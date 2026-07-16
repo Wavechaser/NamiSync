@@ -1,0 +1,1563 @@
+<meta charset="utf-8">
+<title>NamiSync — UI overhaul mockup</title>
+<style>
+/* ============================================================
+   NamiSync is a dark-only Fusion/QSS desktop app by deliberate
+   design choice (see docs/GUI.md: "A light mode is intentionally
+   not implemented"). This mockup honors that — it is not themed
+   for light mode because the real app isn't either.
+
+   Every color below is the app's *actual* theme.py token, not an
+   invented palette — this is meant to be buildable in QSS, not a
+   flight of fancy. Font pairing mirrors the app too: Segoe UI is
+   the real Fusion default; Consolas is the real log/mono font
+   (see theme.py QPlainTextEdit rule) — reused here for paths and
+   hashes since that's already the app's own "data" face.
+   ============================================================ */
+
+:root {
+  --bg: #0f0f10;
+  --surface: #1a1a1c;
+  --surface-alt: #202023;
+  --field: #232326;
+  --border: #2c2c30;
+  --border-strong: #3a3a40;
+  --text: #e8e8ea;
+  --text-muted: #9a9aa0;
+  --text-disabled: #5f5f66;
+  --accent: #0078d4;
+  --accent-hover: #1684d7;
+  --accent-pressed: #006cbe;
+  --ok: #3ecf9a;
+  --fail: #ee6666;
+  --k-update: #33aaee;
+  --k-move: #bb88ee;
+  --k-conflict: #ffdd44;
+  --card-text: #c8c8cc;
+  --font-ui: "Segoe UI", "Segoe UI Variable", "Segoe UI Variable Text", system-ui, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", "SFMono-Regular", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+body { min-height: 100vh; display: flex; justify-content: center; }
+
+::selection { background: var(--accent); color: #fff; }
+
+button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border: 3px solid var(--bg); border-radius: 8px; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #46464e; background-clip: padding-box; }
+
+.mockup-stage {
+  width: 100%;
+  max-width: 1180px;
+  padding: 20px 14px 40px;
+}
+
+/* ---------- window shell ---------- */
+
+.window {
+  width: 100%;
+  /* A real window is a bounded size — without a hard height here, nothing
+     below has anything to overflow *inside*, so a long list just grows the
+     whole page instead of getting its own scrollbar. 800px gives a bit more
+     breathing room than MainWindow's real 760px default (main_window.py). */
+  height: min(800px, calc(100vh - 64px));
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7);
+}
+
+.titlebar {
+  height: 32px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 0 0 0 12px;
+  border-bottom: 1px solid var(--border-strong);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.titlebar .glyph {
+  width: 14px; height: 14px; border-radius: 3px;
+  background: var(--accent);
+  margin-right: 8px;
+  flex: 0 0 auto;
+}
+.titlebar .name { font-size: 12px; color: var(--text-muted); flex: 1; }
+.titlebar .winctl { display: flex; align-items: stretch; height: 100%; }
+.titlebar .winctl button {
+  width: 44px; height: 100%; border: none; background: transparent;
+  color: var(--text-muted); cursor: default; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+}
+.titlebar .winctl button:hover { background: #232326; color: var(--text); }
+.titlebar .winctl button.close:hover { background: var(--fail); color: #1a0000; }
+
+/* ---------- menu bar ---------- */
+
+.menubar {
+  flex: 0 0 auto;
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  padding: 0 4px;
+  position: relative;
+  z-index: 30;
+}
+.menu { position: relative; }
+.menu > .menu-label {
+  border: none; background: transparent; color: var(--text);
+  padding: 5px 10px; font-size: 12.5px; cursor: default; border-radius: 4px;
+}
+.menu > .menu-label u { text-decoration: underline; text-underline-offset: 1px; }
+.menu > .menu-label:hover, .menu.open > .menu-label { background: var(--field); }
+.menu-drop {
+  position: absolute; top: calc(100% + 2px); left: 0;
+  min-width: 230px; background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 4px; display: none;
+  box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6);
+}
+.menu.open .menu-drop { display: block; }
+.menu-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 6px 10px; border-radius: 4px; cursor: default;
+  font-size: 12.5px; justify-content: space-between;
+}
+.menu-item:hover:not(.disabled) { background: var(--accent); color: #fff; }
+.menu-item:hover:not(.disabled) .shortcut { color: rgba(255,255,255,0.8); }
+.menu-item.disabled { color: var(--text-disabled); }
+.menu-item .shortcut { color: var(--text-muted); font-size: 11px; }
+.menu-sep { height: 1px; background: var(--border); margin: 4px 6px; }
+
+/* ---------- shell: rail + page ---------- */
+
+.shell { flex: 1 1 auto; display: flex; min-height: 0; }
+
+.rail {
+  width: 242px; flex: 0 0 auto;
+  border-right: 1px solid var(--border-strong);
+  display: flex; flex-direction: column;
+}
+.new-task {
+  flex: 0 0 auto; height: 34px; border: none; border-bottom: 1px solid var(--border-strong);
+  background: transparent; color: var(--text-muted); text-align: left; padding: 0 14px;
+  font-size: 13px; cursor: default;
+}
+.new-task:hover { background: #1c1c1f; color: var(--text); }
+
+.rail-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
+
+.task-card {
+  position: relative;
+  padding: 10px 10px 12px 13px;
+  border-bottom: 1px solid var(--border-strong);
+  border-left: 3px solid transparent;
+  cursor: default;
+}
+.task-card:hover { background: #17171a; }
+.task-card.selected { background: var(--surface); }
+.task-card[data-tone="ok"] { border-left-color: var(--ok); }
+.task-card[data-tone="fail"] { border-left-color: var(--fail); }
+.task-card[data-tone="busy"] { border-left-color: var(--accent); }
+
+.card-head { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 2px; }
+.card-status { flex: 1; font-weight: 600; font-size: 13px; color: var(--card-text); }
+.task-card.selected .card-status { color: var(--text); }
+.card-status.tone-ok { color: var(--ok); }
+.card-status.tone-fail { color: var(--fail); }
+.card-close {
+  border: none; background: transparent; color: var(--text-disabled);
+  font-size: 10px; padding: 1px 4px; border-radius: 4px; cursor: default;
+}
+.card-close:hover { color: var(--text); background: rgba(255,255,255,0.1); }
+
+.card-line { font-size: 11px; color: var(--text-muted); height: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Borrows the otherwise-blank date line for a live throughput/ETA summary
+   while a task is running (the date itself only exists once it completes). */
+.card-line.live { color: var(--accent); }
+.task-card.selected .card-line.path { color: #b7b7bc; }
+.card-line.path { font-family: var(--font-mono); }
+
+.card-progress { margin-top: 6px; height: 4px; border-radius: 2px; background: var(--border-strong); overflow: hidden; }
+.card-progress > i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+
+/* ---------- page ---------- */
+
+.page { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 13px; }
+
+.section-label { font-size: 13px; color: var(--text); width: 92px; flex: 0 0 auto; padding-top: 6px; }
+
+/* form row */
+.form-grid { display: flex; flex-direction: column; gap: 6px; }
+.form-row { display: flex; align-items: center; gap: 8px; }
+/* Trying a line-style field instead of the boxed QComboBox look — QSS can do
+   this on a real QComboBox/QLineEdit with `border: none; border-bottom: ...`,
+   it isn't dropping any real capability, just a different frame. */
+.field {
+  position: relative;
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: transparent; border: none; border-bottom: 1px solid var(--border-strong);
+  border-radius: 0; padding: 6px 3px 7px; min-width: 0; cursor: default;
+}
+.field:hover { border-bottom-color: var(--accent); }
+.field:has(.field-dropdown.open) { border-bottom-color: var(--accent); }
+.field.empty .field-text { color: var(--text-disabled); }
+.field-text { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.field-caret { color: var(--text-disabled); font-size: 9px; flex: 0 0 auto; }
+
+/* Simulated recent-paths popup — a real QComboBox already keeps the last 5
+   folders per role (see db/state.py load_recent_directories) and shows them
+   exactly like this via QComboBox QAbstractItemView. */
+.field-dropdown {
+  display: none; position: absolute; top: calc(100% + 4px); left: -3px; right: -3px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 4px; box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6); z-index: 25;
+}
+.field-dropdown.open { display: block; }
+.field-dropdown .opt {
+  padding: 6px 9px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.field-dropdown .opt:hover { background: var(--accent); color: #fff; }
+
+/* Setup form grays out and stops responding to clicks while a job runs,
+   matching the real app's setup_form.setEnabled(False) during execution and
+   verification — inputs stay visible but untouchable mid-run. */
+.form-grid.busy { pointer-events: none; }
+.form-grid.busy .section-label { color: var(--text-disabled); }
+.form-grid.busy .field { border-bottom-color: var(--border); }
+.form-grid.busy .field-text { color: var(--text-disabled) !important; }
+.form-grid.busy .field-caret { color: var(--border); }
+
+.btn {
+  border: 1px solid var(--border-strong); background: var(--field); color: var(--text);
+  border-radius: 6px; padding: 6px 14px; font-size: 12.5px; cursor: default; flex: 0 0 auto;
+}
+.btn:hover:not(:disabled) { background: #2b2b2f; }
+.btn:active:not(:disabled) { background: #1f1f22; }
+.btn:disabled { color: var(--text-disabled); background: #1c1c1f; border-color: var(--border); cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn.primary:disabled { background: #24365c; border-color: #24365c; color: #6c7f9f; }
+
+/* options: the toggle now lives on the view-action row, beside the
+   Plan/Inventory switcher; its drawer unfolds as a full-width shelf directly
+   beneath that row instead of a narrow indented column. */
+.toggle-link {
+  border: none; background: transparent; color: var(--text); font-size: 12.5px;
+  display: flex; align-items: center; gap: 6px; padding: 3px 4px; cursor: default; border-radius: 4px;
+  flex: 0 0 auto;
+}
+.toggle-link:hover { background: #1c1c1f; }
+.toggle-link .chev { font-size: 9px; color: var(--text-muted); transition: none; display: inline-block; }
+.toggle-link.open .chev { transform: rotate(90deg); }
+
+.options-pane {
+  display: none; margin: 2px 0 4px; padding: 12px 16px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.options-pane.open { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
+.opt-row { display: flex; align-items: center; gap: 10px; }
+.opt-row label.opt-label { flex: 0 0 auto; color: var(--text); font-size: 12.5px; }
+.select {
+  background: var(--field); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 5px 26px 5px 9px; font-size: 12.5px; min-width: 140px; position: relative;
+  display: inline-flex; align-items: center; justify-content: space-between; cursor: default; gap: 8px;
+}
+.select .arrow { color: var(--text-muted); font-size: 9px; }
+.check-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.checkbox { width: 15px; height: 15px; border: 1px solid var(--border-strong); border-radius: 3px; background: var(--field); flex: 0 0 auto; position: relative; }
+.checkbox.checked, .checkbox.indeterminate { background: var(--accent); border-color: var(--accent); }
+.checkbox.checked::after {
+  content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(40deg);
+}
+.checkbox.indeterminate::after {
+  content: ""; position: absolute; left: 3px; top: 6px; width: 7px; height: 2px; background: #fff;
+}
+/* Row selection checkboxes: same visual token as the options-pane checkbox,
+   reused in the tree so multi-select doesn't require ctrl/shift-click. A
+   folder's box reflects its children — solid check when all are selected,
+   dash when the selection is mixed. */
+.row-check { cursor: default; }
+.row-check:hover { border-color: var(--accent); }
+
+/* summary band: the status headline is the page's highest-priority text now
+   — the affected-size counter is demoted into a quiet right-aligned stack
+   beside it (see docs discussion 2026-07-14). No divider above it — with the
+   line-style fields just above, a border here read as one line too many.
+   summary-top centers the (single-line) headline against side-col's own
+   two lines, so the big headline reads level with that whole stack rather
+   than pinned to its top; status-detail spans full width below both. */
+.summary-row { display: flex; flex-direction: column; gap: 6px; padding: 12px 2px 6px; }
+.summary-top { display: flex; align-items: center; gap: 20px; }
+.status-headline { flex: 1; min-width: 0; font-size: 22px; font-weight: 700; line-height: 28px; text-wrap: balance; }
+.status-headline.tone-ok { color: var(--ok); }
+.status-headline.tone-fail { color: var(--fail); }
+.status-detail { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+
+.side-col {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end;
+  gap: 3px; max-width: 320px; min-width: 0;
+}
+.big-size { font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.big-size.dim { color: var(--text-disabled); }
+.big-size .bs-label { color: var(--text-disabled); }
+.big-size .bs-value { font-weight: 600; }
+.side-note-slot { font-size: 11px; line-height: 13px; color: var(--text-muted); }
+.options-summary-inline { font-size: 11px; color: var(--text-muted); }
+
+/* The live exec detail (%, count, ETA, throughput) and the current-file
+   message share one line directly above the progress bars — reserved at a
+   constant height on every page, busy or not, so switching tasks never
+   shifts the page underneath it. */
+.exec-line { display: flex; align-items: baseline; gap: 12px; min-height: 16px; margin-bottom: 4px; }
+.exec-line .info { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.exec-line .current-file {
+  flex: 1; min-width: 0; display: flex; justify-content: flex-end; align-items: baseline; gap: 6px;
+  font-size: 12px; color: var(--text-muted); overflow: hidden;
+}
+.exec-line .current-file .op { flex: 0 0 auto; white-space: nowrap; }
+/* Truncate from the *start* so the tail of the path stays readable: the
+   rtl wrapper makes "the end" visually the left side for ellipsis purposes,
+   while dir="ltr" on the inner span keeps the actual characters in normal
+   reading order — the two must stay scoped to this inner element only, or
+   the op/path pair itself gets visually reordered (see 2026-07-15 note). */
+.exec-line .current-file .pth-wrap {
+  direction: rtl; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; max-width: 100%;
+}
+.exec-line .current-file .pth { font-family: var(--font-mono); }
+
+/* progress */
+.progress-area { display: flex; flex-direction: column; gap: 4px; }
+.bar { height: 10px; border-radius: 5px; background: #26262a; overflow: hidden; }
+.bar.file { height: 8px; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+
+/* view action row */
+.view-action-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.segment-group { display: flex; }
+.segment {
+  border: 1px solid var(--border-strong); padding: 5px 20px; font-size: 12.5px;
+  background: transparent; color: var(--text-muted); cursor: default;
+}
+.segment.left { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+.segment.right { border-top-right-radius: 6px; border-bottom-right-radius: 6px; border-left: none; }
+.segment.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.view-spacer { flex: 1; }
+.starters { display: flex; gap: 6px; }
+
+/* filter rows */
+.filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--border-strong); border-radius: 6px; padding: 3px 12px 3px 13px;
+  font-size: 12px; color: var(--text-muted); background: transparent; cursor: default;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.chip .n { font-variant-numeric: tabular-nums; }
+.chip:hover { border-color: #4a4a52; }
+.chip.active { background: var(--text); border-color: var(--text); color: var(--surface); }
+.filter-spacer { flex: 1; }
+.free-space { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+
+/* content / tree */
+.content-stack {
+  position: relative;
+  flex: 1 1 auto; min-height: 220px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.reset-view-btn {
+  position: absolute; bottom: 10px; right: 10px; z-index: 15;
+  background: rgba(26, 26, 28, 0.92); border: 1px solid var(--border-strong); border-radius: 14px;
+  padding: 5px 12px; font-size: 11.5px; color: var(--text-muted); cursor: default;
+  box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.6);
+}
+.reset-view-btn:hover { color: var(--text); border-color: #4a4a52; background: rgba(35, 35, 38, 0.96); }
+.placeholder {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--text-muted); font-size: 13px; padding: 30px;
+  border: none;
+}
+.placeholder .ph-wrap { max-width: 340px; }
+.placeholder .ph-mark { width: 34px; height: 34px; margin: 0 auto 12px; border: 1.5px dashed var(--border-strong); border-radius: 8px; }
+
+.tree-scroll { flex: 1; overflow: auto; }
+.tree-header, .tree-row { display: grid; align-items: center; }
+.plan-tree .tree-header, .plan-tree .tree-row { grid-template-columns: minmax(230px,2.2fr) 108px 84px 100px 88px minmax(130px,1fr); }
+.inventory-tree .tree-header, .inventory-tree .tree-row { grid-template-columns: minmax(230px,2.3fr) 90px 100px 88px minmax(120px,1fr); }
+.tree-header {
+  position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+.tree-header .cell { padding: 6px 8px; font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+.tree-row { cursor: default; }
+/* Alternation follows the flattened *visual* row order (JS-applied .row-alt),
+   not DOM nth-child — folder rows and their children live at different
+   nesting depths, so nth-child restarts its odd/even count inside every
+   .tree-children and mostly skips folder header rows entirely. */
+.tree-row.row-alt { background: var(--surface-alt); }
+.tree-row:hover { background: #26262a; }
+.tree-row.selected { background: var(--accent); }
+.tree-row.selected .cell, .tree-row.selected .item-name { color: #fff !important; }
+.tree-row .cell { padding: 4px 8px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-row.hidden-row { display: none; }
+.item-cell { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The checkbox stays pinned to the column's left edge; only the disclosure
+   triangle and name indent with depth (see normalizeItemIndent). */
+.item-indent { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.item-name { overflow: hidden; text-overflow: ellipsis; }
+.item-cell .mono { font-family: var(--font-mono); font-size: 12px; }
+.disclosure {
+  width: 14px; flex: 0 0 auto; text-align: center; color: var(--text-muted); font-size: 9px;
+  cursor: default; user-select: none;
+}
+.no-disclosure { display: inline-block; width: 14px; flex: 0 0 auto; }
+.folder-row .item-name { font-weight: 600; }
+.folder-row .cell.rollup { color: var(--text-muted); font-size: 11.5px; }
+.tree-node.collapsed > .tree-children { display: none; }
+.tree-node.collapsed > .tree-row .disclosure { transform: rotate(-90deg); display: inline-block; }
+
+.review-band { padding: 6px 8px 2px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0; }
+.review-divider { height: 1px; background: var(--border); margin: 2px 0 4px; }
+
+.k-copy, .k-mkdir { color: var(--ok); }
+.k-update { color: var(--k-update); }
+.k-move { color: var(--k-move); }
+.k-trash { color: var(--fail); }
+.k-conflict { color: var(--k-conflict); }
+.k-noop { color: var(--text-disabled); }
+
+.s-done, .s-verified { color: var(--ok); }
+.s-blocked, .s-missing { color: var(--fail); }
+.s-pending { color: var(--text-muted); }
+/* Not-yet-reached rows during execution read "Planned" rather than "Pending"
+   — "Pending" is reserved for the pre-execution dry-run plan state. */
+.s-planned { color: var(--text-muted); }
+.s-copying { color: var(--accent); }
+.s-baseline { color: var(--k-update); }
+.s-reappeared, .s-unbaselined { color: var(--k-conflict); }
+.s-acknowledged { color: var(--text-disabled); }
+.s-noop { color: var(--text-disabled); }
+
+/* One row copies at a time — a real copy queue never runs 9 files at once.
+   This inline bar stands in for the "Copying" text on that one active row. */
+.row-mini-bar {
+  display: inline-block; width: 56px; height: 6px; border-radius: 3px;
+  background: var(--border-strong); overflow: hidden; vertical-align: middle;
+}
+.row-mini-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+/* log */
+.log-view {
+  display: none; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; max-height: 130px; overflow-y: auto; white-space: pre-wrap;
+}
+.log-view.open { display: block; }
+.log-view div { padding: 1px 0; }
+
+/* commit row: contextual per view — Cancel/Pause/Execute on Plan,
+   Cancel/Pause/Verify on Inventory, so the row always matches the content
+   beneath it instead of showing an action the visible view can't use. */
+.commit-row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 2px; }
+
+/* Verify is a folded split button: the main action plus a caret that
+   unfolds "Verify selected" — same verb, narrower scope, one control
+   instead of sending users to the right-click menu for it. */
+.split-btn { position: relative; display: flex; }
+.split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.split-caret {
+  border-top-left-radius: 0; border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 6px 10px; font-size: 9px;
+}
+.split-menu {
+  display: none; position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 170px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 4px; box-shadow: 0 -12px 28px -8px rgba(0, 0, 0, 0.6); z-index: 30;
+}
+.split-menu.open { display: block; }
+
+.statusbar { flex: 0 0 auto; height: 22px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-muted); display: flex; align-items: center; padding: 0 10px; }
+
+/* context menu */
+.ctx-menu {
+  position: fixed; min-width: 220px; background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px;
+  box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6); display: none; z-index: 100;
+}
+.ctx-menu.open { display: block; }
+
+/* small note for reviewers, not part of the app itself */
+.note {
+  max-width: 1180px; margin: 0 auto 10px; padding: 10px 14px;
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface);
+  color: var(--text-muted); font-size: 12px; line-height: 1.5;
+}
+.note b { color: var(--text); }
+
+@media (max-width: 760px) {
+  .rail { width: 190px; }
+  .card-line { display: none; }
+}
+</style>
+
+<div class="mockup-stage">
+  <div class="note">
+    Click a task card to switch tasks. Click <b>Plan / Inventory</b> to toggle views (each
+    task retains its own). Click filter chips, right-click an inventory row, and expand
+    <b>Options</b> / <b>Log</b> — all live. Window controls and the title bar are decorative.
+  </div>
+
+  <div class="window">
+    <div class="titlebar">
+      <div class="glyph"></div>
+      <div class="name">NamiSync</div>
+      <div class="winctl">
+        <button title="mockup">–</button>
+        <button title="mockup">▢</button>
+        <button class="close" title="mockup">✕</button>
+      </div>
+    </div>
+
+    <div class="menubar" id="menubar">
+      <div class="menu" data-menu="file">
+        <button class="menu-label"><u>F</u>ile</button>
+        <div class="menu-drop">
+          <div class="menu-item"><span>Import TeraCopy <u>h</u>ashes…</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span>E<u>x</u>it</span></div>
+        </div>
+      </div>
+      <div class="menu" data-menu="task">
+        <button class="menu-label"><u>T</u>ask</button>
+        <div class="menu-drop">
+          <div class="menu-item"><span><u>N</u>ew task</span><span class="shortcut">Ctrl+T</span></div>
+          <div class="menu-item"><span><u>C</u>lose task</span><span class="shortcut">Ctrl+W</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span><u>S</u>can / Plan</span><span class="shortcut">F5</span></div>
+          <div class="menu-item"><span><u>E</u>xecute</span><span class="shortcut">Ctrl+Enter</span></div>
+          <div class="menu-item disabled"><span><u>C</u>ancel</span><span class="shortcut">Esc</span></div>
+        </div>
+      </div>
+      <div class="menu" data-menu="integrity">
+        <button class="menu-label"><u>I</u>ntegrity</button>
+        <div class="menu-drop">
+          <div class="menu-item"><span><u>I</u>nventory</span></div>
+          <div class="menu-item"><span>Create <u>b</u>aseline</span></div>
+          <div class="menu-item"><span><u>V</u>erify location</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span>Verify <u>s</u>elected</span></div>
+          <div class="menu-item"><span><u>A</u>cknowledge missing</span></div>
+          <div class="menu-item"><span><u>R</u>estore acknowledged</span></div>
+        </div>
+      </div>
+      <div class="menu" data-menu="history">
+        <button class="menu-label"><u>H</u>istory</button>
+        <div class="menu-drop">
+          <div class="menu-item"><span><u>B</u>rowse history…</span></div>
+        </div>
+      </div>
+      <div class="menu" data-menu="help">
+        <button class="menu-label">Hel<u>p</u></button>
+        <div class="menu-drop">
+          <div class="menu-item"><span><u>A</u>bout NamiSync</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shell">
+      <div class="rail">
+        <button class="new-task">+ &nbsp;New</button>
+        <div class="rail-scroll" id="railScroll"></div>
+      </div>
+
+      <div class="page" id="page"></div>
+    </div>
+
+    <div class="statusbar" id="statusbar"></div>
+  </div>
+</div>
+
+<div class="ctx-menu" id="ctxMenu"></div>
+
+<script>
+/* ---------------------------------------------------------------
+   Static demo data for five tasks, chosen to walk through the
+   app's real documented states: a plan awaiting review, a run in
+   progress, a verification that found something wrong, a finished
+   copy+verify (which — per docs/UI_overhaul.md §6 — leaves BOTH
+   the Plan and Inventory views populated at once, independently
+   toggle-able), and a brand new empty task.
+   ------------------------------------------------------------- */
+
+const PLAN_TREE_PENDING = `
+  <div class="review-band">Needs review</div>
+  <div class="tree-row file-row" data-kind="conflict" data-changes="1">
+    <div class="cell item-cell"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0099.CR2</span></div>
+    <div class="cell k-conflict">Conflict</div>
+    <div class="cell">32.1 MB</div>
+    <div class="cell">—</div>
+    <div class="cell s-blocked">Blocked</div>
+    <div class="cell">Case conflict with img_0099.cr2 already planned</div>
+  </div>
+  <div class="review-divider"></div>
+  <div class="tree-node">
+    <div class="tree-row folder-row">
+      <div class="cell item-cell"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">→ D:\\Backup\\Photos</span></div>
+      <div class="cell rollup"></div>
+      <div class="cell rollup">6.7 GB</div>
+      <div class="cell rollup"></div>
+      <div class="cell rollup">9 pending</div>
+      <div class="cell rollup"></div>
+    </div>
+    <div class="tree-children">
+      <div class="tree-node">
+        <div class="tree-row folder-row" style="--depth:1">
+          <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">2025</span></div>
+          <div class="cell rollup"></div><div class="cell rollup">1.3 GB</div><div class="cell rollup"></div><div class="cell rollup">6 changes</div><div class="cell rollup"></div>
+        </div>
+        <div class="tree-children">
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Vacation</span></div>
+              <div class="cell rollup"></div><div class="cell rollup">1.3 GB</div><div class="cell rollup"></div><div class="cell rollup">3 changes</div><div class="cell rollup"></div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0142.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">214.6 MB</div>
+                <div class="cell mono" title="ABCD1234EF9E7A2C...">ABCD:1F9E</div>
+                <div class="cell s-pending">Pending</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0143.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">198.2 MB</div><div class="cell">—</div>
+                <div class="cell s-pending">Pending</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="update" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">sunset.mp4</span></div>
+                <div class="cell k-update">Update</div><div class="cell">1.1 GB</div>
+                <div class="cell mono" title="9F3A22B1...">9F3A:22B1</div>
+                <div class="cell s-pending">Pending</div><div class="cell">Modified (size, mtime)</div>
+              </div>
+            </div>
+          </div>
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Screenshots</span></div>
+              <div class="cell rollup"></div><div class="cell rollup">8.1 MB</div><div class="cell rollup"></div><div class="cell rollup">2 changes</div><div class="cell rollup"></div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="move" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">shot_09.png</span></div>
+                <div class="cell k-move">Move</div><div class="cell">4.2 MB</div><div class="cell">—</div>
+                <div class="cell s-pending">Pending</div><div class="cell">Moved from 2024/Screenshots</div>
+              </div>
+              <div class="tree-row file-row" data-kind="move" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">shot_10.png</span></div>
+                <div class="cell k-move">Move</div><div class="cell">3.9 MB</div><div class="cell">—</div>
+                <div class="cell s-pending">Pending</div><div class="cell">Moved from 2024/Screenshots</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-node">
+        <div class="tree-row folder-row" style="--depth:1">
+          <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">2024</span></div>
+          <div class="cell rollup"></div><div class="cell rollup">95.5 MB</div><div class="cell rollup"></div><div class="cell rollup">4 changes</div><div class="cell rollup"></div>
+        </div>
+        <div class="tree-children">
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Vacation</span></div>
+              <div class="cell k-mkdir rollup">Mkdir</div><div class="cell rollup">3.4 MB</div><div class="cell rollup"></div><div class="cell rollup">Pending</div><div class="cell rollup">New folder</div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">beach.jpg</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">3.4 MB</div><div class="cell">—</div>
+                <div class="cell s-pending">Pending</div><div class="cell">New file</div>
+              </div>
+            </div>
+          </div>
+          <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">old_scan.tif</span></div>
+            <div class="cell k-copy">Copy</div><div class="cell">88.9 MB</div><div class="cell">—</div>
+            <div class="cell s-pending">Pending</div><div class="cell">New file</div>
+          </div>
+          <div class="tree-row file-row" data-kind="noop" data-changes="0" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">duplicate.jpg</span></div>
+            <div class="cell k-noop">No-op</div><div class="cell">2.1 MB</div>
+            <div class="cell mono">AAAA:BBBB</div>
+            <div class="cell s-noop">Unchanged</div><div class="cell">Matches target</div>
+          </div>
+          <div class="tree-row file-row" data-kind="trash" data-changes="1" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">thumbs.db</span></div>
+            <div class="cell k-trash">Trash</div><div class="cell">1.1 MB</div><div class="cell">—</div>
+            <div class="cell s-pending">Pending</div><div class="cell">Deleted from source (trash)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
+const PLAN_TREE_DONE = PLAN_TREE_PENDING
+  .replace(/s-pending">Pending/g, 's-done">Done')
+  .replace(/(\d+) pending/g, '$1 done');
+
+/* A real copy queue moves one file at a time: exactly one row is "Copying"
+   (with its own inline progress bar), rows already landed read "Done", and
+   everything still queued reads "Planned" rather than the pre-execution
+   "Pending". Also a longer sample list — long enough to want Reset view. */
+const PLAN_TREE_EXECUTING = `
+  <div class="review-band">Needs review</div>
+  <div class="tree-row file-row" data-kind="conflict" data-changes="1">
+    <div class="cell item-cell"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0099.CR2</span></div>
+    <div class="cell k-conflict">Conflict</div>
+    <div class="cell">32.1 MB</div>
+    <div class="cell">—</div>
+    <div class="cell s-blocked">Blocked</div>
+    <div class="cell">Case conflict with img_0099.cr2 already planned</div>
+  </div>
+  <div class="review-divider"></div>
+  <div class="tree-node">
+    <div class="tree-row folder-row">
+      <div class="cell item-cell"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">→ E:\\Backup\\Archive</span></div>
+      <div class="cell rollup"></div>
+      <div class="cell rollup">3.1 GB</div>
+      <div class="cell rollup"></div>
+      <div class="cell rollup">1 done · 1 copying · 17 planned</div>
+      <div class="cell rollup"></div>
+    </div>
+    <div class="tree-children">
+      <div class="tree-node">
+        <div class="tree-row folder-row" style="--depth:1">
+          <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">2025</span></div>
+          <div class="cell rollup"></div><div class="cell rollup">2.9 GB</div><div class="cell rollup"></div><div class="cell rollup">1 done · 1 copying · 11 planned</div><div class="cell rollup"></div>
+        </div>
+        <div class="tree-children">
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Vacation</span></div>
+              <div class="cell rollup"></div><div class="cell rollup">2.9 GB</div><div class="cell rollup"></div><div class="cell rollup">1 done · 1 copying · 5 planned</div><div class="cell rollup"></div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0142.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">214.6 MB</div>
+                <div class="cell mono" title="ABCD1234EF9E7A2C...">ABCD:1F9E</div>
+                <div class="cell s-done">Done</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0143.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">198.2 MB</div><div class="cell">—</div>
+                <div class="cell"><span class="row-mini-bar" title="Copying — 45%"><i style="width:45%"></i></span></div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0144.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">221.3 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0145.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">208.9 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0146.CR2</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">199.4 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="update" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">sunset.mp4</span></div>
+                <div class="cell k-update">Update</div><div class="cell">1.1 GB</div>
+                <div class="cell mono" title="9F3A22B1...">9F3A:22B1</div>
+                <div class="cell s-planned">Planned</div><div class="cell">Modified (size, mtime)</div>
+              </div>
+              <div class="tree-row file-row" data-kind="update" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">sunrise.mp4</span></div>
+                <div class="cell k-update">Update</div><div class="cell">980.2 MB</div>
+                <div class="cell mono" title="1AB2CDEF...">1AB2:CDEF</div>
+                <div class="cell s-planned">Planned</div><div class="cell">Modified (size, mtime)</div>
+              </div>
+            </div>
+          </div>
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Screenshots</span></div>
+              <div class="cell rollup"></div><div class="cell rollup">16.4 MB</div><div class="cell rollup"></div><div class="cell rollup">4 planned</div><div class="cell rollup"></div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="move" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">shot_09.png</span></div>
+                <div class="cell k-move">Move</div><div class="cell">4.2 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">Moved from 2024/Screenshots</div>
+              </div>
+              <div class="tree-row file-row" data-kind="move" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">shot_10.png</span></div>
+                <div class="cell k-move">Move</div><div class="cell">3.9 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">Moved from 2024/Screenshots</div>
+              </div>
+              <div class="tree-row file-row" data-kind="move" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">shot_11.png</span></div>
+                <div class="cell k-move">Move</div><div class="cell">4.6 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">Moved from 2024/Screenshots</div>
+              </div>
+              <div class="tree-row file-row" data-kind="move" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">shot_12.png</span></div>
+                <div class="cell k-move">Move</div><div class="cell">3.7 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">Moved from 2024/Screenshots</div>
+              </div>
+            </div>
+          </div>
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Documents</span></div>
+              <div class="cell rollup"></div><div class="cell rollup">1.6 MB</div><div class="cell rollup"></div><div class="cell rollup">2 planned</div><div class="cell rollup"></div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">itinerary.pdf</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">1.2 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">receipts.xlsx</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">412 KB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-node">
+        <div class="tree-row folder-row" style="--depth:1">
+          <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">2024</span></div>
+          <div class="cell rollup"></div><div class="cell rollup">189.8 MB</div><div class="cell rollup"></div><div class="cell rollup">6 planned</div><div class="cell rollup"></div>
+        </div>
+        <div class="tree-children">
+          <div class="tree-node">
+            <div class="tree-row folder-row" style="--depth:2">
+              <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Vacation</span></div>
+              <div class="cell k-mkdir rollup">Mkdir</div><div class="cell rollup">6.5 MB</div><div class="cell rollup"></div><div class="cell rollup">Planned</div><div class="cell rollup">New folder</div>
+            </div>
+            <div class="tree-children">
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">beach.jpg</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">3.4 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+              <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:3">
+                <div class="cell item-cell" style="padding-left:calc(10px + 3*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">beach_02.jpg</span></div>
+                <div class="cell k-copy">Copy</div><div class="cell">3.1 MB</div><div class="cell">—</div>
+                <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+              </div>
+            </div>
+          </div>
+          <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">old_scan.tif</span></div>
+            <div class="cell k-copy">Copy</div><div class="cell">88.9 MB</div><div class="cell">—</div>
+            <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+          </div>
+          <div class="tree-row file-row" data-kind="copy" data-changes="1" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">old_scan_02.tif</span></div>
+            <div class="cell k-copy">Copy</div><div class="cell">91.2 MB</div><div class="cell">—</div>
+            <div class="cell s-planned">Planned</div><div class="cell">New file</div>
+          </div>
+          <div class="tree-row file-row" data-kind="noop" data-changes="0" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">duplicate.jpg</span></div>
+            <div class="cell k-noop">No-op</div><div class="cell">2.1 MB</div>
+            <div class="cell mono">AAAA:BBBB</div>
+            <div class="cell s-noop">Unchanged</div><div class="cell">Matches target</div>
+          </div>
+          <div class="tree-row file-row" data-kind="trash" data-changes="1" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">thumbs.db</span></div>
+            <div class="cell k-trash">Trash</div><div class="cell">1.1 MB</div><div class="cell">—</div>
+            <div class="cell s-planned">Planned</div><div class="cell">Deleted from source (trash)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
+const INV_TREE_ISSUES = `
+  <div class="tree-node">
+    <div class="tree-row folder-row">
+      <div class="cell item-cell"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">D:\\Media\\RawFootage</span></div>
+      <div class="cell rollup">17.4 GB</div><div class="cell rollup"></div><div class="cell rollup">7 files</div><div class="cell rollup">1 missing</div>
+    </div>
+    <div class="tree-children">
+      <div class="tree-node">
+        <div class="tree-row folder-row" style="--depth:1">
+          <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">Interviews</span></div>
+          <div class="cell rollup">14.8 GB</div><div class="cell rollup"></div><div class="cell rollup">3 files</div><div class="cell rollup"></div>
+        </div>
+        <div class="tree-children">
+          <div class="tree-row file-row" data-status="verified" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">interview_01.mov</span></div>
+            <div class="cell">4.8 GB</div><div class="cell mono" title="7E219C40...">7E21:9C40</div>
+            <div class="cell">Present</div><div class="cell s-verified">Verified</div>
+          </div>
+          <div class="tree-row file-row" data-status="verified" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">interview_02.mov</span></div>
+            <div class="cell">5.1 GB</div><div class="cell mono" title="88AB12FF...">88AB:12FF</div>
+            <div class="cell">Present</div><div class="cell s-verified">Verified</div>
+          </div>
+          <div class="tree-row file-row" data-status="baseline" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">interview_03.mov</span></div>
+            <div class="cell">4.9 GB</div><div class="cell">—</div>
+            <div class="cell">Present</div><div class="cell s-baseline">Baseline</div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-node">
+        <div class="tree-row folder-row" style="--depth:1">
+          <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">BRoll</span></div>
+          <div class="cell rollup">2.6 GB</div><div class="cell rollup"></div><div class="cell rollup">3 files</div><div class="cell rollup">1 missing</div>
+        </div>
+        <div class="tree-children">
+          <div class="tree-row file-row" data-status="verified" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">drone_flyover.mp4</span></div>
+            <div class="cell">3.2 GB</div><div class="cell mono" title="C0FE9922...">C0FE:9922</div>
+            <div class="cell">Present</div><div class="cell s-verified">Verified</div>
+          </div>
+          <div class="tree-row file-row" data-status="missing" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">dock_sunrise.mp4</span></div>
+            <div class="cell">2.8 GB</div><div class="cell">—</div>
+            <div class="cell s-missing">Missing</div><div class="cell s-missing">Missing</div>
+          </div>
+          <div class="tree-row file-row" data-status="reappeared" style="--depth:2">
+            <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">harbor_pan.mp4</span></div>
+            <div class="cell">2.6 GB</div><div class="cell mono" title="44DD1010...">44DD:1010</div>
+            <div class="cell">Present</div><div class="cell s-reappeared">Reappeared</div>
+          </div>
+        </div>
+      </div>
+      <div class="tree-row file-row" data-status="unbaselined" style="--depth:1">
+        <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">manifest.txt</span></div>
+        <div class="cell">12 KB</div><div class="cell">—</div>
+        <div class="cell">Present</div><div class="cell s-unbaselined">Unbaselined</div>
+      </div>
+      <div class="tree-row file-row hidden-row" data-status="acknowledged" style="--depth:1">
+        <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">old_take_03.mov</span></div>
+        <div class="cell">1.9 GB</div><div class="cell mono" title="AC100099...">AC10:0099</div>
+        <div class="cell s-missing">Missing</div><div class="cell s-acknowledged">Acknowledged</div>
+      </div>
+    </div>
+  </div>
+`;
+
+const INV_TREE_CLEAN = `
+  <div class="tree-node">
+    <div class="tree-row folder-row">
+      <div class="cell item-cell"><span class="checkbox row-check"></span><span class="disclosure">▾</span><span class="item-name">H:\\ColdStorage\\Mirror</span></div>
+      <div class="cell rollup">6.7 GB</div><div class="cell rollup"></div><div class="cell rollup">10 files</div><div class="cell rollup"></div>
+    </div>
+    <div class="tree-children">
+      <div class="tree-row file-row" data-status="verified" style="--depth:1">
+        <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0142.CR2</span></div>
+        <div class="cell">214.6 MB</div><div class="cell mono" title="ABCD1234EF9E7A2C...">ABCD:1F9E</div>
+        <div class="cell">Present</div><div class="cell s-verified">Verified</div>
+      </div>
+      <div class="tree-row file-row" data-status="verified" style="--depth:1">
+        <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">IMG_0143.CR2</span></div>
+        <div class="cell">198.2 MB</div><div class="cell mono" title="7C6612AA...">7C66:12AA</div>
+        <div class="cell">Present</div><div class="cell s-verified">Verified</div>
+      </div>
+      <div class="tree-row file-row" data-status="verified" style="--depth:1">
+        <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">sunset.mp4</span></div>
+        <div class="cell">1.1 GB</div><div class="cell mono" title="9F3A22B1...">9F3A:22B1</div>
+        <div class="cell">Present</div><div class="cell s-verified">Verified</div>
+      </div>
+      <div class="tree-row file-row" data-status="baseline" style="--depth:1">
+        <div class="cell item-cell" style="padding-left:calc(10px + 1*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">beach.jpg</span></div>
+        <div class="cell">3.4 MB</div><div class="cell">—</div>
+        <div class="cell">Present</div><div class="cell s-baseline">Baseline</div>
+      </div>
+    </div>
+  </div>
+`;
+
+const RECENT_PATHS = {
+  source: ["E:\\Photos\\2025", "E:\\Photos\\2024", "F:\\Camera Imports"],
+  target: ["D:\\Backup\\Photos", "D:\\Backup\\Archive", "E:\\Backup\\Archive"],
+};
+
+const TASKS = {
+  photos: {
+    status: "Dry-run plan ready.", tone: "neutral", date: "",
+    source: "E:\\Photos\\2025", target: "D:\\Backup\\Photos",
+    progress: 0,
+    bigSize: "6.8 GB",
+    headline: "Dry-run plan ready.", headlineTone: "neutral",
+    detail: "9 changes · 4 copy · 1 update · 2 move · 1 trash · 1 conflict",
+    options: "trash deletion, not verified, integrity — destination",
+    barsVisible: false,
+    view: "plan",
+    planHTML: PLAN_TREE_PENDING, planCounts: { all: 10, changes: 9, moves: 2, conflicts: 1 },
+    invHTML: null, invCounts: null,
+    freeSpace: "612.4 GB free · 6.8 GB required",
+    scanEnabled: true, integrityEnabled: false, integrityTip: "Choose one existing folder as the integrity location.",
+    executeEnabled: true, cancelEnabled: false,
+    log: ["10:41:02  Scan complete — 1,204 files, 6.8 GB.", "10:41:04  Plan built — 9 changes, 1 conflict needs review."],
+  },
+  archive: {
+    status: "Executing…", tone: "busy", date: "",
+    source: "F:\\Projects\\Archive", target: "E:\\Backup\\Archive",
+    progress: 62, busy: true,
+    bigSize: "128.5 GB",
+    headline: "Executing…", headlineTone: "neutral",
+    detail: "62 of 214 files · 79.4 GB written",
+    options: "trash deletion, verified, integrity — destination",
+    barsVisible: true, barOverall: 62, barFile: 45,
+    progressInfo: "62% · 62 of 214 · 79.4 GB · ETA 4m · 212 MB/s",
+    railExecSummary: "ETA 4m · 212 MB/s",
+    progressOp: "Copy:", progressPath: "…/2025/Vacation/IMG_0143.CR2",
+    view: "plan",
+    planHTML: PLAN_TREE_EXECUTING,
+    planCounts: { all: 20, changes: 19, moves: 4, conflicts: 1 },
+    invHTML: null, invCounts: null,
+    freeSpace: "3.1 TB free · 128.5 GB required",
+    scanEnabled: false, integrityEnabled: false, integrityTip: "Another task is busy on this volume.",
+    scanTip: "Another task is busy on this volume.",
+    executeEnabled: false, cancelEnabled: true,
+    log: ["09:58:11  Execution started — 214 operations.", "10:02:47  Verifying successful copies as they land."],
+  },
+  footage: {
+    status: "Verification found issues", tone: "fail", date: "Jul 13 · 22:47",
+    source: "D:\\Media\\RawFootage", target: "",
+    progress: 100,
+    bigSize: "17.4 GB",
+    headline: "Verification found issues", headlineTone: "fail",
+    detail: "3 verified, 1 baselined, 0 mismatched, 1 missing, 0 errors · completed 22:47 · Jul 13",
+    options: "trash deletion, not verified, integrity — source",
+    barsVisible: false,
+    view: "inventory",
+    planHTML: null, planCounts: null,
+    invHTML: INV_TREE_ISSUES,
+    invCounts: { all: 7, verified: 3, baseline: 1, unbaselined: 1, missing: 1, reappeared: 1, acknowledged: 1 },
+    freeSpace: "",
+    scanEnabled: false, scanTip: "Choose a distinct Source and Destination to plan a paired sync.",
+    integrityEnabled: true,
+    executeEnabled: false, cancelEnabled: false,
+    log: ["22:44:02  Inventory refreshed — 7 present, 1 missing. Starting verification.", "22:47:19  Verification complete — 1 file missing since the last scan."],
+  },
+  coldstorage: {
+    status: "Execution complete", tone: "ok", date: "Jul 14 · 09:14",
+    source: "G:\\ColdStorage\\Source", target: "H:\\ColdStorage\\Mirror",
+    progress: 100,
+    bigSize: "6.7 GB",
+    headline: "Execution complete", headlineTone: "ok",
+    detail: "10 succeeded, 0 skipped, 0 failed · completed 09:14 · Jul 14",
+    options: "trash deletion, verified, integrity — destination",
+    barsVisible: false,
+    view: "inventory",
+    planHTML: PLAN_TREE_DONE, planCounts: { all: 10, changes: 9, moves: 2, conflicts: 1 },
+    invHTML: INV_TREE_CLEAN, invCounts: { all: 4, verified: 3, baseline: 1, unbaselined: 0, missing: 0, reappeared: 0, acknowledged: 0 },
+    freeSpace: "",
+    scanEnabled: true, integrityEnabled: true,
+    executeEnabled: false, cancelEnabled: false,
+    log: ["09:11:02  Scan complete.", "09:12:40  Execution complete — 10 succeeded.", "09:14:03  Linked verification complete — all copies verified."],
+    note: "Copy + verify hands off to Inventory on completion — Plan keeps its finished, per-row status underneath. Toggle to see both.",
+  },
+  fresh: {
+    status: "New task", tone: "neutral", date: "",
+    source: "", target: "",
+    progress: 0,
+    bigSize: "",
+    headline: "Ready.", headlineTone: "neutral",
+    detail: "",
+    options: "trash deletion, not verified, integrity — destination",
+    barsVisible: false,
+    view: "plan",
+    planHTML: null, planCounts: { all: 0, changes: 0, moves: 0, conflicts: 0 },
+    invHTML: null, invCounts: null,
+    freeSpace: "",
+    scanEnabled: false, scanTip: "Choose Source and Destination folders.",
+    integrityEnabled: false, integrityTip: "Choose one existing folder as the integrity location.",
+    executeEnabled: false, cancelEnabled: false,
+    log: [],
+  },
+};
+
+const CARD_ORDER = ["photos", "archive", "footage", "coldstorage", "fresh"];
+const CARD_TITLE = {
+  photos: { status: "Dry-run plan ready." },
+  archive: { status: "Executing…" },
+  footage: { status: "Verification found issues" },
+  coldstorage: { status: "Execution complete" },
+  fresh: { status: "New task" },
+};
+
+let currentId = "photos";
+const viewState = {}; // per-task retained view + inventory filter
+CARD_ORDER.forEach(id => { viewState[id] = { view: TASKS[id].view, filter: "all", invFilter: "all" }; });
+
+function fmtHeader(cols) {
+  return `<div class="tree-header">${cols.map(c => `<div class="cell">${c}</div>`).join("")}</div>`;
+}
+
+function renderRail() {
+  const rail = document.getElementById("railScroll");
+  rail.innerHTML = "";
+  CARD_ORDER.forEach(id => {
+    const t = TASKS[id];
+    const card = document.createElement("div");
+    card.className = "task-card" + (id === currentId ? " selected" : "");
+    card.dataset.tone = t.tone;
+    card.dataset.id = id;
+    const toneClass = t.tone === "ok" ? "tone-ok" : t.tone === "fail" ? "tone-fail" : "";
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="card-status ${toneClass}">${t.status}</div>
+        <button class="card-close" title="Close task">✕</button>
+      </div>
+      <div class="card-line ${t.busy && t.railExecSummary ? "live" : ""}">${t.busy && t.railExecSummary ? t.railExecSummary : t.date}</div>
+      <div class="card-line path">${t.source || ""}</div>
+      <div class="card-line path">${t.target || ""}</div>
+      <div class="card-progress"><i style="width:${t.progress}%"></i></div>
+    `;
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".card-close")) return;
+      currentId = id;
+      renderRail();
+      renderPage();
+    });
+    rail.appendChild(card);
+  });
+}
+
+function starterButtons(t) {
+  if (t === undefined) return "";
+}
+
+function fieldHTML(role, value, placeholder) {
+  const recents = RECENT_PATHS[role]
+    .map(p => `<div class="opt" data-path="${p}">${p}</div>`)
+    .join("");
+  return `
+    <div class="field ${value ? "" : "empty"}" data-role="${role}">
+      <span class="field-text">${value || placeholder}</span>
+      <span class="field-caret">▾</span>
+      <div class="field-dropdown">${recents}</div>
+    </div>`;
+}
+
+function renderPage() {
+  const t = TASKS[currentId];
+  const vs = viewState[currentId];
+  const page = document.getElementById("page");
+
+  const sourceField = fieldHTML("source", t.source, "Source folder");
+  const targetField = fieldHTML("target", t.target, "Destination folder");
+
+  const planStarters = `
+    <button class="btn" id="btnScan" ${t.scanEnabled ? "" : "disabled"} title="${t.scanEnabled ? "Generate dry-run plan" : (t.scanTip || "")}">Scan / Plan</button>`;
+  const invStarters = `
+    <button class="btn" id="btnInventory" ${t.integrityEnabled ? "" : "disabled"} title="${t.integrityEnabled ? "Scan the selected integrity location" : (t.integrityTip || "")}">Inventory</button>
+    <button class="btn" id="btnBaseline" ${t.integrityEnabled ? "" : "disabled"} title="Hash files with no stored baseline">Create baseline</button>`;
+
+  const pauseDisabled = t.cancelEnabled ? "" : "disabled";
+  const cancelBtn = `<button class="btn" id="btnCancel" ${t.cancelEnabled ? "" : "disabled"} title="Cancel current work">Cancel</button>`;
+  const pauseBtn = `<button class="btn" id="btnPause" ${pauseDisabled} title="Pause current work">Pause</button>`;
+  const executeBtn = `<button class="btn primary" id="btnExecute" ${t.executeEnabled ? "" : "disabled"} title="Execute confirmed plan">Execute</button>`;
+  const verifyDisabled = t.integrityEnabled ? "" : "disabled";
+  const verifyTip = t.integrityEnabled ? "Re-read the selected location against stored hashes" : (t.integrityTip || "");
+  const verifySplitBtn = `
+    <div class="split-btn">
+      <button class="btn primary split-main" id="btnVerifyCommit" ${verifyDisabled} title="${verifyTip}">Verify</button>
+      <button class="btn primary split-caret" id="verifyCaret" ${verifyDisabled} title="More verify options">▾</button>
+      <div class="split-menu" id="verifySplitMenu">
+        <div class="menu-item" id="verifySelectedItem">Verify selected</div>
+      </div>
+    </div>`;
+
+  page.innerHTML = `
+    <div class="form-grid ${t.busy ? "busy" : ""}">
+      <div class="form-row"><div class="section-label">Source</div>${sourceField}<button class="btn" ${t.busy ? "disabled" : ""} title="Choose source folder">Browse</button></div>
+      <div class="form-row"><div class="section-label">Destination</div>${targetField}<button class="btn" ${t.busy ? "disabled" : ""} title="Choose destination folder">Browse</button></div>
+    </div>
+
+    <div class="summary-row">
+      <div class="summary-top">
+        <div class="status-headline ${t.headlineTone === "ok" ? "tone-ok" : t.headlineTone === "fail" ? "tone-fail" : ""}">${t.headline}</div>
+        <div class="side-col">
+          <div class="big-size ${t.bigSize ? "" : "dim"}">${t.bigSize ? `<span class="bs-label">Affected volume:</span> <span class="bs-value">${t.bigSize}</span>` : "—"}</div>
+          <div class="side-note-slot">${t.freeSpace || ""}</div>
+        </div>
+      </div>
+      <div class="status-detail">${t.detail}${t.note ? `<br>${t.note}` : ""}</div>
+    </div>
+
+    <div class="progress-area">
+      <div class="exec-line">
+        <div class="info">${t.barsVisible ? t.progressInfo : ""}</div>
+        <div class="current-file">${t.barsVisible ? `<span class="op">${t.progressOp}</span><span class="pth-wrap"><span class="pth" dir="ltr">${t.progressPath}</span></span>` : ""}</div>
+      </div>
+      <div class="bar"><i style="width:${t.barsVisible ? t.barOverall : 0}%"></i></div>
+      <div class="bar file"><i style="width:${t.barsVisible ? t.barFile : 0}%"></i></div>
+    </div>
+
+    <div class="view-action-row">
+      <div class="segment-group">
+        <button class="segment left ${vs.view === "plan" ? "active" : ""}" id="segPlan" title="Show the dry-run plan">Plan</button>
+        <button class="segment right ${vs.view === "inventory" ? "active" : ""}" id="segInv" title="Show the location inventory">Inventory</button>
+      </div>
+      <button class="toggle-link" id="optToggle"><span class="chev">▸</span> Options</button>
+      <div class="options-summary-inline">${t.options}</div>
+      <div class="view-spacer"></div>
+      <div class="starters">${vs.view === "plan" ? planStarters : invStarters}</div>
+    </div>
+
+    <div class="options-pane" id="optPane">
+      <div class="opt-row"><label class="opt-label">Deletion policy</label><div class="select"><span>trash</span><span class="arrow">▾</span></div></div>
+      <div class="opt-row"><label class="opt-label">Integrity location</label><div class="select"><span>Destination</span><span class="arrow">▾</span></div></div>
+      <div class="check-row"><span class="checkbox"></span> Verify execution</div>
+    </div>
+
+    <div class="filter-row" id="planFilterRow" style="display:${vs.view === "plan" ? "flex" : "none"}">
+      ${t.planCounts ? ["all,All", "changes,Changes", "moves,Moves", "conflicts,Conflicts"].map(pair => {
+        const [key, label] = pair.split(",");
+        return `<button class="chip ${vs.filter === key ? "active" : ""}" data-filter="${key}" title="Show ${label.toLowerCase()}"><span>${label}</span><span class="n">${t.planCounts[key]}</span></button>`;
+      }).join("") : ""}
+      <div class="filter-spacer"></div>
+    </div>
+
+    <div class="filter-row" id="invFilterRow" style="display:${vs.view === "inventory" ? "flex" : "none"}">
+      ${t.invCounts ? ["all,All", "verified,Verified", "baseline,Baseline", "unbaselined,Unbaselined", "missing,Missing"].map(pair => {
+        const [key, label] = pair.split(",");
+        return `<button class="chip ${vs.invFilter === key ? "active" : ""}" data-invfilter="${key}" title="Show ${label.toLowerCase()} inventory files"><span>${label}</span><span class="n">${t.invCounts[key]}</span></button>`;
+      }).join("") : ""}
+      ${t.invCounts && t.invCounts.reappeared > 0 ? `<button class="chip ${vs.invFilter === "reappeared" ? "active" : ""}" data-invfilter="reappeared" title="Show reappeared inventory files"><span>Reappeared</span><span class="n">${t.invCounts.reappeared}</span></button>` : ""}
+      ${t.invCounts && t.invCounts.acknowledged > 0 ? `<button class="chip ${vs.invFilter === "acknowledged" ? "active" : ""}" data-invfilter="acknowledged" title="Show acknowledged inventory files"><span>Acknowledged</span><span class="n">${t.invCounts.acknowledged}</span></button>` : ""}
+      <div class="filter-spacer"></div>
+    </div>
+
+    <div class="content-stack" id="contentStack"></div>
+
+    <button class="toggle-link" id="logToggle" style="align-self:flex-start"><span class="chev">▸</span> Log${t.log.length ? ` (${t.log.length})` : ""}</button>
+    <div class="log-view" id="logView">${t.log.map(l => `<div>${l}</div>`).join("") || "<div>—</div>"}</div>
+
+    <div class="commit-row">
+      ${cancelBtn}
+      ${pauseBtn}
+      ${vs.view === "plan" ? executeBtn : verifySplitBtn}
+    </div>
+  `;
+
+  renderContent();
+  wirePage();
+}
+
+function renderContent() {
+  const t = TASKS[currentId];
+  const vs = viewState[currentId];
+  const stack = document.getElementById("contentStack");
+  let hasTree = false;
+  if (vs.view === "plan") {
+    if (!t.planHTML) {
+      stack.innerHTML = `<div class="placeholder"><div class="ph-wrap"><div class="ph-mark"></div>The dry-run plan appears here after Scan / Plan.</div></div>`;
+    } else {
+      stack.innerHTML = `<div class="tree-scroll plan-tree">${fmtHeader(["Item", "Kind", "Size", "Hash", "Status", "Reason"])}${t.planHTML}</div>`;
+      applyPlanFilter(vs.filter);
+      hasTree = true;
+    }
+  } else {
+    if (!t.invHTML) {
+      stack.innerHTML = `<div class="placeholder"><div class="ph-wrap"><div class="ph-mark"></div>Select one existing folder, then choose Inventory to scan and retain its file state.</div></div>`;
+    } else {
+      stack.innerHTML = `<div class="tree-scroll inventory-tree">${fmtHeader(["Item", "Size", "SHA-256", "Presence", "Integrity"])}${t.invHTML}</div>`;
+      applyInvFilter(vs.invFilter);
+      hasTree = true;
+    }
+  }
+  if (hasTree) {
+    const resetBtn = document.createElement("button");
+    resetBtn.className = "reset-view-btn";
+    resetBtn.textContent = "Reset view";
+    resetBtn.title = "Expand every folder and scroll back to the top";
+    resetBtn.addEventListener("click", () => {
+      document.querySelectorAll(".tree-node.collapsed").forEach(n => n.classList.remove("collapsed"));
+      const scroller = stack.querySelector(".tree-scroll");
+      if (scroller) scroller.scrollTop = 0;
+      applyZebraStripes(scroller);
+    });
+    stack.appendChild(resetBtn);
+    normalizeItemIndent(stack);
+    applyZebraStripes(stack.querySelector(".tree-scroll"));
+  }
+  wireDisclosures();
+  wireContextMenu();
+  wireCheckboxes();
+}
+
+// The checkbox is inserted as the item-cell's first child, ahead of the
+// depth-indented disclosure/name — so it would otherwise recede to the
+// right along with them the deeper a row nests. Moving everything *except*
+// the checkbox into its own indented wrapper keeps the checkbox column
+// fixed regardless of nesting depth.
+function normalizeItemIndent(scope) {
+  scope.querySelectorAll(".item-cell").forEach(cell => {
+    const pl = cell.style.paddingLeft;
+    if (!pl || cell.querySelector(".item-indent")) return;
+    cell.style.paddingLeft = "";
+    const wrapper = document.createElement("span");
+    wrapper.className = "item-indent";
+    wrapper.style.paddingLeft = pl;
+    const checkbox = cell.querySelector(":scope > .row-check");
+    [...cell.children].forEach(child => {
+      if (child !== checkbox) wrapper.appendChild(child);
+    });
+    cell.appendChild(wrapper);
+  });
+}
+
+// Alternating background follows the flattened *visual* row order, since
+// nth-child can't see past each folder's own nesting container (see the
+// .row-alt CSS comment). Hidden rows (filtered out or inside a collapsed
+// folder) are skipped so the stripe sequence matches what's on screen.
+function applyZebraStripes(scope) {
+  if (!scope) return;
+  const rows = [...scope.querySelectorAll(".tree-row")].filter(
+    r => !r.classList.contains("hidden-row") && !r.closest(".tree-node.collapsed")
+  );
+  rows.forEach((r, i) => r.classList.toggle("row-alt", i % 2 === 1));
+}
+
+function applyPlanFilter(key) {
+  document.querySelectorAll(".plan-tree .file-row").forEach(row => {
+    const kind = row.dataset.kind;
+    let show = true;
+    if (key === "changes") show = row.dataset.changes === "1";
+    else if (key === "moves") show = kind === "move";
+    else if (key === "conflicts") show = kind === "conflict";
+    row.classList.toggle("hidden-row", !show);
+  });
+  applyZebraStripes(document.querySelector(".plan-tree"));
+}
+
+function applyInvFilter(key) {
+  document.querySelectorAll(".inventory-tree .file-row").forEach(row => {
+    const status = row.dataset.status;
+    const show = key === "all" ? status !== "acknowledged" : status === key;
+    row.classList.toggle("hidden-row", !show);
+  });
+  applyZebraStripes(document.querySelector(".inventory-tree"));
+}
+
+let lastClickedRow = null;
+
+function wireDisclosures() {
+  document.querySelectorAll(".disclosure").forEach(d => {
+    d.addEventListener("click", (e) => {
+      const node = e.target.closest(".tree-node");
+      if (node) node.classList.toggle("collapsed");
+      applyZebraStripes(e.target.closest(".tree-scroll"));
+    });
+  });
+  const fileRows = () => [...document.querySelectorAll(".tree-row.file-row")].filter(x => !x.classList.contains("hidden-row"));
+  document.querySelectorAll(".tree-row.file-row").forEach(r => {
+    r.addEventListener("click", (e) => {
+      const rows = fileRows();
+      if (e.shiftKey && lastClickedRow && rows.includes(lastClickedRow)) {
+        // Range-select from the last plain/ctrl click (the anchor) through
+        // this row, without moving the anchor itself.
+        const a = rows.indexOf(lastClickedRow);
+        const b = rows.indexOf(r);
+        const [start, end] = a < b ? [a, b] : [b, a];
+        rows.forEach((x, i) => x.classList.toggle("selected", i >= start && i <= end));
+      } else if (e.ctrlKey || e.metaKey) {
+        r.classList.toggle("selected");
+        lastClickedRow = r;
+      } else {
+        rows.forEach(x => x.classList.remove("selected"));
+        r.classList.add("selected");
+        lastClickedRow = r;
+      }
+    });
+  });
+}
+
+function setCheckState(el, state) {
+  el.classList.remove("checked", "indeterminate");
+  if (state === "checked" || state === "indeterminate") el.classList.add(state);
+  el.dataset.state = state;
+}
+
+function getCheckState(el) {
+  return el ? (el.dataset.state || "unchecked") : "unchecked";
+}
+
+// One bottom-up pass over the visible tree: every folder's checkbox reflects
+// its direct children — checked only if all are checked, indeterminate if
+// mixed. Reversing document order visits the deepest folders first, so a
+// parent always sees its children's already-settled state.
+function recomputeFolderChecks(scope) {
+  const nodes = [...scope.querySelectorAll(".tree-node")].reverse();
+  nodes.forEach(node => {
+    const folderCheck = node.querySelector(":scope > .tree-row.folder-row > .item-cell > .row-check");
+    const childrenContainer = node.querySelector(":scope > .tree-children");
+    if (!folderCheck || !childrenContainer) return;
+    const childChecks = [
+      ...childrenContainer.querySelectorAll(":scope > .tree-node > .tree-row.folder-row > .item-cell > .row-check"),
+      ...childrenContainer.querySelectorAll(":scope > .tree-row.file-row > .item-cell > .row-check"),
+    ].map(getCheckState);
+    if (!childChecks.length) return;
+    const allChecked = childChecks.every(s => s === "checked");
+    const noneChecked = childChecks.every(s => s === "unchecked");
+    setCheckState(folderCheck, allChecked ? "checked" : noneChecked ? "unchecked" : "indeterminate");
+  });
+}
+
+function wireCheckboxes() {
+  document.querySelectorAll(".row-check").forEach(check => {
+    check.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const row = check.closest(".tree-row");
+      const newState = getCheckState(check) === "checked" ? "unchecked" : "checked";
+      setCheckState(check, newState);
+      if (row.classList.contains("folder-row")) {
+        const node = row.closest(".tree-node");
+        const childrenContainer = node && node.querySelector(":scope > .tree-children");
+        if (childrenContainer) {
+          childrenContainer.querySelectorAll(".row-check").forEach(c => setCheckState(c, newState));
+        }
+      }
+      const scope = check.closest(".tree-scroll");
+      if (scope) recomputeFolderChecks(scope);
+    });
+  });
+}
+
+function wireContextMenu() {
+  document.querySelectorAll(".inventory-tree .tree-row.file-row").forEach(row => {
+    row.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      row.classList.add("selected");
+      openCtxMenu(e.clientX, e.clientY, row.dataset.status);
+    });
+  });
+}
+
+function openCtxMenu(x, y, status) {
+  const menu = document.getElementById("ctxMenu");
+  const isMissing = status === "missing";
+  const isAck = status === "acknowledged";
+  menu.innerHTML = `
+    <div class="menu-item">Verify selected</div>
+    <div class="menu-item ${isMissing ? "" : "disabled"}">Acknowledge missing</div>
+    <div class="menu-item ${isAck ? "" : "disabled"}">Restore acknowledged</div>
+    <div class="menu-sep"></div>
+    <div class="menu-item">Copy path</div>
+  `;
+  menu.style.left = x + "px";
+  menu.style.top = y + "px";
+  menu.classList.add("open");
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#ctxMenu")) document.getElementById("ctxMenu").classList.remove("open");
+  if (!e.target.closest(".menu")) document.querySelectorAll(".menu.open").forEach(m => m.classList.remove("open"));
+  if (!e.target.closest(".field")) document.querySelectorAll(".field-dropdown.open").forEach(d => d.classList.remove("open"));
+  if (!e.target.closest(".split-btn")) document.querySelectorAll(".split-menu.open").forEach(m => m.classList.remove("open"));
+});
+
+function wirePage() {
+  const vs = viewState[currentId];
+
+  document.getElementById("optToggle").addEventListener("click", (e) => {
+    e.currentTarget.classList.toggle("open");
+    document.getElementById("optPane").classList.toggle("open");
+  });
+  document.getElementById("logToggle").addEventListener("click", (e) => {
+    e.currentTarget.classList.toggle("open");
+    document.getElementById("logView").classList.toggle("open");
+  });
+
+  document.getElementById("segPlan").addEventListener("click", () => { vs.view = "plan"; renderPage(); });
+  document.getElementById("segInv").addEventListener("click", () => { vs.view = "inventory"; renderPage(); });
+
+  document.querySelectorAll("#planFilterRow .chip").forEach(chip => {
+    chip.addEventListener("click", () => { vs.filter = chip.dataset.filter; renderPage(); });
+  });
+  document.querySelectorAll("#invFilterRow .chip").forEach(chip => {
+    chip.addEventListener("click", () => { vs.invFilter = chip.dataset.invfilter; renderPage(); });
+  });
+
+  // Recent-paths popup — only wired while the field isn't grayed out/busy.
+  document.querySelectorAll(".field").forEach(field => {
+    if (field.closest(".form-grid").classList.contains("busy")) return;
+    field.addEventListener("click", () => {
+      const dd = field.querySelector(".field-dropdown");
+      const wasOpen = dd.classList.contains("open");
+      document.querySelectorAll(".field-dropdown.open").forEach(d => d.classList.remove("open"));
+      if (!wasOpen) dd.classList.add("open");
+    });
+    field.querySelectorAll(".field-dropdown .opt").forEach(opt => {
+      opt.addEventListener("click", (e) => {
+        e.stopPropagation();
+        field.querySelector(".field-text").textContent = opt.dataset.path;
+        field.classList.remove("empty");
+        field.querySelector(".field-dropdown").classList.remove("open");
+      });
+    });
+  });
+
+  // Verify's folded split button: caret unfolds "Verify selected".
+  const verifyCaret = document.getElementById("verifyCaret");
+  if (verifyCaret) {
+    verifyCaret.addEventListener("click", (e) => {
+      e.stopPropagation();
+      document.getElementById("verifySplitMenu").classList.toggle("open");
+    });
+    document.getElementById("verifySelectedItem").addEventListener("click", () => {
+      document.getElementById("verifySplitMenu").classList.remove("open");
+    });
+  }
+
+  // Pause is a visual toggle here — Resume until Cancel or a new run resets it.
+  const pauseBtn = document.getElementById("btnPause");
+  if (pauseBtn) {
+    pauseBtn.addEventListener("click", () => {
+      pauseBtn.textContent = pauseBtn.textContent === "Pause" ? "Resume" : "Pause";
+    });
+  }
+}
+
+document.querySelectorAll(".menu > .menu-label").forEach(label => {
+  label.addEventListener("click", (e) => {
+    const menu = e.currentTarget.parentElement;
+    const wasOpen = menu.classList.contains("open");
+    document.querySelectorAll(".menu.open").forEach(m => m.classList.remove("open"));
+    if (!wasOpen) menu.classList.add("open");
+  });
+});
+
+renderRail();
+renderPage();
+</script>
