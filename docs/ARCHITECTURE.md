@@ -134,6 +134,16 @@ an `ExecutionSet` awaiting a second session — and resume is the same
 observe → preflight → execute path as any queue wakeup. An in-flight temp file
 abandoned by a mid-copy pause is reclaimed by ordinary orphaned-temp recovery.
 
+Pause is a per-kind capability, declared once at workflow registration and
+enforced through the transition table: only session kinds with a continuation
+state accept it — execution from M0, the verifier's item-list sessions
+(verify/baseline) from M1 — while scan/plan and import sessions (seconds of
+work, no continuation) refuse pause cleanly and remain cancelable. The
+recorder needs no pause behavior at all: it is call-driven, not stream-driven —
+while nothing executes it simply receives no calls, and the pause-drain forced
+flush (§4.7) has already committed every completed operation's evidence before
+locks release.
+
 ### 2.2a Session runner (bones)
 
 One generic runner, in `core/session.py`, wraps every workflow invocation and
@@ -150,7 +160,11 @@ def run_session(work: Callable[[RunContext], SessionResult], ctx) -> None:
     except PauseRequested:
         transition(PAUSED)                 # no Terminal — session isn't over
     except BaseException as e:
-        emit(Terminal(failed_result(e)))   # FAILED; exception still surfaces
+        emit(Terminal(failed_result(e)))   # FAILED; the runner CONSUMES the
+                                           # exception — typed detail rides the
+                                           # Terminal and the log; nothing
+                                           # re-raises past here, so a second
+                                           # terminal is unconstructible
 ```
 
 The dispatcher wraps `run_session` with lock custody: acquire before, release
@@ -158,6 +172,11 @@ in its own `finally` on every terminal *and* on pause. Exactly-one-terminal is
 a property of this one `finally`-shaped function, not of any module's
 discipline — scan, plan, execute, verify, import, maintenance, and dummy
 sessions all inherit it identically.
+
+Terminal results for cancel, pause, and failure paths are assembled by the
+runner from the session's own emitted RELIABLE `ItemOutcome` stream — control
+flow exceptions carry no payload, and emit-as-you-go (§2.3: silent-until-done
+is not expressible) is what makes the unwind lossless.
 
 ### 2.3 Events (bones)
 
@@ -204,7 +223,10 @@ Invariants (bones):
   drop. Its buffer is sized to absorb at least the events emitted between two
   adjacent checkpoints (≈ one outcome per operation), so backpressure engages
   between operations at a checkpoint-adjacent emit — never as a mid-operation
-  stall — and the wait is bounded by the observer's batched write pace. Any
+  stall — and the wait is capped by a generous injected timeout: a writer that
+  stalls past it or fails outright degrades that session's `audit` axis loudly
+  and blocking stops, so delivery is guaranteed *unless the result says
+  otherwise*, never silently absent. Any
   *other* reliable subscriber that overruns its bounded queue is ejected with
   an explicit `Gap` event rather than silently thinned. The replay buffer is
   bounded per session; a late subscriber gets current state plus a bounded
@@ -253,12 +275,19 @@ class CapabilityProfile:        # one per scanned root
     incurs_seek_penalty: bool | None   # HDD vs SSD; None = unknown → treat as HDD
     max_path: int
     supports_ads: bool
+    supports_hardlinks: bool    # FILE_SUPPORTS_HARD_LINKS volume flag — drives
+                                # the trash-on-update backup fallback and its
+                                # capacity accounting
 
 @dataclass(frozen=True)
 class MetadataSnapshot:         # what "preserve metadata" observed / intends
     attributes: int             # readonly / hidden / system bits
     created_ns: int | None      # None where the fs can't say
-    has_ads: bool | None        # None where the volume can't say
+    streams: tuple[StreamInfo, ...] | None   # ADS manifest (name + size),
+                                # enumerated only when the mapping's
+                                # preservation policy requests ADS — policy-
+                                # driven scan depth; None = not enumerated
+                                # or unsupported
 
 @dataclass(frozen=True)
 class FileRecord:
@@ -271,9 +300,9 @@ class FileRecord:
     metadata: MetadataSnapshot
 
 @dataclass(frozen=True)
-class DirRecord:                # today recorded for empty directories only;
-    rel_path: str               # recording EVERY directory is additive flesh a
-    rel_path_key: str           # future directory-move op can turn on
+class DirRecord:                # EVERY walked directory is recorded — created
+    rel_path: str               # directories need reviewed metadata, and
+    rel_path_key: str           # dir-level move detection later needs identity
     metadata: MetadataSnapshot
     file_identity: FileIdentity | None   # present now so dir-level move
                                 # detection needs no shape change later
@@ -328,9 +357,16 @@ class Plan:                    # immutable snapshot of intent — PURE of observ
 
 @dataclass(frozen=True)
 class PreservationPolicy:
-    preserve_ads: bool          # where supported; failure ⇒ per-op warning
+    preserve_ads: bool          # streams are USER DATA: a requested stream
+                                # that fails to copy on a capable target FAILS
+                                # the op; an ADS-incapable target surfaces at
+                                # plan time as a reviewable degradation
     preserve_created: bool      # where supported
-    preserve_acl: bool = False  # explicit opt-in
+    preserve_acl: bool = False  # explicit opt-in; the security descriptor is
+                                # copied at execution time (preserve-current,
+                                # not preserve-scanned — a scan-time ACL
+                                # snapshot would be heavy and stale); failure
+                                # when opted in FAILS the op
 
 @dataclass(frozen=True)
 class Commitment:               # the durable preauthorization (commit-to-execute)
@@ -401,10 +437,19 @@ class RecordingStatus(StrEnum):
     DEGRADED = "degraded"       # work is true, bookkeeping is behind — loud,
                                 # separate axis, converges on next scan
 
+class Disposition(StrEnum):
+    RAN   = "ran"
+    UNRUN = "unrun"             # never started working: discarded queue
+                                # entries, refusals — typed, never inferred
+                                # from a zero-length operation list or a
+                                # parsed string
+
 @dataclass(frozen=True)
 class OperationResult:
     status: SessionState        # terminal member — FILESYSTEM truth only
     recording: RecordingStatus  # ledger truth — never folded into status
+    audit: RecordingStatus      # history truth — same axis rules (§2.3)
+    disposition: Disposition    # CANCELED + UNRUN = discarded before start
     canceled: bool
     operations: tuple[ItemResult, ...]
     bytes_done: int
@@ -528,8 +573,9 @@ drive-qualified, `..`, root-escaping).
 `complete` flag; cancellation via `ctx.checkpoint()`; visited-identity tracking
 so junctions/reparse loops cannot recurse forever.
 
-**Flesh — now.** Recursive metadata walk (size, mtime_ns, identity, nlink);
-exact-name ignore filtering; capability profiling; placeholder detection
+**Flesh — now.** Recursive metadata walk (size, mtime_ns, identity, nlink;
+every directory recorded with metadata; stream manifests when the active
+preservation policy requests ADS); exact-name ignore filtering; capability profiling; placeholder detection
 (classify reparse/offline files `unsupported`, never open them); scan warnings.
 **Flesh — deferred.** USN change-journal `ChangeSource`; network-share awareness.
 
@@ -555,9 +601,12 @@ workflow reads correspondence from repositories and passes it in.
 
 **Bones.** `Plan`/`PlanOperation`/`Scope`/`MappingSnapshot` shapes;
 deterministic op ids, dependency ordering, and the plan `fingerprint`; the
-capacity formula (single source of truth, sized for max concurrent temps) with
+capacity formula (single source of truth, sized for max concurrent temps, and
+profile-aware — an update on a target without hardlink support also counts the
+displaced version's backup-copy bytes) with
 **no observed free space anywhere in the plan** — capacity is a pure formula
-over operations, free space is preflight's observation; correspondence-aware
+over operations and capability profiles, free space is preflight's
+observation; correspondence-aware
 move detection (prior accepted identity↔path pairs — the PoC lost move
 evidence because paired no-ops were never persisted); `filter_snapshot`
 embedded in the plan; **diffing keyed through `DestinationPolicy.assign()`** —
@@ -566,7 +615,10 @@ though the M0 policy is the identity assignment. This one indirection is what
 makes ingest a policy change instead of a planner rewrite.
 
 **Flesh — now.** Metadata diffing within the coarser root's granularity;
-copy/update/mkdir/trash/delete/noop planning; identity-based move detection
+copy/update/trash/delete/noop planning, with an explicit mkdir-with-metadata
+operation for every directory the plan creates (full chain — file operations
+depend on their parent's mkdir; the executor never creates a directory
+implicitly); identity-based move detection
 (disabled where identity is absent or `nlink>1` or an id appears at multiple
 paths); directory rename decomposition (per-file identity moves + full mkdir
 chain + emptied-dir cleanup — no directory-level move op exists in M0, and the
@@ -587,7 +639,8 @@ grouping) with enrichment metadata supplied by the workflow.
   cleaned up (plan reasons about its own removals, not just the pre-scan).
 - Capacity `required_bytes` never undercounts concurrent updates; a selection
   preflight accepted against observed free space never hits ENOSPC the shared
-  formula could have predicted.
+  formula could have predicted. On a no-hardlink target, the formula includes
+  the displaced versions' backup-copy bytes.
 - Move detection consults prior correspondence: a rename whose evidence lives
   only in the mapping's recorded no-ops is still detected; with an empty
   correspondence snapshot, no false move is ever invented.
@@ -619,7 +672,7 @@ from that snapshot alone and never touches the filesystem.
 
 The split is a bone, for three reasons: `preflight()` becomes exhaustively
 testable against synthetic worlds with no temp directories; the expensive IO
-happens once and can be reused (review and the executor's self-guard can share a
+happens once and can be reused (review and execution start can share a
 snapshot when they're close enough in time); and "pure" stops being an honor
 system. All IO lives in one small function whose only job is statting.
 
@@ -650,37 +703,48 @@ continue-or-refuse).
 - A plan from an incomplete scan is always refused.
 - A nearly-full target whose own orphaned temps would free the needed space is
   **not** refused (PoC open-bug fix).
-- Running the same `preflight` at review, at execute-guard, and at resume
+- Running the same `preflight` at review, at execution start, and at resume
   yields consistent verdicts for an unchanged world.
 
 ### 4.5 executor
 
 **Contract.**
-`execute(xset, ctx, recorder, policies) -> ExecResult`. Guards itself by calling
-`observe` + `preflight` as its first act — unconditionally, never trusting that
-its caller already did. Records only through `recorder`.
+`execute(xset, ctx, recorder, policies) -> ExecResult`. The workflow owns the
+observe → preflight → execute sequence on every start and every resume (§4.9);
+the executor never imports or calls preflight. Its own defense is
+**per-operation**: immediately before each mutation it re-validates that
+operation's direct preconditions against the live filesystem — preflight is
+one stage of TOCTOU prevention, never the last, because the world can change
+between preflight and touch. Records only through `recorder`.
 
 **Bones.** Typed-result return — the session runner owns `Terminal` (§2.2a);
 atomic temp-then-`os.replace` publish with best-effort parent-dir flush (a
 refused flush is a per-op warning; durability is claimed only for what was
 flushed); **displace-then-replace update order** — the live target is preserved
-into trash by atomic same-volume hardlink (copy fallback where hardlinks don't
-exist) *before* `os.replace` publishes over it, so no crash point leaves the
+into trash by atomic same-volume hardlink — with a copy fallback on volumes
+reporting no hardlink support, itself written temp-flush-publish *inside the
+trash run directory* so a partial backup only ever exists under a temp name —
+*before* `os.replace` publishes over it, so no crash point leaves the
 live path absent — a readonly live target has its readonly bit cleared before
 replace (Windows refuses to rename over a readonly file), with the original
 attribute preserved in the plan's metadata snapshot — and composite
 move-update publishes at the new path before trashing the old, so a crash
 leaves both versions present, never neither; the
-temp-name shape `<name>.synctmp-<run-id>-<op-id>`; per-operation final guards
-(no overwrite of unexpected targets, type/emptiness checks before directory
-trash/delete); readonly applied only after publish; directory metadata applied
+temp-name shape `<name>.synctmp-<run-id>-<op-id>`; trash-restore planning
+ignores exact-shape temp names (a partial backup is never restorable) and
+orphaned trash temps age out with the trash run directory — temp recovery
+itself still never walks `.synctrash`; per-operation final guards — the
+executor's own last line of TOCTOU defense (no overwrite of unexpected
+targets, source evidence re-checked at touch, type/emptiness checks before
+directory trash/delete); readonly applied only after publish; directory metadata applied
 only after the directory's children settle (child creates and renames churn
 parent times — directory times are restored last); content-only byte
 accounting; the `FailurePolicy`/`CopyBackend` seams.
 
-**Flesh — now.** copy/update/move/mkdir/trash/delete/noop; hash-on-copy;
-source-drift guard (re-stat source after read; mismatch fails the op, records
-nothing); trash-on-update; root-local trash with volume-identity resolution;
+**Flesh — now.** copy/update/move/mkdir-with-metadata/trash/delete/noop;
+hash-on-copy; source-drift guard (re-stat source — and re-enumerate its stream
+manifest when ADS preservation is active — after read; mismatch fails the op,
+records nothing); trash-on-update; root-local trash with volume-identity resolution;
 temp recovery by exact name in touched dirs only; per-op continue-on-failure;
 chunked cancellation.
 **Flesh — deferred.** Validated partial execution (`DEFERRED` outcomes);
@@ -725,7 +789,9 @@ missing, unsupported, canceled, error); attestation provenance tagging.
 **Flesh — now.** Baseline creation; location verification against the
 size/mtime/identity/hash unit; selected and post-execution verification;
 cache-honest reads; safe conditional recording; accept/re-baseline of a modified
-file.
+file; item-status continuation — verify/baseline sessions pause and resume over
+their remaining selection exactly like execution (same continuation pattern,
+same preflight-on-resume posture).
 **Flesh — deferred.** Multithreaded verification (per-volume-side worker policy);
 IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 (diagnose which side is damaged).
@@ -799,7 +865,9 @@ summaries and retained issue detail; retention sweeps (writable connection).
 
 **Contract.** `submit(kind, request) -> SessionId`; `pause/resume/cancel(id)`;
 `subscribe(id) -> stream`; `list()/get(id)`. Imports core only; resolves `kind`
-through an injected workflow registry it never introspects.
+through an injected workflow registry it never introspects; a registry entry
+declares generic per-kind capabilities (today: pause support) that the control
+plane enforces without learning a domain word.
 
 **Bones.** Generic session admission; volume-scoped concurrency (non-overlapping
 volume sets run in parallel, contenders queue); resource custody (locks acquired
@@ -919,7 +987,9 @@ same pipeline — the *Pipeline-Only Mutation* law); `run_ingest` — scan → e
 - No workflow ever waits on user input; `run_plan` terminates and releases every
   lock while a plan awaits review.
 - `run_execution` always re-observes and re-preflights, regardless of how
-  recently `run_plan` ran.
+  recently `run_plan` ran — it is the sole pre-mutation preflight; the
+  executor's own defense is per-operation precondition re-checking, never a
+  preflight import.
 - A refused preflight short-circuits to a `REFUSED` terminal with no mutation.
 - An execution session refuses an uncommitted or fingerprint-mismatched
   `ExecutionSet` before preflight even runs.
@@ -963,9 +1033,10 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
    reconciles, never rolls back true evidence to look tidy.
 4. **Records are calls that may fail loudly; telemetry is a stream that may be
    missed silently.** The ledger is a record. History is *audit*: guaranteed
-   delivery over the event plane (bounded backpressure, never dropped),
-   best-effort durability with loud failure — it can be behind, never silently
-   absent, and it never alters a filesystem outcome. Progress is telemetry.
+   delivery over the event plane (bounded, timeout-guarded backpressure) unless
+   the session result's `audit` axis loudly says otherwise — never silently
+   absent — with best-effort durability, and it never alters or blocks a
+   filesystem outcome. Progress is telemetry.
 5. **Policies decide, the machine enforces.** Extension points return decisions,
    never receive control.
 6. **Pipeline-only mutation** of managed user data (§4.9); app-owned artifacts
@@ -978,8 +1049,8 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
 11. **Commit-to-execute** — mutation of managed user data happens only under a
     committed, fingerprint-bound, human-reviewed plan; scripts and queues
     replay commitments, never mint them.
-12. **Two-axis truth** — filesystem status and recording status are reported
-    separately; neither ever rewrites the other.
+12. **Axis-separated truth** — filesystem status, ledger recording status, and
+    audit status are reported separately; no axis ever rewrites another.
 
 ---
 

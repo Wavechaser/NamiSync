@@ -32,18 +32,21 @@ executor, recorder, verifier/importer, and settings snapshots.
 
 ### Execution session
 
-1. Accept an explicit reviewed `ExecutionSet` commitment.
+1. Accept only an explicit `Commitment` whose plan fingerprint and selection
+   digest match the reviewed `ExecutionSet`; refuse before preflight otherwise.
 2. Reacquire required physical-volume custody.
 3. Load current semantic environment without altering the reviewed snapshot.
-4. Executor freshly observes/preflights; refusal mutates nothing.
+4. Freshly observe/preflight under execution custody; refusal mutates nothing.
 5. Execute selected dependency-closed work and record through recorder.
 6. Optionally start a separately scoped linked verification phase/session as
    specified by the request.
 7. Return truthful filesystem, recording, and verification aggregates.
 
-Human review occurs between sessions with nothing running. DR-01 applies: a
-single-session no-gate workflow is not permitted unless an explicit durable
-preauthorization is defined as equivalent review.
+Human review occurs between sessions with nothing running. Commitment is the
+durable preauthorization and has no time expiry, but it binds exactly one plan
+fingerprint and dependency-closed selection. Scripts and queue releases may
+replay an existing commitment; no API plans and executes in one unreviewed
+breath.
 
 ## Integrity Workflow
 
@@ -67,14 +70,23 @@ handoff so it never shows stale/empty rows during work.
   mutation remains guarded/history-logged.
 - Ingest follows [INGEST.md](INGEST.md) and the same two-session review boundary.
 - Queue wakeup starts only an already reviewed/authorized execution set and
-  freshly preflights; silent replan is forbidden.
+  freshly preflights; silent replan is forbidden. Contending commitments retain
+  commit order, while disjoint-volume work may run concurrently.
 
 ## Error And Result Aggregation
 
 Workflow catches typed module failures at the correct boundary, preserves
 already-earned item/filesystem results, and lets the generic session runner
-produce terminal. It never maps recorder failure to “copy failed” or observer
-failure to domain failure without the DR-15/DR-16 aggregate policy.
+produce terminal. Filesystem-derived `SessionState` and ledger
+`RecordingStatus` are independent. A history failure is also surfaced without
+changing either, but the authoritative `OperationResult` still lacks a typed
+history/audit status field; public result aggregation cannot freeze until that
+shape is reconciled.
+
+Paused execution continues from `ExecutionSet.status` after fresh preflight.
+The restart/continuation and duplicate-outcome rules for paused scan, baseline,
+verify, and import workflows are not defined; those workflows must not claim
+resumable pause merely because their loops call `checkpoint()`.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An
@@ -99,6 +111,14 @@ all-noop explicit run is completed/no-op and still history-worthy.
   reaches around workflow to call executor/SQL.
 - Settings shaping a plan are snapshotted, not read opportunistically later.
 
+Architecture still needs to place the mandatory execute guard consistently:
+workflows are the only legal module-composition layer, but the executor section
+also says executor calls preflight itself while importing no sibling. Until a
+core injected guard protocol is added, workflow-owned observe/preflight plus
+executor final per-operation guards is the only shape that obeys the import
+law; this is recorded for authoritative review rather than silently settled
+here.
+
 ## PoC Hardening
 
 This sequencing prevents the unwired ledger, preview side effects, no-inventory
@@ -117,8 +137,9 @@ import from handling refusal differently than baseline/verify.
   and preflight; drift refuses without mutation.
 - No workflow waits for human input; mandatory review is between terminated and
   newly submitted sessions.
-- A no-gate execution cannot be invoked unless DR-01's explicit authorization
-  contract is present and tested.
+- An uncommitted execution or one whose plan/selection no longer matches is
+  refused before preflight; queue/script paths can replay but never mint a
+  commitment without human review.
 - Baseline/verify with no prior inventory automatically inventories then hashes;
   selected verify refreshes only selected canonical paths.
 - Location integrity requires only the selected location and never silently
@@ -126,6 +147,9 @@ import from handling refusal differently than baseline/verify.
 - Refusal, all-noop, partial failure, cancel, recorder failure, observer failure,
   and unexpected exception each preserve truthful typed results and history
   behavior.
+- Pause/resume preserves completed execution outcomes and fresh-guards remaining
+  work; non-execution pause remains unavailable until its continuation contract
+  is specified.
 - Linked verify selection equals successful eligible executed operations and is
   handed to UI at the execution-to-verification phase boundary.
 - Replay/undo/repair never execute retained historical operations directly and
@@ -134,4 +158,3 @@ import from handling refusal differently than baseline/verify.
   changes invalidate only state whose identity depends on that location.
 - Import-linter proves workflows may import core/modules/db but not dispatcher
   or interfaces.
-

@@ -19,10 +19,11 @@ and mini progress. The session table is live-state authority; durable task
 grouping later links to history without making CLI/service activities require a
 task parent.
 
-Closing an idle task removes presentation state under retention policy. Closing
-a busy task asks a phase-specific cancel/pause action and waits for actual
-session/thread completion. It never destroys a live worker because a UI `busy`
-flag changed early.
+Closing a terminal task explicitly drops its live `SessionStore` record; durable
+history remains. Closing a queued-unrun task first waits for its discarded audit
+event to be delivered. Closing a busy task asks a phase-specific cancel/pause
+action and waits for actual session/thread completion. It never destroys a live
+worker because a UI `busy` flag changed early.
 
 ## Single-Page Task Shell
 
@@ -42,15 +43,22 @@ shows operation kind, dependencies, reason, source/destination, bytes, hashes or
 evidence, conflict/block state, and status. Rolled-up counts/sizes reflect the
 active All/Changes/Moves/Conflicts filter.
 
+A folder rename is presentation grouping over its per-file moves, full mkdir
+chain, and cleanup dependencies. Expanding it reveals real executable operation
+ids/outcomes; grouping never becomes a hidden directory-level mutation.
+
 Blocked operations do not disable unrelated dependency-closed work globally.
 Any future partial selection recomputes dependencies/capacity and shows deferred
 outcomes. Verify-after-execution is disclosed in scope/operation presentation.
-Commit starts a new execution session and fresh preflight; refusal is visibly
-different from success.
+Commit binds the reviewed plan fingerprint and exact dependency-closed selection
+digest, then starts a new execution session and fresh preflight. Editing the
+selection invalidates the commitment. Refusal is visibly different from
+success.
 
-No automatic/unattended UI execution bypasses DR-01. Cancel/pause text explains
-the current phase, in-flight temp behavior, retained completed work, and lock
-release/resume consequences.
+No automatic/unattended UI execution bypasses commitment. Cancel/pause text
+explains the current phase, in-flight temp behavior, retained completed work,
+and lock release/resume consequences. Resume returns to the back of the volume
+queue and never interrupts currently running work.
 
 ## Inventory And Integrity
 
@@ -179,6 +187,8 @@ verification; silent invalid paths; and hidden verify-after-execution scope.
   modified, missing, unsupported, canceled, and error are distinct.
 - Refusal, all-noop, partial failure, canceled, recording-behind, and history
   degradation have truthful distinct headlines and accessibility text.
+- Closing a terminal task drops only live session state; queued discard is
+  audit-delivered first and neither action deletes durable history.
 - Menu/button/context actions share label, shortcut, enablement, scope, and
   dispatch behavior from one source.
 - History renders each activity kind and retained detail; retention actually

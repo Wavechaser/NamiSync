@@ -1,75 +1,110 @@
 # NamiSync Handoff
 
-## Changes
+Date: 2026-07-18
 
-- Resolved all `DESIGN_REVIEW.md` findings with the user — the 23 original
-  items plus DR-24 (directory operations), found during the sanity pass — and
-  recorded a dated **Resolution** note under every item; the review file is
-  now the decision log.
-- Updated the authoritative sources to match, in the prescribed order
-  (`FEATURES.md` first, then `ARCHITECTURE.md`). Headline decisions:
-  - **Commit-to-execute** (DR-01): a reviewed plan's explicit commitment,
-    bound to the plan's deterministic fingerprint, is the durable
-    preauthorization; committed plans queue and run sequentially;
-    `run_unattended_sync` removed; no plan-and-execute-without-review path
-    exists anywhere.
-  - **Session runner** (DR-02/03): new `core/session.py` runner owns
-    exactly-one-`Terminal` and pause/cancel resolution; `Checkpoint` never
-    blocks — it raises `PauseRequested`/`Canceled`; a paused execution is
-    exactly a queued `ExecutionSet`, resumed via the queue-wakeup path.
-  - **Planner inputs** (DR-04/05): `plan()` gains an immutable
-    `MappingSnapshot` correspondence input; `target_free_space` removed from
-    `Plan` (free space is `observe()`'s job).
-  - **Displace-then-replace updates** (DR-08): hardlink-to-trash then atomic
-    `os.replace`; no crash point leaves the live target absent.
-  - **History = audit with guaranteed delivery** (DR-09/16): bounded producer
-    backpressure for the history observer, `Gap`-event ejection for other
-    reliable subscribers, bounded replay buffer.
-  - **Two-axis truth** (DR-15): terminal `SessionState` reports filesystem
-    work; a separate `RecordingStatus` reports ledger bookkeeping.
-  - **M0 scope additions** (DR-13): real cross-process volume locks before the
-    executor's first mutation.
-  - Type-level fixes: `VolumeId` reduced to stable key material (DR-10),
-    `UnsupportedRecord` collection on `ScanResult` (DR-11), typed
-    `Subject`-keyed `ObservedWorld.stats` (DR-21), `ContentEvidence` +
-    post-publish subject stat in `Attestation` (DR-07), `MetadataSnapshot` +
-    `PreservationPolicy` (DR-22), `current_filters` in `ObservedWorld`
-    (DR-06), typed `IntegrityOutcome` event body (DR-14), annotation key
-    namespace in the schema freeze (DR-18, partial pull-forward).
-  - Doc corrections: CLI sync-command contract and no-subcommand behavior
-    (DR-19), latent-protocol rule and fixed §7 reference (DR-20), core-owns-
-    contracts wording (DR-23), best-effort directory-flush honesty (DR-12),
-    session-record retention (DR-17).
+## Session Outcome
 
-- A sanity-check pass over the updated authoritative docs then caught and
-  fixed: a commitment-check-in-preflight contradiction (commitment checking
-  lives only at the execution session's entry — preflight also runs at review
-  time, pre-commitment); `Commitment` now binds the reviewed selection
-  (`selection_digest`) alongside the plan fingerprint; `observe()` gains an
-  injected `SettingsReader`; readonly targets are cleared before `os.replace`
-  (Windows refuses to rename over readonly); the interrupted-update `nlink=2`
-  trash-link interaction is documented as benign; volume matching wording
-  corrected (in-place conversion preserves the serial, a true reformat
-  regenerates it); `Gap`/`REFUSED` comments clarified.
-- Follow-up decisions: **Resume Never Preempts** (a resumed session re-enters
-  at the back of its volumes' queue); history backpressure buffer sized to
-  absorb inter-checkpoint emissions; **DR-24** directory operations —
-  decompose + grouped review, `DirRecord` defined (metadata + optional
-  identity), directory metadata applied after children settle.
+Reviewed the reconciled `DESIGN_REVIEW.md`, `FEATURES.md`, and
+`ARCHITECTURE.md`, treating Features as behavioral authority and Architecture
+as contract authority. Propagated every settled, internally coherent decision
+into the focused module contracts. The authoritative documents themselves were
+not changed.
 
-The 17 per-module drafts have **not** yet been re-synced to these decisions.
+Updated module docs:
+
+- `CORE.md`, `DISPATCHER.md`, and `WORKFLOWS.md`: sole core session runner,
+  nonblocking checkpoint unwind, execution continuation, volume-queue resume,
+  terminal retention, reliable event delivery, and two-session review/execute.
+- `PLANNER.md`, `PREFLIGHT.md`, and `EXECUTOR.md`: `MappingSnapshot`, no observed
+  free space in `Plan`, settings inside `ObservedWorld`, plan-and-selection
+  commitment, directory-rename decomposition, target-stat attestations,
+  displace-then-replace update order, and last-applied directory metadata.
+- `SCANNER.md`, `INVENTORY.md`, `DATABASE.md`, and `RECORDER.md`: stable
+  `VolumeId`, corroborating volume evidence, typed unsupported/directory records,
+  metadata snapshots, namespaced annotations, conditional target attestations,
+  and filesystem/recording two-axis truth.
+- `VERIFIER.md` and `HISTORY.md`: typed `IntegrityOutcome`, admission-time audit
+  subscription, bounded backpressure, best-effort history durability, and loud
+  degradation.
+- `COMMANDLINE.md`, `INTERFACES.md`, `DESKTOP_UI.md`, and `INGEST.md`: exact
+  commitment gate, corrected no-subcommand behavior, queue-only replay of
+  commitments, folder-rename presentation grouping, and ingest provenance
+  namespace/version snapshots.
+
+All obsolete “DR-x must decide” placeholders were removed. The remaining open
+language in module docs is deliberate and corresponds to the review blockers
+below.
+
+## Review Blockers Found
+
+All seven blockers below were resolved on 2026-07-18: decision records live in
+`DESIGN_REVIEW.md` as DR-25 through DR-31, and `FEATURES.md`/`ARCHITECTURE.md`
+are updated to match. The original statements are retained for context.
+
+1. **Executor/preflight layering contradiction.** Architecture says workflows
+   are the only place modules meet and executor imports core only, but also says
+   executor itself calls the preflight module unconditionally. The executor
+   signature has no core guard protocol/callable. Choose workflow-owned
+   observe/preflight under execution custody, or add an injected core guard
+   protocol; direct executor-to-preflight import violates the import law.
+
+2. **Non-hardlink update fallback is under-specified.** `CapabilityProfile` has
+   no hardlink-support field, and the shared capacity formula does not explicitly
+   count both the new replacement temp and the old-target backup copy. The copy
+   backup also needs its own temp/flush/atomic-publish sequence before live
+   replacement. Non-hardlink updates can otherwise pass preflight and predictably
+   fail ENOSPC or retain a partial trash version.
+
+3. **ADS/ACL preservation cannot be implemented from `MetadataSnapshot`.** The
+   snapshot contains only ADS presence, not a stream manifest/content evidence,
+   and no ACL snapshot. Source drift for named streams is therefore unguarded.
+   Treating requested ADS-copy failure on an ADS-capable volume as only a warning
+   can publish a result with silent user-data loss. Define the snapshot/copy/
+   failure contract before claiming preservation.
+
+4. **Directory metadata has no input for non-empty directories.** Scanner and
+   Features retain `DirRecord` only for empty directories, while Executor
+   promises source attributes/timestamps for every created directory. A newly
+   created non-empty directory has no reviewed metadata snapshot. Either record
+   every directory now or narrow the preservation promise.
+
+5. **History degradation has no result field, and stalled-writer behavior is
+   contradictory.** `OperationResult` exposes only ledger `RecordingStatus`,
+   yet history failure must also surface on the session result. Separately,
+   bounded memory plus guaranteed audit delivery requires waiting forever for a
+   writer that stalls without failing, while the spec says history never blocks
+   filesystem work. Add an audit status and an explicit timeout/degradation or
+   durable-spill rule.
+
+6. **Pause/cancel result transport is incomplete.** Bare `Canceled` and
+   `PauseRequested` exceptions carry neither partial typed results nor a
+   continuation. `ExecutionSet.status` covers execution resume, but no
+   restart/continuation or duplicate-outcome rule exists for scan, baseline,
+   verify, or import. The runner also says unexpected exceptions still surface
+   after it emits terminal without defining how callers avoid a second terminal.
+
+7. **Queued-discard audit lacks a typed generic distinction.** Dispatcher must
+   remain domain-blind and history must not parse strings, but the current core
+   state/event/result vocabulary cannot distinguish discarded-before-start from
+   an ordinary zero-work cancellation. Add a generic typed terminal reason or
+   attempt disposition before implementing Queue Discard Audit.
 
 ## Verification
 
-- `git diff --check`: no whitespace errors.
-- `.\.venv\Scripts\python.exe -m pytest`: 1 passed.
-- `.\.venv\Scripts\lint-imports.exe`: contracts kept, 0 broken.
+- `git diff --check` passes.
+- Focused docs contain no remaining obsolete `DR-xx`, `run_unattended_sync`,
+  `target_free_space`, or `WAITING_INPUT` contract language.
+- No runtime tests were run; this session changed documentation only.
 
-## Immediate Next Context
+## Next Work
 
-- Propagate the recorded resolutions from `DESIGN_REVIEW.md` into the affected
-  module drafts (`CORE`, `PLANNER`, `PREFLIGHT`, `EXECUTOR`, `DISPATCHER`,
-  `RECORDER`, `HISTORY`, `WORKFLOWS`, `COMMANDLINE` are the most affected) so
-  authoritative and focused docs agree again.
-- Then freeze M0 core types and begin the walking skeleton.
-- No files were staged or committed.
+The seven blockers are resolved in `FEATURES.md`/`ARCHITECTURE.md` with
+decision records in `DESIGN_REVIEW.md` (DR-25 through DR-31). Remaining: remove
+the matching explicit blocker notes from the module docs and propagate the new
+contract details — workflow-owned preflight with executor per-op guards,
+`supports_hardlinks` and profile-aware capacity, ADS stream manifests and
+FAILED semantics, all-directory records with explicit mkdir-with-metadata, the
+`audit` result axis and timeout-guarded backpressure, runner-assembled partial
+results with per-kind pause capability, and the `Disposition` field. After
+that, M0 can start with the core result/session/event shapes and import-law
+tests without knowingly freezing contradictory bones.

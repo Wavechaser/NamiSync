@@ -13,36 +13,43 @@ or executes/repairs anything.
 
 ## Required Inputs
 
-The current four-argument architecture signature is insufficient. Before M0,
-DR-04 and DR-05 must add:
+```python
+plan(source: ScanResult, target: ScanResult,
+     correspondence: MappingSnapshot, options: SyncOptions,
+     scope: Scope) -> Plan
+```
 
-- source and target `ScanResult` values;
-- immutable prior mapping/correspondence evidence for move detection;
-- sync options and deletion policy;
-- `Scope` and symmetric mapping-filter snapshot;
-- `DestinationPolicy` assignment plus any enrichment metadata;
-- an observed planning-capacity snapshot, or an explicit decision to keep
-  observed free space outside the pure plan.
+`options` contains deletion and preservation policies, the symmetric mapping
+filter snapshot, and the selected `DestinationPolicy` plus any already-extracted
+enrichment metadata. `MappingSnapshot` contains prior accepted pairs/no-ops,
+retained missing rows, and ambiguity/hardlink disqualifiers keyed by canonical
+path. Observed target free space is deliberately absent: review and execution
+call `observe()` and judge the same pure required-byte formula against current
+space.
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
 
 ## Plan Contract
 
-A plan snapshots roots and volume evidence, complete-scan state, filters,
-semantic options, policy/version fingerprint, deterministic operations,
-dependency graph/order, required volumes, required content bytes, concurrency
-assumption, and all source/target stat evidence needed by preflight.
+A plan snapshots roots and `VolumeId` evidence, complete-scan state, filters,
+semantic options, `PreservationPolicy`, policy/version fingerprint,
+deterministic operations, dependency graph/order, required volumes, required
+content bytes, concurrency assumption, and all source/target stat evidence
+needed by preflight. It contains no target-free-space observation.
 
 Each operation has a stable id derived from canonical intent—not list position
 or random state—and includes kind, source/target relative paths, expected
 before-state, intended after-state, byte contribution, reason code,
 dependencies, and blocked/conflict detail. Execution never recomputes target
-paths or destination policy. Expected/intended metadata follows the typed
-snapshot and preservation policy required by DR-22.
+paths or destination policy. Expected/intended metadata uses
+`MetadataSnapshot` (attributes, creation time, and ADS presence) under the
+snapshotted preservation policy.
 
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
-status. Deferred operations remain explicit; omission is not a status.
+status. Its optional `Commitment` binds both the plan fingerprint and a
+deterministic digest of that exact selection; changing either invalidates the
+commitment. Deferred operations remain explicit; omission is not a status.
 
 ## Diffing And Operation Rules
 
@@ -65,6 +72,10 @@ status. Deferred operations remain explicit; omission is not a status.
   move. It never equates source and target filesystem IDs.
 - A rename plus content change is one composite move-update intent with one
   final ledger result, even if execution uses recoverable internal stages.
+- A directory rename always decomposes into per-file identity moves, the full
+  parent-first mkdir chain, and dependency-ordered cleanup of directories made
+  empty by those moves. There is no M0 directory-move operation; interfaces may
+  group the decomposition as one folder-level review item.
 - Unsupported scan entries remain visible and blocked; they do not vanish from
   the plan.
 
@@ -79,6 +90,13 @@ planner state.
 
 The plan snapshots the worker-count/concurrency assumption used by the formula;
 executor may use fewer workers but never more without re-planning/re-preflight.
+
+The non-hardlink trash-on-update fallback is not implementation-ready in the
+authoritative type set: `CapabilityProfile` does not expose hardlink support and
+the capacity text does not say that the old-target backup copy consumes space
+in addition to the replacement temp. Non-hardlink updates must remain refused
+until the capability and formula are made explicit; otherwise preflight can
+approve a predictably ENOSPC update.
 
 ## Scope And Selection
 
@@ -96,8 +114,10 @@ historical operation list is scope input, never executable authority.
 The M0 identity policy returns a batch assignment. Batch shape is permanent so
 future templates can detect collisions and keep companion groups together.
 Assignments must be deterministic, root-relative, collision-complete, and path
-validated. DR-18 must define policy/enrichment fingerprints and provenance
-lookup before ingest. No policy receives filesystem or executor control.
+validated. Policy/enrichment versions and all assignment inputs are snapshotted
+in the plan. Ingest origin evidence uses feature-owned namespaced annotations
+(`ingest.origin.*`) so a later implementation does not require new generic
+schema. No policy receives filesystem or executor control.
 
 ## Expectations Of Other Modules
 
@@ -128,6 +148,9 @@ lookup before ingest. No policy receives filesystem or executor control.
 - Randomized input ordering produces the same plan.
 - Nested empty directory fixtures create every level parent-first and an
   immediate rescan/replan converges to no mutations.
+- Renamed-directory fixtures decompose into per-file moves, mkdir dependencies,
+  and safe emptied-directory cleanup; UI grouping does not change executable
+  operation ids or dependency order.
 - Target directories emptied by same-plan operations receive safe dependent
   cleanup; nonempty/unselected directories never do.
 - Additive emits no target-only mutation; trash is default; mirror is rejected
@@ -146,6 +169,9 @@ lookup before ingest. No policy receives filesystem or executor control.
   refuse.
 - Capacity property tests never undercount any allowed worker schedule and use
   the exact same function as preflight.
+- Non-hardlink update fixtures are refused until their backup-copy bytes and
+  capability are represented; after that contract is added, those bytes are
+  included in the same capacity property tests.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
 - Destination policy collision and companion-group property tests produce

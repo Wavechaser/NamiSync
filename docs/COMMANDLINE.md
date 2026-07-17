@@ -1,8 +1,7 @@
 # Command-Line Interface
 
 Status: draft contract. Priority: architecture assigns reviewed `sync` and
-`history` to M0; integrity commands arrive with M1. DR-19 must reconcile this
-with the current Features command list and no-subcommand GUI behavior.
+`history` to M0; integrity commands arrive with M1.
 
 ## Entry Points
 
@@ -10,9 +9,9 @@ with the current Features command list and no-subcommand GUI behavior.
 `sys.argv[1:]` when no explicit test argument is supplied. Tests exercise both
 real process entry points. No command is reachable only through injected argv.
 
-Until a desktop exists, no-subcommand behavior must be explicitly defined by
-DR-19—recommended: concise help plus a non-error indication that the desktop is
-not installed yet. Once desktop is delivered, no-subcommand may launch it.
+Until a desktop exists, no subcommand prints usage and exits nonzero; nothing
+runs implicitly. Once the desktop is delivered, `nami-sync`, `nami-sync-gui`,
+and `python -m namisync` with no subcommand launch it.
 
 ## Commands
 
@@ -24,9 +23,9 @@ not installed yet. Once desktop is delivered, no-subcommand may launch it.
 - `nami-sync history [RUN]`: list envelopes or render typed retained detail.
 
 For noninteractive use, mandatory review cannot be waived by a casual `--yes`.
-DR-01 must define either a separately persisted reviewed plan plus
-`execute-plan`, or a scoped preauthorization with plan fingerprint/material
-change rules. Queue/service reuse follows that same contract.
+The command surface may expose a separate queue-release flag that executes only
+already committed sets. A commitment binds plan fingerprint plus exact selection
+digest; no flag combination plans and executes in one unreviewed invocation.
 
 ### M1
 
@@ -64,6 +63,10 @@ Draft exit categories (numeric assignment may be finalized with implementation):
 - cancellation;
 - integrity issues found (`mismatched`, `modified`, `missing`, error);
 - filesystem success with ledger/history durability degradation.
+
+`RecordingStatus.DEGRADED` supplies the ledger distinction. The architecture
+still needs a typed history/audit result field before the CLI can assign the
+history-degradation category without parsing diagnostics.
 
 Exit status derives from typed result, not log text or byte count.
 
@@ -114,12 +117,12 @@ transport replacement behind the same command adapter in M2.
 
 - Subprocess tests invoke `nami-sync` and `python -m namisync` with real argv for
   every command and compare dispatch/results.
-- M0 sync command is present in Features or DR-19 records a replacement; default
-  behavior is defined for both pre-desktop and desktop installations.
+- M0 exposes reviewed `sync` and `history`; default behavior is defined for both
+  pre-desktop and desktop installations.
 - Plan command/session mutates no files/ledger configuration and releases locks
   before commitment input.
-- Execution cannot proceed without the finalized DR-01 review authorization and
-  always freshly preflights.
+- Execution cannot proceed without a matching plan-and-selection commitment and
+  always freshly preflights; queue release accepts already committed sets only.
 - Refusal, no-op, partial failure, cancel, mismatch, and ledger-behind return
   distinct documented exit categories and truthful output.
 - Ctrl+C during multi-GiB simulated copy/import reaches cooperative terminal and

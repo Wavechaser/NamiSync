@@ -27,9 +27,10 @@ key, display path, expected state/stat/hash/provenance, and scope token. Workflo
 must inventory or scoped-refresh before constructing them; verifier never
 silently operates on stale/missing inventory.
 
-The generic event `Outcome` is insufficient for integrity meaning. DR-14 must
-freeze a typed `IntegrityOutcome`: `verified`, `baselined`, `mismatched`,
-`modified`, `missing`, `unsupported`, `canceled`, and `error`.
+Each file emits a reliable typed `IntegrityOutcome` carrying `IntegrityResult`:
+`verified`, `baselined`, `mismatched`, `modified`, `missing`, `unsupported`,
+`canceled`, or `error`. Generic `Outcome` remains the operation-level lifecycle
+vocabulary and is not parsed to recover integrity meaning.
 
 ## Per-File Algorithm
 
@@ -87,7 +88,8 @@ mapping. It must not require both source and target roots.
 
 ## Expectations Of Other Modules
 
-- Core supplies integrity/result/event evidence types after DR-14.
+- Core supplies `IntegrityOutcome`, integrity/result/event evidence types, and
+  the one generic session runner.
 - Inventory workflow/repositories supply freshly refreshed canonical selections;
   verifier does not infer inventory or mappings.
 - Recorder owns every evidence write and enforces the conditional primitive.
@@ -97,7 +99,9 @@ mapping. It must not require both source and target roots.
 - History observes every item/terminal, including refusal and unexpected error.
 - UI consumes typed results and updates inventory rows, not plan rows by loose
   path matching.
-- Errors in recorder/history are surfaced separately from content verdicts.
+- Recorder degradation is surfaced through `RecordingStatus` separately from
+  content verdicts. History degradation must likewise be surfaced once the
+  missing audit-status result shape is resolved.
 
 ## Latent Features
 

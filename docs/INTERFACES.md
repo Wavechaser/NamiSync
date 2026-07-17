@@ -22,12 +22,15 @@ rule.
 - Submit through dispatcher/registry rather than starting ad hoc workers that
   call modules directly.
 - Read current session records and subscribe from a sequence number.
-- Treat progress as a replaceable snapshot and state/item/terminal as reliable
-  under the finalized delivery contract.
+- Treat progress as a replaceable snapshot. Handle bounded state/item/terminal
+  delivery, including `Gap` plus resubscription for an ejected/late ordinary
+  subscriber; the history observer has the stronger admission-time contract.
 - Present refusal, cancellation, partial failure, recording-behind, history
   failure, and integrity mismatch as distinct states.
 - Keep plan, inventory, and history presentation models orthogonal.
-- Never expose an “execute anyway” path around mandatory review/preflight.
+- Commit only after the plan session terminates, binding plan fingerprint and
+  exact selection digest. Never expose an “execute anyway” path around
+  commitment or fresh preflight.
 - Runtime thread/ownership guards raise real exceptions, not `assert`.
 
 ## Shared Actions
@@ -76,6 +79,11 @@ is the provisioning seam.
   interfaces do not issue SQL.
 - UI and CLI do not infer domain success from zero bytes or green styling.
 
+The public result schema must gain an explicit audit/history degradation field
+or generalize the persistence status before interfaces can render a required
+history failure without parsing diagnostics. `RecordingStatus` remains the
+ledger axis and must not be overloaded silently.
+
 ## PoC Hardening
 
 The layer contract prevents dead real CLI argv, real-user test database writes,
@@ -97,6 +105,8 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
 - Refused zero-op, all-noop, partial failure, cancellation, mismatch, and
   ledger-behind states render distinctly.
 - Event reconnect handles current state/tail/gap without duplicate row outcomes.
+- Changing plan selection after review invalidates commitment; neither UI nor
+  CLI can submit the stale commitment.
 - Action source-of-truth tests cover menu/button/context presentation equality.
 - Presentation-selection tests run without modal loops or live filesystem/DB.
 - Thread/result callbacks execute on the required presentation thread and raise

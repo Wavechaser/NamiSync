@@ -1,8 +1,7 @@
 # Recorder Module
 
 Status: draft contract. Priority: M0 sync recording; M1 integrity/import
-recording. DR-15 must resolve how recording failure contributes to session
-status.
+recording.
 
 ## Purpose
 
@@ -17,8 +16,10 @@ uses a separate database.
 
 ## Command Contract
 
-Recorder commands carry complete immutable evidence and idempotency keys. At
-minimum the protocol covers:
+Recorder commands carry complete immutable evidence and idempotency keys. Copy
+and update commands receive `Attestation(ContentEvidence, published_target_stat)`;
+the source's post-read stat remains separate drift evidence and is never stored
+as target identity. At minimum the protocol covers:
 
 - run/session start and filesystem-result window;
 - confirmed copy/update/move/trash/delete/mkdir/no-op correspondence;
@@ -83,11 +84,12 @@ a collision by rolling back the entire run silently.
 
 ## Recording Failure Semantics
 
-DR-15 must define the aggregate status. Recorder always returns/raises the
-recording failure to the workflow. The already successful filesystem result is
-preserved verbatim and interfaces disclose “files changed; ledger behind” rather
-than “copy failed.” Recovery re-inventories/reconciles; it never rolls back true
-filesystem work merely to make the ledger tidy.
+Recorder always returns/raises the recording failure to the workflow. The
+already successful filesystem result and terminal `SessionState` are preserved
+verbatim; `OperationResult.recording` becomes `RecordingStatus.DEGRADED` and
+interfaces disclose “files changed; ledger behind” rather than “copy failed.”
+Recovery re-inventories/reconciles; it never rolls back true filesystem work
+merely to make the ledger tidy.
 
 ## Expectations
 
@@ -137,7 +139,7 @@ Hardlink group recording remains nullable until preservation semantics exist.
 - Flush occurs before each destructive operation, on pause drain, and before
   terminal delivery; crash loses at most the declared batch window.
 - Recorder failure preserves the original filesystem `ExecResult` and produces
-  the finalized DR-15 ledger-behind outcome.
+  `RecordingStatus.DEGRADED` without changing the filesystem terminal.
 - Complete inventory over 33k entries and large path selections use bounded
   batches with no SQL parameter overflow.
 - Move onto a retained missing row reconciles that row and keeps unrelated run
@@ -148,4 +150,3 @@ Hardlink group recording remains nullable until preservation semantics exist.
   verification time.
 - One shared UTC/host runtime produces identical representations across ledger
   and history boundaries.
-

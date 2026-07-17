@@ -1,8 +1,7 @@
 # Dispatcher Module
 
-Status: draft contract. Priority: M0 in-memory session store plus real safe
-custody; M2 durable queue/reconciliation. DR-02, DR-03, DR-09, DR-13, and DR-17
-must be resolved at their indicated gates.
+Status: draft contract. Priority: M0 in-memory session store plus real
+cross-process custody; M2 durable queue/reconciliation.
 
 ## Purpose
 
@@ -30,16 +29,17 @@ generic required-resource declaration and opaque serialized workflow payload.
 
 ## State And Runner Ownership
 
-Dispatcher enforces core's one legal transition table. The generic session
-runner owns start/end timestamps, exception containment, resource release, and
-preferably exactly-one terminal emission per DR-03. Modules return typed opaque
-results and emit nonterminal events through `RunContext`.
+Dispatcher enforces core's one legal transition table. The generic core session
+runner owns start/end timestamps, exception containment, pause/cancel
+resolution, and exactly-one terminal emission. Modules return typed opaque
+results and emit only nonterminal events through `RunContext`; dispatcher owns
+custody around the runner and releases it in every exit path.
 
-Pause behavior must follow DR-02: drain to a safe boundary, retain an opaque
-continuation, exit/release custody, and resume through fresh workflow preflight.
-It must not leave a blocked stack holding hidden handles while reporting
-`PAUSED`. Cancel requests are cooperative but terminal cleanup/release is
-unconditional.
+Pause drains by raising `PauseRequested`, unwinds the workflow, retains the
+opaque continuation, and reports `PAUSED` only after custody is released. Resume
+re-enters admission at the back of every required volume queue, never preempts a
+running session, and starts with fresh workflow preflight. Cancel requests are
+cooperative but terminal cleanup/release is unconditional.
 
 ## Admission And Volume Scheduling
 
@@ -48,11 +48,12 @@ prevent deadlock. Sessions with disjoint required volumes may run concurrently;
 contenders queue. Planning sessions may release locks when complete; execution
 reacquires and revalidates volumes.
 
-Per DR-13, cross-process physical-volume exclusion is required before any M0
-mutation. This is distinct from M2 durable queue ownership. Unsupported or
-ambiguous volumes are refused, not scheduled optimistically. Network-share
-coordination remains unavailable and mutating sessions on such roots are refused
-unless a separate safe guard exists.
+Cross-process physical-volume exclusion is required before any M0 mutation,
+using a named OS mutex or lock file keyed deterministically by volume serial
+with abandoned-holder recovery proven. This is distinct from M2 durable queue
+ownership. Unsupported or ambiguous volumes are refused, not scheduled
+optimistically. Network-share coordination remains unavailable and mutating
+sessions on such roots are refused unless a separate safe guard exists.
 
 Custody has one owner: dispatcher/session runner. Executor never releases locks.
 Every terminal, pause-drain, admission failure, workflow exception, observer
@@ -61,14 +62,18 @@ failure, and orderly teardown path releases exactly the acquired set.
 ## Events And Subscription
 
 Dispatcher assigns envelope timestamp/schema/sequence and fans out events.
-Progress is lossy/coalescible; reliable state/item/terminal delivery follows the
-finalized DR-09 capacity policy. Subscribers attach independently so a slow UI
-cannot block history or producer. Late subscribers receive current state plus a
-bounded tail/detectable gap—not a false promise of full replay.
+Progress is lossy/coalescible. History is the distinguished admission-time
+reliable subscriber: its bounded buffer never drops events and may backpressure
+the producer only at a safe checkpoint boundary. Any other reliable subscriber
+whose bounded queue overruns is ejected and first receives
+`Gap(first_missed_seq)`. Late subscribers receive current state plus a bounded
+tail/detectable gap—not a false promise of full replay.
 
 History attaches at admission before workflow events. Subscriber exceptions are
-isolated and surfaced; they do not crash the producer or silently remove a
-required audit subscriber.
+isolated and surfaced on the session result; they do not rewrite filesystem or
+ledger truth. The unresolved indefinite-stall policy is documented in
+[CORE.md](CORE.md) and [HISTORY.md](HISTORY.md); dispatcher must not substitute
+an unbounded queue or silent loss.
 
 ## Session Store
 
@@ -79,12 +84,24 @@ the registry/workflow adapter does that after selection.
 M0 `InMemorySessionStore` provides process-local task state and no restart
 reconciliation. M2 `SqliteSessionStore` adds reload, durable pending queue,
 single queue-owner lock, and `RUNNING`→`INTERRUPTED` reconciliation when owner
-process/custody is dead. DR-17 must define terminal retention and `drop()` before
-durable UI tasks depend on it.
+process/custody is dead. Terminal records stay in the live session table until
+the task is explicitly closed, then `drop()` removes them; history remains the
+durable trail.
 
-Queued execution still requires a reviewed/authorized immutable plan and fresh
-preflight. Replanning after wakeup produces a material-difference review; it is
-not a silent replacement.
+Queued execution accepts only a `Commitment` matching plan fingerprint and
+selection digest, and always freshly preflights. Replanning after wakeup
+produces a material-difference review; it is not a silent replacement.
+Contending committed sets start in commit order; disjoint-volume sets may start
+as soon as their volumes are free. A queued session discarded before running
+must deliver its generic discarded/unrun terminal detail to the admission-time
+history observer before its live record is dropped; dispatcher never imports or
+calls history directly.
+
+Core currently has no typed discarded-before-start reason/body, so the observer
+cannot reliably distinguish this case from an ordinary zero-work cancellation
+without parsing incidental state. Queue discard audit remains a schema blocker
+until that generic distinction is added without teaching dispatcher a domain
+activity.
 
 ## Teardown
 
@@ -102,7 +119,8 @@ application processes.
 - Workflows declare resources and deserialize their own opaque request.
 - Interfaces only call this public contract and subscribe; they do not manage a
   second session lifecycle.
-- History attaches as an observer and follows DR-16 failure semantics.
+- History attaches as the admission-time audit observer; its failure is loud but
+  never rewrites filesystem or ledger truth.
 
 ## PoC Hardening
 
@@ -119,15 +137,16 @@ duplicate terminal paths from being reinvented by each interface.
 - Exhaustive transition/control tests reject illegal pause/resume/cancel without
   state corruption.
 - Disjoint-volume sessions overlap; shared-volume sessions serialize in
-  deterministic lock order; cross-process M0 mutation contention is actually
-  refused/queued according to DR-13.
+  deterministic commit/lock order; cross-process M0 mutation contention is
+  actually refused/queued by the OS-level lock.
 - Fault injection at admission, lock acquisition, workflow start, every event,
   pause, cancel, terminal, store write, subscriber failure, and teardown releases
-  exactly acquired resources and emits one terminal under DR-03.
+  exactly acquired resources and emits one terminal from the core runner.
 - Paused session holds no volume lock/open workflow stack and resume starts with
-  fresh preflight under DR-02.
-- Progress flood remains bounded/coalesced; reliable-event stress follows DR-09
-  with no silent loss or producer deadlock.
+  fresh preflight at the back of the volume queue.
+- Progress flood remains bounded/coalesced; history delivery backpressures only
+  at a safe boundary; an overrun non-history reliable subscriber gets `Gap` and
+  ejection rather than silent loss.
 - Late subscription returns current state/tail and exposes sequence gaps.
 - Opaque blobs round-trip through store without dispatcher deserialization.
 - M0 process restart loses in-memory sessions honestly and requires rescan;
@@ -136,6 +155,6 @@ duplicate terminal paths from being reinvented by each interface.
 - Queue owner is unique across processes; volume locks remain independent.
 - Orderly teardown completes without UI-thread deadlock and reports any session
   that could not drain within policy.
-- Terminal retention/drop behavior satisfies finalized DR-17 and never erases
-  required audit history.
-
+- Terminal records survive until explicit close; queued discard is observed as
+  discarded/unrun before `drop()` and never requires a dispatcher-to-history
+  import.

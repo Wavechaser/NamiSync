@@ -1,8 +1,8 @@
 # Executor Module
 
 Status: draft contract. Priority: M0 native single-worker execution on plain
-local NTFS. Atomic update recovery in DR-08 and terminal ownership in DR-03 are
-blocking design decisions.
+local NTFS. Non-hardlink update capacity, metadata-stream fidelity, and
+non-execution pause continuation remain cross-contract review items.
 
 ## Purpose
 
@@ -23,15 +23,26 @@ execute(xset, ctx, recorder, policies, fs) -> ExecResult
 ```
 
 The caller must hold deterministic physical-volume custody, but executor still
-validates custody/identity. Its first act is fresh `observe()` plus pure
-`preflight()`. A refusal returns without temp cleanup or any other mutation.
-After a successful verdict, executor may recover only exact owned temps named by
-that verdict and then processes dependency-ready operations in plan order.
+validates custody/identity. Execution entry first validates that `Commitment`
+matches both the immutable plan fingerprint and exact selection digest; a
+missing or mismatched commitment is refused before observation. Fresh
+observation/preflight must occur under the same custody immediately before
+execution, and a refusal permits no temp cleanup or other mutation. After a
+successful verdict, executor may recover only exact owned temps named by that
+verdict and then processes dependency-ready operations in plan order.
 
-Per DR-03, the generic session runner should emit the single terminal event.
-Executor emits phase, progress, and item outcomes and returns one complete
-result. If architecture retains terminal ownership here, every non-executor
-session needs an equivalent common wrapper; two owners are forbidden.
+The authoritative architecture currently assigns that guard both to the
+workflow (the only layer where modules may meet) and to executor itself, while
+also requiring executor to import core only. Executor cannot directly call the
+preflight sibling without violating the import law, and its signature has no
+injected core guard protocol. Implementation must wait for a decision between a
+workflow-owned guard envelope and a core protocol/callable injected into
+executor; final per-operation guards remain mandatory either way.
+
+The core generic session runner emits the single terminal event. Executor emits
+phase, progress, and item/integrity outcomes only, returns one complete result,
+and lets `Canceled`/`PauseRequested` unwind to that runner after its own safe
+operation-boundary cleanup.
 
 ## Universal Operation Rules
 
@@ -44,7 +55,8 @@ session needs an equivalent common wrapper; two owners are forbidden.
   window.
 - Record one final typed outcome per selected operation; dependencies of a
   failed operation become explicit canceled/deferred outcomes, while independent
-  operations continue.
+  operations continue. Pause leaves completed status intact and unreached work
+  pending in `ExecutionSet`.
 - Byte progress counts copied/updated content only.
 - Policies return `Continue`, `Stop`, or bounded `Retry(after)` decisions; the
   executor retains guards, limits, checkpointing, and final outcome ownership.
@@ -55,19 +67,27 @@ session needs an equivalent common wrapper; two owners are forbidden.
 2. Create an exclusive exact-name temp in the final target parent and volume.
 3. Stream source bytes through `CopyBackend` in bounded chunks while hashing and
    checkpointing; backend writes bytes only.
-4. Flush file content to the medium, apply the DR-22 typed metadata snapshot
-   under explicit preservation policy, and flush again when metadata durability
-   requires it.
+4. Flush file content to the medium, apply the typed `MetadataSnapshot` under
+   the plan's `PreservationPolicy` except readonly, and flush again when metadata
+   durability requires it. Readonly is applied only after publish.
 5. Re-stat source and compare with the planned/opened source snapshot. Drift
    fails and removes/quarantines the temp; no attestation is recorded.
 6. Re-check destination expected absence/state immediately before publish.
 7. Atomically publish with the Windows/local-filesystem primitive.
-8. Attempt the defined parent-directory durability action and report its actual
-   guarantee under DR-12.
-9. Stat the published target and combine it with the source-stream digest so
-   target identity is never confused with source identity (DR-07).
-10. Call recorder. A recorder failure preserves the filesystem outcome and is
-    surfaced separately as required by DR-15.
+8. Attempt a best-effort parent-directory flush. A refused/unsupported flush is
+   a per-operation durability warning; the result claims durability only for
+   the file content/metadata that was actually flushed.
+9. Stat the published target and construct `Attestation(ContentEvidence,
+   target_stat)` so target identity is never confused with source identity.
+10. Call recorder. A recorder failure preserves the filesystem outcome and
+    degrades `RecordingStatus` instead of relabeling the copy as failed.
+
+The current metadata bone is not sufficient to make ADS/ACL preservation safe:
+`MetadataSnapshot` records only ADS presence and no stream manifest/content
+evidence (and no ACL snapshot), while a failed ADS copy on an ADS-capable volume
+is specified as only a warning. Until the authoritative contract defines the
+stream snapshot, drift guard, copy mechanism, and whether requested stream loss
+fails publication, executor must not claim complete ADS/ACL preservation.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
 Recovery is limited to exact grammar in selected copy/update parents, never a
@@ -75,38 +95,60 @@ full-tree walk and never `.synctrash`.
 
 ## Update And Trash-On-Update
 
-An update prepares and validates the replacement temp before displacing the
-current target. The old version is retained in
-`.synctrash/<run-id>/<relative-path>` when trash-on-update is enabled. The exact
-crash-safe replacement/backup sequence is unresolved in DR-08; implementation
-must not claim operation atomicity until every point between backup and publish
-has a tested recovery rule.
+An update completely prepares and validates the replacement temp before it
+touches the current target. With trash-on-update enabled it then:
 
-At minimum, no crash path may delete both old and new content, publish a partial
-new file, or record final success early. Rerun reconciliation must distinguish
-owned temp, owned run backup, already-published replacement, and unrelated user
-files. Automatic recovery always preserves the only known good version.
+1. validates/reserves `.synctrash/<run-id>/<relative-path>` on the target volume;
+2. preserves the old live file there using a same-volume hardlink, or a complete
+   copy fallback on a filesystem that cannot hardlink;
+3. clears readonly on the live target if Windows requires it for replacement;
+4. atomically publishes the prepared temp over the live path with `os.replace`;
+5. applies the new file's readonly bit and remaining post-publish metadata;
+6. performs the best-effort parent flush, re-stats, and records success.
+
+No crash point leaves the live path absent. A crash after hardlink creation but
+before replacement leaves the old live inode with link count two; that is a
+benign, scan-visible hardlink warning which disables move detection until the
+trash link is purged. Rerun reconciliation distinguishes exact owned temp/run
+backup/already-published state from unrelated user files and converges without
+discarding the only known-good version.
+
+The copy fallback is not safe to implement from the current architecture alone:
+its backup must itself be fully written, flushed, and atomically published
+before live replacement, and its extra bytes must be in capacity planning. The
+capability field and formula are currently absent. Readonly ordering must also
+prove that clearing the live inode does not silently degrade the old hardlinked
+trash version's metadata across crash/retry.
 
 ## Other Operations
 
 ### Move
 
 Revalidate old target and new destination, refuse occupancy, perform a
-same-volume atomic rename, flush directory metadata according to DR-12, stat the
+same-volume atomic rename, attempt best-effort parent-directory flushes, stat the
 result, then record correspondence. A vanished source/old target yields a
 typed skipped/failed outcome and must not leave the old ledger row `present`.
 
 ### Composite move-update
 
-One plan operation may have internal prepare, move/backup, and publish stages,
-but only one final outcome and ledger transition. A crash after any internal
-stage leaves recoverable evidence and no completed mapping claim.
+Publish the changed content at the new path first, then trash the old path. One
+plan operation may have internal prepare/publish/trash stages, but only one
+final outcome and ledger transition. A crash after any internal stage may leave
+both old and new versions, never neither, and leaves no completed mapping claim.
 
 ### Mkdir
 
 Create only the planned directory after validating parent containment and
 expected absence. Existing matching directories may converge to a typed no-op;
-wrong-type entries fail.
+wrong-type entries fail. Apply source directory attributes and restore directory
+timestamps only after all descendant child operations have settled.
+
+The authoritative scanner currently retains `DirRecord` only for empty
+directories, while Features requires metadata restoration for every created
+directory. Metadata for a newly created non-empty source directory therefore
+has no defined input; executor must not synthesize it or re-read it outside the
+plan. That scanner/feature contract needs review before this guarantee is
+implementable.
 
 ### Trash
 
@@ -128,11 +170,14 @@ otherwise record a stale/skipped outcome rather than refreshing false evidence.
 
 ## Cancellation, Pause, And Failure
 
-Copy chunks are bounded so cancel latency is bounded. Cancellation cleans or
-retains owned temp according to the restart policy, marks the in-flight and
-remaining operations accurately, flushes required records, and returns through
-the generic session wrapper. Pause semantics depend on DR-02; M0 must not block
-while pretending locks were released.
+Copy chunks are bounded so cancel/pause latency is bounded. Either request
+unwinds rather than blocking. Cancellation cleans or retains only exact owned
+temps, preserves earned outcomes, marks in-flight/remaining work accurately,
+forces required recorder flushes, and reaches the runner's one canceled
+terminal. Pause abandons/reclaims an in-flight temp through ordinary exact-name
+recovery, preserves completed `ExecutionSet` statuses, forces pause-drain
+recording, transitions without a terminal, and releases custody. Resume queues
+at the back, re-observes, re-preflights, and continues only unreached work.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoint
 between attempts. Persistent failure records a typed reason and independent work
@@ -155,7 +200,7 @@ outside the copy chunk size so fast disks cannot flood UI queues.
 - Preflight supplies fresh verdict semantics, while executor retains final
   per-operation guards.
 - Dispatcher/session runner owns physical-volume custody, pause/cancel control,
-  and terminal ownership after DR-03.
+  and terminal ownership.
 - Workflow aggregates execution, recording, and optional verification results.
 - Filesystem mutation succeeds before its record call.
 - Destructive boundaries force prior recorder state durable.
@@ -190,7 +235,11 @@ attestation guard, and composite move-update gap.
   is published, no success is recorded early, and every owned artifact is
   recoverable without touching user lookalikes.
 - Copy/update publish is same-volume atomic; target bytes are either the complete
-  prior version or complete new version under the finalized DR-08 contract.
+  prior version or complete new version, and the displaced version exists in
+  exact run trash before replacement publishes.
+- Fault injection between hardlink/copy-backup, readonly clearing, replace,
+  metadata, flush, and record leaves a recoverable state; an interrupted
+  hardlink backup is a documented `nlink>1` warning and rerun converges.
 - Source mutation during any chunk or before final stat fails the operation and
   records no digest/attestation.
 - Target appearance/change after preflight but before mutation is detected by
@@ -205,10 +254,13 @@ attestation guard, and composite move-update gap.
   produce correct filesystem and recorder outcomes without rolling back other
   earned records.
 - Directory create/delete tests cover full chains, wrong types, nonempty races,
-  and no recursive unplanned deletion.
+  no recursive unplanned deletion, and metadata application only after every
+  child operation has settled. Non-empty source-directory metadata remains
+  blocked on the scanner/feature inconsistency recorded above.
 - No-op drift cannot refresh identity, last-seen, hash, or correspondence.
-- Multi-GiB simulated copy cancellation occurs within one configured chunk;
-  pause follows the finalized drain contract and releases custody.
+- Multi-GiB simulated copy cancellation and pause occur within one configured
+  chunk; pause persists completed status, emits no terminal, releases custody,
+  and resume performs fresh preflight at the back of the queue.
 - Progress totals equal copy/update content bytes exactly and remain monotonic;
   event rate stays under the configured bound.
 - Transient sharing violations retry within bound; persistent locks skip/fail

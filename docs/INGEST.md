@@ -1,7 +1,8 @@
 # Ingest Workflow
 
-Status: latent draft. Priority: after the M0 sync pipeline is proven and DR-18
-is resolved. No ingest behavior is required for M0/M1.
+Status: latent draft. Priority: after the M0 sync pipeline is proven. No ingest
+behavior is required for M0/M1; its protocol shapes and annotation namespace
+are provisioned now without an unused runtime implementation.
 
 ## Purpose
 
@@ -22,14 +23,15 @@ target-only library files.
 5. Produce an immutable additive-only plan and terminate the plan session.
 6. Show source, computed destination, fallback/collision/group reasons, and
    capacity for mandatory review.
-7. Start a separate execution session, freshly observe/preflight, and execute
-   through the ordinary executor.
+7. Bind the reviewed plan fingerprint and selection digest into a `Commitment`,
+   then start a separate execution session which freshly observes/preflights and
+   executes through the ordinary executor.
 8. Record destination-side origin provenance after successful publish.
 9. Optionally run honest post-execution verification against the source before
    the card is declared safe to format.
 
-No-gate ingest is prohibited unless DR-01 defines a review-equivalent explicit
-preauthorization.
+No-gate ingest is prohibited. Scripted or queued ingest may replay an existing
+commitment but may not generate a plan and execute it without human review.
 
 ## Destination And Enrichment Contract
 
@@ -55,9 +57,12 @@ Re-ingest derives no-op from current library evidence plus origin provenance.
 Collision-suffixed prior results must be discoverable through a provenance
 index, not by trying suffixes until something exists.
 
-DR-18 must freeze origin annotation keys, normalization, uniqueness, template
-change behavior, and content-dedup authority. A changed template cannot silently
-duplicate or relocate earlier imports.
+Origin annotation keys live under the reserved `ingest.origin.*` namespace and
+are normalized/unique per entity/key. Template/extractor/policy versions and
+assignment inputs are snapshotted into the plan. A changed template cannot
+silently duplicate or relocate earlier imports; provenance lookup must surface
+the prior destination for re-review. Content dedup remains a later policy and
+is not inferred from annotations alone.
 
 ## Provenance
 
@@ -93,8 +98,8 @@ cleanup for an old card.
   moved; collisions remain blocked or receive reviewed deterministic suffixes.
 - Partial-card rerun finds prior collision-suffixed results through provenance
   and converges without card-side state.
-- Template/version change follows the finalized DR-18 duplicate policy and
-  never silently creates a second copy.
+- Template/version change consults recorded origin provenance, surfaces the
+  prior destination for review, and never silently creates a second copy.
 - Origin annotations appear only after successful publish and point to the
   correct destination row.
 - ExifTool failure/cancel cannot hang the session, inject shell arguments, or

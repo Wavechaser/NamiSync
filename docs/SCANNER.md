@@ -16,11 +16,12 @@ warning is executable. It implements `ChangeSource` and imports only core.
 scan(root: Root, ignores: IgnoreSet, ctx: RunContext) -> ScanResult
 ```
 
-The result contains the resolved root and volume evidence, capability profile,
-regular files, directories including empty directories, unsupported entries,
-warnings, ignore snapshot, and `complete`. DR-11 must add a typed unsupported
-entry/support state; a warning alone is not enough to preserve a placeholder in
-review and inventory.
+The result contains the resolved root, `VolumeId` plus corroborating
+`VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, retained empty
+`DirRecord` values, typed `UnsupportedRecord` values, warnings, ignore snapshot,
+and `complete`. Unsupported records live in their own collection so planner and
+inventory consumers must handle them explicitly; warning text is not their
+state.
 
 Results are sorted by normalized relative key with a deterministic tie-breaker.
 The scanner returns partial observations instead of raising for ordinary access
@@ -33,9 +34,9 @@ failures. Fatal root/volume errors are typed and still produce a session result.
 3. Enumerate entries without following reparse points by default.
 4. Apply location ignores before descending into an ignored subtree.
 5. Check `ctx.checkpoint()` between entries/directories.
-6. Record size, mtime, stable identity when supported, link count, attributes,
-   and type without opening file content. The preservation metadata shape must
-   be finalized under DR-22 before M0 copy claims that scope.
+6. Record size, mtime, stable identity when supported, link count, and
+   `MetadataSnapshot(attributes, created_ns, has_ads)` without opening ordinary
+   file content. `DirRecord` carries the same metadata plus optional identity.
 7. Track visited directory identity so junctions and mount loops terminate.
 8. Classify cloud/offline placeholders from attributes/reparse tags without
    hydrating or reading them.
@@ -71,8 +72,15 @@ Unknowns degrade conservatively: unknown seek penalty behaves like HDD for
 worker policy; absent stable identity disables identity moves; coarse timestamps
 control planner comparison tolerance.
 
-Volume labels are observations, not sole identifiers. Matching rules are owned
-by core/database and remain under DR-10.
+The stable volume key is `(serial, fs_type)`; labels are mutable corroborating
+evidence. Relabeling does not rebind, a changed filesystem type does, and
+simultaneous duplicate keys require explicit user choice.
+
+Two authoritative promises need more type support before scanner can satisfy
+them: non-hardlink update fallback needs a hardlink-capability field, and
+restoring metadata for every newly created directory needs `DirRecord` for
+non-empty directories as well as empty ones. Scanner must not infer either fact
+from filesystem-name heuristics.
 
 ## Expectations Of Other Modules
 
@@ -107,7 +115,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 ## Acceptance Criteria
 
 - A clean tree returns `complete=True`, stable deterministic ordering, all
-  regular files, and every empty directory.
+  regular files, every empty directory as `DirRecord`, and every unsupported
+  entry as `UnsupportedRecord`.
 - Permission denial, disappearing entries, and enumeration errors are retained
   as warnings, return the reachable snapshot, and force `complete=False`.
 - A junction to an ancestor, sibling, or another volume never recurses twice or
@@ -123,6 +132,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
   merging records.
 - exFAT/FAT fixtures report coarse timestamp granularity and no stable identity;
   NTFS fixtures report usable identity when the OS supplies it.
+- Every file/retained directory carries an attributes/creation/ADS-presence
+  metadata snapshot without hydrating unsupported placeholders.
 - Long paths above legacy `MAX_PATH` scan successfully without truncation.
 - An offline volume never returns a complete empty snapshot and never causes a
   missing sweep.

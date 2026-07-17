@@ -18,13 +18,20 @@ attestation format.
 
 - Stable identifier value types: session, run, operation, row, mapping, host,
   volume, and file identity.
-- Immutable scan, plan, observation, attestation, item-result, and run-result
+- Immutable scan (`FileRecord`, `DirRecord`, `UnsupportedRecord`), plan,
+  observation, content-evidence, attestation, item-result, and run-result
   dataclasses; `ExecutionSet` is the explicit mutable execution-status carrier.
+- `MappingSnapshot`, root-qualified `Subject`, `Commitment`,
+  `PreservationPolicy`, `MetadataSnapshot`, and the stable `VolumeId`/
+  corroborating `VolumeEvidence` split.
 - `SessionState`, its legal transition table, and terminal-state predicate.
 - `Outcome` and typed reason codes; free-form text is presentation detail, not
   control flow.
-- Versioned event envelopes and typed event bodies.
-- `RunContext` and cooperative pause/cancel checkpoint protocol.
+- Versioned event envelopes and typed event bodies, including `Gap` and the M1
+  `IntegrityOutcome`/eight-value `IntegrityResult` vocabulary.
+- `RunContext`, nonblocking cooperative pause/cancel checkpoint protocol, and
+  the generic session runner that alone resolves pause/cancel and emits
+  `Terminal`.
 - Protocols for recorder, clock, failure policy, copy backend, worker count,
   change source, destination policy, metadata extraction, session storage, and
   filesystem observations needed by module contracts.
@@ -40,15 +47,32 @@ request is either a legal transition or a typed rejection with no state change.
 `INTERRUPTED` is resumable and is produced only by durable-store reconciliation;
 it is not a normal runtime terminal.
 
-Pause semantics must be resolved in [DESIGN_REVIEW.md](DESIGN_REVIEW.md)
-(DR-02) before implementation. Core must not ship a checkpoint contract that allows a
-workflow stack to remain blocked while the dispatcher claims volume locks have
-been released.
+`Checkpoint` never waits. It returns normally, raises `PauseRequested`, or
+raises `Canceled`; either exception unwinds the workflow stack to the generic
+runner. A pause transitions to `PAUSED` without a terminal and releases volume
+custody. Resume re-enters admission at the back of the required volumes' queue
+and performs fresh observation/preflight. Cancellation produces the one
+`CANCELED` terminal.
 
-Terminal emission ownership must likewise be singular. The recommended core
-shape is a generic session-runner result from which the dispatcher emits one
-`Terminal`; modules return results and never emit a terminal themselves. See
-DR-03.
+The generic runner in `core/session.py` is the sole `Terminal` producer for
+every workflow. Modules and workflows return typed results and emit only
+nonterminal bodies. The dispatcher wraps the runner with custody acquisition
+and unconditional release; it does not add a second terminal path.
+
+An execution's continuation is its mutable `ExecutionSet.status`: completed
+operations remain completed and unreached operations remain eligible after
+fresh preflight. The corresponding restart/continuation representation for
+scan, verify, baseline, and import sessions is not yet defined by the
+authoritative architecture; those session kinds must not claim resumable pause
+until that gap is resolved.
+
+The runner pseudocode's bare `Canceled`/`PauseRequested` exceptions also carry
+no typed partial result. Core therefore has no specified way to build a canceled
+`OperationResult` containing already-earned item outcomes, or to persist the
+continuation before announcing `PAUSED`. The exception payload/result-builder
+contract and the rule for surfacing an unexpected exception after terminal
+emission must be frozen before the runner is implemented; otherwise outcome
+loss or duplicate terminal handling is likely.
 
 ## Event Contract
 
@@ -58,9 +82,19 @@ reliable; progress is a replaceable snapshot. Event details must be typed or
 schema-versioned—consumers must not infer semantics by parsing user-facing
 strings.
 
-Reliable delivery policy remains open under DR-09. The type system must expose
-delivery class and detectable gaps without promising an impossible combination
-of bounded memory, zero producer blocking, and zero reliable-event loss.
+History is attached at admission as the distinguished reliable audit
+subscriber. Its bounded queue may apply producer backpressure only at a safe
+checkpoint boundary and never drops an admitted event. Other reliable
+subscribers that overrun their bounded queue are ejected; the first thing they
+observe is a typed `Gap(first_missed_seq)`. Late subscribers receive current
+state plus a bounded tail and use sequence numbers to detect omitted history.
+Progress alone is lossy/coalescible.
+
+The policy for a history writer that stalls indefinitely (rather than failing
+promptly) remains an implementation blocker: bounded memory plus guaranteed
+delivery requires waiting, while the current architecture also says history
+must not block filesystem work. No implementation may hide that tradeoff with
+an unbounded queue or silent drop.
 
 ## Path And Identity Rules
 
@@ -78,9 +112,11 @@ observation/preflight. Long-path conversion happens only after validation.
 point. The implementation must use a tested Windows-equivalent mapping strategy
 and preserve NTFS-distinct names such as `Straße.txt` and `strasse.txt`.
 
-Volume identity matching must separate stable key material from mutable label
-evidence as required by DR-10. File identity is nullable and never fabricated
-on filesystems that cannot supply stable identity.
+`VolumeId(serial, fs_type)` is the stable key. Label and other mutable mount
+facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with
+a changed filesystem type requires explicit rebind, and two mounted volumes
+with one key require explicit user choice. File identity is nullable and never
+fabricated on filesystems that cannot supply stable identity.
 
 ## Time And Evidence
 
@@ -88,10 +124,18 @@ All domain timestamps come from one injected `Clock`, are timezone-aware UTC,
 and are normalized once before persistence or event emission. Presentation
 converts to local time.
 
-An attestation joins a SHA-256 digest to the exact stat snapshot it attests and
-its provenance. DR-07 must resolve source-stream versus published-target
-identity before the final type freezes. No consumer may treat copy-stream
-evidence as readback verification.
+`ContentEvidence` owns SHA-256 digest, size, provenance, and observation time.
+`Attestation` joins that content to the exact subject `FileStat`. For copy and
+update, the subject is the published target re-statted after publication; the
+source's post-read stat is separate drift-guard evidence. No consumer may treat
+copy-stream evidence as readback verification.
+
+`OperationResult.status` reports filesystem truth only. Ledger persistence is
+the independent `RecordingStatus.OK|DEGRADED` axis; neither rewrites the other.
+The architecture also requires history-write degradation on the session result,
+but its type reference currently has no audit/history status field. That shape
+must be added or explicitly folded into a renamed generalized persistence axis
+before result schemas freeze.
 
 ## Expectations Of Other Modules
 
@@ -107,9 +151,9 @@ evidence as readback verification.
 
 Declare expensive-to-retrofit shapes now: `DEFERRED`, schema-versioned events,
 all `Scope` kinds, nullable file identity/hardlink group, policy protocols,
-opaque workflow payloads, and attestation provenance. A latent protocol need
-not have an M0 implementation unless an M0 consumer uses it; this corrects the
-ambiguity in DR-20 without adding speculative runtime behavior.
+opaque workflow payloads, and attestation provenance. A latent protocol is
+declared shape-only and has no implementation until its first consumer; this
+provisions the seam without speculative runtime behavior.
 
 ## PoC Hardening
 
@@ -128,13 +172,15 @@ ambiguity in DR-20 without adding speculative runtime behavior.
 - Exhaustive tests prove every legal session edge and reject every other edge
   without changing state.
 - Every session path—success, refusal, cancellation, exception, and later
-  interruption—can produce exactly one terminal from the agreed owner.
+  interruption—produces exactly one terminal from the core runner; pause
+  produces none until that same session resumes and terminates.
 - Concurrent event emission yields gap-free monotonically increasing sequence
   numbers per session and no sequence sharing across sessions.
 - Event serialization round-trips every body and rejects unsupported schema
   versions explicitly.
-- A slow-subscriber stress test proves the selected DR-09 delivery policy and
-  reports detectable loss/failure rather than silently violating it.
+- A slow-subscriber stress test proves bounded history backpressure, ejects an
+  overrun non-history reliable subscriber with `Gap`, and never silently loses
+  a reliable event.
 - Unicode corpus tests preserve NTFS-distinct paths and normalize separator and
   ordinary case variants identically.
 - Path tests reject drive, UNC, device, traversal, NUL, mixed-separator escape,
@@ -142,4 +188,11 @@ ambiguity in DR-20 without adding speculative runtime behavior.
 - UTC/DST boundary tests prove all core timestamps are aware UTC values.
 - Attestations cannot be constructed without algorithm, digest, provenance,
   subject stat evidence, and observation time.
+- A changed selection invalidates a `Commitment` even when the plan fingerprint
+  is unchanged; uncommitted and mismatched execution sets are unexecutable.
+- `RecordingStatus` can degrade without rewriting a successful filesystem
+  terminal; the unresolved history-status representation is covered before the
+  public result schema freezes.
+- Cancel/pause fault injection preserves earned item results and continuation
+  state through the runner; exception surfacing cannot trigger a second terminal.
 - Import-linter proves `namisync.core` imports no project layer.

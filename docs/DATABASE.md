@@ -7,8 +7,8 @@ inventory/integrity in M1; migrations and protection workflows later.
 
 `namisync.db` owns SQLite schemas, connection factories, recorder implementation,
 read repositories, history observer/store, and later migrations. The main
-ledger stores durable operational evidence; the history database stores
-independent activity audit/telemetry. They have separate connections, versions,
+ledger stores durable operational evidence; the history database stores an
+independent activity audit. They have separate connections, versions,
 retention, failure domains, and no cross-database foreign keys.
 
 Live databases are local, never placed in a cloud-synced managed root. Settings
@@ -21,21 +21,25 @@ The initial schema reserves the expensive identity/evidence bones:
 
 - schema metadata/version;
 - hosts as observation/run provenance;
-- volumes with stable key evidence separated from mutable label/mount evidence;
+- volumes keyed by `VolumeId(serial, fs_type)`, with mutable label/mount
+  `VolumeEvidence` stored only as corroboration;
 - role-free locations keyed by physical volume plus volume-relative root path;
 - inventory rows keyed by location plus canonical relative path;
 - optional file identity and nullable hardlink-group room;
 - mappings linking distinct source/target locations with soft `deleted_at`;
 - mapping-scoped correspondence constrained to rows in the mapping's locations;
 - run/op idempotency tokens and actual UTC run window;
-- digest algorithm/value, attested stat unit, provenance, observed/hash/verified
-  times kept semantically distinct;
+- digest algorithm/value, `ContentEvidence`, attested subject stat, provenance,
+  observed/hash/verified times kept semantically distinct;
+- metadata snapshot fields for attributes, creation time, and ADS presence;
 - presence, acknowledgement, exclusion, reappearance, and unsupported state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
-Drive letters are current mount/display data, never persisted identity. DR-10
-must finalize the volume key. A composite constraint/trigger must prevent a
-mapping correspondence from referencing a target file in another location.
+Drive letters are current mount/display data, never persisted identity. Label
+drift is noted without rebind; a matching serial with a changed filesystem type
+requires explicit rebind; simultaneous duplicate keys require explicit user
+choice. A composite constraint/trigger must prevent a mapping correspondence
+from referencing a target file in another location.
 
 ## Connection Rules
 
@@ -139,8 +143,9 @@ round trips, and duplicated time/host formatting.
 - Schema rejects cross-location mapping correspondence despite valid row ids.
 - Windows path-key corpus stores NTFS-distinct names separately and ordinary
   case/separator variants as one key.
-- Volume mount-letter changes preserve location identity; clone/label/reformat
-  cases follow finalized DR-10 behavior.
+- Volume mount-letter/label changes preserve location identity; a changed
+  filesystem type requires rebind, and simultaneous duplicate identities require
+  explicit user choice.
 - Complete/scoped/offline inventory reconciliation obeys `INVENTORY.md` and
   scales beyond 33k rows without variable overflow.
 - Large mapping/inventory selections use bounded query counts demonstrated by

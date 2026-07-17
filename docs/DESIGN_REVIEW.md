@@ -1,7 +1,8 @@
 # NamiSync Design Review
 
-Status: all findings reviewed and resolved 2026-07-18 — the 23 original items
-plus DR-24, found during the resolution session's sanity pass. Each item below
+Status: all findings reviewed and resolved 2026-07-18 — the 23 original
+items, DR-24 from the resolution session's sanity pass, and DR-25 through
+DR-31 from the module-draft propagation review. Each item below
 carries a **Resolution** note and `FEATURES.md`/`ARCHITECTURE.md` have been
 updated to match. The per-module drafts have not yet been re-synced to these
 decisions. This file is now the decision log; the authoritative sources
@@ -420,6 +421,112 @@ does not reintroduce the old monolithic core.
 
 **Resolution (2026-07-18):** Done — the FEATURES bullet now reads: core owns
 shared contracts and the session machine; isolated modules own sync behavior.
+
+## Propagation-Review Blockers
+
+Seven contract defects found while propagating the resolved decisions into the
+per-module drafts (see the propagation session's `HANDOFF.md` for the original
+blocker statements).
+
+### DR-25 — Executor self-preflight violated the import law
+
+§4.5 had the executor calling `observe` + `preflight` as its first act while §1
+forbids modules from meeting outside workflows.
+
+**Resolution (2026-07-18):** The workflow owns observe → preflight → execute on
+every start and every resume, and is the sole pre-mutation preflight. The
+executor keeps its own **per-operation** defense: immediately before each
+mutation it re-validates that operation's direct preconditions (expected
+target state, source evidence at touch, type/emptiness) — preflight is one
+stage of TOCTOU prevention, never the last, because the world can change
+between preflight and touch. No executor-to-preflight import exists.
+
+### DR-26 — Non-hardlink update fallback was under-specified
+
+No `supports_hardlinks` capability, no backup-copy capacity accounting, no
+crash-safety discipline for the backup copy itself.
+
+**Resolution (2026-07-18):** `CapabilityProfile.supports_hardlinks` from the
+authoritative `FILE_SUPPORTS_HARD_LINKS` volume flag (no probing, no fs-name
+whitelist). The shared capacity formula becomes profile-aware: updates on a
+no-hardlink target count the displaced version's backup-copy bytes,
+max-concurrency-aware. The backup copy follows the same temp-flush-publish
+discipline inside the trash run directory, so a partial backup only ever
+exists under a temp name; trash-restore planning ignores exact-shape temp
+names, and orphaned trash temps age out with the trash run directory (temp
+recovery still never walks `.synctrash`).
+
+### DR-27 — ADS/ACL preservation was unimplementable from `has_ads`
+
+A presence bit cannot drive stream copying or drift detection, no ACL snapshot
+existed, and requested-stream copy failure was wrongly specified as a warning.
+
+**Resolution (2026-07-18):** `MetadataSnapshot.streams` is an ADS manifest
+(name + size), enumerated only when the mapping's preservation policy requests
+ADS — policy-driven scan depth. The executor copies manifest streams and
+re-enumerates the source post-copy as part of the drift guard. Streams are
+user data: a requested stream that fails to copy on a capable target FAILS the
+operation; an ADS-incapable target surfaces at plan time as a reviewable
+degradation, before commitment. ACL preservation stays opt-in with honest
+semantics: the security descriptor is copied at execution time
+(preserve-current, not preserve-scanned), and failure when opted in fails the
+operation.
+
+### DR-28 — Non-empty directories had no metadata input
+
+`DirRecord` covered only empty directories while the executor promised
+metadata for every created directory — which were also created implicitly, as
+unreviewed side effects of file copies.
+
+**Resolution (2026-07-18):** The scanner records every walked directory (it
+visits them anyway). The planner emits an explicit mkdir-with-metadata
+operation for every directory the plan creates — full chain, file operations
+depending on their parent's mkdir — and the executor never creates a directory
+implicitly. Kills the PoC's partial-chain bug class by construction and
+provides the all-directory records the future directory-move op needs.
+
+### DR-29 — History degradation had no result field; stalled writers were contradictory
+
+`OperationResult` carried only ledger status, and guaranteed delivery plus
+bounded memory plus never-blocking cannot survive a writer that stalls
+forever.
+
+**Resolution (2026-07-18):** `OperationResult` gains an `audit:
+RecordingStatus` axis beside `recording`; invariant 12 becomes axis-separated
+truth (filesystem / ledger / audit — no axis rewrites another). Backpressure
+waits are capped by a generous injected timeout: a writer that stalls past it
+or fails degrades the session's audit axis loudly and blocking stops.
+Delivery is guaranteed *unless the result says otherwise* — never silently
+absent.
+
+### DR-30 — Pause/cancel result transport and non-execution resume were undefined
+
+Bare control-flow exceptions carry no partial results; scan/verify/baseline/
+import had no resume semantics; the runner's "exception still surfaces" implied
+a possible second terminal.
+
+**Resolution (2026-07-18):** Exceptions stay payload-free: the session runner
+assembles cancel/pause/failure terminal results from the session's own emitted
+RELIABLE `ItemOutcome` stream (emit-as-you-go is already law, making unwind
+lossless). Pause is a per-kind capability declared at workflow registration
+and enforced by the transition table: only kinds with a continuation state
+accept it — execution (M0) and the verifier's item-list sessions
+(verify/baseline, M1, via the same item-status continuation pattern as
+`ExecutionSet`) — while scan/plan and import sessions refuse pause cleanly and
+remain cancelable. The runner consumes exceptions: typed detail rides the
+`Terminal` and the log, nothing re-raises past it, so a second terminal is
+unconstructible. The recorder needs no pause behavior — it is call-driven, and
+the pause-drain forced flush commits completed evidence before locks release.
+
+### DR-31 — Queued-discard audit lacked a typed distinction
+
+CANCELED with zero operations was indistinguishable from discarded-before-start
+without string parsing.
+
+**Resolution (2026-07-18):** `OperationResult` gains a typed `Disposition`
+{`RAN`, `UNRUN`}: a discarded queue entry is CANCELED + UNRUN, a refusal is
+naturally UNRUN, and nothing is ever inferred from a zero-length operation
+list or a parsed string. No new terminal state, no new transition edges.
 
 ## Required Review Order
 

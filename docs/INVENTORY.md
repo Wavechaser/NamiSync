@@ -18,6 +18,11 @@ path, present/missing/unsupported state, latest safe observation, optional hash
 and provenance, hash-observed/last-verified times, missing acknowledgement,
 reappearance marker, host provenance, and optional hardlink group.
 
+Present files retain `MetadataSnapshot` fields needed by reviewed preservation.
+Empty-directory `DirRecord` and typed `UnsupportedRecord` observations remain
+distinguishable from ordinary files; unsupported state is never reconstructed
+from warning text.
+
 Mapping correspondence is separate and mapping-scoped. A shared location keeps
 one physical inventory while each mapping retains independent source/target
 relationship evidence.
@@ -59,9 +64,10 @@ does not delete evidence; restore reverses only acknowledgement.
 
 Repository reads return zero/one/many mapping associations. Workflows require
 explicit paired roots when association is ambiguous. Known drive-letter changes
-resolve through volume evidence; rebinding to a different location/volume is an
-explicit sampled verification workflow. Cloned-volume ambiguity is never
-auto-resolved.
+resolve through `VolumeId(serial, fs_type)`; label changes are noted without
+rebind, a matching serial with changed filesystem type requires explicit rebind,
+and simultaneous duplicate identities require explicit user choice. Rebinding
+to a different location/volume is an explicit sampled verification workflow.
 
 ## Expectations Of Other Modules
 
@@ -117,8 +123,7 @@ summary and policy; missing acknowledgement is not pruning.
   bounded transaction/round-trip behavior.
 - Mapping-state foreign keys/composite checks reject target rows from another
   location.
-- Drive-letter change resolves the same known volume; label change follows the
-  finalized DR-10 rule; simultaneous clone ambiguity requires a choice.
+- Drive-letter/label change resolves the same known volume; filesystem-type
+  change requires rebind; simultaneous clone ambiguity requires a choice.
 - Inventory queries expose zero/one/many mappings without guessing.
 - UI filtering and Plan invalidation cannot clear or mutate inventory state.
-

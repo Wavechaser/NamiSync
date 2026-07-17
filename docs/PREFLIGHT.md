@@ -8,26 +8,25 @@ managed-data mutation, on resume, and on queued wakeup.
 Preflight separates current-world observation from pure judgment:
 
 ```python
-observe(xset: ExecutionSet, fs: FileSystem) -> ObservedWorld
-preflight(xset: ExecutionSet, world: ObservedWorld,
-          environment: ExecutionEnvironment) -> Verdict
+observe(xset: ExecutionSet, fs: FileSystem,
+        settings: SettingsReader) -> ObservedWorld
+preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict
 ```
 
-The added immutable environment is required by DR-06 for current semantic
-settings such as filters. `observe()` performs read-only IO and decides nothing;
-`preflight()` performs no IO and changes nothing. Neither repairs, re-plans,
-drops, cleans, or executes operations.
+`observe()` performs read-only IO, including reading current semantic settings,
+and decides nothing. `preflight()` performs no IO and changes nothing. Neither
+repairs, re-plans, drops, cleans, or executes operations.
 
 ## Observation Boundary
 
 Observation touches only remaining selected-operation paths and their required
 parents/roots. It records source and target stats (or absence), root/physical
 volume evidence, free space, exact reclaimable owned-temp bytes, trash path
-resolution/writability, and one injected UTC timestamp.
+resolution/writability, current filters from the injected settings reader, and
+one injected UTC timestamp.
 
-Stats are keyed by a typed subject containing root identity/role plus canonical
-relative key, never by relative-path string alone; DR-21 blocks the ambiguous
-architecture shape.
+Stats are keyed by `Subject(root, rel_path_key)`, never by relative-path string
+alone.
 
 Every path is first lexically validated, then opened/resolved under its root
 with long-path-safe, reparse-aware handling. Reclaimable temp accounting accepts
@@ -63,6 +62,10 @@ the run. It verifies:
 Unrelated tree changes do not matter. A refusal never mutates `ExecutionSet`,
 silently removes an operation, or changes an operation to a safer-looking kind.
 
+Commitment validation is not preflight judgment: review uses preflight before a
+commitment exists. `run_execution` must refuse a missing plan fingerprint or
+selection-digest match before it calls observation/preflight.
+
 ## Repetition And Freshness
 
 Plan review may display a verdict from one observation. Execution always makes
@@ -83,14 +86,22 @@ artifacts before allocating new temps. If cleanup later fails or actual free
 space falls below the verdict, executor fails safely without publishing partial
 content. User files resembling temp names never count as recoverable.
 
+Until hardlink capability and backup-copy capacity are represented in the
+authoritative plan/profile shapes, a target that cannot hardlink must refuse a
+trash-on-update selection rather than run a formula that omits the old-version
+copy.
+
 ## Expectations Of Other Modules
 
 - Planner embeds every before-state and policy snapshot needed for judgment.
 - Core supplies path/volume/evidence types and the shared capacity function.
-- Workflow supplies current immutable semantic environment.
+- Workflow supplies the injected settings reader used by observation.
 - Dispatcher holds/acquires required volume custody around execution; preflight
   verifies identity but does not own locks.
-- Executor calls observe/preflight unconditionally and retains final guards.
+- A fresh guard is mandatory immediately before executor mutation under the
+  same custody, and executor retains final per-operation guards. Whether the
+  workflow invokes this sibling module or injects a core guard callable into
+  executor must be reconciled with the modules-never-call-modules import law.
 - Interfaces show refusal reasons without offering an execute-anyway bypass.
 
 ## Latent Features
@@ -133,6 +144,8 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
   verdicts for identical snapshots and fresh different verdicts after drift.
 - Refusal leaves plan, selection, statuses, filesystem, and ledger byte-for-byte
   unchanged.
+- Missing or mismatched plan/selection commitment is refused by execution entry
+  before observation; ordinary review preflight remains usable without one.
 - A test changes an unrelated file between plan and execution and still passes;
   a touched file change refuses.
 - Long-path and root-escape cases are judged through canonical validated paths.
