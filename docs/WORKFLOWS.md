@@ -1,0 +1,137 @@
+# Workflows Module
+
+Status: draft contract. Priority: M0 plan/execution sync and history; M1
+inventory/integrity/import; later queue, maintenance, replay, undo/repair, and
+ingest.
+
+## Purpose
+
+Workflows are plain top-to-bottom functions and the only place operation modules
+meet. They translate a typed request into sequential calls, pass immutable
+outputs forward, aggregate filesystem/recording/history-aware results, and
+declare required resources to dispatcher. They do not implement scan/diff/copy/
+hash/SQL/UI behavior and never coordinate through signals or callbacks-for-
+control.
+
+Every dependency arrives through one composition-root `deps` object: clock,
+scanner/change source, repositories, planner/policies, observer/preflight,
+executor, recorder, verifier/importer, and settings snapshots.
+
+## Reviewed Sync
+
+### Plan session
+
+1. Validate distinct non-nested roots and request semantics.
+2. Resolve volume/location/mapping evidence without persisting preview-only
+   configuration.
+3. Scan both roots.
+4. Read immutable prior correspondence and semantic settings snapshot.
+5. Apply filters/policies and plan.
+6. Observe/preflight for review information.
+7. Return immutable serializable plan/verdict; terminate and release locks.
+
+### Execution session
+
+1. Accept an explicit reviewed `ExecutionSet` commitment.
+2. Reacquire required physical-volume custody.
+3. Load current semantic environment without altering the reviewed snapshot.
+4. Executor freshly observes/preflights; refusal mutates nothing.
+5. Execute selected dependency-closed work and record through recorder.
+6. Optionally start a separately scoped linked verification phase/session as
+   specified by the request.
+7. Return truthful filesystem, recording, and verification aggregates.
+
+Human review occurs between sessions with nothing running. DR-01 applies: a
+single-session no-gate workflow is not permitted unless an explicit durable
+preauthorization is defined as equivalent review.
+
+## Integrity Workflow
+
+Inventory, baseline, verify, rebaseline, and hash import are location-centric,
+not plan- or mapping-dependent. The workflow resolves one selected location,
+performs full or selected refresh, commits inventory, constructs canonical
+selection, runs the integrity module, flushes recorder, and returns inventory
+plus typed outcomes. Missing inventory is created automatically; the user is
+not told to run a hidden prerequisite manually.
+
+Selected verification uses scoped refresh. Full verify uses a complete location
+scan before missing marking. UI receives refreshed inventory at the scan-to-hash
+handoff so it never shows stale/empty rows during work.
+
+## Other Workflows
+
+- History browsing is read-only and runs alongside mutating sessions.
+- Replay reconstructs scope from retained detail and plans fresh.
+- Undo/repair generates an ordinary plan and mandatory review.
+- Database backup/check/export/import are typed maintenance sessions; app-owned
+  mutation remains guarded/history-logged.
+- Ingest follows [INGEST.md](INGEST.md) and the same two-session review boundary.
+- Queue wakeup starts only an already reviewed/authorized execution set and
+  freshly preflights; silent replan is forbidden.
+
+## Error And Result Aggregation
+
+Workflow catches typed module failures at the correct boundary, preserves
+already-earned item/filesystem results, and lets the generic session runner
+produce terminal. It never maps recorder failure to “copy failed” or observer
+failure to domain failure without the DR-15/DR-16 aggregate policy.
+
+Refusal is distinct from failure and has zero managed-data mutation. Partial
+failure derives from item outcomes, not merely whether any bytes moved. An
+all-noop explicit run is completed/no-op and still history-worthy.
+
+## Orthogonality Rules
+
+- Planning preview does not create mappings or persist deletion policy.
+- Plan invalidation does not clear inventory evidence.
+- Inventory refresh does not rewrite attested baselines.
+- Verification does not mutate plans or mark unverified noops.
+- History does not record ledger truth or control work.
+- UI choice does not alter workflow semantics.
+- Ingest source temporariness does not create role-bearing location state.
+
+## Expectations
+
+- Modules are callable and never import each other.
+- Repositories return immutable snapshots and recorder is sole ledger writer.
+- Dispatcher treats request/result as opaque and owns custody/control.
+- Interfaces submit typed requests and present events/results; no interface
+  reaches around workflow to call executor/SQL.
+- Settings shaping a plan are snapshotted, not read opportunistically later.
+
+## PoC Hardening
+
+This sequencing prevents the unwired ledger, preview side effects, no-inventory
+baseline/verify failure, target-role fallback, full refresh for selected verify,
+missing integrity audit on unexpected exceptions, stale plan/inventory display,
+and view-wide false verification scope. A common guard envelope prevents hash
+import from handling refusal differently than baseline/verify.
+
+## Acceptance Criteria
+
+- Workflow source reads visibly top-to-bottom and contains no signal loop,
+  domain operation implementation, raw SQL, or UI import.
+- Plan session persists no mapping/settings/user-data mutation and releases all
+  custody before review.
+- Execution always uses the exact reviewed plan/selection, fresh observation,
+  and preflight; drift refuses without mutation.
+- No workflow waits for human input; mandatory review is between terminated and
+  newly submitted sessions.
+- A no-gate execution cannot be invoked unless DR-01's explicit authorization
+  contract is present and tested.
+- Baseline/verify with no prior inventory automatically inventories then hashes;
+  selected verify refreshes only selected canonical paths.
+- Location integrity requires only the selected location and never silently
+  falls back to another root.
+- Refusal, all-noop, partial failure, cancel, recorder failure, observer failure,
+  and unexpected exception each preserve truthful typed results and history
+  behavior.
+- Linked verify selection equals successful eligible executed operations and is
+  handed to UI at the execution-to-verification phase boundary.
+- Replay/undo/repair never execute retained historical operations directly and
+  always create a new reviewed plan.
+- Plan-only option changes invalidate plan but preserve inventory; location
+  changes invalidate only state whose identity depends on that location.
+- Import-linter proves workflows may import core/modules/db but not dispatcher
+  or interfaces.
+

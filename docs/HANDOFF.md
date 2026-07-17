@@ -2,44 +2,58 @@
 
 ## Changes
 
-- Aligned `AGENTS.md` directory and dependency rules with the newer
-  `ARCHITECTURE.md`: `core`, `modules`, `db`, `workflows`, `dispatcher`, and
-  `interfaces` now have explicit responsibilities and import directions.
-- Standardized the Python package spelling on `namisync` across active docs,
-  imported PoC references, and the UI mockup. The `nami-sync` executable name
-  remains hyphenated by design.
-- Added empty package boundaries for every architecture layer and changed
-  setuptools configuration to discover all `namisync*` packages.
-- Added import-linter contracts that enforce the architecture's direct and
-  indirect dependency restrictions, including independence between operation
-  modules.
-- Added a pytest smoke test that imports the canonical package and all layer
-  packages, giving the repository a real green test baseline.
-- Ignored generated `*.egg-info/` metadata and documented the import-boundary
-  command in `README.md`.
-- Repaired the moved `.venv`: its metadata and the `pip`, `pytest`, and
-  `lint-imports` launchers now reference `F:\GitHubRepositories\NamiSync`.
+- Added thorough draft contracts for every architectural module and the major
+  cross-module domains: `CORE`, `SCANNER`, `PLANNER`, `PREFLIGHT`, `EXECUTOR`,
+  `VERIFIER`, `INVENTORY`, `HASH_IMPORT`, `INGEST`, `RECORDER`, `DATABASE`,
+  `HISTORY`, `DISPATCHER`, `WORKFLOWS`, `INTERFACES`, `COMMANDLINE`, and
+  `DESKTOP_UI`.
+- Each draft defines responsibility/non-responsibility, inputs and outputs,
+  collaborator expectations, atomicity/idempotency/data-safety invariants,
+  milestone priority, latent-feature seams, PoC hardening, and acceptance
+  criteria.
+- Added `DESIGN_REVIEW.md` with 23 unresolved source-contract issues, ordered by
+  milestone impact, plus traceability from all 111 PoC bug-log entries to owning
+  drafts and regression themes.
+- Added the new active documentation set to the root `README.md` index.
 
-The pre-existing architecture revisions that split observation from preflight,
-split reviewed sync into plan and execution sessions, define M0 history, and
-clarify dispatcher persistence were preserved. This session changed only the
-stale underscored module spelling in that document.
+No product code or authoritative `FEATURES.md`/`ARCHITECTURE.md` contract was
+changed in this session. The drafts explicitly flag unresolved issues rather
+than silently overriding those sources.
+
+## Highest-Priority Review
+
+Resolve these before M0 mutates user files:
+
+1. Mandatory review versus `run_unattended_sync`/unattended ingest (DR-01).
+2. Pause checkpoint blocking versus lock release and fresh resume preflight
+   (DR-02).
+3. Exactly-one-terminal ownership across every session kind (DR-03).
+4. Missing planner correspondence/capacity/current-filter inputs (DR-04 through
+   DR-06).
+5. Source-versus-target attestation identity and trash-on-update crash recovery
+   (DR-07/DR-08).
+6. Reliable event capacity, volume identity, unsupported scan representation,
+   Windows directory durability, and real M0 cross-process volume custody
+   (DR-09 through DR-13).
+7. Root-aware `ObservedWorld` keys and a typed metadata-preservation snapshot
+   (DR-21/DR-22).
 
 ## Verification
 
-- `.\.venv\Scripts\python.exe -m pytest` — 1 passed.
-- `.\.venv\Scripts\lint-imports.exe` — 7 contracts kept, 0 broken.
-- A temporary sibling-module import broke the independence contract as
-  expected; the probe files were removed before the final clean lint run.
-- `.\.venv\Scripts\python.exe -m pip check` — no broken requirements.
-- Setuptools discovery returned `namisync` plus all six architecture
-  subpackages.
-- `git diff --check` — no whitespace errors.
+- Read all 775 lines of `ARCHITECTURE.md`, 297 lines of `FEATURES.md`, and 551
+  lines/111 entries of `PoC_import/BUGS.md`.
+- All 17 module/domain drafts contain acceptance criteria and explicit
+  collaborator expectations.
+- Markdown relative-link check: passed.
+- Design-review reference check: 23 defined items, no missing references.
+- Encoding/stale-package-name scan over new docs: clean.
+- `git diff --check`: no whitespace errors.
+- `.\.venv\Scripts\python.exe -m pytest`: 1 passed.
+- `.\.venv\Scripts\lint-imports.exe`: 7 contracts kept, 0 broken.
 
 ## Immediate Next Context
 
-- No sync behavior has been implemented; the next architecture step is M0 core
-  contracts.
-- `docs/ARCHITECTURE.md` still contains the user's unstaged structural edits;
-  do not discard or rewrite them.
-- Generated `namisync.egg-info/` remains local but is now ignored by Git.
+- Review `DESIGN_REVIEW.md` in its stated order before freezing M0 core types.
+- Once decisions are made, update `FEATURES.md`/`ARCHITECTURE.md` first, then
+  revise affected module drafts so authoritative and focused docs agree.
+- No files were staged or committed.
