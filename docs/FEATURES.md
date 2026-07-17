@@ -40,6 +40,28 @@ document's rules.
 
 - **Durable Job Queue**. Queued jobs persist in the dispatcher's own session table, retain stale-plan defenses through the same preflight re-check every resume uses, and support optional re-planning with material-difference review before execution.
 
+## INGEST
+
+Ingest copies media from a card or mirrored directory into a library organized
+by capture metadata instead of preserving directory structure — DIT-style
+offload built on the same scan → enrich → plan → preflight → execute pipeline.
+All unrealized; the settled Destination Policy Seam (see Planner) is its
+provision.
+
+- **Metadata-Sorted Ingest**. Files will be copied into a destination structure computed from capture metadata (date, camera body) by a naming template, rather than mirroring the source layout.
+- **Enrichment Stage**. An extraction pass will read capture metadata between scan and plan as its own cancellable pipeline stage; a file whose metadata cannot be read falls back to a policy destination (filesystem times or an unsorted bucket) and never fails the run.
+- **Naming Templates**. Templates will compose tokens (capture date, camera, original name, sequence) into destination paths; two source files computing the same destination resolve deterministically by sequence policy, and every collision is visible in plan review.
+- **Companion Grouping**. Sidecar and pair files (RAW+JPEG, XMP, THM) will travel to the same destination folder with consistent renames, as one reviewable group.
+- **Additive by Contract**. Ingest never trashes, mirrors, or otherwise touches target-only files, and never mutates the source card.
+- **Ingest Review**. Ingest uses the same plan-review-execute two-session shape as sync, with each file's computed destination shown for review; unattended ingest remains possible through the same no-gate path as unattended sync.
+- **Untracked Ingest Sources**. Ledger locations are created only by sync and integrity workflows; ingest never creates ledger state for its source. A card is scanned in memory, planned against, copied from, and forgotten — nothing to rebind, recognize, or clean up when it is formatted. Temporariness is a property of the workflow, not of any filesystem type.
+- **Origin Provenance**. Ingest stamps each library file's ledger row with its origin evidence — original filename, capture time, source size — through the generic annotations table, so all ingest evidence lives on the tracked library side.
+- **Stateless Resume**. Re-ingesting a partially ingested card is just planning again: files whose computed or provenance-matched destination already exists plan as no-ops, including files that landed under a collision suffix, with no card-side state consulted.
+- **Ingest Profiles**. A recurring ingest configuration (target library, template, options) will anchor to the destination and accept whatever source volume is presented; it is its own small entity, not a mapping, and accrues no per-card rows.
+- **Content Dedup**. Optionally, a file whose content hash already exists in the library will plan as a skip regardless of destination path.
+- **Verified Offload**. Post-execution verification will confirm the library copies against the card before the user formats it; a whole-card check across multiple past runs derives from origin provenance plus hash comparison, with no card-side state.
+- **ExifTool Extraction**. Metadata extraction sits behind a protocol; an ExifTool batch-mode implementation is the intended first extractor.
+
 ## DISPATCHER
 
 - **Domain-Blind Session Scheduling**. The dispatcher admits, schedules, and tracks sessions by their generic contract alone; no dispatcher method or code path is named for a specific activity such as sync or verify.
@@ -84,6 +106,7 @@ document's rules.
 ## PLANNER
 
 - **Scoped Planning**. The planner accepts a scope over candidate files as a first-class input — everything, a pattern, an explicit selection, or the file set recorded by a past run — so ordinary sync, filtered execution, and history replay are the same mechanism applied to different scopes.
+- **Destination Policy Seam**. Every operation's target path comes through a destination policy, and diffing matches source to target through that computed destination — path-preserving is simply the default policy — so restructure-on-copy workflows such as ingest change a policy implementation, never the planner's diff logic.
 - **Filesystem Capability Awareness**. Diffing compares timestamps within the coarser of the two roots' recorded timestamp granularity, and move detection is disabled on any root whose filesystem doesn't support stable file identity, instead of silently misreading FAT-family timestamps and identities as reliable.
 - **Metadata-Based Diffing**. Matching size and modification time produces a no-op, while changed metadata produces an update.
 - **Copy and Update Planning**. Source-only files become copies and changed matched files become updates.
@@ -230,7 +253,7 @@ document's rules.
 - **Hash Import Command**. `nami-sync import-hashes` imports explicit TeraCopy sidecars for one location.
 - **History Command**. `nami-sync history` lists recent audit runs or prints one retained entry with detail.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
-- **GUI Entry Points**. Running `nami-sync`, `nami-sync-gui`, or `python -m nami_sync` launches the desktop application when no subcommand is given.
+- **GUI Entry Points**. Running `nami-sync`, `nami-sync-gui`, or `python -m namisync` launches the desktop application when no subcommand is given.
 - **Concurrent Read-Only Commands**. Read-only CLI commands such as history and status run alongside a GUI session or other CLI invocations; mutating commands are subject to the same volume and queue arbitration as any other session.
 
 ## DESKTOP UI

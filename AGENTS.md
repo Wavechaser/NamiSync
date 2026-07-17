@@ -10,8 +10,18 @@ reused by CLI, queue, or service entry points.
 
 ## Directory Conventions
 
-- `namisync/core/`: sync-domain models, scanner, planner, executor, policies,
-  hashing, and path utilities. No Qt imports.
+- `namisync/core/`: contracts, session state, events, path safety, and protocol
+  shapes. It imports only the Python standard library.
+- `namisync/modules/`: scanner, planner, preflight, executor, and verifier. It
+  imports `core`; modules do not import one another.
+- `namisync/db/`: recorder, repositories, schemas, and the history observer. It
+  imports `core` and is the sole writer of the main ledger.
+- `namisync/workflows/`: sync and integrity workflow coordination. It is the
+  only layer where modules meet and may import `core`, `modules`, and `db`.
+- `namisync/dispatcher/`: domain-blind session admission, custody, control, and
+  event fan-out. It imports `core`, never modules or workflows.
+- `namisync/interfaces/`: CLI, API, and desktop adapters. It imports workflows
+  and the dispatcher through the composition root and owns no domain policy.
 - `tests/`: pytest tests mirroring package boundaries where practical.
 - Active focused documentation lives in `docs/`:
   - `FEATURES.md` for all planned and existing features.
@@ -41,9 +51,11 @@ their contract, and update the matching tests and documentation when it does.
 - **Feature orthogonality:** planning/execution, inventory/integrity, history,
   and UI presentation have distinct responsibilities. Do not make one feature
   silently reinterpret, duplicate, or invalidate another feature's state.
-- **Discrete layering:** `core` owns domain behavior, `db` owns persistence,
-  `app` coordinates workflows, and `ui` adapts them for Qt. Dependencies flow
-  inward; GUI code does not decide sync behavior or reach around workflows.
+- **Discrete layering:** `core` defines contracts; `modules` implement isolated
+  domain operations; `db` owns persistence; `workflows` are the only place
+  modules meet; `dispatcher` is domain-blind; and `interfaces` adapt workflows
+  and sessions. Dependencies follow the import law in `ARCHITECTURE.md`; UI code
+  does not decide sync behavior or reach around workflows.
 
 ## Naming Conventions
 
@@ -55,8 +67,9 @@ their contract, and update the matching tests and documentation when it does.
   may use `pathlib.Path`, but persisted paths must not depend on a drive letter.
 - Deletion policies are named `trash`, `additive`, and `mirror`; `trash` is the
   default user-facing policy.
-- The name `NamiSync` should not be broken apart into, for example, `nami_sync`
-  even in lower cases. 
+- Use `NamiSync` as the product name, `namisync` as the Python package and
+  module name, and `nami-sync` as the command-line executable. Never use
+  `nami_sync`.
 
 ## Implementation Rules
 

@@ -3,7 +3,7 @@
 A single-file, interactive HTML/CSS/JS mockup of the NamiSync desktop app,
 used to iterate on visual design before touching the real PySide6 UI. It is
 a design artifact, not shipped code — nothing here is imported by
-`nami_sync`, and this folder isn't part of the app.
+`namisync`, and this folder isn't part of the app.
 
 It lives outside `docs/` deliberately: `docs/` documents the shipped app,
 and this mockup is expected to move, get replaced, or disappear once the
@@ -18,7 +18,7 @@ no external requests.
 ## What it's grounded in
 
 Every color, font, column width, and label is pulled from the real app as
-of the Phase 2 / menu-bar overhaul (`nami_sync/ui/theme.py`,
+of the Phase 2 / menu-bar overhaul (`namisync/ui/theme.py`,
 `task_page.py`, `main_window.py`; see `docs/UI_overhaul.md` and
 `docs/GUI.md`), not invented:
 

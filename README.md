@@ -15,3 +15,9 @@ Run the test suite with:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
+
+Check the architectural import boundaries with:
+
+```powershell
+.\.venv\Scripts\lint-imports.exe
+```

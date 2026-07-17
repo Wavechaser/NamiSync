@@ -320,7 +320,7 @@ re-checked against later code.
 ### Phase 1
 - SEVERE - FIXED. Dead feature. `main()` defaulted to `None` instead of
   reading `sys.argv` when called with no explicit argv, so every real
-  invocation (`nami-sync`, `python -m nami_sync`) launched the GUI regardless
+  invocation (`nami-sync`, `python -m namisync`) launched the GUI regardless
   of the subcommand typed — `import-hashes`, `verify`, and `history` were
   unreachable outside tests. (cause: every test passed an explicit argv
   tuple, so nothing exercised the real default path.)
@@ -451,7 +451,7 @@ re-checked against later code.
   of a declared `QObject` receiver, so Qt's auto-connection fell back to a
   direct call on the emitting worker thread instead of queuing to the GUI
   thread.) This is the defect that motivated centralizing worker lifecycle in
-  `nami_sync/ui/worker_session.py` (`CancellableWorker`/`WorkerSession`),
+  `namisync/ui/worker_session.py` (`CancellableWorker`/`WorkerSession`),
   which retired the older `_release_worker` sender-guard mechanism entirely
   — see the "UI — tab shell" section above for that superseded mechanism's
   own bugs.

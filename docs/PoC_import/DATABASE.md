@@ -106,7 +106,7 @@ win. Import creates no location, file row, mapping, mapping state, or run.
 
 ## One-location access surfaces
 
-`nami_sync/app/inventory.py` is the non-Qt inventory workflow. It scans and
+`namisync/app/inventory.py` is the non-Qt inventory workflow. It scans and
 reconciles one selected location, then returns its retained file rows and a
 read-only mapping-context summary. It creates a location/file inventory only;
 it never creates, selects, or promotes a mapping.

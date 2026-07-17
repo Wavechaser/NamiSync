@@ -17,8 +17,75 @@ dev = [
     "pytest>=8.0",
 ]
 
-[tool.setuptools]
-packages = ["namisync"]
+[tool.setuptools.packages.find]
+include = ["namisync*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.importlinter]
+root_package = "namisync"
+
+[[tool.importlinter.contracts]]
+name = "Core imports no project layer"
+type = "forbidden"
+source_modules = ["namisync.core"]
+forbidden_modules = [
+    "namisync.modules",
+    "namisync.db",
+    "namisync.workflows",
+    "namisync.dispatcher",
+    "namisync.interfaces",
+]
+
+[[tool.importlinter.contracts]]
+name = "Modules import only core"
+type = "forbidden"
+source_modules = ["namisync.modules"]
+forbidden_modules = [
+    "namisync.db",
+    "namisync.workflows",
+    "namisync.dispatcher",
+    "namisync.interfaces",
+]
+
+[[tool.importlinter.contracts]]
+name = "Domain modules are mutually independent"
+type = "forbidden"
+source_modules = ["namisync.modules.*"]
+forbidden_modules = ["namisync.modules.*"]
+
+[[tool.importlinter.contracts]]
+name = "Database imports only core"
+type = "forbidden"
+source_modules = ["namisync.db"]
+forbidden_modules = [
+    "namisync.modules",
+    "namisync.workflows",
+    "namisync.dispatcher",
+    "namisync.interfaces",
+]
+
+[[tool.importlinter.contracts]]
+name = "Workflows do not import dispatcher or interfaces"
+type = "forbidden"
+source_modules = ["namisync.workflows"]
+forbidden_modules = ["namisync.dispatcher", "namisync.interfaces"]
+
+[[tool.importlinter.contracts]]
+name = "Dispatcher imports only core"
+type = "forbidden"
+source_modules = ["namisync.dispatcher"]
+forbidden_modules = [
+    "namisync.modules",
+    "namisync.db",
+    "namisync.workflows",
+    "namisync.interfaces",
+]
+
+[[tool.importlinter.contracts]]
+name = "Interfaces use workflows and dispatcher"
+type = "forbidden"
+source_modules = ["namisync.interfaces"]
+forbidden_modules = ["namisync.core", "namisync.modules", "namisync.db"]
+allow_indirect_imports = true

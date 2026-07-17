@@ -230,11 +230,22 @@ class ExecutionSet:           # plan + selection + mutable per-op status
     status: dict[OpId, Outcome]
 
 @dataclass(frozen=True)
+class ObservedWorld:            # a scoped re-stat SNAPSHOT — the impure half of preflight
+    stats: Mapping[str, FileStat | None]   # only paths the remaining ops touch
+    free_space: int
+    reclaimable_temp_bytes: int
+    volumes: Mapping[Root, VolumeId | None]
+    observed_at: datetime
+
+@dataclass(frozen=True)
 class Verdict:
     ok: bool
     refusals: tuple[Refusal, ...]   # per-operation reason + observed snapshot
     observed: ObservedWorld
 ```
+
+`ObservedWorld` is what keeps preflight pure: **`observe()` touches the
+filesystem, `preflight()` only reads the snapshot it produced** (§4.4).
 
 ### 2.6 Attestation and results (bones)
 
@@ -290,13 +301,29 @@ class WorkerCountPolicy(Protocol):
 
 class ChangeSource(Protocol):
     def scan(self, root: Root, ctx: RunContext) -> ScanResult: ...  # walking impl now; USN later
+
+class DestinationPolicy(Protocol):
+    """Computes target rel paths for a WHOLE batch. Diffing matches source to
+    target THROUGH this computation — path-preserving is just the default.
+    Batch-shaped because collisions are between files and companion groups are
+    across files; a per-file signature cannot express either."""
+    def assign(self, records: Sequence[FileRecord],
+               meta: Mapping[str, FileMeta],
+               target: ScanResult) -> Assignment: ...
+    # Assignment: source rel_path -> dest rel_path, plus group and collision
+    # detail for plan review.
+
+class MetadataExtractor(Protocol):   # ships with ingest, not M0; ExifTool -stay_open batch mode first
+    """IO only, decides nothing — the enrich stage's analogue of observe()."""
+    def extract(self, paths: Sequence[str], ctx: RunContext) -> Mapping[str, FileMeta]: ...
 ```
 
 Each protocol ships in M0 with its degenerate implementation: `flush()` is a
 no-op, `FailurePolicy` always returns `Continue` (skip-and-record), `CopyBackend`
 is native-only, `WorkerCountPolicy` always returns 1, `ChangeSource` is the
-walking scanner. New behavior is a new implementation behind the same shape —
-never an edit to a consumer.
+walking scanner, and `DestinationPolicy` assigns every file its own relative
+path (`meta` is always empty in M0 — no extractor exists yet). New behavior is a new
+implementation behind the same shape — never an edit to a consumer.
 
 ---
 
@@ -382,7 +409,11 @@ exact-name ignore filtering; capability profiling; placeholder detection
 
 **Bones.** `Plan`/`PlanOperation`/`Scope` shapes; deterministic op ids and
 dependency ordering; the capacity formula (single source of truth, sized for max
-concurrent temps); `filter_snapshot` embedded in the plan.
+concurrent temps); `filter_snapshot` embedded in the plan; **diffing keyed
+through `DestinationPolicy.assign()`** — the diff never compares
+`source.rel_path` to `target.rel_path` directly, even though the M0 policy is
+the identity assignment. This one indirection is what makes ingest a policy
+change instead of a planner rewrite.
 
 **Flesh — now.** Metadata diffing within the coarser root's granularity;
 copy/update/mkdir/trash/delete/noop planning; identity-based move detection
@@ -391,7 +422,9 @@ paths); composite move-update as one operation; conflict blocking; capacity
 planning; `Scope.everything()`.
 **Flesh — deferred.** Content-aware no-op; hash-based move detection; retained
 human conflict resolution; `Scope.pattern/explicit/recorded_run` (filters,
-partial exec, replay — all new scope constructors, zero planner-shape change).
+partial exec, replay — all new scope constructors, zero planner-shape change);
+ingest destination policies (naming templates, collision sequencing, companion
+grouping) with enrichment metadata supplied by the workflow.
 
 **Acceptance criteria.**
 - Same input scans always yield byte-identical plans (determinism).
@@ -407,11 +440,28 @@ partial exec, replay — all new scope constructors, zero planner-shape change).
 
 ### 4.4 preflight
 
-**Contract.** `preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict`.
-Pure; no mutation of plan or filesystem.
+**Contract.** Two functions, deliberately split so purity is real rather than
+claimed:
 
-**Bones.** The `Verdict` shape carrying per-op refusals plus the observed
-snapshot; scoped re-stat of only the remaining selected operations.
+```python
+def observe(xset: ExecutionSet, fs: FileSystem) -> ObservedWorld: ...   # impure, IO only, no judgement
+def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict: ... # pure, judgement only, no IO
+```
+
+`observe()` does the scoped re-stat — it touches only the paths the remaining
+selected operations name, reads free space, resolves root volume identity, and
+sums reclaimable orphaned-temp bytes. It decides nothing. `preflight()` renders
+every verdict from that snapshot alone and never touches the filesystem.
+
+The split is a bone, for three reasons: `preflight()` becomes exhaustively
+testable against synthetic worlds with no temp directories; the expensive IO
+happens once and can be reused (review and the executor's self-guard can share a
+snapshot when they're close enough in time); and "pure" stops being an honor
+system. All IO lives in one small function whose only job is statting.
+
+**Bones.** The `observe`/`preflight` split; the `ObservedWorld` snapshot shape;
+the `Verdict` shape carrying per-op refusals plus the snapshot it judged;
+observation scoped to operation-touched paths only.
 
 **Flesh — now.** All checks: plan integrity (dependency-closed, no dep on a
 deferred/failed/blocked op), complete-scan requirement, staleness, capacity
@@ -422,10 +472,12 @@ escape and is writable), filter-snapshot drift.
 continue-or-refuse).
 
 **Acceptance criteria.**
-- Preflight never writes to disk or mutates the plan (asserted by a
-  read-only-filesystem test harness).
-- It re-stats only operation-touched paths; an unrelated change elsewhere in
-  either tree never causes refusal (PoC regression — the original whole-tree
+- `preflight()` performs no IO at all — it is called with no filesystem
+  available in test and still renders every verdict.
+- `observe()` never mutates anything (asserted by a read-only-filesystem
+  harness) and never judges — it has no refusal logic.
+- `observe()` stats only operation-touched paths; an unrelated change elsewhere
+  in either tree never causes refusal (PoC regression — the original whole-tree
   preflight over-refused and was slow).
 - A plan from an incomplete scan is always refused.
 - A nearly-full target whose own orphaned temps would free the needed space is
@@ -436,8 +488,9 @@ continue-or-refuse).
 ### 4.5 executor
 
 **Contract.**
-`execute(xset, ctx, recorder, policies) -> ExecResult`. Guards itself with
-`preflight` as its first act; records only through `recorder`.
+`execute(xset, ctx, recorder, policies) -> ExecResult`. Guards itself by calling
+`observe` + `preflight` as its first act — unconditionally, never trusting that
+its caller already did. Records only through `recorder`.
 
 **Bones.** The single-`Terminal` guarantee via `try/finally`; atomic
 temp-then-`os.replace` publish with parent-dir fsync; the temp-name shape
@@ -516,9 +569,14 @@ any destructive op, at pause-drain, and at terminal; run-token idempotency;
 WAL + foreign keys + bounded busy timeout; the §3 schema-freeze columns. History
 has **no** foreign key to the ledger and its failures never roll back real work.
 
-**Flesh — now.** Recording for sync/verify/baseline/import; missing-marking
-sweep (batched — never one giant `NOT IN`); inventory reconciliation; history
-envelopes, summaries, typed detail; retention sweeps (writable connection).
+**Flesh — now (M0).** Recorder for sync operations; missing-marking sweep
+(batched — never one giant `NOT IN`); inventory reconciliation. History observer
+in minimal form: run envelopes plus sync summaries and ordered operations —
+enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
+`history` command. The observer is cheap precisely because it is only an event
+subscriber; nothing calls it.
+**Flesh — M1.** Recording for verify/baseline/import; history integrity
+summaries and retained issue detail; retention sweeps (writable connection).
 **Flesh — deferred.** Migration module; legacy import; scheduled backup/quick-check
 (as an ordinary session); export/import; ledger merge across hosts.
 
@@ -547,17 +605,34 @@ envelopes, summaries, typed detail; retention sweeps (writable connection).
 through an injected workflow registry it never introspects.
 
 **Bones.** Generic session admission; volume-scoped concurrency (non-overlapping
-volume sets run in parallel, contenders queue); single queue-owner via a
-persisted-queue file lock; resource custody (locks acquired on start, released on
-terminal or pause-drain — one owner); the control plane over the transition
-table; event sequencing + fan-out + bounded replay; the persisted session table
-(lifecycle + **opaque** per-workflow blob — the sole DB-write exception); startup
-reconciliation (dead-process `RUNNING` ⇒ `INTERRUPTED`); orderly teardown.
+volume sets run in parallel, contenders queue); resource custody (locks acquired
+on start, released on terminal or pause-drain — one owner); the control plane
+over the transition table; event sequencing + fan-out; the **`SessionStore`
+protocol** and the serialized session-record shape (lifecycle fields + an
+**opaque** per-workflow blob the dispatcher never deserializes) — this store is
+the sole exception to *the dispatcher never writes a database*; orderly teardown.
 
-**Flesh — now.** In-process serial-to-volume-scoped admission; keep-everything
-replay buffer (degenerate); pause/resume/cancel.
-**Flesh — deferred.** Durable queue with launch policy; event conflation policy
-(degenerate = simple rate limit now); local-pipe CLI-as-client.
+```python
+class SessionStore(Protocol):
+    def put(self, rec: SessionRecord) -> None: ...
+    def load_all(self) -> Sequence[SessionRecord]: ...   # in-memory impl returns ()
+    def drop(self, sid: SessionId) -> None: ...
+```
+
+**Flesh — now (M0).** `InMemorySessionStore` — the degenerate implementation;
+`load_all()` returns nothing, so there is no reload and nothing to reconcile. A
+process death in M0 simply loses the session table, and recovery is the ordinary
+convergence model: rescan, replan. `INTERRUPTED` exists in the enum from day one
+but nothing produces it yet — a declared-but-unreached state, per §7's gap
+technique. Also now: volume-scoped admission, pause/resume/cancel,
+keep-everything replay buffer.
+
+**Flesh — deferred (M2).** `SqliteSessionStore` — the durable implementation
+behind the same protocol; reload on launch; startup reconciliation (dead-process
+`RUNNING` ⇒ `INTERRUPTED`, routed into preflight-then-continue); single
+queue-owner via a file lock on the persisted store; durable queue with launch
+policy; event conflation policy (degenerate = simple rate limit now); local-pipe
+CLI-as-client.
 
 **Acceptance criteria.**
 - No dispatcher symbol names a domain activity; it never imports modules or
@@ -574,22 +649,56 @@ replay buffer (degenerate); pause/resume/cancel.
 
 ### 4.9 workflows
 
-**Contract.** Plain functions — `run_paired_sync(req, ctx, deps)`,
-`run_integrity(req, ctx, deps)` — that sequence modules by passing typed data
-forward. The only place modules meet. Each runs as one session.
+**Contract.** Plain functions that sequence modules by passing typed data
+forward. The only place modules meet.
 
-**Bones.** Top-to-bottom sequencing (scan → plan → preflight → execute/verify);
-no signals, no callbacks-for-control; every dependency arrives via `deps`.
+```python
+def run_plan(req: PlanRequest, ctx, deps) -> Plan: ...            # session 1: scan → plan → observe → preflight
+def run_execution(xset: ExecutionSet, ctx, deps) -> ExecResult: ...# session 2: observe → preflight → execute
+def run_integrity(req, ctx, deps) -> IntegrityResult: ...          # inventory / baseline / verify / import
+def run_unattended_sync(req, ctx, deps) -> ExecResult: ...         # CLI/queue: both phases, no human gate
+```
 
-**Flesh — now.** Paired sync; one-location integrity (inventory/baseline/verify/
-import).
-**Flesh — deferred.** Queue-driven runs; replay-from-history; DB maintenance
-session; undo/repair (each generated as an ordinary plan through the same
-pipeline — the *Pipeline-Only Mutation* law).
+**A sync is two sessions, not one.** This is how mandatory dry-run review
+coexists with *sessions never block on a human*: review happens **between**
+sessions, not inside one. `run_plan` terminates with a `Plan` as its result —
+locks released, nothing running, no state pending. The human reviews at their
+leisure (minutes or days; the app may even close). Submitting the reviewed
+`ExecutionSet` starts `run_execution`, which re-observes and re-preflights
+because the world has moved on since review.
+
+Everything downstream falls out of this split:
+
+- A **queued job** is exactly an `ExecutionSet` awaiting its second session —
+  which is why `ExecutionSet` is serializable and why the dispatcher's opaque
+  blob has something to hold.
+- **Stale-plan defense** is not a special queue feature; the second session
+  always preflights, whether the gap was 5 seconds or 5 days.
+- **Partial execution, filters, and replay** change only the `Selection` or
+  `Scope` carried between the two sessions — neither session's shape changes.
+- **Unattended runs** (`run_unattended_sync`) chain both phases in one session
+  with no review gate. It still preflights; it just never stops to ask. The
+  human gate is a property of the *interface*, not of the pipeline.
+
+**Bones.** The two-session split; top-to-bottom sequencing (scan → plan →
+observe → preflight → execute/verify); no signals, no callbacks-for-control;
+every dependency arrives via `deps`.
+
+**Flesh — now.** Paired sync (both phases); one-location integrity
+(inventory/baseline/verify/import); unattended sync for the CLI.
+**Flesh — deferred.** Queue-driven second sessions; replay-from-history; DB
+maintenance session; undo/repair (each generated as an ordinary plan through the
+same pipeline — the *Pipeline-Only Mutation* law); `run_ingest` — scan → enrich
+(`MetadataExtractor`, its own cancellable stage) → plan (template
+`DestinationPolicy`) → the same review gate, preflight, and executor as sync.
 
 **Acceptance criteria.**
 - The workflow reads top-to-bottom as sequential calls; control flow is visible,
   not emergent.
+- No workflow ever waits on user input; `run_plan` terminates and releases every
+  lock while a plan awaits review.
+- `run_execution` always re-observes and re-preflights, regardless of how
+  recently `run_plan` ran.
 - A refused preflight short-circuits to a `REFUSED` terminal with no mutation.
 - Every mutation of managed user data flows through plan → preflight → execute —
   including future undo and repair — so their conflicts with later runs surface
@@ -608,7 +717,7 @@ mismatch-severity, cancel/pause safety messaging, completion toasts, mapping
 list). Toolkit choice deliberately deferred — the doc names no GUI framework.
 
 **Acceptance criteria.**
-- The real entry points (`nami-sync`, `python -m nami_sync`) dispatch by actual
+- The real entry points (`nami-sync`, `python -m namisync`) dispatch by actual
   `sys.argv`; no command is reachable only under an explicit test argv (PoC
   SEVERE dead-CLI bug — smoke-test the real default path).
 - Read-only CLI commands run concurrently with a GUI session; mutating commands
@@ -643,15 +752,19 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
 
 ## 6. Build order
 
-- **M0 — walking skeleton.** core contracts → degenerate dispatcher → two dummy
-  operations proving pause/cancel/lock-release → scanner→planner→preflight→
-  executor on plain NTFS → recorder + minimal ledger (schema-freeze columns
-  present, `flush` a no-op) → CLI `sync`/`history`. Ships a real, safe,
-  hash-on-copy sync tool.
-- **M1 — integrity.** verifier + baseline + inventory + history observer. Verify
-  is additive once inventory rows and the recorder exist.
-- **M2 — durability & scope.** persisted session table, durable queue, filters
-  (via new `Scope` constructors), event conflation.
+- **M0 — walking skeleton.** core contracts → dispatcher with
+  `InMemorySessionStore` → two dummy operations proving pause/cancel/lock-release
+  → scanner → planner → observe/preflight → executor on plain NTFS → recorder +
+  minimal ledger (schema-freeze columns present, `flush` a no-op) → minimal
+  history observer (sync envelopes + summaries) → CLI `sync` (both phases, plus
+  unattended) and `history`. Ships a real, safe, hash-on-copy sync tool with an
+  audit trail.
+- **M1 — integrity.** verifier + baseline + inventory + history integrity detail
+  + retention. Verify is additive once inventory rows and the recorder exist.
+- **M2 — durability & scope.** `SqliteSessionStore` behind the existing
+  protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
+  producer); single queue-owner lock; durable queue; filters (via new `Scope`
+  constructors); event conflation.
 - **M3+ — surface & scale.** web/desktop UI against the then-stable event
   protocol; multithreaded copy/verify; USN change source; migration module;
   data-protection features.

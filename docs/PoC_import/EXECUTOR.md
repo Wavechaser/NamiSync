@@ -22,7 +22,7 @@ target inventory only after filesystem success.
 
 ## Module
 
-- `nami_sync/core/executor.py`
+- `namisync/core/executor.py`
   - `execute_plan(plan, run_id, progress_callback=None, cancel_requested=None)`
 
 ## Supported Operations

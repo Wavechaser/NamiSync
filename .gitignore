@@ -9,6 +9,7 @@ htmlcov/
 
 build/
 dist/
+*.egg-info/
 *.spec
 
 *.db
@@ -20,4 +21,3 @@ dist/
 
 .env
 .env.*
-
