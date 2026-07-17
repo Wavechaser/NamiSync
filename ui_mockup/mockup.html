@@ -28,7 +28,7 @@
   --accent: #0078d4;
   --accent-hover: #1684d7;
   --accent-pressed: #006cbe;
-  --ok: #3ecf9a;
+  --ok: #33dd99;
   --fail: #ee6666;
   --k-update: #33aaee;
   --k-move: #bb88ee;
@@ -313,7 +313,11 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .status-headline { flex: 1; min-width: 0; font-size: 22px; font-weight: 700; line-height: 28px; text-wrap: balance; }
 .status-headline.tone-ok { color: var(--ok); }
 .status-headline.tone-fail { color: var(--fail); }
-.status-detail { font-size: 12px; line-height: 16px; color: var(--text-muted); }
+/* Reserves one line's height even when empty (busy tasks, or a fresh task
+   with nothing to report yet), so this line's presence/absence never shifts
+   the rest of the page — see the exec-line note just below for why busy
+   tasks render this empty instead of duplicating it. */
+.status-detail { font-size: 12px; line-height: 16px; min-height: 16px; color: var(--text-muted); }
 
 .side-col {
   flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end;
@@ -323,7 +327,7 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .big-size.dim { color: var(--text-disabled); }
 .big-size .bs-label { color: var(--text-disabled); }
 .big-size .bs-value { font-weight: 600; }
-.side-note-slot { font-size: 11px; line-height: 13px; color: var(--text-muted); }
+.side-note-slot { font-size: 11px; line-height: 13px; min-height: 13px; color: var(--text-muted); }
 .options-summary-inline { font-size: 11px; color: var(--text-muted); }
 
 /* The live exec detail (%, count, ETA, throughput) and the current-file
@@ -516,6 +520,15 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
   color: var(--text-muted); font-size: 12px; line-height: 1.5;
 }
 .note b { color: var(--text); }
+.note.palette-note { margin: 10px auto 0; }
+.palette-swatches { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; }
+.swatch { display: flex; align-items: center; gap: 8px; }
+.swatch-chip {
+  width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+.swatch-label { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
+.swatch-label b { display: block; color: var(--text); font-size: 11.5px; font-weight: 600; }
 
 @media (max-width: 760px) {
   .rail { width: 190px; }
@@ -525,7 +538,7 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 
 <div class="mockup-stage">
   <div class="note">
-    Click a task card to switch tasks. Click <b>Plan / Inventory</b> to toggle views (each
+    Click a task card to switch tasks. Click <b>Sync / Integrity</b> to toggle views (each
     task retains its own). Click filter chips, right-click an inventory row, and expand
     <b>Options</b> / <b>Log</b> — all live. Window controls and the title bar are decorative.
   </div>
@@ -597,6 +610,31 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
     </div>
 
     <div class="statusbar" id="statusbar"></div>
+  </div>
+
+  <div class="note palette-note">
+    <b>Color palette</b> — the actual <code>theme.py</code> tokens this mockup is built from
+    (see the <code>:root</code> block in this file's &lt;style&gt;), not a separate design pass.
+    <div class="palette-swatches">
+      <div class="swatch"><span class="swatch-chip" style="background:var(--bg)"></span><span class="swatch-label"><b>--bg</b>#0f0f10</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--surface)"></span><span class="swatch-label"><b>--surface</b>#1a1a1c</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--surface-alt)"></span><span class="swatch-label"><b>--surface-alt</b>#202023</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--field)"></span><span class="swatch-label"><b>--field</b>#232326</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--border)"></span><span class="swatch-label"><b>--border</b>#2c2c30</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--border-strong)"></span><span class="swatch-label"><b>--border-strong</b>#3a3a40</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--text)"></span><span class="swatch-label"><b>--text</b>#e8e8ea</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--text-muted)"></span><span class="swatch-label"><b>--text-muted</b>#9a9aa0</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--text-disabled)"></span><span class="swatch-label"><b>--text-disabled</b>#5f5f66</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--card-text)"></span><span class="swatch-label"><b>--card-text</b>#c8c8cc</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--accent)"></span><span class="swatch-label"><b>--accent</b>#0078d4</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--accent-hover)"></span><span class="swatch-label"><b>--accent-hover</b>#1684d7</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--accent-pressed)"></span><span class="swatch-label"><b>--accent-pressed</b>#006cbe</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--ok)"></span><span class="swatch-label"><b>--ok</b>#33dd99</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--fail)"></span><span class="swatch-label"><b>--fail</b>#ee6666</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--k-update)"></span><span class="swatch-label"><b>--k-update</b>#33aaee</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--k-move)"></span><span class="swatch-label"><b>--k-move</b>#bb88ee</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--k-conflict)"></span><span class="swatch-label"><b>--k-conflict</b>#ffdd44</span></div>
+    </div>
   </div>
 </div>
 
@@ -710,7 +748,7 @@ const PLAN_TREE_PENDING = `
           </div>
           <div class="tree-row file-row" data-kind="noop" data-changes="0" style="--depth:2">
             <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">duplicate.jpg</span></div>
-            <div class="cell k-noop">No-op</div><div class="cell">2.1 MB</div>
+            <div class="cell k-noop">Skipped</div><div class="cell">2.1 MB</div>
             <div class="cell mono">AAAA:BBBB</div>
             <div class="cell s-noop">Unchanged</div><div class="cell">Matches target</div>
           </div>
@@ -890,7 +928,7 @@ const PLAN_TREE_EXECUTING = `
           </div>
           <div class="tree-row file-row" data-kind="noop" data-changes="0" style="--depth:2">
             <div class="cell item-cell" style="padding-left:calc(10px + 2*18px)"><span class="checkbox row-check"></span><span class="no-disclosure"></span><span class="item-name">duplicate.jpg</span></div>
-            <div class="cell k-noop">No-op</div><div class="cell">2.1 MB</div>
+            <div class="cell k-noop">Skipped</div><div class="cell">2.1 MB</div>
             <div class="cell mono">AAAA:BBBB</div>
             <div class="cell s-noop">Unchanged</div><div class="cell">Matches target</div>
           </div>
@@ -1010,11 +1048,11 @@ const RECENT_PATHS = {
 
 const TASKS = {
   photos: {
-    status: "Dry-run plan ready.", tone: "neutral", date: "",
+    status: "Plan Ready", tone: "neutral", date: "",
     source: "E:\\Photos\\2025", target: "D:\\Backup\\Photos",
     progress: 0,
     bigSize: "6.8 GB",
-    headline: "Dry-run plan ready.", headlineTone: "neutral",
+    headline: "Plan Ready", headlineTone: "neutral",
     detail: "9 changes · 4 copy · 1 update · 2 move · 1 trash · 1 conflict",
     options: "trash deletion, not verified, integrity — destination",
     barsVisible: false,
@@ -1049,11 +1087,11 @@ const TASKS = {
     log: ["09:58:11  Execution started — 214 operations.", "10:02:47  Verifying successful copies as they land."],
   },
   footage: {
-    status: "Verification found issues", tone: "fail", date: "Jul 13 · 22:47",
+    status: "Verification Error", tone: "fail", date: "Jul 13 · 22:47",
     source: "D:\\Media\\RawFootage", target: "",
     progress: 100,
     bigSize: "17.4 GB",
-    headline: "Verification found issues", headlineTone: "fail",
+    headline: "Verification Error", headlineTone: "fail",
     detail: "3 verified, 1 baselined, 0 mismatched, 1 missing, 0 errors · completed 22:47 · Jul 13",
     options: "trash deletion, not verified, integrity — source",
     barsVisible: false,
@@ -1083,7 +1121,6 @@ const TASKS = {
     scanEnabled: true, integrityEnabled: true,
     executeEnabled: false, cancelEnabled: false,
     log: ["09:11:02  Scan complete.", "09:12:40  Execution complete — 10 succeeded.", "09:14:03  Linked verification complete — all copies verified."],
-    note: "Copy + verify hands off to Inventory on completion — Plan keeps its finished, per-row status underneath. Toggle to see both.",
   },
   fresh: {
     status: "New task", tone: "neutral", date: "",
@@ -1107,9 +1144,9 @@ const TASKS = {
 
 const CARD_ORDER = ["photos", "archive", "footage", "coldstorage", "fresh"];
 const CARD_TITLE = {
-  photos: { status: "Dry-run plan ready." },
+  photos: { status: "Plan Ready" },
   archive: { status: "Executing…" },
-  footage: { status: "Verification found issues" },
+  footage: { status: "Verification Error" },
   coldstorage: { status: "Execution complete" },
   fresh: { status: "New task" },
 };
@@ -1211,7 +1248,7 @@ function renderPage() {
           <div class="side-note-slot">${t.freeSpace || ""}</div>
         </div>
       </div>
-      <div class="status-detail">${t.detail}${t.note ? `<br>${t.note}` : ""}</div>
+      ${t.barsVisible ? "" : `<div class="status-detail">${t.detail}</div>`}
     </div>
 
     <div class="progress-area">
@@ -1225,8 +1262,8 @@ function renderPage() {
 
     <div class="view-action-row">
       <div class="segment-group">
-        <button class="segment left ${vs.view === "plan" ? "active" : ""}" id="segPlan" title="Show the dry-run plan">Plan</button>
-        <button class="segment right ${vs.view === "inventory" ? "active" : ""}" id="segInv" title="Show the location inventory">Inventory</button>
+        <button class="segment left ${vs.view === "plan" ? "active" : ""}" id="segPlan" title="Show the dry-run plan">Sync</button>
+        <button class="segment right ${vs.view === "inventory" ? "active" : ""}" id="segInv" title="Show the location inventory">Integrity</button>
       </div>
       <button class="toggle-link" id="optToggle"><span class="chev">▸</span> Options</button>
       <div class="options-summary-inline">${t.options}</div>
