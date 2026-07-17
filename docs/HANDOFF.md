@@ -2,58 +2,74 @@
 
 ## Changes
 
-- Added thorough draft contracts for every architectural module and the major
-  cross-module domains: `CORE`, `SCANNER`, `PLANNER`, `PREFLIGHT`, `EXECUTOR`,
-  `VERIFIER`, `INVENTORY`, `HASH_IMPORT`, `INGEST`, `RECORDER`, `DATABASE`,
-  `HISTORY`, `DISPATCHER`, `WORKFLOWS`, `INTERFACES`, `COMMANDLINE`, and
-  `DESKTOP_UI`.
-- Each draft defines responsibility/non-responsibility, inputs and outputs,
-  collaborator expectations, atomicity/idempotency/data-safety invariants,
-  milestone priority, latent-feature seams, PoC hardening, and acceptance
-  criteria.
-- Added `DESIGN_REVIEW.md` with 23 unresolved source-contract issues, ordered by
-  milestone impact, plus traceability from all 111 PoC bug-log entries to owning
-  drafts and regression themes.
-- Added the new active documentation set to the root `README.md` index.
+- Resolved all `DESIGN_REVIEW.md` findings with the user — the 23 original
+  items plus DR-24 (directory operations), found during the sanity pass — and
+  recorded a dated **Resolution** note under every item; the review file is
+  now the decision log.
+- Updated the authoritative sources to match, in the prescribed order
+  (`FEATURES.md` first, then `ARCHITECTURE.md`). Headline decisions:
+  - **Commit-to-execute** (DR-01): a reviewed plan's explicit commitment,
+    bound to the plan's deterministic fingerprint, is the durable
+    preauthorization; committed plans queue and run sequentially;
+    `run_unattended_sync` removed; no plan-and-execute-without-review path
+    exists anywhere.
+  - **Session runner** (DR-02/03): new `core/session.py` runner owns
+    exactly-one-`Terminal` and pause/cancel resolution; `Checkpoint` never
+    blocks — it raises `PauseRequested`/`Canceled`; a paused execution is
+    exactly a queued `ExecutionSet`, resumed via the queue-wakeup path.
+  - **Planner inputs** (DR-04/05): `plan()` gains an immutable
+    `MappingSnapshot` correspondence input; `target_free_space` removed from
+    `Plan` (free space is `observe()`'s job).
+  - **Displace-then-replace updates** (DR-08): hardlink-to-trash then atomic
+    `os.replace`; no crash point leaves the live target absent.
+  - **History = audit with guaranteed delivery** (DR-09/16): bounded producer
+    backpressure for the history observer, `Gap`-event ejection for other
+    reliable subscribers, bounded replay buffer.
+  - **Two-axis truth** (DR-15): terminal `SessionState` reports filesystem
+    work; a separate `RecordingStatus` reports ledger bookkeeping.
+  - **M0 scope additions** (DR-13): real cross-process volume locks before the
+    executor's first mutation.
+  - Type-level fixes: `VolumeId` reduced to stable key material (DR-10),
+    `UnsupportedRecord` collection on `ScanResult` (DR-11), typed
+    `Subject`-keyed `ObservedWorld.stats` (DR-21), `ContentEvidence` +
+    post-publish subject stat in `Attestation` (DR-07), `MetadataSnapshot` +
+    `PreservationPolicy` (DR-22), `current_filters` in `ObservedWorld`
+    (DR-06), typed `IntegrityOutcome` event body (DR-14), annotation key
+    namespace in the schema freeze (DR-18, partial pull-forward).
+  - Doc corrections: CLI sync-command contract and no-subcommand behavior
+    (DR-19), latent-protocol rule and fixed §7 reference (DR-20), core-owns-
+    contracts wording (DR-23), best-effort directory-flush honesty (DR-12),
+    session-record retention (DR-17).
 
-No product code or authoritative `FEATURES.md`/`ARCHITECTURE.md` contract was
-changed in this session. The drafts explicitly flag unresolved issues rather
-than silently overriding those sources.
+- A sanity-check pass over the updated authoritative docs then caught and
+  fixed: a commitment-check-in-preflight contradiction (commitment checking
+  lives only at the execution session's entry — preflight also runs at review
+  time, pre-commitment); `Commitment` now binds the reviewed selection
+  (`selection_digest`) alongside the plan fingerprint; `observe()` gains an
+  injected `SettingsReader`; readonly targets are cleared before `os.replace`
+  (Windows refuses to rename over readonly); the interrupted-update `nlink=2`
+  trash-link interaction is documented as benign; volume matching wording
+  corrected (in-place conversion preserves the serial, a true reformat
+  regenerates it); `Gap`/`REFUSED` comments clarified.
+- Follow-up decisions: **Resume Never Preempts** (a resumed session re-enters
+  at the back of its volumes' queue); history backpressure buffer sized to
+  absorb inter-checkpoint emissions; **DR-24** directory operations —
+  decompose + grouped review, `DirRecord` defined (metadata + optional
+  identity), directory metadata applied after children settle.
 
-## Highest-Priority Review
-
-Resolve these before M0 mutates user files:
-
-1. Mandatory review versus `run_unattended_sync`/unattended ingest (DR-01).
-2. Pause checkpoint blocking versus lock release and fresh resume preflight
-   (DR-02).
-3. Exactly-one-terminal ownership across every session kind (DR-03).
-4. Missing planner correspondence/capacity/current-filter inputs (DR-04 through
-   DR-06).
-5. Source-versus-target attestation identity and trash-on-update crash recovery
-   (DR-07/DR-08).
-6. Reliable event capacity, volume identity, unsupported scan representation,
-   Windows directory durability, and real M0 cross-process volume custody
-   (DR-09 through DR-13).
-7. Root-aware `ObservedWorld` keys and a typed metadata-preservation snapshot
-   (DR-21/DR-22).
+The 17 per-module drafts have **not** yet been re-synced to these decisions.
 
 ## Verification
 
-- Read all 775 lines of `ARCHITECTURE.md`, 297 lines of `FEATURES.md`, and 551
-  lines/111 entries of `PoC_import/BUGS.md`.
-- All 17 module/domain drafts contain acceptance criteria and explicit
-  collaborator expectations.
-- Markdown relative-link check: passed.
-- Design-review reference check: 23 defined items, no missing references.
-- Encoding/stale-package-name scan over new docs: clean.
 - `git diff --check`: no whitespace errors.
 - `.\.venv\Scripts\python.exe -m pytest`: 1 passed.
-- `.\.venv\Scripts\lint-imports.exe`: 7 contracts kept, 0 broken.
+- `.\.venv\Scripts\lint-imports.exe`: contracts kept, 0 broken.
 
 ## Immediate Next Context
 
-- Review `DESIGN_REVIEW.md` in its stated order before freezing M0 core types.
-- Once decisions are made, update `FEATURES.md`/`ARCHITECTURE.md` first, then
-  revise affected module drafts so authoritative and focused docs agree.
+- Propagate the recorded resolutions from `DESIGN_REVIEW.md` into the affected
+  module drafts (`CORE`, `PLANNER`, `PREFLIGHT`, `EXECUTOR`, `DISPATCHER`,
+  `RECORDER`, `HISTORY`, `WORKFLOWS`, `COMMANDLINE` are the most affected) so
+  authoritative and focused docs agree again.
+- Then freeze M0 core types and begin the walking skeleton.
 - No files were staged or committed.

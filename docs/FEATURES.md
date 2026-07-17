@@ -11,7 +11,7 @@ document's rules.
 
 ## PROJECT ARCHITECTURE
 
-- **Layered Domain Design**. Core owns sync behavior, the database owns persistence, application workflows coordinate them, and interfaces adapt those workflows.
+- **Layered Domain Design**. Core owns shared contracts and the session machine, isolated modules (scanner, planner, preflight, executor, verifier) own sync behavior, the database owns persistence, application workflows coordinate them, and interfaces adapt those workflows.
 - **Headless Workflows**. Planning, execution, inventory, integrity, and history workflows run without Qt and are shared by the desktop UI and CLI.
 - **Thin Desktop Adapter**. The desktop UI presents workflow state and delegates sync decisions to headless layers; it never owns sync policy regardless of which UI toolkit implements it.
 - **Typed Core Contracts**. Explicit dataclasses carry scan, plan, execution, progress, verification, and result data across layers.
@@ -19,7 +19,7 @@ document's rules.
 - **Session-Typed Operations**. Every long-running activity (scan, plan, execute, verify, baseline, import) runs inside one typed session contract: a shared state machine, a tagged-union event stream, and a cooperative checkpoint that pause and cancellation both resolve through, so no module invents its own lifecycle or terminal shape.
 - **Workflow-Sequenced Pipelines**. Modules never call each other directly; an application workflow function sequences scan, plan, preflight, and execute by passing typed data forward, so coordination stays readable top to bottom instead of emergent from signals or callbacks.
 - **Preflight as a Callable, Not a Gate**. Preflight validates a plan-and-selection pair against current filesystem state and can be invoked repeatedly — at start, at resume, after a selection change — instead of running once as an unrepeatable ritual.
-- **Recorded Ledger, Observed History**. Execution and verification report through the Recorder module rather than writing SQL directly; the recorder commits ledger evidence in a bounded window rather than one write per operation, while the independent history store consumes the same session's event stream asynchronously, matching its append-only, non-blocking role.
+- **Recorded Ledger, Observed History**. Execution and verification report through the Recorder module rather than writing SQL directly; the recorder commits ledger evidence in a bounded window rather than one write per operation, while the independent history store consumes the same session's event stream asynchronously with guaranteed, bounded delivery, matching its append-only role.
 - **Policy Extension Points**. New behavior (copy backends, retry and failure handling, deletion policy) plugs in as a protocol that returns a decision to the machine, never as a hook that receives control, so invariants stay enforced centrally regardless of which policy is active.
 - **Pipeline-Only Mutation**. Every mutation to user data inside a managed root flows through plan, preflight, and execute — including undo and repair — so a corrective action's conflicts with later changes surface in ordinary plan review instead of a special-cased overwrite. App-owned artifacts (trash purge, database maintenance) are exempt from this law but stay type- and ownership-guarded and history-logged.
 - **Sessions Never Block on a Human**. A conflict or error during execution is logged and the run continues past it; nothing pauses mid-run to wait on a decision. Review and any corrective action happen after the run ends, through the same pipeline as any other plan.
@@ -35,6 +35,7 @@ document's rules.
 
 - **One-Way Root Mapping**. NamiSync reconciles a distinct source folder into a distinct, non-nested destination folder.
 - **Dry-Run Review**. Every sync scans both roots and produces a reviewable plan before filesystem mutation.
+- **Commit-to-Execute**. Execution happens only for a plan the user has reviewed and explicitly committed; the commitment binds to the plan's deterministic fingerprint and to the reviewed selection, so neither can change under an approval. A committed plan runs immediately when its volumes are free, otherwise it queues, and committed plans execute sequentially in commit order. An uncommitted plan is never executed and never expires into execution — it simply remains reviewable. Scripted and queued execution replay committed plans; nothing plans and executes in one unreviewed step, and every committed execution still preflights first, with material drift refused back to review rather than silently re-planned.
 - **Deletion Policies**. Paired sync supports `trash` by default and `additive`, while `mirror` is available only as an internal policy.
 - **Recent Folders**. The application remembers up to five recent source and destination folders separately.
 
@@ -53,7 +54,7 @@ provision.
 - **Naming Templates**. Templates will compose tokens (capture date, camera, original name, sequence) into destination paths; two source files computing the same destination resolve deterministically by sequence policy, and every collision is visible in plan review.
 - **Companion Grouping**. Sidecar and pair files (RAW+JPEG, XMP, THM) will travel to the same destination folder with consistent renames, as one reviewable group.
 - **Additive by Contract**. Ingest never trashes, mirrors, or otherwise touches target-only files, and never mutates the source card.
-- **Ingest Review**. Ingest uses the same plan-review-execute two-session shape as sync, with each file's computed destination shown for review; unattended ingest remains possible through the same no-gate path as unattended sync.
+- **Ingest Review**. Ingest uses the same plan-review-execute two-session shape as sync, with each file's computed destination shown for review; ingest execution follows the same commit-to-execute contract as sync — a committed ingest plan may run queued or scripted, but no ingest ever executes without a reviewed commitment.
 - **Untracked Ingest Sources**. Ledger locations are created only by sync and integrity workflows; ingest never creates ledger state for its source. A card is scanned in memory, planned against, copied from, and forgotten — nothing to rebind, recognize, or clean up when it is formatted. Temporariness is a property of the workflow, not of any filesystem type.
 - **Origin Provenance**. Ingest stamps each library file's ledger row with its origin evidence — original filename, capture time, source size — through the generic annotations table, so all ingest evidence lives on the tracked library side.
 - **Stateless Resume**. Re-ingesting a partially ingested card is just planning again: files whose computed or provenance-matched destination already exists plan as no-ops, including files that landed under a collision suffix, with no card-side state consulted.
@@ -70,6 +71,7 @@ provision.
 - **Resource Custody**. The dispatcher acquires each session's required volume locks on start and releases them on every terminal transition or pause-drain, so lock lifetime has exactly one owner.
 - **Control Plane**. Pause, resume, and cancel are dispatcher operations that flip a flag a running session's checkpoint resolves against; the dispatcher enforces the legal state-transition table so illegal requests fail cleanly instead of corrupting session state.
 - **Resume Outcomes**. Resuming a paused or interrupted session always preflights first and either continues or is refused with reasons if the remaining plan is no longer valid; the user replans and re-attempts rather than the system attempting a silent partial continuation.
+- **Resume Never Preempts**. A resumed session re-enters admission at the back of its volumes' queue: if another session took over the contended volume while it was paused, the resumed session runs when that session finishes or is itself paused or canceled. Jumping the queue would mean either force-pausing the running session or running two sessions on one volume — the first is confusing, the second is forbidden.
 - **Persisted Session Table**. The dispatcher persists its own session table — lifecycle state and an opaque per-workflow payload — independent of the ledger and history; this is the one exception to never writing a database, and the dispatcher never interprets the payload it stores.
 - **Startup Reconciliation**. On launch, the dispatcher reloads its session table; anything left running by a process that is no longer alive is marked interrupted, queued sessions become pending again, and interrupted sessions flow into the same preflight-then-continue path as any other resume.
 - **Event Plumbing**. The dispatcher sequences and fans out each session's event stream to GUI, CLI, history recorder — and buffers for replay so a late or reconnecting subscriber can catch up without the operation knowing.
@@ -79,16 +81,16 @@ provision.
 - **Orderly Teardown**. Application shutdown stops admission, drains or cancels running sessions, and confirms every lock released before exit.
 - **What the Dispatcher Is Not**. The dispatcher never sequences a workflow's internal steps, never interprets a domain result beyond its terminal status, and never writes to the main ledger or history database (its own persisted session table is the sole exception); coordination, recording, and domain meaning stay in workflows, the recorder, and observers.
 
-- **Queue Launch Policy**. Queued sessions found on GUI launch will wait for explicit confirmation before running; a CLI flag will authorize unattended execution for scripted use.
+- **Queue Launch Policy**. Committed sessions found queued on GUI launch will wait for explicit confirmation before running; a CLI flag will authorize executing already-committed queued plans without that per-launch confirmation. The flag releases the queue; it never waives plan review.
 
 ## SCANNER
 
 - **Recursive Metadata Scan**. The scanner records root-relative regular files with size, nanosecond modification time, and filesystem identity.
-- **Directory Inventory**. Empty directories are retained as directory records so they can be planned for creation or cleanup.
+- **Directory Inventory**. Empty directories are retained as directory records so they can be planned for creation or cleanup; directory records carry the same metadata snapshot as files plus optional filesystem identity, so recording every directory — the enabler for a future directory-level move operation — stays an additive change, never a rework.
 - **Ignored-Path Filtering**. NamiSync excludes application databases, checksum sidecars, common Windows metadata files, sync trash, and generated temporary files — always by exact, fully-qualified name shape, never by suffix or substring, so a user file can never be silently excluded for resembling an application artifact.
 - **Scan Warnings**. Access errors and filesystem case collisions are retained in scan results for plan review.
 - **Cooperative Scan Cancellation**. Scans check for cancellation while walking directories and files.
-- **Placeholder Detection**. Cloud-backed placeholder files (OneDrive, Dropbox, and similar reparse-tagged files) are recognized from their attributes without being opened, recorded as unsupported, and reported as scan warnings instead of being read and silently hydrated.
+- **Placeholder Detection**. Cloud-backed placeholder files (OneDrive, Dropbox, and similar reparse-tagged files) are recognized from their attributes without being opened, recorded as unsupported, and reported as scan warnings instead of being read and silently hydrated. Unsupported entries are typed scan records in their own right — they flow through inventory and plan review as blocked, never-executable items rather than living only in warning text.
 - **Filesystem Capability Profile**. Each scanned root records its filesystem type, timestamp granularity, and whether stable file identity is available, so the planner and preflight can reason about what a root's metadata can and can't prove.
 - **Junction Cycle Protection**. The scanner tracks visited directory identities while walking so a directory junction or reparse loop cannot recurse indefinitely.
 
@@ -113,8 +115,9 @@ provision.
 - **Move Detection**. Unambiguous source filesystem-identity changes can become target-side moves; an identity observed at more than one scanned path is excluded from consideration.
 - **Composite Move-Update**. A detected move whose content also changed is planned as one composite operation whose evidence records only at full completion, so a crash partway can never leave old content at the new path while the ledger claims consistency.
 - **Directory Operations**. Source-only empty directories become `mkdir` operations and removable target-only empty directories become policy-controlled operations.
+- **Directory Rename Decomposition**. A renamed or moved source folder is never a directory-level operation: it decomposes into per-file identity moves, the full `mkdir` chain for new locations, and cleanup of the directories it emptied. Target-side file moves are same-volume renames, so a folder rename copies no content bytes. Plan review presents the decomposition grouped under the folder so it reads as one rename, not thousands of rows.
 - **Conflict Blocking**. Case collisions and file-directory conflicts remain visible as blocked conflict operations instead of being guessed through.
-- **Capacity Planning**. Plans record target free space and conservatively require room for all copy and update bytes, with temporary-file accounting sized for the maximum number of concurrently in-flight temp files rather than assuming one at a time.
+- **Capacity Planning**. Plans conservatively compute required bytes for all copy and update work, with temporary-file accounting sized for the maximum number of concurrently in-flight temp files rather than assuming one at a time; target free space is never baked into the plan — it is observed at review and preflight time, where the one shared capacity formula judges it.
 - **Stable Plan Ordering**. Operations receive deterministic per-plan identifiers and dependency-aware ordering.
 
 - **Content-Aware No-Op Detection**. Planning will use hashes or another content check before accepting metadata-equal files as unchanged.
@@ -135,15 +138,16 @@ provision.
 
 ## EXECUTOR
 
-- **Atomic Copy and Update**. File content is written to a target-volume temporary file, flushed and fsynced, metadata-preserved, atomically published, and followed by a best-effort parent-directory flush so a power loss after publish cannot silently lose the rename.
+- **Atomic Copy and Update**. File content is written to a target-volume temporary file, flushed and fsynced, metadata-preserved, atomically published, and followed by a best-effort parent-directory flush; a flush the filesystem refuses downgrades to a per-operation warning, and power-loss durability is claimed only for what was actually flushed.
 - **Source-Drift Guard**. Copy and update operations re-stat the source after the read stream closes; a mismatch against the plan's recorded evidence fails the operation instead of recording a hash for content that changed underneath it.
 - **Hash on Copy**. Successful copies and updates calculate a SHA-256 digest from the source byte stream during copying.
 - **Contention Retry Policy**. A failure policy distinguishes transient sharing violations, which retry with bounded backoff, from persistent locks, which skip the operation with a typed reason the plan view can show.
-- **Metadata Preservation Scope**. Copies and updates preserve modification time and standard attributes (readonly, hidden, system) by default; alternate data streams and creation time are preserved where supported, and ACL/owner preservation is an explicit, off-by-default policy flag.
+- **Metadata Preservation Scope**. Copies and updates preserve modification time and standard attributes (readonly, hidden, system) by default; alternate data streams and creation time are preserved where supported, and ACL/owner preservation is an explicit, off-by-default policy flag. Observed and intended metadata travel as a typed snapshot on scan records and plan operations; the readonly attribute is applied only after publish, and a failed stream copy on a stream-capable volume surfaces as a per-operation warning, never silently.
 - **Guarded Target Moves**. Target-side moves refuse existing destinations and preserve the existing target file record when recorded.
 - **Root-Local Trash**. Trash operations move items to `.synctrash/<run-id>/<relative-path>` on the target volume.
-- **Trash-on-Update**. Updating a file first moves its existing target version into the run's trash with a same-volume rename before the replacement publishes; this is on by default and can be disabled per mapping.
+- **Trash-on-Update**. Updating a file preserves its existing target version into the run's trash before the replacement publishes — by an atomic same-volume hardlink where the filesystem supports one, by copy where it doesn't — and only then atomically replaces the live path, so no crash point ever leaves the target absent; this is on by default and can be disabled per mapping.
 - **Guarded Deletion**. Internal mirror deletes and empty-directory cleanup validate type and emptiness before removal.
+- **Directory Metadata**. Created directories receive the source directory's recorded attributes, and directory timestamps are applied only after every child operation inside that directory has settled — child creates and renames churn parent directory times, so directory times are restored last.
 - **Partial Result Reporting**. Independent operations continue after failures, with per-operation succeeded, skipped, failed, and canceled results.
 - **Progress and Cancellation**. Execution reports overall and per-file byte progress and checks cancellation between operations and copy chunks.
 - **Content-Byte Accounting**. Progress and throughput totals count transferred copy and update content only; same-volume move, trash, and delete metadata operations never inflate byte progress or ETA.
@@ -197,12 +201,13 @@ provision.
 - **Bounded-Window Durability**. Ledger commits batch by operation count or elapsed time rather than one write per operation, with an immediate forced flush before any destructive operation, at pause-drain, and at session terminal — bounding the crash window to at most one batch without weakening the never-wrong-only-behind guarantee.
 - **Idempotent Recording**. The recorder treats a repeated run token as a no-op, backed by the ledger's own uniqueness constraint as the last line of defense.
 - **Serialized Writer**. All in-process sessions record through one serialized writer, so legitimately parallel disjoint-volume runs can never silently lose bookkeeping to ledger lock contention; cross-process writers get a generous busy timeout with bounded retry, and a recording failure is always surfaced, never swallowed.
+- **Two-Axis Truth**. A session's terminal state reports its filesystem work alone; ledger bookkeeping reports through a separate recording status carried in the result. Completed work with a failed or lagging ledger write surfaces as completed-with-degraded-recording — loudly, in the UI, CLI exit detail, and history — and the behind ledger converges on the next scan rather than the result lying in either direction.
 
 ## FILES LEDGER
 
 - **Local SQLite Ledger**. NamiSync stores hosts, physical locations, inventories, mappings, runs, and mapping-specific file correspondence in a local schema-versioned database.
 - **Windows Path Identity**. Location and relative-path keys normalize Windows separators and case without relying on SQLite `NOCASE`.
-- **Volume-Anchored Location Identity**. Locations key off volume identity (on-disk serial, filesystem type, label) plus a volume-relative path; the drive-lettered path is a derived display value, never stored identity.
+- **Volume-Anchored Location Identity**. Locations key off stable volume identity — on-disk serial plus filesystem type — and a volume-relative path; label and similar mutable attributes are corroborating evidence, not key material, so a relabel is a silently-noted footnote while a reformat (same serial, different filesystem) demands explicit rebind. The drive-lettered path is a derived display value, never stored identity.
 - **Host as Provenance, Not Identity**. Hosts tag observations and runs with which host produced them rather than anchoring location identity, so two hosts sharing one physical volume each keep truthful, independent evidence without needing to arbitrate authority.
 - **Offline Volumes**. A location whose volume is not currently mounted is offline, not missing; a complete scan never marks its rows missing because the disk itself is absent.
 - **Known-Volume Recognition**. A previously known volume serial reappearing under a different drive letter resolves automatically and silently; this is letter resolution, not rebind, and needs no user action.
@@ -232,6 +237,7 @@ provision.
 ## HISTORY
 
 - **Independent Audit Store**. Sync, baseline, verification, and TeraCopy import attempts are recorded in a separate local history database.
+- **Audit Delivery Guarantee**. History subscribes at session admission on the reliable event plane and is never dropped: when its bounded buffer fills, the producer briefly waits at a checkpoint boundary rather than discarding audit events. A history write failure is surfaced loudly on the session result but never blocks, fails, or falsifies filesystem work, and a process crash loses at most the bounded in-flight buffer — the same never-wrong-only-behind posture as the ledger.
 - **Typed Run Details**. History retains activity-specific summaries and ordered sync operations or integrity issues.
 - **No-Op and Cancellation Audit**. Explicit no-op and canceled activities are recorded alongside successful and failed activities.
 - **History Idempotency**. Repeating a recorded run token does not create a duplicate history entry.
@@ -247,21 +253,24 @@ provision.
 
 ## COMMANDLINE
 
+- **Sync Command**. `nami-sync sync` runs the plan session, prints the reviewable plan, and asks for explicit terminal confirmation; confirming commits the plan and immediately runs the execution session, declining leaves it uncommitted. A separate flag executes already-committed queued plans for scripted use; no flag combination plans and executes without a review.
 - **Inventory Command**. `nami-sync inventory` scans one location and prints its retained inventory and mapping guidance.
 - **Baseline Command**. `nami-sync baseline` creates missing baselines and reports integrity counts and issues.
 - **Verify Command**. `nami-sync verify` verifies one location and returns a failing exit code when integrity issues are found.
 - **Hash Import Command**. `nami-sync import-hashes` imports explicit TeraCopy sidecars for one location.
 - **History Command**. `nami-sync history` lists recent audit runs or prints one retained entry with detail.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
-- **GUI Entry Points**. Running `nami-sync`, `nami-sync-gui`, or `python -m namisync` launches the desktop application when no subcommand is given.
+- **No-Subcommand Behavior**. Until a desktop implementation exists, running `nami-sync` or `python -m namisync` with no subcommand prints usage and exits nonzero; nothing ever runs implicitly.
 - **Concurrent Read-Only Commands**. Read-only CLI commands such as history and status run alongside a GUI session or other CLI invocations; mutating commands are subject to the same volume and queue arbitration as any other session.
+
+- **GUI Entry Points**. Once the desktop application exists, running `nami-sync`, `nami-sync-gui`, or `python -m namisync` with no subcommand will launch it.
 
 ## DESKTOP UI
 
 - **Task Rail**. The window provides a scrollable newest-first rail of task cards with status, paths, completion date, close controls, and mini progress bars.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
 - **Folder Selection**. Source and destination support editable recent-folder dropdowns and folder browser buttons.
-- **Plan Tree**. The Plan view displays operations in a directory-nested tree with rolled-up counts, sizes, reasons, hashes, and statuses.
+- **Plan Tree**. The Plan view displays operations in a directory-nested tree with rolled-up counts, sizes, reasons, hashes, and statuses; a decomposed folder rename reads as one folder-level group, not a flat run of per-file moves.
 - **Inventory Tree**. The Inventory view displays retained files in a directory-nested tree with presence and integrity states.
 - **Plan Filters**. Plan review can filter All, Changes, Moves, and Conflicts with live counts.
 - **Inventory Filters**. Inventory review can filter All, Verified, Baseline, Unbaselined, Missing, Reappeared, and Acknowledged rows with live counts.
