@@ -5,6 +5,10 @@ section, bullets before the first blank line describe settled, built-toward
 behavior; bullets after it are unrealized future work — some already
 reflected as a seam in the settled design, some not yet begun.
 
+Reference documentation imported from the proof-of-concept lives in
+`PoC_import/`; its `BUGS.md` is the evidence base behind many of this
+document's rules.
+
 ## PROJECT ARCHITECTURE
 
 - **Layered Domain Design**. Core owns sync behavior, the database owns persistence, application workflows coordinate them, and interfaces adapt those workflows.
@@ -59,7 +63,7 @@ reflected as a seam in the settled design, some not yet begun.
 
 - **Recursive Metadata Scan**. The scanner records root-relative regular files with size, nanosecond modification time, and filesystem identity.
 - **Directory Inventory**. Empty directories are retained as directory records so they can be planned for creation or cleanup.
-- **Ignored-Path Filtering**. NamiSync excludes application databases, checksum sidecars, common Windows metadata files, sync trash, and generated temporary files.
+- **Ignored-Path Filtering**. NamiSync excludes application databases, checksum sidecars, common Windows metadata files, sync trash, and generated temporary files — always by exact, fully-qualified name shape, never by suffix or substring, so a user file can never be silently excluded for resembling an application artifact.
 - **Scan Warnings**. Access errors and filesystem case collisions are retained in scan results for plan review.
 - **Cooperative Scan Cancellation**. Scans check for cancellation while walking directories and files.
 - **Placeholder Detection**. Cloud-backed placeholder files (OneDrive, Dropbox, and similar reparse-tagged files) are recognized from their attributes without being opened, recorded as unsupported, and reported as scan warnings instead of being read and silently hydrated.
@@ -83,10 +87,11 @@ reflected as a seam in the settled design, some not yet begun.
 - **Filesystem Capability Awareness**. Diffing compares timestamps within the coarser of the two roots' recorded timestamp granularity, and move detection is disabled on any root whose filesystem doesn't support stable file identity, instead of silently misreading FAT-family timestamps and identities as reliable.
 - **Metadata-Based Diffing**. Matching size and modification time produces a no-op, while changed metadata produces an update.
 - **Copy and Update Planning**. Source-only files become copies and changed matched files become updates.
-- **Move Detection**. Unambiguous source filesystem-identity changes can become target-side moves, with a follow-up update when metadata differs; an identity observed at more than one scanned path is excluded from consideration.
+- **Move Detection**. Unambiguous source filesystem-identity changes can become target-side moves; an identity observed at more than one scanned path is excluded from consideration.
+- **Composite Move-Update**. A detected move whose content also changed is planned as one composite operation whose evidence records only at full completion, so a crash partway can never leave old content at the new path while the ledger claims consistency.
 - **Directory Operations**. Source-only empty directories become `mkdir` operations and removable target-only empty directories become policy-controlled operations.
 - **Conflict Blocking**. Case collisions and file-directory conflicts remain visible as blocked conflict operations instead of being guessed through.
-- **Capacity Planning**. Plans record target free space and conservatively require room for all copy and update bytes.
+- **Capacity Planning**. Plans record target free space and conservatively require room for all copy and update bytes, with temporary-file accounting sized for the maximum number of concurrently in-flight temp files rather than assuming one at a time.
 - **Stable Plan Ordering**. Operations receive deterministic per-plan identifiers and dependency-aware ordering.
 
 - **Content-Aware No-Op Detection**. Planning will use hashes or another content check before accepting metadata-equal files as unchanged.
@@ -99,14 +104,15 @@ reflected as a seam in the settled design, some not yet begun.
 - **Repeatable, Not One-Shot**. The same function runs before execution for review, inside the executor as its own guard, after any resume, and on queued-job wakeup.
 - **Scoped Re-Check**. Only the remaining selected operations are re-stated; preflight never re-walks the full tree.
 - **Plan Integrity Check**. Confirms the selection is dependency-closed and no selected operation depends on a deferred, failed, or blocked one.
+- **Complete-Scan Requirement**. A plan built from an incomplete or errored scan is reviewable but never executable, because it cannot safely establish source-only or target-only state.
 - **Staleness Check**. Confirms each remaining operation's source and target evidence still matches what the plan recorded.
-- **Capacity Check**. Recomputes required bytes for the remaining selection against current target free space.
-- **Safety Check**. Confirms roots still resolve to their recorded volume identity and the trash location is writable.
+- **Capacity Check**. Recomputes required bytes for the remaining selection against current target free space, counting reclaimable orphaned NamiSync temp bytes as recoverable so a nearly-full target cannot loop-refuse over space the run itself would free.
+- **Safety Check**. Confirms roots still resolve to their recorded volume identity, and that the trash directory resolves onto the target root's own volume without escaping through a reparse point and is writable.
 - **No Repair**. A refused verdict carries per-operation reasons and the observed snapshot; preflight never re-plans, drops, or patches operations to make them pass.
 
 ## EXECUTOR
 
-- **Atomic Copy and Update**. File content is written to a target-volume temporary file, flushed, metadata-preserved, and atomically published.
+- **Atomic Copy and Update**. File content is written to a target-volume temporary file, flushed and fsynced, metadata-preserved, atomically published, and followed by a best-effort parent-directory flush so a power loss after publish cannot silently lose the rename.
 - **Source-Drift Guard**. Copy and update operations re-stat the source after the read stream closes; a mismatch against the plan's recorded evidence fails the operation instead of recording a hash for content that changed underneath it.
 - **Hash on Copy**. Successful copies and updates calculate a SHA-256 digest from the source byte stream during copying.
 - **Contention Retry Policy**. A failure policy distinguishes transient sharing violations, which retry with bounded backoff, from persistent locks, which skip the operation with a typed reason the plan view can show.
@@ -117,11 +123,12 @@ reflected as a seam in the settled design, some not yet begun.
 - **Guarded Deletion**. Internal mirror deletes and empty-directory cleanup validate type and emptiness before removal.
 - **Partial Result Reporting**. Independent operations continue after failures, with per-operation succeeded, skipped, failed, and canceled results.
 - **Progress and Cancellation**. Execution reports overall and per-file byte progress and checks cancellation between operations and copy chunks.
-- **Temporary-File Recovery**. Relevant orphaned NamiSync temporary files are cleaned from touched target parent directories before copying.
+- **Content-Byte Accounting**. Progress and throughput totals count transferred copy and update content only; same-volume move, trash, and delete metadata operations never inflate byte progress or ETA.
+- **Temporary-File Recovery**. Orphaned NamiSync temporary files are cleaned from touched target parent directories before copying — matched by the exact generated temp-name shape only, never by substring, never entering `.synctrash`, and never walking the full tree.
 
 - **Validated Partial Execution**. Selected plan operations will execute only after dependency closure, summary and capacity recomputation, and explicit deferred outcomes are recorded.
 - **Restartable Large-File Copy**. Large-file copies will support resuming from an interrupted offset with a persisted partial digest, instead of restarting from zero.
-- **Multithreaded Copy Workers**. Independent copy operations will run across parallel workers under one session, with merged progress and ordering handled by the session rather than the copy loop.
+- **Multithreaded Copy Workers**. Independent copy operations will run across parallel workers under one session, with merged progress and ordering handled by the session rather than the copy loop, and capacity accounting already sized for every concurrent in-flight temp file.
 - **Background IO Throttling**. Execution will support a pacing knob for background or lower-priority runs, independent of the progress-reporting throttle.
 - **Robocopy Copy Backend**. NamiSync will evaluate an optional Robocopy backend for bulk moves that accept copy-now, baseline-later trust, while retaining its own planning, trash, and safety controls.
 
@@ -147,6 +154,7 @@ reflected as a seam in the settled design, some not yet begun.
 - **Selected Verification**. Present inventory files selected in the UI can be verified without verifying the entire location.
 - **Post-Execution Verification**. A sync can automatically verify eligible copied, updated, and moved files after execution.
 - **Safe Conditional Recording**. Hash and verification results are persisted only when the file state remains consistent with the observation being recorded.
+- **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
 
 - **Multithreaded Verification**. Verification speed can be CPU-bound on faster disks, the verifier should run multithreaded conditionally.
 - **Automatic Background Integrity**. Background hashing and verification remain unrealized.
@@ -165,6 +173,7 @@ reflected as a seam in the settled design, some not yet begun.
 - **Provenance Tagging**. Every hash write records how it was attested — inherited from a copy's source stream, a direct read-back, or an independent verification — so displayed trust never overstates what was actually checked.
 - **Bounded-Window Durability**. Ledger commits batch by operation count or elapsed time rather than one write per operation, with an immediate forced flush before any destructive operation, at pause-drain, and at session terminal — bounding the crash window to at most one batch without weakening the never-wrong-only-behind guarantee.
 - **Idempotent Recording**. The recorder treats a repeated run token as a no-op, backed by the ledger's own uniqueness constraint as the last line of defense.
+- **Serialized Writer**. All in-process sessions record through one serialized writer, so legitimately parallel disjoint-volume runs can never silently lose bookkeeping to ledger lock contention; cross-process writers get a generous busy timeout with bounded retry, and a recording failure is always surfaced, never swallowed.
 
 ## FILES LEDGER
 
