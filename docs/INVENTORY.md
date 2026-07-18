@@ -1,8 +1,10 @@
 # Inventory Domain
 
-Status: draft cross-module contract. Priority: M1. Inventory is not a new
-sideways-calling operation module: scanner observes, workflows coordinate, and
-database repositories/recorder retain state.
+Status: the database retention/reconciliation foundation is implemented; M1
+workflow, selection, acknowledgement/filter controls, and interface composition
+remain. Inventory is not a new sideways-calling operation module: scanner
+observes, workflows coordinate, and database repositories/recorder retain
+state.
 
 ## Purpose
 
@@ -10,6 +12,27 @@ Inventory is the durable, role-free record of what has been observed at a
 physical location and what integrity evidence exists. A location may exist with
 zero, one, or many mappings. Inventory state must not be reinterpreted by plan
 view state, mapping role, UI filters, or a partial scan.
+
+## Implemented Persistence Slice
+
+The ledger schema stores current observation fields separately from attested
+hash subject fields, including nullable identity/hardlink-group room, presence,
+unsupported reason, missing/acknowledgement/exclusion/reappearance timestamps,
+host provenance, and scope token. Ordinary scans update only current
+observation fields and cannot rewrite an established attestation.
+
+`LedgerRecorder.record_inventory()` batches present, directory, and unsupported
+observations. A complete online full scan uses a temporary key table to mark
+unseen present/unsupported rows missing without a parameter-sized `NOT IN`;
+incomplete and offline scans infer no missing state, while complete selected
+refreshes affect only selected keys. Reappearance is set on a missing-to-present
+transition.
+
+`LedgerRepository` returns immutable typed rows and bounded canonical-path
+selections. The conditional integrity recorder writes attestation and optionally
+clears `reappeared_at`/advances true verification time in the same transaction.
+Acknowledgement/restore, mapping-filter state, stale-age queries, and the
+workflow that automatically constructs verifier selections remain M1 work.
 
 ## State Model
 

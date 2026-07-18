@@ -1,6 +1,6 @@
 # Planner Module
 
-Status: draft contract. Priority: M0 path-preserving paired sync; later scopes,
+Status: M0 path-preserving paired-sync implementation complete. Later scopes,
 content evidence, ingest policies, replay, repair, and undo reuse the same plan
 shape.
 
@@ -18,6 +18,22 @@ plan(source: ScanResult, target: ScanResult,
      correspondence: MappingSnapshot, options: SyncOptions,
      scope: Scope) -> Plan
 ```
+
+## Implemented M0 Surface
+
+`namisync.modules.planner.plan()` is a pure transformation over frozen core
+snapshots. `namisync.core.planning` owns the serializable plan, operation,
+assignment, policy, scope, deterministic-id/fingerprint, selection-digest,
+and shared capacity contracts. M0 implements `Scope.everything()` and the
+batch-shaped identity destination policy; the other scope constructors remain
+declared but raise rather than pretending to work.
+
+The implementation emits explicit parent-first directory operations, file
+copy/update/no-op intent, correspondence-qualified move or composite
+move-update intent, target-only policy operations, and dependency-ordered
+directory cleanup. Blocked unsupported/collision items remain in the plan.
+Planner and preflight both call `calculate_required_bytes()`; neither stores or
+guesses target free space.
 
 `options` contains deletion and preservation policies, the symmetric mapping
 filter snapshot, and the selected `DestinationPolicy` plus any already-extracted
@@ -186,3 +202,11 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.
 - Import-linter proves planner imports core but no sibling module.
+
+## M0 Verification
+
+`tests/test_planner.py` contains 22 filesystem-free planner tests covering
+random input order, byte-identical serialization, directory convergence,
+cleanup dependencies, move disqualifiers, policy collisions, symmetric
+filters, long paths, and hardlink-aware capacity. Shared path/serialization
+contracts are covered in `tests/test_core_scanplan.py`.

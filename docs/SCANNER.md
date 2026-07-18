@@ -1,7 +1,7 @@
 # Scanner Module
 
-Status: draft contract. Priority: walking scanner in M0; incremental and
-network-aware sources are later implementations of the same contract.
+Status: M0 walking and path-scoped implementation complete. Incremental and
+network-aware sources remain later implementations of the same contract.
 
 ## Purpose
 
@@ -15,6 +15,20 @@ warning is executable. It implements `ChangeSource` and imports only core.
 ```python
 scan(root: Root, ignores: IgnoreSet, ctx: RunContext) -> ScanResult
 ```
+
+## Implemented M0 Surface
+
+`namisync.modules.scanner` provides the module-level `scan()` entry point and
+an injectable `WalkingScanner`. Its native backend uses metadata-only Windows
+enumeration and volume capability observation; tests replace that backend to
+fault disappearing entries, permission errors, placeholder attributes,
+identity cycles, case collisions, coarse filesystems, and partial enumeration
+without opening file content.
+
+Full scans retain the walked root plus every reachable directory and declare
+completeness modulo the exact `IgnoreSet`. `ScanScope.selected()` performs
+only named-path stats, never a full walk, and deliberately returns a scoped,
+non-complete result so a consumer cannot use it for missing inference.
 
 The result contains the resolved root, `VolumeId` plus corroborating
 `VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every walked
@@ -140,3 +154,9 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - A scoped refresh of two paths performs no full walk and cannot mark a third
   row missing.
 - Import-linter proves scanner code imports core but no sibling module.
+
+## M0 Verification
+
+`tests/test_scanner.py` contains 15 focused scanner tests. Shared path and
+artifact-grammar coverage lives in `tests/test_core_scanplan.py`; the complete
+suite and import-linter are the release gates.

@@ -1,7 +1,8 @@
 # History Module
 
-Status: draft contract. Priority: minimal sync history in M0; integrity detail
-and retention in M1; task grouping, replay, discard audit, and export later.
+Status: minimal independent sync history storage and observer integration are
+implemented for M0. Integrity/import detail, retention, task grouping, replay,
+discard audit, export, and interface composition remain later work.
 
 ## Purpose
 
@@ -9,6 +10,26 @@ History observes session events and writes an independent append-oriented local
 SQLite database. It records what NamiSync attempted and reported without
 participating in filesystem or ledger transactions. No history failure may roll
 back real file work or ledger truth.
+
+## Implemented M0 Slice
+
+`HistoryStore` owns a separate WAL database and returns a `HistoryObserver`
+matching the dispatcher's composition-root protocol: `on_event(envelope)`,
+`finalize(result)`, and `close()`. The dispatcher owns the bounded worker queue,
+timeout, and audit-axis settlement; the history package imports only core and
+never imports dispatcher.
+
+The observer accepts reliable preterminal envelopes, idempotently detects exact
+duplicate sequence delivery, rejects conflicting or reordered duplicates, and
+persists one actual-time sync envelope, typed summary axes, and ordered
+`ItemOutcome` detail during finalization. Run-token replay with an identical
+payload is a no-op; a different payload raises `TokenConflictError`. A failed
+history transaction propagates to the dispatcher acknowledgement without
+mutating the provisional filesystem or ledger result.
+
+`HistoryRepository` returns immutable typed run and operation snapshots through
+a read-only connection. No M0 method implements retention or integrity/import
+detail, and no CLI/UI surface is claimed by this module alone.
 
 ## Observer Contract
 
@@ -120,6 +141,13 @@ history or asks history to infer disposition from zero bytes or strings.
 - Database override plumbing keeps tests/CLI out of real user history.
 
 ## Acceptance Criteria
+
+M0 tests cover sync axis/detail round-trip, ordered outcomes, no-op/refused
+attempts, exact duplicate delivery, conflicting duplicate diagnosis, idempotent
+run finalization, read-only browsing, and failure isolation. Buffer pressure,
+acknowledgement timeout, and single-terminal settlement are dispatcher tests.
+Integrity/import renderers, retention, replay, discard audit, and export remain
+future acceptance gates.
 
 - Every terminal path listed above produces exactly one idempotent envelope with
   actual start/end ordering and activity kind.

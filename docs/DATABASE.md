@@ -1,7 +1,8 @@
 # Database Module
 
-Status: draft contract. Priority: schema bones and minimal ledger in M0;
-inventory/integrity in M1; migrations and protection workflows later.
+Status: schema bones, safe connection factories, the M0 ledger/repositories,
+inventory reconciliation, and minimal sync history are implemented. Migrations,
+retention, backup/protection workflows, and richer history remain later work.
 
 ## Purpose And Boundaries
 
@@ -14,6 +15,29 @@ retention, failure domains, and no cross-database foreign keys.
 Live databases are local, never placed in a cloud-synced managed root. Settings
 live in a separate local settings file; semantic settings used by a plan are
 snapshotted into that plan.
+
+## Implemented Foundation
+
+`schema.py` creates independent version-1 ledger and history schemas. The ledger
+freezes hosts, stable volumes plus mutable evidence, role-free locations,
+soft-deletable mappings, current versus attested inventory state, mapping-scoped
+correspondence, run/operation tokens, generic annotations, and nullable hardlink
+group room. Database triggers reject correspondence whose rows do not belong to
+the mapping's source and target locations.
+
+`connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
+read repositories open SQLite in `mode=ro` and enable `query_only`. Live paths
+can be validated against managed roots before creation. `timestamps.py` is the
+single fixed-width aware-UTC representation used by both schemas.
+
+`repositories.py` returns immutable inventory, run, and `MappingSnapshot`
+values. Canonical path selections are queried in bounded 400-key chunks, and
+mapping correspondence is returned with stable source/target volume evidence
+and hardlink/duplicate-identity disqualification. Reads never refresh state.
+
+The present migration policy is explicit refusal on a schema-version mismatch.
+Reset remains an external/manual operation; no ordered migration, backup,
+retention, export/import, or maintenance writer is claimed yet.
 
 ## Main Ledger Shape
 
@@ -136,6 +160,12 @@ casefold over-merge, lost path guards, missing paired-noop evidence, excessive
 round trips, and duplicated time/host formatting.
 
 ## Acceptance Criteria
+
+Fresh-schema, pragma, read-only, cross-location trigger, canonical path,
+volume/rebind, 33k reconciliation, bounded repository query, WAL concurrency,
+and independent history round-trip cases are covered in the M0 suite. Criteria
+for retention, migrations, backups, exports, and cloud-provider discovery remain
+future gates rather than current implementation claims.
 
 - Fresh schemas contain every freeze field, version stamp, index, uniqueness,
   and foreign-key/trigger constraint required above.

@@ -1,6 +1,7 @@
 # Core Module
 
-Status: draft contract. Priority: M0 bones, required before every other module.
+Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
+and recording contracts implemented with their owning operation modules.
 
 ## Purpose
 
@@ -40,6 +41,23 @@ attestation format.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
 
+The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
+`core/models.py`, `core/planning.py`, and `core/preflight.py`. These files own
+canonical Windows relative paths, immutable filesystem evidence, deterministic
+plan serialization and capacity, and root-qualified observation/refusal
+shapes. OS walking and observation remain in operation modules; core stays
+standard-library-only and behavior-free.
+
+Executor continuation and collaborator contracts are implemented in
+`core/execution.py`: the mutable `ExecutionSet`, fixed-format `RunId`, typed
+failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
+
+`core/recording.py` now owns the immutable host, volume, location, mapping, sync
+run, finish, and inventory commands used at the ledger boundary. Per-operation
+sync evidence remains behind `core.execution.Recorder`, while conditional
+integrity evidence remains behind `core.integrity.IntegrityRecorder`; the
+database implements both without moving SQL or persistence policy into core.
+
 ## Session Contract
 
 The transition table is defined once and consumed by the dispatcher. Every
@@ -76,6 +94,13 @@ module, its unwind finalizer emits `CANCELED` for the in-flight and every
 unreached selected item. The same finalizer emits nothing for unreached work on
 `PauseRequested`, because that work remains pending for resume.
 
+The runner accepts a dispatcher-owned item accumulator. It is retained across
+pause attempts and cleared only after terminal settlement, so a resumed session
+that later cancels or fails includes reliable outcomes earned before the pause.
+The registry adapter snapshots continuation bytes before `PAUSED`; the
+dispatcher stores those bytes without decoding them and opens a fresh adapter
+invocation on resume.
+
 ## Event Contract
 
 Every envelope contains a session id, gap-free per-session sequence, injected
@@ -101,6 +126,12 @@ timeout sets `audit=OK`; failure or timeout sets `audit=DEGRADED` and ends
 blocking. The runner then constructs and releases the one immutable `Terminal`
 to ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
+
+The M0 envelope codec round-trips `StateChanged`, `PhaseChanged`, `Progress`,
+`ItemOutcome`, `Gap`, and `Terminal` and rejects unknown schema/body versions.
+Integrity-specific event serialization remains part of its M1 integration; the
+live event plane already transports verifier-defined bodies structurally and
+treats every non-`Progress` body as reliable.
 
 ## Path And Identity Rules
 

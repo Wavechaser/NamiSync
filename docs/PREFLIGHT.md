@@ -1,7 +1,8 @@
 # Preflight Module
 
-Status: draft contract. Priority: M0 and mandatory immediately before every
-managed-data mutation, on resume, and on queued wakeup.
+Status: M0 observation and pure judgment implementation complete. Fresh
+preflight remains mandatory immediately before every managed-data mutation,
+on resume, and on queued wakeup.
 
 ## Purpose
 
@@ -12,6 +13,22 @@ observe(xset: ExecutionSet, fs: FileSystem,
         settings: SettingsReader) -> ObservedWorld
 preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict
 ```
+
+## Implemented M0 Surface
+
+`namisync.modules.preflight.observe()` consumes an injected read-only
+filesystem and settings reader. It records only remaining selected-operation
+subjects, required target parents, both roots, capacity, exact reclaimable temp
+bytes, trash safety, settings, and one UTC timestamp. The native local backend
+performs no cleanup or hydration.
+
+`preflight()` consumes only the immutable `ObservedWorld` contract in
+`namisync.core.preflight`. It reports all applicable typed run- and
+operation-level refusals for incomplete scans, root/volume ambiguity, broken
+selection dependencies, blocked work, direct or parent-path drift, policy
+drift, insufficient capacity, trash safety, containment, and target path
+representation. Commitment checking remains at the execution-workflow entry,
+as review preflight intentionally works before a commitment exists.
 
 `observe()` performs read-only IO, including reading current semantic settings,
 and decides nothing. `preflight()` performs no IO and changes nothing. Neither
@@ -154,3 +171,9 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
   a touched file change refuses.
 - Long-path and root-escape cases are judged through canonical validated paths.
 - Import-linter proves preflight imports core but no sibling module.
+
+## M0 Verification
+
+`tests/test_preflight.py` contains 29 focused tests. Pure-verdict fixtures run
+without a filesystem, while instrumented observation tests prove scoped reads,
+fresh-world behavior, exact temp accounting, and no managed-data mutation.

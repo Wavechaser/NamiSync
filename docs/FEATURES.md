@@ -65,6 +65,12 @@ provision.
 
 ## DISPATCHER
 
+Implementation status (M0): generic process-local admission/control, bounded
+event delivery, opaque continuation snapshots, and real cross-process Windows
+volume custody are implemented. SQLite session persistence, startup
+reconciliation, and unique durable queue ownership remain M2; their bullets
+below describe settled behavior, not current M0 runtime claims.
+
 - **Domain-Blind Session Scheduling**. The dispatcher admits, schedules, and tracks sessions by their generic contract alone; no dispatcher method or code path is named for a specific activity such as sync or verify.
 - **Volume-Scoped Concurrency**. Sessions whose required volumes don't overlap may run concurrently; sessions contending for the same volume queue behind each other. Concurrency is a property of the resources a session needs, not a single global one-at-a-time rule.
 - **Single Queue Owner**. Multiple NamiSync processes may run at once; cross-process volume locks arbitrate disk access between them, and a file lock on the persisted queue ensures exactly one process at a time owns queued-session admission.
@@ -93,6 +99,7 @@ provision.
 - **Placeholder Detection**. Cloud-backed placeholder files (OneDrive, Dropbox, and similar reparse-tagged files) are recognized from their attributes without being opened, recorded as unsupported, and reported as scan warnings instead of being read and silently hydrated. Unsupported entries are typed scan records in their own right — they flow through inventory and plan review as blocked, never-executable items rather than living only in warning text.
 - **Filesystem Capability Profile**. Each scanned root records its filesystem type, timestamp granularity, and whether stable file identity is available, so the planner and preflight can reason about what a root's metadata can and can't prove.
 - **Junction Cycle Protection**. The scanner tracks visited directory identities while walking so a directory junction or reparse loop cannot recurse indefinitely.
+- **M0 Scanner Implemented**. Native walking and selected-path observation now produce deterministic typed snapshots with exact owned-artifact ignores, conservative capabilities, cooperative cancellation, placeholder/reparse blocking, collision warnings, and explicit completeness.
 
 - **Change-Journal Scanning**. The scanner sits behind a pluggable change-source interface; a future NTFS USN-journal-backed source will supply incremental changes without the planner or executor knowing the difference. It requires elevated access or a background service and remains unrealized.
 
@@ -119,6 +126,7 @@ provision.
 - **Conflict Blocking**. Case collisions and file-directory conflicts remain visible as blocked conflict operations instead of being guessed through.
 - **Capacity Planning**. Plans conservatively compute required bytes for all copy and update work, with temporary-file accounting sized for the maximum number of concurrently in-flight temp files rather than assuming one at a time; target free space is never baked into the plan — it is observed at review and preflight time, where the one shared capacity formula judges it.
 - **Stable Plan Ordering**. Operations receive deterministic per-plan identifiers and dependency-aware ordering.
+- **M0 Planner Implemented**. Pure path-preserving planning now emits deterministic copy, update, no-op, correspondence-qualified move/move-update, explicit directory, policy removal, cleanup, and blocked review items using the shared capacity function.
 
 - **Content-Aware No-Op Detection**. Planning will use hashes or another content check before accepting metadata-equal files as unchanged.
 - **Hash-Based Move Detection**. Move detection will extend beyond source filesystem identity to evidence-aware content matching.
@@ -135,9 +143,14 @@ provision.
 - **Capacity Check**. Recomputes required bytes for the remaining selection against current target free space, counting reclaimable orphaned NamiSync temp bytes as recoverable so a nearly-full target cannot loop-refuse over space the run itself would free.
 - **Safety Check**. Confirms roots still resolve to their recorded volume identity, and that the trash directory resolves onto the target root's own volume without escaping through a reparse point and is writable.
 - **No Repair**. A refused verdict carries per-operation reasons and the observed snapshot; preflight never re-plans, drops, or patches operations to make them pass.
+- **M0 Preflight Implemented**. Scoped read-only observation and pure judgment now validate complete scans, remaining dependencies, touched evidence and parents, roots/volumes, semantic settings, capacity, trash safety, containment, and path representation with typed refusal reasons.
 
 ## EXECUTOR
 
+- **M0 Native Executor Implemented**. A single-worker Windows executor now runs
+  reviewed copy, update, move, move-update, mkdir, trash, delete, and no-op
+  operations with operation-local evidence guards, typed continuation outcomes,
+  injected copy/failure/filesystem seams, and post-filesystem recorder calls.
 - **Atomic Copy and Update**. File content is written to a target-volume temporary file, flushed and fsynced, metadata-preserved, atomically published, and followed by a best-effort parent-directory flush; a flush the filesystem refuses downgrades to a per-operation warning, and power-loss durability is claimed only for what was actually flushed.
 - **Source-Drift Guard**. Copy and update operations re-stat the source after the read stream closes; a mismatch against the plan's recorded evidence fails the operation instead of recording a hash for content that changed underneath it.
 - **Hash on Copy**. Successful copies and updates calculate a SHA-256 digest from the source byte stream during copying.
@@ -183,6 +196,7 @@ provision.
 - **Post-Execution Verification**. A sync can automatically verify eligible copied, updated, and moved files after execution.
 - **Safe Conditional Recording**. Hash and verification results are persisted only when the file state remains consistent with the observation being recorded.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
+- **Verifier Operation Implemented**. The isolated baseline, verify, and explicit rebaseline operation now provides cache-honest Windows reads, typed per-file outcomes, safe conditional ledger recording, and lossless pause/cancel continuation. Inventory selection, workflow registration, history detail, and UI/CLI composition remain the M1 product surface.
 
 - **Multithreaded Verification**. Verification speed can be CPU-bound on faster disks, the verifier should run multithreaded conditionally.
 - **Automatic Background Integrity**. Background hashing and verification remain unrealized.
@@ -203,6 +217,7 @@ provision.
 - **Idempotent Recording**. The recorder treats a repeated run token as a no-op, backed by the ledger's own uniqueness constraint as the last line of defense.
 - **Serialized Writer**. All in-process sessions record through one serialized writer, so legitimately parallel disjoint-volume runs can never silently lose bookkeeping to ledger lock contention; cross-process writers get a generous busy timeout with bounded retry, and a recording failure is always surfaced, never swallowed.
 - **Axis-Separated Truth**. A session's terminal state reports its filesystem work alone; ledger bookkeeping and audit history report through separate recording and audit statuses carried in the result. Completed work with a failed or lagging write on either store surfaces as completed-with-degraded-recording (or -audit) — loudly, in the UI, CLI exit detail, and history — and the behind store converges rather than the result lying on any axis.
+- **M0 Recorder Implemented**. One run-bound serialized recorder now covers every sync operation, eager per-command durability behind the final flush seam, idempotent run/operation tokens, bounded cross-process retry, scalable inventory reconciliation, and the shared conditional baseline/verify/rebaseline evidence transaction.
 
 ## FILES LEDGER
 
@@ -220,6 +235,7 @@ provision.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
 - **Local Settings File**. Cosmetic and semantic application settings live in a local settings file beside the databases, not inside the ledger schema; settings that shape a plan, such as filters, are snapshotted into the plan itself when used, so preflight reasons about the values in effect at the time rather than values that may have since changed.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
+- **M0 Ledger Implemented**. Versioned ledger/history schemas now freeze identity and evidence fields, enforce mapping-correspondence location integrity, separate observed from attested stats, expose read-only typed inventory/mapping/run repositories, and refuse configured database paths inside managed roots.
 
 - **Hardlink Groups**. Schema room is reserved for grouping paths that share one file identity, so hard-link-aware correspondence and, later, hard-link preservation on copy remain additive rather than a rework.
 - **Named Mappings**. A mapping will carry a user-assigned display name distinct from its source and target paths.
@@ -244,6 +260,7 @@ provision.
 - **History Idempotency**. Repeating a recorded run token does not create a duplicate history entry.
 - **History Retention**. Summary and detail retention settings can prune old history detail while preserving the run envelope and summary.
 - **History Browsing**. Retained runs and their details can be inspected in the desktop History dialog or through the CLI.
+- **M0 Sync History Implemented**. The independent store now consumes the dispatcher's reliable preterminal observer protocol and persists idempotent sync envelopes, axis-separated summaries, and ordered typed operation details; interface browsing remains separate composition work.
 
 - **Task-Grouped History**. GUI activities will be grouped under durable task records while CLI and service activities remain valid without a task parent.
 - **Task Annotations**. Users will be able to add a trimmed plain-text task annotation of up to 256 characters.

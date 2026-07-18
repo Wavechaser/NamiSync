@@ -1,8 +1,9 @@
 # Executor Module
 
-Status: draft contract. Priority: M0 native single-worker execution on plain
-local NTFS. External writers are outside NamiSync's volume-lock contract; the
-residual update race is documented below rather than presented as closed.
+Status: M0 implemented. The native single-worker executor covers every reviewed
+operation kind on local Windows filesystems, with focused acceptance coverage.
+External writers remain outside NamiSync's volume-lock contract; the residual
+update race is documented below rather than presented as closed.
 
 ## Purpose
 
@@ -19,7 +20,7 @@ alternate execution engine.
 ## Entry Contract
 
 ```python
-execute(xset, ctx, recorder, policies, fs) -> ExecResult
+execute(xset, ctx, recorder, policies, fs) -> OperationResult
 ```
 
 The caller holds deterministic physical-volume custody and validates that the
@@ -201,10 +202,11 @@ release custody, and never suppress already-earned item outcomes.
 
 ## Progress
 
-Progress snapshots carry content bytes done/total, items done/total, current
-path, phase, and optionally per-file bytes. Moves, trash, mkdir, delete, and
-no-op contribute items but zero transfer bytes. Emission is throttled/coalesced
-outside the copy chunk size so fast disks cannot flood UI queues.
+`Progress` snapshots carry content bytes done/total, items done/total, and the
+current path; `PhaseChanged` carries the phase separately. Moves, trash, mkdir,
+delete, and no-op contribute items but zero transfer bytes. Failed work is not
+credited as completed content. Emission is throttled/coalesced outside the copy
+chunk size so fast disks cannot flood UI queues.
 
 ## Expectations Of Other Modules
 
@@ -247,6 +249,26 @@ large-copy cancellation, missing move handling, empty-directory omission,
 whole-tree preflight, broad temp deletion, false byte totals, incomplete-scan
 execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
 attestation guard, and composite move-update gap.
+
+## M0 Implementation
+
+`namisync/core/execution.py` owns `ExecutionSet`, validated run identifiers,
+typed executor reasons and decisions, and the filesystem/copy/recorder
+protocols. `namisync/modules/executor.py` supplies `NativeFileSystem`,
+`NativeCopyBackend`, `BoundedFailurePolicy`, `ExecutorPolicies`, and `execute`.
+The implementation has no sibling-module import; workflow supplies the reviewed
+and freshly preflighted set, dispatcher/session owns custody and terminal
+aggregation, and the run-bound recorder owns durable ledger interpretation.
+
+The focused M0 suite exercises all eight operation kinds; atomic conditional
+publish and displacement; hardlink and copy-backup update paths; source and
+target drift; ACL and readonly ordering; exact temp cleanup; reparse/off-volume
+trash refusal; move/composite failure bounds; dependency continuation; deferred
+directory metadata; cancel, pause, unexpected interruption, bounded sharing
+retry, recorder degradation, progress throttling, and copy attestations. The
+workflow/dispatcher/recorder suites cover the acceptance responsibilities that
+belong outside this module, including fresh preflight, custody, one terminal,
+and durable run-token idempotency.
 
 ## Acceptance Criteria
 

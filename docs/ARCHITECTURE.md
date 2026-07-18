@@ -586,6 +586,12 @@ drive-qualified, `..`, root-escaping).
 
 ### 4.2 scanner
 
+**Implementation status (2026-07-18).** The M0 native walking scanner,
+injectable fault backend, full/scoped result distinction, exact ignores,
+capability evidence, placeholder/reparse handling, deterministic records, and
+typed incomplete snapshots are implemented and acceptance-tested. USN and
+network change sources remain deferred.
+
 **Contract.** `scan(root, ignores, ctx) -> ScanResult`. Implements
 `ChangeSource`.
 
@@ -612,6 +618,13 @@ every directory recorded with metadata); exact-name ignore filtering; capability
   `mtime_granularity_ns`.
 
 ### 4.3 planner
+
+**Implementation status (2026-07-18).** The pure M0 planner and its core plan
+contracts are implemented: identity assignment, metadata diffing, explicit
+directory chains, correspondence-qualified file moves, composite move-update,
+planned-removal cleanup, symmetric filters, deterministic serialization, and
+the shared hardlink-aware capacity function. Non-everything scopes and content
+evidence remain deferred.
 
 **Contract.**
 `plan(source: ScanResult, target: ScanResult, correspondence: MappingSnapshot,
@@ -672,6 +685,12 @@ grouping) with enrichment metadata supplied by the workflow.
 
 ### 4.4 preflight
 
+**Implementation status (2026-07-18).** Scoped read-only observation and pure
+typed judgment are implemented for complete-scan, root/volume, dependency,
+direct and parent evidence, settings, capacity, trash, containment, and path
+representation checks. Commitment validation remains correctly outside this
+module at execution-workflow entry.
+
 **Contract.** Two functions, deliberately split so purity is real rather than
 claimed:
 
@@ -729,8 +748,15 @@ continue-or-refuse).
 
 ### 4.5 executor
 
+**Implementation status (2026-07-18).** The M0 native single-worker executor
+and its core execution contracts are implemented for all eight operation kinds,
+with conditional publish, guarded trash/delete, deferred directory metadata,
+continuation state, bounded retries, throttled progress, and post-mutation typed
+recording. ADS, restartable copies, parallel workers, and IO throttling remain
+deferred as described below.
+
 **Contract.**
-`execute(xset, ctx, recorder, policies) -> ExecResult`. The workflow owns the
+`execute(xset, ctx, recorder, policies, fs) -> OperationResult`. The workflow owns the
 observe → preflight → execute sequence on every start and every resume (§4.9);
 the executor never imports or calls preflight. Its own defense is
 **per-operation**: immediately before each mutation it re-validates that
@@ -825,21 +851,26 @@ IO throttling; Robocopy backend.
 
 ### 4.6 verifier
 
-**Contract.** `verify(selection, ctx, recorder) -> VerifyResult`;
-`baseline(selection, ctx, recorder) -> ...`. Records through `recorder`.
+**Contract.** `verify|baseline|rebaseline(selection, ctx, recorder,
+reader=None) -> IntegrityRunResult`. Records through `recorder`.
 
-**Bones.** Per-file `ItemOutcome` emission (no silent-until-done); the
+**Bones.** Per-file `IntegrityOutcome` emission (no silent-until-done); the
 cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached
 items emitted before unwind); the integrity-outcome vocabulary (verified,
 baselined, mismatched, modified, missing, unsupported, canceled, error);
 attestation provenance tagging.
 
-**Flesh — now.** Baseline creation; location verification against the
+**Flesh — operation module implemented early during M0 construction; integrated
+in M1.** Baseline creation; location verification against the
 size/mtime/identity/hash unit; selected and post-execution verification;
 cache-honest reads; safe conditional recording; accept/re-baseline of a modified
 file; item-status continuation — verify/baseline sessions pause and resume over
 their remaining selection exactly like execution (same continuation pattern,
-same preflight-on-resume posture).
+same preflight-on-resume posture). The callable module, real Windows unbuffered
+reader, and conditional ledger primitive are present before M1, but inventory
+refresh, integrity workflow/history detail, dispatcher registration, and
+interfaces remain the M1 product gate.
+
 **Flesh — deferred.** Multithreaded verification (per-volume-side worker policy);
 IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 (diagnose which side is damaged).
@@ -866,6 +897,14 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 `repositories.py` holds all reads. `history.py` is an event-stream observer with
 its own database. `schema.py` owns both schemas and the version stamps.
 
+**Implementation status (2026-07-18).** The versioned ledger/history schemas,
+safe writer/read-only connection factories, canonical UTC codec, serialized
+retrying writer, run-bound sync recorder, batched inventory reconciliation,
+conditional baseline/verify/rebaseline writes, typed ledger repositories, and
+minimal sync history observer/repository are implemented. M0 commands commit
+eagerly, so `flush()` preserves the final boundary while the crash window is
+zero completed commands. Cross-process contention is bounded and visible.
+
 **Bones.** Single serialized writer; the conditional-recording primitive (write
 gated on row id + state + size + mtime still matching the observation) shared by
 copy/verify/baseline/import; bounded-window durability with forced flush before
@@ -877,14 +916,16 @@ guaranteed (timeout-guarded, backpressured) delivery, acknowledges its final
 write before the `Terminal` is released (the two-phase finalization of §2.2a),
 and its write failures surface on the session result's `audit` axis (§2.3).
 
-**Flesh — now (M0).** Recorder for sync operations; missing-marking sweep
+**Flesh — implemented (M0).** Recorder for sync operations; missing-marking sweep
 (batched — never one giant `NOT IN`); inventory reconciliation. History observer
 in minimal form: run envelopes plus sync summaries and ordered operations —
 enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 `history` command. The observer is cheap precisely because it is only an event
 subscriber; nothing calls it.
-**Flesh — M1.** Recording for verify/baseline/import; history integrity
-summaries and retained issue detail; retention sweeps (writable connection).
+Conditional verify/baseline/rebaseline recording landed early with the isolated
+verifier during M0 construction. **Flesh — M1.** Hash-import recording; history
+integrity/import summaries and retained issue detail; retention sweeps
+(writable connection); integrity workflow composition.
 **Flesh — deferred.** Migration module; legacy import; scheduled backup/quick-check
 (as an ordinary session); export/import; ledger merge across hosts.
 
@@ -933,7 +974,7 @@ class SessionStore(Protocol):
     def drop(self, sid: SessionId) -> None: ...
 ```
 
-**Flesh — now (M0).** `InMemorySessionStore` — the degenerate implementation;
+**Flesh — implemented (M0).** `InMemorySessionStore` — the degenerate implementation;
 `load_all()` returns nothing, so there is no reload and nothing to reconcile. A
 process death in M0 simply loses the session table, and recovery is the ordinary
 convergence model: rescan, replan. `INTERRUPTED` exists in the enum from day one
@@ -956,8 +997,8 @@ history entry first.
 behind the same protocol; reload on launch; startup reconciliation (dead-process
 `RUNNING` ⇒ `INTERRUPTED`, routed into preflight-then-continue); single
 queue-owner via a file lock on the persisted store; durable queue with launch
-policy; event conflation policy (degenerate = simple rate limit now); local-pipe
-CLI-as-client.
+policy; configurable event-conflation policy (M0 already coalesces progress in
+bounded live/replay buffers); local-pipe CLI-as-client.
 
 **Acceptance criteria.**
 - No dispatcher symbol names a domain activity; it never imports modules or
@@ -967,8 +1008,9 @@ CLI-as-client.
 - Every session reaches a terminal and releases every lock on every path,
   including exceptions and teardown (custody conformance).
 - The stored per-workflow blob is never deserialized by the dispatcher.
-- After a simulated process kill, reconciliation marks the orphan `INTERRUPTED`
-  and routes it through preflight-then-continue.
+- **M2:** after a simulated process kill, reconciliation marks the orphan
+  `INTERRUPTED` and routes it through preflight-then-continue. M0 instead proves
+  honest process-local loss plus abandoned volume-lock recovery.
 - A `Progress` flood never stalls a slow subscriber or the producer; a
   `RELIABLE` event reaches the history observer or the session's `audit` axis
   reads `DEGRADED`; an ejected subscriber always sees an explicit `Gap`.
@@ -983,7 +1025,7 @@ forward. The only place modules meet.
 
 ```python
 def run_plan(req: PlanRequest, ctx, deps) -> Plan: ...            # session 1: scan → plan → observe → preflight
-def run_execution(xset: ExecutionSet, ctx, deps) -> ExecResult: ...# session 2: observe → preflight → execute;
+def run_execution(xset: ExecutionSet, ctx, deps) -> OperationResult: ...# session 2: observe → preflight → execute;
                                                                    # consumes a COMMITTED ExecutionSet only
 def run_integrity(req, ctx, deps) -> IntegrityResult: ...          # inventory / baseline / verify / import
 ```
@@ -1113,9 +1155,13 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
   (displace-then-replace updates) → recorder + minimal ledger (schema-freeze
   columns present, `flush` a no-op) → minimal history observer (sync envelopes
   + summaries) → CLI `sync` (plan → terminal review → commit → execute) and
-  `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail.
-- **M1 — integrity.** verifier + baseline + inventory + history integrity detail
-  + retention. Verify is additive once inventory rows and the recorder exist.
+  `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
+  isolated verifier operation may land in parallel during M0 construction, but
+  does not broaden this shipping gate without its inventory/workflow surface.
+- **M1 — integrity.** integrate the verifier through baseline + inventory +
+  history integrity detail + retention. Verify is additive once inventory rows
+  and the recorder exist; the operation module and cache-honest Windows reader
+  are already available for that composition.
 - **M2 — durability & scope.** `SqliteSessionStore` behind the existing
   protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
   producer); single queue-owner lock; durable queue; filters (via new `Scope`
