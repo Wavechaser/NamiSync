@@ -50,9 +50,10 @@ vocabulary and is not parsed to recover integrity meaning.
 9. If stats are stable and digest differs, emit `mismatched`; preserve the old
    baseline and never auto-accept.
 
-Every selected file emits exactly one reliable item result even when canceled
-or errored. Summary counts derive from those results, not a separate mutable
-counter path.
+Every selected file emits exactly one reliable item result when the session
+terminates, including cancel and error paths. Summary counts derive from those
+results, not a separate mutable counter path. A pause is different: unreached
+items remain pending and emit nothing until resume.
 
 ## Cache-Honest Reads
 
@@ -91,6 +92,12 @@ continuation. They emit each reliable outcome before advancing status; pause
 unwinds after preserving completed items, releases custody without terminal,
 and resume freshly refreshes/guards only the remaining selection. Rebaseline is
 short/non-pausable unless it adopts the same continuation explicitly.
+
+On cancellation, the verifier's unwind finalizer emits `canceled` for the
+in-flight file and every unreached selected file before re-raising `Canceled` to
+the runner. On pause, that finalizer emits nothing for them. This makes runner
+aggregation lossless without exposing verifier internals or duplicating results
+after resume.
 
 ## Expectations Of Other Modules
 
@@ -157,4 +164,6 @@ retained evidence but generates a new plan; verifier never restores content.
 - Pause after any item count preserves exactly those outcomes/writes, releases
   custody with no terminal, and resume neither repeats outcomes nor skips an
   unreached selected row.
+- Cancellation after any item count emits exactly one result for every selected
+  row, including in-flight and unreached canceled rows, before runner unwind.
 - Import-linter proves verifier imports core but no sibling module.

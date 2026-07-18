@@ -564,7 +564,13 @@ bumps the file's mtime, so ordinary metadata diffing already schedules the
 update that re-copies streams (test-verified assumption before the feature
 ships). Residuals: incapable-target warnings are mapping-level at plan time;
 stream bytes are uncounted by capacity; stream content is copied but not
-attested (ledger hashes cover the main data stream only).
+attested (ledger hashes cover the main data stream only); and mtime is an
+evadable signal — a writer that suppresses or restores it escapes stream
+refresh, so the feature claims no independent ADS-only convergence. The
+latent `supports_ads`/`preserve_ads` fields are kept: they follow the
+design's declared-but-unreached pattern (like `INTERRUPTED` and `DEFERRED`),
+cost one volume-flag read and one unexposed default, and create no
+unreachable states for consumers to handle.
 
 ### DR-33 — Shared review/execution observation contradicted fresh preflight
 
@@ -593,10 +599,24 @@ preservation) never corrupts NamiSync's evidence, since attestation subjects
 are always NamiSync's own published files. Fault tests must exercise a swap
 *between* guard and destructive call.
 
-**Note (2026-07-18):** the residual window is the platform's floor, not a
-NamiSync shortcut — Explorer's own replace-via-Recycle-Bin flow composes the
-same displace-then-place steps with the same window, and Windows has offered
-no supported transactional filesystem primitive since TxF's deprecation.
+**Corrected (2026-07-18):** two claims here were overstated against
+Microsoft's own documentation. First, the window is not time-bounded — usually
+tiny, but the process can be descheduled between syscalls — so wording and
+fault tests bound the residual by *data consequence*, never elapsed time.
+Second, `ReplaceFileW` *is* a supported single-call replacement with an
+optional backup, recommended over deprecated TxF; it is deliberately not used
+because it merges the replaced file's attributes, ACLs, and named streams into
+the replacement and documents partial-state failure cases —
+hardlink/copy-backup-then-replace is a chosen tradeoff, not the platform's
+only primitive. Additionally clarified: conditional primitives guarantee only
+their own condition (never source-path identity), so the external-writer
+boundary applies to all mutations, with consequence classes stated per
+operation family — trash-routed operations at worst preserve the wrong item
+recoverably, moves at worst misplace without destroying, and only
+update-replace and internal mirror deletes can destroy an external writer's
+file, never NamiSync's own displaced version or evidence. Directory renames
+inherit only the non-destructive classes, since DR-24's decomposition means
+no directory-level mutation exists.
 
 ### DR-35 — Audit status and Terminal finalization were circular
 

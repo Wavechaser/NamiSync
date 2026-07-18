@@ -24,8 +24,7 @@ executor, recorder, verifier/importer, and settings snapshots.
 1. Validate distinct non-nested roots and request semantics.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
-3. Scan both roots using metadata depth required by the reviewed preservation
-   policy (the scanner protocol still needs that input added explicitly).
+3. Scan both roots with the same role-free observation contract.
 4. Read immutable prior correspondence and semantic settings snapshot.
 5. Apply filters/policies and plan.
 6. Observe/preflight for review information.
@@ -85,8 +84,9 @@ Workflow catches typed module failures at the correct boundary, preserves
 already-earned item/filesystem results, and lets the generic session runner
 produce terminal. Filesystem-derived `SessionState`, ledger `recording`, and
 history `audit` statuses are independent. A history failure/timeout degrades
-only `audit`; final Terminal construction must use the bounded acknowledgement
-ordering described in [HISTORY.md](HISTORY.md).
+only `audit`. The runner drains and finalizes history first, settles the audit
+axis from its bounded acknowledgement, and only then releases the immutable
+Terminal.
 
 Paused execution continues from `ExecutionSet.status` after fresh preflight.
 Paused baseline/verify use their item-status continuation and fresh remaining

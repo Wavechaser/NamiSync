@@ -15,8 +15,11 @@ back real file work or ledger truth.
 The history observer attaches at session admission as the distinguished reliable
 audit subscriber. It creates an activity envelope using session/run token,
 activity kind, actual UTC start, host provenance, subject or source/target
-context, and schema version. It consumes ordered phase/item events and finalizes
-exactly once from terminal.
+context, and schema version. It consumes ordered preterminal phase/item events.
+When the runner requests finalization, it drains those events and writes the
+final envelope/summary from the provisional typed result, then acknowledges
+success or failure within the same timeout. It never derives its final state by
+parsing the Terminal that depends on that acknowledgement.
 
 Its queue is bounded and sized for at least the reliable events emitted between
 adjacent checkpoints. When full, the producer waits at the next safe checkpoint
@@ -57,12 +60,13 @@ axis says so for a delivered terminal; a process crash has no completed result,
 loses at most the bounded buffer, and is surfaced by startup reconciliation. An
 unbounded queue and silent loss are forbidden.
 
-Finalization ordering remains underspecified. History consumes `Terminal` to
-write/finalize the run, but `Terminal.result.audit` must already say whether that
-write succeeded. A bounded two-phase acknowledgement (or equivalent) is needed
-so the final history-write failure can affect the one immutable Terminal seen by
-other subscribers without history consuming two contradictory terminal events.
-This is a causality issue, not a reason to weaken the new audit axis.
+Finalization is deliberately two phase. The runner first supplies the
+provisional domain/recording result and waits for history to drain and attempt
+its final write. It then settles the audit axis from the acknowledgement and
+releases one immutable Terminal to ordinary subscribers. A timeout is itself a
+failed acknowledgement: blocking ends, `audit=DEGRADED`, and no second
+corrective Terminal exists. The call-driven recorder completes its own terminal
+flush before result assembly and does not participate in this handshake.
 
 An unexpected workflow error still emits/finalizes a failed attempt through the
 generic session wrapper. History code catches its own SQLite/serialization
@@ -130,9 +134,10 @@ history or asks history to infer disposition from zero bytes or strings.
   without changing the original result.
 - Observer failure degrades the explicit audit result/health signal and never
   rolls back ledger or filesystem work.
-- A buffer-pressure test proves no admitted history event is dropped and no
-  backpressure happens mid-filesystem operation; timeout stops blocking and
-  yields `audit=DEGRADED` rather than a silent gap.
+- A buffer-pressure test proves admitted history events are delivered within
+  the bound while `audit=OK` and no backpressure happens mid-filesystem
+  operation; timeout stops blocking and yields `audit=DEGRADED` rather than
+  silent loss under an OK result.
 - Terminal-finalization fault injection proves success/failure acknowledgement
   is reflected in the single Terminal delivered to ordinary subscribers; no
   second corrective Terminal is emitted.

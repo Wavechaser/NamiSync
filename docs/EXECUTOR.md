@@ -1,8 +1,8 @@
 # Executor Module
 
 Status: draft contract. Priority: M0 native single-worker execution on plain
-local NTFS. Conditional atomic mutation semantics against non-NamiSync writers
-remain an authoritative TOCTOU review item.
+local NTFS. External writers are outside NamiSync's volume-lock contract; the
+residual update race is documented below rather than presented as closed.
 
 ## Purpose
 
@@ -43,7 +43,10 @@ operation-boundary cleanup.
   required absence/occupancy, root containment, and directory emptiness where
   relevant. Drift fails that operation without guessing.
 - Validate paths lexically and by resolved handle; use long-path-safe APIs.
-- Never overwrite an unexpected destination or follow a reparse escape.
+- Use operation-matched conditional primitives where Windows provides them:
+  `CREATE_NEW` for temps, non-replacing rename when destination absence is a
+  precondition, and `RemoveDirectory` for atomic nonempty refusal. Never follow
+  a reparse escape.
 - Flush recorder before a destructive operation when required by the durability
   window.
 - Record one final typed outcome per selected operation; dependencies of a
@@ -56,11 +59,12 @@ operation-boundary cleanup.
 
 An immediate stat followed by a path-based mutation is detection, not an atomic
 condition: an unrelated process can replace the path between those calls even
-though NamiSync's own volume lock is held. Any operation promising “never
-overwrite/delete an unexpected target” must use an OS primitive/handle protocol
-whose mutation is conditional on the validated object or fails atomically on
-occupancy. Until that primitive is specified per operation, the docs must call
-the remaining external-writer race residual rather than proven closed.
+though NamiSync's own volume lock is held. Conditional primitives close the
+occupancy/emptiness cases named above. Update's backup-then-replace sequence
+retains one external path-swap window between its final guard and replacing the
+live name. External processes mutating a managed target root during execution
+are outside the safety contract; this residual must remain visible in tests and
+documentation rather than becoming a false compare-and-swap guarantee.
 
 ## Copy State Machine
 
@@ -68,15 +72,14 @@ the remaining external-writer race residual rather than proven closed.
 2. Create an exclusive exact-name temp in the final target parent and volume.
 3. Stream source bytes through `CopyBackend` in bounded chunks while hashing and
    checkpointing; backend writes bytes only.
-4. When requested, copy every named stream in the reviewed name/size manifest;
-   on an ADS-capable target any stream failure fails the operation. Copy the
-   current source security descriptor only when ACL preservation is opted in;
-   failure also fails the operation.
+4. Copy the current source security descriptor only when ACL preservation is
+   opted in; failure fails the operation. ADS is not part of the M0 state
+   machine.
 5. Flush content to the medium, apply creation time/standard attributes under
    the plan's `PreservationPolicy` except readonly, and flush again when metadata
    durability requires it. Readonly is applied only after publish.
-6. Re-stat source and, when ADS is active, re-enumerate its stream manifest.
-   Drift fails and removes/quarantines the temp; no attestation is recorded.
+6. Re-stat source. Drift fails and removes/quarantines the temp; no attestation
+   is recorded.
 7. Re-check destination expected absence/state at publish and use a conditional
    atomic primitive appropriate to the planned before-state.
 8. Atomically publish with the Windows/local-filesystem primitive.
@@ -121,6 +124,15 @@ still never walks `.synctrash`. Readonly ordering/recovery restores the old
 version's planned attributes after replacement so the hardlinked trash inode is
 not left silently degraded.
 
+The final guard cannot make the subsequent path-based replacement conditional
+on target identity. If an external process swaps the live target after backup
+and guard but before replacement, that external file can be replaced without
+being the version preserved in trash. NamiSync still records only the
+post-publish target it actually created, so the ledger is not falsely attached
+to the displaced object. The inter-call interval is normally very short but is
+not scheduler-bounded; tests assert the bounded data consequence, not a timing
+claim.
+
 ## Other Operations
 
 ### Move
@@ -161,10 +173,8 @@ degrade to copy-delete. Record only after the rename succeeds.
 
 Mirror deletion remains internal/guarded. Re-stat type and identity immediately
 before deletion and use the strongest available handle-conditional delete;
-directories must be empty at deletion time and the OS remove call must enforce
-that condition. Never recursively delete an unplanned subtree. If Windows lacks
-an object-conditional primitive for a case, surface the residual external-swap
-race rather than asserting the preceding stat made deletion atomic.
+directories must be empty at deletion time and `RemoveDirectory` must enforce
+that condition atomically. Never recursively delete an unplanned subtree.
 
 ### No-op
 
@@ -222,6 +232,10 @@ outside the copy chunk size so fast disks cannot flood UI queues.
   capacity, deterministic outcome aggregation, and per-volume characteristics.
 - Restartable copy requires a versioned partial-file/digest checkpoint whose
   ownership and source snapshot are validated before reuse.
+- ADS preservation, when exposed later, enumerates and validates source streams
+  during copy without adding scanner, plan-operation, or database manifests.
+  Requested stream loss on a capable target fails the operation; stream bytes
+  remain outside capacity/progress totals and main-stream attestations.
 - Throttling wraps chunk pacing without changing event semantics.
 - Robocopy may supply bytes through `CopyBackend`; it never owns planning,
   trash, publish, final guards, or ledger claims.
@@ -249,16 +263,18 @@ attestation guard, and composite move-update gap.
   complete published trash version; restore ignores the former and capacity
   includes its content bytes.
 - Source mutation during any chunk or before final stat fails the operation and
-  records no digest/attestation; ADS-enabled cases also detect a changed stream
-  name/size manifest.
-- Requested ADS or opt-in ACL copy failure on a capable target fails before
-  publish and leaves the prior live target untouched; an ADS-incapable target's
-  behavior is already explicit in the reviewed plan degradation rather than
-  discovered by an attempted stream copy.
+  records no digest/attestation.
+- Opt-in ACL copy failure fails before publish and leaves the prior live target
+  untouched. ADS has no M0 acceptance case because the policy is not exposed.
 - Target appearance/change after preflight but before mutation is detected by
-  the final guard; operation-specific mutation tests must prove the validated
-  object cannot be swapped between guard and destructive touch, or explicitly
-  classify the remaining external-writer race as residual.
+  the final guard when it occurs before that guard. Faults injected between
+  guard and touch prove only the condition owned by the mutation primitive:
+  non-replacing rename rejects destination appearance and `RemoveDirectory`
+  rejects nonempty directories. Source-object swaps are rejected only by an
+  explicitly handle-bound mutation; otherwise they remain inside the disclosed
+  external-writer boundary. Update fault injection proves an external swap may
+  replace the swapped file without trashing it but cannot create a false ledger
+  attestation or publish partial bytes.
 - First blocked/failed work does not abort later independent operations; broken
   dependents receive explicit outcomes.
 - Exact temp cleanup preserves names containing `.synctmp-`, ignores other

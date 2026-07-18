@@ -761,17 +761,21 @@ directory trash/delete), enforced through operation-matched **conditional
 primitives** where the OS provides them: publishes and moves that expect an
 absent destination use non-replacing rename (atomically fails if something
 appeared), temp files are created `CREATE_NEW`, and directory deletion relies
-on `RemoveDirectory`'s own atomic emptiness refusal. The one non-conditional
-mutation is update's displace-then-replace pair, whose microsecond
-external-swap window is **explicit residual risk**: external writers mutating
-a target root during execution are outside the safety contract (volume locks
-coordinate NamiSync processes only), and the bounded worst case is an
-externally-swapped file being replaced without trash preservation — never
-corrupted bookkeeping, since attestation subjects are always NamiSync's own
-published files. This window is the platform's floor: Explorer's own
-replace-via-Recycle-Bin flow composes the same steps, and Windows has offered
-no supported transactional alternative since TxF's deprecation; readonly
-applied only after publish; directory metadata applied
+on `RemoveDirectory`'s own atomic emptiness refusal. A primitive guarantees
+exactly its own condition and nothing more — none binds *source* identity to
+a pathname — so the external-writer boundary applies to **every** mutation,
+and each residual race is bounded by its **data consequence**, never by
+elapsed time (the gap between syscalls is usually tiny but not
+scheduler-bounded): trash-routed operations at worst preserve the wrong item
+recoverably, moves at worst misplace without destroying, and only update's
+replace and internal mirror deletes can destroy an external writer's file —
+never NamiSync's displaced version, never its evidence, since attestation
+subjects are always NamiSync's own published files. `ReplaceFileW` — the
+supported single-call replacement with optional backup — is deliberately not
+used: it merges the replaced file's attributes, ACLs, and named streams into
+the replacement and documents partial-state failure cases;
+hardlink/copy-backup-then-replace is a chosen tradeoff, not the only Windows
+primitive; readonly applied only after publish; directory metadata applied
 only after the directory's children settle (child creates and renames churn
 parent times — directory times are restored last); the cancel-unwind finalizer
 (§2.2a — canceled outcomes for in-flight and unreached items emitted before
@@ -810,9 +814,11 @@ IO throttling; Robocopy backend.
 - Trash that would land off-volume or through a reparse point is refused before
   any move.
 - Fault tests exercise an external path swap *between* a final guard and its
-  destructive call, not only drift before the guard: conditional-primitive
-  operations fail the op cleanly; the update residual window's worst case
-  matches the documented bound, with no silent ledger corruption.
+  destructive call, not only drift before the guard, and assert the **data
+  consequence**, never elapsed time: each conditional primitive fails cleanly
+  on exactly the condition it enforces, trash-routed swaps land recoverably in
+  trash, and the update residual's worst case matches the documented bound
+  with no silent ledger corruption.
 - Cancellation during a multi-GiB copy takes effect within one chunk.
 - All volume locks are released on every terminal path (custody is the
   session's, not the executor's — but the executor must not leak temps).

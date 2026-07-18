@@ -43,10 +43,8 @@ or random state—and includes kind, source/target relative paths, expected
 before-state, intended after-state, byte contribution, reason code,
 dependencies, and blocked/conflict detail. Execution never recomputes target
 paths or destination policy. Expected/intended metadata uses
-`MetadataSnapshot` (attributes, creation time, and an ADS name/size manifest
-when preservation requests it) under the snapshotted preservation policy. An
-ADS-incapable target is a reviewable plan-time degradation, never an
-execution-time surprise after commitment.
+`MetadataSnapshot` (attributes and creation time) under the snapshotted
+preservation policy. No stream manifest enters a plan.
 
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
@@ -122,6 +120,11 @@ in the plan. Ingest origin evidence uses feature-owned namespaced annotations
 (`ingest.origin.*`) so a later implementation does not require new generic
 schema. No policy receives filesystem or executor control.
 
+The unexposed `preserve_ads` policy is latent. When it is implemented, planner's
+only ADS responsibility is a mapping-level warning when the target capability
+cannot carry streams; enumeration, byte transfer, and validation remain
+executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
+
 ## Expectations Of Other Modules
 
 - Scanner supplies complete typed snapshots and conservative capabilities.
@@ -179,9 +182,6 @@ schema. No policy receives filesystem or executor control.
   for the link itself.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
-- Preserve-ADS policy with an incapable target produces an explicit reviewable
-  degradation before commitment; a capable target carries the source manifest
-  into each affected operation.
 - Destination policy collision and companion-group property tests produce
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.

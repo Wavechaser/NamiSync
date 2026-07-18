@@ -121,8 +121,10 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
   copy-delete.
 - Fresh execution observation closes the plan-to-execute stale-plan gap as far
   as possible; executor live guards narrow the residual window, and only
-  operation-specific conditional atomic primitives can close path-swap races at
-  destructive touch.
+  operation-specific mutation primitives can enforce touch-time conditions.
+  Non-replacing destinations and emptiness checks do not by themselves bind a
+  source pathname to the object previously observed; that requires an explicit
+  handle-bound operation or remains inside the external-writer boundary.
 
 ## Acceptance Criteria
 
