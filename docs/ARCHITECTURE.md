@@ -173,10 +173,25 @@ a property of this one `finally`-shaped function, not of any module's
 discipline — scan, plan, execute, verify, import, maintenance, and dummy
 sessions all inherit it identically.
 
-Terminal results for cancel, pause, and failure paths are assembled by the
-runner from the session's own emitted RELIABLE `ItemOutcome` stream — control
-flow exceptions carry no payload, and emit-as-you-go (§2.3: silent-until-done
-is not expressible) is what makes the unwind lossless.
+Terminal results for cancel and failure paths are assembled by the runner from
+the session's own emitted RELIABLE `ItemOutcome` stream (pause emits no
+terminal at all — the session isn't over). Control-flow exceptions carry no
+payload; what makes the unwind lossless is a **module obligation**: an
+item-processing module's own `finally` emits a `CANCELED` outcome for the
+in-flight item and every unreached selected item before `Canceled` leaves the
+module — while on `PauseRequested` it emits nothing for them, because they
+remain pending for resume. Emit-as-you-go plus this unwind finalizer means the
+runner never introspects module internals.
+
+Audit finalization is a bounded two-phase step, not a circularity: before the
+runner emits the one immutable `Terminal`, it drains the audit subscriber and
+history attempts its final write, acknowledging within the same generous
+timeout. Success stamps `audit=OK`; timeout or failure stamps `audit=DEGRADED`
+and releases any blocking. Only then is `Terminal` — carrying the settled
+audit axis — released to ordinary subscribers. History finalizes from the
+drain step; it never parses the `Terminal` it already acknowledged, and no
+second terminal exists. (The `recording` axis has no such loop: the recorder
+is call-driven, and its terminal flush completes before result assembly.)
 
 ### 2.3 Events (bones)
 
@@ -190,7 +205,9 @@ class Envelope:
 
 class DeliveryClass(StrEnum):
     LOSSY    = "lossy"       # may be coalesced/dropped in favor of latest
-    RELIABLE = "reliable"    # never dropped for admission-time subscribers
+    RELIABLE = "reliable"    # guaranteed to the audit subscriber (timeout-
+                             # guarded); ejection of any other subscriber is
+                             # announced by Gap — never silent thinning
 
 # Event bodies (each pairs with an Envelope):
 class StateChanged: state: SessionState                       # RELIABLE
@@ -216,8 +233,9 @@ Invariants (bones):
   discipline (the session runner's `finally`, §2.2a — modules never emit it).
 - `Progress` is the only lossy class. A slow subscriber gets the latest progress
   snapshot, never a backlog, and can never stall a producer or a faster
-  subscriber. Outcomes and state transitions are never dropped for a subscriber
-  attached at admission (the history observer is always such a subscriber).
+  subscriber. Outcomes and state transitions reach the history observer under
+  the timeout-guarded audit guarantee below, and are never *silently* dropped
+  for any subscriber — ejection is always announced by `Gap`.
 - RELIABLE is bounded, not magical. The history observer gets guaranteed
   delivery via bounded producer backpressure at checkpoint boundaries — never a
   drop. Its buffer is sized to absorb at least the events emitted between two
@@ -283,11 +301,11 @@ class CapabilityProfile:        # one per scanned root
 class MetadataSnapshot:         # what "preserve metadata" observed / intends
     attributes: int             # readonly / hidden / system bits
     created_ns: int | None      # None where the fs can't say
-    streams: tuple[StreamInfo, ...] | None   # ADS manifest (name + size),
-                                # enumerated only when the mapping's
-                                # preservation policy requests ADS — policy-
-                                # driven scan depth; None = not enumerated
-                                # or unsupported
+    # no stream manifest — ever (DR-32, amended): ADS is settled as
+    # executor-time enumeration at copy (the executor already holds the file),
+    # so no scan-time manifest is needed and the scanner stays role-free; ADS
+    # writes bump the file's NTFS mtime, so metadata diffing already schedules
+    # the re-copy that refreshes streams
 
 @dataclass(frozen=True)
 class FileRecord:
@@ -357,10 +375,12 @@ class Plan:                    # immutable snapshot of intent — PURE of observ
 
 @dataclass(frozen=True)
 class PreservationPolicy:
-    preserve_ads: bool          # streams are USER DATA: a requested stream
-                                # that fails to copy on a capable target FAILS
-                                # the op; an ADS-incapable target surfaces at
-                                # plan time as a reviewable degradation
+    preserve_ads: bool          # LATENT seam (DR-32, amended): declared,
+                                # unimplemented, not user-exposed; contract is
+                                # settled — executor-time enumeration, no scan
+                                # input, streams are USER DATA (a requested
+                                # stream that fails to copy FAILS the op),
+                                # incapable target = mapping-level plan warning
     preserve_created: bool      # where supported
     preserve_acl: bool = False  # explicit opt-in; the security descriptor is
                                 # copied at execution time (preserve-current,
@@ -574,8 +594,7 @@ drive-qualified, `..`, root-escaping).
 so junctions/reparse loops cannot recurse forever.
 
 **Flesh — now.** Recursive metadata walk (size, mtime_ns, identity, nlink;
-every directory recorded with metadata; stream manifests when the active
-preservation policy requests ADS); exact-name ignore filtering; capability profiling; placeholder detection
+every directory recorded with metadata); exact-name ignore filtering; capability profiling; placeholder detection
 (classify reparse/offline files `unsupported`, never open them); scan warnings.
 **Flesh — deferred.** USN change-journal `ChangeSource`; network-share awareness.
 
@@ -672,9 +691,11 @@ from that snapshot alone and never touches the filesystem.
 
 The split is a bone, for three reasons: `preflight()` becomes exhaustively
 testable against synthetic worlds with no temp directories; the expensive IO
-happens once and can be reused (review and execution start can share a
-snapshot when they're close enough in time); and "pure" stops being an honor
-system. All IO lives in one small function whose only job is statting.
+happens exactly once per judgment and is never entangled with it — and every
+judging session observes *fresh*: review, execution start, resume, and queue
+wakeup each observe their own world, because closeness in time is not evidence
+of unchanged state; and "pure" stops being an honor system. All IO lives in
+one small function whose only job is statting.
 
 **Bones.** The `observe`/`preflight` split; the `ObservedWorld` snapshot shape;
 the `Verdict` shape carrying per-op refusals plus the snapshot it judged;
@@ -736,20 +757,35 @@ orphaned trash temps age out with the trash run directory — temp recovery
 itself still never walks `.synctrash`; per-operation final guards — the
 executor's own last line of TOCTOU defense (no overwrite of unexpected
 targets, source evidence re-checked at touch, type/emptiness checks before
-directory trash/delete); readonly applied only after publish; directory metadata applied
+directory trash/delete), enforced through operation-matched **conditional
+primitives** where the OS provides them: publishes and moves that expect an
+absent destination use non-replacing rename (atomically fails if something
+appeared), temp files are created `CREATE_NEW`, and directory deletion relies
+on `RemoveDirectory`'s own atomic emptiness refusal. The one non-conditional
+mutation is update's displace-then-replace pair, whose microsecond
+external-swap window is **explicit residual risk**: external writers mutating
+a target root during execution are outside the safety contract (volume locks
+coordinate NamiSync processes only), and the bounded worst case is an
+externally-swapped file being replaced without trash preservation — never
+corrupted bookkeeping, since attestation subjects are always NamiSync's own
+published files. This window is the platform's floor: Explorer's own
+replace-via-Recycle-Bin flow composes the same steps, and Windows has offered
+no supported transactional alternative since TxF's deprecation; readonly
+applied only after publish; directory metadata applied
 only after the directory's children settle (child creates and renames churn
-parent times — directory times are restored last); content-only byte
-accounting; the `FailurePolicy`/`CopyBackend` seams.
+parent times — directory times are restored last); the cancel-unwind finalizer
+(§2.2a — canceled outcomes for in-flight and unreached items emitted before
+unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams.
 
 **Flesh — now.** copy/update/move/mkdir-with-metadata/trash/delete/noop;
-hash-on-copy; source-drift guard (re-stat source — and re-enumerate its stream
-manifest when ADS preservation is active — after read; mismatch fails the op,
-records nothing); trash-on-update; root-local trash with volume-identity resolution;
+hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
+the op, records nothing); trash-on-update; root-local trash with volume-identity resolution;
 temp recovery by exact name in touched dirs only; per-op continue-on-failure;
 chunked cancellation.
 **Flesh — deferred.** Validated partial execution (`DEFERRED` outcomes);
-restartable large-file copy; multithreaded copy workers; background IO
-throttling; Robocopy backend.
+executor-time ADS stream copy (per the settled FEATURES → *ADS Preservation*
+contract); restartable large-file copy; multithreaded copy workers; background
+IO throttling; Robocopy backend.
 
 **Acceptance criteria.**
 - Every executor path — success, failure, cancel, pause, refusal, exception —
@@ -773,6 +809,10 @@ throttling; Robocopy backend.
   a user file containing `.synctmp-` survives (PoC SEVERE regression).
 - Trash that would land off-volume or through a reparse point is refused before
   any move.
+- Fault tests exercise an external path swap *between* a final guard and its
+  destructive call, not only drift before the guard: conditional-primitive
+  operations fail the op cleanly; the update residual window's worst case
+  matches the documented bound, with no silent ledger corruption.
 - Cancellation during a multi-GiB copy takes effect within one chunk.
 - All volume locks are released on every terminal path (custody is the
   session's, not the executor's — but the executor must not leak temps).
@@ -783,8 +823,10 @@ throttling; Robocopy backend.
 `baseline(selection, ctx, recorder) -> ...`. Records through `recorder`.
 
 **Bones.** Per-file `ItemOutcome` emission (no silent-until-done); the
-integrity-outcome vocabulary (verified, baselined, mismatched, modified,
-missing, unsupported, canceled, error); attestation provenance tagging.
+cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached
+items emitted before unwind); the integrity-outcome vocabulary (verified,
+baselined, mismatched, modified, missing, unsupported, canceled, error);
+attestation provenance tagging.
 
 **Flesh — now.** Baseline creation; location verification against the
 size/mtime/identity/hash unit; selected and post-execution verification;
@@ -825,8 +867,9 @@ any destructive op, at pause-drain, and at terminal; run-token idempotency;
 WAL + foreign keys + bounded busy timeout; the §3 schema-freeze columns. History
 has **no** foreign key to the ledger and its failures never roll back real work —
 but history is audit, not disposable telemetry: it subscribes at admission with
-guaranteed (backpressured) delivery, and its write failures surface on the
-session result (§2.3).
+guaranteed (timeout-guarded, backpressured) delivery, acknowledges its final
+write before the `Terminal` is released (the two-phase finalization of §2.2a),
+and its write failures surface on the session result's `audit` axis (§2.3).
 
 **Flesh — now (M0).** Recorder for sync operations; missing-marking sweep
 (batched — never one giant `NOT IN`); inventory reconciliation. History observer
@@ -858,8 +901,8 @@ summaries and retained issue detail; retention sweeps (writable connection).
 - A repeated run token is a no-op in both databases.
 - A completed run with a failed ledger write reports `COMPLETED` with
   `recording=DEGRADED`, both visibly; the next scan converges the ledger
-  (two-axis truth — never inverts a successful result, never hides a behind
-  ledger).
+  (axis-separated truth — never inverts a successful result, never hides a
+  behind ledger).
 
 ### 4.8 dispatcher
 
@@ -921,7 +964,8 @@ CLI-as-client.
 - After a simulated process kill, reconciliation marks the orphan `INTERRUPTED`
   and routes it through preflight-then-continue.
 - A `Progress` flood never stalls a slow subscriber or the producer; a
-  `RELIABLE` event is never dropped for an admission-time subscriber.
+  `RELIABLE` event reaches the history observer or the session's `audit` axis
+  reads `DEGRADED`; an ejected subscriber always sees an explicit `Gap`.
 - Two processes contending for one volume serialize through the OS-level lock;
   killing the holder mid-run releases it (abandoned-lock recovery proven by a
   process-kill test).

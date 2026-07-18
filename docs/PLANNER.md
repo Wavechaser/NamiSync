@@ -43,8 +43,10 @@ or random state—and includes kind, source/target relative paths, expected
 before-state, intended after-state, byte contribution, reason code,
 dependencies, and blocked/conflict detail. Execution never recomputes target
 paths or destination policy. Expected/intended metadata uses
-`MetadataSnapshot` (attributes, creation time, and ADS presence) under the
-snapshotted preservation policy.
+`MetadataSnapshot` (attributes, creation time, and an ADS name/size manifest
+when preservation requests it) under the snapshotted preservation policy. An
+ADS-incapable target is a reviewable plan-time degradation, never an
+execution-time surprise after commitment.
 
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
@@ -61,7 +63,9 @@ commitment. Deferred operations remain explicit; omission is not a status.
 - Matching size+mtime is an M0 metadata no-op, with the documented limitation
   that content-aware no-op comes later.
 - Source-only files plan copy; changed matched files plan update.
-- Source-only directories plan the complete parent-first mkdir chain.
+- Every directory the plan will create has an explicit parent-first
+  mkdir-with-metadata operation; file and child-directory operations depend on
+  their parent mkdir. Executor never creates an implicit parent.
 - Target-only files/directories follow additive/trash/internal-mirror policy.
 - Directory cleanup reasons about removals planned in this same plan, not only
   the pre-scan tree.
@@ -91,12 +95,11 @@ planner state.
 The plan snapshots the worker-count/concurrency assumption used by the formula;
 executor may use fewer workers but never more without re-planning/re-preflight.
 
-The non-hardlink trash-on-update fallback is not implementation-ready in the
-authoritative type set: `CapabilityProfile` does not expose hardlink support and
-the capacity text does not say that the old-target backup copy consumes space
-in addition to the replacement temp. Non-hardlink updates must remain refused
-until the capability and formula are made explicit; otherwise preflight can
-approve a predictably ENOSPC update.
+The function consumes target `CapabilityProfile.supports_hardlinks`, populated
+from the Windows `FILE_SUPPORTS_HARD_LINKS` volume flag. For each concurrently
+in-flight update on a non-hardlink target it counts both the new replacement
+temp and the displaced old-version backup copy. It does not infer support from
+filesystem name or an attempted operation.
 
 ## Scope And Selection
 
@@ -148,6 +151,8 @@ schema. No policy receives filesystem or executor control.
 - Randomized input ordering produces the same plan.
 - Nested empty directory fixtures create every level parent-first and an
   immediate rescan/replan converges to no mutations.
+- Non-empty parent chains also produce explicit metadata-bearing mkdirs, and
+  every file/child operation depends on its nearest created parent.
 - Renamed-directory fixtures decompose into per-file moves, mkdir dependencies,
   and safe emptied-directory cleanup; UI grouping does not change executable
   operation ids or dependency order.
@@ -169,11 +174,14 @@ schema. No policy receives filesystem or executor control.
   refuse.
 - Capacity property tests never undercount any allowed worker schedule and use
   the exact same function as preflight.
-- Non-hardlink update fixtures are refused until their backup-copy bytes and
-  capability are represented; after that contract is added, those bytes are
-  included in the same capacity property tests.
+- No-hardlink update fixtures include displaced-version backup bytes under every
+  allowed worker schedule; hardlink-capable fixtures do not charge content bytes
+  for the link itself.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
+- Preserve-ADS policy with an incapable target produces an explicit reviewable
+  degradation before commitment; a capable target carries the source manifest
+  into each affected operation.
 - Destination policy collision and companion-group property tests produce
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.

@@ -20,9 +20,10 @@ exactly once from terminal.
 
 Its queue is bounded and sized for at least the reliable events emitted between
 adjacent checkpoints. When full, the producer waits at the next safe checkpoint
-boundary instead of dropping audit. This is guaranteed in-process delivery, not
-guaranteed disk durability: a process crash may lose at most the bounded
-in-flight buffer.
+boundary instead of dropping audit, capped by an injected generous timeout.
+Drain within that bound guarantees in-process delivery; failure/timeout degrades
+the session's audit axis and stops blocking. Disk durability remains
+best-effort: a process crash may lose at most the bounded in-flight buffer.
 
 Every explicit attempt is recordable: success, partial failure, all-noop,
 blocked, capacity/preflight refusal, cancellation, unexpected exception,
@@ -49,19 +50,19 @@ history. M1 adds integrity/import detail and retention.
 
 ## Failure Semantics
 
-A history serialization/database failure is loud on the session result and
-system health, but never rolls back, fails, or falsifies filesystem work or main
-ledger evidence. History is allowed to be behind, never silently absent. A
-stalled writer is still an unresolved contract edge: bounded memory and
-guaranteed delivery require producer waiting, but the architecture supplies no
-timeout/degradation transition for a writer that neither drains nor fails.
-Implementation must not solve that contradiction with silent loss or unbounded
-memory.
+A history serialization/database failure or backpressure timeout sets
+`OperationResult.audit=DEGRADED` and system health loudly, but never rewrites
+filesystem `status` or ledger `recording`. History may be behind only when that
+axis says so for a delivered terminal; a process crash has no completed result,
+loses at most the bounded buffer, and is surfaced by startup reconciliation. An
+unbounded queue and silent loss are forbidden.
 
-`OperationResult` currently has `RecordingStatus` for the main ledger only and
-no separate history/audit status despite requiring this failure on the session
-result. The type must gain an audit axis or deliberately generalize/rename the
-persistence axis before history's public contract is implementable.
+Finalization ordering remains underspecified. History consumes `Terminal` to
+write/finalize the run, but `Terminal.result.audit` must already say whether that
+write succeeded. A bounded two-phase acknowledgement (or equivalent) is needed
+so the final history-write failure can affect the one immutable Terminal seen by
+other subscribers without history consuming two contradictory terminal events.
+This is a causality issue, not a reason to weaken the new audit axis.
 
 An unexpected workflow error still emits/finalizes a failed attempt through the
 generic session wrapper. History code catches its own SQLite/serialization
@@ -86,15 +87,12 @@ do not alter results. Restoring setup restores inputs/options only and forces a
 new plan. Export to CSV/JSON is read-only, stable-schema/versioned, and escapes
 spreadsheet formula injection where relevant.
 
-A queued session discarded before running is retained as a typed discarded,
-unrun attempt. Dispatcher accomplishes this through generic state/terminal
-events and waits for observer delivery before dropping the live session record;
-it never imports or calls the history store.
-
-The current core event/result vocabulary does not yet carry a typed
-discarded-before-start distinction. History must not infer it from zero bytes or
-free-form reason text; a generic reason/status field is required before this
-latent feature is implementable.
+A queued session discarded before running is retained as
+`CANCELED+Disposition.UNRUN`; a cancellation after work is `CANCELED+RAN` and a
+preflight refusal is `REFUSED+UNRUN`. Dispatcher accomplishes this through
+generic terminal events and waits for observer delivery (or loud audit
+degradation) before dropping the live session record; it never imports/calls
+history or asks history to infer disposition from zero bytes or strings.
 
 ## Expectations
 
@@ -133,9 +131,11 @@ latent feature is implementable.
 - Observer failure degrades the explicit audit result/health signal and never
   rolls back ledger or filesystem work.
 - A buffer-pressure test proves no admitted history event is dropped and no
-  backpressure happens mid-filesystem operation; a permanently stalled writer
-  remains a failing specification test until the authoritative timeout policy
-  is supplied.
+  backpressure happens mid-filesystem operation; timeout stops blocking and
+  yields `audit=DEGRADED` rather than a silent gap.
+- Terminal-finalization fault injection proves success/failure acknowledgement
+  is reflected in the single Terminal delivered to ordinary subscribers; no
+  second corrective Terminal is emitted.
 - Retention on a writable connection prunes eligible detail, preserves envelope
   and summary, handles timezone/precision boundaries, and is idempotent.
 - Replay is unavailable with an explicit reason after detail pruning and always
@@ -145,4 +145,5 @@ latent feature is implementable.
 - Export escapes formula-leading cells and preserves typed/schema-versioned
   values.
 - Discarding a queued unrun session delivers one discarded audit envelope before
-  its live session record is dropped, without a dispatcher/history import.
+  its live session record is dropped, typed as `CANCELED+UNRUN` and without a
+  dispatcher/history import.

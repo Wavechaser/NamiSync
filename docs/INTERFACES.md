@@ -24,7 +24,8 @@ rule.
 - Read current session records and subscribe from a sequence number.
 - Treat progress as a replaceable snapshot. Handle bounded state/item/terminal
   delivery, including `Gap` plus resubscription for an ejected/late ordinary
-  subscriber; the history observer has the stronger admission-time contract.
+  subscriber; history has timeout-bounded admission delivery and exposes failure
+  through the audit axis rather than pretending the stream was complete.
 - Present refusal, cancellation, partial failure, recording-behind, history
   failure, and integrity mismatch as distinct states.
 - Keep plan, inventory, and history presentation models orthogonal.
@@ -79,10 +80,10 @@ is the provisioning seam.
   interfaces do not issue SQL.
 - UI and CLI do not infer domain success from zero bytes or green styling.
 
-The public result schema must gain an explicit audit/history degradation field
-or generalize the persistence status before interfaces can render a required
-history failure without parsing diagnostics. `RecordingStatus` remains the
-ledger axis and must not be overloaded silently.
+`OperationResult.recording` and `.audit` expose independent ledger/history
+durability, while `Disposition.RAN|UNRUN` distinguishes discarded/refused work
+from a zero-byte activity that actually ran. Interfaces render these typed axes
+without parsing diagnostics or overloading filesystem status.
 
 ## PoC Hardening
 
@@ -104,6 +105,8 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
   disabling everything.
 - Refused zero-op, all-noop, partial failure, cancellation, mismatch, and
   ledger-behind states render distinctly.
+- Audit-behind is independent of ledger-behind; queued discard renders from
+  `CANCELED+UNRUN`, not byte count or free-form reason.
 - Event reconnect handles current state/tail/gap without duplicate row outcomes.
 - Changing plan selection after review invalidates commitment; neither UI nor
   CLI can submit the stale commitment.

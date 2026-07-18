@@ -31,7 +31,8 @@ The initial schema reserves the expensive identity/evidence bones:
 - run/op idempotency tokens and actual UTC run window;
 - digest algorithm/value, `ContentEvidence`, attested subject stat, provenance,
   observed/hash/verified times kept semantically distinct;
-- metadata snapshot fields for attributes, creation time, and ADS presence;
+- metadata snapshot fields for attributes and creation time; ADS has no scan,
+  inventory, or schema representation;
 - presence, acknowledgement, exclusion, reappearance, and unsupported state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
@@ -152,6 +153,9 @@ round trips, and duplicated time/host formatting.
   instrumentation benchmarks.
 - History integrity detail, sync operations, and subject-only activities all
   round-trip through typed repository reads.
+- History run envelopes round-trip filesystem status, independent
+  recording/audit axes, and `Disposition` without deriving them from detail
+  count or text.
 - Retention uses a writable connection, canonical time comparison, preserves
   summaries when pruning detail, and is idempotent.
 - Concurrent recorder/repository/history access does not lose committed evidence

@@ -27,8 +27,8 @@ Check the architectural import boundaries with:
 - [`FEATURES.md`](docs/FEATURES.md): settled and latent product behavior.
 - [`ARCHITECTURE.md`](docs/ARCHITECTURE.md): system structure, contracts, and
   milestone order.
-- [`DESIGN_REVIEW.md`](docs/DESIGN_REVIEW.md): unresolved inconsistencies and
-  safety decisions found while hardening module contracts.
+- [`DESIGN_REVIEW.md`](docs/DESIGN_REVIEW.md): resolved decision ledger from
+  hardening the architecture and module contracts.
 - [`CORE.md`](docs/CORE.md): shared types, session/event contracts, path safety,
   identity, time, and evidence.
 - [`SCANNER.md`](docs/SCANNER.md): filesystem observation and completeness.

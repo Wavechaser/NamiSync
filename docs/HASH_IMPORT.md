@@ -46,6 +46,8 @@ limits, deterministic duplicate handling, and no implicit encoding fallback.
 - Recorder conditionally writes only if row id, state, size, and mtime still
   match.
 - Dispatcher supplies checkpoint/custody; history observes all outcomes.
+- Workflow registration refuses pause for import (no continuation) while
+  cooperative cancellation remains available between lines/batches.
 - UI/CLI disclose scope and conflicts without offering overwrite-established.
 
 ## PoC Hardening
@@ -68,6 +70,8 @@ uncancelable-close, and real-user-history defects.
   provenance.
 - Cancellation is observed between lines/batches and closing UI never waits for
   an uncancelable import.
+- A pause request is rejected without changing session state or losing
+  cancelability.
 - Volume-guard refusal and unexpected SQLite/OS exceptions still create a
   truthful history attempt.
 - CLI database overrides isolate both ledger and history from real user data.

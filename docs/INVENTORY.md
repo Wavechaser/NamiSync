@@ -18,10 +18,11 @@ path, present/missing/unsupported state, latest safe observation, optional hash
 and provenance, hash-observed/last-verified times, missing acknowledgement,
 reappearance marker, host provenance, and optional hardlink group.
 
-Present files retain `MetadataSnapshot` fields needed by reviewed preservation.
-Empty-directory `DirRecord` and typed `UnsupportedRecord` observations remain
-distinguishable from ordinary files; unsupported state is never reconstructed
-from warning text.
+Present files retain `MetadataSnapshot` attributes and creation time needed by
+reviewed preservation. Every walked directory has a `DirRecord`, and typed
+`UnsupportedRecord` observations remain distinguishable from ordinary files;
+unsupported state is never reconstructed from warning text. ADS is not
+inventory state: the deferred feature enumerates streams only in the executor.
 
 Mapping correspondence is separate and mapping-scoped. A shared location keeps
 one physical inventory while each mapping retains independent source/target
@@ -108,6 +109,8 @@ summary and policy; missing acknowledgement is not pruning.
 
 - A first complete scan creates one role-free location and deterministic rows
   without creating a mapping.
+- Complete scans retain every walked directory and one canonical role-free
+  observation shape regardless of mapping policy.
 - Complete rescan marks only truly unseen in-scope rows missing and preserves
   their hash/stat evidence.
 - Incomplete scan and offline volume mark no unseen row missing.

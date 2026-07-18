@@ -1,8 +1,8 @@
 # Executor Module
 
 Status: draft contract. Priority: M0 native single-worker execution on plain
-local NTFS. Non-hardlink update capacity, metadata-stream fidelity, and
-non-execution pause continuation remain cross-contract review items.
+local NTFS. Conditional atomic mutation semantics against non-NamiSync writers
+remain an authoritative TOCTOU review item.
 
 ## Purpose
 
@@ -22,33 +22,26 @@ alternate execution engine.
 execute(xset, ctx, recorder, policies, fs) -> ExecResult
 ```
 
-The caller must hold deterministic physical-volume custody, but executor still
-validates custody/identity. Execution entry first validates that `Commitment`
-matches both the immutable plan fingerprint and exact selection digest; a
-missing or mismatched commitment is refused before observation. Fresh
-observation/preflight must occur under the same custody immediately before
-execution, and a refusal permits no temp cleanup or other mutation. After a
-successful verdict, executor may recover only exact owned temps named by that
-verdict and then processes dependency-ready operations in plan order.
-
-The authoritative architecture currently assigns that guard both to the
-workflow (the only layer where modules may meet) and to executor itself, while
-also requiring executor to import core only. Executor cannot directly call the
-preflight sibling without violating the import law, and its signature has no
-injected core guard protocol. Implementation must wait for a decision between a
-workflow-owned guard envelope and a core protocol/callable injected into
-executor; final per-operation guards remain mandatory either way.
+The caller holds deterministic physical-volume custody and validates that the
+`Commitment` matches both immutable plan fingerprint and exact selection digest
+before preflight. Workflow alone performs a fresh observe → preflight → execute
+sequence on every start/resume; executor imports no preflight sibling. A refusal
+permits no temp cleanup or other mutation. After a successful verdict, executor
+may recover only exact owned temps named by that verdict and processes
+dependency-ready operations in plan order.
 
 The core generic session runner emits the single terminal event. Executor emits
-phase, progress, and item/integrity outcomes only, returns one complete result,
+phase, progress, and item outcomes only, returns one complete result,
 and lets `Canceled`/`PauseRequested` unwind to that runner after its own safe
 operation-boundary cleanup.
 
 ## Universal Operation Rules
 
 - Checkpoint before each operation and at operation-specific safe boundaries.
-- Re-stat every touched source/target immediately before mutation and compare
-  with the plan; residual drift fails that operation without guessing.
+- At each operation's point of touch, revalidate its direct source/target
+  preconditions against live filesystem evidence: expected identity/type/stat,
+  required absence/occupancy, root containment, and directory emptiness where
+  relevant. Drift fails that operation without guessing.
 - Validate paths lexically and by resolved handle; use long-path-safe APIs.
 - Never overwrite an unexpected destination or follow a reparse escape.
 - Flush recorder before a destructive operation when required by the durability
@@ -61,33 +54,39 @@ operation-boundary cleanup.
 - Policies return `Continue`, `Stop`, or bounded `Retry(after)` decisions; the
   executor retains guards, limits, checkpointing, and final outcome ownership.
 
+An immediate stat followed by a path-based mutation is detection, not an atomic
+condition: an unrelated process can replace the path between those calls even
+though NamiSync's own volume lock is held. Any operation promising “never
+overwrite/delete an unexpected target” must use an OS primitive/handle protocol
+whose mutation is conditional on the validated object or fails atomically on
+occupancy. Until that primitive is specified per operation, the docs must call
+the remaining external-writer race residual rather than proven closed.
+
 ## Copy State Machine
 
 1. Validate expected source and destination states.
 2. Create an exclusive exact-name temp in the final target parent and volume.
 3. Stream source bytes through `CopyBackend` in bounded chunks while hashing and
    checkpointing; backend writes bytes only.
-4. Flush file content to the medium, apply the typed `MetadataSnapshot` under
+4. When requested, copy every named stream in the reviewed name/size manifest;
+   on an ADS-capable target any stream failure fails the operation. Copy the
+   current source security descriptor only when ACL preservation is opted in;
+   failure also fails the operation.
+5. Flush content to the medium, apply creation time/standard attributes under
    the plan's `PreservationPolicy` except readonly, and flush again when metadata
    durability requires it. Readonly is applied only after publish.
-5. Re-stat source and compare with the planned/opened source snapshot. Drift
-   fails and removes/quarantines the temp; no attestation is recorded.
-6. Re-check destination expected absence/state immediately before publish.
-7. Atomically publish with the Windows/local-filesystem primitive.
-8. Attempt a best-effort parent-directory flush. A refused/unsupported flush is
+6. Re-stat source and, when ADS is active, re-enumerate its stream manifest.
+   Drift fails and removes/quarantines the temp; no attestation is recorded.
+7. Re-check destination expected absence/state at publish and use a conditional
+   atomic primitive appropriate to the planned before-state.
+8. Atomically publish with the Windows/local-filesystem primitive.
+9. Attempt a best-effort parent-directory flush. A refused/unsupported flush is
    a per-operation durability warning; the result claims durability only for
    the file content/metadata that was actually flushed.
-9. Stat the published target and construct `Attestation(ContentEvidence,
+10. Stat the published target and construct `Attestation(ContentEvidence,
    target_stat)` so target identity is never confused with source identity.
-10. Call recorder. A recorder failure preserves the filesystem outcome and
+11. Call recorder. A recorder failure preserves the filesystem outcome and
     degrades `RecordingStatus` instead of relabeling the copy as failed.
-
-The current metadata bone is not sufficient to make ADS/ACL preservation safe:
-`MetadataSnapshot` records only ADS presence and no stream manifest/content
-evidence (and no ACL snapshot), while a failed ADS copy on an ADS-capable volume
-is specified as only a warning. Until the authoritative contract defines the
-stream snapshot, drift guard, copy mechanism, and whether requested stream loss
-fails publication, executor must not claim complete ADS/ACL preservation.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
 Recovery is limited to exact grammar in selected copy/update parents, never a
@@ -99,8 +98,10 @@ An update completely prepares and validates the replacement temp before it
 touches the current target. With trash-on-update enabled it then:
 
 1. validates/reserves `.synctrash/<run-id>/<relative-path>` on the target volume;
-2. preserves the old live file there using a same-volume hardlink, or a complete
-   copy fallback on a filesystem that cannot hardlink;
+2. preserves the old live file there using a same-volume hardlink when
+   `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
+   temp, flushes it, and atomically publishes the complete backup inside the run
+   directory before proceeding;
 3. clears readonly on the live target if Windows requires it for replacement;
 4. atomically publishes the prepared temp over the live path with `os.replace`;
 5. applies the new file's readonly bit and remaining post-publish metadata;
@@ -113,21 +114,24 @@ trash link is purged. Rerun reconciliation distinguishes exact owned temp/run
 backup/already-published state from unrelated user files and converges without
 discarding the only known-good version.
 
-The copy fallback is not safe to implement from the current architecture alone:
-its backup must itself be fully written, flushed, and atomically published
-before live replacement, and its extra bytes must be in capacity planning. The
-capability field and formula are currently absent. Readonly ordering must also
-prove that clearing the live inode does not silently degrade the old hardlinked
-trash version's metadata across crash/retry.
+The planner/preflight formula includes backup-copy bytes on no-hardlink targets.
+A partial backup remains under exact temp grammar, is ignored by restore
+planning, and ages out with the trash run directory; ordinary temp recovery
+still never walks `.synctrash`. Readonly ordering/recovery restores the old
+version's planned attributes after replacement so the hardlinked trash inode is
+not left silently degraded.
 
 ## Other Operations
 
 ### Move
 
 Revalidate old target and new destination, refuse occupancy, perform a
-same-volume atomic rename, attempt best-effort parent-directory flushes, stat the
-result, then record correspondence. A vanished source/old target yields a
-typed skipped/failed outcome and must not leave the old ledger row `present`.
+same-volume non-replacing atomic rename whose primitive itself fails if the
+destination appeared, attempt best-effort parent-directory flushes, stat the
+result, then record correspondence. Source identity must be validated on the
+object being renamed where the OS API permits handle-relative rename. A vanished
+or swapped old target yields a typed skipped/failed outcome and must not leave
+the old ledger row `present`.
 
 ### Composite move-update
 
@@ -140,27 +144,27 @@ both old and new versions, never neither, and leaves no completed mapping claim.
 
 Create only the planned directory after validating parent containment and
 expected absence. Existing matching directories may converge to a typed no-op;
+the create primitive must atomically fail if a new entry appeared, and
 wrong-type entries fail. Apply source directory attributes and restore directory
 timestamps only after all descendant child operations have settled.
-
-The authoritative scanner currently retains `DirRecord` only for empty
-directories, while Features requires metadata restoration for every created
-directory. Metadata for a newly created non-empty source directory therefore
-has no defined input; executor must not synthesize it or re-read it outside the
-plan. That scanner/feature contract needs review before this guarantee is
-implementable.
+Every created directory has its own reviewed mkdir-with-metadata operation from
+an all-directory `DirRecord`; executor never creates implicit parent paths.
 
 ### Trash
 
 Resolve trash under the target on the same physical volume, create guarded run
-parents, refuse reparse/off-volume paths, refuse destination collisions, and use
-rename rather than copy-delete. Record only after the rename succeeds.
+parents, refuse reparse/off-volume paths, use a non-replacing rename that fails
+atomically on trash collision, and validate the source object at touch. Never
+degrade to copy-delete. Record only after the rename succeeds.
 
 ### Delete and directory cleanup
 
 Mirror deletion remains internal/guarded. Re-stat type and identity immediately
-before deletion; directories must be empty at deletion time. Never recursively
-delete an unplanned subtree.
+before deletion and use the strongest available handle-conditional delete;
+directories must be empty at deletion time and the OS remove call must enforce
+that condition. Never recursively delete an unplanned subtree. If Windows lacks
+an object-conditional primitive for a case, surface the residual external-swap
+race rather than asserting the preceding stat made deletion atomic.
 
 ### No-op
 
@@ -171,13 +175,14 @@ otherwise record a stale/skipped outcome rather than refreshing false evidence.
 ## Cancellation, Pause, And Failure
 
 Copy chunks are bounded so cancel/pause latency is bounded. Either request
-unwinds rather than blocking. Cancellation cleans or retains only exact owned
-temps, preserves earned outcomes, marks in-flight/remaining work accurately,
-forces required recorder flushes, and reaches the runner's one canceled
-terminal. Pause abandons/reclaims an in-flight temp through ordinary exact-name
-recovery, preserves completed `ExecutionSet` statuses, forces pause-drain
-recording, transitions without a terminal, and releases custody. Resume queues
-at the back, re-observes, re-preflights, and continues only unreached work.
+unwinds rather than blocking. Executor catches `Canceled` only long enough to
+clean/retain exact owned temps and emit reliable canceled outcomes for the
+in-flight and unreached selection, then re-raises for runner aggregation and the
+one canceled terminal. Pause abandons/reclaims an in-flight temp through
+ordinary exact-name recovery, preserves completed `ExecutionSet` statuses,
+forces pause-drain recording, and re-raises without terminal; dispatcher then
+releases custody. Resume queues at the back, freshly re-observes/preflights in
+workflow, and continues only unreached work.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoint
 between attempts. Persistent failure records a typed reason and independent work
@@ -240,10 +245,20 @@ attestation guard, and composite move-update gap.
 - Fault injection between hardlink/copy-backup, readonly clearing, replace,
   metadata, flush, and record leaves a recoverable state; an interrupted
   hardlink backup is a documented `nlink>1` warning and rerun converges.
+- On a no-hardlink target, backup fault injection leaves only an exact temp or a
+  complete published trash version; restore ignores the former and capacity
+  includes its content bytes.
 - Source mutation during any chunk or before final stat fails the operation and
-  records no digest/attestation.
+  records no digest/attestation; ADS-enabled cases also detect a changed stream
+  name/size manifest.
+- Requested ADS or opt-in ACL copy failure on a capable target fails before
+  publish and leaves the prior live target untouched; an ADS-incapable target's
+  behavior is already explicit in the reviewed plan degradation rather than
+  discovered by an attempted stream copy.
 - Target appearance/change after preflight but before mutation is detected by
-  the final guard and never overwritten.
+  the final guard; operation-specific mutation tests must prove the validated
+  object cannot be swapped between guard and destructive touch, or explicitly
+  classify the remaining external-writer race as residual.
 - First blocked/failed work does not abort later independent operations; broken
   dependents receive explicit outcomes.
 - Exact temp cleanup preserves names containing `.synctmp-`, ignores other
@@ -255,8 +270,8 @@ attestation guard, and composite move-update gap.
   earned records.
 - Directory create/delete tests cover full chains, wrong types, nonempty races,
   no recursive unplanned deletion, and metadata application only after every
-  child operation has settled. Non-empty source-directory metadata remains
-  blocked on the scanner/feature inconsistency recorded above.
+  child operation has settled; every created empty or non-empty directory comes
+  from its own reviewed `DirRecord` operation.
 - No-op drift cannot refresh identity, last-seen, hash, or correspondence.
 - Multi-GiB simulated copy cancellation and pause occur within one configured
   chunk; pause persists completed status, emits no terminal, releases custody,

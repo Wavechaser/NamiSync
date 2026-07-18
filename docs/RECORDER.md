@@ -97,7 +97,8 @@ merely to make the ledger tidy.
 - Executor/verifier/import never share the recorder's SQLite connection or issue
   SQL.
 - Repositories are read-only and cannot smuggle writes through a helper.
-- Workflow aggregates filesystem and recording outcomes.
+- Workflow aggregates filesystem, ledger-recording, and independent audit
+  outcomes; recorder controls only the ledger axis.
 - Database schema enforces location/mapping integrity and idempotency.
 - History failure/success is independent of recorder transaction outcome.
 
@@ -111,7 +112,8 @@ Hardlink group recording remains nullable until preservation semantics exist.
 ## PoC Hardening
 
 - Wiring recorder into workflows prevents the built-but-unused ledger.
-- Separate filesystem/recording result prevents inverted trust reporting.
+- Axis-separated filesystem/ledger/audit result prevents inverted trust
+  reporting while keeping history outside recorder.
 - Actual start/end timestamps prevent post-hoc identical run windows.
 - Conditional writes fix stale hash backfill and no-op evidence refresh.
 - Bounded transactions fix multi-hour verify lock/loss.

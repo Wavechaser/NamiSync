@@ -22,8 +22,8 @@ attestation format.
   observation, content-evidence, attestation, item-result, and run-result
   dataclasses; `ExecutionSet` is the explicit mutable execution-status carrier.
 - `MappingSnapshot`, root-qualified `Subject`, `Commitment`,
-  `PreservationPolicy`, `MetadataSnapshot`, and the stable `VolumeId`/
-  corroborating `VolumeEvidence` split.
+  `PreservationPolicy`, `MetadataSnapshot`, capability profile,
+  and the stable `VolumeId`/corroborating `VolumeEvidence` split.
 - `SessionState`, its legal transition table, and terminal-state predicate.
 - `Outcome` and typed reason codes; free-form text is presentation detail, not
   control flow.
@@ -59,20 +59,22 @@ every workflow. Modules and workflows return typed results and emit only
 nonterminal bodies. The dispatcher wraps the runner with custody acquisition
 and unconditional release; it does not add a second terminal path.
 
-An execution's continuation is its mutable `ExecutionSet.status`: completed
-operations remain completed and unreached operations remain eligible after
-fresh preflight. The corresponding restart/continuation representation for
-scan, verify, baseline, and import sessions is not yet defined by the
-authoritative architecture; those session kinds must not claim resumable pause
-until that gap is resolved.
+Pause is a generic per-workflow-registration capability. Execution supports it
+from M0 through mutable `ExecutionSet.status`; verify and baseline add an
+item-status continuation in M1. Scan, plan, and hash import refuse pause cleanly
+and remain cancelable. A pause unwinds, forces recorder flush where applicable,
+persists the workflow-owned continuation, releases custody, and emits no
+terminal.
 
-The runner pseudocode's bare `Canceled`/`PauseRequested` exceptions also carry
-no typed partial result. Core therefore has no specified way to build a canceled
-`OperationResult` containing already-earned item outcomes, or to persist the
-continuation before announcing `PAUSED`. The exception payload/result-builder
-contract and the rule for surfacing an unexpected exception after terminal
-emission must be frozen before the runner is implemented; otherwise outcome
-loss or duplicate terminal handling is likely.
+`Canceled` and `PauseRequested` remain payload-free. The runner consumes them
+and aggregates already emitted RELIABLE item outcomes into the session result;
+unexpected exceptions are likewise consumed after typed detail is attached to
+the one terminal/log path, so no exception can escape to create a second
+terminal. Operation modules emit outcomes as work settles rather than holding a
+private result list until return. Before `Canceled` leaves an item-processing
+module, its unwind finalizer emits `CANCELED` for the in-flight and every
+unreached selected item. The same finalizer emits nothing for unreached work on
+`PauseRequested`, because that work remains pending for resume.
 
 ## Event Contract
 
@@ -84,17 +86,21 @@ strings.
 
 History is attached at admission as the distinguished reliable audit
 subscriber. Its bounded queue may apply producer backpressure only at a safe
-checkpoint boundary and never drops an admitted event. Other reliable
-subscribers that overrun their bounded queue are ejected; the first thing they
-observe is a typed `Gap(first_missed_seq)`. Late subscribers receive current
-state plus a bounded tail and use sequence numbers to detect omitted history.
-Progress alone is lossy/coalescible.
+checkpoint boundary and only until an injected generous timeout. Drain within
+the timeout guarantees delivery; writer failure or timeout degrades the
+session's audit axis loudly and ends backpressure. Other reliable subscribers
+that overrun their bounded queue are ejected; the first thing they observe is a
+typed `Gap(first_missed_seq)`. Late subscribers receive current state plus a
+bounded tail and use sequence numbers to detect omitted history. Progress alone
+is lossy/coalescible.
 
-The policy for a history writer that stalls indefinitely (rather than failing
-promptly) remains an implementation blocker: bounded memory plus guaranteed
-delivery requires waiting, while the current architecture also says history
-must not block filesystem work. No implementation may hide that tradeoff with
-an unbounded queue or silent drop.
+Terminal finalization is a bounded two-phase handshake. The runner first drains
+the audit subscriber and asks it to finalize the run from the preterminal event
+stream and provisional result. An acknowledgement within the same generous
+timeout sets `audit=OK`; failure or timeout sets `audit=DEGRADED` and ends
+blocking. The runner then constructs and releases the one immutable `Terminal`
+to ordinary subscribers. History never needs to consume or parse that Terminal,
+so no corrective second terminal or circular acknowledgement exists.
 
 ## Path And Identity Rules
 
@@ -130,12 +136,12 @@ update, the subject is the published target re-statted after publication; the
 source's post-read stat is separate drift-guard evidence. No consumer may treat
 copy-stream evidence as readback verification.
 
-`OperationResult.status` reports filesystem truth only. Ledger persistence is
-the independent `RecordingStatus.OK|DEGRADED` axis; neither rewrites the other.
-The architecture also requires history-write degradation on the session result,
-but its type reference currently has no audit/history status field. That shape
-must be added or explicitly folded into a renamed generalized persistence axis
-before result schemas freeze.
+`OperationResult.status` reports filesystem truth only. Ledger persistence and
+history persistence are independent `recording` and `audit`
+`RecordingStatus.OK|DEGRADED` axes; no axis rewrites another. Typed
+`Disposition.RAN|UNRUN` distinguishes a canceled discarded queue entry and a
+refusal from sessions that actually began domain work without parsing strings
+or inferring from an empty operation list.
 
 ## Expectations Of Other Modules
 
@@ -154,6 +160,12 @@ all `Scope` kinds, nullable file identity/hardlink group, policy protocols,
 opaque workflow payloads, and attestation provenance. A latent protocol is
 declared shape-only and has no implementation until its first consumer; this
 provisions the seam without speculative runtime behavior.
+
+ADS is deliberately lighter than a cross-module protocol: `supports_ads` and
+the unexposed `preserve_ads` flag reserve the decision, while scan records,
+plans, schemas, and M0 acceptance tests contain no stream manifest. When the
+feature is implemented, enumeration and validation belong to executor-time copy
+logic; no scanner role or inventory representation is added.
 
 ## PoC Hardening
 
@@ -178,9 +190,9 @@ provisions the seam without speculative runtime behavior.
   numbers per session and no sequence sharing across sessions.
 - Event serialization round-trips every body and rejects unsupported schema
   versions explicitly.
-- A slow-subscriber stress test proves bounded history backpressure, ejects an
-  overrun non-history reliable subscriber with `Gap`, and never silently loses
-  a reliable event.
+- A slow-subscriber stress test proves timeout-bounded history backpressure,
+  degrades `audit` on timeout/failure, ejects an overrun non-history reliable
+  subscriber with `Gap`, and never silently loses an event while claiming OK.
 - Unicode corpus tests preserve NTFS-distinct paths and normalize separator and
   ordinary case variants identically.
 - Path tests reject drive, UNC, device, traversal, NUL, mixed-separator escape,
@@ -190,9 +202,12 @@ provisions the seam without speculative runtime behavior.
   subject stat evidence, and observation time.
 - A changed selection invalidates a `Commitment` even when the plan fingerprint
   is unchanged; uncommitted and mismatched execution sets are unexecutable.
-- `RecordingStatus` can degrade without rewriting a successful filesystem
-  terminal; the unresolved history-status representation is covered before the
-  public result schema freezes.
+- `recording` and `audit` can degrade independently without rewriting a
+  successful filesystem terminal; terminal-finalization fault injection proves
+  the audit axis reflects failure to write the final history envelope.
 - Cancel/pause fault injection preserves earned item results and continuation
-  state through the runner; exception surfacing cannot trigger a second terminal.
+  state through the runner; pause emits no terminal and exception surfacing
+  cannot trigger a second terminal.
+- `Disposition` round-trips and distinguishes `CANCELED+UNRUN` queue discard,
+  `REFUSED+UNRUN`, and work that actually ran.
 - Import-linter proves `namisync.core` imports no project layer.

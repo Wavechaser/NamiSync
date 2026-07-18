@@ -4,107 +4,135 @@ Date: 2026-07-18
 
 ## Session Outcome
 
-Reviewed the reconciled `DESIGN_REVIEW.md`, `FEATURES.md`, and
-`ARCHITECTURE.md`, treating Features as behavioral authority and Architecture
-as contract authority. Propagated every settled, internally coherent decision
-into the focused module contracts. The authoritative documents themselves were
-not changed.
+Sanity-checked the revised `FEATURES.md` and `ARCHITECTURE.md`, including the
+seven DR-25–DR-31 resolutions and the stronger executor-side TOCTOU language.
+The seven original propagation blockers are resolved coherently and have been
+propagated into the focused module contracts. The authoritative documents were
+not edited in this session.
 
 Updated module docs:
 
-- `CORE.md`, `DISPATCHER.md`, and `WORKFLOWS.md`: sole core session runner,
-  nonblocking checkpoint unwind, execution continuation, volume-queue resume,
-  terminal retention, reliable event delivery, and two-session review/execute.
-- `PLANNER.md`, `PREFLIGHT.md`, and `EXECUTOR.md`: `MappingSnapshot`, no observed
-  free space in `Plan`, settings inside `ObservedWorld`, plan-and-selection
-  commitment, directory-rename decomposition, target-stat attestations,
-  displace-then-replace update order, and last-applied directory metadata.
-- `SCANNER.md`, `INVENTORY.md`, `DATABASE.md`, and `RECORDER.md`: stable
-  `VolumeId`, corroborating volume evidence, typed unsupported/directory records,
-  metadata snapshots, namespaced annotations, conditional target attestations,
-  and filesystem/recording two-axis truth.
-- `VERIFIER.md` and `HISTORY.md`: typed `IntegrityOutcome`, admission-time audit
-  subscription, bounded backpressure, best-effort history durability, and loud
-  degradation.
-- `COMMANDLINE.md`, `INTERFACES.md`, `DESKTOP_UI.md`, and `INGEST.md`: exact
-  commitment gate, corrected no-subcommand behavior, queue-only replay of
-  commitments, folder-rename presentation grouping, and ingest provenance
-  namespace/version snapshots.
+- `CORE.md`, `DISPATCHER.md`, `WORKFLOWS.md`: per-kind pause capability,
+  payload-free control unwind, runner-owned terminal, independent filesystem /
+  ledger / audit axes, timeout-bounded history backpressure, and typed
+  `Disposition`.
+- `SCANNER.md`, `INVENTORY.md`, `DATABASE.md`: all-directory `DirRecord`,
+  `supports_hardlinks`, policy-depth ADS manifests, stream-aware retained
+  metadata, and result/disposition persistence.
+- `PLANNER.md`, `PREFLIGHT.md`, `EXECUTOR.md`: workflow-owned fresh preflight,
+  profile-aware no-hardlink capacity, crash-safe trash backup copy, explicit
+  mkdir-with-metadata dependencies, ADS/ACL failure semantics, and per-operation
+  live TOCTOU guards.
+- `VERIFIER.md`, `HASH_IMPORT.md`: verify/baseline item-status pause
+  continuation and explicit pause refusal for import.
+- `HISTORY.md`, `RECORDER.md`, `COMMANDLINE.md`, `INTERFACES.md`,
+  `DESKTOP_UI.md`: audit degradation, timeout behavior, axis-separated
+  presentation, and `CANCELED+UNRUN` queue-discard rendering.
+- `README.md`: documentation index now describes `DESIGN_REVIEW.md` as the
+  resolved decision ledger rather than an unresolved-issues list.
 
-All obsolete “DR-x must decide” placeholders were removed. The remaining open
-language in module docs is deliberate and corresponds to the review blockers
-below.
+The old blocker paragraphs were removed. New review notes below are retained in
+the affected focused docs instead of silently filling holes in the authority.
 
-## Review Blockers Found
+## Sanity Findings Requiring Review
 
-All seven blockers below were resolved on 2026-07-18: decision records live in
-`DESIGN_REVIEW.md` as DR-25 through DR-31, and `FEATURES.md`/`ARCHITECTURE.md`
-are updated to match. The original statements are retained for context.
+All six findings below were resolved on 2026-07-18: decision records live in
+`DESIGN_REVIEW.md` as DR-32 through DR-37, and `FEATURES.md`/`ARCHITECTURE.md`
+are updated to match. Notably, finding 1 was resolved by deferring ADS
+preservation wholesale (DR-32, superseding DR-27's ADS half). The original
+statements are retained for context.
 
-1. **Executor/preflight layering contradiction.** Architecture says workflows
-   are the only place modules meet and executor imports core only, but also says
-   executor itself calls the preflight module unconditionally. The executor
-   signature has no core guard protocol/callable. Choose workflow-owned
-   observe/preflight under execution custody, or add an injected core guard
-   protocol; direct executor-to-preflight import violates the import law.
+### 1. Policy-driven ADS scan has no contract input
 
-2. **Non-hardlink update fallback is under-specified.** `CapabilityProfile` has
-   no hardlink-support field, and the shared capacity formula does not explicitly
-   count both the new replacement temp and the old-target backup copy. The copy
-   backup also needs its own temp/flush/atomic-publish sequence before live
-   replacement. Non-hardlink updates can otherwise pass preflight and predictably
-   fail ENOSPC or retain a partial trash version.
+Architecture keeps `scan(root, ignores, ctx)` / `ChangeSource.scan(root, ctx)`,
+but also says the scanner enumerates stream manifests only when the mapping's
+preservation policy requests ADS. A role-free scan cannot infer that policy and
+one location can participate in mappings with different policies. Add a typed
+metadata projection/scan-depth input or a separate enrichment operation.
 
-3. **ADS/ACL preservation cannot be implemented from `MetadataSnapshot`.** The
-   snapshot contains only ADS presence, not a stream manifest/content evidence,
-   and no ACL snapshot. Source drift for named streams is therefore unguarded.
-   Treating requested ADS-copy failure on an ADS-capable volume as only a warning
-   can publish a result with silent user-data loss. Define the snapshot/copy/
-   failure contract before claiming preservation.
+Related: `MetadataSnapshot` references `StreamInfo` without defining its type,
+canonical ADS name syntax, duplicate handling, supported stream types, or
+validation. Those are serialization/path-safety bones and should freeze before
+schema/code.
 
-4. **Directory metadata has no input for non-empty directories.** Scanner and
-   Features retain `DirRecord` only for empty directories, while Executor
-   promises source attributes/timestamps for every created directory. A newly
-   created non-empty directory has no reviewed metadata snapshot. Either record
-   every directory now or narrow the preservation promise.
+### 2. Fresh execution observation is contradicted once
 
-5. **History degradation has no result field, and stalled-writer behavior is
-   contradictory.** `OperationResult` exposes only ledger `RecordingStatus`,
-   yet history failure must also surface on the session result. Separately,
-   bounded memory plus guaranteed audit delivery requires waiting forever for a
-   writer that stalls without failing, while the spec says history never blocks
-   filesystem work. Add an audit status and an explicit timeout/degradation or
-   durable-spill rule.
+Features and Architecture §4.9 require `run_execution` to always re-observe and
+re-preflight. Architecture §4.4 still says review and execution start can share
+an observation when close in time. Time closeness is not evidence of unchanged
+state. Focused docs retain the safer rule: execution/resume/queue wakeup always
+observe fresh.
 
-6. **Pause/cancel result transport is incomplete.** Bare `Canceled` and
-   `PauseRequested` exceptions carry neither partial typed results nor a
-   continuation. `ExecutionSet.status` covers execution resume, but no
-   restart/continuation or duplicate-outcome rule exists for scan, baseline,
-   verify, or import. The runner also says unexpected exceptions still surface
-   after it emits terminal without defining how callers avoid a second terminal.
+### 3. Immediate re-stat is not an atomic TOCTOU condition
 
-7. **Queued-discard audit lacks a typed generic distinction.** Dispatcher must
-   remain domain-blind and history must not parse strings, but the current core
-   state/event/result vocabulary cannot distinguish discarded-before-start from
-   an ordinary zero-work cancellation. Add a generic typed terminal reason or
-   attempt disposition before implementing Queue Discard Audit.
+The new per-operation guards are necessary and materially improve the design,
+but a path-based stat followed by `os.replace`, rename, or delete still permits
+an external process to swap the path between calls; NamiSync volume locks only
+coordinate NamiSync. Architecture simultaneously promises no overwrite of an
+unexpected target.
+
+Define the conditional Windows primitive/handle protocol per operation (for
+example non-replacing destination creation/rename where absence is expected,
+and object-conditional source mutation where available), or explicitly state
+which external-writer races remain residual. Fault tests must exercise a swap
+between final guard and destructive call, not only drift before the guard.
+
+### 4. Audit status and Terminal finalization are circular
+
+History consumes `Terminal` to finalize the history row, but
+`Terminal.result.audit` must already report whether that final write succeeded.
+If history fails while consuming Terminal, ordinary subscribers have already
+received an immutable result claiming `audit=OK` unless event delivery has a
+special ordering contract.
+
+Define a bounded two-phase terminal acknowledgement or equivalent: history must
+attempt/ack finalization before the one immutable Terminal is released to
+ordinary subscribers, without history consuming a second contradictory
+Terminal. Timeout/failure then sets `audit=DEGRADED` and releases blocking.
+
+### 5. Runner aggregation needs an unwind-emission rule
+
+Architecture says the runner assembles cancel/failure results from already
+emitted reliable outcomes, but a checkpoint can raise during an item and
+unreached selected items have not emitted anything. Focused executor/verifier
+docs now require an unwind finalizer to emit current/unreached canceled outcomes
+before re-raising. Put that obligation in the authoritative runner/module
+contract (or give the runner a generic item catalog/status accessor).
+
+Also correct §2.2a's phrase “Terminal results for cancel, pause, and failure”:
+pause emits no Terminal.
+
+### 6. A few Architecture assertions still use pre-resolution wording
+
+- `DeliveryClass.RELIABLE` and dispatcher acceptance say admission-time reliable
+  events are never dropped, but non-history subscribers may be ejected and
+  history may time out with `audit=DEGRADED`.
+- Database acceptance still calls filesystem/ledger/audit “two-axis truth.”
+
+These are documentation defects, but they should be corrected before tests are
+named directly from those acceptance criteria.
 
 ## Verification
 
 - `git diff --check` passes.
-- Focused docs contain no remaining obsolete `DR-xx`, `run_unattended_sync`,
-  `target_free_space`, or `WAITING_INPUT` contract language.
-- No runtime tests were run; this session changed documentation only.
+- Focused docs contain no old DR-25–DR-31 blocker language.
+- `FEATURES.md`, `ARCHITECTURE.md`, and `DESIGN_REVIEW.md` are unchanged by this
+  propagation pass.
+- No runtime tests were run; changes are documentation-only.
 
 ## Next Work
 
-The seven blockers are resolved in `FEATURES.md`/`ARCHITECTURE.md` with
-decision records in `DESIGN_REVIEW.md` (DR-25 through DR-31). Remaining: remove
-the matching explicit blocker notes from the module docs and propagate the new
-contract details — workflow-owned preflight with executor per-op guards,
-`supports_hardlinks` and profile-aware capacity, ADS stream manifests and
-FAILED semantics, all-directory records with explicit mkdir-with-metadata, the
-`audit` result axis and timeout-guarded backpressure, runner-assembled partial
-results with per-kind pause capability, and the `Disposition` field. After
-that, M0 can start with the core result/session/event shapes and import-law
-tests without knowingly freezing contradictory bones.
+Findings 1–6 are resolved in the authoritative docs (DR-32 through DR-37):
+ADS deferred wholesale to a latent seam; fresh observation per judging
+session; operation-matched conditional primitives with documented
+external-swap residual; bounded two-phase audit finalization before Terminal
+release; the module-side cancel-unwind finalizer (nothing emitted on pause);
+and the stale "never dropped"/"two-axis" assertions reworded. DR-32 has since
+been amended: executor-time ADS enumeration is promoted from sketch to settled
+contract (still deferred executor flesh — no scan input, mtime-driven re-copy,
+mapping-level incapable-target warning, uncounted stream bytes and unattested
+stream content as documented residuals), and DR-34 gained the platform-floor
+note (Explorer's replace flow shares the window; TxF is deprecated).
+Remaining: remove the corresponding explicit review notes from `CORE.md`,
+`SCANNER.md`, `HISTORY.md`, and `EXECUTOR.md`, propagate the DR-32–DR-37
+details into the module drafts, then freeze the M0 bones.

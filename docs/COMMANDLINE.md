@@ -64,9 +64,10 @@ Draft exit categories (numeric assignment may be finalized with implementation):
 - integrity issues found (`mismatched`, `modified`, `missing`, error);
 - filesystem success with ledger/history durability degradation.
 
-`RecordingStatus.DEGRADED` supplies the ledger distinction. The architecture
-still needs a typed history/audit result field before the CLI can assign the
-history-degradation category without parsing diagnostics.
+`OperationResult.recording` and `.audit` independently carry
+`RecordingStatus.OK|DEGRADED`, so CLI can identify which store is behind without
+parsing diagnostics. `Disposition` distinguishes refused/discarded unrun work
+from an activity that ran but transferred zero bytes.
 
 Exit status derives from typed result, not log text or byte count.
 
@@ -125,6 +126,8 @@ transport replacement behind the same command adapter in M2.
   always freshly preflights; queue release accepts already committed sets only.
 - Refusal, no-op, partial failure, cancel, mismatch, and ledger-behind return
   distinct documented exit categories and truthful output.
+- Ledger-behind and audit-behind output/exit detail are independently testable;
+  `CANCELED+UNRUN` renders queued discard rather than in-run cancellation.
 - Ctrl+C during multi-GiB simulated copy/import reaches cooperative terminal and
   releases custody.
 - Integrity commands with temporary DB overrides write neither real ledger nor

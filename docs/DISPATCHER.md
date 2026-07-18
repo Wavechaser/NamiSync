@@ -25,7 +25,8 @@ list(query=None) -> Sequence[SessionRecord]
 
 An injected registry maps opaque kind to a generic callable/capability adapter;
 dispatcher does not introspect domain request fields. Admission receives a
-generic required-resource declaration and opaque serialized workflow payload.
+generic required-resource declaration, pause-support flag, and opaque serialized
+workflow payload.
 
 ## State And Runner Ownership
 
@@ -35,10 +36,13 @@ resolution, and exactly-one terminal emission. Modules return typed opaque
 results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
-Pause drains by raising `PauseRequested`, unwinds the workflow, retains the
-opaque continuation, and reports `PAUSED` only after custody is released. Resume
+Pause is accepted only when the registered kind declares a continuation:
+execution in M0 and verify/baseline item-list sessions in M1. Scan, plan, and
+hash import refuse pause without changing state and remain cancelable. An
+accepted pause raises `PauseRequested`, unwinds after workflow continuation
+state is retained, and reports `PAUSED` only after custody is released. Resume
 re-enters admission at the back of every required volume queue, never preempts a
-running session, and starts with fresh workflow preflight. Cancel requests are
+running session, and starts with the workflow's fresh guard. Cancel requests are
 cooperative but terminal cleanup/release is unconditional.
 
 ## Admission And Volume Scheduling
@@ -63,17 +67,19 @@ failure, and orderly teardown path releases exactly the acquired set.
 
 Dispatcher assigns envelope timestamp/schema/sequence and fans out events.
 Progress is lossy/coalescible. History is the distinguished admission-time
-reliable subscriber: its bounded buffer never drops events and may backpressure
-the producer only at a safe checkpoint boundary. Any other reliable subscriber
+reliable subscriber: its bounded buffer backpressures only at a safe checkpoint
+boundary and only until an injected generous timeout. Failure/timeout degrades
+the session's `audit` status and stops blocking. Any other reliable subscriber
 whose bounded queue overruns is ejected and first receives
 `Gap(first_missed_seq)`. Late subscribers receive current state plus a bounded
 tail/detectable gap—not a false promise of full replay.
 
-History attaches at admission before workflow events. Subscriber exceptions are
-isolated and surfaced on the session result; they do not rewrite filesystem or
-ledger truth. The unresolved indefinite-stall policy is documented in
-[CORE.md](CORE.md) and [HISTORY.md](HISTORY.md); dispatcher must not substitute
-an unbounded queue or silent loss.
+History attaches at admission before workflow events. Subscriber exceptions and
+timeouts are isolated and surfaced through `OperationResult.audit`; they do not
+rewrite filesystem or ledger truth. Dispatcher must not substitute an unbounded
+queue or silent loss. The terminal/audit acknowledgement ordering still needs
+the non-circular finalization contract recorded in [CORE.md](CORE.md) and
+[HISTORY.md](HISTORY.md).
 
 ## Session Store
 
@@ -97,11 +103,10 @@ must deliver its generic discarded/unrun terminal detail to the admission-time
 history observer before its live record is dropped; dispatcher never imports or
 calls history directly.
 
-Core currently has no typed discarded-before-start reason/body, so the observer
-cannot reliably distinguish this case from an ordinary zero-work cancellation
-without parsing incidental state. Queue discard audit remains a schema blocker
-until that generic distinction is added without teaching dispatcher a domain
-activity.
+The terminal is `CANCELED` with `Disposition.UNRUN`; ordinary cancellation after
+work is `CANCELED+RAN`, and preflight refusal is `REFUSED+UNRUN`. Dispatcher
+forwards these core values without learning domain meaning or inferring from an
+empty operation list.
 
 ## Teardown
 
@@ -135,7 +140,8 @@ duplicate terminal paths from being reinvented by each interface.
 - Import-linter and symbol scan prove dispatcher imports core only and contains
   no domain activity names/methods.
 - Exhaustive transition/control tests reject illegal pause/resume/cancel without
-  state corruption.
+  state corruption; pause capability tests accept execution/verify/baseline and
+  refuse scan/plan/import by generic registration metadata.
 - Disjoint-volume sessions overlap; shared-volume sessions serialize in
   deterministic commit/lock order; cross-process M0 mutation contention is
   actually refused/queued by the OS-level lock.
@@ -145,8 +151,9 @@ duplicate terminal paths from being reinvented by each interface.
 - Paused session holds no volume lock/open workflow stack and resume starts with
   fresh preflight at the back of the volume queue.
 - Progress flood remains bounded/coalesced; history delivery backpressures only
-  at a safe boundary; an overrun non-history reliable subscriber gets `Gap` and
-  ejection rather than silent loss.
+  at a safe boundary until timeout, then degrades `audit`; an overrun
+  non-history reliable subscriber gets `Gap` and ejection rather than silent
+  loss.
 - Late subscription returns current state/tail and exposes sequence gaps.
 - Opaque blobs round-trip through store without dispatcher deserialization.
 - M0 process restart loses in-memory sessions honestly and requires rescan;
@@ -156,5 +163,5 @@ duplicate terminal paths from being reinvented by each interface.
 - Orderly teardown completes without UI-thread deadlock and reports any session
   that could not drain within policy.
 - Terminal records survive until explicit close; queued discard is observed as
-  discarded/unrun before `drop()` and never requires a dispatcher-to-history
-  import.
+  `CANCELED+UNRUN` before `drop()` and never requires a dispatcher-to-history
+  import or string parsing.

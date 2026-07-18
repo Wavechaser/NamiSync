@@ -1,8 +1,9 @@
 # NamiSync Design Review
 
 Status: all findings reviewed and resolved 2026-07-18 — the 23 original
-items, DR-24 from the resolution session's sanity pass, and DR-25 through
-DR-31 from the module-draft propagation review. Each item below
+items, DR-24 from the resolution session's sanity pass, DR-25 through DR-31
+from the module-draft propagation review, and DR-32 through DR-37 from the
+follow-up quadruple-check. Each item below
 carries a **Resolution** note and `FEATURES.md`/`ARCHITECTURE.md` have been
 updated to match. The per-module drafts have not yet been re-synced to these
 decisions. This file is now the decision log; the authoritative sources
@@ -472,6 +473,9 @@ semantics: the security descriptor is copied at execution time
 (preserve-current, not preserve-scanned), and failure when opted in fails the
 operation.
 
+**Superseded in part (2026-07-18):** the ADS half is deferred wholesale by
+DR-32; the ACL half stands.
+
 ### DR-28 — Non-empty directories had no metadata input
 
 `DirRecord` covered only empty directories while the executor promised
@@ -527,6 +531,111 @@ without string parsing.
 {`RAN`, `UNRUN`}: a discarded queue entry is CANCELED + UNRUN, a refusal is
 naturally UNRUN, and nothing is ever inferred from a zero-length operation
 list or a parsed string. No new terminal state, no new transition edges.
+
+## Follow-Up Review Findings
+
+Six findings from the quadruple-check of the resolved authoritative docs.
+
+### DR-32 — Policy-driven ADS scanning was structurally broken; ADS deferred
+
+DR-27's scan-time stream manifests required the scanner to know a mapping's
+preservation policy, but a role-free scan cannot infer one and a single
+location can participate in mappings with different policies. `StreamInfo`
+was also referenced without a defined shape, name syntax, or validation rules.
+
+**Resolution (2026-07-18):** ADS preservation is deferred wholesale to a
+latent seam. The `streams` field and `StreamInfo` are removed; `supports_ads`
+and `preserve_ads` remain declared but unimplemented and not user-exposed;
+FEATURES states the streams-don't-travel limitation loudly. The sketched
+future path is executor-time enumeration — the executor already holds the
+file, needing no scanner policy input — with the DR-27 failure semantics
+(requested-stream loss FAILS the op) preserved as the contract for whenever
+the feature lands. Supersedes DR-27's ADS half; the ACL half stands.
+
+**Amended (2026-07-18):** the executor-time path is promoted from sketch to
+settled contract (still deferred flesh). Clarifications from the follow-up
+discussion: a policy-aware scan would *not* have broken the database's
+file-set logic (missing-marking and diffing depend on which files are seen,
+not metadata depth) — what it breaks is the one-canonical-observation-per-
+location property inventory relies on, plus the mapping-agnostic
+`ChangeSource` seam. Executor-time enumeration avoids that tax entirely, and
+composes with planning because NTFS timestamps are per-file: an ADS write
+bumps the file's mtime, so ordinary metadata diffing already schedules the
+update that re-copies streams (test-verified assumption before the feature
+ships). Residuals: incapable-target warnings are mapping-level at plan time;
+stream bytes are uncounted by capacity; stream content is copied but not
+attested (ledger hashes cover the main data stream only).
+
+### DR-33 — Shared review/execution observation contradicted fresh preflight
+
+§4.4 still said review and execution start could share an `ObservedWorld`
+"when close enough in time," contradicting the mandatory fresh observation of
+§4.9 and FEATURES.
+
+**Resolution (2026-07-18):** The reuse claim is deleted. Every judging session
+observes fresh — review, execution start, resume, and queue wakeup each
+observe their own world; closeness in time is not evidence of unchanged state.
+
+### DR-34 — Per-operation re-stat is not atomic against external swaps
+
+A path-based stat followed by a destructive call still permits an external
+process to swap the path between them; volume locks coordinate only NamiSync.
+
+**Resolution (2026-07-18):** Guards gain teeth from operation-matched
+conditional primitives where the OS provides them: non-replacing rename where
+an absent destination is expected, `CREATE_NEW` temp creation, and
+`RemoveDirectory`'s inherent atomic emptiness refusal. The sole
+non-conditional mutation — update's displace-then-replace pair — carries
+explicit residual-risk wording: external writers mutating a target root
+mid-execution are outside the safety contract, the window is microseconds,
+and the bounded worst case (an externally-swapped file replaced without trash
+preservation) never corrupts NamiSync's evidence, since attestation subjects
+are always NamiSync's own published files. Fault tests must exercise a swap
+*between* guard and destructive call.
+
+**Note (2026-07-18):** the residual window is the platform's floor, not a
+NamiSync shortcut — Explorer's own replace-via-Recycle-Bin flow composes the
+same displace-then-place steps with the same window, and Windows has offered
+no supported transactional filesystem primitive since TxF's deprecation.
+
+### DR-35 — Audit status and Terminal finalization were circular
+
+History consumed `Terminal` to finalize its row, but `Terminal.result.audit`
+had to already report whether that final write succeeded.
+
+**Resolution (2026-07-18):** Bounded two-phase finalization. Before the runner
+releases the one immutable `Terminal`, it drains the audit subscriber and
+history attempts and acknowledges its final write within the same generous
+timeout; success stamps `audit=OK`, timeout or failure stamps `audit=DEGRADED`
+and releases blocking. History finalizes from the drain step, never parses the
+`Terminal` it acknowledged, and no second terminal exists. The `recording`
+axis has no such loop — the recorder is call-driven and its terminal flush
+completes before result assembly.
+
+### DR-36 — Runner aggregation lacked an unwind-emission rule; pause mislabeled
+
+Unreached items have emitted nothing when a checkpoint raises mid-run, so
+runner-assembled results were incomplete; §2.2a also referred to a pause
+Terminal, which does not exist.
+
+**Resolution (2026-07-18):** Lossless unwind is a stated module obligation: an
+item-processing module's own `finally` emits a `CANCELED` outcome for the
+in-flight item and every unreached selected item before `Canceled` leaves the
+module, and emits nothing for them on `PauseRequested` — they remain pending
+for resume. The obligation is named in the executor and verifier bones. §2.2a
+now says terminal results are assembled for cancel and failure only; pause
+emits no terminal.
+
+### DR-37 — Stale pre-resolution wording survived in assertions
+
+`DeliveryClass.RELIABLE`, an events invariant, a dispatcher acceptance
+criterion, and FEATURES' Event Delivery Classes still said reliable events are
+"never dropped" unconditionally; a database acceptance criterion still said
+"two-axis truth."
+
+**Resolution (2026-07-18):** All reworded to the settled semantics: guaranteed
+to the audit subscriber under the timeout guard, never *silently* dropped for
+anyone (ejection is announced by `Gap`), and "axis-separated truth."
 
 ## Required Review Order
 

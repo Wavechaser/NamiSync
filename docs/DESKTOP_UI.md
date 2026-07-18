@@ -21,9 +21,10 @@ task parent.
 
 Closing a terminal task explicitly drops its live `SessionStore` record; durable
 history remains. Closing a queued-unrun task first waits for its discarded audit
-event to be delivered. Closing a busy task asks a phase-specific cancel/pause
-action and waits for actual session/thread completion. It never destroys a live
-worker because a UI `busy` flag changed early.
+event to be delivered or visibly reports audit degradation. Closing a busy task
+offers pause only for a kind whose registration supports it and otherwise asks
+for phase-specific cancellation; it waits for actual session/thread completion.
+It never destroys a live worker because a UI `busy` flag changed early.
 
 ## Single-Page Task Shell
 
@@ -187,6 +188,8 @@ verification; silent invalid paths; and hidden verify-after-execution scope.
   modified, missing, unsupported, canceled, and error are distinct.
 - Refusal, all-noop, partial failure, canceled, recording-behind, and history
   degradation have truthful distinct headlines and accessibility text.
+- A discarded queue item renders from `CANCELED+UNRUN`; a cancellation after
+  work renders from `CANCELED+RAN`, regardless of operation count.
 - Closing a terminal task drops only live session state; queued discard is
   audit-delivered first and neither action deletes durable history.
 - Menu/button/context actions share label, shortcut, enablement, scope, and

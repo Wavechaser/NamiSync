@@ -24,7 +24,8 @@ executor, recorder, verifier/importer, and settings snapshots.
 1. Validate distinct non-nested roots and request semantics.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
-3. Scan both roots.
+3. Scan both roots using metadata depth required by the reviewed preservation
+   policy (the scanner protocol still needs that input added explicitly).
 4. Read immutable prior correspondence and semantic settings snapshot.
 5. Apply filters/policies and plan.
 6. Observe/preflight for review information.
@@ -40,7 +41,8 @@ executor, recorder, verifier/importer, and settings snapshots.
 5. Execute selected dependency-closed work and record through recorder.
 6. Optionally start a separately scoped linked verification phase/session as
    specified by the request.
-7. Return truthful filesystem, recording, and verification aggregates.
+7. Return truthful filesystem, ledger-recording, audit, and verification
+   aggregates with independent axes.
 
 Human review occurs between sessions with nothing running. Commitment is the
 durable preauthorization and has no time expiry, but it binds exactly one plan
@@ -61,6 +63,10 @@ Selected verification uses scoped refresh. Full verify uses a complete location
 scan before missing marking. UI receives refreshed inventory at the scan-to-hash
 handoff so it never shows stale/empty rows during work.
 
+Verify and baseline register pause support and retain per-item status so resume
+freshly guards only the remaining selection. Scan, plan, and hash import register
+pause unsupported and remain cooperatively cancelable.
+
 ## Other Workflows
 
 - History browsing is read-only and runs alongside mutating sessions.
@@ -77,16 +83,15 @@ handoff so it never shows stale/empty rows during work.
 
 Workflow catches typed module failures at the correct boundary, preserves
 already-earned item/filesystem results, and lets the generic session runner
-produce terminal. Filesystem-derived `SessionState` and ledger
-`RecordingStatus` are independent. A history failure is also surfaced without
-changing either, but the authoritative `OperationResult` still lacks a typed
-history/audit status field; public result aggregation cannot freeze until that
-shape is reconciled.
+produce terminal. Filesystem-derived `SessionState`, ledger `recording`, and
+history `audit` statuses are independent. A history failure/timeout degrades
+only `audit`; final Terminal construction must use the bounded acknowledgement
+ordering described in [HISTORY.md](HISTORY.md).
 
 Paused execution continues from `ExecutionSet.status` after fresh preflight.
-The restart/continuation and duplicate-outcome rules for paused scan, baseline,
-verify, and import workflows are not defined; those workflows must not claim
-resumable pause merely because their loops call `checkpoint()`.
+Paused baseline/verify use their item-status continuation and fresh remaining
+selection guard. Unsupported pause requests for scan/plan/import are typed
+control rejections with no lifecycle mutation.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An
@@ -111,13 +116,9 @@ all-noop explicit run is completed/no-op and still history-worthy.
   reaches around workflow to call executor/SQL.
 - Settings shaping a plan are snapshotted, not read opportunistically later.
 
-Architecture still needs to place the mandatory execute guard consistently:
-workflows are the only legal module-composition layer, but the executor section
-also says executor calls preflight itself while importing no sibling. Until a
-core injected guard protocol is added, workflow-owned observe/preflight plus
-executor final per-operation guards is the only shape that obeys the import
-law; this is recorded for authoritative review rather than silently settled
-here.
+Workflow is the sole preflight owner: it sequences fresh observe → preflight →
+execute under custody on every start/resume. Executor imports no sibling and
+performs only operation-local live precondition guards.
 
 ## PoC Hardening
 
@@ -147,9 +148,9 @@ import from handling refusal differently than baseline/verify.
 - Refusal, all-noop, partial failure, cancel, recorder failure, observer failure,
   and unexpected exception each preserve truthful typed results and history
   behavior.
-- Pause/resume preserves completed execution outcomes and fresh-guards remaining
-  work; non-execution pause remains unavailable until its continuation contract
-  is specified.
+- Pause/resume preserves completed execution and verifier-item outcomes and
+  fresh-guards remaining work; scan/plan/import refuse pause without losing
+  cancelability.
 - Linked verify selection equals successful eligible executed operations and is
   handed to UI at the execution-to-verification phase boundary.
 - Replay/undo/repair never execute retained historical operations directly and

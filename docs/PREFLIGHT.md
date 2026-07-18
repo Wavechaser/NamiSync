@@ -86,10 +86,10 @@ artifacts before allocating new temps. If cleanup later fails or actual free
 space falls below the verdict, executor fails safely without publishing partial
 content. User files resembling temp names never count as recoverable.
 
-Until hardlink capability and backup-copy capacity are represented in the
-authoritative plan/profile shapes, a target that cannot hardlink must refuse a
-trash-on-update selection rather than run a formula that omits the old-version
-copy.
+The shared formula uses the target's reviewed
+`CapabilityProfile.supports_hardlinks`; a no-hardlink update selection includes
+the old target's backup-copy bytes as well as replacement temps. Preflight never
+probes support or substitutes a filesystem-name guess.
 
 ## Expectations Of Other Modules
 
@@ -98,10 +98,9 @@ copy.
 - Workflow supplies the injected settings reader used by observation.
 - Dispatcher holds/acquires required volume custody around execution; preflight
   verifies identity but does not own locks.
-- A fresh guard is mandatory immediately before executor mutation under the
-  same custody, and executor retains final per-operation guards. Whether the
-  workflow invokes this sibling module or injects a core guard callable into
-  executor must be reconciled with the modules-never-call-modules import law.
+- Workflow alone invokes fresh observe/preflight immediately before executor
+  mutation under the same custody. Executor imports no preflight sibling and
+  retains live per-operation guards as the final TOCTOU defense.
 - Interfaces show refusal reasons without offering an execute-anyway bypass.
 
 ## Latent Features
@@ -121,7 +120,9 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
 - Volume/reparse validation prevents trash from becoming cross-volume
   copy-delete.
 - Fresh execution observation closes the plan-to-execute stale-plan gap as far
-  as possible; executor final guards cover the residual window.
+  as possible; executor live guards narrow the residual window, and only
+  operation-specific conditional atomic primitives can close path-swap races at
+  destructive touch.
 
 ## Acceptance Criteria
 
@@ -139,7 +140,8 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
 - Same-volume, contained, writable trash passes; reparse, off-volume, readonly,
   and unresolved trash fails before mutation.
 - Capacity boundary/property tests agree with planner for full and partial
-  selections and safely count only exact reclaimable temps.
+  selections, include no-hardlink backup copies, and safely count only exact
+  reclaimable temps outside `.synctrash`.
 - Review, immediate execution, resume, and queue wakeup return identical
   verdicts for identical snapshots and fresh different verdicts after drift.
 - Refusal leaves plan, selection, statuses, filesystem, and ledger byte-for-byte

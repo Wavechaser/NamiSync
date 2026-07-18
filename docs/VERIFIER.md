@@ -86,6 +86,12 @@ verified merely because they appeared in the plan.
 Manual verification is location-scoped and independent of any current plan or
 mapping. It must not require both source and target roots.
 
+Verify and baseline selections carry per-item status as their pause
+continuation. They emit each reliable outcome before advancing status; pause
+unwinds after preserving completed items, releases custody without terminal,
+and resume freshly refreshes/guards only the remaining selection. Rebaseline is
+short/non-pausable unless it adopts the same continuation explicitly.
+
 ## Expectations Of Other Modules
 
 - Core supplies `IntegrityOutcome`, integrity/result/event evidence types, and
@@ -99,9 +105,8 @@ mapping. It must not require both source and target roots.
 - History observes every item/terminal, including refusal and unexpected error.
 - UI consumes typed results and updates inventory rows, not plan rows by loose
   path matching.
-- Recorder degradation is surfaced through `RecordingStatus` separately from
-  content verdicts. History degradation must likewise be surfaced once the
-  missing audit-status result shape is resolved.
+- Ledger `recording` and history `audit` degradation are surfaced independently
+  from each other and from content verdicts.
 
 ## Latent Features
 
@@ -149,4 +154,7 @@ retained evidence but generates a new plan; verifier never restores content.
   respect per-volume worker policy.
 - Unexpected SQLite/OS errors still produce an audited activity envelope and a
   truthful terminal.
+- Pause after any item count preserves exactly those outcomes/writes, releases
+  custody with no terminal, and resume neither repeats outcomes nor skips an
+  unreached selected row.
 - Import-linter proves verifier imports core but no sibling module.
