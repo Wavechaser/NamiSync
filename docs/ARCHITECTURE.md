@@ -768,9 +768,11 @@ one stage of TOCTOU prevention, never the last, because the world can change
 between preflight and touch. Records only through `recorder`.
 
 **Bones.** Typed-result return — the session runner owns `Terminal` (§2.2a);
-atomic temp-then-`os.replace` publish with best-effort parent-dir flush (a
-refused flush is a per-op warning; durability is claimed only for what was
-flushed); **displace-then-replace update order** — the live target is preserved
+atomic temp-then-`os.replace` publish with best-effort parent-dir flush through
+a directory handle opened with `GENERIC_WRITE` access and
+`FILE_FLAG_BACKUP_SEMANTICS` (a refused flush is a per-op warning; durability is
+claimed only for what was flushed);
+**displace-then-replace update order** — the live target is preserved
 into trash by atomic same-volume hardlink — with a copy fallback on volumes
 reporting no hardlink support, itself written temp-flush-publish *inside the
 trash run directory* so a partial backup only ever exists under a temp name —
@@ -790,7 +792,10 @@ directory trash/delete), enforced through operation-matched **conditional
 primitives** where the OS provides them: publishes and moves that expect an
 absent destination use non-replacing rename (atomically fails if something
 appeared), temp files are created `CREATE_NEW`, and directory deletion relies
-on `RemoveDirectory`'s own atomic emptiness refusal. A primitive guarantees
+on `RemoveDirectory`'s own atomic emptiness refusal. Dependency-complete
+`directory_cleanup` deletes retain exact stable identity, kind, size,
+attributes, and creation time but ignore mtime/link-count churn caused by their
+own child removals; identity-less cleanup refuses. A primitive guarantees
 exactly its own condition and nothing more — none binds *source* identity to
 a pathname — so the external-writer boundary applies to **every** mutation,
 and each residual race is bounded by its **data consequence**, never by

@@ -111,6 +111,9 @@ nami-sync history RUN_TOKEN
 
 ### Unreleased
 
+- Fixed same-run empty-directory cleanup to tolerate only child-induced
+  directory mtime/link-count churn under stable identity, and fixed Windows
+  parent-directory flushing to use the write access required by the OS.
 - Fixed planner no-op classification for standard-attribute-only changes, so
   readonly/hidden/system drift now produces an update and converges on target.
 - Implemented the M0 workflow/composition and CLI slice: versioned dispatcher

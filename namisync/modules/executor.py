@@ -40,7 +40,7 @@ from namisync.core.execution import (
 )
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
 from namisync.core.pathing import validate_relative_path
-from namisync.core.planning import OpId, OperationKind, PlanOperation
+from namisync.core.planning import OpId, OperationKind, OperationReason, PlanOperation
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -428,7 +428,7 @@ class NativeFileSystem:
         create_file.restype = wintypes.HANDLE
         handle = create_file(
             str(path),
-            0x80000000,
+            0x40000000,
             0x1 | 0x2 | 0x4,
             None,
             3,
@@ -1546,6 +1546,10 @@ def _delete(
         raise OperationFailure(
             ExecutionReason.TARGET_MISSING, "delete operation has no target evidence"
         )
+    directory_cleanup = (
+        operation.target_expected.kind is EntryKind.DIRECTORY
+        and operation.reason is OperationReason.DIRECTORY_CLEANUP
+    )
     _guard_present(
         fs,
         target_root,
@@ -1553,6 +1557,7 @@ def _delete(
         operation.target_expected,
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
+        matcher=_matches_directory_cleanup if directory_cleanup else None,
     )
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
     _flush_before_destructive(recorder, state)
@@ -1829,6 +1834,7 @@ def _guard_present(
     *,
     missing: ExecutionReason,
     drift: ExecutionReason,
+    matcher: Callable[[FileStat, FileStat], bool] | None = None,
 ) -> FileStat:
     try:
         actual = fs.stat(root, relative_path)
@@ -1840,7 +1846,7 @@ def _guard_present(
         raise
     if actual is None:
         raise OperationFailure(missing, f"planned path is missing: {relative_path}")
-    if not _matches_expected(actual, expected):
+    if not (matcher or _matches_expected)(actual, expected):
         reason = ExecutionReason.WRONG_TYPE if actual.kind is not expected.kind else drift
         raise OperationFailure(reason, f"planned evidence drifted: {relative_path}")
     return actual
@@ -1859,6 +1865,19 @@ def _matches_expected(actual: FileStat, expected: FileStat) -> bool:
             expected.file_identity is None
             or actual.file_identity == expected.file_identity
         )
+    )
+
+
+def _matches_directory_cleanup(actual: FileStat, expected: FileStat) -> bool:
+    """Match an emptied planned directory while ignoring child-induced churn."""
+
+    return (
+        actual.kind is EntryKind.DIRECTORY
+        and expected.kind is EntryKind.DIRECTORY
+        and expected.file_identity is not None
+        and actual.file_identity == expected.file_identity
+        and actual.size == expected.size
+        and actual.metadata == expected.metadata
     )
 
 

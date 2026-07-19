@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 import hashlib
 from pathlib import Path
+import time
 from typing import Callable
 
 import pytest
@@ -112,6 +113,7 @@ def _operation(
     prior_target_rel_path: str | None = None,
     prior_target_expected: FileStat | None = None,
     dependencies: tuple[OpId, ...] = (),
+    reason: OperationReason = OperationReason.SOURCE_ONLY,
 ) -> PlanOperation:
     return PlanOperation(
         op_id=OpId(f"{number:032x}"),
@@ -131,7 +133,7 @@ def _operation(
             else source_expected.size
         ),
         dependencies=dependencies,
-        reason=OperationReason.SOURCE_ONLY,
+        reason=reason,
     )
 
 
@@ -253,6 +255,44 @@ def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) 
     )
     assert max(event.bytes_done for event in progress) == len(b"complete-content")
     assert not any(isinstance(event, Terminal) for event in events)
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert "durability_warnings" not in item.detail
+
+
+def test_native_directory_flush_succeeds_on_target_ntfs(tmp_path: Path) -> None:
+    _, target = _roots(tmp_path)
+
+    assert NativeFileSystem().flush_directory(target)
+
+
+class UnavailableDirectoryFlushFileSystem(NativeFileSystem):
+    def flush_directory(self, path: Path) -> bool:
+        return False
+
+
+def test_unavailable_directory_flush_remains_an_honest_warning(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"content")
+    fs = UnavailableDirectoryFlushFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+
+    result, events, _ = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.COMPLETED
+    assert item.detail["durability_warnings"] == (
+        f"parent directory flush unsupported: {target}",
+    )
 
 
 def test_executor_live_stat_matches_native_scanner_evidence(tmp_path: Path) -> None:
@@ -680,12 +720,196 @@ def test_nonempty_directory_delete_refuses_without_recursive_removal(tmp_path: P
         source_expected=None,
         target_expected=directory_stat,
         intended=None,
+        reason=OperationReason.DIRECTORY_CLEANUP,
     )
 
     result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
 
     assert result.status is SessionState.FAILED
     assert (target / "folder" / "child.txt").read_text(encoding="utf-8") == "keep"
+    assert recorder.calls == []
+
+
+def test_directory_cleanup_succeeds_after_last_child_is_trashed(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    folder = target / "obsolete"
+    folder.mkdir()
+    child = folder / "child.bin"
+    child.write_bytes(b"old")
+    fs = NativeFileSystem()
+    child_stat = fs.stat(target, r"obsolete\child.bin")
+    directory_stat = fs.stat(target, "obsolete")
+    assert child_stat is not None and directory_stat is not None
+    time.sleep(0.02)
+    trash = _operation(
+        1,
+        OperationKind.TRASH,
+        source_rel_path=None,
+        target_rel_path=r"obsolete\child.bin",
+        source_expected=None,
+        target_expected=child_stat,
+        intended=None,
+    )
+    cleanup = _operation(
+        2,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="obsolete",
+        source_expected=None,
+        target_expected=directory_stat,
+        intended=None,
+        dependencies=(trash.op_id,),
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (trash, cleanup))), fs=fs
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert not folder.exists()
+    assert (
+        target / ".synctrash" / str(RUN_ID) / "obsolete" / "child.bin"
+    ).read_bytes() == b"old"
+    assert [call[0] for call in recorder.calls] == ["trashed", "deleted"]
+
+
+def test_directory_cleanup_succeeds_after_last_child_is_moved(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    old_folder = target / "old"
+    new_folder = target / "new"
+    old_folder.mkdir()
+    new_folder.mkdir()
+    child = old_folder / "child.bin"
+    child.write_bytes(b"content")
+    fs = NativeFileSystem()
+    child_stat = fs.stat(target, r"old\child.bin")
+    directory_stat = fs.stat(target, "old")
+    assert child_stat is not None and directory_stat is not None
+    time.sleep(0.02)
+    move = _operation(
+        1,
+        OperationKind.MOVE,
+        source_rel_path=None,
+        target_rel_path=r"new\child.bin",
+        source_expected=None,
+        target_expected=None,
+        intended=child_stat,
+        prior_target_rel_path=r"old\child.bin",
+        prior_target_expected=child_stat,
+        reason=OperationReason.IDENTITY_RENAME,
+    )
+    cleanup = _operation(
+        2,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="old",
+        source_expected=None,
+        target_expected=directory_stat,
+        intended=None,
+        dependencies=(move.op_id,),
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (move, cleanup))), fs=fs
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert not old_folder.exists()
+    assert (new_folder / "child.bin").read_bytes() == b"content"
+    assert [call[0] for call in recorder.calls] == ["moved", "deleted"]
+
+
+def test_directory_cleanup_rejects_replaced_empty_directory(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    folder = target / "folder"
+    folder.mkdir()
+    fs = NativeFileSystem()
+    expected = fs.stat(target, "folder")
+    assert expected is not None and expected.file_identity is not None
+    folder.rmdir()
+    folder.mkdir()
+    replacement = fs.stat(target, "folder")
+    assert replacement is not None
+    assert replacement.file_identity != expected.file_identity
+    cleanup = _operation(
+        1,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="folder",
+        source_expected=None,
+        target_expected=expected,
+        intended=None,
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (cleanup,))), fs=fs
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert folder.is_dir()
+    assert recorder.calls == []
+
+
+def test_directory_cleanup_requires_reviewed_stable_identity(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    folder = target / "folder"
+    folder.mkdir()
+    fs = NativeFileSystem()
+    actual = fs.stat(target, "folder")
+    assert actual is not None
+    cleanup = _operation(
+        1,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="folder",
+        source_expected=None,
+        target_expected=replace(actual, file_identity=None),
+        intended=None,
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (cleanup,))), fs=fs
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert folder.is_dir()
+    assert recorder.calls == []
+
+
+def test_directory_cleanup_reason_does_not_relax_file_evidence(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    path = target / "file.bin"
+    path.write_bytes(b"old")
+    fs = NativeFileSystem()
+    expected = fs.stat(target, "file.bin")
+    assert expected is not None
+    time.sleep(0.02)
+    path.write_bytes(b"new")
+    cleanup = _operation(
+        1,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="file.bin",
+        source_expected=None,
+        target_expected=expected,
+        intended=None,
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (cleanup,))), fs=fs
+    )
+
+    assert result.status is SessionState.FAILED
+    assert path.read_bytes() == b"new"
     assert recorder.calls == []
 
 

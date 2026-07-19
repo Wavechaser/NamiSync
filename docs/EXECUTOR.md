@@ -84,9 +84,10 @@ documentation rather than becoming a false compare-and-swap guarantee.
 7. Re-check destination expected absence/state at publish and use a conditional
    atomic primitive appropriate to the planned before-state.
 8. Atomically publish with the Windows/local-filesystem primitive.
-9. Attempt a best-effort parent-directory flush. A refused/unsupported flush is
-   a per-operation durability warning; the result claims durability only for
-   the file content/metadata that was actually flushed.
+9. Open the parent directory with `GENERIC_WRITE` and
+   `FILE_FLAG_BACKUP_SEMANTICS`, then attempt a best-effort flush. A refused or
+   unsupported flush is a per-operation durability warning; the result claims
+   durability only for what was actually flushed.
 10. Stat the published target and construct `Attestation(ContentEvidence,
    target_stat)` so target identity is never confused with source identity.
 11. Call recorder. A recorder failure preserves the filesystem outcome and
@@ -173,9 +174,13 @@ degrade to copy-delete. Record only after the rename succeeds.
 ### Delete and directory cleanup
 
 Mirror deletion remains internal/guarded. Re-stat type and identity immediately
-before deletion and use the strongest available handle-conditional delete;
-directories must be empty at deletion time and `RemoveDirectory` must enforce
-that condition atomically. Never recursively delete an unplanned subtree.
+before deletion and use the strongest available handle-conditional delete.
+Only a dependency-complete `directory_cleanup` delete may ignore mtime and link
+count churn caused by removing its own planned children; it still requires a
+reviewed stable identity plus exact kind, size, attributes, and creation time.
+Identity-less cleanup is refused. Directories must be empty at deletion time and
+`RemoveDirectory` enforces that condition atomically. Never recursively delete
+an unplanned subtree.
 
 ### No-op
 
@@ -317,6 +322,11 @@ and durable run-token idempotency.
   no recursive unplanned deletion, and metadata application only after every
   child operation has settled; every created empty or non-empty directory comes
   from its own reviewed `DirRecord` operation.
+- Same-run trash/move cleanup tolerates only directory mtime/link-count churn,
+  rejects replacement and identity-less directories, and removes only when
+  `RemoveDirectory` confirms emptiness.
+- Native NTFS parent-directory flush succeeds with a writable directory handle;
+  injected refusal remains an honest per-operation durability warning.
 - No-op drift cannot refresh identity, last-seen, hash, or correspondence.
 - Multi-GiB simulated copy cancellation and pause occur within one configured
   chunk; pause persists completed status, emits no terminal, releases custody,
