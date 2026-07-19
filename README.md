@@ -77,6 +77,7 @@ nami-sync history RUN_TOKEN
 
 ## Documentation
 
+- [`BUGS.md`](docs/BUGS.md): current substantive defect log and fix status.
 - [`FEATURES.md`](docs/FEATURES.md): settled and latent product behavior.
 - [`ARCHITECTURE.md`](docs/ARCHITECTURE.md): system structure, contracts, and
   milestone order.

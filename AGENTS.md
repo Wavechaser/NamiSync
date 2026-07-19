@@ -24,6 +24,7 @@ reused by CLI, queue, or service entry points.
   and the dispatcher through the composition root and owns no domain policy.
 - `tests/`: pytest tests mirroring package boundaries where practical.
 - Active focused documentation lives in `docs/`:
+  - `BUGS.md` for substantive defects, verified fixes, and current status.
   - `FEATURES.md` for all planned and existing features.
   - `ARCHITECTURE.md` for project architectural decisions and design principles. 
   - `HANDOFF.md` for the latest session only: changes made, verification, and
