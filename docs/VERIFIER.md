@@ -104,6 +104,15 @@ state across a full location. Post-execution verification contains only eligible
 successfully executed operations; no-op or failed operations are not marked
 verified merely because they appeared in the plan.
 
+The linked selection is built ledger-first: the workflow reads back the
+inventory rows execution just recorded (through read-only repositories, keyed by
+the eligible executed operations' canonical target paths) rather than receiving
+row identities from the executor, which stays domain-blind and surfaces only
+op-level outcomes. A pure move preserves the moved row's existing hash and
+attestation, so verifying a moved file verifies against carried-forward evidence
+rather than re-baselining; a moved file that never had a hash baselines on first
+verify.
+
 Manual verification is location-scoped and independent of any current plan or
 mapping. It must not require both source and target roots.
 

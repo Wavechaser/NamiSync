@@ -37,7 +37,11 @@ filesystem success. Copy/update evidence is bound to the published target stat,
 tagged `copy`, and never advances `last_verified_at`. Paired no-ops require both
 live stats to match the reviewed snapshots. Move recording validates the prior
 row before carrying its evidence forward and transactionally reconciles a
-retained-missing destination row.
+retained-missing destination row. A pure move preserves that row's content hash,
+provenance, and `last_verified_at` — a same-volume rename keeps size, mtime, and
+identity — so a later verify verifies against carried-forward evidence instead of
+re-baselining; a move of a never-hashed file simply carries no hash. Move-update
+overwrites content and therefore records fresh `copy` evidence.
 
 Inventory reconciliation batches observations and uses a temporary key table
 for complete missing sweeps, so a 33k+ location never becomes a giant parameter

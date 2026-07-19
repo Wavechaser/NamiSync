@@ -60,11 +60,19 @@ not create either database. Invalid database locations are rejected before the
 plan session, and an execution refusal may still create independent audit
 history while leaving managed files and ledger configuration untouched.
 Execution recomputes the decoded plan fingerprint before comparing commitment,
-so payload content cannot change behind a retained fingerprint.
+so payload content cannot change behind a retained fingerprint. This makes
+lossless payload encoding a correctness invariant, not a convenience: every plan
+field that feeds the fingerprint must survive the JSON codec unchanged, or
+execution refuses a faithfully committed plan. A round-trip/fingerprint-stability
+test exercises the codec over every operation kind and optional field, so a
+dropped or renormalized field fails the build instead of silently refusing every
+execution.
 
 M0 selects the complete dependency-closed plan. Durable plan files, selection
 editing, queue release, linked verification, and integrity workflows are not
-part of this implementation slice.
+part of this implementation slice. When linked verification lands, its selection
+is built ledger-first from the inventory rows execution just recorded, not handed
+over from the executor, which surfaces only op-level outcomes.
 
 ## Integrity Workflow
 
