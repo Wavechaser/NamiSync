@@ -1,8 +1,7 @@
 # Workflows Module
 
-Status: draft contract. Priority: M0 plan/execution sync and history; M1
-inventory/integrity/import; later queue, maintenance, replay, undo/repair, and
-ingest.
+Status: M0 reviewed sync and history implemented. M1 inventory/integrity/import
+and later queue, maintenance, replay, undo/repair, and ingest remain deferred.
 
 ## Purpose
 
@@ -48,6 +47,24 @@ durable preauthorization and has no time expiry, but it binds exactly one plan
 fingerprint and dependency-closed selection. Scripts and queue releases may
 replay an existing commitment; no API plans and executes in one unreviewed
 breath.
+
+### M0 implementation
+
+`workflows/sync.py` contains the plain planning and execution functions.
+`LocalWorkflowRuntime` is the local composition root: it injects every module,
+resolves immutable prior correspondence through read-only repositories,
+declares physical-volume resource keys, owns schema-versioned JSON continuation
+payloads, starts ledger recording only after commitment and fresh preflight,
+and supplies the dispatcher history observer. Planning and declined review do
+not create either database. Invalid database locations are rejected before the
+plan session, and an execution refusal may still create independent audit
+history while leaving managed files and ledger configuration untouched.
+Execution recomputes the decoded plan fingerprint before comparing commitment,
+so payload content cannot change behind a retained fingerprint.
+
+M0 selects the complete dependency-closed plan. Durable plan files, selection
+editing, queue release, linked verification, and integrity workflows are not
+part of this implementation slice.
 
 ## Integrity Workflow
 

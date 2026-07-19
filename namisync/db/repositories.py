@@ -63,6 +63,14 @@ class RunSnapshot:
     recording_status: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class MappingLookup:
+    mapping_id: int
+    source_location_id: int
+    target_location_id: int
+    snapshot: MappingSnapshot
+
+
 def _optional_time(value: str | None) -> datetime | None:
     return None if value is None else decode_utc(value)
 
@@ -249,6 +257,53 @@ class LedgerRepository:
             disqualified_target_identities=self._disqualified_identities(
                 int(mapping["target_location_id"])
             ),
+        )
+
+    def find_mapping(
+        self,
+        source_volume: VolumeId,
+        source_relative_root: str,
+        target_volume: VolumeId,
+        target_relative_root: str,
+    ) -> MappingLookup | None:
+        """Return the active mapping matching two physical volume roots."""
+
+        source_key = normalize_relative_path(source_relative_root, allow_root=True)
+        target_key = normalize_relative_path(target_relative_root, allow_root=True)
+        row = self._connection.execute(
+            """SELECT mapping.id, mapping.source_location_id,
+                      mapping.target_location_id
+                 FROM mappings AS mapping
+                 JOIN locations AS source_location
+                   ON source_location.id = mapping.source_location_id
+                 JOIN volumes AS source_volume ON source_volume.id = source_location.volume_id
+                 JOIN locations AS target_location
+                   ON target_location.id = mapping.target_location_id
+                 JOIN volumes AS target_volume ON target_volume.id = target_location.volume_id
+                WHERE mapping.deleted_at IS NULL
+                  AND source_volume.serial = ? AND source_volume.fs_type = ?
+                  AND source_location.volume_relative_path_key = ?
+                  AND target_volume.serial = ? AND target_volume.fs_type = ?
+                  AND target_location.volume_relative_path_key = ?
+                ORDER BY mapping.id
+                LIMIT 1""",
+            (
+                source_volume.serial,
+                source_volume.fs_type,
+                source_key,
+                target_volume.serial,
+                target_volume.fs_type,
+                target_key,
+            ),
+        ).fetchone()
+        if row is None:
+            return None
+        mapping_id = int(row["id"])
+        return MappingLookup(
+            mapping_id=mapping_id,
+            source_location_id=int(row["source_location_id"]),
+            target_location_id=int(row["target_location_id"]),
+            snapshot=self.get_mapping_snapshot(mapping_id),
         )
 
     def _disqualified_identities(self, location_id: int) -> frozenset[FileIdentity]:

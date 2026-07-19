@@ -54,7 +54,11 @@ def _is_descendant(path: str, directory: str) -> bool:
 
 
 def _metadata_equal(source: FileStat, target: FileStat, granularity_ns: int) -> bool:
-    return source.size == target.size and abs(source.mtime_ns - target.mtime_ns) <= granularity_ns
+    return (
+        source.size == target.size
+        and abs(source.mtime_ns - target.mtime_ns) <= granularity_ns
+        and source.metadata.attributes == target.metadata.attributes
+    )
 
 
 def _group_by_key(records: Iterable[object]) -> dict[str, list[object]]:

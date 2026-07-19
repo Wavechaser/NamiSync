@@ -74,8 +74,9 @@ commitment. Deferred operations remain explicit; omission is not a status.
 - Apply mapping filters symmetrically before diffing. Location ignores have
   already bounded scan completeness.
 - Compare mtimes within the coarser capability granularity.
-- Matching size+mtime is an M0 metadata no-op, with the documented limitation
-  that content-aware no-op comes later.
+- Matching size, mtime within the coarser granularity, and standard attributes
+  is an M0 metadata no-op. An attributes-only change plans an update even when
+  size and mtime are unchanged. Content-aware no-op comes later.
 - Source-only files plan copy; changed matched files plan update.
 - Every directory the plan will create has an explicit parent-first
   mkdir-with-metadata operation; file and child-directory operations depend on
@@ -161,7 +162,9 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
 - Mapping evidence includes paired no-ops so later renames do not degrade to
   copy+trash.
 - Incomplete scans and unsupported entries remain visible and non-executable.
-- Metadata no-op risk is explicit and later content evidence is additive.
+- Attribute-only drift is update-worthy; the remaining metadata no-op risk is
+  content changing behind equal size/time/attributes, and later content
+  evidence is additive.
 
 ## Acceptance Criteria
 
@@ -198,6 +201,8 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   for the link itself.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
+- A readonly/hidden/system-only difference with unchanged size and mtime plans
+  an update and propagates through the real sync workflow.
 - Destination policy collision and companion-group property tests produce
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.

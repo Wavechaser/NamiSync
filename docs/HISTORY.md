@@ -1,8 +1,8 @@
 # History Module
 
-Status: minimal independent sync history storage and observer integration are
-implemented for M0. Integrity/import detail, retention, task grouping, replay,
-discard audit, export, and interface composition remain later work.
+Status: minimal independent sync history storage, observer integration, and CLI
+browsing are implemented for M0. Integrity/import detail, retention, task
+grouping, replay, discard audit, and export remain later work.
 
 ## Purpose
 
@@ -28,8 +28,9 @@ history transaction propagates to the dispatcher acknowledgement without
 mutating the provisional filesystem or ledger result.
 
 `HistoryRepository` returns immutable typed run and operation snapshots through
-a read-only connection. No M0 method implements retention or integrity/import
-detail, and no CLI/UI surface is claimed by this module alone.
+a read-only connection. The M0 CLI reaches these reads through the workflow
+composition root; the database module itself owns no interface policy. No M0
+method implements retention or integrity/import detail.
 
 ## Observer Contract
 

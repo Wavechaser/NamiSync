@@ -31,6 +31,19 @@ class PreparedSession:
         if not all(isinstance(resource, ResourceId) for resource in self.resources):
             raise TypeError("prepared resources must contain ResourceId values")
 
+    @classmethod
+    def from_resource_keys(
+        cls,
+        payload: bytes,
+        resources: tuple[tuple[str, str], ...],
+    ) -> PreparedSession:
+        """Build generic custody ids without exposing core types to interfaces."""
+
+        return cls(
+            payload,
+            frozenset(ResourceId(namespace, key) for namespace, key in resources),
+        )
+
 
 class WorkflowInvocation(Protocol):
     """Adapter-owned decoded invocation; dispatcher never inspects it."""

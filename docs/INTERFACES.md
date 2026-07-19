@@ -1,7 +1,7 @@
 # Interfaces Layer
 
-Status: draft common contract. Priority: M0 CLI; desktop later under the current
-architecture; API remains latent.
+Status: M0 CLI implemented; desktop remains later under the current
+architecture and API remains latent.
 
 ## Purpose
 
@@ -14,6 +14,19 @@ classification, or session lifecycle.
 CLI and desktop must produce the same workflow request for the same intent and
 interpret the same typed result consistently. API, when added, follows the same
 rule.
+
+## M0 CLI Adapter
+
+`interfaces/cli.py` is a thin dispatcher-backed adapter. It exposes reviewed
+`sync` and read-only `history`, renders typed plan/refusal/result axes, requests
+cooperative cancellation on Ctrl+C, and never imports core, modules, or the
+database layer. Human confirmation occurs only after the plan session is
+terminal and closed. Both real entry points consume `sys.argv[1:]`; before the
+desktop exists, no subcommand prints usage and exits nonzero.
+
+The implemented options and numeric exits are recorded in
+[COMMANDLINE.md](COMMANDLINE.md). Queue control, machine output, integrity
+commands, and the desktop action layer remain deferred.
 
 ## Common Adapter Contract
 

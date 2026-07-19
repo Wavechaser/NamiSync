@@ -25,6 +25,12 @@ fault disappearing entries, permission errors, placeholder attributes,
 identity cycles, case collisions, coarse filesystems, and partial enumeration
 without opening file content.
 
+On a volume that advertises stable file identity, Windows directory-entry
+metadata may still omit the inode for an extended-path enumeration. In that
+case only, the walker repeats the metadata-only stat through its backend for the
+exact entry path. This preserves correspondence-qualified move detection
+without opening content or fabricating identity.
+
 Full scans retain the walked root plus every reachable directory and declare
 completeness modulo the exact `IgnoreSet`. `ScanScope.selected()` performs
 only named-path stats, never a full walk, and deliberately returns a scoped,
@@ -143,7 +149,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Case-collision and multi-link/duplicate-identity cases are reported without
   merging records.
 - exFAT/FAT fixtures report coarse timestamp granularity and no stable identity;
-  NTFS fixtures report usable identity when the OS supplies it.
+  NTFS fixtures and the real native walk report usable identity when the OS
+  supplies it, including directory-entry omission fallback.
 - Every file/directory carries attributes and creation-time metadata; scans do
   not vary by mapping role or preservation policy and never enumerate ADS.
 - Capability fixtures prove `supports_hardlinks` follows the authoritative

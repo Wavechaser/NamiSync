@@ -52,6 +52,19 @@ def test_clean_tree_is_complete_deterministic_and_records_every_directory(tmp_pa
     assert all(record.metadata.created_ns is None or record.metadata.created_ns >= 0 for record in first.files)
 
 
+def test_native_walk_recovers_identity_when_directory_entry_omits_it(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "identity.bin").write_bytes(b"identity")
+
+    result = WalkingScanner().scan(
+        Root(str(tmp_path), "source"), IgnoreSet(), _ctx()
+    )
+
+    if result.profile.stable_file_identity:
+        assert result.files[0].file_identity is not None
+
+
 def test_scanner_never_opens_file_content_and_exact_ignores_preserve_user_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

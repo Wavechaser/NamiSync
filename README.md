@@ -19,16 +19,20 @@ The M0 scanner, planner, and preflight modules are implemented as a headless
 pipeline surface. Scans retain deterministic typed filesystem evidence and
 explicit completeness; planning is pure, correspondence-aware, dependency
 ordered, and byte-stable; preflight separates scoped read-only observation
-from exhaustive typed judgment. Workflow and interface composition remain
-separate M0 integration work.
+from exhaustive typed judgment.
 
 The M0 persistence foundation is implemented: a serialized run-bound recorder
 is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
 mapping correspondence, runs, and distinct observed/attested evidence; typed
 repositories are read-only; and an independent history observer stores sync
 envelopes, summaries, and ordered operations. Migrations, backup/retention,
-hash import, richer history detail, and workflow/interface composition remain
-later phases.
+hash import, and richer integrity history remain later phases.
+
+The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
+scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
+and independent history without crossing package boundaries. The CLI exposes
+the two-session `sync` review/commit/execute flow and read-only `history`
+browsing through both `nami-sync` and `python -m namisync`.
 
 ## Development setup
 
@@ -50,6 +54,26 @@ Check the architectural import boundaries with:
 ```powershell
 .\.venv\Scripts\lint-imports.exe
 ```
+
+## Command line
+
+Review and, only after typing the exact confirmation, execute a one-way sync:
+
+```powershell
+nami-sync sync C:\Source D:\Target
+```
+
+Browse retained history or one run in detail:
+
+```powershell
+nami-sync history
+nami-sync history RUN_TOKEN
+```
+
+`trash` is the default deletion policy; `additive` is also public, while
+`mirror` remains hidden. Ledger and history default to separate files under
+`%LOCALAPPDATA%\NamiSync`; `sync` accepts `--database` and
+`--history-database` overrides for isolated runs. There is no `--yes` bypass.
 
 ## Documentation
 
@@ -86,6 +110,15 @@ Check the architectural import boundaries with:
 
 ### Unreleased
 
+- Fixed planner no-op classification for standard-attribute-only changes, so
+  readonly/hidden/system drift now produces an update and converges on target.
+- Implemented the M0 workflow/composition and CLI slice: versioned dispatcher
+  payloads, two-session plan/commit/execute, fresh execution preflight, volume
+  custody, ledger recording, independent history browsing, real process entry
+  points, and isolated database overrides.
+- Fixed bounded sharing-violation retries for multi-step update and move-update
+  operations by resuming validated durable sub-steps instead of restarting into
+  false target drift or destination occupancy.
 - Implemented the guarded M0 Windows executor for every planned operation kind,
   including atomic copy/update publication, trash-on-update recovery, exact temp
   ownership, typed continuation, bounded retries, progress, and copy evidence.

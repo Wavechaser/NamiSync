@@ -337,6 +337,11 @@ class WalkingScanner:
 
                 try:
                     stat = entry.stat(follow_symlinks=False)
+                    if (
+                        volume.profile.stable_file_identity
+                        and int(getattr(stat, "st_ino", 0) or 0) <= 0
+                    ):
+                        stat = self._backend.lstat(entry.path)
                 except (OSError, PermissionError) as error:
                     warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
                     unsupported.append(

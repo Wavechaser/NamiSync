@@ -197,6 +197,27 @@ def test_pure_preflight_accepts_matching_snapshot_without_filesystem() -> None:
     assert verdict.refusals == ()
 
 
+def test_preflight_accepts_new_identity_when_scan_had_no_identity_evidence() -> None:
+    source = replace(_file("copy.bin"), file_identity=None)
+    xset = _xset(source_files=(source,))
+    world = _world(xset)
+    operation = xset.remaining()[0]
+    subject = Subject(
+        xset.plan.source_root.root_id,
+        normalize_relative_path(operation.source_rel_path),
+    )
+    stats = dict(world.stats)
+    observed = stats[subject].stat
+    assert observed is not None
+    stats[subject] = StatObservation(
+        replace(observed, file_identity=FileIdentity("SRC", 999))
+    )
+
+    assert RefusalCode.IDENTITY_CHANGED not in _codes(
+        xset, replace(world, stats=stats)
+    )
+
+
 @pytest.mark.parametrize(("source_complete", "target_complete", "expected"), [(False, True, RefusalCode.INCOMPLETE_SOURCE_SCAN), (True, False, RefusalCode.INCOMPLETE_TARGET_SCAN)])
 def test_every_incomplete_scan_is_refused_even_without_target_only_work(
     source_complete: bool, target_complete: bool, expected: RefusalCode

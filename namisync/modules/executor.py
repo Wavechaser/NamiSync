@@ -591,6 +591,36 @@ class _Settled:
     detail: dict[str, object] = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class _PreparedCopy:
+    source: Path
+    target: Path
+    temp: Path
+    digest: CopyDigest
+    intended: FileStat
+
+
+@dataclass(slots=True)
+class _UpdateContinuation:
+    prepared: _PreparedCopy
+    prepared_stat: FileStat
+    live_stat: FileStat
+    trash: Path | None
+    backup_stat: FileStat | None
+    detail: dict[str, object]
+    published: bool = False
+
+
+@dataclass(slots=True)
+class _MoveUpdateContinuation:
+    prepared: _PreparedCopy
+    old_relative_path: str
+    old_expected: FileStat
+    published_stat: FileStat
+    trash: Path | None = None
+    attestation: Attestation | None = None
+
+
 @dataclass(slots=True)
 class _ExecutionState:
     outcomes: dict[OpId, ItemOutcome]
@@ -599,6 +629,9 @@ class _ExecutionState:
     pending_directories: list[PlanOperation] = field(default_factory=list)
     ready_directories: set[OpId] = field(default_factory=set)
     restore_directories: set[OpId] = field(default_factory=set)
+    retry_continuations: dict[
+        OpId, _UpdateContinuation | _MoveUpdateContinuation
+    ] = field(default_factory=dict)
     filesystem_failed: bool = False
 
 
@@ -790,12 +823,14 @@ def execute(
                         isinstance(decision, Retry)
                         and attempt <= policies.max_retries
                     ):
-                        _cleanup_inflight(state, fs)
+                        if operation.op_id not in state.retry_continuations:
+                            _cleanup_inflight(state, fs)
                         ctx.checkpoint()
                         policies.sleep(decision.after)
                         ctx.checkpoint()
                         continue
                     cleanup_error = _cleanup_inflight(state, fs)
+                    state.retry_continuations.pop(operation.op_id, None)
                     if cleanup_error is not None:
                         error = OperationFailure(
                             ExecutionReason.CLEANUP_FAILED,
@@ -807,6 +842,7 @@ def execute(
                         stop_requested = True
                     break
                 else:
+                    state.retry_continuations.pop(operation.op_id, None)
                     _settle(xset, state, progress, ctx, operation, settled)
                     break
 
@@ -953,15 +989,6 @@ def _execute_operation(
     raise OperationFailure(
         ExecutionReason.IO_ERROR, f"unsupported operation kind: {operation.kind}"
     )
-
-
-@dataclass(frozen=True, slots=True)
-class _PreparedCopy:
-    source: Path
-    target: Path
-    temp: Path
-    digest: CopyDigest
-    intended: FileStat
 
 
 def _prepare_copy(
@@ -1111,73 +1138,153 @@ def _update(
         raise OperationFailure(
             ExecutionReason.TARGET_MISSING, "update has no displaced target evidence"
         )
-    prepared = _prepare_copy(
-        operation,
-        xset,
-        ctx,
-        policies,
-        fs,
-        source_root,
-        target_root,
-        state,
-        progress,
-    )
-    _guard_present(
-        fs,
-        target_root,
-        operation.target_rel_path,
-        operation.target_expected,
-        missing=ExecutionReason.TARGET_MISSING,
-        drift=ExecutionReason.TARGET_DRIFT,
-    )
-    detail: dict[str, object] = {}
-    trash: Path | None = None
-    if xset.plan.trash_on_update:
-        trash = fs.trash_destination(
-            target_root, xset.run_id, operation.target_rel_path
+    existing = state.retry_continuations.get(operation.op_id)
+    if existing is None:
+        prepared = _prepare_copy(
+            operation,
+            xset,
+            ctx,
+            policies,
+            fs,
+            source_root,
+            target_root,
+            state,
+            progress,
         )
-        if fs.stat_path(trash) is not None:
-            raise OperationFailure(
-                ExecutionReason.TRASH_COLLISION, f"update trash exists: {trash}"
+        _guard_present(
+            fs,
+            target_root,
+            operation.target_rel_path,
+            operation.target_expected,
+            missing=ExecutionReason.TARGET_MISSING,
+            drift=ExecutionReason.TARGET_DRIFT,
+        )
+        detail: dict[str, object] = {}
+        trash: Path | None = None
+        backup_error: Exception | None = None
+        if xset.plan.trash_on_update:
+            trash = fs.trash_destination(
+                target_root, xset.run_id, operation.target_rel_path
             )
-        if xset.plan.target_profile.supports_hardlinks:
-            fs.hardlink(prepared.target, trash)
-            detail["backup"] = "hardlink"
-        else:
-            backup_temp = fs.owned_temp(trash, xset.run_id, operation.op_id)
-            try:
-                fs.remove_owned_temp(backup_temp)
-            except Exception as error:
+            if fs.stat_path(trash) is not None:
                 raise OperationFailure(
-                    ExecutionReason.CLEANUP_FAILED,
-                    f"cannot recover exact backup temp: {backup_temp}",
-                    cause=error,
-                ) from error
-            fs.copy_backup(prepared.target, backup_temp, trash, ctx.checkpoint)
-            detail["backup"] = "copy"
+                    ExecutionReason.TRASH_COLLISION, f"update trash exists: {trash}"
+                )
+            try:
+                if xset.plan.target_profile.supports_hardlinks:
+                    fs.hardlink(prepared.target, trash)
+                    detail["backup"] = "hardlink"
+                else:
+                    backup_temp = fs.owned_temp(trash, xset.run_id, operation.op_id)
+                    try:
+                        fs.remove_owned_temp(backup_temp)
+                    except Exception as error:
+                        raise OperationFailure(
+                            ExecutionReason.CLEANUP_FAILED,
+                            f"cannot recover exact backup temp: {backup_temp}",
+                            cause=error,
+                        ) from error
+                    fs.copy_backup(prepared.target, backup_temp, trash, ctx.checkpoint)
+                    detail["backup"] = "copy"
+            except (Canceled, PauseRequested):
+                raise
+            except Exception as error:
+                if fs.stat_path(trash) is None:
+                    raise
+                backup_error = error
+                detail["backup"] = (
+                    "hardlink"
+                    if xset.plan.target_profile.supports_hardlinks
+                    else "copy"
+                )
+        continuation = _UpdateContinuation(
+            prepared=prepared,
+            prepared_stat=_require_stat_path(fs, prepared.temp),
+            live_stat=_require_stat_path(fs, prepared.target),
+            trash=trash,
+            backup_stat=None if trash is None else _require_stat_path(fs, trash),
+            detail=detail,
+        )
+        state.retry_continuations[operation.op_id] = continuation
+        if backup_error is not None:
+            raise backup_error
+    elif isinstance(existing, _UpdateContinuation):
+        continuation = existing
+        prepared = continuation.prepared
+    else:
+        raise RuntimeError("executor continuation kind does not match update")
 
-    readonly_cleared = bool(
-        operation.target_expected.metadata.attributes & _READONLY
-    )
-    published = False
-    try:
-        if readonly_cleared:
-            fs.clear_readonly(prepared.target)
-        _flush_before_destructive(recorder, state)
-        fs.replace(prepared.temp, prepared.target)
-        state.inflight_temp = None
-        published = True
-    finally:
-        if readonly_cleared and not published and fs.stat_path(prepared.target) is not None:
-            fs.apply_metadata(
-                prepared.target,
-                operation.target_expected,
-                preserve_created=xset.plan.preservation.preserve_created,
-                apply_readonly=True,
+    if not continuation.published:
+        temp_stat = fs.stat_path(prepared.temp)
+        if temp_stat is None:
+            published = _require_stat_path(fs, prepared.target)
+            if not _same_file_version(published, continuation.prepared_stat):
+                raise OperationFailure(
+                    ExecutionReason.TARGET_DRIFT,
+                    "update temp disappeared without the prepared file being published",
+                )
+            continuation.published = True
+            state.inflight_temp = None
+        else:
+            _guard_present(
+                fs,
+                source_root,
+                operation.source_rel_path,
+                operation.source_expected,
+                missing=ExecutionReason.SOURCE_MISSING,
+                drift=ExecutionReason.SOURCE_DRIFT,
             )
-    if trash is not None:
+            _guard_path_stat(
+                temp_stat,
+                continuation.prepared_stat,
+                ExecutionReason.TARGET_DRIFT,
+                "prepared update temp drifted before retry",
+            )
+            live = _require_stat_path(fs, prepared.target)
+            _guard_path_stat(
+                live,
+                continuation.live_stat,
+                ExecutionReason.TARGET_DRIFT,
+                "live update target drifted after its backup was created",
+            )
+            if continuation.trash is not None:
+                backup = _require_stat_path(fs, continuation.trash)
+                assert continuation.backup_stat is not None
+                _guard_path_stat(
+                    backup,
+                    continuation.backup_stat,
+                    ExecutionReason.TRASH_COLLISION,
+                    "update backup drifted before retry",
+                )
+
+            readonly_cleared = bool(
+                operation.target_expected.metadata.attributes & _READONLY
+            )
+            try:
+                if readonly_cleared:
+                    fs.clear_readonly(prepared.target)
+                _flush_before_destructive(recorder, state)
+                fs.replace(prepared.temp, prepared.target)
+                state.inflight_temp = None
+                continuation.published = True
+            finally:
+                live = fs.stat_path(prepared.target)
+                if (
+                    readonly_cleared
+                    and not continuation.published
+                    and live is not None
+                    and _same_file_version(live, continuation.live_stat)
+                ):
+                    fs.apply_metadata(
+                        prepared.target,
+                        operation.target_expected,
+                        preserve_created=xset.plan.preservation.preserve_created,
+                        apply_readonly=True,
+                    )
+
+    if continuation.trash is not None:
         fs.apply_metadata(
-            trash,
+            continuation.trash,
             operation.target_expected,
             preserve_created=xset.plan.preservation.preserve_created,
             apply_readonly=True,
@@ -1188,11 +1295,15 @@ def _update(
         preserve_created=xset.plan.preservation.preserve_created,
         apply_readonly=True,
     )
-    detail.update(
+    continuation.detail.update(
         _durability_detail(
             fs,
             prepared.target.parent,
-            *(() if trash is None else (trash.parent,)),
+            *(
+                ()
+                if continuation.trash is None
+                else (continuation.trash.parent,)
+            ),
         )
     )
     published_stat = _profiled_stat(
@@ -1200,8 +1311,12 @@ def _update(
         xset.plan.target_profile.stable_file_identity,
     )
     attestation = _attestation(prepared.digest, published_stat, policies.clock)
-    _record(state, detail, lambda: recorder.record_updated(operation.op_id, attestation))
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    _record(
+        state,
+        continuation.detail,
+        lambda: recorder.record_updated(operation.op_id, attestation),
+    )
+    return _Settled(Outcome.SUCCEEDED, detail=continuation.detail)
 
 
 def _move(
@@ -1254,74 +1369,117 @@ def _move_update(
     state: _ExecutionState,
     progress: _ProgressTracker,
 ) -> _Settled:
-    old_rel, old_expected = _prior_target(operation)
-    _guard_present(
-        fs,
-        target_root,
-        old_rel,
-        old_expected,
-        missing=ExecutionReason.TARGET_MISSING,
-        drift=ExecutionReason.TARGET_DRIFT,
-    )
-    prepared = _prepare_copy(
-        operation,
-        xset,
-        ctx,
-        policies,
-        fs,
-        source_root,
-        target_root,
-        state,
-        progress,
-    )
-    try:
-        fs.publish_new(prepared.temp, prepared.target)
-    except FileExistsError as error:
+    existing = state.retry_continuations.get(operation.op_id)
+    if existing is None:
+        old_rel, old_expected = _prior_target(operation)
+        _guard_present(
+            fs,
+            target_root,
+            old_rel,
+            old_expected,
+            missing=ExecutionReason.TARGET_MISSING,
+            drift=ExecutionReason.TARGET_DRIFT,
+        )
+        prepared = _prepare_copy(
+            operation,
+            xset,
+            ctx,
+            policies,
+            fs,
+            source_root,
+            target_root,
+            state,
+            progress,
+        )
+        try:
+            fs.publish_new(prepared.temp, prepared.target)
+        except FileExistsError as error:
+            raise OperationFailure(
+                ExecutionReason.DESTINATION_OCCUPIED,
+                "move-update destination appeared before conditional publish",
+                cause=error,
+            ) from error
+        state.inflight_temp = None
+        continuation = _MoveUpdateContinuation(
+            prepared=prepared,
+            old_relative_path=old_rel,
+            old_expected=old_expected,
+            published_stat=_require_stat_path(fs, prepared.target),
+        )
+        state.retry_continuations[operation.op_id] = continuation
+    elif isinstance(existing, _MoveUpdateContinuation):
+        continuation = existing
+        prepared = continuation.prepared
+    else:
+        raise RuntimeError("executor continuation kind does not match move-update")
+
+    published_actual = _require_stat_path(fs, prepared.target)
+    if not _same_file_version(published_actual, continuation.published_stat):
         raise OperationFailure(
-            ExecutionReason.DESTINATION_OCCUPIED,
-            "move-update destination appeared before conditional publish",
-            cause=error,
-        ) from error
-    state.inflight_temp = None
+            ExecutionReason.TARGET_DRIFT,
+            "published move-update target drifted before completion",
+        )
     fs.apply_metadata(
         prepared.target,
         prepared.intended,
         preserve_created=xset.plan.preservation.preserve_created,
         apply_readonly=True,
     )
-    published = _profiled_stat(
-        _require_stat_path(fs, prepared.target),
-        xset.plan.target_profile.stable_file_identity,
-    )
-    attestation = _attestation(prepared.digest, published, policies.clock)
-    trash = fs.trash_destination(target_root, xset.run_id, old_rel)
-    if fs.stat_path(trash) is not None:
-        raise OperationFailure(
-            ExecutionReason.TRASH_COLLISION, f"move-update trash exists: {trash}"
+    if continuation.attestation is None:
+        published = _profiled_stat(
+            _require_stat_path(fs, prepared.target),
+            xset.plan.target_profile.stable_file_identity,
         )
-    _guard_present(
-        fs,
-        target_root,
-        old_rel,
-        old_expected,
-        missing=ExecutionReason.TARGET_MISSING,
-        drift=ExecutionReason.TARGET_DRIFT,
+        continuation.attestation = _attestation(
+            prepared.digest, published, policies.clock
+        )
+    if continuation.trash is None:
+        continuation.trash = fs.trash_destination(
+            target_root, xset.run_id, continuation.old_relative_path
+        )
+    trash = continuation.trash
+    old = fs.resolve(
+        target_root, continuation.old_relative_path, must_exist=False
     )
-    old = fs.resolve(target_root, old_rel, must_exist=True)
-    _flush_before_destructive(recorder, state)
-    try:
-        fs.rename_new(old, trash)
-    except FileExistsError as error:
-        raise OperationFailure(
-            ExecutionReason.TRASH_COLLISION,
-            "move-update trash destination appeared before conditional rename",
-            cause=error,
-        ) from error
+    old_actual = fs.stat(target_root, continuation.old_relative_path)
+    trash_actual = fs.stat_path(trash)
+    if old_actual is None:
+        if trash_actual is None or not _matches_expected(
+            trash_actual, continuation.old_expected
+        ):
+            raise OperationFailure(
+                ExecutionReason.TARGET_MISSING,
+                "move-update old path vanished without reaching owned trash",
+            )
+    else:
+        _guard_path_stat(
+            old_actual,
+            continuation.old_expected,
+            ExecutionReason.TARGET_DRIFT,
+            "move-update old path drifted before trash",
+        )
+        if trash_actual is not None:
+            raise OperationFailure(
+                ExecutionReason.TRASH_COLLISION,
+                f"move-update trash exists: {trash}",
+            )
+        _flush_before_destructive(recorder, state)
+        try:
+            fs.rename_new(old, trash)
+        except FileExistsError as error:
+            raise OperationFailure(
+                ExecutionReason.TRASH_COLLISION,
+                "move-update trash destination appeared before conditional rename",
+                cause=error,
+            ) from error
     detail = _durability_detail(fs, prepared.target.parent, old.parent, trash.parent)
+    assert continuation.attestation is not None
     _record(
         state,
         detail,
-        lambda: recorder.record_move_updated(operation.op_id, attestation),
+        lambda: recorder.record_move_updated(
+            operation.op_id, continuation.attestation
+        ),
     )
     return _Settled(Outcome.SUCCEEDED, detail=detail)
 
@@ -1697,6 +1855,33 @@ def _matches_expected(actual: FileStat, expected: FileStat) -> bool:
         and actual.mtime_ns == expected.mtime_ns
         and actual.nlink == expected.nlink
         and actual.metadata == expected.metadata
+        and (
+            expected.file_identity is None
+            or actual.file_identity == expected.file_identity
+        )
+    )
+
+
+def _guard_path_stat(
+    actual: FileStat,
+    expected: FileStat,
+    reason: ExecutionReason,
+    detail: str,
+) -> None:
+    if not _matches_expected(actual, expected):
+        raise OperationFailure(
+            ExecutionReason.WRONG_TYPE if actual.kind is not expected.kind else reason,
+            detail,
+        )
+
+
+def _same_file_version(actual: FileStat, expected: FileStat) -> bool:
+    """Recognize one prepared file across rename and partial metadata steps."""
+
+    return (
+        actual.kind is expected.kind
+        and actual.size == expected.size
+        and actual.mtime_ns == expected.mtime_ns
         and (
             expected.file_identity is None
             or actual.file_identity == expected.file_identity

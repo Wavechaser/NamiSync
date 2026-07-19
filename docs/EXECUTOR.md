@@ -196,9 +196,15 @@ releases custody. Resume queues at the back, freshly re-observes/preflights in
 workflow, and continues only unreached work.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoint
-between attempts. Persistent failure records a typed reason and independent work
-continues. Unexpected executor exceptions are contained by the session wrapper,
-release custody, and never suppress already-earned item outcomes.
+between attempts. A simple operation restarts after exact-temp cleanup; an
+update or move-update with a durable sub-step retains an operation-local
+continuation, revalidates the prepared/published file and owned backup/trash,
+and resumes at replace or old-to-trash rename instead of colliding with its own
+hardlink or published destination. It also recognizes the exact committed state
+if an injected/native boundary reports failure after the syscall took effect.
+Persistent failure records `sharing-violation` after the configured bound and
+independent work continues. Unexpected executor exceptions are contained by the
+session wrapper, release custody, and never suppress already-earned outcomes.
 
 ## Progress
 
@@ -264,8 +270,9 @@ The focused M0 suite exercises all eight operation kinds; atomic conditional
 publish and displacement; hardlink and copy-backup update paths; source and
 target drift; ACL and readonly ordering; exact temp cleanup; reparse/off-volume
 trash refusal; move/composite failure bounds; dependency continuation; deferred
-directory metadata; cancel, pause, unexpected interruption, bounded sharing
-retry, recorder degradation, progress throttling, and copy attestations. The
+directory metadata; cancel, pause, unexpected interruption, simple and
+multi-step bounded sharing retry, recorder degradation, progress throttling,
+and copy attestations. The
 workflow/dispatcher/recorder suites cover the acceptance responsibilities that
 belong outside this module, including fresh preflight, custody, one terminal,
 and durable run-token idempotency.
@@ -316,8 +323,10 @@ and durable run-token idempotency.
   and resume performs fresh preflight at the back of the queue.
 - Progress totals equal copy/update content bytes exactly and remain monotonic;
   event rate stays under the configured bound.
-- Transient sharing violations retry within bound; persistent locks skip/fail
-  with actionable reason and do not hang the session.
+- Transient sharing violations retry within bound, including update replace and
+  move-update old-to-trash failures after an earlier sub-step committed;
+  persistent locks fail with actionable `sharing-violation` rather than false
+  drift/occupancy and do not hang the session.
 - Copy-stream evidence is tagged `copy`, target identity comes from post-publish
   stat, and `last_verified_at` remains unchanged until real verification.
 - Recorder failure test preserves the successful filesystem result, reports the

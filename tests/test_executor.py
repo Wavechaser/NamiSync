@@ -844,6 +844,176 @@ def test_transient_sharing_violation_retries_within_bound(tmp_path: Path) -> Non
     assert (target / "file.bin").read_bytes() == b"retry"
 
 
+class ReplaceSharingOnceFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.attempts += 1
+        if self.attempts == 1:
+            error = OSError("sharing violation during replace")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        super().replace(temp, target)
+
+
+@pytest.mark.parametrize("hardlinks", [True, False])
+def test_update_retries_replace_without_restarting_after_backup(
+    tmp_path: Path, hardlinks: bool
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = ReplaceSharingOnceFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=hardlinks)), fs=fs
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert fs.attempts == 2
+    assert (target / "file.bin").read_bytes() == b"new-version"
+    assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
+    assert [call[0] for call in recorder.calls] == ["updated"]
+
+
+class ReplaceSharingAfterCommitFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.attempts += 1
+        super().replace(temp, target)
+        error = OSError("sharing report after committed replace")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+
+def test_update_retry_recognizes_replace_that_committed_before_error(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = ReplaceSharingAfterCommitFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    assert result.status is SessionState.COMPLETED
+    assert fs.attempts == 1
+    assert (target / "file.bin").read_bytes() == b"new-version"
+    assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
+    assert [call[0] for call in recorder.calls] == ["updated"]
+
+
+class BackupSharingAfterCommitFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def copy_backup(self, source, temp, target, checkpoint) -> None:
+        self.attempts += 1
+        super().copy_backup(source, temp, target, checkpoint)
+        error = OSError("sharing report after committed backup")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+
+def test_update_retry_recognizes_committed_copy_backup(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = BackupSharingAfterCommitFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)), fs=fs
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert fs.attempts == 1
+    assert (target / "file.bin").read_bytes() == b"new-version"
+    assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
+    assert [call[0] for call in recorder.calls] == ["updated"]
+
+
+class ReplaceSharingAlwaysFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.attempts += 1
+        error = OSError("persistent replace sharing violation")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+
+def test_persistent_update_sharing_exhausts_policy_without_false_drift(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = ReplaceSharingAlwaysFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs
+    )
+
+    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert fs.attempts == 3
+    assert outcome.reason == "sharing-violation"
+    assert (target / "file.bin").read_bytes() == b"old-version"
+    assert recorder.calls == []
+
+
 class PersistentSharingFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.attempts = 0
@@ -1071,6 +1241,96 @@ def test_composite_move_update_publishes_new_then_trashes_old(tmp_path: Path) ->
     result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
 
     assert result.status is SessionState.COMPLETED
+    assert (target / "renamed.bin").read_bytes() == b"changed"
+    assert not (target / "old.bin").exists()
+    assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
+    assert [call[0] for call in recorder.calls] == ["move_updated"]
+
+
+class MoveUpdateTrashSharingOnceFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        if ".synctrash" in target.parts:
+            self.attempts += 1
+            if self.attempts == 1:
+                error = OSError("sharing violation while trashing old path")
+                error.winerror = 32  # type: ignore[attr-defined]
+                raise error
+        super().rename_new(source, target)
+
+
+def test_move_update_retries_old_to_trash_without_republishing(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "renamed.bin").write_bytes(b"changed")
+    (target / "old.bin").write_bytes(b"old")
+    fs = MoveUpdateTrashSharingOnceFileSystem()
+    source_stat = fs.stat(source, "renamed.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.MOVE_UPDATE,
+        source_rel_path="renamed.bin",
+        target_rel_path="renamed.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+        prior_target_rel_path="old.bin",
+        prior_target_expected=old_stat,
+    )
+
+    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    assert result.status is SessionState.COMPLETED
+    assert fs.attempts == 2
+    assert (target / "renamed.bin").read_bytes() == b"changed"
+    assert not (target / "old.bin").exists()
+    assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
+    assert [call[0] for call in recorder.calls] == ["move_updated"]
+
+
+class MoveUpdateTrashSharingAfterCommitFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.attempts = 0
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        if ".synctrash" in target.parts:
+            self.attempts += 1
+            super().rename_new(source, target)
+            error = OSError("sharing report after committed trash rename")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        super().rename_new(source, target)
+
+
+def test_move_update_retry_recognizes_committed_old_to_trash_rename(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "renamed.bin").write_bytes(b"changed")
+    (target / "old.bin").write_bytes(b"old")
+    fs = MoveUpdateTrashSharingAfterCommitFileSystem()
+    source_stat = fs.stat(source, "renamed.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.MOVE_UPDATE,
+        source_rel_path="renamed.bin",
+        target_rel_path="renamed.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+        prior_target_rel_path="old.bin",
+        prior_target_expected=old_stat,
+    )
+
+    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    assert result.status is SessionState.COMPLETED
+    assert fs.attempts == 1
     assert (target / "renamed.bin").read_bytes() == b"changed"
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"

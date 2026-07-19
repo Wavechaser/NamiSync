@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 import re
@@ -12,7 +12,7 @@ from typing import BinaryIO, NewType, Protocol, TypeAlias
 
 from .evidence import Attestation, Outcome
 from .models import FileStat
-from .planning import OpId, Plan, PlanOperation
+from .planning import OpId, Plan, PlanFingerprint, PlanOperation
 
 
 RunId = NewType("RunId", str)
@@ -28,6 +28,25 @@ def validated_run_id(value: str) -> RunId:
     return RunId(value)
 
 
+@dataclass(frozen=True, slots=True)
+class Commitment:
+    """Human authorization bound to one plan and exact operation selection."""
+
+    plan_fingerprint: PlanFingerprint
+    selection_digest: bytes
+    committed_at: datetime
+
+    def __post_init__(self) -> None:
+        if not self.plan_fingerprint:
+            raise ValueError("commitment plan fingerprint is required")
+        if len(self.selection_digest) != 32:
+            raise ValueError("commitment selection digest must contain 32 bytes")
+        if self.committed_at.tzinfo is None or self.committed_at.utcoffset() is None:
+            raise ValueError("commitment timestamp must be timezone-aware")
+        if self.committed_at.utcoffset() != timezone.utc.utcoffset(self.committed_at):
+            raise ValueError("commitment timestamp must be UTC")
+
+
 @dataclass(slots=True)
 class ExecutionSet:
     """A selected plan plus mutable continuation state for pause/resume."""
@@ -36,6 +55,7 @@ class ExecutionSet:
     selection: frozenset[OpId]
     run_id: RunId
     status: dict[OpId, Outcome] = field(default_factory=dict)
+    commitment: Commitment | None = None
 
     def __post_init__(self) -> None:
         validated_run_id(str(self.run_id))

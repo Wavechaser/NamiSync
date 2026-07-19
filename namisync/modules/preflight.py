@@ -353,7 +353,10 @@ def _add_stat_refusals(
         return
     if actual.kind is not expected.kind:
         refusals.append(Refusal(RefusalCode.TYPE_CHANGED, operation.op_id, subject))
-    if actual.file_identity != expected.file_identity:
+    if (
+        expected.file_identity is not None
+        and actual.file_identity != expected.file_identity
+    ):
         refusals.append(Refusal(RefusalCode.IDENTITY_CHANGED, operation.op_id, subject))
     if actual.size != expected.size:
         refusals.append(Refusal(RefusalCode.SIZE_CHANGED, operation.op_id, subject))

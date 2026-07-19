@@ -586,11 +586,12 @@ drive-qualified, `..`, root-escaping).
 
 ### 4.2 scanner
 
-**Implementation status (2026-07-18).** The M0 native walking scanner,
+**Implementation status (2026-07-19).** The M0 native walking scanner,
 injectable fault backend, full/scoped result distinction, exact ignores,
 capability evidence, placeholder/reparse handling, deterministic records, and
-typed incomplete snapshots are implemented and acceptance-tested. USN and
-network change sources remain deferred.
+typed incomplete snapshots are implemented and acceptance-tested. Stable-ID
+volumes recover a directory-entry identity omission with one exact-path
+metadata stat. USN and network change sources remain deferred.
 
 **Contract.** `scan(root, ignores, ctx) -> ScanResult`. Implements
 `ChangeSource`.
@@ -619,8 +620,9 @@ every directory recorded with metadata); exact-name ignore filtering; capability
 
 ### 4.3 planner
 
-**Implementation status (2026-07-18).** The pure M0 planner and its core plan
-contracts are implemented: identity assignment, metadata diffing, explicit
+**Implementation status (2026-07-19).** The pure M0 planner and its core plan
+contracts are implemented: identity assignment, timestamp- and
+standard-attribute-aware metadata diffing, explicit
 directory chains, correspondence-qualified file moves, composite move-update,
 planned-removal cleanup, symmetric filters, deterministic serialization, and
 the shared hardlink-aware capacity function. Non-everything scopes and content
@@ -646,7 +648,8 @@ the diff never compares `source.rel_path` to `target.rel_path` directly, even
 though the M0 policy is the identity assignment. This one indirection is what
 makes ingest a policy change instead of a planner rewrite.
 
-**Flesh — now.** Metadata diffing within the coarser root's granularity;
+**Flesh — now.** Mtime diffing within the coarser root's granularity plus
+exact standard-attribute diffing;
 copy/update/trash/delete/noop planning, with an explicit mkdir-with-metadata
 operation for every directory the plan creates (full chain — file operations
 depend on their parent's mkdir; the executor never creates a directory
@@ -805,7 +808,10 @@ primitive; readonly applied only after publish; directory metadata applied
 only after the directory's children settle (child creates and renames churn
 parent times — directory times are restored last); the cancel-unwind finalizer
 (§2.2a — canceled outcomes for in-flight and unreached items emitted before
-unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams.
+unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams;
+and process-local retry continuations for committed update/move-update sub-steps,
+which revalidate the exact prepared/published and backup/trash evidence before
+resuming rather than restarting against the executor's own prior mutation.
 
 **Flesh — now.** copy/update/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
@@ -1064,14 +1070,22 @@ Everything downstream falls out of this split:
 observe → preflight → execute/verify); no signals, no callbacks-for-control;
 every dependency arrives via `deps`.
 
-**Flesh — now.** Paired sync (both phases); one-location integrity
-(inventory/baseline/verify/import); CLI sync — terminal review and commit
-*between* the two sessions.
-**Flesh — deferred.** Queue-driven second sessions; replay-from-history; DB
-maintenance session; undo/repair (each generated as an ordinary plan through the
-same pipeline — the *Pipeline-Only Mutation* law); `run_ingest` — scan → enrich
-(`MetadataExtractor`, its own cancellable stage) → plan (template
-`DestinationPolicy`) → the same review gate, preflight, and executor as sync.
+**Implementation status (2026-07-19).** M0 paired sync now runs both dispatcher
+sessions through schema-versioned opaque payloads. Planning reads prior
+correspondence without creating configuration; execution verifies commitment,
+freshly observes/preflights under volume custody, then opens the sole ledger
+writer and independent history observer. The CLI commits only between terminal
+sessions and exposes the resulting typed history reads.
+
+**Flesh — implemented (M0).** Paired sync (both phases), local composition,
+CLI terminal review/commit, and history browsing.
+**Flesh — deferred.** One-location integrity
+(inventory/baseline/verify/import, M1); queue-driven second sessions;
+replay-from-history; DB maintenance session; undo/repair (each generated as an
+ordinary plan through the same pipeline — the *Pipeline-Only Mutation* law);
+`run_ingest` — scan → enrich (`MetadataExtractor`, its own cancellable stage)
+→ plan (template `DestinationPolicy`) → the same review gate, preflight, and
+executor as sync.
 
 **Acceptance criteria.**
 - The workflow reads top-to-bottom as sequential calls; control flow is visible,

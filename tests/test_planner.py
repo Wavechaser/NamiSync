@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 
@@ -34,6 +34,7 @@ from namisync.core.planning import (
     MappingPair,
     MappingSnapshot,
     OperationKind,
+    OperationReason,
     PlanOperation,
     PreservationPolicy,
     Scope,
@@ -376,6 +377,22 @@ def test_coarse_timestamp_granularity_produces_metadata_noop() -> None:
         profile=coarse,
     )
     assert [operation.kind for operation in _plan(source, target).operations] == [OperationKind.NOOP]
+
+
+def test_standard_attribute_change_plans_update_without_mtime_change() -> None:
+    source_file = replace(
+        _file("same.bin"), metadata=MetadataSnapshot(1, META.created_ns)
+    )
+    target_file = _file("same.bin", identity=FileIdentity("DST", 2))
+    source = _scan("source", SOURCE_VOLUME, files=(source_file,))
+    target = _scan("target", TARGET_VOLUME, files=(target_file,))
+
+    operations = _plan(source, target).operations
+
+    assert [operation.kind for operation in operations] == [OperationKind.UPDATE]
+    assert operations[0].reason is OperationReason.METADATA_CHANGED
+    assert operations[0].metadata == source_file.metadata
+    assert operations[0].content_bytes == source_file.size
 
 
 def test_duplicate_identity_and_ambiguous_prior_correspondence_disable_move() -> None:
