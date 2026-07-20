@@ -1874,10 +1874,12 @@ def _matches_directory_cleanup(actual: FileStat, expected: FileStat) -> bool:
     return (
         actual.kind is EntryKind.DIRECTORY
         and expected.kind is EntryKind.DIRECTORY
-        and expected.file_identity is not None
-        and actual.file_identity == expected.file_identity
         and actual.size == expected.size
         and actual.metadata == expected.metadata
+        and (
+            expected.file_identity is None
+            or actual.file_identity == expected.file_identity
+        )
     )
 
 

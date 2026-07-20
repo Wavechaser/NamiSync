@@ -130,7 +130,9 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
   and CLI/history report blocked/deferred exceptions with a distinct partial
   exit and history schema migration.
 - Fixed same-run empty-directory cleanup to tolerate only child-induced
-  directory mtime/link-count churn under stable identity, and fixed Windows
+  directory mtime/link-count churn while binding identity whenever the reviewed
+  scan supplied it; identity-less FAT cleanup now converges under the remaining
+  evidence and the operating system's atomic emptiness guard. Also fixed Windows
   parent-directory flushing to use the write access required by the OS.
 - Fixed planner no-op classification for standard-attribute-only changes, so
   readonly/hidden/system drift now produces an update and converges on target.

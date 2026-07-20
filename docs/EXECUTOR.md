@@ -176,11 +176,11 @@ degrade to copy-delete. Record only after the rename succeeds.
 Mirror deletion remains internal/guarded. Re-stat type and identity immediately
 before deletion and use the strongest available handle-conditional delete.
 Only a dependency-complete `directory_cleanup` delete may ignore mtime and link
-count churn caused by removing its own planned children; it still requires a
-reviewed stable identity plus exact kind, size, attributes, and creation time.
-Identity-less cleanup is refused. Directories must be empty at deletion time and
-`RemoveDirectory` enforces that condition atomically. Never recursively delete
-an unplanned subtree.
+count churn caused by removing its own planned children; it still requires exact
+kind, size, attributes, and creation time. A stable identity binds exactly when
+the reviewed scan supplied one; absent identity is absent evidence, not a veto.
+Directories must be empty at deletion time and `RemoveDirectory` enforces that
+condition atomically. Never recursively delete an unplanned subtree.
 
 ### No-op
 

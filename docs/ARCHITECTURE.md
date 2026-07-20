@@ -815,9 +815,10 @@ primitives** where the OS provides them: publishes and moves that expect an
 absent destination use non-replacing rename (atomically fails if something
 appeared), temp files are created `CREATE_NEW`, and directory deletion relies
 on `RemoveDirectory`'s own atomic emptiness refusal. Dependency-complete
-`directory_cleanup` deletes retain exact stable identity, kind, size,
-attributes, and creation time but ignore mtime/link-count churn caused by their
-own child removals; identity-less cleanup refuses. A primitive guarantees
+`directory_cleanup` deletes retain exact kind, size, attributes, and creation
+time but ignore mtime/link-count churn caused by their own child removals;
+identity binds when the reviewed scan supplied it, while absent identity remains
+absent evidence rather than a veto. A primitive guarantees
 exactly its own condition and nothing more — none binds *source* identity to
 a pathname — so the external-writer boundary applies to **every** mutation,
 and each residual race is bounded by its **data consequence**, never by

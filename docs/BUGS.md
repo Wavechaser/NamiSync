@@ -21,8 +21,10 @@ Format: `- SEVERITY - STATUS. Category. What happened. Cause: why.`
   always failed as target drift, preventing folder rename/removal from finishing
   in one run. Cause: the generic final guard compared the directory's scan-time
   mtime and link count even though removing its planned children changes those
-  fields; fixed with a cleanup-only matcher that still requires stable identity,
-  kind, size, attributes, and creation time before atomic empty-directory removal.
+  fields; fixed with a cleanup-only matcher that still requires kind, size,
+  attributes, and creation time, binds identity when the reviewed scan supplied
+  it, and treats absent identity as absent evidence rather than a veto before
+  atomic empty-directory removal.
 - MODERATE - FIXED (2026-07-20). Durability reporting. Every Windows parent-
   directory flush failed and attached an unsupported-flush warning to otherwise
   successful mutations. Cause: `CreateFileW` opened the directory for

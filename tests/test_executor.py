@@ -855,7 +855,7 @@ def test_directory_cleanup_rejects_replaced_empty_directory(tmp_path: Path) -> N
     assert recorder.calls == []
 
 
-def test_directory_cleanup_requires_reviewed_stable_identity(tmp_path: Path) -> None:
+def test_directory_cleanup_allows_absent_reviewed_identity(tmp_path: Path) -> None:
     source, target = _roots(tmp_path)
     folder = target / "folder"
     folder.mkdir()
@@ -868,7 +868,48 @@ def test_directory_cleanup_requires_reviewed_stable_identity(tmp_path: Path) -> 
         source_rel_path=None,
         target_rel_path="folder",
         source_expected=None,
-        target_expected=replace(actual, file_identity=None),
+        target_expected=replace(
+            actual,
+            file_identity=None,
+            mtime_ns=actual.mtime_ns - 1,
+            nlink=actual.nlink + 1,
+        ),
+        intended=None,
+        reason=OperationReason.DIRECTORY_CLEANUP,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (cleanup,))), fs=fs
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert not folder.exists()
+    assert recorder.calls[0][0] == "deleted"
+
+
+def test_identityless_directory_cleanup_still_rejects_metadata_drift(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    folder = target / "folder"
+    folder.mkdir()
+    fs = NativeFileSystem()
+    actual = fs.stat(target, "folder")
+    assert actual is not None
+    cleanup = _operation(
+        1,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="folder",
+        source_expected=None,
+        target_expected=replace(
+            actual,
+            file_identity=None,
+            metadata=replace(
+                actual.metadata,
+                attributes=actual.metadata.attributes ^ 0x2,
+            ),
+        ),
         intended=None,
         reason=OperationReason.DIRECTORY_CLEANUP,
     )
