@@ -120,29 +120,26 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
-- Fixed hostile NTFS/SMB-originated names aborting scan/plan review: contract-
-  invalid names now produce escaped typed incomplete-scan evidence, lone
-  surrogates cannot enter relative paths or crash canonical encoding, and
-  exact-case source/target mismatches become visible blocked conflicts.
-- Added automatic safe-subset sync: blocked operations are itemized instead of
-  refusing independent work, blocked correspondence is quarantined, incomplete
-  scans become additive-only, no-ops continue refreshing move correspondence,
-  and CLI/history report blocked/deferred exceptions with a distinct partial
-  exit and history schema migration.
-- Fixed same-run empty-directory cleanup to tolerate only child-induced
-  directory mtime/link-count churn while binding identity whenever the reviewed
-  scan supplied it; identity-less FAT cleanup now converges under the remaining
-  evidence and the operating system's atomic emptiness guard. Also fixed Windows
-  parent-directory flushing to use the write access required by the OS.
-- Fixed planner no-op classification for standard-attribute-only changes, so
-  readonly/hidden/system drift now produces an update and converges on target.
+- Hardened scan and plan review against hostile filesystem names and case-only
+  conflicts: invalid names become typed incomplete-scan evidence, surrogates
+  cannot reach canonical encoding, and casing mismatches are explicit blockers.
+- Added safe partial sync: blocked work is itemized and quarantined, incomplete
+  scans are additive-only, independent work and no-op correspondence refreshes
+  continue, and CLI/history report blocked or deferred items with a distinct
+  partial exit.
+- Hardened Windows execution: same-run empty-directory cleanup accepts only
+  child-induced metadata churn, parent-directory flushing requests the required
+  write access, and retried multi-step operations resume from durable sub-steps.
+- Fixed planner no-ops for standard-attribute changes, so readonly, hidden, and
+  system drift now produces an update.
+- Hardened plan admission and Windows scan identity: plan fingerprints are
+  recomputed before commitment validation, unsafe database locations are refused
+  before confirmation, preflight results render reliably, and NTFS identity has
+  an exact-path fallback.
 - Implemented the M0 workflow/composition and CLI slice: versioned dispatcher
   payloads, two-session plan/commit/execute, fresh execution preflight, volume
   custody, ledger recording, independent history browsing, real process entry
   points, and isolated database overrides.
-- Fixed bounded sharing-violation retries for multi-step update and move-update
-  operations by resuming validated durable sub-steps instead of restarting into
-  false target drift or destination occupancy.
 - Implemented the guarded M0 Windows executor for every planned operation kind,
   including atomic copy/update publication, trash-on-update recovery, exact temp
   ownership, typed continuation, bounded retries, progress, and copy evidence.
