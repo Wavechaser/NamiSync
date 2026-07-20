@@ -40,10 +40,13 @@ executor, recorder, verifier/importer, and settings snapshots.
 2. Reacquire required physical-volume custody.
 3. Load current semantic environment without altering the reviewed snapshot.
 4. Freshly observe/preflight under execution custody; refusal mutates nothing.
-5. Execute selected dependency-closed work and record through recorder.
-6. Optionally start a separately scoped linked verification phase/session as
+5. After a successful verdict, remove exact prior-run temps once from the
+   observed touched-target-parent scope; cleanup failure stops before executor
+   admission, so capacity credited by preflight cannot become unsafe.
+6. Execute selected dependency-closed work and record through recorder.
+7. Optionally start a separately scoped linked verification phase/session as
    specified by the request.
-7. Return truthful filesystem, ledger-recording, audit, and verification
+8. Return truthful filesystem, ledger-recording, audit, and verification
    aggregates with independent axes.
 
 Human review occurs between sessions with nothing running. Commitment is the
@@ -161,8 +164,9 @@ interfaces present that as partial completion rather than clean full success.
 - Settings shaping a plan are snapshotted, not read opportunistically later.
 
 Workflow is the sole preflight owner: it sequences fresh observe → preflight →
-execute under custody on every start/resume. Executor imports no sibling and
-performs only operation-local live precondition guards.
+scoped prior-run temp recovery → execute under custody on every start/resume.
+Executor imports no sibling and performs only operation-local live precondition
+guards.
 
 ## PoC Hardening
 

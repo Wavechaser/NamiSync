@@ -216,8 +216,9 @@ logic; no scanner role or inventory representation is added.
   ordering errors.
 - One event/result vocabulary prevents verifier, history, CLI, and GUI from
   disagreeing about partial failure, refusal, and integrity state.
-- Exact artifact recognition prevents generic `.db` and `.synctmp-` matches
-  from excluding or deleting user data.
+- One exact temp-name parser supplies scanner ignore, preflight capacity, and
+  executor recovery with the same ownership grammar, preventing generic
+  `.synctmp-` matches from excluding, counting, or deleting user data.
 
 ## Acceptance Criteria
 

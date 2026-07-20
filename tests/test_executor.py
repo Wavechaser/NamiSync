@@ -408,6 +408,57 @@ def test_exact_temp_recovery_preserves_user_lookalike(tmp_path: Path) -> None:
     assert lookalike.read_bytes() == b"user"
 
 
+def test_orphan_temp_sweep_is_exact_scoped_and_preserves_current_run(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "target"
+    touched = target / "touched"
+    untouched = target / "untouched"
+    trash = target / ".synctrash"
+    off_volume = target / "off-volume"
+    for directory in (touched, untouched, trash, off_volume):
+        directory.mkdir(parents=True)
+    fs = NativeFileSystem()
+    old_run = validated_run_id("2" * 32)
+    old_op = OpId("3" * 32)
+    current_op = OpId("4" * 32)
+    old_temp = fs.owned_temp(touched / "old.bin", old_run, old_op)
+    current_temp = fs.owned_temp(touched / "current.bin", RUN_ID, current_op)
+    untouched_temp = fs.owned_temp(untouched / "later.bin", old_run, old_op)
+    trash_temp = fs.owned_temp(trash / "backup.bin", old_run, old_op)
+    off_volume_temp = fs.owned_temp(off_volume / "mounted.bin", old_run, old_op)
+    lookalike = touched / "notes.synctmp-user.txt"
+    exact_directory = fs.owned_temp(touched / "directory", old_run, old_op)
+    old_temp.write_bytes(b"old")
+    current_temp.write_bytes(b"current")
+    untouched_temp.write_bytes(b"untouched")
+    trash_temp.write_bytes(b"trash")
+    off_volume_temp.write_bytes(b"mounted")
+    lookalike.write_bytes(b"user")
+    exact_directory.mkdir()
+    native_volume = fs._volume_serial
+    monkeypatch.setattr(
+        fs,
+        "_volume_serial",
+        lambda path: "off-volume" if path.name == "off-volume" else native_volume(path),
+    )
+
+    fs.remove_orphaned_temps(
+        target,
+        frozenset({"touched", ".synctrash", "off-volume"}),
+        RUN_ID,
+    )
+
+    assert not old_temp.exists()
+    assert current_temp.read_bytes() == b"current"
+    assert untouched_temp.read_bytes() == b"untouched"
+    assert trash_temp.read_bytes() == b"trash"
+    assert off_volume_temp.read_bytes() == b"mounted"
+    assert lookalike.read_bytes() == b"user"
+    assert exact_directory.is_dir()
+
+
 @pytest.mark.parametrize("hardlinks", [True, False])
 def test_update_preserves_displaced_version_before_replace(
     tmp_path: Path, hardlinks: bool

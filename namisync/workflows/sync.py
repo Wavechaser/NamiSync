@@ -159,6 +159,11 @@ def run_execution(
 
     with deps.open_recording(xset) as recording:
         try:
+            deps.executor_fs.remove_orphaned_temps(
+                Path(xset.plan.target_root.path),
+                verdict.observed.target_parent_paths,
+                xset.run_id,
+            )
             result = deps.executor(
                 xset,
                 ctx,

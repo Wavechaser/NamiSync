@@ -9,6 +9,10 @@ identities, including FAT-style volumes. The executor now follows the shared
 evidence rule: identity binds exactly when the reviewed scan supplied it;
 absent identity is absent evidence rather than an execution veto.
 
+Also restored the advertised crashed-copy recovery path: after successful
+preflight, execution now removes exact prior-run temps once from the same
+touched target-parent scope used for reclaimable-capacity accounting.
+
 ## Changes
 
 - Narrowed only the `directory_cleanup` guard. It continues to ignore the
@@ -22,6 +26,15 @@ absent identity is absent evidence rather than an execution veto.
   and added a counter-test proving immutable metadata drift is still rejected.
 - Updated `BUGS.md`, `EXECUTOR.md`, `FEATURES.md`, `ARCHITECTURE.md`, and the
   README changelog to describe the conditional-identity policy.
+- Added a shared exact temp-owner parser, retained preflight's touched-parent
+  scope in `ObservedWorld`, and excluded current-run temps from reclaimable-byte
+  accounting.
+- Added the post-verdict, pre-copy sweep. It removes only different-run regular
+  files with exact generated names; current-run temps remain owned by the
+  per-operation retry/cancel path, and cleanup failure stops before copying.
+- Documented the recovery contract in `CORE.md`, `PREFLIGHT.md`, `EXECUTOR.md`,
+  `WORKFLOWS.md`, `FEATURES.md`, `ARCHITECTURE.md`, `BUGS.md`, and the README
+  changelog without replacing this handoff's earlier context.
 
 ## Verification
 
@@ -30,6 +43,10 @@ absent identity is absent evidence rather than an execution veto.
 - Full suite: 288 passed in 7.41s.
 - Import-linter: 7 contracts kept, 0 broken (41 files, 137 dependencies).
 - `git diff --check`: clean apart from expected LF-to-CRLF notices.
+- Temp-recovery focused selection: 112 passed.
+- Current full suite after final same-volume hardening: 291 passed in 7.57s.
+- Current import-linter: 7 contracts kept, 0 broken (41 files, 137
+  dependencies).
 
 ## Immediate Next Context
 
@@ -40,3 +57,7 @@ absent identity is absent evidence rather than an execution veto.
 - The relaxed matcher remains exclusive to dependency-complete
   `directory_cleanup` deletes. File deletes and all other operation guards keep
   their existing evidence rules.
+- M0's single worker permits current-run temp preservation during the run-level
+  sweep; exact per-operation cleanup still handles retry, cancel, and resume.
+  Recovery enumerates direct children only, requires the target root's physical
+  volume, and never enters `.synctrash`.

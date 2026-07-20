@@ -227,7 +227,16 @@ class ScanScope:
             raise ValueError("selected scan requires at least one path")
 
 
-_TEMP_NAME = re.compile(r"^.+\.synctmp-[0-9a-f]{32}-[0-9a-f]{32}$")
+_TEMP_NAME = re.compile(
+    r"^.+\.synctmp-(?P<run_id>[0-9a-f]{32})-(?P<op_id>[0-9a-f]{32})$"
+)
+
+
+def owned_temp_run_id(name: str) -> str | None:
+    """Return the owning run id for an exact generated temp name."""
+
+    match = _TEMP_NAME.fullmatch(name)
+    return None if match is None else match.group("run_id")
 
 
 @dataclass(frozen=True)
@@ -261,7 +270,11 @@ class IgnoreSet:
         if self.exclude_sync_trash and (key == ".SYNCTRASH" or key.startswith(".SYNCTRASH\\")):
             return True
         name = PureWindowsPath(canonical).name
-        return bool(self.exclude_owned_temps and not is_directory and _TEMP_NAME.fullmatch(name))
+        return bool(
+            self.exclude_owned_temps
+            and not is_directory
+            and owned_temp_run_id(name) is not None
+        )
 
 
 @dataclass(frozen=True)

@@ -199,6 +199,35 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     assert history_errors.getvalue() == ""
 
 
+def test_successful_rerun_removes_prior_run_temp_from_touched_parent(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"completed retry")
+    orphan = target / (
+        "abandoned.bin.synctmp-" + "1" * 32 + "-" + "2" * 32
+    )
+    orphan.write_bytes(b"partial copy")
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("execute\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS, (stdout.getvalue(), stderr.getvalue())
+    assert (target / "payload.bin").read_bytes() == b"completed retry"
+    assert not orphan.exists()
+
+
 class _DriftingConfirmation(io.StringIO):
     def __init__(self, target: Path) -> None:
         super().__init__("execute\n")

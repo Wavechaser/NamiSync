@@ -202,6 +202,13 @@ class ExecutorFileSystem(Protocol):
 
     def remove_owned_temp(self, path: Path) -> None: ...
 
+    def remove_orphaned_temps(
+        self,
+        target_root: Path,
+        parent_paths: frozenset[str],
+        current_run_id: RunId,
+    ) -> None: ...
+
     def open_source(self, path: Path) -> BinaryIO: ...
 
     def create_temp(self, path: Path) -> BinaryIO: ...

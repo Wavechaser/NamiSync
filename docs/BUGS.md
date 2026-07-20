@@ -28,6 +28,14 @@ to a global chronological list.
 
 ### M0 hardening
 
+- MODERATE - FIXED (2026-07-20). Orphaned temporary-file recovery. Temps left
+  by killed or crashed runs accumulated permanently while preflight counted
+  their bytes as reclaimable, leaking target capacity and potentially stranding
+  a nearly-full sync. Cause: executor removed only the current run's exact
+  per-operation temp, while every rerun has a new run id and scanner correctly
+  ignores owned temps; fixed with one post-preflight, pre-copy exact-grammar
+  sweep over preflight's touched target parents, excluding current-run files and
+  `.synctrash`.
 - MODERATE - FIXED (2026-07-20). Metadata state validation. Cleanup of a
   directory emptied by same-run moves or trash operations was rejected as target
   drift, preventing folder rename/removal in one run. Cause: the final guard

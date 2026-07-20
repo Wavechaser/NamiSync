@@ -168,6 +168,7 @@ def _world(xset: ExecutionSet, *, free_space: int = 10_000) -> ObservedWorld:
     return ObservedWorld(
         stats,
         paths,
+        frozenset(),
         {
             xset.plan.source_root.root_id: RootObservation(
                 xset.plan.source_root.path,
@@ -523,7 +524,12 @@ class InstrumentedFileSystem:
     def free_space(self, target: Root) -> int:
         return 10_000
 
-    def reclaimable_temp_bytes(self, target: Root, parent_paths: frozenset[str]) -> int:
+    def reclaimable_temp_bytes(
+        self,
+        target: Root,
+        parent_paths: frozenset[str],
+        current_run_id: str,
+    ) -> int:
         return 0
 
     def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation:
@@ -556,18 +562,39 @@ def test_observation_is_read_only_and_stats_only_remaining_touched_paths_and_par
     assert world.observed_at is NOW
 
 
-def test_local_reclaimable_temp_count_is_exact_and_excludes_synctrash(tmp_path: Path) -> None:
+def test_local_reclaimable_temp_count_is_exact_and_excludes_synctrash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     parent = tmp_path / "folder"
     parent.mkdir()
     exact = parent / ("data.bin.synctmp-" + "a" * 32 + "-" + "b" * 32)
     exact.write_bytes(b"12345")
+    current = parent / ("current.bin.synctmp-" + "c" * 32 + "-" + "d" * 32)
+    current.write_bytes(b"current")
     (parent / "my.synctmp-notes.txt").write_bytes(b"user")
     trash = tmp_path / ".synctrash"
     trash.mkdir()
     (trash / ("old.bin.synctmp-" + "a" * 32 + "-" + "b" * 32)).write_bytes(b"ignored")
+    off_volume = tmp_path / "off-volume"
+    off_volume.mkdir()
+    (off_volume / ("mounted.bin.synctmp-" + "a" * 32 + "-" + "b" * 32)).write_bytes(
+        b"other volume"
+    )
+    monkeypatch.setattr(
+        "namisync.modules.preflight._volume_observation",
+        lambda path: (
+            VolumeId("OTHER", "UNKNOWN")
+            if Path(path).name == "off-volume"
+            else VolumeId("TARGET", "UNKNOWN"),
+            VolumeEvidence(device_id=str(path)),
+        ),
+    )
     fs = LocalObservationFileSystem()
     assert fs.reclaimable_temp_bytes(
-        Root(str(tmp_path), "target"), frozenset({"folder", ".synctrash"})
+        Root(str(tmp_path), "target"),
+        frozenset({"folder", ".synctrash", "off-volume"}),
+        "c" * 32,
     ) == 5
 
 

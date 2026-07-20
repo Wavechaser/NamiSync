@@ -27,9 +27,10 @@ The caller holds deterministic physical-volume custody and validates that the
 `Commitment` matches both immutable plan fingerprint and exact selection digest
 before preflight. Workflow alone performs a fresh observe → preflight → execute
 sequence on every start/resume; executor imports no preflight sibling. A refusal
-permits no temp cleanup or other mutation. After a successful verdict, executor
-may recover only exact owned temps named by that verdict and processes
-dependency-ready operations in plan order.
+permits no temp cleanup or other mutation. After a successful verdict, workflow
+passes preflight's touched-target-parent scope to the executor filesystem for
+one exact prior-run temp sweep, then processes dependency-ready operations in
+plan order. A sweep failure stops before any planned operation is admitted.
 
 The core generic session runner emits the single terminal event. Executor emits
 phase, progress, and item outcomes only, returns one complete result,
@@ -94,8 +95,11 @@ documentation rather than becoming a false compare-and-swap guarantee.
     degrades `RecordingStatus` instead of relabeling the copy as failed.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
-Recovery is limited to exact grammar in selected copy/update parents, never a
-full-tree walk and never `.synctrash`.
+Once per successfully preflighted execution, recovery enumerates only direct
+children of the same touched target parents used for capacity accounting. It
+removes exact-grammar regular files whose embedded run id differs from the
+current run; current-run temps remain under per-operation retry/cancel cleanup.
+Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
 ## Update And Trash-On-Update
 
@@ -273,7 +277,8 @@ aggregation, and the run-bound recorder owns durable ledger interpretation.
 
 The focused M0 suite exercises all eight operation kinds; atomic conditional
 publish and displacement; hardlink and copy-backup update paths; source and
-target drift; ACL and readonly ordering; exact temp cleanup; reparse/off-volume
+target drift; ACL and readonly ordering; prior-run exact temp recovery and
+current-run/lookalike isolation; reparse/off-volume
 trash refusal; move/composite failure bounds; dependency continuation; deferred
 directory metadata; cancel, pause, unexpected interruption, simple and
 multi-step bounded sharing retry, recorder degradation, progress throttling,
@@ -311,8 +316,11 @@ and durable run-token idempotency.
   attestation or publish partial bytes.
 - First blocked/failed work does not abort later independent operations; broken
   dependents receive explicit outcomes.
-- Exact temp cleanup preserves names containing `.synctmp-`, ignores other
-  directories and trash, and safely handles cleanup failure/capacity changes.
+- Exact temp recovery removes prior-run regular files only from preflight's
+  touched-parent scope; current-run temps, substring lookalikes, exact-name
+  directories, untouched parents, off-volume mounts, and `.synctrash` survive.
+  Cleanup failure stops before copy allocation or publication after preflight
+  credited those bytes.
 - Trash cannot escape through reparse points, cross volumes, overwrite a trash
   collision, or degrade to copy-delete.
 - Move occupancy, vanished-old-path, wrong type, and retained-missing-row cases

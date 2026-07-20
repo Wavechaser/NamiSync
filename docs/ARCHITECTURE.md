@@ -413,6 +413,7 @@ class Subject(NamedTuple):      # never a bare string key — both roots share
 @dataclass(frozen=True)
 class ObservedWorld:            # a scoped SNAPSHOT — the impure half of preflight
     stats: Mapping[Subject, FileStat | None]   # only subjects the remaining ops touch
+    target_parent_paths: frozenset[str]        # exact temp-count/recovery scope
     free_space: int
     reclaimable_temp_bytes: int
     volumes: Mapping[Root, VolumeId | None]
@@ -724,10 +725,12 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict: ... # pure, 
 `observe()` does the scoped re-stat — it touches only the subjects the
 remaining selected operations name (keyed `(root, rel_path_key)`, never a bare
 string — both roots share the same rel paths), reads free space, resolves root
-volume identity, sums reclaimable orphaned-temp bytes, and snapshots the
-semantic configuration currently in effect (`current_filters`, read through the
-injected `SettingsReader`) — reading settings is IO too. It decides nothing. `preflight()` renders every verdict
-from that snapshot alone and never touches the filesystem.
+volume identity, retains the touched target-parent set, sums only exact
+different-run temp bytes that execution will sweep from that set, and snapshots
+the semantic configuration currently in effect (`current_filters`, read through
+the injected `SettingsReader`) — reading settings is IO too. It decides nothing.
+`preflight()` renders every verdict from that snapshot alone and never touches
+the filesystem.
 
 The split is a bone, for three reasons: `preflight()` becomes exhaustively
 testable against synthetic worlds with no temp directories; the expensive IO
@@ -737,7 +740,8 @@ wakeup each observe their own world, because closeness in time is not evidence
 of unchanged state; and "pure" stops being an honor system. All IO lives in
 one small function whose only job is statting.
 
-**Bones.** The `observe`/`preflight` split; the `ObservedWorld` snapshot shape;
+**Bones.** The `observe`/`preflight` split; the `ObservedWorld` snapshot shape,
+including the immutable touched-target-parent recovery scope;
 the `Verdict` shape carrying per-op refusals plus the snapshot it judged;
 observation scoped to operation-touched paths only.
 
@@ -766,8 +770,9 @@ resume remains continue-or-refuse).
 - An incomplete scan permits selected copy/update/mkdir/noop work but refuses
   selected move/move-update/trash/delete work; manually reintroduced blocked
   correspondence is also refused.
-- A nearly-full target whose own orphaned temps would free the needed space is
-  **not** refused (PoC open-bug fix).
+- A nearly-full target whose exact prior-run temps in touched parents free the
+  needed space is **not** refused; current-run temps and out-of-scope artifacts
+  are not credited to the run-level sweep.
 - Running the same `preflight` at review, at execution start, and at resume
   yields consistent verdicts for an unchanged world.
 
@@ -844,7 +849,8 @@ resuming rather than restarting against the executor's own prior mutation.
 **Flesh — now.** copy/update/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
 the op, records nothing); trash-on-update; root-local trash with volume-identity resolution;
-temp recovery by exact name in touched dirs only; per-op continue-on-failure;
+one post-verdict, pre-copy prior-run temp sweep over preflight's exact touched
+parents plus per-operation current-run temp cleanup; per-op continue-on-failure;
 chunked cancellation.
 **Flesh — deferred.** Validated partial execution (`DEFERRED` outcomes);
 executor-time ADS stream copy (per the settled FEATURES → *ADS Preservation*
@@ -869,8 +875,11 @@ IO throttling; Robocopy backend.
 - Source changed mid-copy ⇒ op `FAILED`, **no** attestation recorded (PoC gap).
 - A first blocked/failed operation never aborts later independent operations
   (the "walk away for hours" guarantee — the PoC's original SEVERE bug).
-- Temp recovery deletes only exact-shape temp names in copy/update parent dirs;
-  a user file containing `.synctmp-` survives (PoC SEVERE regression).
+- Temp recovery deletes only exact-shape, different-run regular files in the
+  preflight-retained touched parents. Current-run temps, lookalikes, exact-name
+  directories, untouched parents, off-volume mounts, and `.synctrash` survive;
+  a sweep failure occurs before copy allocation, so credited capacity is never
+  used unsafely.
 - Trash that would land off-volume or through a reparse point is refused before
   any move.
 - Fault tests exercise an external path swap *between* a final guard and its

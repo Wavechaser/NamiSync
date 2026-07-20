@@ -47,6 +47,7 @@ class TrashObservation:
 class ObservedWorld:
     stats: Mapping[Subject, StatObservation]
     paths: Mapping[Subject, str]
+    target_parent_paths: frozenset[str]
     roots: Mapping[str, RootObservation]
     free_space: int | None
     reclaimable_temp_bytes: int

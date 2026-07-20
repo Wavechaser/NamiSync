@@ -120,6 +120,9 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Fixed crashed-copy temp recovery: successful executions now sweep exact
+  prior-run temps once from preflight's touched target parents before copying,
+  while preserving current-run temps, lookalikes, untouched paths, and trash.
 - Hardened scan and plan review against hostile filesystem names and case-only
   conflicts: invalid names become typed incomplete-scan evidence, surrogates
   cannot reach canonical encoding, and casing mismatches are explicit blockers.

@@ -48,8 +48,10 @@ alone.
 
 Every path is first lexically validated, then opened/resolved under its root
 with long-path-safe, reparse-aware handling. Reclaimable temp accounting accepts
-only the exact NamiSync temp grammar, in touched target parents, outside trash,
-on the target volume. Observation never deletes those files.
+only regular files with the exact NamiSync temp grammar and a run id different
+from the current execution, in touched target parents outside trash on the
+target volume. `ObservedWorld` retains that identical parent set for the
+post-verdict recovery sweep. Observation never deletes those files.
 
 An observation failure is evidence, not an exception that silently skips a
 check. The snapshot records unknown/unavailable state so pure judgment refuses
@@ -101,11 +103,12 @@ those guards.
 
 ## Capacity And Temp Recovery
 
-The pure required-byte calculation comes from core/planner. Preflight may count
-owned orphan temps as recoverable only if executor will remove exactly those
-artifacts before allocating new temps. If cleanup later fails or actual free
-space falls below the verdict, executor fails safely without publishing partial
-content. User files resembling temp names never count as recoverable.
+The pure required-byte calculation comes from core/planner. Preflight counts
+owned orphan temps as recoverable only when the post-verdict sweep will attempt
+to remove them once, from the same retained parent scope, before allocating new
+temps. If cleanup fails or actual free space falls below the verdict, execution
+fails safely without publishing partial content. Current-run temps and user
+files resembling temp names never count as sweep-reclaimable.
 
 The shared formula uses the target's reviewed
 `CapabilityProfile.supports_hardlinks`; a no-hardlink update selection includes
@@ -171,8 +174,10 @@ refused until that profile exists.
 - Same-volume, contained, writable trash passes; reparse, off-volume, readonly,
   and unresolved trash fails before mutation.
 - Capacity boundary/property tests agree with planner for full and partial
-  selections, include no-hardlink backup copies, and safely count only exact
-  reclaimable temps outside `.synctrash`.
+  selections, include no-hardlink backup copies, and count only prior-run exact
+  regular-file temps in the same touched-parent scope execution sweeps; current
+  run, lookalike, untouched-parent, off-volume, and `.synctrash` entries are
+  excluded.
 - Review, immediate execution, resume, and queue wakeup return identical
   verdicts for identical snapshots and fresh different verdicts after drift.
 - Refusal leaves plan, selection, statuses, filesystem, and ledger byte-for-byte
@@ -188,5 +193,5 @@ refused until that profile exists.
 
 `tests/test_preflight.py` contains focused pure-verdict and instrumented
 observation tests proving selection-aware completeness, blocked-correspondence
-defense, scoped reads, fresh-world behavior, exact temp accounting, and no
-managed-data mutation.
+defense, scoped reads, fresh-world behavior, run-aware exact temp accounting,
+retained recovery scope, and no managed-data mutation.

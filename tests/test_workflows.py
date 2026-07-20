@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from namisync.core.events import ItemOutcome
 from namisync.core.evidence import Outcome
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
@@ -258,7 +260,12 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
     events: list[object] = []
     saved: list[object] = []
     finished: list[tuple[SessionState, object]] = []
-    world = SimpleNamespace(paths={})
+    world = SimpleNamespace(paths={}, target_parent_paths=frozenset({""}))
+    cleanup_calls: list[tuple[Path, frozenset[str], object]] = []
+
+    class FileSystem:
+        def remove_orphaned_temps(self, target, parents, current_run_id) -> None:
+            cleanup_calls.append((target, parents, current_run_id))
 
     class Recording:
         recorder = object()
@@ -297,7 +304,7 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
         open_recording=lambda execution_set: Recording(),
         executor=executor,
         executor_policies=object(),
-        executor_fs=object(),
+        executor_fs=FileSystem(),
     )
 
     result = run_execution(xset, RunContext(events.append, lambda: None), deps)
@@ -310,6 +317,9 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
     assert [item.outcome for item in events if isinstance(item, ItemOutcome)] == [
         Outcome.SUCCEEDED,
         Outcome.BLOCKED,
+    ]
+    assert cleanup_calls == [
+        (Path(plan.target_root.path), frozenset({""}), run_id)
     ]
     assert finished and saved
 
@@ -412,6 +422,68 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
     assert [item.outcome for item in events if isinstance(item, ItemOutcome)] == [
         Outcome.BLOCKED
     ]
+
+
+def test_temp_recovery_failure_stops_before_executor_and_records_failure() -> None:
+    plan = _plan_with(
+        (_operation(1, OperationKind.COPY, "normal.txt", source="normal.txt"),)
+    )
+    selection = frozenset(operation.op_id for operation in plan.operations)
+    run_id = validated_run_id("8" * 32)
+    xset = ExecutionSet(
+        plan,
+        selection,
+        run_id,
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    finished: list[SessionState] = []
+    executor_called = False
+    world = SimpleNamespace(paths={}, target_parent_paths=frozenset({""}))
+
+    class Recording:
+        recorder = object()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def finish(self, status, recording) -> None:
+            del recording
+            finished.append(status)
+
+    class FileSystem:
+        def remove_orphaned_temps(self, target, parents, current_run_id) -> None:
+            del target, parents, current_run_id
+            raise PermissionError("orphan is locked")
+
+    def executor(*args):
+        nonlocal executor_called
+        executor_called = True
+        return OperationResult(SessionState.COMPLETED)
+
+    deps = SimpleNamespace(
+        save_execution_details=lambda value: None,
+        observer=lambda *args: world,
+        observation_fs=object(),
+        settings=lambda value: object(),
+        preflight=lambda execution_set, observed: Verdict(True, (), observed),
+        open_recording=lambda execution_set: Recording(),
+        executor=executor,
+        executor_policies=object(),
+        executor_fs=FileSystem(),
+    )
+
+    with pytest.raises(PermissionError, match="orphan is locked"):
+        run_execution(xset, RunContext(lambda value: None, lambda: None), deps)
+
+    assert not executor_called
+    assert finished == [SessionState.FAILED]
 
 
 def test_execution_refuses_uncommitted_set_before_preflight() -> None:

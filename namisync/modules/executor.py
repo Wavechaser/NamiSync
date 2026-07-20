@@ -38,8 +38,14 @@ from namisync.core.execution import (
     RunId,
     Stop,
 )
-from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
-from namisync.core.pathing import validate_relative_path
+from namisync.core.models import (
+    EntryKind,
+    FileIdentity,
+    FileStat,
+    MetadataSnapshot,
+    owned_temp_run_id,
+)
+from namisync.core.pathing import normalize_relative_path, validate_relative_path
 from namisync.core.planning import OpId, OperationKind, OperationReason, PlanOperation
 from namisync.core.session import (
     Canceled,
@@ -251,6 +257,49 @@ class NativeFileSystem:
             path.unlink()
         except FileNotFoundError:
             return
+
+    def remove_orphaned_temps(
+        self,
+        target_root: Path,
+        parent_paths: frozenset[str],
+        current_run_id: RunId,
+    ) -> None:
+        """Remove exact prior-run temps from preflight's touched parents."""
+
+        current = str(current_run_id)
+        target_root = target_root.resolve(strict=True)
+        target_volume = self._volume_serial(target_root)
+        for relative in sorted(
+            parent_paths,
+            key=lambda value: (
+                normalize_relative_path(value, allow_root=True),
+                value,
+            ),
+        ):
+            key = normalize_relative_path(relative, allow_root=True)
+            if key == ".SYNCTRASH" or key.startswith(".SYNCTRASH\\"):
+                continue
+            if relative:
+                parent = self.resolve(target_root, relative, must_exist=False)
+                if not os.path.lexists(parent):
+                    continue
+                self._reject_reparse(parent)
+                if not parent.is_dir():
+                    continue
+            else:
+                parent = target_root
+                self._reject_reparse(parent)
+            if self._volume_serial(parent) != target_volume:
+                continue
+            with os.scandir(parent) as entries:
+                for entry in entries:
+                    owner = owned_temp_run_id(entry.name)
+                    if (
+                        owner is not None
+                        and owner != current
+                        and entry.is_file(follow_symlinks=False)
+                    ):
+                        self.remove_owned_temp(Path(entry.path))
 
     def open_source(self, path: Path) -> BinaryIO:
         return cast(BinaryIO, path.open("rb", buffering=0))

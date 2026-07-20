@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import stat as stat_module
 from datetime import datetime, timezone
@@ -21,6 +20,7 @@ from namisync.core.models import (
     Root,
     VolumeEvidence,
     VolumeId,
+    owned_temp_run_id,
 )
 from namisync.core.pathing import (
     is_path_below,
@@ -47,9 +47,6 @@ from namisync.core.preflight import (
 )
 
 
-_TEMP_NAME = re.compile(r"^.+\.synctmp-[0-9a-f]{32}-[0-9a-f]{32}$")
-
-
 class SettingsReader(Protocol):
     def read_filters(self) -> FilterSet: ...
 
@@ -63,7 +60,12 @@ class ObservationFileSystem(Protocol):
 
     def free_space(self, target: Root) -> int: ...
 
-    def reclaimable_temp_bytes(self, target: Root, parent_paths: frozenset[str]) -> int: ...
+    def reclaimable_temp_bytes(
+        self,
+        target: Root,
+        parent_paths: frozenset[str],
+        current_run_id: str,
+    ) -> int: ...
 
     def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation: ...
 
@@ -174,8 +176,14 @@ class LocalObservationFileSystem:
     def free_space(self, target: Root) -> int:
         return int(shutil.disk_usage(target.path).free)
 
-    def reclaimable_temp_bytes(self, target: Root, parent_paths: frozenset[str]) -> int:
+    def reclaimable_temp_bytes(
+        self,
+        target: Root,
+        parent_paths: frozenset[str],
+        current_run_id: str,
+    ) -> int:
         total = 0
+        target_volume, _ = _volume_observation(target.path)
         for parent_path in sorted(parent_paths, key=lambda value: (normalize_relative_path(value, allow_root=True), value)):
             if parent_path and (
                 normalize_relative_path(parent_path) == ".SYNCTRASH"
@@ -184,9 +192,17 @@ class LocalObservationFileSystem:
                 continue
             absolute = target.path if not parent_path else join_under_root(target.path, parent_path)
             try:
+                parent_volume, _ = _volume_observation(absolute)
+                if parent_volume != target_volume:
+                    continue
                 with os.scandir(absolute) as entries:
                     for entry in entries:
-                        if _TEMP_NAME.fullmatch(entry.name) and entry.is_file(follow_symlinks=False):
+                        owner = owned_temp_run_id(entry.name)
+                        if (
+                            owner is not None
+                            and owner != current_run_id
+                            and entry.is_file(follow_symlinks=False)
+                        ):
                             total += int(entry.stat(follow_symlinks=False).st_size)
             except (FileNotFoundError, PermissionError, NotADirectoryError):
                 continue
@@ -273,7 +289,11 @@ def observe(
     except (OSError, PermissionError):
         free_space = None
     try:
-        reclaimable = fs.reclaimable_temp_bytes(xset.plan.target_root, target_parents)
+        reclaimable = fs.reclaimable_temp_bytes(
+            xset.plan.target_root,
+            target_parents,
+            str(xset.run_id),
+        )
     except (OSError, PermissionError):
         reclaimable = 0
     remaining = xset.remaining()
@@ -303,6 +323,7 @@ def observe(
     return ObservedWorld(
         stats=stats,
         paths=paths,
+        target_parent_paths=target_parents,
         roots=roots,
         free_space=free_space,
         reclaimable_temp_bytes=reclaimable,
