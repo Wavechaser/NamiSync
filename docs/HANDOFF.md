@@ -1,89 +1,63 @@
 # NamiSync Session Handoff
 
-Date: 2026-07-18
+Date: 2026-07-20
 
 ## Session Outcome
 
-Sanity-checked the DR-32–DR-37 revisions in `FEATURES.md`,
-`ARCHITECTURE.md`, and `DESIGN_REVIEW.md`, then propagated the settled contracts
-through the focused module documents.
+Restored empty-directory cleanup on targets that do not provide stable file
+identities, including FAT-style volumes. The executor now follows the shared
+evidence rule: identity binds exactly when the reviewed scan supplied it;
+absent identity is absent evidence rather than an execution veto.
 
-The propagation intentionally simplified ADS provisioning:
+Also restored the advertised crashed-copy recovery path: after successful
+preflight, execution now removes exact prior-run temps once from the same
+touched target-parent scope used for reclaimable-capacity accounting.
 
-- scanner remains role-free and never enumerates streams;
-- `MetadataSnapshot`, inventory, and database schemas contain no stream state;
-- plans contain no stream manifest and M0 has no ADS-enabled mapping or ADS
-  acceptance matrix;
-- the dormant `supports_ads` / unexposed `preserve_ads` seam remains, with the
-  future behavior documented once as executor-time enumeration.
+## Changes
 
-Other propagated changes:
-
-- `CORE.md`, `DISPATCHER.md`, `HISTORY.md`, and `WORKFLOWS.md` now specify the
-  bounded preterminal audit-finalization handshake instead of leaving a
-  Terminal/history causality review note.
-- `CORE.md`, `EXECUTOR.md`, and `VERIFIER.md` now require cancel-unwind emission
-  for in-flight and unreached selected items, while pause emits nothing for
-  pending work.
-- `EXECUTOR.md` now names the conditional Windows primitives used where
-  available and explicitly bounds the remaining update race by its data
-  consequence, without pretending a preceding path stat is compare-and-swap.
-
-## Remaining Review Notes
-
-All six notes below were resolved on 2026-07-18: DR-34 carries a correction
-record (consequence-bounded wording, `ReplaceFileW` acknowledged as the
-supported single-call alternative and a deliberate non-choice, external-writer
-boundary applied to all mutations with per-family consequence classes), DR-32's
-amendment gains the mtime-evasion caveat and the keep-the-latent-fields
-decision (note 5: kept, per the declared-but-unreached pattern), and the
-`FEATURES.md` audit bullet now leads with the delivered-or-DEGRADED contract
-(note 6). The original statements are retained for context:
-
-1. Calling the update race a “microsecond” window is too strong. It is normally
-   short, but the interval between syscalls is not scheduler-bounded. Tests
-   should assert the possible data outcome, not elapsed time.
-2. Calling the current sequence the absolute “platform floor” is also too
-   strong. Microsoft documents `ReplaceFileW` with an optional backup as the
-   supported single-file alternative to deprecated TxF. It is not a drop-in for
-   NamiSync because it merges target attributes, ACLs, and named streams into
-   the replacement and documents partial-state error cases. The current
-   hardlink/copy-backup plus replace design remains reasonable, but it is a
-   chosen tradeoff rather than the only Windows primitive.
-3. The listed conditional primitives do not close every non-update path swap.
-   Non-replacing rename protects destination absence, not the identity of the
-   source pathname; `RemoveDirectory` protects emptiness, not directory
-   identity. Either specify handle-bound source mutation where that guarantee
-   is required, or apply the external-writer boundary to all mutations and test
-   only the exact condition each primitive enforces. The latter is simpler for
-   M0.
-4. Executor-time ADS enumeration preserves streams only for files already
-   scheduled for copy/update. ADS-only drift is discovered through the stated
-   mtime assumption; a writer that restores/suppresses mtime can evade it. That
-   is a future limitation, not an M0 blocker, but the feature should not claim
-   independent ADS convergence without another change signal.
-5. `supports_ads` and `preserve_ads` are dead M0 fields. Because ADS has no
-   schema representation and event/plan formats are versioned, adding them when
-   the first implementation exists may be simpler than carrying unreachable
-   states now. Keep them only if freezing this seam is worth that cost.
-6. The `FEATURES.md` audit bullet still says the history subscriber “is never
-   dropped” before qualifying timeout/failure degradation. The event contract
-   is clearer: delivery is guaranteed within the timeout, or the result says
-   `audit=DEGRADED`; nothing is silently lost while claiming `OK`.
+- Narrowed only the `directory_cleanup` guard. It continues to ignore the
+  directory mtime and link-count churn caused by successful child operations.
+- The guard still requires exact directory kind, size, attributes, and creation
+  time. When a reviewed identity exists, a replacement directory is still
+  rejected as target drift.
+- `RemoveDirectory`/`rmdir` remains the final atomic emptiness check, so cleanup
+  cannot remove a directory containing entries.
+- Replaced the identity-veto regression with an identity-less convergence test
+  and added a counter-test proving immutable metadata drift is still rejected.
+- Updated `BUGS.md`, `EXECUTOR.md`, `FEATURES.md`, `ARCHITECTURE.md`, and the
+  README changelog to describe the conditional-identity policy.
+- Added a shared exact temp-owner parser, retained preflight's touched-parent
+  scope in `ObservedWorld`, and excluded current-run temps from reclaimable-byte
+  accounting.
+- Added the post-verdict, pre-copy sweep. It removes only different-run regular
+  files with exact generated names; current-run temps remain owned by the
+  per-operation retry/cancel path, and cleanup failure stops before copying.
+- Documented the recovery contract in `CORE.md`, `PREFLIGHT.md`, `EXECUTOR.md`,
+  `WORKFLOWS.md`, `FEATURES.md`, `ARCHITECTURE.md`, `BUGS.md`, and the README
+  changelog without replacing this handoff's earlier context.
 
 ## Verification
 
-- Documentation-only source change; no project runtime tests were run.
-- A local ADS probe confirmed that an ordinary named-stream write advanced the
-  file mtime on this workspace volume. This supports the normal-case assumption
-  but does not turn it into an unbypassable change signal.
-- `rg` found no active focused-document references to `StreamInfo`, scan-time
-  stream manifests, ADS scan depth, or unresolved terminal-finalization notes.
-- `git diff --check` passes, and the probe artifact was removed.
+- Directory-cleanup regression selection: 6 passed.
+- Focused executor suite: 52 passed.
+- Full suite: 288 passed in 7.41s.
+- Import-linter: 7 contracts kept, 0 broken (41 files, 137 dependencies).
+- `git diff --check`: clean apart from expected LF-to-CRLF notices.
+- Temp-recovery focused selection: 112 passed.
+- Current full suite after final same-volume hardening: 291 passed in 7.57s.
+- Current import-linter: 7 contracts kept, 0 broken (41 files, 137
+  dependencies).
 
-## Next Work
+## Immediate Next Context
 
-The six review notes are resolved in the authoritative docs and the decision
-log. Next: propagate the corrected DR-32/DR-34 wording into the affected
-module drafts (`EXECUTOR.md` in particular), then freeze the M0 core shapes
-and import-law tests. ADS implementation remains deferred.
+- The residual external-writer boundary is deliberate: on an identity-less
+  target, a recreated empty directory could pass the remaining evidence checks.
+  The operating system still refuses deletion if the directory contains an
+  entry.
+- The relaxed matcher remains exclusive to dependency-complete
+  `directory_cleanup` deletes. File deletes and all other operation guards keep
+  their existing evidence rules.
+- M0's single worker permits current-run temp preservation during the run-level
+  sweep; exact per-operation cleanup still handles retry, cancel, and resume.
+  Recovery enumerates direct children only, requires the target root's physical
+  volume, and never enters `.synctrash`.

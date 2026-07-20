@@ -1,6 +1,7 @@
 # Core Module
 
-Status: draft contract. Priority: M0 bones, required before every other module.
+Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
+and recording contracts implemented with their owning operation modules.
 
 ## Purpose
 
@@ -25,7 +26,8 @@ attestation format.
   `PreservationPolicy`, `MetadataSnapshot`, capability profile,
   and the stable `VolumeId`/corroborating `VolumeEvidence` split.
 - `SessionState`, its legal transition table, and terminal-state predicate.
-- `Outcome` and typed reason codes; free-form text is presentation detail, not
+- Six-value `Outcome` (`succeeded`, `skipped`, `failed`, `canceled`, `deferred`,
+  `blocked`) and typed reason codes; free-form text is presentation detail, not
   control flow.
 - Versioned event envelopes and typed event bodies, including `Gap` and the M1
   `IntegrityOutcome`/eight-value `IntegrityResult` vocabulary.
@@ -39,6 +41,23 @@ attestation format.
   conversion helpers.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
+
+The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
+`core/models.py`, `core/planning.py`, and `core/preflight.py`. These files own
+canonical Windows relative paths, immutable filesystem evidence, deterministic
+plan serialization and capacity, and root-qualified observation/refusal
+shapes. OS walking and observation remain in operation modules; core stays
+standard-library-only and behavior-free.
+
+Executor continuation and collaborator contracts are implemented in
+`core/execution.py`: the mutable `ExecutionSet`, fixed-format `RunId`, typed
+failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
+
+`core/recording.py` now owns the immutable host, volume, location, mapping, sync
+run, finish, and inventory commands used at the ledger boundary. Per-operation
+sync evidence remains behind `core.execution.Recorder`, while conditional
+integrity evidence remains behind `core.integrity.IntegrityRecorder`; the
+database implements both without moving SQL or persistence policy into core.
 
 ## Session Contract
 
@@ -76,6 +95,13 @@ module, its unwind finalizer emits `CANCELED` for the in-flight and every
 unreached selected item. The same finalizer emits nothing for unreached work on
 `PauseRequested`, because that work remains pending for resume.
 
+The runner accepts a dispatcher-owned item accumulator. It is retained across
+pause attempts and cleared only after terminal settlement, so a resumed session
+that later cancels or fails includes reliable outcomes earned before the pause.
+The registry adapter snapshots continuation bytes before `PAUSED`; the
+dispatcher stores those bytes without decoding them and opens a fresh adapter
+invocation on resume.
+
 ## Event Contract
 
 Every envelope contains a session id, gap-free per-session sequence, injected
@@ -102,12 +128,19 @@ blocking. The runner then constructs and releases the one immutable `Terminal`
 to ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
+The version-2 M0 envelope codec round-trips `StateChanged`, `PhaseChanged`, `Progress`,
+`ItemOutcome`, `Gap`, and `Terminal` and rejects unknown schema/body versions.
+Integrity-specific event serialization remains part of its M1 integration; the
+live event plane already transports verifier-defined bodies structurally and
+treats every non-`Progress` body as reliable.
+
 ## Path And Identity Rules
 
 Persisted paths are root-relative with `\` as the canonical separator. Reject
 empty components where Windows would reinterpret them, absolute paths, drive or
 UNC qualification, `.`/`..`, alternate root syntax, embedded NUL, and any path
-whose resolved handle escapes its root through a reparse point.
+with an ambiguous suffix, stream/device qualifier, or unpaired surrogate, plus
+any path whose resolved handle escapes its root through a reparse point.
 
 Lexical validation and handle-based containment are separate checks: lexical
 validation is pure and always available; filesystem containment belongs in
@@ -117,6 +150,13 @@ observation/preflight. Long-path conversion happens only after validation.
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code
 point. The implementation must use a tested Windows-equivalent mapping strategy
 and preserve NTFS-distinct names such as `Straße.txt` and `strasse.txt`.
+
+Filesystem enumeration may observe names outside this lexical contract. Those
+names never enter `FileRecord`, `DirRecord`, `UnsupportedRecord`, or operation
+paths: the scanner retains an escaped typed warning at the nearest valid parent
+and marks the scan incomplete. Canonical plan JSON preserves established UTF-8
+bytes for valid Unicode and defensively emits JSON surrogate escapes for any
+malformed free-form string that reaches serialization.
 
 `VolumeId(serial, fs_type)` is the stable key. Label and other mutable mount
 facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with
@@ -155,7 +195,7 @@ or inferring from an empty operation list.
 
 ## Provisioning For Latent Features
 
-Declare expensive-to-retrofit shapes now: `DEFERRED`, schema-versioned events,
+Declare expensive-to-retrofit shapes now: `DEFERRED`, `BLOCKED`, schema-versioned events,
 all `Scope` kinds, nullable file identity/hardlink group, policy protocols,
 opaque workflow payloads, and attestation provenance. A latent protocol is
 declared shape-only and has no implementation until its first consumer; this
@@ -176,8 +216,9 @@ logic; no scanner role or inventory representation is added.
   ordering errors.
 - One event/result vocabulary prevents verifier, history, CLI, and GUI from
   disagreeing about partial failure, refusal, and integrity state.
-- Exact artifact recognition prevents generic `.db` and `.synctmp-` matches
-  from excluding or deleting user data.
+- One exact temp-name parser supplies scanner ignore, preflight capacity, and
+  executor recovery with the same ownership grammar, preventing generic
+  `.synctmp-` matches from excluding, counting, or deleting user data.
 
 ## Acceptance Criteria
 

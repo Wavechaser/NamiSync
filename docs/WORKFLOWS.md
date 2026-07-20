@@ -1,8 +1,7 @@
 # Workflows Module
 
-Status: draft contract. Priority: M0 plan/execution sync and history; M1
-inventory/integrity/import; later queue, maintenance, replay, undo/repair, and
-ingest.
+Status: M0 reviewed sync and history implemented. M1 inventory/integrity/import
+and later queue, maintenance, replay, undo/repair, and ingest remain deferred.
 
 ## Purpose
 
@@ -27,8 +26,12 @@ executor, recorder, verifier/importer, and settings snapshots.
 3. Scan both roots with the same role-free observation contract.
 4. Read immutable prior correspondence and semantic settings snapshot.
 5. Apply filters/policies and plan.
-6. Observe/preflight for review information.
-7. Return immutable serializable plan/verdict; terminate and release locks.
+6. Derive the deterministic safe selection: retain additive/no-op work, mark
+   direct blockers `BLOCKED`, quarantine overlapping/dependent work as
+   `DEFERRED`, and withhold destructive/identity moves when either scan is
+   incomplete.
+7. Observe/preflight that exact selection for review information.
+8. Return immutable serializable plan/verdict; terminate and release locks.
 
 ### Execution session
 
@@ -37,10 +40,13 @@ executor, recorder, verifier/importer, and settings snapshots.
 2. Reacquire required physical-volume custody.
 3. Load current semantic environment without altering the reviewed snapshot.
 4. Freshly observe/preflight under execution custody; refusal mutates nothing.
-5. Execute selected dependency-closed work and record through recorder.
-6. Optionally start a separately scoped linked verification phase/session as
+5. After a successful verdict, remove exact prior-run temps once from the
+   observed touched-target-parent scope; cleanup failure stops before executor
+   admission, so capacity credited by preflight cannot become unsafe.
+6. Execute selected dependency-closed work and record through recorder.
+7. Optionally start a separately scoped linked verification phase/session as
    specified by the request.
-7. Return truthful filesystem, ledger-recording, audit, and verification
+8. Return truthful filesystem, ledger-recording, audit, and verification
    aggregates with independent axes.
 
 Human review occurs between sessions with nothing running. Commitment is the
@@ -48,6 +54,45 @@ durable preauthorization and has no time expiry, but it binds exactly one plan
 fingerprint and dependency-closed selection. Scripts and queue releases may
 replay an existing commitment; no API plans and executes in one unreviewed
 breath.
+
+### M0 implementation
+
+`workflows/sync.py` contains the plain planning and execution functions.
+`LocalWorkflowRuntime` is the local composition root: it injects every module,
+resolves immutable prior correspondence through read-only repositories,
+declares physical-volume resource keys, owns schema-versioned JSON continuation
+payloads, starts ledger recording only after commitment and fresh preflight,
+and supplies the dispatcher history observer. Planning and declined review do
+not create either database. Invalid database locations are rejected before the
+plan session, and an execution refusal may still create independent audit
+history while leaving managed files and ledger configuration untouched.
+Execution recomputes the decoded plan fingerprint before comparing commitment,
+so payload content cannot change behind a retained fingerprint. This makes
+lossless payload encoding a correctness invariant, not a convenience: every plan
+field that feeds the fingerprint must survive the JSON codec unchanged, or
+execution refuses a faithfully committed plan. A round-trip/fingerprint-stability
+test exercises the codec over every operation kind and optional field, so a
+dropped or renormalized field fails the build instead of silently refusing every
+execution.
+
+M0 automatically selects the maximal safe dependency-closed subset. Directly
+blocked items remain in the reviewed plan as `BLOCKED`; operations touching
+their source/target correspondence region or depending on an exclusion become
+`DEFERRED`. If either scan is incomplete, `move`, `move_update`, `trash`, and
+`delete` are withheld globally because absence and identity correspondence are
+not proven, while `copy`, `update`, `mkdir`, and guarded `noop` remain eligible.
+The commitment digest binds this derived selection and fresh preflight enforces
+the same safety envelope if another caller supplies a different selection.
+
+Workflow emits excluded items after execution settles and merges them into the
+terminal result without rewriting successful filesystem status. Blocked intent
+never writes the main ledger; selected no-ops still execute their live guard and
+refresh source/target correspondence. Durable plan files, user selection
+editing, queue release, linked verification, and integrity workflows are not
+part of this implementation slice. When linked verification lands, its
+selection is built ledger-first from the inventory rows execution just
+recorded, not handed over from the executor, which surfaces only op-level
+outcomes.
 
 ## Integrity Workflow
 
@@ -95,7 +140,9 @@ control rejections with no lifecycle mutation.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An
-all-noop explicit run is completed/no-op and still history-worthy.
+all-noop explicit run is completed/no-op and still history-worthy. A safe-subset
+run can be filesystem `COMPLETED` with itemized `BLOCKED`/`DEFERRED` exclusions;
+interfaces present that as partial completion rather than clean full success.
 
 ## Orthogonality Rules
 
@@ -117,8 +164,9 @@ all-noop explicit run is completed/no-op and still history-worthy.
 - Settings shaping a plan are snapshotted, not read opportunistically later.
 
 Workflow is the sole preflight owner: it sequences fresh observe → preflight →
-execute under custody on every start/resume. Executor imports no sibling and
-performs only operation-local live precondition guards.
+scoped prior-run temp recovery → execute under custody on every start/resume.
+Executor imports no sibling and performs only operation-local live precondition
+guards.
 
 ## PoC Hardening
 
@@ -136,6 +184,11 @@ import from handling refusal differently than baseline/verify.
   custody before review.
 - Execution always uses the exact reviewed plan/selection, fresh observation,
   and preflight; drift refuses without mutation.
+- A blocked item cannot refuse independent safe work merely by existing in the
+  plan; its overlapping target correspondence and dependent operations remain
+  excluded.
+- Incomplete scans allow guarded copy/update/mkdir/noop work but never admit
+  move, move-update, trash, or delete operations.
 - No workflow waits for human input; mandatory review is between terminated and
   newly submitted sessions.
 - An uncommitted execution or one whose plan/selection no longer matches is

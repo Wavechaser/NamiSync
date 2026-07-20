@@ -1,7 +1,7 @@
 # Scanner Module
 
-Status: draft contract. Priority: walking scanner in M0; incremental and
-network-aware sources are later implementations of the same contract.
+Status: M0 walking and path-scoped implementation complete. Incremental and
+network-aware sources remain later implementations of the same contract.
 
 ## Purpose
 
@@ -16,6 +16,26 @@ warning is executable. It implements `ChangeSource` and imports only core.
 scan(root: Root, ignores: IgnoreSet, ctx: RunContext) -> ScanResult
 ```
 
+## Implemented M0 Surface
+
+`namisync.modules.scanner` provides the module-level `scan()` entry point and
+an injectable `WalkingScanner`. Its native backend uses metadata-only Windows
+enumeration and volume capability observation; tests replace that backend to
+fault disappearing entries, permission errors, placeholder attributes,
+identity cycles, case collisions, coarse filesystems, and partial enumeration
+without opening file content.
+
+On a volume that advertises stable file identity, Windows directory-entry
+metadata may still omit the inode for an extended-path enumeration. In that
+case only, the walker repeats the metadata-only stat through its backend for the
+exact entry path. This preserves correspondence-qualified move detection
+without opening content or fabricating identity.
+
+Full scans retain the walked root plus every reachable directory and declare
+completeness modulo the exact `IgnoreSet`. `ScanScope.selected()` performs
+only named-path stats, never a full walk, and deliberately returns a scoped,
+non-complete result so a consumer cannot use it for missing inference.
+
 The result contains the resolved root, `VolumeId` plus corroborating
 `VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every walked
 directory as `DirRecord`, typed `UnsupportedRecord` values, warnings, ignore
@@ -26,6 +46,11 @@ not their state.
 Results are sorted by normalized relative key with a deterministic tie-breaker.
 The scanner returns partial observations instead of raising for ordinary access
 failures. Fatal root/volume errors are typed and still produce a session result.
+Raw directory-entry names are validated before canonical sorting, ignore
+matching, metadata access, or record construction. A name that the filesystem
+can expose but the root-relative path contract cannot represent is skipped,
+reported as `PATH_UNREPRESENTABLE` with an escaped display spelling and nearest
+valid parent, and makes the scan incomplete; safe siblings remain reviewable.
 
 ## Walking Rules
 
@@ -43,6 +68,10 @@ failures. Fatal root/volume errors are typed and still produce a session result.
    hydrating or reading them.
 9. Record access/type/collision/hardlink warnings and set `complete=False` for
    any uncertainty that could make one side appear absent.
+10. Reject Windows-ambiguous suffixes, device spellings, stream qualifiers,
+    traversal, NUL, and unpaired surrogates at the path boundary. Diagnostic
+    text escapes hostile code units rather than inserting them into path-bearing
+    records, serialized plans, or terminal output.
 
 Application-owned ignores use exact qualified names or exact generated-name
 grammar. `.synctrash` is excluded as an owned root; a user filename merely
@@ -53,9 +82,9 @@ excluded unless it is the exact configured artifact.
 
 A full scan is complete only modulo its recorded location ignores. Mapping
 filters do not affect completeness; workflows apply them symmetrically after
-both scans. An unreadable entry, case collision, uncertain reparse traversal, or
-root identity change makes the scan reviewable but non-executable where absence
-could drive mutation.
+both scans. An unreadable or unrepresentable entry, case collision, uncertain
+reparse traversal, or root identity change makes the scan reviewable but
+non-executable where absence could drive mutation.
 
 Selected inventory refresh is a separate scoped observation mode. It may update
 named paths but must never infer that unselected rows are missing. The workflow
@@ -84,8 +113,9 @@ simultaneous duplicate keys require explicit user choice.
 
 - Core supplies path, identity, warning, capability, and result types.
 - Workflow supplies the exact ignore snapshot and session/error handling.
-- Planner treats incomplete scans as non-executable and does not reinterpret
-  warnings.
+- Planner preserves incomplete-scan evidence and warnings in the full reviewed
+  plan. Workflow permits only the evidence-positive additive/noop subset and
+  withholds destructive/identity work; scanner itself decides neither.
 - Inventory reconciles full and scoped scans differently and never writes from
   the scanner itself.
 - Dispatcher supplies checkpoint behavior and holds required custody where the
@@ -104,6 +134,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Exact ignore matching covers the PoC user-`.db` data-loss bug and missing
   history database sidecars.
 - Per-entry error capture prevents permission errors from aborting the walk.
+- Contract-invalid NTFS/SMB names produce typed escaped evidence instead of
+  aborting enumeration or contaminating safe relative-path contracts.
 - Checkpoints restore cooperative cancellation.
 - Visited identity and reparse classification close the open junction-cycle
   gap.
@@ -129,7 +161,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Case-collision and multi-link/duplicate-identity cases are reported without
   merging records.
 - exFAT/FAT fixtures report coarse timestamp granularity and no stable identity;
-  NTFS fixtures report usable identity when the OS supplies it.
+  NTFS fixtures and the real native walk report usable identity when the OS
+  supplies it, including directory-entry omission fallback.
 - Every file/directory carries attributes and creation-time metadata; scans do
   not vary by mapping role or preservation policy and never enumerate ADS.
 - Capability fixtures prove `supports_hardlinks` follows the authoritative
@@ -140,3 +173,9 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - A scoped refresh of two paths performs no full walk and cannot mark a third
   row missing.
 - Import-linter proves scanner code imports core but no sibling module.
+
+## M0 Verification
+
+`tests/test_scanner.py` contains 15 focused scanner tests. Shared path and
+artifact-grammar coverage lives in `tests/test_core_scanplan.py`; the complete
+suite and import-linter are the release gates.

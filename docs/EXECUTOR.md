@@ -1,8 +1,9 @@
 # Executor Module
 
-Status: draft contract. Priority: M0 native single-worker execution on plain
-local NTFS. External writers are outside NamiSync's volume-lock contract; the
-residual update race is documented below rather than presented as closed.
+Status: M0 implemented. The native single-worker executor covers every reviewed
+operation kind on local Windows filesystems, with focused acceptance coverage.
+External writers remain outside NamiSync's volume-lock contract; the residual
+update race is documented below rather than presented as closed.
 
 ## Purpose
 
@@ -19,16 +20,17 @@ alternate execution engine.
 ## Entry Contract
 
 ```python
-execute(xset, ctx, recorder, policies, fs) -> ExecResult
+execute(xset, ctx, recorder, policies, fs) -> OperationResult
 ```
 
 The caller holds deterministic physical-volume custody and validates that the
 `Commitment` matches both immutable plan fingerprint and exact selection digest
 before preflight. Workflow alone performs a fresh observe → preflight → execute
 sequence on every start/resume; executor imports no preflight sibling. A refusal
-permits no temp cleanup or other mutation. After a successful verdict, executor
-may recover only exact owned temps named by that verdict and processes
-dependency-ready operations in plan order.
+permits no temp cleanup or other mutation. After a successful verdict, workflow
+passes preflight's touched-target-parent scope to the executor filesystem for
+one exact prior-run temp sweep, then processes dependency-ready operations in
+plan order. A sweep failure stops before any planned operation is admitted.
 
 The core generic session runner emits the single terminal event. Executor emits
 phase, progress, and item outcomes only, returns one complete result,
@@ -83,17 +85,21 @@ documentation rather than becoming a false compare-and-swap guarantee.
 7. Re-check destination expected absence/state at publish and use a conditional
    atomic primitive appropriate to the planned before-state.
 8. Atomically publish with the Windows/local-filesystem primitive.
-9. Attempt a best-effort parent-directory flush. A refused/unsupported flush is
-   a per-operation durability warning; the result claims durability only for
-   the file content/metadata that was actually flushed.
+9. Open the parent directory with `GENERIC_WRITE` and
+   `FILE_FLAG_BACKUP_SEMANTICS`, then attempt a best-effort flush. A refused or
+   unsupported flush is a per-operation durability warning; the result claims
+   durability only for what was actually flushed.
 10. Stat the published target and construct `Attestation(ContentEvidence,
    target_stat)` so target identity is never confused with source identity.
 11. Call recorder. A recorder failure preserves the filesystem outcome and
     degrades `RecordingStatus` instead of relabeling the copy as failed.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
-Recovery is limited to exact grammar in selected copy/update parents, never a
-full-tree walk and never `.synctrash`.
+Once per successfully preflighted execution, recovery enumerates only direct
+children of the same touched target parents used for capacity accounting. It
+removes exact-grammar regular files whose embedded run id differs from the
+current run; current-run temps remain under per-operation retry/cancel cleanup.
+Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
 ## Update And Trash-On-Update
 
@@ -172,9 +178,13 @@ degrade to copy-delete. Record only after the rename succeeds.
 ### Delete and directory cleanup
 
 Mirror deletion remains internal/guarded. Re-stat type and identity immediately
-before deletion and use the strongest available handle-conditional delete;
-directories must be empty at deletion time and `RemoveDirectory` must enforce
-that condition atomically. Never recursively delete an unplanned subtree.
+before deletion and use the strongest available handle-conditional delete.
+Only a dependency-complete `directory_cleanup` delete may ignore mtime and link
+count churn caused by removing its own planned children; it still requires exact
+kind, size, attributes, and creation time. A stable identity binds exactly when
+the reviewed scan supplied one; absent identity is absent evidence, not a veto.
+Directories must be empty at deletion time and `RemoveDirectory` enforces that
+condition atomically. Never recursively delete an unplanned subtree.
 
 ### No-op
 
@@ -195,16 +205,23 @@ releases custody. Resume queues at the back, freshly re-observes/preflights in
 workflow, and continues only unreached work.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoint
-between attempts. Persistent failure records a typed reason and independent work
-continues. Unexpected executor exceptions are contained by the session wrapper,
-release custody, and never suppress already-earned item outcomes.
+between attempts. A simple operation restarts after exact-temp cleanup; an
+update or move-update with a durable sub-step retains an operation-local
+continuation, revalidates the prepared/published file and owned backup/trash,
+and resumes at replace or old-to-trash rename instead of colliding with its own
+hardlink or published destination. It also recognizes the exact committed state
+if an injected/native boundary reports failure after the syscall took effect.
+Persistent failure records `sharing-violation` after the configured bound and
+independent work continues. Unexpected executor exceptions are contained by the
+session wrapper, release custody, and never suppress already-earned outcomes.
 
 ## Progress
 
-Progress snapshots carry content bytes done/total, items done/total, current
-path, phase, and optionally per-file bytes. Moves, trash, mkdir, delete, and
-no-op contribute items but zero transfer bytes. Emission is throttled/coalesced
-outside the copy chunk size so fast disks cannot flood UI queues.
+`Progress` snapshots carry content bytes done/total, items done/total, and the
+current path; `PhaseChanged` carries the phase separately. Moves, trash, mkdir,
+delete, and no-op contribute items but zero transfer bytes. Failed work is not
+credited as completed content. Emission is throttled/coalesced outside the copy
+chunk size so fast disks cannot flood UI queues.
 
 ## Expectations Of Other Modules
 
@@ -244,9 +261,31 @@ outside the copy chunk size so fast disks cannot flood UI queues.
 
 This contract directly covers the PoC first-failure abort, stale-plan TOCTOU,
 large-copy cancellation, missing move handling, empty-directory omission,
-whole-tree preflight, broad temp deletion, false byte totals, incomplete-scan
-execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
+whole-tree preflight, broad temp deletion, false byte totals, unsafe
+incomplete-scan destructive execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
 attestation guard, and composite move-update gap.
+
+## M0 Implementation
+
+`namisync/core/execution.py` owns `ExecutionSet`, validated run identifiers,
+typed executor reasons and decisions, and the filesystem/copy/recorder
+protocols. `namisync/modules/executor.py` supplies `NativeFileSystem`,
+`NativeCopyBackend`, `BoundedFailurePolicy`, `ExecutorPolicies`, and `execute`.
+The implementation has no sibling-module import; workflow supplies the reviewed
+and freshly preflighted set, dispatcher/session owns custody and terminal
+aggregation, and the run-bound recorder owns durable ledger interpretation.
+
+The focused M0 suite exercises all eight operation kinds; atomic conditional
+publish and displacement; hardlink and copy-backup update paths; source and
+target drift; ACL and readonly ordering; prior-run exact temp recovery and
+current-run/lookalike isolation; reparse/off-volume
+trash refusal; move/composite failure bounds; dependency continuation; deferred
+directory metadata; cancel, pause, unexpected interruption, simple and
+multi-step bounded sharing retry, recorder degradation, progress throttling,
+and copy attestations. The
+workflow/dispatcher/recorder suites cover the acceptance responsibilities that
+belong outside this module, including fresh preflight, custody, one terminal,
+and durable run-token idempotency.
 
 ## Acceptance Criteria
 
@@ -277,8 +316,11 @@ attestation guard, and composite move-update gap.
   attestation or publish partial bytes.
 - First blocked/failed work does not abort later independent operations; broken
   dependents receive explicit outcomes.
-- Exact temp cleanup preserves names containing `.synctmp-`, ignores other
-  directories and trash, and safely handles cleanup failure/capacity changes.
+- Exact temp recovery removes prior-run regular files only from preflight's
+  touched-parent scope; current-run temps, substring lookalikes, exact-name
+  directories, untouched parents, off-volume mounts, and `.synctrash` survive.
+  Cleanup failure stops before copy allocation or publication after preflight
+  credited those bytes.
 - Trash cannot escape through reparse points, cross volumes, overwrite a trash
   collision, or degrade to copy-delete.
 - Move occupancy, vanished-old-path, wrong type, and retained-missing-row cases
@@ -288,14 +330,21 @@ attestation guard, and composite move-update gap.
   no recursive unplanned deletion, and metadata application only after every
   child operation has settled; every created empty or non-empty directory comes
   from its own reviewed `DirRecord` operation.
+- Same-run trash/move cleanup tolerates only directory mtime/link-count churn,
+  rejects replacement and identity-less directories, and removes only when
+  `RemoveDirectory` confirms emptiness.
+- Native NTFS parent-directory flush succeeds with a writable directory handle;
+  injected refusal remains an honest per-operation durability warning.
 - No-op drift cannot refresh identity, last-seen, hash, or correspondence.
 - Multi-GiB simulated copy cancellation and pause occur within one configured
   chunk; pause persists completed status, emits no terminal, releases custody,
   and resume performs fresh preflight at the back of the queue.
 - Progress totals equal copy/update content bytes exactly and remain monotonic;
   event rate stays under the configured bound.
-- Transient sharing violations retry within bound; persistent locks skip/fail
-  with actionable reason and do not hang the session.
+- Transient sharing violations retry within bound, including update replace and
+  move-update old-to-trash failures after an earlier sub-step committed;
+  persistent locks fail with actionable `sharing-violation` rather than false
+  drift/occupancy and do not hang the session.
 - Copy-stream evidence is tagged `copy`, target identity comes from post-publish
   stat, and `last_verified_at` remains unchanged until real verification.
 - Recorder failure test preserves the successful filesystem result, reports the

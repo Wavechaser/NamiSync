@@ -1,7 +1,7 @@
 # Command-Line Interface
 
-Status: draft contract. Priority: architecture assigns reviewed `sync` and
-`history` to M0; integrity commands arrive with M1.
+Status: M0 reviewed `sync` and `history` implemented. Integrity commands arrive
+with M1; queue release and machine-readable output remain deferred.
 
 ## Entry Points
 
@@ -21,6 +21,17 @@ and `python -m namisync` with no subcommand launch it.
   collect explicit commitment between sessions, then submit execution and render
   item/summary results.
 - `nami-sync history [RUN]`: list envelopes or render typed retained detail.
+
+Recent-run listings include blocked/deferred exception counts so a filesystem-
+completed safe subset is not mistaken for a clean full sync; run detail shows
+each path and reason.
+
+`sync` accepts `--deletion-policy trash|additive`, `--database PATH`, and
+`--history-database PATH`. `history` accepts `--limit N` and
+`--history-database PATH`. For `sync`, both database files must be distinct and
+outside the managed roots; defaults are the local
+`%LOCALAPPDATA%\NamiSync\ledger.db` and
+`%LOCALAPPDATA%\NamiSync\history.db`.
 
 For noninteractive use, mandatory review cannot be waived by a casual `--yes`.
 The command surface may expose a separate queue-release flag that executes only
@@ -43,10 +54,13 @@ back to another argument.
 ## Review Rendering
 
 Print roots/volume evidence, policy, filter/policy snapshot, operation counts and
-content bytes, conflicts/refusals, required/free capacity, trash behavior,
+content bytes, runnable/blocked/deferred selection counts, per-item exclusion
+reasons, required/free capacity for the selected subset, trash behavior,
 computed ingest destinations when applicable, and a stable plan fingerprint.
 Commitment occurs only after the plan session has terminated and released
 custody. Execution output discloses fresh-preflight refusal/material drift.
+Successful safe-subset execution says `completed with exceptions`, itemizes the
+blocked/deferred paths, and tells the user to resolve them and re-plan.
 
 ## Output And Exit Status
 
@@ -54,15 +68,19 @@ Human output goes to stdout/stderr with actionable reasons and no ambiguous
 green-success wording. A future machine format is versioned and writes progress
 separately from the final structured result.
 
-Draft exit categories (numeric assignment may be finalized with implementation):
+Implemented exit categories:
 
-- success, including explicit no-op;
-- usage/input error;
-- preflight/volume refusal with no mutation;
-- partial or complete activity failure;
-- cancellation;
-- integrity issues found (`mismatched`, `modified`, `missing`, error);
-- filesystem success with ledger/history durability degradation.
+| Code | Meaning |
+| ---: | --- |
+| `0` | success, including declined review and explicit no-op |
+| `2` | usage, path, or configuration input error |
+| `3` | commitment or fresh-preflight refusal with no managed-data mutation |
+| `4` | planning/execution/runtime failure |
+| `5` | cooperative cancellation |
+| `6` | selected safe work completed, but blocked or deferred items remain |
+| `7` | filesystem success with degraded ledger or audit durability |
+
+Integrity-issue exits are assigned with the M1 integrity commands.
 
 `OperationResult.recording` and `.audit` independently carry
 `RecordingStatus.OK|DEGRADED`, so CLI can identify which store is behind without
@@ -124,7 +142,8 @@ transport replacement behind the same command adapter in M2.
   before commitment input.
 - Execution cannot proceed without a matching plan-and-selection commitment and
   always freshly preflights; queue release accepts already committed sets only.
-- Refusal, no-op, partial failure, cancel, mismatch, and ledger-behind return
+- Refusal, no-op, safe-subset partial completion, partial failure, cancel,
+  mismatch, and ledger-behind return
   distinct documented exit categories and truthful output.
 - Ledger-behind and audit-behind output/exit detail are independently testable;
   `CANCELED+UNRUN` renders queued discard rather than in-run cancellation.

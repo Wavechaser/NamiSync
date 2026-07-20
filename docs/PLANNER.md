@@ -1,6 +1,6 @@
 # Planner Module
 
-Status: draft contract. Priority: M0 path-preserving paired sync; later scopes,
+Status: M0 path-preserving paired-sync implementation complete. Later scopes,
 content evidence, ingest policies, replay, repair, and undo reuse the same plan
 shape.
 
@@ -18,6 +18,22 @@ plan(source: ScanResult, target: ScanResult,
      correspondence: MappingSnapshot, options: SyncOptions,
      scope: Scope) -> Plan
 ```
+
+## Implemented M0 Surface
+
+`namisync.modules.planner.plan()` is a pure transformation over frozen core
+snapshots. `namisync.core.planning` owns the serializable plan, operation,
+assignment, policy, scope, deterministic-id/fingerprint, selection-digest,
+and shared capacity contracts. M0 implements `Scope.everything()` and the
+batch-shaped identity destination policy; the other scope constructors remain
+declared but raise rather than pretending to work.
+
+The implementation emits explicit parent-first directory operations, file
+copy/update/no-op intent, correspondence-qualified move or composite
+move-update intent, target-only policy operations, and dependency-ordered
+directory cleanup. Blocked unsupported/collision items remain in the plan.
+Planner and preflight both call `calculate_required_bytes()`; neither stores or
+guesses target free space.
 
 `options` contains deletion and preservation policies, the symmetric mapping
 filter snapshot, and the selected `DestinationPolicy` plus any already-extracted
@@ -46,10 +62,19 @@ paths or destination policy. Expected/intended metadata uses
 `MetadataSnapshot` (attributes and creation time) under the snapshotted
 preservation policy. No stream manifest enters a plan.
 
+Canonical JSON remains byte-compatible for valid Unicode paths and escapes a
+malformed surrogate code unit defensively instead of raising during operation-id
+or plan-fingerprint construction. The scanner rejects such code units before a
+path record exists; serializer hardening prevents unrelated free-form data from
+turning a review into a raw encoding failure.
+
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
 deterministic digest of that exact selection; changing either invalidates the
-commitment. Deferred operations remain explicit; omission is not a status.
+commitment. Workflow derives M0's safe subset from the full plan: direct
+blockers stay `BLOCKED`, correspondence/dependency exclusions stay `DEFERRED`,
+and incomplete scans withhold destructive/identity operations. Planner itself
+continues to emit complete deterministic intent and does not hide those items.
 
 ## Diffing And Operation Rules
 
@@ -58,8 +83,9 @@ commitment. Deferred operations remain explicit; omission is not a status.
 - Apply mapping filters symmetrically before diffing. Location ignores have
   already bounded scan completeness.
 - Compare mtimes within the coarser capability granularity.
-- Matching size+mtime is an M0 metadata no-op, with the documented limitation
-  that content-aware no-op comes later.
+- Matching size, mtime within the coarser granularity, and standard attributes
+  is an M0 metadata no-op. An attributes-only change plans an update even when
+  size and mtime are unchanged. Content-aware no-op comes later.
 - Source-only files plan copy; changed matched files plan update.
 - Every directory the plan will create has an explicit parent-first
   mkdir-with-metadata operation; file and child-directory operations depend on
@@ -69,6 +95,11 @@ commitment. Deferred operations remain explicit; omission is not a status.
   the pre-scan tree.
 - Case and file/directory collisions become blocked operations with no guessed
   winner.
+- A single source and target entry that share a Windows path key but differ in
+  exact spelling become a typed `case_mismatch` blocked conflict, even when
+  their metadata matches. Directory mismatches block dependent descendants.
+  M0 does not pretend that an ordinary no-op converged casing or attempt an
+  unsafe case-only move through the existing absence-guarded move contract.
 - Move detection requires unambiguous prior source correspondence, stable
   identity, link count one, unique identity occurrence, and a safe target-side
   move. It never equates source and target filesystem IDs.
@@ -101,11 +132,12 @@ filesystem name or an attempted operation.
 
 ## Scope And Selection
 
-M0 implements `Scope.everything()`. Pattern, explicit, and recorded-run scopes
+M0 implements `Scope.everything()` plus workflow-owned safe-subset selection.
+Pattern, explicit, and recorded-run scopes
 are declared now. Scope uses canonical stable candidate identities, not raw UI
-row numbers or display paths. Partial selection closes dependencies, recomputes
-capacity and summaries, and marks valid omitted work `DEFERRED` once partial
-execution exists.
+row numbers or display paths. The implemented selector closes dependencies,
+recomputes capacity/summaries, and reports forced exclusions; user-edited
+partial selection remains deferred.
 
 Replay, undo, and repair always plan fresh against current scans/evidence. A
 historical operation list is scope input, never executable authority.
@@ -144,8 +176,11 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   and planner/executor formula drift.
 - Mapping evidence includes paired no-ops so later renames do not degrade to
   copy+trash.
-- Incomplete scans and unsupported entries remain visible and non-executable.
-- Metadata no-op risk is explicit and later content evidence is additive.
+- Incomplete scans and unsupported entries remain visible; unsupported items
+  are blocked, while workflow permits only completeness-independent operations.
+- Attribute-only drift is update-worthy; the remaining metadata no-op risk is
+  content changing behind equal size/time/attributes, and later content
+  evidence is additive.
 
 ## Acceptance Criteria
 
@@ -173,8 +208,9 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   recorded as final success.
 - Case and file/directory collisions are blocked and visible; independent work
   remains executable after dependency closure.
-- Incomplete source or target scans yield a reviewable plan that preflight must
-  refuse.
+- Incomplete source or target scans yield a reviewable full plan whose workflow
+  selection admits copy/update/mkdir/noop and withholds move/move-update/trash/
+  delete; preflight refuses any caller that reintroduces withheld operations.
 - Capacity property tests never undercount any allowed worker schedule and use
   the exact same function as preflight.
 - No-hardlink update fixtures include displaced-version backup bytes under every
@@ -182,7 +218,17 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   for the link itself.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
+- A readonly/hidden/system-only difference with unchanged size and mtime plans
+  an update and propagates through the real sync workflow.
 - Destination policy collision and companion-group property tests produce
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.
 - Import-linter proves planner imports core but no sibling module.
+
+## M0 Verification
+
+`tests/test_planner.py` contains 22 filesystem-free planner tests covering
+random input order, byte-identical serialization, directory convergence,
+cleanup dependencies, move disqualifiers, policy collisions, symmetric
+filters, long paths, and hardlink-aware capacity. Shared path/serialization
+contracts are covered in `tests/test_core_scanplan.py`.

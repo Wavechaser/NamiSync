@@ -300,7 +300,7 @@ directory's children settle.
 
 ### DR-14 — Integrity outcomes do not fit the generic event type
 
-`ItemOutcome.outcome` is the five-value generic `Outcome`, while verifier
+`ItemOutcome.outcome` is the six-value generic `Outcome`, while verifier
 consumers need verified, baselined, mismatched, modified, missing, unsupported,
 canceled, and error. Encoding these as free-form `kind` or `reason` strings
 would recreate the PoC's inconsistent presentation paths.

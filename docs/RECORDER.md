@@ -1,7 +1,8 @@
 # Recorder Module
 
-Status: draft contract. Priority: M0 sync recording; M1 integrity/import
-recording.
+Status: M0 sync recording, ledger setup, inventory reconciliation, and the
+shared conditional integrity write are implemented. Hash import and maintenance
+recording remain later work.
 
 ## Purpose
 
@@ -13,6 +14,46 @@ a bounded durability window, and fails visibly.
 
 History is not recorder output. It independently observes session events and
 uses a separate database.
+
+## Implemented Foundation
+
+`namisync.db.recorder.LedgerRecorder` owns one serialized writable connection.
+It records hosts, volume evidence, role-free locations, mappings, actual run
+windows, inventory observations, sync outcomes, and conditional integrity
+evidence. `begin_sync_run()` validates an execution run's mapping, physical
+volumes, plan, selection, and token, then returns a run-bound
+`SyncRunRecorder` implementing the executor's narrow recorder protocol. This
+keeps run and plan context out of every per-operation call without making
+operation ids globally unique across reruns.
+
+M0 uses eager operation-scoped transactions behind the final batching
+interface. Every successful call is already durable, and `flush()` is therefore
+a boundary-compatible no-op rather than a missing seam. One re-entrant lock
+serializes threads; WAL, SQLite busy timeout, and bounded retry handle another
+process. Exhausted contention raises `RecordingBusyError`.
+
+All sync operation kinds record only after the executor reports matching
+filesystem success. Copy/update evidence is bound to the published target stat,
+tagged `copy`, and never advances `last_verified_at`. Paired no-ops require both
+live stats to match the reviewed snapshots. Move recording validates the prior
+row before carrying its evidence forward and transactionally reconciles a
+retained-missing destination row. A pure move preserves that row's content hash,
+provenance, and `last_verified_at` — a same-volume rename keeps size, mtime, and
+identity — so a later verify verifies against carried-forward evidence instead of
+re-baselining; a move of a never-hashed file simply carries no hash. Move-update
+overwrites content and therefore records fresh `copy` evidence.
+
+Workflow exclusions do not call the main-ledger recorder: blocked intent and
+deferred quarantine/withholding are audit-history facts, not durable filesystem
+evidence. Selected no-ops still run their live guards and call `record_noop`, so
+even an otherwise degraded safe-subset run refreshes valid correspondence for
+future complete-scan move detection.
+
+Inventory reconciliation batches observations and uses a temporary key table
+for complete missing sweeps, so a 33k+ location never becomes a giant parameter
+list. The integrity primitive gates row, location, canonical path, present
+state, scope token, current stat, and full expected attestation. Evidence,
+`last_verified_at`, and `reappeared_at` change in one transaction or not at all.
 
 ## Command Contract
 
@@ -125,6 +166,12 @@ Hardlink group recording remains nullable until preservation semantics exist.
 - Guarded path normalization errors cannot roll back unrelated earned records.
 
 ## Acceptance Criteria
+
+The M0-owned criteria below are covered by focused schema, sync, inventory,
+integrity, concurrency, repository, and verifier-recorder integration tests.
+Workflow result aggregation and executor flush placement are verified by their
+own layer tests; bounded multi-operation batching remains latent because M0
+commits every command eagerly.
 
 - Static/import tests prove no production ledger write occurs outside recorder
   and schema/migration ownership.

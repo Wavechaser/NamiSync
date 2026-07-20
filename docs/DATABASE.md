@@ -1,7 +1,9 @@
 # Database Module
 
-Status: draft contract. Priority: schema bones and minimal ledger in M0;
-inventory/integrity in M1; migrations and protection workflows later.
+Status: schema bones, safe connection factories, the M0 ledger/repositories,
+inventory reconciliation, and minimal sync history are implemented. One narrow
+history v1-to-v2 migration is implemented; general migrations, retention,
+backup/protection workflows, and richer history remain later work.
 
 ## Purpose And Boundaries
 
@@ -14,6 +16,31 @@ retention, failure domains, and no cross-database foreign keys.
 Live databases are local, never placed in a cloud-synced managed root. Settings
 live in a separate local settings file; semantic settings used by a plan are
 snapshotted into that plan.
+
+## Implemented Foundation
+
+`schema.py` creates a version-1 ledger and version-2 history schema. The ledger
+freezes hosts, stable volumes plus mutable evidence, role-free locations,
+soft-deletable mappings, current versus attested inventory state, mapping-scoped
+correspondence, run/operation tokens, generic annotations, and nullable hardlink
+group room. Database triggers reject correspondence whose rows do not belong to
+the mapping's source and target locations.
+
+`connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
+read repositories open SQLite in `mode=ro` and enable `query_only`. Live paths
+can be validated against managed roots before creation. `timestamps.py` is the
+single fixed-width aware-UTC representation used by both schemas.
+
+`repositories.py` returns immutable inventory, run, and `MappingSnapshot`
+values. Canonical path selections are queried in bounded 400-key chunks, and
+mapping correspondence is returned with stable source/target volume evidence
+and hardlink/duplicate-identity disqualification. Reads never refresh state.
+
+History version 2 adds the run-level `blocked_count`; opening a version-1
+history database adds that column transactionally with a zero default and
+preserves existing runs. Other version mismatches are explicitly refused.
+Reset remains an external/manual operation; no general ordered migration,
+backup, retention, export/import, or maintenance writer is claimed yet.
 
 ## Main Ledger Shape
 
@@ -88,8 +115,9 @@ future explicit policy with impact review, not an incidental scan cleanup.
 
 ## Schema Evolution
 
-Both databases start with a version stamp. Before real evidence must survive a
-schema change, a dedicated ordered migration module takes an atomic backup,
+Both databases start with a version stamp. The implemented history v1-to-v2
+step is deliberately additive and transactional. Before broader real evidence
+must survive a schema change, a dedicated ordered migration module takes an atomic backup,
 checks supported source versions, migrates transactionally, verifies integrity,
 and restores/refuses safely on failure. Early reset-and-refuse behavior is
 acceptable only before user evidence exists and must be explicit.
@@ -137,6 +165,13 @@ round trips, and duplicated time/host formatting.
 
 ## Acceptance Criteria
 
+Fresh-schema, pragma, read-only, cross-location trigger, canonical path,
+volume/rebind, 33k reconciliation, bounded repository query, WAL concurrency,
+independent history round-trip, and the additive history v1-to-v2 migration are
+covered in the M0 suite. Criteria for retention, general migrations, backups,
+exports, and cloud-provider discovery remain future gates rather than current
+implementation claims.
+
 - Fresh schemas contain every freeze field, version stamp, index, uniqueness,
   and foreign-key/trigger constraint required above.
 - `PRAGMA foreign_keys`, WAL, and busy timeout are verified on every connection
@@ -156,6 +191,8 @@ round trips, and duplicated time/host formatting.
 - History run envelopes round-trip filesystem status, independent
   recording/audit axes, and `Disposition` without deriving them from detail
   count or text.
+- Version-1 history upgrades transactionally to version 2, preserving prior runs
+  and initializing `blocked_count` to zero.
 - Retention uses a writable connection, canonical time comparison, preserves
   summaries when pruning detail, and is idempotent.
 - Concurrent recorder/repository/history access does not lose committed evidence

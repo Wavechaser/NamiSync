@@ -261,11 +261,13 @@ class Outcome(StrEnum):
     FAILED    = "failed"     # attempted, errored
     CANCELED  = "canceled"   # not reached due to cancellation
     DEFERRED  = "deferred"   # valid but held back (dependency, partial-exec)
+    BLOCKED   = "blocked"    # intrinsically unexecutable reviewed plan item
 ```
 
-Every operation every module performs ends in exactly one of these. `DEFERRED`
-exists in the enum from day one though only partial execution produces it —
-consumers handle all five now; producers grow into them.
+Every reviewed operation ends in exactly one of these. M0 safe-subset workflow
+produces `BLOCKED` for direct blockers and `DEFERRED` for quarantined,
+dependency-excluded, or incomplete-scan-withheld work. Quarantine and
+withholding remain reason codes rather than additional top-level outcomes.
 
 ### 2.5 Scan, plan, execution (bones = shapes; flesh = fields)
 
@@ -340,8 +342,9 @@ class ScanResult:
     unsupported: tuple[UnsupportedRecord, ...]  # its own collection — a consumer
                                 # must decide about them explicitly; a flag on
                                 # FileRecord would be a forgettable discipline
-    warnings: tuple[ScanWarning, ...]   # access errors, case collisions, hardlinks
-    complete: bool              # False ⇒ reviewable, never executable
+    warnings: tuple[ScanWarning, ...]   # access/path errors, collisions, hardlinks
+    complete: bool              # False ⇒ reviewable; absence/identity-dependent
+                                # operations are withheld from execution
 
 @dataclass(frozen=True)
 class MappingSnapshot:          # prior accepted correspondence — read from
@@ -410,6 +413,7 @@ class Subject(NamedTuple):      # never a bare string key — both roots share
 @dataclass(frozen=True)
 class ObservedWorld:            # a scoped SNAPSHOT — the impure half of preflight
     stats: Mapping[Subject, FileStat | None]   # only subjects the remaining ops touch
+    target_parent_paths: frozenset[str]        # exact temp-count/recovery scope
     free_space: int
     reclaimable_temp_bytes: int
     volumes: Mapping[Root, VolumeId | None]
@@ -571,7 +575,9 @@ sequencer, path-safety helpers, and all protocol shapes. Imports nothing.
 **Bones.** All of §2. The transition table. `normalize_relative_path` (Windows
 one-codepoint uppercase — never `casefold()`, which merged `Straße`/`strasse`
 into one row in the PoC). Root-constrained path validation (rejects absolute,
-drive-qualified, `..`, root-escaping).
+drive-qualified, `..`, ambiguous suffix/device/stream spellings, NUL, unpaired
+surrogates, and root-escaping). Canonical JSON preserves valid-Unicode bytes and
+escapes malformed surrogate code units rather than raising.
 
 **Flesh.** None. Core is all bones by definition.
 
@@ -580,11 +586,21 @@ drive-qualified, `..`, root-escaping).
   proven by an exhaustive table test.
 - `normalize_relative_path` keeps NTFS-distinct names distinct across a Unicode
   special-casing corpus (`ß`, Turkish `İ/ı`, fullwidth forms).
-- Path validation rejects every escape form and accepts every legitimate
-  root-relative path.
+- Path validation rejects every escape form and non-scalar surrogate while
+  accepting every contract-legitimate root-relative path; canonical JSON never
+  raises while encoding malformed free-form Unicode.
 - Event `seq` is gap-free and monotonic per session under concurrent emit.
 
 ### 4.2 scanner
+
+**Implementation status (2026-07-20).** The M0 native walking scanner,
+injectable fault backend, full/scoped result distinction, exact ignores,
+capability evidence, placeholder/reparse handling, deterministic records, and
+typed incomplete snapshots are implemented and acceptance-tested. Raw names
+outside the lexical path contract become escaped `PATH_UNREPRESENTABLE`
+warnings without aborting safe siblings. Stable-ID volumes recover a
+directory-entry identity omission with one exact-path metadata stat. USN and
+network change sources remain deferred.
 
 **Contract.** `scan(root, ignores, ctx) -> ScanResult`. Implements
 `ChangeSource`.
@@ -594,7 +610,8 @@ drive-qualified, `..`, root-escaping).
 so junctions/reparse loops cannot recurse forever.
 
 **Flesh — now.** Recursive metadata walk (size, mtime_ns, identity, nlink;
-every directory recorded with metadata); exact-name ignore filtering; capability profiling; placeholder detection
+every directory recorded with metadata); pre-use raw-name validation; exact-name
+ignore filtering; capability profiling; placeholder detection
 (classify reparse/offline files `unsupported`, never open them); scan warnings.
 **Flesh — deferred.** USN change-journal `ChangeSource`; network-share awareness.
 
@@ -604,6 +621,9 @@ every directory recorded with metadata); exact-name ignore filtering; capability
 - A cloud placeholder file is recorded `unsupported` and is **never opened**
   (asserted by a read-tripwire in test).
 - A partial/errored walk yields `complete=False`; a clean walk yields `True`.
+- A contract-invalid file or directory name is escaped into typed evidence,
+  makes the scan incomplete, is never opened/descended, and does not prevent a
+  safe sibling from being retained.
 - Ignored artifacts are matched only by exact qualified name; a user file named
   `my.synctmp-notes.txt` or `data.db` is **never** excluded (direct PoC
   regression tests).
@@ -612,6 +632,15 @@ every directory recorded with metadata); exact-name ignore filtering; capability
   `mtime_granularity_ns`.
 
 ### 4.3 planner
+
+**Implementation status (2026-07-20).** The pure M0 planner and its core plan
+contracts are implemented: identity assignment, timestamp- and
+standard-attribute-aware metadata diffing, explicit
+directory chains, correspondence-qualified file moves, composite move-update,
+planned-removal cleanup, symmetric filters, deterministic surrogate-safe
+serialization, typed exact-case mismatch blocking, and the shared
+hardlink-aware capacity function. Non-everything scopes and content evidence
+remain deferred.
 
 **Contract.**
 `plan(source: ScanResult, target: ScanResult, correspondence: MappingSnapshot,
@@ -633,7 +662,8 @@ the diff never compares `source.rel_path` to `target.rel_path` directly, even
 though the M0 policy is the identity assignment. This one indirection is what
 makes ingest a policy change instead of a planner rewrite.
 
-**Flesh — now.** Metadata diffing within the coarser root's granularity;
+**Flesh — now.** Mtime diffing within the coarser root's granularity plus
+exact standard-attribute diffing;
 copy/update/trash/delete/noop planning, with an explicit mkdir-with-metadata
 operation for every directory the plan creates (full chain — file operations
 depend on their parent's mkdir; the executor never creates a directory
@@ -644,6 +674,8 @@ chain + emptied-dir cleanup — no directory-level move op exists in M0, and the
 decomposition must exist regardless: a folder whose children also changed
 content cannot collapse into one rename); composite move-update as one
 operation; conflict blocking; capacity planning; `Scope.everything()`.
+Exact-case mismatches across one source/target Windows key are distinct blocked
+conflicts, not metadata no-ops; directory conflicts block dependent descendants.
 **Flesh — deferred.** Content-aware no-op; hash-based move detection; retained
 human conflict resolution; `Scope.pattern/explicit/recorded_run` (filters,
 partial exec, replay — all new scope constructors, zero planner-shape change);
@@ -666,11 +698,20 @@ grouping) with enrichment metadata supplied by the workflow.
 - On a stable-identity-less root, no `move` operation is ever emitted.
 - A file whose identity appears at two paths, or with `nlink>1`, is never part
   of a move.
+- Metadata-equal `KEEP.txt`/`keep.txt` evidence produces a visible typed
+  conflict, never a silent no-op; a directory mismatch blocks its dependent
+  region without guessing a case-only rename.
 - A renamed source folder decomposes into per-file moves, a full mkdir chain,
   and emptied-dir cleanup; the rerun converges to zero operations and the
   rename itself copies no content bytes.
 
 ### 4.4 preflight
+
+**Implementation status (2026-07-20).** Scoped read-only observation and pure
+typed judgment are implemented for selection-aware scan completeness, blocked
+correspondence, root/volume, dependency, direct and parent evidence, settings,
+capacity, trash, containment, and path representation checks. Commitment
+validation remains correctly outside this module at execution-workflow entry.
 
 **Contract.** Two functions, deliberately split so purity is real rather than
 claimed:
@@ -684,10 +725,12 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict: ... # pure, 
 `observe()` does the scoped re-stat — it touches only the subjects the
 remaining selected operations name (keyed `(root, rel_path_key)`, never a bare
 string — both roots share the same rel paths), reads free space, resolves root
-volume identity, sums reclaimable orphaned-temp bytes, and snapshots the
-semantic configuration currently in effect (`current_filters`, read through the
-injected `SettingsReader`) — reading settings is IO too. It decides nothing. `preflight()` renders every verdict
-from that snapshot alone and never touches the filesystem.
+volume identity, retains the touched target-parent set, sums only exact
+different-run temp bytes that execution will sweep from that set, and snapshots
+the semantic configuration currently in effect (`current_filters`, read through
+the injected `SettingsReader`) — reading settings is IO too. It decides nothing.
+`preflight()` renders every verdict from that snapshot alone and never touches
+the filesystem.
 
 The split is a bone, for three reasons: `preflight()` becomes exhaustively
 testable against synthetic worlds with no temp directories; the expensive IO
@@ -697,12 +740,14 @@ wakeup each observe their own world, because closeness in time is not evidence
 of unchanged state; and "pure" stops being an honor system. All IO lives in
 one small function whose only job is statting.
 
-**Bones.** The `observe`/`preflight` split; the `ObservedWorld` snapshot shape;
+**Bones.** The `observe`/`preflight` split; the `ObservedWorld` snapshot shape,
+including the immutable touched-target-parent recovery scope;
 the `Verdict` shape carrying per-op refusals plus the snapshot it judged;
 observation scoped to operation-touched paths only.
 
 **Flesh — now.** All checks: plan integrity (dependency-closed, no dep on a
-deferred/failed/blocked op), complete-scan requirement, staleness, capacity
+deferred/failed/blocked op), blocked-correspondence quarantine, operation-class
+scan-completeness gating, staleness, capacity
 (counting reclaimable orphaned-temp bytes as recoverable), safety (roots resolve
 to recorded `VolumeId`; trash resolves onto the target volume without reparse
 escape and is writable), filter-snapshot drift (`plan.filter_snapshot` vs
@@ -710,8 +755,9 @@ escape and is writable), filter-snapshot drift (`plan.filter_snapshot` vs
 preflight check — preflight also runs at review time, before any commitment
 exists, and must render the same verdicts there; the execution session's entry
 refuses an uncommitted set before preflight even runs (§4.9).
-**Flesh — deferred.** Graceful `continue-with-skips` resume tier (M0 resume is
-continue-or-refuse).
+**Flesh — deferred.** User-edited partial selections and a graceful
+`continue-with-skips` resume tier (M0 automatic safe-subset execution exists;
+resume remains continue-or-refuse).
 
 **Acceptance criteria.**
 - `preflight()` performs no IO at all — it is called with no filesystem
@@ -721,16 +767,26 @@ continue-or-refuse).
 - `observe()` stats only operation-touched paths; an unrelated change elsewhere
   in either tree never causes refusal (PoC regression — the original whole-tree
   preflight over-refused and was slow).
-- A plan from an incomplete scan is always refused.
-- A nearly-full target whose own orphaned temps would free the needed space is
-  **not** refused (PoC open-bug fix).
+- An incomplete scan permits selected copy/update/mkdir/noop work but refuses
+  selected move/move-update/trash/delete work; manually reintroduced blocked
+  correspondence is also refused.
+- A nearly-full target whose exact prior-run temps in touched parents free the
+  needed space is **not** refused; current-run temps and out-of-scope artifacts
+  are not credited to the run-level sweep.
 - Running the same `preflight` at review, at execution start, and at resume
   yields consistent verdicts for an unchanged world.
 
 ### 4.5 executor
 
+**Implementation status (2026-07-18).** The M0 native single-worker executor
+and its core execution contracts are implemented for all eight operation kinds,
+with conditional publish, guarded trash/delete, deferred directory metadata,
+continuation state, bounded retries, throttled progress, and post-mutation typed
+recording. ADS, restartable copies, parallel workers, and IO throttling remain
+deferred as described below.
+
 **Contract.**
-`execute(xset, ctx, recorder, policies) -> ExecResult`. The workflow owns the
+`execute(xset, ctx, recorder, policies, fs) -> OperationResult`. The workflow owns the
 observe → preflight → execute sequence on every start and every resume (§4.9);
 the executor never imports or calls preflight. Its own defense is
 **per-operation**: immediately before each mutation it re-validates that
@@ -739,9 +795,11 @@ one stage of TOCTOU prevention, never the last, because the world can change
 between preflight and touch. Records only through `recorder`.
 
 **Bones.** Typed-result return — the session runner owns `Terminal` (§2.2a);
-atomic temp-then-`os.replace` publish with best-effort parent-dir flush (a
-refused flush is a per-op warning; durability is claimed only for what was
-flushed); **displace-then-replace update order** — the live target is preserved
+atomic temp-then-`os.replace` publish with best-effort parent-dir flush through
+a directory handle opened with `GENERIC_WRITE` access and
+`FILE_FLAG_BACKUP_SEMANTICS` (a refused flush is a per-op warning; durability is
+claimed only for what was flushed);
+**displace-then-replace update order** — the live target is preserved
 into trash by atomic same-volume hardlink — with a copy fallback on volumes
 reporting no hardlink support, itself written temp-flush-publish *inside the
 trash run directory* so a partial backup only ever exists under a temp name —
@@ -761,7 +819,11 @@ directory trash/delete), enforced through operation-matched **conditional
 primitives** where the OS provides them: publishes and moves that expect an
 absent destination use non-replacing rename (atomically fails if something
 appeared), temp files are created `CREATE_NEW`, and directory deletion relies
-on `RemoveDirectory`'s own atomic emptiness refusal. A primitive guarantees
+on `RemoveDirectory`'s own atomic emptiness refusal. Dependency-complete
+`directory_cleanup` deletes retain exact kind, size, attributes, and creation
+time but ignore mtime/link-count churn caused by their own child removals;
+identity binds when the reviewed scan supplied it, while absent identity remains
+absent evidence rather than a veto. A primitive guarantees
 exactly its own condition and nothing more — none binds *source* identity to
 a pathname — so the external-writer boundary applies to **every** mutation,
 and each residual race is bounded by its **data consequence**, never by
@@ -779,12 +841,16 @@ primitive; readonly applied only after publish; directory metadata applied
 only after the directory's children settle (child creates and renames churn
 parent times — directory times are restored last); the cancel-unwind finalizer
 (§2.2a — canceled outcomes for in-flight and unreached items emitted before
-unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams.
+unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams;
+and process-local retry continuations for committed update/move-update sub-steps,
+which revalidate the exact prepared/published and backup/trash evidence before
+resuming rather than restarting against the executor's own prior mutation.
 
 **Flesh — now.** copy/update/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
 the op, records nothing); trash-on-update; root-local trash with volume-identity resolution;
-temp recovery by exact name in touched dirs only; per-op continue-on-failure;
+one post-verdict, pre-copy prior-run temp sweep over preflight's exact touched
+parents plus per-operation current-run temp cleanup; per-op continue-on-failure;
 chunked cancellation.
 **Flesh — deferred.** Validated partial execution (`DEFERRED` outcomes);
 executor-time ADS stream copy (per the settled FEATURES → *ADS Preservation*
@@ -809,8 +875,11 @@ IO throttling; Robocopy backend.
 - Source changed mid-copy ⇒ op `FAILED`, **no** attestation recorded (PoC gap).
 - A first blocked/failed operation never aborts later independent operations
   (the "walk away for hours" guarantee — the PoC's original SEVERE bug).
-- Temp recovery deletes only exact-shape temp names in copy/update parent dirs;
-  a user file containing `.synctmp-` survives (PoC SEVERE regression).
+- Temp recovery deletes only exact-shape, different-run regular files in the
+  preflight-retained touched parents. Current-run temps, lookalikes, exact-name
+  directories, untouched parents, off-volume mounts, and `.synctrash` survive;
+  a sweep failure occurs before copy allocation, so credited capacity is never
+  used unsafely.
 - Trash that would land off-volume or through a reparse point is refused before
   any move.
 - Fault tests exercise an external path swap *between* a final guard and its
@@ -825,21 +894,26 @@ IO throttling; Robocopy backend.
 
 ### 4.6 verifier
 
-**Contract.** `verify(selection, ctx, recorder) -> VerifyResult`;
-`baseline(selection, ctx, recorder) -> ...`. Records through `recorder`.
+**Contract.** `verify|baseline|rebaseline(selection, ctx, recorder,
+reader=None) -> IntegrityRunResult`. Records through `recorder`.
 
-**Bones.** Per-file `ItemOutcome` emission (no silent-until-done); the
+**Bones.** Per-file `IntegrityOutcome` emission (no silent-until-done); the
 cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached
 items emitted before unwind); the integrity-outcome vocabulary (verified,
 baselined, mismatched, modified, missing, unsupported, canceled, error);
 attestation provenance tagging.
 
-**Flesh — now.** Baseline creation; location verification against the
+**Flesh — operation module implemented early during M0 construction; integrated
+in M1.** Baseline creation; location verification against the
 size/mtime/identity/hash unit; selected and post-execution verification;
 cache-honest reads; safe conditional recording; accept/re-baseline of a modified
 file; item-status continuation — verify/baseline sessions pause and resume over
 their remaining selection exactly like execution (same continuation pattern,
-same preflight-on-resume posture).
+same preflight-on-resume posture). The callable module, real Windows unbuffered
+reader, and conditional ledger primitive are present before M1, but inventory
+refresh, integrity workflow/history detail, dispatcher registration, and
+interfaces remain the M1 product gate.
+
 **Flesh — deferred.** Multithreaded verification (per-volume-side worker policy);
 IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 (diagnose which side is damaged).
@@ -866,6 +940,15 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 `repositories.py` holds all reads. `history.py` is an event-stream observer with
 its own database. `schema.py` owns both schemas and the version stamps.
 
+**Implementation status (2026-07-20).** The versioned ledger/history schemas,
+safe writer/read-only connection factories, canonical UTC codec, serialized
+retrying writer, run-bound sync recorder, batched inventory reconciliation,
+conditional baseline/verify/rebaseline writes, typed ledger repositories, and
+minimal sync history observer/repository, blocked/deferred item audit, and the
+transactional additive history v1-to-v2 migration are implemented. M0 commands commit
+eagerly, so `flush()` preserves the final boundary while the crash window is
+zero completed commands. Cross-process contention is bounded and visible.
+
 **Bones.** Single serialized writer; the conditional-recording primitive (write
 gated on row id + state + size + mtime still matching the observation) shared by
 copy/verify/baseline/import; bounded-window durability with forced flush before
@@ -877,15 +960,18 @@ guaranteed (timeout-guarded, backpressured) delivery, acknowledges its final
 write before the `Terminal` is released (the two-phase finalization of §2.2a),
 and its write failures surface on the session result's `audit` axis (§2.3).
 
-**Flesh — now (M0).** Recorder for sync operations; missing-marking sweep
+**Flesh — implemented (M0).** Recorder for sync operations; missing-marking sweep
 (batched — never one giant `NOT IN`); inventory reconciliation. History observer
-in minimal form: run envelopes plus sync summaries and ordered operations —
+in minimal form: run envelopes plus sync summaries and ordered operations,
+including a sixth blocked outcome and deferred exclusion reasons —
 enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 `history` command. The observer is cheap precisely because it is only an event
 subscriber; nothing calls it.
-**Flesh — M1.** Recording for verify/baseline/import; history integrity
-summaries and retained issue detail; retention sweeps (writable connection).
-**Flesh — deferred.** Migration module; legacy import; scheduled backup/quick-check
+Conditional verify/baseline/rebaseline recording landed early with the isolated
+verifier during M0 construction. **Flesh — M1.** Hash-import recording; history
+integrity/import summaries and retained issue detail; retention sweeps
+(writable connection); integrity workflow composition.
+**Flesh — deferred.** General migration module; legacy import; scheduled backup/quick-check
 (as an ordinary session); export/import; ledger merge across hosts.
 
 **Acceptance criteria.**
@@ -933,7 +1019,7 @@ class SessionStore(Protocol):
     def drop(self, sid: SessionId) -> None: ...
 ```
 
-**Flesh — now (M0).** `InMemorySessionStore` — the degenerate implementation;
+**Flesh — implemented (M0).** `InMemorySessionStore` — the degenerate implementation;
 `load_all()` returns nothing, so there is no reload and nothing to reconcile. A
 process death in M0 simply loses the session table, and recovery is the ordinary
 convergence model: rescan, replan. `INTERRUPTED` exists in the enum from day one
@@ -956,8 +1042,8 @@ history entry first.
 behind the same protocol; reload on launch; startup reconciliation (dead-process
 `RUNNING` ⇒ `INTERRUPTED`, routed into preflight-then-continue); single
 queue-owner via a file lock on the persisted store; durable queue with launch
-policy; event conflation policy (degenerate = simple rate limit now); local-pipe
-CLI-as-client.
+policy; configurable event-conflation policy (M0 already coalesces progress in
+bounded live/replay buffers); local-pipe CLI-as-client.
 
 **Acceptance criteria.**
 - No dispatcher symbol names a domain activity; it never imports modules or
@@ -967,8 +1053,9 @@ CLI-as-client.
 - Every session reaches a terminal and releases every lock on every path,
   including exceptions and teardown (custody conformance).
 - The stored per-workflow blob is never deserialized by the dispatcher.
-- After a simulated process kill, reconciliation marks the orphan `INTERRUPTED`
-  and routes it through preflight-then-continue.
+- **M2:** after a simulated process kill, reconciliation marks the orphan
+  `INTERRUPTED` and routes it through preflight-then-continue. M0 instead proves
+  honest process-local loss plus abandoned volume-lock recovery.
 - A `Progress` flood never stalls a slow subscriber or the producer; a
   `RELIABLE` event reaches the history observer or the session's `audit` axis
   reads `DEGRADED`; an ejected subscriber always sees an explicit `Gap`.
@@ -983,7 +1070,7 @@ forward. The only place modules meet.
 
 ```python
 def run_plan(req: PlanRequest, ctx, deps) -> Plan: ...            # session 1: scan → plan → observe → preflight
-def run_execution(xset: ExecutionSet, ctx, deps) -> ExecResult: ...# session 2: observe → preflight → execute;
+def run_execution(xset: ExecutionSet, ctx, deps) -> OperationResult: ...# session 2: observe → preflight → execute;
                                                                    # consumes a COMMITTED ExecutionSet only
 def run_integrity(req, ctx, deps) -> IntegrityResult: ...          # inventory / baseline / verify / import
 ```
@@ -1006,6 +1093,12 @@ Everything downstream falls out of this split:
   always preflights, whether the gap was 5 seconds or 5 days.
 - **Partial execution, filters, and replay** change only the `Selection` or
   `Scope` carried between the two sessions — neither session's shape changes.
+- **M0 safe-subset execution** derives that selection deterministically from
+  the full reviewed plan. Direct blockers are `BLOCKED`; path-correspondence or
+  dependency collateral is `DEFERRED`; incomplete scans globally withhold
+  move, move-update, trash, and delete while retaining guarded copy, update,
+  mkdir, and noop. The plan fingerprint still binds full intent and the
+  commitment digest binds the exact runnable subset.
 - **There is no no-gate path.** Every execution session consumes a *committed*
   `ExecutionSet` — one a human reviewed and explicitly committed, bound to the
   plan's fingerprint. The commitment is the durable preauthorization: its
@@ -1022,14 +1115,25 @@ Everything downstream falls out of this split:
 observe → preflight → execute/verify); no signals, no callbacks-for-control;
 every dependency arrives via `deps`.
 
-**Flesh — now.** Paired sync (both phases); one-location integrity
-(inventory/baseline/verify/import); CLI sync — terminal review and commit
-*between* the two sessions.
-**Flesh — deferred.** Queue-driven second sessions; replay-from-history; DB
-maintenance session; undo/repair (each generated as an ordinary plan through the
-same pipeline — the *Pipeline-Only Mutation* law); `run_ingest` — scan → enrich
-(`MetadataExtractor`, its own cancellable stage) → plan (template
-`DestinationPolicy`) → the same review gate, preflight, and executor as sync.
+**Implementation status (2026-07-20).** M0 paired sync now runs both dispatcher
+sessions through schema-versioned opaque payloads. Planning reads prior
+correspondence without creating configuration, derives and reviews the maximal
+safe dependency-closed subset, and preflights that selection. Execution verifies
+commitment, freshly observes/preflights under volume custody, then opens the sole
+ledger writer and independent history observer. Exclusions are emitted as
+itemized blocked/deferred audit outcomes after selected execution settles; they
+never become main-ledger evidence. The CLI commits only between terminal
+sessions and exposes the resulting typed history reads.
+
+**Flesh — implemented (M0).** Paired sync (both phases), automatic safe-subset
+selection, local composition, CLI terminal review/commit, and history browsing.
+**Flesh — deferred.** One-location integrity
+(inventory/baseline/verify/import, M1); queue-driven second sessions;
+replay-from-history; DB maintenance session; undo/repair (each generated as an
+ordinary plan through the same pipeline — the *Pipeline-Only Mutation* law);
+`run_ingest` — scan → enrich (`MetadataExtractor`, its own cancellable stage)
+→ plan (template `DestinationPolicy`) → the same review gate, preflight, and
+executor as sync.
 
 **Acceptance criteria.**
 - The workflow reads top-to-bottom as sequential calls; control flow is visible,
@@ -1041,6 +1145,11 @@ same pipeline — the *Pipeline-Only Mutation* law); `run_ingest` — scan → e
   executor's own defense is per-operation precondition re-checking, never a
   preflight import.
 - A refused preflight short-circuits to a `REFUSED` terminal with no mutation.
+- A direct blocker cannot refuse independent safe work. Corresponding paths and
+  dependencies remain quarantined, and incomplete scans cannot authorize any
+  destructive or identity-move operation.
+- Successful selected work remains filesystem `COMPLETED`; blocked/deferred
+  exclusions are separately itemized and presented as partial completion.
 - An execution session refuses an uncommitted or fingerprint-mismatched
   `ExecutionSet` before preflight even runs.
 - Every mutation of managed user data flows through plan → preflight → execute —
@@ -1055,8 +1164,9 @@ same pipeline — the *Pipeline-Only Mutation* law); `run_ingest` — scan → e
 translate user intent into `submit`.
 
 **Flesh — now (M0).** CLI `sync` (plan → terminal review → commit → execute) +
-`history`; real entry-point wiring; no-subcommand prints usage and exits
-nonzero until the desktop exists.
+`history`; runnable/blocked/deferred review and partial-completion exit 6; real
+entry-point wiring; no-subcommand prints usage and exits nonzero until the
+desktop exists.
 **Flesh — deferred.** Full CLI surface; web API; desktop UI (task rail, trees,
 mismatch-severity, cancel/pause safety messaging, completion toasts, mapping
 list). Toolkit choice deliberately deferred — the doc names no GUI framework.
@@ -1113,9 +1223,13 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
   (displace-then-replace updates) → recorder + minimal ledger (schema-freeze
   columns present, `flush` a no-op) → minimal history observer (sync envelopes
   + summaries) → CLI `sync` (plan → terminal review → commit → execute) and
-  `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail.
-- **M1 — integrity.** verifier + baseline + inventory + history integrity detail
-  + retention. Verify is additive once inventory rows and the recorder exist.
+  `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
+  isolated verifier operation may land in parallel during M0 construction, but
+  does not broaden this shipping gate without its inventory/workflow surface.
+- **M1 — integrity.** integrate the verifier through baseline + inventory +
+  history integrity detail + retention. Verify is additive once inventory rows
+  and the recorder exist; the operation module and cache-honest Windows reader
+  are already available for that composition.
 - **M2 — durability & scope.** `SqliteSessionStore` behind the existing
   protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
   producer); single queue-owner lock; durable queue; filters (via new `Scope`

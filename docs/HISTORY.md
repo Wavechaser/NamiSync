@@ -1,7 +1,8 @@
 # History Module
 
-Status: draft contract. Priority: minimal sync history in M0; integrity detail
-and retention in M1; task grouping, replay, discard audit, and export later.
+Status: minimal independent sync history storage, observer integration, and CLI
+browsing are implemented for M0. Integrity/import detail, retention, task
+grouping, replay, discard audit, and export remain later work.
 
 ## Purpose
 
@@ -9,6 +10,36 @@ History observes session events and writes an independent append-oriented local
 SQLite database. It records what NamiSync attempted and reported without
 participating in filesystem or ledger transactions. No history failure may roll
 back real file work or ledger truth.
+
+## Implemented M0 Slice
+
+`HistoryStore` owns a separate WAL database and returns a `HistoryObserver`
+matching the dispatcher's composition-root protocol: `on_event(envelope)`,
+`finalize(result)`, and `close()`. The dispatcher owns the bounded worker queue,
+timeout, and audit-axis settlement; the history package imports only core and
+never imports dispatcher.
+
+The observer accepts reliable preterminal envelopes, idempotently detects exact
+duplicate sequence delivery, rejects conflicting or reordered duplicates, and
+persists one actual-time sync envelope, typed summary axes, and ordered
+`ItemOutcome` detail during finalization. Run-token replay with an identical
+payload is a no-op; a different payload raises `TokenConflictError`. A failed
+history transaction propagates to the dispatcher acknowledgement without
+mutating the provisional filesystem or ledger result.
+
+The M0 outcome vocabulary now includes `BLOCKED` in addition to succeeded,
+skipped, failed, canceled, and deferred. Direct plan blockers use `BLOCKED`;
+safe-subset collateral exclusions remain `DEFERRED` with typed reasons such as
+`blocked-correspondence`, `blocked-dependency`, or `incomplete-scan`. History
+stores each path/reason and a run-level blocked count. Quarantine and withholding
+do not add separate top-level outcome categories.
+
+`HistoryRepository` returns immutable typed run and operation snapshots through
+a read-only connection. The M0 CLI reaches these reads through the workflow
+composition root; the database module itself owns no interface policy. No M0
+method implements retention or integrity/import detail. Recent-run rendering
+derives blocked/deferred exception counts from those typed item rows, while
+detailed rendering lists each path and reason.
 
 ## Observer Contract
 
@@ -40,7 +71,8 @@ integrity errors, not silently ignored.
 ## Activity Detail
 
 - Sync: immutable reviewed plan/run context, ordered operation id/kind/path,
-  outcome/reason, content bytes, and summary counts.
+  outcome/reason, content bytes, and summary counts, including direct blockers
+  and deferred quarantine/withholding.
 - Integrity: selected scope, typed per-file integrity issues/outcomes, counts,
   and evidence provenance.
 - Hash import: imported/known/conflict/invalid/stale outcomes.
@@ -49,7 +81,9 @@ integrity errors, not silently ignored.
   detail where applicable.
 
 M0 stores sync envelopes, summaries, and ordered operations sufficient for CLI
-history. M1 adds integrity/import detail and retention.
+history. The history schema is version 2; startup transactionally adds
+`blocked_count` when opening a version-1 store and preserves existing runs. M1
+adds integrity/import detail and retention.
 
 ## Failure Semantics
 
@@ -120,6 +154,13 @@ history or asks history to infer disposition from zero bytes or strings.
 - Database override plumbing keeps tests/CLI out of real user history.
 
 ## Acceptance Criteria
+
+M0 tests cover sync axis/detail round-trip, ordered outcomes, blocked/no-op/refused
+attempts, exact duplicate delivery, conflicting duplicate diagnosis, idempotent
+run finalization, read-only browsing, and failure isolation. Buffer pressure,
+acknowledgement timeout, and single-terminal settlement are dispatcher tests.
+Integrity/import renderers, retention, replay, discard audit, and export remain
+future acceptance gates.
 
 - Every terminal path listed above produces exactly one idempotent envelope with
   actual start/end ordering and activity kind.

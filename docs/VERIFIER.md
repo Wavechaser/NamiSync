@@ -1,7 +1,12 @@
 # Verifier Module
 
-Status: draft contract. Priority: M1 after inventory and conditional recorder
-primitives exist.
+Status: verifier operation module implemented during M0 construction; end-user
+integrity workflow remains M1 because inventory selection, workflow/dispatcher
+composition, history detail, and interfaces are separate dependencies.
+
+The implemented slice is directly callable and testable through injected
+reader, recorder, clock, event, and checkpoint contracts. It does not claim
+that the location-centric integrity workflow is already surfaced to users.
 
 ## Purpose
 
@@ -17,20 +22,26 @@ paired source/target mapping.
 ## Entry Contracts
 
 ```python
-baseline(selection, ctx, recorder, reader) -> IntegrityResult
-verify(selection, ctx, recorder, reader) -> IntegrityResult
-rebaseline(selection, ctx, recorder, reader) -> IntegrityResult
+baseline(selection, ctx, recorder, reader=None) -> IntegrityRunResult
+verify(selection, ctx, recorder, reader=None) -> IntegrityRunResult
+rebaseline(selection, ctx, recorder, reader=None) -> IntegrityRunResult
 ```
 
 Selections contain immutable inventory row id, location/root, canonical path
-key, display path, expected state/stat/hash/provenance, and scope token. Workflow
-must inventory or scoped-refresh before constructing them; verifier never
-silently operates on stale/missing inventory.
+key, display path, expected current state/stat, retained `Attestation` (if any),
+scope token, and reappearance state. `IntegritySelection` adds only the mutable
+completed-item and processed-byte continuation needed for pause/resume. Workflow
+must inventory or scoped-refresh before constructing selections; verifier never
+silently inventories, changes mappings, or scans unselected paths.
 
 Each file emits a reliable typed `IntegrityOutcome` carrying `IntegrityResult`:
 `verified`, `baselined`, `mismatched`, `modified`, `missing`, `unsupported`,
 `canceled`, or `error`. Generic `Outcome` remains the operation-level lifecycle
 vocabulary and is not parsed to recover integrity meaning.
+
+`IntegrityRunResult` is derived from emitted outcomes and carries the
+independent aggregate recording axis. A conditional recorder refusal or error
+degrades recording without rewriting a truthful content verdict.
 
 ## Per-File Algorithm
 
@@ -40,7 +51,7 @@ vocabulary and is not parsed to recover integrity meaning.
 4. If absent, emit `missing`; if unsupported, emit `unsupported`; if stat
    changed, emit `modified` without calling it bitrot.
 5. Read through the cache-honest strategy while hashing SHA-256 and reporting
-   throttled progress.
+   monotonic progress throttled by an injected monotonic clock.
 6. Stat the same open subject/handle after reading; drift yields `modified` or
    `error` and no write.
 7. If no stored hash, emit `baselined` and conditionally record a
@@ -58,11 +69,20 @@ items remain pending and emit nothing until resume.
 ## Cache-Honest Reads
 
 A verification match must attest storage, not merely pages populated by the
-copy that just finished. The Windows strategy must be selected and tested before
-M1: unbuffered reads require alignment and filesystem support; a safe fallback
-may defer post-copy verification beyond cache pressure. The outcome/provenance
-must disclose which supported strategy actually ran. Unsupported honest-read
-conditions are deferred/unsupported, not silently downgraded to verified.
+copy that just finished. `WindowsUnbufferedReader` opens the selected file with
+`FILE_FLAG_NO_BUFFERING`, obtains the volume sector size, reads into
+`VirtualAlloc`-aligned buffers in sector-multiple requests, and reports
+`windows-unbuffered` in the item outcome. It rejects reparse components and
+verifies that the opened handle's final path is exactly the selected path below
+the resolved root. The handle permits other readers but denies writer/delete
+sharing so the selected name cannot be replaced while it still refers to the
+old subject. Pre- and post-read stats come from that same handle.
+
+There is deliberately no buffered fallback. A non-Windows host, reparse
+subject, alignment rejection, unsupported volume, or inability to prove handle
+containment produces a disclosed `unsupported` outcome and never a false
+`verified` result. Windows integration tests exercise an ordinary local file
+through the actual unbuffered strategy.
 
 ## Baseline And Re-Baseline
 
@@ -71,10 +91,10 @@ present state, size, mtime, and identity still match. Encountering a null hash
 during verify is `baselined`, never `verified`.
 
 Re-baseline is an explicit user-reviewed acceptance of current modified content.
-It uses the same fresh stat/hash/conditional write path, retains audit history of
-the prior evidence, and never runs automatically after mismatch. A reappeared
-row receiving accepted matching/new evidence clears `reappeared_at` atomically
-with that write.
+It uses the same fresh stat/hash/conditional write path, supplies the prior
+attestation to the recorder for conflict detection/audit retention, and never
+runs automatically after mismatch. A reappeared row receiving accepted
+matching/new evidence clears `reappeared_at` atomically with that write.
 
 ## Selected And Linked Verification
 
@@ -84,14 +104,24 @@ state across a full location. Post-execution verification contains only eligible
 successfully executed operations; no-op or failed operations are not marked
 verified merely because they appeared in the plan.
 
+The linked selection is built ledger-first: the workflow reads back the
+inventory rows execution just recorded (through read-only repositories, keyed by
+the eligible executed operations' canonical target paths) rather than receiving
+row identities from the executor, which stays domain-blind and surfaces only
+op-level outcomes. A pure move preserves the moved row's existing hash and
+attestation, so verifying a moved file verifies against carried-forward evidence
+rather than re-baselining; a moved file that never had a hash baselines on first
+verify.
+
 Manual verification is location-scoped and independent of any current plan or
 mapping. It must not require both source and target roots.
 
-Verify and baseline selections carry per-item status as their pause
-continuation. They emit each reliable outcome before advancing status; pause
-unwinds after preserving completed items, releases custody without terminal,
-and resume freshly refreshes/guards only the remaining selection. Rebaseline is
-short/non-pausable unless it adopts the same continuation explicitly.
+Verify, baseline, and the implemented rebaseline entry point carry per-item
+status as their pause continuation. They emit each reliable outcome before
+advancing status; pause unwinds after preserving completed items, releases
+custody without terminal, and resume freshly refreshes/guards only the remaining
+selection. Rebaseline therefore uses the same continuation rather than a
+separate short-operation exception.
 
 On cancellation, the verifier's unwind finalizer emits `canceled` for the
 in-flight file and every unreached selected file before re-raising `Canceled` to
@@ -109,7 +139,9 @@ after resume.
 - `COPY_ATTESTED` may provide a baseline digest but never advances
   `last_verified_at`; only an honest verifier read does.
 - Dispatcher/session runner supplies custody, checkpoint, and one terminal.
-- History observes every item/terminal, including refusal and unexpected error.
+- History observes every preterminal item, including refusal and unexpected
+  error, then acknowledges finalization before the runner releases `Terminal`
+  to ordinary subscribers; history does not consume that terminal itself.
 - UI consumes typed results and updates inventory rows, not plan rows by loose
   path matching.
 - Ledger `recording` and history `audit` degradation are surfaced independently
@@ -122,6 +154,35 @@ remain deterministic and each row retains one conditional write. HDD paths may
 pipeline IO/CPU without random-seek explosion. Background integrity is an
 ordinary dispatcher session. Repair guidance compares both sides against
 retained evidence but generates a new plan; verifier never restores content.
+
+## Implementation Boundary
+
+Implemented and directly verified in this module:
+
+- the complete stat-first/digest-second classification matrix;
+- null-hash verify, baseline, explicit rebaseline, provenance, and one
+  conditional recorder command per eligible row;
+- canonical path/location guards and selection-only access;
+- one reliable typed result per settled row, including read/error and complete
+  cancel unwind;
+- outcome-before-continuation pause/resume behavior;
+- monotonic throttled progress, including retried work after pause;
+- the real Windows unbuffered reader and disclosed unsupported path;
+- sibling-free imports (`namisync.modules.verifier` imports `core` only).
+
+Still owned by the M1 composition around this module:
+
+- automatic inventory creation and full/scoped refresh;
+- constructing post-execution selections from successful eligible operations;
+- integrity workflow/history-detail persistence and run finalization;
+- dispatcher custody registration and interface presentation.
+
+The shared SQLite ledger already implements the injected conditional
+`record_integrity` command, including atomic evidence/reappearance updates and
+rollback on write failure; the integration test exercises that real boundary.
+
+Those seams are explicit injected contracts, not placeholder calls or sibling
+imports inside the verifier.
 
 ## PoC Hardening
 
