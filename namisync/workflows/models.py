@@ -46,6 +46,8 @@ class PlanOperationView:
     target_path: str
     reason: str
     blocked_reason: str | None
+    selection_outcome: str | None
+    selection_reason: str | None
     content_bytes: int
 
 

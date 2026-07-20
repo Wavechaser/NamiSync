@@ -257,8 +257,8 @@ chunk size so fast disks cannot flood UI queues.
 
 This contract directly covers the PoC first-failure abort, stale-plan TOCTOU,
 large-copy cancellation, missing move handling, empty-directory omission,
-whole-tree preflight, broad temp deletion, false byte totals, incomplete-scan
-execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
+whole-tree preflight, broad temp deletion, false byte totals, unsafe
+incomplete-scan destructive execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
 attestation guard, and composite move-update gap.
 
 ## M0 Implementation

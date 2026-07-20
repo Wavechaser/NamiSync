@@ -14,7 +14,12 @@ from uuid import uuid4
 from namisync.core.execution import Commitment, ExecutionSet
 from namisync.core.evidence import RecordingStatus
 from namisync.core.models import ScanResult, VolumeEvidence, VolumeId
-from namisync.core.planning import MappingSnapshot, Plan, selection_digest
+from namisync.core.planning import (
+    MappingSnapshot,
+    Plan,
+    calculate_required_bytes,
+    selection_digest,
+)
 from namisync.core.recording import (
     FinishRunCommand,
     HostCommand,
@@ -66,6 +71,7 @@ from .payloads import (
     encode_plan_request,
 )
 from .sync import SyncDependencies, refusal_views, run_execution, run_plan
+from .selection import derive_execution_selection
 
 
 PLAN_KIND = "sync-plan"
@@ -190,7 +196,8 @@ class LocalWorkflowRuntime:
         if artifact is None:
             raise KeyError(request_id)
         plan_value = artifact.plan
-        selection = frozenset(operation.op_id for operation in plan_value.operations)
+        decision = derive_execution_selection(plan_value)
+        exclusions = {item.op_id: item for item in decision.exclusions}
         warnings = tuple(
             _warning_text("source", warning.code.value, warning.rel_path, warning.detail)
             for warning in artifact.source_scan.warnings
@@ -207,8 +214,16 @@ class LocalWorkflowRuntime:
             deletion_policy=plan_value.deletion_policy.value,
             trash_on_update=plan_value.trash_on_update,
             fingerprint=str(plan_value.fingerprint),
-            selection_digest_hex=selection_digest(selection).hex(),
-            required_bytes=plan_value.required_bytes,
+            selection_digest_hex=selection_digest(decision.selection).hex(),
+            required_bytes=calculate_required_bytes(
+                tuple(
+                    operation
+                    for operation in plan_value.operations
+                    if operation.op_id in decision.selection
+                ),
+                target_profile=plan_value.target_profile,
+                trash_on_update=plan_value.trash_on_update,
+            ),
             free_bytes=artifact.verdict.observed.free_space,
             reclaimable_temp_bytes=artifact.verdict.observed.reclaimable_temp_bytes,
             warnings=warnings,
@@ -223,6 +238,12 @@ class LocalWorkflowRuntime:
                     blocked_reason=None
                     if operation.blocked_reason is None
                     else operation.blocked_reason.value,
+                    selection_outcome=None
+                    if operation.op_id not in exclusions
+                    else exclusions[operation.op_id].outcome.value,
+                    selection_reason=None
+                    if operation.op_id not in exclusions
+                    else exclusions[operation.op_id].reason,
                     content_bytes=operation.content_bytes,
                 )
                 for operation in plan_value.operations
@@ -242,9 +263,7 @@ class LocalWorkflowRuntime:
             raise KeyError(request_id)
         if not artifact.verdict.ok:
             raise ValueError("a refused plan cannot be committed")
-        selection = frozenset(
-            operation.op_id for operation in artifact.plan.operations
-        )
+        selection = derive_execution_selection(artifact.plan).selection
         committed = committed_at or self.clock.now()
         _require_utc(committed, "commitment")
         commitment = Commitment(

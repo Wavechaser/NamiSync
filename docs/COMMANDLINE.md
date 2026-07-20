@@ -22,6 +22,10 @@ and `python -m namisync` with no subcommand launch it.
   item/summary results.
 - `nami-sync history [RUN]`: list envelopes or render typed retained detail.
 
+Recent-run listings include blocked/deferred exception counts so a filesystem-
+completed safe subset is not mistaken for a clean full sync; run detail shows
+each path and reason.
+
 `sync` accepts `--deletion-policy trash|additive`, `--database PATH`, and
 `--history-database PATH`. `history` accepts `--limit N` and
 `--history-database PATH`. For `sync`, both database files must be distinct and
@@ -50,10 +54,13 @@ back to another argument.
 ## Review Rendering
 
 Print roots/volume evidence, policy, filter/policy snapshot, operation counts and
-content bytes, conflicts/refusals, required/free capacity, trash behavior,
+content bytes, runnable/blocked/deferred selection counts, per-item exclusion
+reasons, required/free capacity for the selected subset, trash behavior,
 computed ingest destinations when applicable, and a stable plan fingerprint.
 Commitment occurs only after the plan session has terminated and released
 custody. Execution output discloses fresh-preflight refusal/material drift.
+Successful safe-subset execution says `completed with exceptions`, itemizes the
+blocked/deferred paths, and tells the user to resolve them and re-plan.
 
 ## Output And Exit Status
 
@@ -70,6 +77,7 @@ Implemented exit categories:
 | `3` | commitment or fresh-preflight refusal with no managed-data mutation |
 | `4` | planning/execution/runtime failure |
 | `5` | cooperative cancellation |
+| `6` | selected safe work completed, but blocked or deferred items remain |
 | `7` | filesystem success with degraded ledger or audit durability |
 
 Integrity-issue exits are assigned with the M1 integrity commands.
@@ -134,7 +142,8 @@ transport replacement behind the same command adapter in M2.
   before commitment input.
 - Execution cannot proceed without a matching plan-and-selection commitment and
   always freshly preflights; queue release accepts already committed sets only.
-- Refusal, no-op, partial failure, cancel, mismatch, and ledger-behind return
+- Refusal, no-op, safe-subset partial completion, partial failure, cancel,
+  mismatch, and ledger-behind return
   distinct documented exit categories and truthful output.
 - Ledger-behind and audit-behind output/exit detail are independently testable;
   `CANCELED+UNRUN` renders queued discard rather than in-run cancellation.

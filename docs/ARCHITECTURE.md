@@ -261,11 +261,13 @@ class Outcome(StrEnum):
     FAILED    = "failed"     # attempted, errored
     CANCELED  = "canceled"   # not reached due to cancellation
     DEFERRED  = "deferred"   # valid but held back (dependency, partial-exec)
+    BLOCKED   = "blocked"    # intrinsically unexecutable reviewed plan item
 ```
 
-Every operation every module performs ends in exactly one of these. `DEFERRED`
-exists in the enum from day one though only partial execution produces it —
-consumers handle all five now; producers grow into them.
+Every reviewed operation ends in exactly one of these. M0 safe-subset workflow
+produces `BLOCKED` for direct blockers and `DEFERRED` for quarantined,
+dependency-excluded, or incomplete-scan-withheld work. Quarantine and
+withholding remain reason codes rather than additional top-level outcomes.
 
 ### 2.5 Scan, plan, execution (bones = shapes; flesh = fields)
 
@@ -341,7 +343,8 @@ class ScanResult:
                                 # must decide about them explicitly; a flag on
                                 # FileRecord would be a forgettable discipline
     warnings: tuple[ScanWarning, ...]   # access errors, case collisions, hardlinks
-    complete: bool              # False ⇒ reviewable, never executable
+    complete: bool              # False ⇒ reviewable; absence/identity-dependent
+                                # operations are withheld from execution
 
 @dataclass(frozen=True)
 class MappingSnapshot:          # prior accepted correspondence — read from
@@ -688,11 +691,11 @@ grouping) with enrichment metadata supplied by the workflow.
 
 ### 4.4 preflight
 
-**Implementation status (2026-07-18).** Scoped read-only observation and pure
-typed judgment are implemented for complete-scan, root/volume, dependency,
-direct and parent evidence, settings, capacity, trash, containment, and path
-representation checks. Commitment validation remains correctly outside this
-module at execution-workflow entry.
+**Implementation status (2026-07-20).** Scoped read-only observation and pure
+typed judgment are implemented for selection-aware scan completeness, blocked
+correspondence, root/volume, dependency, direct and parent evidence, settings,
+capacity, trash, containment, and path representation checks. Commitment
+validation remains correctly outside this module at execution-workflow entry.
 
 **Contract.** Two functions, deliberately split so purity is real rather than
 claimed:
@@ -724,7 +727,8 @@ the `Verdict` shape carrying per-op refusals plus the snapshot it judged;
 observation scoped to operation-touched paths only.
 
 **Flesh — now.** All checks: plan integrity (dependency-closed, no dep on a
-deferred/failed/blocked op), complete-scan requirement, staleness, capacity
+deferred/failed/blocked op), blocked-correspondence quarantine, operation-class
+scan-completeness gating, staleness, capacity
 (counting reclaimable orphaned-temp bytes as recoverable), safety (roots resolve
 to recorded `VolumeId`; trash resolves onto the target volume without reparse
 escape and is writable), filter-snapshot drift (`plan.filter_snapshot` vs
@@ -732,8 +736,9 @@ escape and is writable), filter-snapshot drift (`plan.filter_snapshot` vs
 preflight check — preflight also runs at review time, before any commitment
 exists, and must render the same verdicts there; the execution session's entry
 refuses an uncommitted set before preflight even runs (§4.9).
-**Flesh — deferred.** Graceful `continue-with-skips` resume tier (M0 resume is
-continue-or-refuse).
+**Flesh — deferred.** User-edited partial selections and a graceful
+`continue-with-skips` resume tier (M0 automatic safe-subset execution exists;
+resume remains continue-or-refuse).
 
 **Acceptance criteria.**
 - `preflight()` performs no IO at all — it is called with no filesystem
@@ -743,7 +748,9 @@ continue-or-refuse).
 - `observe()` stats only operation-touched paths; an unrelated change elsewhere
   in either tree never causes refusal (PoC regression — the original whole-tree
   preflight over-refused and was slow).
-- A plan from an incomplete scan is always refused.
+- An incomplete scan permits selected copy/update/mkdir/noop work but refuses
+  selected move/move-update/trash/delete work; manually reintroduced blocked
+  correspondence is also refused.
 - A nearly-full target whose own orphaned temps would free the needed space is
   **not** refused (PoC open-bug fix).
 - Running the same `preflight` at review, at execution start, and at resume
@@ -908,11 +915,12 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 `repositories.py` holds all reads. `history.py` is an event-stream observer with
 its own database. `schema.py` owns both schemas and the version stamps.
 
-**Implementation status (2026-07-18).** The versioned ledger/history schemas,
+**Implementation status (2026-07-20).** The versioned ledger/history schemas,
 safe writer/read-only connection factories, canonical UTC codec, serialized
 retrying writer, run-bound sync recorder, batched inventory reconciliation,
 conditional baseline/verify/rebaseline writes, typed ledger repositories, and
-minimal sync history observer/repository are implemented. M0 commands commit
+minimal sync history observer/repository, blocked/deferred item audit, and the
+transactional additive history v1-to-v2 migration are implemented. M0 commands commit
 eagerly, so `flush()` preserves the final boundary while the crash window is
 zero completed commands. Cross-process contention is bounded and visible.
 
@@ -929,7 +937,8 @@ and its write failures surface on the session result's `audit` axis (§2.3).
 
 **Flesh — implemented (M0).** Recorder for sync operations; missing-marking sweep
 (batched — never one giant `NOT IN`); inventory reconciliation. History observer
-in minimal form: run envelopes plus sync summaries and ordered operations —
+in minimal form: run envelopes plus sync summaries and ordered operations,
+including a sixth blocked outcome and deferred exclusion reasons —
 enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 `history` command. The observer is cheap precisely because it is only an event
 subscriber; nothing calls it.
@@ -937,7 +946,7 @@ Conditional verify/baseline/rebaseline recording landed early with the isolated
 verifier during M0 construction. **Flesh — M1.** Hash-import recording; history
 integrity/import summaries and retained issue detail; retention sweeps
 (writable connection); integrity workflow composition.
-**Flesh — deferred.** Migration module; legacy import; scheduled backup/quick-check
+**Flesh — deferred.** General migration module; legacy import; scheduled backup/quick-check
 (as an ordinary session); export/import; ledger merge across hosts.
 
 **Acceptance criteria.**
@@ -1059,6 +1068,12 @@ Everything downstream falls out of this split:
   always preflights, whether the gap was 5 seconds or 5 days.
 - **Partial execution, filters, and replay** change only the `Selection` or
   `Scope` carried between the two sessions — neither session's shape changes.
+- **M0 safe-subset execution** derives that selection deterministically from
+  the full reviewed plan. Direct blockers are `BLOCKED`; path-correspondence or
+  dependency collateral is `DEFERRED`; incomplete scans globally withhold
+  move, move-update, trash, and delete while retaining guarded copy, update,
+  mkdir, and noop. The plan fingerprint still binds full intent and the
+  commitment digest binds the exact runnable subset.
 - **There is no no-gate path.** Every execution session consumes a *committed*
   `ExecutionSet` — one a human reviewed and explicitly committed, bound to the
   plan's fingerprint. The commitment is the durable preauthorization: its
@@ -1075,15 +1090,18 @@ Everything downstream falls out of this split:
 observe → preflight → execute/verify); no signals, no callbacks-for-control;
 every dependency arrives via `deps`.
 
-**Implementation status (2026-07-19).** M0 paired sync now runs both dispatcher
+**Implementation status (2026-07-20).** M0 paired sync now runs both dispatcher
 sessions through schema-versioned opaque payloads. Planning reads prior
-correspondence without creating configuration; execution verifies commitment,
-freshly observes/preflights under volume custody, then opens the sole ledger
-writer and independent history observer. The CLI commits only between terminal
+correspondence without creating configuration, derives and reviews the maximal
+safe dependency-closed subset, and preflights that selection. Execution verifies
+commitment, freshly observes/preflights under volume custody, then opens the sole
+ledger writer and independent history observer. Exclusions are emitted as
+itemized blocked/deferred audit outcomes after selected execution settles; they
+never become main-ledger evidence. The CLI commits only between terminal
 sessions and exposes the resulting typed history reads.
 
-**Flesh — implemented (M0).** Paired sync (both phases), local composition,
-CLI terminal review/commit, and history browsing.
+**Flesh — implemented (M0).** Paired sync (both phases), automatic safe-subset
+selection, local composition, CLI terminal review/commit, and history browsing.
 **Flesh — deferred.** One-location integrity
 (inventory/baseline/verify/import, M1); queue-driven second sessions;
 replay-from-history; DB maintenance session; undo/repair (each generated as an
@@ -1102,6 +1120,11 @@ executor as sync.
   executor's own defense is per-operation precondition re-checking, never a
   preflight import.
 - A refused preflight short-circuits to a `REFUSED` terminal with no mutation.
+- A direct blocker cannot refuse independent safe work. Corresponding paths and
+  dependencies remain quarantined, and incomplete scans cannot authorize any
+  destructive or identity-move operation.
+- Successful selected work remains filesystem `COMPLETED`; blocked/deferred
+  exclusions are separately itemized and presented as partial completion.
 - An execution session refuses an uncommitted or fingerprint-mismatched
   `ExecutionSet` before preflight even runs.
 - Every mutation of managed user data flows through plan → preflight → execute —
@@ -1116,8 +1139,9 @@ executor as sync.
 translate user intent into `submit`.
 
 **Flesh — now (M0).** CLI `sync` (plan → terminal review → commit → execute) +
-`history`; real entry-point wiring; no-subcommand prints usage and exits
-nonzero until the desktop exists.
+`history`; runnable/blocked/deferred review and partial-completion exit 6; real
+entry-point wiring; no-subcommand prints usage and exits nonzero until the
+desktop exists.
 **Flesh — deferred.** Full CLI surface; web API; desktop UI (task rail, trees,
 mismatch-severity, cancel/pause safety messaging, completion toasts, mapping
 list). Toolkit choice deliberately deferred — the doc names no GUI framework.

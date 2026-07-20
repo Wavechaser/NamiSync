@@ -6,13 +6,28 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
+from namisync.core.events import Envelope, ItemOutcome, SCHEMA_VERSION
+from namisync.core.evidence import Outcome
+from namisync.core.session import (
+    OperationResult,
+    SessionId,
+    SessionRecord,
+    SessionState,
+)
+from namisync.db.history import HistoryContext, HistoryStore
 from namisync.interfaces.cli import (
+    EXIT_PARTIAL,
     EXIT_REFUSED,
     EXIT_SUCCESS,
     EXIT_USAGE,
+    _exit_for_record,
+    _render_execution,
     main,
 )
+
+from _db_fixtures import FakeClock, NOW
 
 
 def _arguments(source: Path, target: Path, ledger: Path, history: Path) -> list[str]:
@@ -35,6 +50,87 @@ def test_no_subcommand_prints_usage_and_returns_nonzero() -> None:
 
     assert result == EXIT_USAGE
     assert "usage:" in stderr.getvalue()
+
+
+def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
+    blocked = ItemOutcome(
+        "blocked",
+        "noop",
+        "junction",
+        Outcome.BLOCKED,
+        reason="unsupported",
+    )
+    deferred = ItemOutcome(
+        "withheld",
+        "trash",
+        "old.bin",
+        Outcome.DEFERRED,
+        reason="incomplete-scan",
+    )
+    record = SimpleNamespace(
+        result=OperationResult(
+            SessionState.COMPLETED,
+            operations=(blocked, deferred),
+        )
+    )
+    details = SimpleNamespace(commitment_error=None, refusals=())
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    _render_execution(record, details, stdout, stderr)
+
+    assert _exit_for_record(record) == EXIT_PARTIAL
+    assert "completed with exceptions: blocked=1; deferred=1" in stdout.getvalue()
+
+
+def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> None:
+    history = tmp_path / "history.db"
+    record = SessionRecord(
+        SessionId("session"),
+        "sync-execution",
+        SessionState.PENDING,
+        (),
+        b"payload",
+        True,
+        1,
+        NOW,
+    )
+    blocked = ItemOutcome(
+        "blocked",
+        "noop",
+        "junction",
+        Outcome.BLOCKED,
+        reason="unsupported",
+    )
+    with HistoryStore(history, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(
+                "partial-run",
+                "host",
+                activity_kind="sync",
+                source_context="source",
+                target_context="target",
+            ),
+        )
+        observer.on_event(
+            Envelope(record.session_id, 1, NOW, SCHEMA_VERSION, blocked)
+        )
+        observer.finalize(
+            OperationResult(SessionState.COMPLETED, operations=(blocked,))
+        )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        ["history", "--history-database", str(history)],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS
+    assert "exceptions=blocked:1,deferred:0" in stdout.getvalue()
+    assert stderr.getvalue() == ""
 
 
 def test_declined_plan_mutates_neither_files_nor_databases(tmp_path: Path) -> None:

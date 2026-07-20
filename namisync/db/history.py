@@ -242,10 +242,10 @@ class HistoryObserver:
                            started_at, ended_at, filesystem_status,
                            recording_status, audit_status, disposition, canceled,
                            bytes_done, bytes_total, succeeded_count, skipped_count,
-                           failed_count, canceled_count, deferred_count,
+                           failed_count, canceled_count, deferred_count, blocked_count,
                            error_type, error_message, payload_hash
                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                                 ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
+                                 ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id""",
                     (
                         context.run_token,
                         str(self._record.session_id),
@@ -269,6 +269,7 @@ class HistoryObserver:
                         counts[Outcome.FAILED],
                         counts[Outcome.CANCELED],
                         counts[Outcome.DEFERRED],
+                        counts[Outcome.BLOCKED],
                         None if result.error is None else result.error.type_name,
                         None if result.error is None else result.error.message,
                         payload_hash,

@@ -249,6 +249,13 @@ def _event_bodies() -> tuple[object, ...]:
         PhaseChanged("phase"),
         Progress(1, 2, 3, 4, "folder\\file"),
         item,
+        ItemOutcome(
+            item_id="blocked",
+            kind="noop",
+            path="junction",
+            outcome=Outcome.BLOCKED,
+            reason="unsupported",
+        ),
         Gap(7),
         Terminal(result),
     )

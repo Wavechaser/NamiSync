@@ -76,6 +76,7 @@ class RefusalCode(StrEnum):
     VOLUME_CLONE_AMBIGUOUS = "volume_clone_ambiguous"
     SELECTION_NOT_CLOSED = "selection_not_closed"
     OPERATION_BLOCKED = "operation_blocked"
+    BLOCKED_CORRESPONDENCE = "blocked_correspondence"
     DEPENDENCY_UNAVAILABLE = "dependency_unavailable"
     OBSERVATION_UNAVAILABLE = "observation_unavailable"
     SOURCE_DRIFT = "source_drift"

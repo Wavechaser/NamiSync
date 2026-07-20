@@ -9,7 +9,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
-from namisync.core.events import PhaseChanged
+from namisync.core.events import ItemOutcome, PhaseChanged
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import (
     ExecutionSet,
@@ -39,6 +39,7 @@ from namisync.modules.executor import ExecutorPolicies
 from namisync.modules.preflight import ObservationFileSystem, SettingsReader
 
 from .models import ExecutionDetails, PlanArtifact, PlanRequest, RefusalView
+from .selection import ExecutionSelection, derive_execution_selection
 
 
 class RunRecording(Protocol):
@@ -109,8 +110,8 @@ def run_plan(
         request.options,
         Scope.everything(),
     )
-    selection = frozenset(operation.op_id for operation in plan.operations)
-    preview = ExecutionSet(plan, selection, run_id)
+    decision = derive_execution_selection(plan)
+    preview = ExecutionSet(plan, decision.selection, run_id)
 
     ctx.emit(PhaseChanged("review-preflight"))
     world = deps.observer(preview, deps.observation_fs, deps.settings(plan))
@@ -138,15 +139,22 @@ def run_execution(
             disposition=Disposition.UNRUN,
         )
 
+    exclusion_items = _exclusion_items(
+        xset.plan,
+        derive_execution_selection(xset.plan),
+        xset.selection,
+    )
     ctx.emit(PhaseChanged("execution-preflight"))
     world = deps.observer(xset, deps.observation_fs, deps.settings(xset.plan))
     verdict = deps.preflight(xset, world)
     refusals = refusal_views(verdict)
     deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
     if not verdict.ok:
+        _emit_items(ctx, exclusion_items)
         return OperationResult(
             status=SessionState.REFUSED,
             disposition=Disposition.UNRUN,
+            operations=exclusion_items,
         )
 
     with deps.open_recording(xset) as recording:
@@ -161,6 +169,7 @@ def run_execution(
         except PauseRequested:
             raise
         except Canceled:
+            _emit_items(ctx, exclusion_items)
             _finish_best_effort(
                 recording,
                 SessionState.CANCELED,
@@ -168,6 +177,7 @@ def run_execution(
             )
             raise
         except BaseException:
+            _emit_items(ctx, exclusion_items)
             _finish_best_effort(
                 recording,
                 SessionState.FAILED,
@@ -175,6 +185,13 @@ def run_execution(
             )
             raise
 
+        _emit_items(ctx, exclusion_items)
+        result = replace(
+            result,
+            operations=_merge_operation_results(
+                xset.plan, result.operations, exclusion_items
+            ),
+        )
         try:
             recording.finish(result.status, result.recording)
         except Exception:
@@ -190,6 +207,50 @@ def refusal_views(verdict: Verdict) -> tuple[RefusalView, ...]:
             path = verdict.observed.paths.get(refusal.subject)
         views.append(RefusalView(refusal.code.value, path, refusal.detail))
     return tuple(views)
+
+
+def _emit_items(ctx: RunContext, items: tuple[ItemOutcome, ...]) -> None:
+    for item in items:
+        ctx.emit(item)
+
+
+def _exclusion_items(
+    plan: Plan,
+    decision: ExecutionSelection,
+    selection: frozenset,
+) -> tuple[ItemOutcome, ...]:
+    operations = {operation.op_id: operation for operation in plan.operations}
+    return tuple(
+        ItemOutcome(
+            item_id=str(exclusion.op_id),
+            kind=operations[exclusion.op_id].kind.value,
+            path=operations[exclusion.op_id].target_rel_path,
+            outcome=exclusion.outcome,
+            reason=exclusion.reason,
+            detail=exclusion.detail,
+        )
+        for exclusion in decision.exclusions
+        if exclusion.op_id not in selection
+    )
+
+
+def _merge_operation_results(
+    plan: Plan,
+    executed: tuple[object, ...],
+    excluded: tuple[ItemOutcome, ...],
+) -> tuple[object, ...]:
+    by_id = {
+        str(item.item_id): item
+        for item in (*executed, *excluded)
+        if hasattr(item, "item_id")
+    }
+    ordered = [
+        by_id.pop(str(operation.op_id))
+        for operation in plan.operations
+        if str(operation.op_id) in by_id
+    ]
+    ordered.extend(by_id.values())
+    return tuple(ordered)
 
 
 def _commitment_error(xset: ExecutionSet) -> str | None:

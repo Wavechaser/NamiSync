@@ -24,11 +24,12 @@ performs no cleanup or hydration.
 
 `preflight()` consumes only the immutable `ObservedWorld` contract in
 `namisync.core.preflight`. It reports all applicable typed run- and
-operation-level refusals for incomplete scans, root/volume ambiguity, broken
-selection dependencies, blocked work, direct or parent-path drift, policy
-drift, insufficient capacity, trash safety, containment, and target path
-representation. Commitment checking remains at the execution-workflow entry,
-as review preflight intentionally works before a commitment exists.
+operation-level refusals for unsafe operations selected from incomplete scans,
+root/volume ambiguity, broken selection dependencies, blocked/quarantined work,
+direct or parent-path drift, policy drift, insufficient capacity, trash safety,
+containment, and target path representation. Commitment checking remains at the
+execution-workflow entry, as review preflight intentionally works before a
+commitment exists.
 
 `observe()` performs read-only IO, including reading current semantic settings,
 and decides nothing. `preflight()` performs no IO and changes nothing. Neither
@@ -59,11 +60,14 @@ the affected operation.
 Preflight returns all applicable typed refusals, grouped per operation and for
 the run. It verifies:
 
-- both original scans were complete modulo recorded ignores;
+- move, move-update, trash, and delete are selected only when both original
+  scans were complete modulo recorded ignores; guarded copy, update, mkdir, and
+  noop do not rely on proving tree-wide absence and remain admissible;
 - roots remain distinct, non-nested, and bound to the reviewed volume evidence;
 - cloned/ambiguous volumes are not guessed;
 - selection is dependency-closed;
-- no selected operation depends on blocked, failed, canceled, or deferred work;
+- no selected operation is blocked, overlaps a blocked correspondence region,
+  or depends on blocked, failed, canceled, or deferred work;
 - current source/target/type/identity/size/mtime evidence matches each planned
   before-state within capability granularity;
 - expected absence is still absence and expected destination occupancy/type is
@@ -122,16 +126,21 @@ probes support or substitutes a filesystem-name guess.
 
 ## Latent Features
 
-Partial execution and resume add selection/status cases, not new safety logic.
-Queue wakeup calls the same functions. Network roots require a distinct weaker
-observation/custody profile and remain refused until that profile exists. A
-future continue-with-skips tier must produce explicit deferred/skipped outcomes
-and a new reviewed summary; it cannot silently reinterpret a refusal.
+M0 implements the first validated continue-with-skips tier in workflow:
+blocked operations are explicit `BLOCKED` outcomes, quarantined/dependency work
+and incomplete-scan destructive work are explicit `DEFERRED` outcomes, and the
+review summary/digest describes the resulting selection. Preflight does not
+perform those exclusions; it independently refuses a caller that reintroduces
+them. User-edited partial selection and resume policy remain later selection/
+status cases, not new safety logic. Queue wakeup calls the same functions.
+Network roots require a distinct weaker observation/custody profile and remain
+refused until that profile exists.
 
 ## PoC Hardening
 
 - Scoped stats fix whole-tree over-refusal and duplicate full-walk latency.
-- Complete-scan refusal prevents hidden-subtree target deletion.
+- Operation-class completeness gating prevents hidden-subtree target deletion
+  without refusing evidence-positive additive work elsewhere.
 - Shared capacity calculation prevents drift and update undercount.
 - Reclaimable exact temps fix nearly-full loop-refusal without broad cleanup.
 - Volume/reparse validation prevents trash from becoming cross-volume
@@ -151,8 +160,11 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
   writes nothing.
 - Instrumentation proves observation stats only selected touched paths and
   required parents/roots; an unrelated change never refuses the plan.
-- Every incomplete-scan plan is refused, including a plan with no apparent
-  target-only operations.
+- Incomplete-scan copy/update/mkdir/noop selections pass, while any manually
+  selected move/move-update/trash/delete is refused with the applicable source/
+  target completeness code.
+- A manually selected operation overlapping blocked correspondence is refused;
+  ordinary workflow selection quarantines it before commitment.
 - Source drift, target drift, type change, identity change, destination
   appearance, root swap, volume clone ambiguity, filter drift, and dependency
   break each yield typed refusals.
@@ -174,6 +186,7 @@ and a new reviewed summary; it cannot silently reinterpret a refusal.
 
 ## M0 Verification
 
-`tests/test_preflight.py` contains 29 focused tests. Pure-verdict fixtures run
-without a filesystem, while instrumented observation tests prove scoped reads,
-fresh-world behavior, exact temp accounting, and no managed-data mutation.
+`tests/test_preflight.py` contains focused pure-verdict and instrumented
+observation tests proving selection-aware completeness, blocked-correspondence
+defense, scoped reads, fresh-world behavior, exact temp accounting, and no
+managed-data mutation.

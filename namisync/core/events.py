@@ -9,7 +9,7 @@ from typing import Mapping
 
 from namisync.core.evidence import Outcome, RecordingStatus
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class DeliveryClass(StrEnum):

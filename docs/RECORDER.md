@@ -43,6 +43,12 @@ identity — so a later verify verifies against carried-forward evidence instead
 re-baselining; a move of a never-hashed file simply carries no hash. Move-update
 overwrites content and therefore records fresh `copy` evidence.
 
+Workflow exclusions do not call the main-ledger recorder: blocked intent and
+deferred quarantine/withholding are audit-history facts, not durable filesystem
+evidence. Selected no-ops still run their live guards and call `record_noop`, so
+even an otherwise degraded safe-subset run refreshes valid correspondence for
+future complete-scan move detection.
+
 Inventory reconciliation batches observations and uses a temporary key table
 for complete missing sweeps, so a 33k+ location never becomes a giant parameter
 list. The integrity primitive gates row, location, canonical path, present

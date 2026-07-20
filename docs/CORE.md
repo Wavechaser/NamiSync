@@ -26,7 +26,8 @@ attestation format.
   `PreservationPolicy`, `MetadataSnapshot`, capability profile,
   and the stable `VolumeId`/corroborating `VolumeEvidence` split.
 - `SessionState`, its legal transition table, and terminal-state predicate.
-- `Outcome` and typed reason codes; free-form text is presentation detail, not
+- Six-value `Outcome` (`succeeded`, `skipped`, `failed`, `canceled`, `deferred`,
+  `blocked`) and typed reason codes; free-form text is presentation detail, not
   control flow.
 - Versioned event envelopes and typed event bodies, including `Gap` and the M1
   `IntegrityOutcome`/eight-value `IntegrityResult` vocabulary.
@@ -127,7 +128,7 @@ blocking. The runner then constructs and releases the one immutable `Terminal`
 to ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
-The M0 envelope codec round-trips `StateChanged`, `PhaseChanged`, `Progress`,
+The version-2 M0 envelope codec round-trips `StateChanged`, `PhaseChanged`, `Progress`,
 `ItemOutcome`, `Gap`, and `Terminal` and rejects unknown schema/body versions.
 Integrity-specific event serialization remains part of its M1 integration; the
 live event plane already transports verifier-defined bodies structurally and
@@ -186,7 +187,7 @@ or inferring from an empty operation list.
 
 ## Provisioning For Latent Features
 
-Declare expensive-to-retrofit shapes now: `DEFERRED`, schema-versioned events,
+Declare expensive-to-retrofit shapes now: `DEFERRED`, `BLOCKED`, schema-versioned events,
 all `Scope` kinds, nullable file identity/hardlink group, policy protocols,
 opaque workflow payloads, and attestation provenance. A latent protocol is
 declared shape-only and has no implementation until its first consumer; this

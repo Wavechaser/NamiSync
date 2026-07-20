@@ -25,14 +25,19 @@ The M0 persistence foundation is implemented: a serialized run-bound recorder
 is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
 mapping correspondence, runs, and distinct observed/attested evidence; typed
 repositories are read-only; and an independent history observer stores sync
-envelopes, summaries, and ordered operations. Migrations, backup/retention,
-hash import, and richer integrity history remain later phases.
+envelopes, summaries, and ordered operations, including blocked/deferred safe-
+subset exclusions. A narrow history v1-to-v2 migration preserves existing runs;
+general migrations, backup/retention, hash import, and richer integrity history
+remain later phases.
 
 The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
 scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
 and independent history without crossing package boundaries. The CLI exposes
 the two-session `sync` review/commit/execute flow and read-only `history`
-browsing through both `nami-sync` and `python -m namisync`.
+browsing through both `nami-sync` and `python -m namisync`. Blocked items no
+longer refuse independent work: review commits a quarantined safe subset,
+incomplete scans allow guarded additive/no-op work while withholding moves and
+deletions, and history itemizes every blocked/deferred exception.
 
 ## Development setup
 
@@ -74,6 +79,8 @@ nami-sync history RUN_TOKEN
 `mirror` remains hidden. Ledger and history default to separate files under
 `%LOCALAPPDATA%\NamiSync`; `sync` accepts `--database` and
 `--history-database` overrides for isolated runs. There is no `--yes` bypass.
+Completed safe-subset runs with blocked or deferred items return exit code `6`
+and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ## Documentation
 
@@ -111,6 +118,11 @@ nami-sync history RUN_TOKEN
 
 ### Unreleased
 
+- Added automatic safe-subset sync: blocked operations are itemized instead of
+  refusing independent work, blocked correspondence is quarantined, incomplete
+  scans become additive-only, no-ops continue refreshing move correspondence,
+  and CLI/history report blocked/deferred exceptions with a distinct partial
+  exit and history schema migration.
 - Fixed same-run empty-directory cleanup to tolerate only child-induced
   directory mtime/link-count churn under stable identity, and fixed Windows
   parent-directory flushing to use the write access required by the OS.

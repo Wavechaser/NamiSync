@@ -22,6 +22,8 @@ from namisync.core.models import (
     Root,
     ScanResult,
     ScanScope,
+    UnsupportedReason,
+    UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
 )
@@ -91,6 +93,7 @@ def _scan(
     directories: tuple[DirRecord, ...] = (),
     profile: CapabilityProfile = PROFILE,
     complete: bool = True,
+    unsupported: tuple[UnsupportedRecord, ...] = (),
 ) -> ScanResult:
     return ScanResult(
         Root(fr"C:\{root_id}", root_id),
@@ -99,7 +102,7 @@ def _scan(
         profile,
         files,
         (_dir(""), *directories),
-        (),
+        unsupported,
         (),
         IgnoreSet(),
         ScanScope.full(),
@@ -218,12 +221,87 @@ def test_preflight_accepts_new_identity_when_scan_had_no_identity_evidence() -> 
     )
 
 
-@pytest.mark.parametrize(("source_complete", "target_complete", "expected"), [(False, True, RefusalCode.INCOMPLETE_SOURCE_SCAN), (True, False, RefusalCode.INCOMPLETE_TARGET_SCAN)])
-def test_every_incomplete_scan_is_refused_even_without_target_only_work(
-    source_complete: bool, target_complete: bool, expected: RefusalCode
+@pytest.mark.parametrize(
+    ("source_complete", "target_complete"),
+    [(False, True), (True, False), (False, False)],
+)
+def test_incomplete_scan_allows_selected_copy_work(
+    source_complete: bool, target_complete: bool
 ) -> None:
     xset = _xset(source_complete=source_complete, target_complete=target_complete)
-    assert expected in _codes(xset, _world(xset))
+
+    assert preflight(xset, _world(xset)).ok
+
+
+@pytest.mark.parametrize(
+    ("source_complete", "target_complete", "expected"),
+    [
+        (False, True, {RefusalCode.INCOMPLETE_SOURCE_SCAN}),
+        (True, False, {RefusalCode.INCOMPLETE_TARGET_SCAN}),
+        (
+            False,
+            False,
+            {
+                RefusalCode.INCOMPLETE_SOURCE_SCAN,
+                RefusalCode.INCOMPLETE_TARGET_SCAN,
+            },
+        ),
+    ],
+)
+def test_incomplete_scan_refuses_selected_destructive_work(
+    source_complete: bool,
+    target_complete: bool,
+    expected: set[RefusalCode],
+) -> None:
+    xset = _xset(
+        source_files=(),
+        target_files=(_file("target-only.bin", volume="DST"),),
+        source_complete=source_complete,
+        target_complete=target_complete,
+    )
+
+    assert expected <= _codes(xset, _world(xset))
+
+
+def test_preflight_refuses_manually_selected_blocked_correspondence() -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        complete=False,
+        unsupported=(
+            UnsupportedRecord(
+                "foo",
+                normalize_relative_path("foo"),
+                UnsupportedReason.REPARSE_POINT,
+                EntryKind.DIRECTORY,
+            ),
+        ),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file(r"foo\keep.txt", volume="DST"),),
+        directories=(_dir("foo"),),
+    )
+    built = plan(
+        source,
+        target,
+        MappingSnapshot.empty(SOURCE_VOLUME, TARGET_VOLUME),
+        SyncOptions(),
+        Scope.everything(),
+    )
+    counterpart = next(
+        operation
+        for operation in built.operations
+        if operation.target_rel_path == r"foo\keep.txt"
+    )
+    xset = ExecutionSet(
+        built,
+        frozenset({counterpart.op_id}),
+        validated_run_id("b" * 32),
+    )
+
+    assert RefusalCode.BLOCKED_CORRESPONDENCE in _codes(xset, _world(xset))
 
 
 @pytest.mark.parametrize(
@@ -317,6 +395,16 @@ def test_dependency_break_and_blocked_dependency_are_refused() -> None:
 
     failed = ExecutionSet(xset.plan, xset.selection, xset.run_id, {mkdir.op_id: Outcome.FAILED})
     assert RefusalCode.DEPENDENCY_UNAVAILABLE in _codes(failed, _world(failed))
+
+    blocked = ExecutionSet(
+        xset.plan,
+        xset.selection,
+        xset.run_id,
+        {mkdir.op_id: Outcome.BLOCKED},
+    )
+    assert RefusalCode.DEPENDENCY_UNAVAILABLE in _codes(
+        blocked, _world(blocked)
+    )
 
 
 @pytest.mark.parametrize(

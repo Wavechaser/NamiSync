@@ -26,8 +26,12 @@ executor, recorder, verifier/importer, and settings snapshots.
 3. Scan both roots with the same role-free observation contract.
 4. Read immutable prior correspondence and semantic settings snapshot.
 5. Apply filters/policies and plan.
-6. Observe/preflight for review information.
-7. Return immutable serializable plan/verdict; terminate and release locks.
+6. Derive the deterministic safe selection: retain additive/no-op work, mark
+   direct blockers `BLOCKED`, quarantine overlapping/dependent work as
+   `DEFERRED`, and withhold destructive/identity moves when either scan is
+   incomplete.
+7. Observe/preflight that exact selection for review information.
+8. Return immutable serializable plan/verdict; terminate and release locks.
 
 ### Execution session
 
@@ -68,11 +72,24 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
-M0 selects the complete dependency-closed plan. Durable plan files, selection
+M0 automatically selects the maximal safe dependency-closed subset. Directly
+blocked items remain in the reviewed plan as `BLOCKED`; operations touching
+their source/target correspondence region or depending on an exclusion become
+`DEFERRED`. If either scan is incomplete, `move`, `move_update`, `trash`, and
+`delete` are withheld globally because absence and identity correspondence are
+not proven, while `copy`, `update`, `mkdir`, and guarded `noop` remain eligible.
+The commitment digest binds this derived selection and fresh preflight enforces
+the same safety envelope if another caller supplies a different selection.
+
+Workflow emits excluded items after execution settles and merges them into the
+terminal result without rewriting successful filesystem status. Blocked intent
+never writes the main ledger; selected no-ops still execute their live guard and
+refresh source/target correspondence. Durable plan files, user selection
 editing, queue release, linked verification, and integrity workflows are not
-part of this implementation slice. When linked verification lands, its selection
-is built ledger-first from the inventory rows execution just recorded, not handed
-over from the executor, which surfaces only op-level outcomes.
+part of this implementation slice. When linked verification lands, its
+selection is built ledger-first from the inventory rows execution just
+recorded, not handed over from the executor, which surfaces only op-level
+outcomes.
 
 ## Integrity Workflow
 
@@ -120,7 +137,9 @@ control rejections with no lifecycle mutation.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An
-all-noop explicit run is completed/no-op and still history-worthy.
+all-noop explicit run is completed/no-op and still history-worthy. A safe-subset
+run can be filesystem `COMPLETED` with itemized `BLOCKED`/`DEFERRED` exclusions;
+interfaces present that as partial completion rather than clean full success.
 
 ## Orthogonality Rules
 
@@ -161,6 +180,11 @@ import from handling refusal differently than baseline/verify.
   custody before review.
 - Execution always uses the exact reviewed plan/selection, fresh observation,
   and preflight; drift refuses without mutation.
+- A blocked item cannot refuse independent safe work merely by existing in the
+  plan; its overlapping target correspondence and dependent operations remain
+  excluded.
+- Incomplete scans allow guarded copy/update/mkdir/noop work but never admit
+  move, move-update, trash, or delete operations.
 - No workflow waits for human input; mandatory review is between terminated and
   newly submitted sessions.
 - An uncommitted execution or one whose plan/selection no longer matches is

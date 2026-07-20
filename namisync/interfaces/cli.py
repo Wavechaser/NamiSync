@@ -30,6 +30,7 @@ EXIT_USAGE = 2
 EXIT_REFUSED = 3
 EXIT_FAILED = 4
 EXIT_CANCELED = 5
+EXIT_PARTIAL = 6
 EXIT_DEGRADED = 7
 
 
@@ -212,11 +213,23 @@ def _run_history(
             print("No retained history runs.", file=stdout)
             return EXIT_SUCCESS
         for run in runs:
+            exception_counts = Counter(
+                item.outcome
+                for item in run.operations
+                if item.outcome in {"blocked", "deferred"}
+            )
+            exceptions = (
+                ""
+                if not exception_counts
+                else "  exceptions="
+                f"blocked:{exception_counts['blocked']},"
+                f"deferred:{exception_counts['deferred']}"
+            )
             print(
                 f"{run.run_token}  {run.started_at.isoformat()}  "
                 f"{run.filesystem_status}  ledger={run.recording_status} "
                 f"audit={run.audit_status}  {_safe(run.source_context)} -> "
-                f"{_safe(run.target_context)}",
+                f"{_safe(run.target_context)}{exceptions}",
                 file=stdout,
             )
         return EXIT_SUCCESS
@@ -298,6 +311,14 @@ def _wait_for_result(
 
 def _render_plan(review, output: TextIO) -> None:
     counts = Counter(operation.kind for operation in review.operations)
+    exclusion_counts = Counter(
+        operation.selection_outcome
+        for operation in review.operations
+        if operation.selection_outcome is not None
+    )
+    runnable_count = sum(
+        operation.selection_outcome is None for operation in review.operations
+    )
     print("NamiSync reviewed sync plan", file=output)
     print(f"Source: {_safe(review.source_path)}", file=output)
     print(f"Target: {_safe(review.target_path)}", file=output)
@@ -320,12 +341,22 @@ def _render_plan(review, output: TextIO) -> None:
         + (", ".join(f"{kind}={count}" for kind, count in sorted(counts.items())) or "none"),
         file=output,
     )
+    print(
+        f"Selection: runnable={runnable_count}; "
+        f"blocked={exclusion_counts['blocked']}; "
+        f"deferred={exclusion_counts['deferred']}",
+        file=output,
+    )
     for operation in review.operations:
         source = "" if operation.source_path is None else f"{_safe(operation.source_path)} -> "
-        blocked = "" if operation.blocked_reason is None else f" BLOCKED={operation.blocked_reason}"
+        exclusion = (
+            ""
+            if operation.selection_outcome is None
+            else f" {operation.selection_outcome.upper()}={operation.selection_reason}"
+        )
         print(
             f"  {operation.kind:11} {source}{_safe(operation.target_path)} "
-            f"[{operation.reason}; {operation.content_bytes} bytes]{blocked}",
+            f"[{operation.reason}; {operation.content_bytes} bytes]{exclusion}",
             file=output,
         )
     for warning in review.warnings:
@@ -347,6 +378,18 @@ def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
         f"bytes={result.bytes_done}/{result.bytes_total}",
         file=output,
     )
+    outcomes = Counter(
+        item.outcome.value
+        for item in result.operations
+        if hasattr(item, "outcome")
+    )
+    if outcomes["blocked"] or outcomes["deferred"]:
+        print(
+            "Execution completed with exceptions: "
+            f"blocked={outcomes['blocked']}; deferred={outcomes['deferred']}. "
+            "Review the itemized exclusions and re-plan after resolving them.",
+            file=output,
+        )
     for item in result.operations:
         if not all(hasattr(item, name) for name in ("kind", "path", "outcome")):
             continue
@@ -421,6 +464,12 @@ def _exit_for_record(record) -> int:
         return EXIT_FAILED
     if result.recording.value == "degraded" or result.audit.value == "degraded":
         return EXIT_DEGRADED
+    if any(
+        getattr(getattr(item, "outcome", None), "value", None)
+        in {"blocked", "deferred"}
+        for item in result.operations
+    ):
+        return EXIT_PARTIAL
     return EXIT_SUCCESS
 
 

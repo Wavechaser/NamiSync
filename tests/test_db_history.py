@@ -20,6 +20,7 @@ from namisync.db.history import (
     HistoryRepository,
     HistoryStore,
 )
+from namisync.db.connections import connect_history_reader
 from namisync.db.writer import RecordingError, TokenConflictError
 
 from _db_fixtures import FakeClock, NOW
@@ -82,6 +83,39 @@ def test_history_round_trips_sync_axes_and_ordered_operations(tmp_path: Path) ->
     assert len(snapshot.operations) == 1
     assert snapshot.operations[0].event_seq == 2
     assert snapshot.operations[0].detail == {"bytes": 7}
+
+
+def test_history_records_blocked_outcome_and_aggregate(tmp_path: Path) -> None:
+    record = _record("session-blocked")
+    context = HistoryContext("run-blocked", "host-1")
+    item = ItemOutcome(
+        "op-blocked",
+        "noop",
+        "junction",
+        Outcome.BLOCKED,
+        reason="unsupported",
+    )
+    result = OperationResult(SessionState.COMPLETED, operations=(item,))
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        observer.on_event(_envelope(record, 1, item))
+        observer.finalize(result)
+        with HistoryRepository(store.path) as repository:
+            snapshot = repository.get("run-blocked")
+        connection = connect_history_reader(store.path)
+        try:
+            blocked_count = connection.execute(
+                "SELECT blocked_count FROM history_runs WHERE run_token = ?",
+                ("run-blocked",),
+            ).fetchone()[0]
+        finally:
+            connection.close()
+
+    assert snapshot.operations[0].outcome is Outcome.BLOCKED
+    assert snapshot.operations[0].path == "junction"
+    assert snapshot.operations[0].reason == "unsupported"
+    assert blocked_count == 1
 
 
 def test_history_keeps_noop_refusal_browseable(tmp_path: Path) -> None:

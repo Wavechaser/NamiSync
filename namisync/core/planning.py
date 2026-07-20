@@ -406,3 +406,66 @@ def serialize_plan(plan: Plan) -> bytes:
 
 def selection_digest(selection: Sequence[OpId] | frozenset[OpId]) -> bytes:
     return hashlib.sha256(canonical_json_bytes(sorted(str(item) for item in selection))).digest()
+
+
+def quarantined_operation_ids(
+    operations: Sequence[PlanOperation],
+) -> frozenset[OpId]:
+    """Return nonblocked operations whose paths overlap blocked correspondence."""
+
+    blocked_source_paths = {
+        normalize_relative_path(operation.source_rel_path)
+        for operation in operations
+        if operation.blocked and operation.source_rel_path is not None
+    }
+    blocked_target_paths = {
+        normalize_relative_path(path)
+        for operation in operations
+        if operation.blocked
+        for path in (operation.target_rel_path, operation.prior_target_rel_path)
+        if path is not None
+    }
+    quarantined: set[OpId] = set()
+    for operation in operations:
+        if operation.blocked:
+            continue
+        if operation.source_rel_path is not None and _inside_any_region(
+            normalize_relative_path(operation.source_rel_path),
+            blocked_source_paths,
+        ):
+            quarantined.add(operation.op_id)
+            continue
+        target_paths = {normalize_relative_path(operation.target_rel_path)}
+        if operation.prior_target_rel_path is not None:
+            target_paths.add(normalize_relative_path(operation.prior_target_rel_path))
+        if any(
+            _inside_any_region(path, blocked_target_paths)
+            for path in target_paths
+        ):
+            quarantined.add(operation.op_id)
+            continue
+        destructive_paths: set[str] = set()
+        if operation.kind in {OperationKind.TRASH, OperationKind.DELETE}:
+            destructive_paths.add(normalize_relative_path(operation.target_rel_path))
+        elif (
+            operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE}
+            and operation.prior_target_rel_path is not None
+        ):
+            destructive_paths.add(
+                normalize_relative_path(operation.prior_target_rel_path)
+            )
+        if any(
+            _same_or_descendant(blocked, destructive)
+            for destructive in destructive_paths
+            for blocked in blocked_target_paths
+        ):
+            quarantined.add(operation.op_id)
+    return frozenset(quarantined)
+
+
+def _inside_any_region(path: str, regions: set[str]) -> bool:
+    return any(_same_or_descendant(path, region) for region in regions)
+
+
+def _same_or_descendant(path: str, ancestor: str) -> bool:
+    return path == ancestor or path.startswith(ancestor + "\\")

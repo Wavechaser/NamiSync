@@ -38,6 +38,20 @@ Format: `- SEVERITY - STATUS. Category. What happened. Cause: why.`
 
 ### M0 integration
 
+- SEVERE - FIXED (2026-07-20). Availability and data safety. One blocked item
+  or any incomplete scan refused the entire sync, so independent ordinary files
+  could never converge; merely dropping the blocker would instead have exposed
+  target-only trash/delete planned from incomplete source knowledge. Cause: the
+  workflow selected every plan operation and preflight treated completeness as
+  a run-wide gate; fixed with commitment-bound safe-subset selection, blocked-
+  path/dependency quarantine, additive-only incomplete-scan fallback, and an
+  independent preflight backstop against reintroduced unsafe selections.
+- MODERATE - FIXED (2026-07-20). Audit truth. Blocked plan items disappeared
+  from execution results/history because only executor-selected operations
+  emitted item outcomes. Cause: the five-value outcome model had no direct
+  blocker state and workflow emitted no exclusion events; fixed with the sixth
+  `BLOCKED` outcome, reasoned `DEFERRED` exclusions, itemized history rows, and
+  a version-2 blocked summary count.
 - SEVERE - FIXED (2026-07-19). Availability. Every real execution crashed
   while presenting fresh-preflight results, before mutation could begin.
   Cause: a local `refusal_views` variable shadowed the formatter function;

@@ -7,11 +7,17 @@ import pytest
 
 from namisync.db.connections import (
     DatabaseLocationError,
+    connect_history_reader,
     connect_ledger_reader,
     connect_ledger_writer,
     validate_database_path,
 )
-from namisync.db.schema import LEDGER_SCHEMA_VERSION, initialize_ledger
+from namisync.db.schema import (
+    HISTORY_SCHEMA_VERSION,
+    LEDGER_SCHEMA_VERSION,
+    initialize_history,
+    initialize_ledger,
+)
 
 
 def _pragma(connection: sqlite3.Connection, name: str):
@@ -157,3 +163,87 @@ def test_database_path_is_refused_inside_managed_root(tmp_path: Path) -> None:
 
     outside = tmp_path / "local" / "ledger.db"
     assert validate_database_path(outside, managed_roots=(managed,)) == outside.resolve()
+
+
+def test_history_v1_migrates_blocked_count_without_losing_runs(tmp_path: Path) -> None:
+    path = tmp_path / "history.db"
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript(
+            """
+            CREATE TABLE schema_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
+            INSERT INTO schema_metadata(key, value) VALUES ('schema_version', '1');
+            CREATE TABLE history_runs (
+                id INTEGER PRIMARY KEY,
+                run_token TEXT NOT NULL UNIQUE,
+                session_id TEXT NOT NULL,
+                activity_kind TEXT NOT NULL,
+                host_key TEXT NOT NULL,
+                subject_kind TEXT,
+                subject_id TEXT,
+                source_context TEXT,
+                target_context TEXT,
+                started_at TEXT NOT NULL,
+                ended_at TEXT NOT NULL,
+                filesystem_status TEXT NOT NULL,
+                recording_status TEXT NOT NULL,
+                audit_status TEXT NOT NULL,
+                disposition TEXT NOT NULL,
+                canceled INTEGER NOT NULL,
+                bytes_done INTEGER NOT NULL,
+                bytes_total INTEGER NOT NULL,
+                succeeded_count INTEGER NOT NULL,
+                skipped_count INTEGER NOT NULL,
+                failed_count INTEGER NOT NULL,
+                canceled_count INTEGER NOT NULL,
+                deferred_count INTEGER NOT NULL,
+                error_type TEXT,
+                error_message TEXT,
+                payload_hash BLOB NOT NULL
+            ) STRICT;
+            CREATE TABLE history_operations (
+                run_id INTEGER NOT NULL,
+                item_order INTEGER NOT NULL,
+                event_seq INTEGER,
+                item_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                path TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                reason TEXT,
+                detail_json TEXT NOT NULL,
+                PRIMARY KEY(run_id, item_order),
+                UNIQUE(run_id, item_id)
+            ) STRICT;
+            INSERT INTO history_runs(
+                run_token, session_id, activity_kind, host_key,
+                started_at, ended_at, filesystem_status, recording_status,
+                audit_status, disposition, canceled, bytes_done, bytes_total,
+                succeeded_count, skipped_count, failed_count, canceled_count,
+                deferred_count, payload_hash
+            ) VALUES (
+                'existing', 'session', 'sync', 'host',
+                '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:01+00:00',
+                'completed', 'ok', 'ok', 'ran', 0, 0, 0, 1, 0, 0, 0, 0, X'00'
+            );
+            """
+        )
+    finally:
+        connection.close()
+
+    initialize_history(path)
+
+    reader = connect_history_reader(path)
+    try:
+        version = int(
+            reader.execute(
+                "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+            ).fetchone()[0]
+        )
+        row = reader.execute(
+            "SELECT run_token, blocked_count FROM history_runs"
+        ).fetchone()
+    finally:
+        reader.close()
+
+    assert version == HISTORY_SCHEMA_VERSION == 2
+    assert tuple(row) == ("existing", 0)

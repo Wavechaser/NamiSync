@@ -104,8 +104,9 @@ simultaneous duplicate keys require explicit user choice.
 
 - Core supplies path, identity, warning, capability, and result types.
 - Workflow supplies the exact ignore snapshot and session/error handling.
-- Planner treats incomplete scans as non-executable and does not reinterpret
-  warnings.
+- Planner preserves incomplete-scan evidence and warnings in the full reviewed
+  plan. Workflow permits only the evidence-positive additive/noop subset and
+  withholds destructive/identity work; scanner itself decides neither.
 - Inventory reconciles full and scoped scans differently and never writes from
   the scanner itself.
 - Dispatcher supplies checkpoint behavior and holds required custody where the

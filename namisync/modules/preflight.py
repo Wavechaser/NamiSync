@@ -33,6 +33,7 @@ from namisync.core.planning import (
     OperationKind,
     PlanOperation,
     calculate_required_bytes,
+    quarantined_operation_ids,
 )
 from namisync.core.preflight import (
     ObservedWorld,
@@ -371,11 +372,6 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
 
     plan = xset.plan
     refusals: list[Refusal] = []
-    if not plan.source_complete:
-        refusals.append(Refusal(RefusalCode.INCOMPLETE_SOURCE_SCAN))
-    if not plan.target_complete:
-        refusals.append(Refusal(RefusalCode.INCOMPLETE_TARGET_SCAN))
-
     source_root = world.roots.get(plan.source_root.root_id)
     target_root = world.roots.get(plan.target_root.root_id)
     for expected, observed in ((plan.source_volume_id, source_root), (plan.target_volume_id, target_root)):
@@ -410,16 +406,40 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
     operations_by_id = {operation.op_id: operation for operation in plan.operations}
     remaining = xset.remaining()
     remaining_ids = {operation.op_id for operation in remaining}
+    quarantined = quarantined_operation_ids(plan.operations)
     direct_target_subjects: set[Subject] = set()
     created_directory_keys = {
         normalize_relative_path(operation.target_rel_path)
         for operation in remaining
         if operation.kind is OperationKind.MKDIR
     }
-    unavailable = {Outcome.FAILED, Outcome.CANCELED, Outcome.DEFERRED}
+    unavailable = {
+        Outcome.FAILED,
+        Outcome.CANCELED,
+        Outcome.DEFERRED,
+        Outcome.BLOCKED,
+    }
     for operation in remaining:
+        if operation.kind in {
+            OperationKind.MOVE,
+            OperationKind.MOVE_UPDATE,
+            OperationKind.TRASH,
+            OperationKind.DELETE,
+        }:
+            if not plan.source_complete:
+                refusals.append(
+                    Refusal(RefusalCode.INCOMPLETE_SOURCE_SCAN, operation.op_id)
+                )
+            if not plan.target_complete:
+                refusals.append(
+                    Refusal(RefusalCode.INCOMPLETE_TARGET_SCAN, operation.op_id)
+                )
         if operation.blocked:
             refusals.append(Refusal(RefusalCode.OPERATION_BLOCKED, operation.op_id, detail=operation.blocked_reason.value))
+        elif operation.op_id in quarantined:
+            refusals.append(
+                Refusal(RefusalCode.BLOCKED_CORRESPONDENCE, operation.op_id)
+            )
         for dependency in operation.dependencies:
             if dependency not in xset.selection:
                 refusals.append(Refusal(RefusalCode.SELECTION_NOT_CLOSED, operation.op_id, detail=str(dependency)))

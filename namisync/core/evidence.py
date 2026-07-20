@@ -11,13 +11,14 @@ from namisync.core.models import FileStat
 
 
 class Outcome(StrEnum):
-    """Filesystem outcome for one selected item."""
+    """Execution outcome or reviewed exclusion for one plan item."""
 
     SUCCEEDED = "succeeded"
     SKIPPED = "skipped"
     FAILED = "failed"
     CANCELED = "canceled"
     DEFERRED = "deferred"
+    BLOCKED = "blocked"
 
 
 class RecordingStatus(StrEnum):

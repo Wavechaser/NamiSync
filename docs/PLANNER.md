@@ -65,7 +65,10 @@ preservation policy. No stream manifest enters a plan.
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
 deterministic digest of that exact selection; changing either invalidates the
-commitment. Deferred operations remain explicit; omission is not a status.
+commitment. Workflow derives M0's safe subset from the full plan: direct
+blockers stay `BLOCKED`, correspondence/dependency exclusions stay `DEFERRED`,
+and incomplete scans withhold destructive/identity operations. Planner itself
+continues to emit complete deterministic intent and does not hide those items.
 
 ## Diffing And Operation Rules
 
@@ -118,11 +121,12 @@ filesystem name or an attempted operation.
 
 ## Scope And Selection
 
-M0 implements `Scope.everything()`. Pattern, explicit, and recorded-run scopes
+M0 implements `Scope.everything()` plus workflow-owned safe-subset selection.
+Pattern, explicit, and recorded-run scopes
 are declared now. Scope uses canonical stable candidate identities, not raw UI
-row numbers or display paths. Partial selection closes dependencies, recomputes
-capacity and summaries, and marks valid omitted work `DEFERRED` once partial
-execution exists.
+row numbers or display paths. The implemented selector closes dependencies,
+recomputes capacity/summaries, and reports forced exclusions; user-edited
+partial selection remains deferred.
 
 Replay, undo, and repair always plan fresh against current scans/evidence. A
 historical operation list is scope input, never executable authority.
@@ -161,7 +165,8 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   and planner/executor formula drift.
 - Mapping evidence includes paired no-ops so later renames do not degrade to
   copy+trash.
-- Incomplete scans and unsupported entries remain visible and non-executable.
+- Incomplete scans and unsupported entries remain visible; unsupported items
+  are blocked, while workflow permits only completeness-independent operations.
 - Attribute-only drift is update-worthy; the remaining metadata no-op risk is
   content changing behind equal size/time/attributes, and later content
   evidence is additive.
@@ -192,8 +197,9 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   recorded as final success.
 - Case and file/directory collisions are blocked and visible; independent work
   remains executable after dependency closure.
-- Incomplete source or target scans yield a reviewable plan that preflight must
-  refuse.
+- Incomplete source or target scans yield a reviewable full plan whose workflow
+  selection admits copy/update/mkdir/noop and withholds move/move-update/trash/
+  delete; preflight refuses any caller that reintroduces withheld operations.
 - Capacity property tests never undercount any allowed worker schedule and use
   the exact same function as preflight.
 - No-hardlink update fixtures include displaced-version backup bytes under every

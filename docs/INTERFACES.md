@@ -24,6 +24,12 @@ database layer. Human confirmation occurs only after the plan session is
 terminal and closed. Both real entry points consume `sys.argv[1:]`; before the
 desktop exists, no subcommand prints usage and exits nonzero.
 
+Plan review identifies the exact runnable selection plus blocked and deferred
+items. A filesystem-completed safe subset is rendered as `completed with
+exceptions` and returns the documented partial exit category; it is not
+collapsed into either clean success or execution failure. Detailed history uses
+the same outcome/reason fields.
+
 The implemented options and numeric exits are recorded in
 [COMMANDLINE.md](COMMANDLINE.md). Queue control, machine output, integrity
 commands, and the desktop action layer remain deferred.

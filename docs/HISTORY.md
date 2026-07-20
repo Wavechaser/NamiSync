@@ -27,10 +27,19 @@ payload is a no-op; a different payload raises `TokenConflictError`. A failed
 history transaction propagates to the dispatcher acknowledgement without
 mutating the provisional filesystem or ledger result.
 
+The M0 outcome vocabulary now includes `BLOCKED` in addition to succeeded,
+skipped, failed, canceled, and deferred. Direct plan blockers use `BLOCKED`;
+safe-subset collateral exclusions remain `DEFERRED` with typed reasons such as
+`blocked-correspondence`, `blocked-dependency`, or `incomplete-scan`. History
+stores each path/reason and a run-level blocked count. Quarantine and withholding
+do not add separate top-level outcome categories.
+
 `HistoryRepository` returns immutable typed run and operation snapshots through
 a read-only connection. The M0 CLI reaches these reads through the workflow
 composition root; the database module itself owns no interface policy. No M0
-method implements retention or integrity/import detail.
+method implements retention or integrity/import detail. Recent-run rendering
+derives blocked/deferred exception counts from those typed item rows, while
+detailed rendering lists each path and reason.
 
 ## Observer Contract
 
@@ -62,7 +71,8 @@ integrity errors, not silently ignored.
 ## Activity Detail
 
 - Sync: immutable reviewed plan/run context, ordered operation id/kind/path,
-  outcome/reason, content bytes, and summary counts.
+  outcome/reason, content bytes, and summary counts, including direct blockers
+  and deferred quarantine/withholding.
 - Integrity: selected scope, typed per-file integrity issues/outcomes, counts,
   and evidence provenance.
 - Hash import: imported/known/conflict/invalid/stale outcomes.
@@ -71,7 +81,9 @@ integrity errors, not silently ignored.
   detail where applicable.
 
 M0 stores sync envelopes, summaries, and ordered operations sufficient for CLI
-history. M1 adds integrity/import detail and retention.
+history. The history schema is version 2; startup transactionally adds
+`blocked_count` when opening a version-1 store and preserves existing runs. M1
+adds integrity/import detail and retention.
 
 ## Failure Semantics
 
@@ -143,7 +155,7 @@ history or asks history to infer disposition from zero bytes or strings.
 
 ## Acceptance Criteria
 
-M0 tests cover sync axis/detail round-trip, ordered outcomes, no-op/refused
+M0 tests cover sync axis/detail round-trip, ordered outcomes, blocked/no-op/refused
 attempts, exact duplicate delivery, conflicting duplicate diagnosis, idempotent
 run finalization, read-only browsing, and failure isolation. Buffer pressure,
 acknowledgement timeout, and single-terminal settlement are dispatcher tests.

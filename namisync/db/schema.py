@@ -15,7 +15,7 @@ from .connections import (
 
 
 LEDGER_SCHEMA_VERSION = 1
-HISTORY_SCHEMA_VERSION = 1
+HISTORY_SCHEMA_VERSION = 2
 
 
 _LEDGER_SCHEMA = f"""
@@ -274,6 +274,7 @@ CREATE TABLE IF NOT EXISTS history_runs (
     failed_count INTEGER NOT NULL,
     canceled_count INTEGER NOT NULL,
     deferred_count INTEGER NOT NULL,
+    blocked_count INTEGER NOT NULL,
     error_type TEXT,
     error_message TEXT,
     payload_hash BLOB NOT NULL,
@@ -320,6 +321,8 @@ def _initialize(
                 "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
             ).fetchone()[0]
         )
+        if history:
+            version = _migrate_history(connection, version)
         expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
         if version != expected:
             raise sqlite3.DatabaseError(
@@ -328,6 +331,30 @@ def _initialize(
     finally:
         connection.close()
     return resolved
+
+
+def _migrate_history(connection: sqlite3.Connection, version: int) -> int:
+    if version != 1:
+        return version
+    columns = {
+        row[1] for row in connection.execute("PRAGMA table_info(history_runs)")
+    }
+    connection.execute("BEGIN IMMEDIATE")
+    try:
+        if "blocked_count" not in columns:
+            connection.execute(
+                "ALTER TABLE history_runs "
+                "ADD COLUMN blocked_count INTEGER NOT NULL DEFAULT 0"
+            )
+        connection.execute(
+            "UPDATE schema_metadata SET value = ? WHERE key = 'schema_version'",
+            (str(HISTORY_SCHEMA_VERSION),),
+        )
+        connection.execute("COMMIT")
+    except BaseException:
+        connection.execute("ROLLBACK")
+        raise
+    return HISTORY_SCHEMA_VERSION
 
 
 def initialize_ledger(
