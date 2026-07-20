@@ -311,6 +311,60 @@ def test_case_type_and_unsupported_conflicts_are_blocked_while_independent_work_
     assert not independent.blocked
 
 
+@pytest.mark.parametrize("target_mtime", [1_000, 2_000])
+def test_case_only_file_mismatch_is_a_visible_blocked_conflict(target_mtime: int) -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file("KEEP.txt", mtime=1_000),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file("keep.txt", mtime=target_mtime),),
+    )
+
+    result = _plan(source, target)
+
+    operation = next(item for item in result.operations if item.source_rel_path == "KEEP.txt")
+    assert operation.kind is OperationKind.NOOP
+    assert operation.target_rel_path == "keep.txt"
+    assert operation.reason is OperationReason.CASE_MISMATCH
+    assert operation.blocked_reason is BlockedReason.CASE_MISMATCH
+
+
+def test_case_only_directory_mismatch_blocks_the_ambiguous_region() -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file(r"Folder\child.txt"),),
+        directories=(_dir("Folder"),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file(r"folder\child.txt"),),
+        directories=(_dir("folder"),),
+    )
+
+    result = _plan(source, target)
+
+    directory = next(
+        item
+        for item in result.operations
+        if item.reason is OperationReason.CASE_MISMATCH and item.source_expected.kind is EntryKind.DIRECTORY
+    )
+    assert directory.target_rel_path == "folder"
+    assert directory.blocked_reason is BlockedReason.CASE_MISMATCH
+    child = next(
+        item
+        for item in result.operations
+        if item.source_rel_path == r"Folder\child.txt"
+    )
+    assert child.blocked_reason is BlockedReason.BLOCKED_DEPENDENCY
+    assert child.dependencies == (directory.op_id,)
+
+
 def test_incomplete_scans_remain_reviewable_but_are_snapshotted_unexecutable() -> None:
     result = _plan(
         _scan("source", SOURCE_VOLUME, files=(_file("a.bin"),), complete=False),

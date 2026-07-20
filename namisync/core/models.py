@@ -181,6 +181,7 @@ class ScanWarningCode(StrEnum):
     ACCESS_DENIED = "access_denied"
     DISAPPEARED = "disappeared"
     ENUMERATION_ERROR = "enumeration_error"
+    PATH_UNREPRESENTABLE = "path_unrepresentable"
     CASE_COLLISION = "case_collision"
     DUPLICATE_IDENTITY = "duplicate_identity"
     MULTI_LINK = "multi_link"

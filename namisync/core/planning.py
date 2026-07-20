@@ -56,6 +56,7 @@ class OperationReason(StrEnum):
     TARGET_ONLY = "target_only"
     DIRECTORY_CLEANUP = "directory_cleanup"
     UNSUPPORTED = "unsupported"
+    CASE_MISMATCH = "case_mismatch"
     CASE_COLLISION = "case_collision"
     TYPE_COLLISION = "type_collision"
     POLICY_COLLISION = "policy_collision"
@@ -63,6 +64,7 @@ class OperationReason(StrEnum):
 
 class BlockedReason(StrEnum):
     UNSUPPORTED = "unsupported"
+    CASE_MISMATCH = "case_mismatch"
     CASE_COLLISION = "case_collision"
     TYPE_COLLISION = "type_collision"
     DESTINATION_COLLISION = "destination_collision"
@@ -329,12 +331,19 @@ def _primitive(value: object) -> object:
 
 
 def canonical_json_bytes(value: object) -> bytes:
+    """Return canonical JSON while preserving existing valid-Unicode bytes.
+
+    ``backslashreplace`` affects only malformed surrogate code units, which
+    JSON can represent with a ``\\uXXXX`` escape. Valid Unicode retains the
+    established UTF-8 encoding and therefore its existing fingerprints.
+    """
+
     return json.dumps(
         _primitive(value),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8")
+    ).encode("utf-8", errors="backslashreplace")
 
 
 def deterministic_operation_id(

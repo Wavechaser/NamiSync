@@ -45,6 +45,8 @@ def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
         raise TypeError("relative path must be a string")
     if "\x00" in value:
         raise PathValidationError("relative path contains NUL")
+    if any("\ud800" <= character <= "\udfff" for character in value):
+        raise PathValidationError("relative path contains an unpaired surrogate")
     if value == "":
         if allow_root:
             return ""

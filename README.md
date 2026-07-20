@@ -18,8 +18,10 @@ is intentionally process-local until the M2 SQLite queue/reconciliation phase.
 The M0 scanner, planner, and preflight modules are implemented as a headless
 pipeline surface. Scans retain deterministic typed filesystem evidence and
 explicit completeness; planning is pure, correspondence-aware, dependency
-ordered, and byte-stable; preflight separates scoped read-only observation
-from exhaustive typed judgment.
+ordered, and byte-stable; hostile filesystem names become escaped incomplete-
+scan evidence instead of aborting review, and exact-case source/target
+mismatches remain visible blocked conflicts. Preflight separates scoped
+read-only observation from exhaustive typed judgment.
 
 The M0 persistence foundation is implemented: a serialized run-bound recorder
 is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
@@ -118,6 +120,10 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Fixed hostile NTFS/SMB-originated names aborting scan/plan review: contract-
+  invalid names now produce escaped typed incomplete-scan evidence, lone
+  surrogates cannot enter relative paths or crash canonical encoding, and
+  exact-case source/target mismatches become visible blocked conflicts.
 - Added automatic safe-subset sync: blocked operations are itemized instead of
   refusing independent work, blocked correspondence is quarantined, incomplete
   scans become additive-only, no-ops continue refreshing move correspondence,

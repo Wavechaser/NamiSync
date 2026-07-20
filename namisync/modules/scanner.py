@@ -29,7 +29,13 @@ from namisync.core.models import (
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import join_under_root, normalize_relative_path, to_extended_length_path
+from namisync.core.pathing import (
+    PathValidationError,
+    join_under_root,
+    normalize_relative_path,
+    to_extended_length_path,
+    validate_relative_path,
+)
 from namisync.core.session import RunContext
 
 
@@ -197,6 +203,19 @@ def _is_reparse(stat: os.stat_result) -> bool:
     return bool(_attributes(stat) & FILE_ATTRIBUTE_REPARSE_POINT or getattr(stat, "st_reparse_tag", 0))
 
 
+def _escaped_path(value: str) -> str:
+    """Return terminal- and UTF-8-safe diagnostic text for a raw path."""
+
+    return ascii(value)[1:-1]
+
+
+def _entry_sort_key(entry: DirectoryEntry) -> tuple[int, str, str]:
+    try:
+        return 0, normalize_relative_path(entry.name), entry.name
+    except PathValidationError:
+        return 1, _escaped_path(entry.name), ""
+
+
 class WalkingScanner:
     def __init__(self, backend: ScannerBackend | None = None) -> None:
         self._backend = backend or NativeScannerBackend()
@@ -317,12 +336,24 @@ class WalkingScanner:
             if enumeration_error is not None:
                 warnings.append(ScanWarning(ScanWarningCode.ENUMERATION_ERROR, relative_directory, str(enumeration_error)))
                 complete = False
-            ordered.sort(key=lambda item: (normalize_relative_path(item.name), item.name))
+            ordered.sort(key=_entry_sort_key)
 
             child_directories: list[tuple[str, str]] = []
             for entry in ordered:
                 ctx.checkpoint()
-                rel_path = entry.name if not relative_directory else f"{relative_directory}\\{entry.name}"
+                candidate = entry.name if not relative_directory else f"{relative_directory}\\{entry.name}"
+                try:
+                    rel_path = validate_relative_path(candidate)
+                except PathValidationError as error:
+                    warnings.append(
+                        ScanWarning(
+                            ScanWarningCode.PATH_UNREPRESENTABLE,
+                            relative_directory or None,
+                            f"{_escaped_path(candidate)}: {error}",
+                        )
+                    )
+                    complete = False
+                    continue
                 try:
                     is_directory = entry.is_dir(follow_symlinks=False)
                 except (OSError, PermissionError) as error:

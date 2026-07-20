@@ -139,7 +139,8 @@ treats every non-`Progress` body as reliable.
 Persisted paths are root-relative with `\` as the canonical separator. Reject
 empty components where Windows would reinterpret them, absolute paths, drive or
 UNC qualification, `.`/`..`, alternate root syntax, embedded NUL, and any path
-whose resolved handle escapes its root through a reparse point.
+with an ambiguous suffix, stream/device qualifier, or unpaired surrogate, plus
+any path whose resolved handle escapes its root through a reparse point.
 
 Lexical validation and handle-based containment are separate checks: lexical
 validation is pure and always available; filesystem containment belongs in
@@ -149,6 +150,13 @@ observation/preflight. Long-path conversion happens only after validation.
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code
 point. The implementation must use a tested Windows-equivalent mapping strategy
 and preserve NTFS-distinct names such as `Straße.txt` and `strasse.txt`.
+
+Filesystem enumeration may observe names outside this lexical contract. Those
+names never enter `FileRecord`, `DirRecord`, `UnsupportedRecord`, or operation
+paths: the scanner retains an escaped typed warning at the nearest valid parent
+and marks the scan incomplete. Canonical plan JSON preserves established UTF-8
+bytes for valid Unicode and defensively emits JSON surrogate escapes for any
+malformed free-form string that reaches serialization.
 
 `VolumeId(serial, fs_type)` is the stable key. Label and other mutable mount
 facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with

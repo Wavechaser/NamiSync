@@ -342,7 +342,7 @@ class ScanResult:
     unsupported: tuple[UnsupportedRecord, ...]  # its own collection — a consumer
                                 # must decide about them explicitly; a flag on
                                 # FileRecord would be a forgettable discipline
-    warnings: tuple[ScanWarning, ...]   # access errors, case collisions, hardlinks
+    warnings: tuple[ScanWarning, ...]   # access/path errors, collisions, hardlinks
     complete: bool              # False ⇒ reviewable; absence/identity-dependent
                                 # operations are withheld from execution
 
@@ -574,7 +574,9 @@ sequencer, path-safety helpers, and all protocol shapes. Imports nothing.
 **Bones.** All of §2. The transition table. `normalize_relative_path` (Windows
 one-codepoint uppercase — never `casefold()`, which merged `Straße`/`strasse`
 into one row in the PoC). Root-constrained path validation (rejects absolute,
-drive-qualified, `..`, root-escaping).
+drive-qualified, `..`, ambiguous suffix/device/stream spellings, NUL, unpaired
+surrogates, and root-escaping). Canonical JSON preserves valid-Unicode bytes and
+escapes malformed surrogate code units rather than raising.
 
 **Flesh.** None. Core is all bones by definition.
 
@@ -583,18 +585,21 @@ drive-qualified, `..`, root-escaping).
   proven by an exhaustive table test.
 - `normalize_relative_path` keeps NTFS-distinct names distinct across a Unicode
   special-casing corpus (`ß`, Turkish `İ/ı`, fullwidth forms).
-- Path validation rejects every escape form and accepts every legitimate
-  root-relative path.
+- Path validation rejects every escape form and non-scalar surrogate while
+  accepting every contract-legitimate root-relative path; canonical JSON never
+  raises while encoding malformed free-form Unicode.
 - Event `seq` is gap-free and monotonic per session under concurrent emit.
 
 ### 4.2 scanner
 
-**Implementation status (2026-07-19).** The M0 native walking scanner,
+**Implementation status (2026-07-20).** The M0 native walking scanner,
 injectable fault backend, full/scoped result distinction, exact ignores,
 capability evidence, placeholder/reparse handling, deterministic records, and
-typed incomplete snapshots are implemented and acceptance-tested. Stable-ID
-volumes recover a directory-entry identity omission with one exact-path
-metadata stat. USN and network change sources remain deferred.
+typed incomplete snapshots are implemented and acceptance-tested. Raw names
+outside the lexical path contract become escaped `PATH_UNREPRESENTABLE`
+warnings without aborting safe siblings. Stable-ID volumes recover a
+directory-entry identity omission with one exact-path metadata stat. USN and
+network change sources remain deferred.
 
 **Contract.** `scan(root, ignores, ctx) -> ScanResult`. Implements
 `ChangeSource`.
@@ -604,7 +609,8 @@ metadata stat. USN and network change sources remain deferred.
 so junctions/reparse loops cannot recurse forever.
 
 **Flesh — now.** Recursive metadata walk (size, mtime_ns, identity, nlink;
-every directory recorded with metadata); exact-name ignore filtering; capability profiling; placeholder detection
+every directory recorded with metadata); pre-use raw-name validation; exact-name
+ignore filtering; capability profiling; placeholder detection
 (classify reparse/offline files `unsupported`, never open them); scan warnings.
 **Flesh — deferred.** USN change-journal `ChangeSource`; network-share awareness.
 
@@ -614,6 +620,9 @@ every directory recorded with metadata); exact-name ignore filtering; capability
 - A cloud placeholder file is recorded `unsupported` and is **never opened**
   (asserted by a read-tripwire in test).
 - A partial/errored walk yields `complete=False`; a clean walk yields `True`.
+- A contract-invalid file or directory name is escaped into typed evidence,
+  makes the scan incomplete, is never opened/descended, and does not prevent a
+  safe sibling from being retained.
 - Ignored artifacts are matched only by exact qualified name; a user file named
   `my.synctmp-notes.txt` or `data.db` is **never** excluded (direct PoC
   regression tests).
@@ -623,13 +632,14 @@ every directory recorded with metadata); exact-name ignore filtering; capability
 
 ### 4.3 planner
 
-**Implementation status (2026-07-19).** The pure M0 planner and its core plan
+**Implementation status (2026-07-20).** The pure M0 planner and its core plan
 contracts are implemented: identity assignment, timestamp- and
 standard-attribute-aware metadata diffing, explicit
 directory chains, correspondence-qualified file moves, composite move-update,
-planned-removal cleanup, symmetric filters, deterministic serialization, and
-the shared hardlink-aware capacity function. Non-everything scopes and content
-evidence remain deferred.
+planned-removal cleanup, symmetric filters, deterministic surrogate-safe
+serialization, typed exact-case mismatch blocking, and the shared
+hardlink-aware capacity function. Non-everything scopes and content evidence
+remain deferred.
 
 **Contract.**
 `plan(source: ScanResult, target: ScanResult, correspondence: MappingSnapshot,
@@ -663,6 +673,8 @@ chain + emptied-dir cleanup — no directory-level move op exists in M0, and the
 decomposition must exist regardless: a folder whose children also changed
 content cannot collapse into one rename); composite move-update as one
 operation; conflict blocking; capacity planning; `Scope.everything()`.
+Exact-case mismatches across one source/target Windows key are distinct blocked
+conflicts, not metadata no-ops; directory conflicts block dependent descendants.
 **Flesh — deferred.** Content-aware no-op; hash-based move detection; retained
 human conflict resolution; `Scope.pattern/explicit/recorded_run` (filters,
 partial exec, replay — all new scope constructors, zero planner-shape change);
@@ -685,6 +697,9 @@ grouping) with enrichment metadata supplied by the workflow.
 - On a stable-identity-less root, no `move` operation is ever emitted.
 - A file whose identity appears at two paths, or with `nlink>1`, is never part
   of a move.
+- Metadata-equal `KEEP.txt`/`keep.txt` evidence produces a visible typed
+  conflict, never a silent no-op; a directory mismatch blocks its dependent
+  region without guessing a case-only rename.
 - A renamed source folder decomposes into per-file moves, a full mkdir chain,
   and emptied-dir cleanup; the rerun converges to zero operations and the
   rename itself copies no content bytes.

@@ -71,6 +71,16 @@ Format: `- SEVERITY - STATUS. Category. What happened. Cause: why.`
 
 ### M0 integration
 
+- SEVERE - FIXED (2026-07-20). Availability and input safety. A single NTFS,
+  SMB, archive, or WSL-originated name outside NamiSync's relative-path contract
+  could abort the whole planning session with a raw `PathValidationError`; an
+  unpaired surrogate could instead survive scanning and crash operation-id or
+  fingerprint encoding with `UnicodeEncodeError`. Cause: the walker normalized
+  untrusted directory-entry names before its per-entry boundary, path validation
+  admitted surrogate code units, and canonical JSON used strict UTF-8 encoding;
+  fixed by pre-use validation, escaped typed `PATH_UNREPRESENTABLE` evidence,
+  incomplete-scan isolation, explicit surrogate rejection, and compatible
+  serializer hardening.
 - SEVERE - FIXED (2026-07-19). Availability and convergence. On native Windows
   walks, scanner evidence could omit an NTFS file identity while fresh direct
   observation supplied one, falsely refusing sync and disabling recorded
@@ -83,6 +93,12 @@ Format: `- SEVERITY - STATUS. Category. What happened. Cause: why.`
 
 ### M0 hardening
 
+- MODERATE - FIXED (2026-07-20). Convergence truth. A source/target pair such
+  as `KEEP.txt` and `keep.txt` was reported as a metadata no-op forever, hiding
+  the fact that exact target casing had not converged. Cause: Windows-key
+  grouping discarded the target spelling before no-op classification; fixed
+  with a distinct typed `case_mismatch` blocker for files and directories plus
+  blocked dependency propagation through mismatched directory regions.
 - MODERATE - FIXED (2026-07-19). Convergence. A readonly, hidden, or system
   attribute change with unchanged size and mtime planned as `noop`, so the
   target attribute never converged.

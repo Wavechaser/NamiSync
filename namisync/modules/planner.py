@@ -235,12 +235,35 @@ def plan(
         directory_key = normalize_relative_path(directory_path)
         existing_dirs = target_dirs_by_key.get(directory_key, [])
         existing_files = target_files_by_key.get(directory_key, [])
-        if existing_dirs:
-            continue
         source_candidates = source_dirs_by_key.get(directory_key, [])
         source_directory = source_candidates[0] if len(source_candidates) == 1 and isinstance(source_candidates[0], DirRecord) else None
         parent_operation = _nearest_created_parent(directory_path, created_directories)
         dependencies = (parent_operation.op_id,) if parent_operation is not None else ()
+        if existing_dirs:
+            target_directory = (
+                existing_dirs[0]
+                if len(existing_dirs) == 1 and isinstance(existing_dirs[0], DirRecord)
+                else None
+            )
+            if (
+                source_directory is not None
+                and target_directory is not None
+                and source_directory.rel_path != target_directory.rel_path
+            ):
+                operation = _blocked_operation(
+                    kind=OperationKind.NOOP,
+                    source_rel_path=source_directory.rel_path,
+                    target_rel_path=target_directory.rel_path,
+                    source_expected=source_directory.stat,
+                    target_expected=target_directory.stat,
+                    intended=source_directory.stat,
+                    reason=OperationReason.CASE_MISMATCH,
+                    blocked_reason=BlockedReason.CASE_MISMATCH,
+                    dependencies=dependencies,
+                )
+                mkdir_operations.append(operation)
+                created_directories[directory_key] = operation
+            continue
         if len(source_candidates) > 1 or existing_files or source_directory is None:
             operation = _blocked_operation(
                 kind=OperationKind.MKDIR,
@@ -340,6 +363,22 @@ def plan(
             target_record = target_values[0]
             if not isinstance(target_record, FileRecord):
                 raise TypeError("target file index contained a non-file record")
+            if source_record.rel_path != target_record.rel_path:
+                content_operations.append(
+                    _blocked_operation(
+                        kind=OperationKind.NOOP,
+                        source_rel_path=source_record.rel_path,
+                        target_rel_path=target_record.rel_path,
+                        source_expected=source_record.stat,
+                        target_expected=target_record.stat,
+                        intended=source_record.stat,
+                        reason=OperationReason.CASE_MISMATCH,
+                        blocked_reason=BlockedReason.CASE_MISMATCH,
+                        dependencies=dependencies,
+                    )
+                )
+                claimed_target_keys.add(item.target_rel_path_key)
+                continue
             matched = _metadata_equal(source_record.stat, target_record.stat, granularity)
             kind = OperationKind.NOOP if matched else OperationKind.UPDATE
             reason = OperationReason.METADATA_MATCH if matched else OperationReason.METADATA_CHANGED

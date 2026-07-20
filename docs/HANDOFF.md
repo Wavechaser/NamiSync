@@ -4,69 +4,55 @@ Date: 2026-07-20
 
 ## Session Outcome
 
-Fixed two M0 executor defects that prevented dependency-ordered directory
-cleanup and made every Windows parent-directory durability flush fail. Those
-executor fixes changed no deferred feature scope or public contract.
+Fixed two scanner/planner input-boundary defects. A filesystem entry whose raw
+name is legal to enumerate but outside NamiSync's safe relative-path contract
+no longer aborts scan/plan review, and a source/target pair that differs only in
+exact casing no longer disappears into a misleading metadata no-op.
 
-Added M0 automatic safe-subset execution so blocked items and incomplete scans
-no longer refuse independent safe work. Destructive and identity-move work stays
-withheld whenever scan completeness cannot prove it safe, and blocked-path
-counterparts remain quarantined.
+The fixes preserve the existing safety boundary: hostile names never enter
+path-bearing records or executable operations, and M0 does not attempt an
+automatic case-only rename through the ordinary absence-guarded move contract.
 
 ## Changes
 
-- `DELETE` operations marked `directory_cleanup` now use a dedicated final
-  guard. It requires a reviewed stable directory identity and exact kind, size,
-  standard attributes, and creation time, while ignoring only mtime and link
-  count changes caused by successful child move/trash dependencies.
-- Identity-less cleanup, replacement directories, file deletes, non-cleanup
-  directory operations, and nonempty directories remain guarded/refused.
-- `NativeFileSystem.flush_directory` now opens Windows directory handles with
-  `GENERIC_WRITE`, the access required by `FlushFileBuffers`, while retaining
-  broad sharing, `OPEN_EXISTING`, and `FILE_FLAG_BACKUP_SEMANTICS`.
-- Best-effort flush failure still preserves filesystem success and emits an
-  explicit durability warning.
-- Added focused regressions for trash/move cleanup, replacement and
-  identity-less refusal, file-evidence isolation, nonempty refusal, successful
-  native NTFS flush, and injected flush degradation.
-- Updated `docs/BUGS.md`, `docs/EXECUTOR.md`, `docs/FEATURES.md`,
-  `docs/ARCHITECTURE.md`, and the README changelog.
-- Added deterministic workflow selection and a matching pure-preflight
-  backstop: direct blockers are `BLOCKED`; correspondence/dependency collateral
-  and incomplete-scan destructive work are `DEFERRED`; copy/update/mkdir/noop
-  remain runnable, while move/move-update/trash/delete are withheld for either
-  incomplete scan.
-- Review and commitment now use the derived selection and selected capacity.
-  Workflow emits exclusions into terminal results/history without writing them
-  to the main ledger; guarded no-ops still refresh correspondence.
-- Added `BLOCKED` as the sixth outcome, partial CLI exit code 6, itemized
-  completed-with-exceptions output, history `blocked_count`, event schema v2,
-  and a transactional history v1-to-v2 additive migration.
-- Updated workflow, preflight, planner, scanner, executor, recorder, core,
-  database, history, interface/CLI, feature, architecture, bug, README, and
-  handoff documentation for the new contract.
+- `validate_relative_path()` now rejects unpaired surrogate code units in
+  addition to the existing traversal, qualification, device, stream, NUL, and
+  ambiguous-suffix rules.
+- The walking scanner validates each raw child path before canonical sorting,
+  ignore evaluation, metadata access, or record construction. An invalid file
+  or directory becomes an escaped `PATH_UNREPRESENTABLE` warning at its nearest
+  valid parent, makes the scan incomplete, is not opened or descended, and does
+  not prevent safe siblings from being retained.
+- Canonical JSON retains its established UTF-8 bytes for valid Unicode while
+  defensively emitting JSON escapes for malformed surrogate code units, so
+  operation-id and plan-fingerprint construction cannot raise a raw
+  `UnicodeEncodeError`.
+- The planner emits a distinct blocked `case_mismatch` operation when one
+  source and target file or directory share a Windows key but differ in exact
+  spelling. Directory conflicts block dependent descendant work.
+- Added synthetic hostile-file/directory coverage, a real Windows
+  `\\?\...\trailingdot.` regression, canonical serialization coverage, and
+  matching/changed-metadata file plus directory case-mismatch coverage.
+- Updated `SCANNER.md`, `PLANNER.md`, `CORE.md`, `BUGS.md`, `FEATURES.md`,
+  `ARCHITECTURE.md`, README status/changelog, and this handoff.
 
 ## Verification
 
-- `python -m pytest tests/test_executor.py -q`: 51 passed.
-- `python -m pytest -q`: 280 passed.
+- Focused scanner/planner/path tests: 59 passed.
+- Payload/workflow/CLI/preflight compatibility tests: 61 passed.
+- Full suite: 287 passed in 8.17s.
 - Import-linter: 7 contracts kept, 0 broken (41 files, 137 dependencies).
 - `git diff --check`: clean apart from expected Git LF-to-CRLF notices.
-- Safe-subset focused verification: 87 tests passed across workflow, preflight,
-  history, CLI, and schema areas before the final full-suite run.
 
 ## Immediate Next Context
 
-- Parent-directory flushing remains explicitly best effort; a refused or
-  unsupported flush is reported without relabeling a completed mutation.
-- Cleanup on a filesystem without reviewed stable identity intentionally
-  refuses rather than risking removal of a reused empty directory path.
-- The executor still uses path-based `rmdir`; `RemoveDirectory` supplies the
-  atomic nonempty refusal, while external path replacement remains within the
-  documented external-writer boundary.
-- Incomplete scans deliberately use a global additive fallback because `Plan`
-  currently carries completeness booleans, not exact uncertainty regions. A
-  future precision improvement can persist source/target uncertainty regions
-  and narrow withholding without changing the selection/outcome seam.
-- `BLOCKED` is the only new top-level outcome. Quarantine and incomplete-scan
-  withholding remain `DEFERRED` reasons, avoiding separate result/schema axes.
+- `PATH_UNREPRESENTABLE` is diagnostic evidence; `complete=False` is the safety
+  state that withholds absence- and identity-dependent work. Invalid raw names
+  are intentionally not forced into `UnsupportedRecord`, whose path contract
+  must remain safe.
+- Exact-case mismatches remain blocked until a future dedicated recase
+  operation defines target-local guards, executor behavior, recording, and
+  crash recovery. Reusing ordinary `MOVE` would be incorrect because its target
+  must be absent, while old and new case spellings may resolve to one live item.
+- Canonical bytes and fingerprints for every valid-Unicode plan are unchanged;
+  only malformed surrogate code units use the defensive JSON escape path.

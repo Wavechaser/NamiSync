@@ -62,6 +62,12 @@ paths or destination policy. Expected/intended metadata uses
 `MetadataSnapshot` (attributes and creation time) under the snapshotted
 preservation policy. No stream manifest enters a plan.
 
+Canonical JSON remains byte-compatible for valid Unicode paths and escapes a
+malformed surrogate code unit defensively instead of raising during operation-id
+or plan-fingerprint construction. The scanner rejects such code units before a
+path record exists; serializer hardening prevents unrelated free-form data from
+turning a review into a raw encoding failure.
+
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
 deterministic digest of that exact selection; changing either invalidates the
@@ -89,6 +95,11 @@ continues to emit complete deterministic intent and does not hide those items.
   the pre-scan tree.
 - Case and file/directory collisions become blocked operations with no guessed
   winner.
+- A single source and target entry that share a Windows path key but differ in
+  exact spelling become a typed `case_mismatch` blocked conflict, even when
+  their metadata matches. Directory mismatches block dependent descendants.
+  M0 does not pretend that an ordinary no-op converged casing or attempt an
+  unsafe case-only move through the existing absence-guarded move contract.
 - Move detection requires unambiguous prior source correspondence, stable
   identity, link count one, unique identity occurrence, and a safe target-side
   move. It never equates source and target filesystem IDs.

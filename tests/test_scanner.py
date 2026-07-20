@@ -21,6 +21,7 @@ from namisync.core.models import (
     VolumeEvidence,
     VolumeId,
 )
+from namisync.core.pathing import to_extended_length_path
 from namisync.core.session import Canceled, RunContext
 from namisync.modules.scanner import (
     FILE_ATTRIBUTE_OFFLINE,
@@ -248,6 +249,78 @@ def test_case_collision_and_hardlinks_are_warned_without_merging() -> None:
     assert not result.complete
     codes = {warning.code for warning in result.warnings}
     assert {ScanWarningCode.CASE_COLLISION, ScanWarningCode.DUPLICATE_IDENTITY, ScanWarningCode.MULTI_LINK} <= codes
+
+
+def test_unrepresentable_names_are_typed_escaped_and_do_not_abort_safe_siblings() -> None:
+    surrogate_name = "bad_" + chr(0xDCFF) + ".txt"
+    hostile_directory = FakeEntry(
+        "blocked.",
+        r"C:\root\blocked.",
+        True,
+        _fake_stat(ino=4, directory=True),
+    )
+    entries = [
+        FakeEntry("safe.txt", r"C:\root\safe.txt", False, _fake_stat(ino=2)),
+        FakeEntry("trailingdot.", r"C:\root\trailingdot.", False, _fake_stat(ino=3)),
+        FakeEntry(surrogate_name, "C:\\root\\" + surrogate_name, False, _fake_stat(ino=5)),
+        hostile_directory,
+    ]
+    backend = FakeBackend(
+        {
+            r"C:\root": entries,
+            r"C:\root\blocked.": [
+                FakeEntry("hidden.txt", r"C:\root\blocked.\hidden.txt", False, _fake_stat(ino=6))
+            ],
+        },
+        _profile(),
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\root", "source"), IgnoreSet(), _ctx()
+    )
+
+    assert [record.rel_path for record in result.files] == ["safe.txt"]
+    assert backend.scandir_calls == [r"C:\root"]
+    assert not result.complete
+    path_warnings = [
+        warning
+        for warning in result.warnings
+        if warning.code is ScanWarningCode.PATH_UNREPRESENTABLE
+    ]
+    assert len(path_warnings) == 3
+    assert all(warning.rel_path is None for warning in path_warnings)
+    details = "\n".join(warning.detail for warning in path_warnings)
+    assert "trailingdot." in details
+    assert "blocked." in details
+    assert r"bad_\udcff.txt" in details
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires the Windows extended path namespace")
+def test_native_extended_path_trailing_dot_is_typed_not_fatal(tmp_path: Path) -> None:
+    hostile_path = to_extended_length_path(str(tmp_path)) + r"\trailingdot."
+    descriptor = os.open(
+        hostile_path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_BINARY,
+        0o600,
+    )
+    os.close(descriptor)
+    (tmp_path / "safe.txt").write_bytes(b"safe")
+
+    try:
+        result = WalkingScanner().scan(
+            Root(str(tmp_path), "source"), IgnoreSet(), _ctx()
+        )
+    finally:
+        os.unlink(hostile_path)
+
+    assert [record.rel_path for record in result.files] == ["safe.txt"]
+    assert not result.complete
+    warning = next(
+        item
+        for item in result.warnings
+        if item.code is ScanWarningCode.PATH_UNREPRESENTABLE
+    )
+    assert "trailingdot." in warning.detail
 
 
 @pytest.mark.parametrize(

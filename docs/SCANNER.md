@@ -46,6 +46,11 @@ not their state.
 Results are sorted by normalized relative key with a deterministic tie-breaker.
 The scanner returns partial observations instead of raising for ordinary access
 failures. Fatal root/volume errors are typed and still produce a session result.
+Raw directory-entry names are validated before canonical sorting, ignore
+matching, metadata access, or record construction. A name that the filesystem
+can expose but the root-relative path contract cannot represent is skipped,
+reported as `PATH_UNREPRESENTABLE` with an escaped display spelling and nearest
+valid parent, and makes the scan incomplete; safe siblings remain reviewable.
 
 ## Walking Rules
 
@@ -63,6 +68,10 @@ failures. Fatal root/volume errors are typed and still produce a session result.
    hydrating or reading them.
 9. Record access/type/collision/hardlink warnings and set `complete=False` for
    any uncertainty that could make one side appear absent.
+10. Reject Windows-ambiguous suffixes, device spellings, stream qualifiers,
+    traversal, NUL, and unpaired surrogates at the path boundary. Diagnostic
+    text escapes hostile code units rather than inserting them into path-bearing
+    records, serialized plans, or terminal output.
 
 Application-owned ignores use exact qualified names or exact generated-name
 grammar. `.synctrash` is excluded as an owned root; a user filename merely
@@ -73,9 +82,9 @@ excluded unless it is the exact configured artifact.
 
 A full scan is complete only modulo its recorded location ignores. Mapping
 filters do not affect completeness; workflows apply them symmetrically after
-both scans. An unreadable entry, case collision, uncertain reparse traversal, or
-root identity change makes the scan reviewable but non-executable where absence
-could drive mutation.
+both scans. An unreadable or unrepresentable entry, case collision, uncertain
+reparse traversal, or root identity change makes the scan reviewable but
+non-executable where absence could drive mutation.
 
 Selected inventory refresh is a separate scoped observation mode. It may update
 named paths but must never infer that unselected rows are missing. The workflow
@@ -125,6 +134,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Exact ignore matching covers the PoC user-`.db` data-loss bug and missing
   history database sidecars.
 - Per-entry error capture prevents permission errors from aborting the walk.
+- Contract-invalid NTFS/SMB names produce typed escaped evidence instead of
+  aborting enumeration or contaminating safe relative-path contracts.
 - Checkpoints restore cooperative cancellation.
 - Visited identity and reparse classification close the open junction-cycle
   gap.
