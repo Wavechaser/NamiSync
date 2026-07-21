@@ -122,6 +122,9 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Made rename review truthful: recase, move, and move-update rows now show the
+  observed prior target path changing to the planned target path, including
+  visible case-only changes such as `keep.txt -> KEEP.txt`.
 - Fixed crashed-copy temp recovery: successful executions now sweep exact
   prior-run temps once from preflight's touched target parents before copying,
   while preserving current-run temps, lookalikes, untouched paths, and trash.

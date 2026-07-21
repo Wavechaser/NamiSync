@@ -57,6 +57,13 @@ to a global chronological list.
 
 ### M0 integration
 
+- MODERATE - FIXED (2026-07-21). Rename plan presentation. Recase rows rendered
+  the source and destination as the same spelling, and move/move-update rows
+  likewise omitted the old target path, so review hid the filesystem rename a
+  user was approving. Cause: `PlanOperationView` discarded
+  `prior_target_rel_path` and the CLI always used the source path as the
+  displayed origin; fixed by retaining `prior_target_path` in the workflow read
+  model and preferring it as the left side for rename-shaped operations.
 - MODERATE - FIXED (2026-07-21). Fingerprinted option decoding. A plan-request
   payload that omitted `propagate_source_casing` decoded as false and then
   re-encoded with the field present, so one accepted payload did not have a

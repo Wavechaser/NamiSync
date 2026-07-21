@@ -57,6 +57,10 @@ Print roots/volume evidence, policy, filter/policy snapshot, operation counts an
 content bytes, runnable/blocked/deferred selection counts, per-item exclusion
 reasons, required/free capacity for the selected subset, trash behavior,
 computed ingest destinations when applicable, and a stable plan fingerprint.
+Rename-shaped operations render the observed prior target path on the left and
+the planned target path on the right. This makes a case-only `recase` visible as
+`keep.txt -> KEEP.txt` and also exposes the actual old-to-new path for `move`
+and `move_update` review rows.
 Commitment occurs only after the plan session has terminated and released
 custody. Execution output discloses fresh-preflight refusal/material drift.
 Successful safe-subset execution says `completed with exceptions`, itemizes the

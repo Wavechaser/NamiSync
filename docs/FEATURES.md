@@ -35,7 +35,7 @@ document's rules.
 ## SYNC WORKFLOW
 
 - **One-Way Root Mapping**. NamiSync reconciles a distinct source folder into a distinct, non-nested destination folder.
-- **Dry-Run Review**. Every sync scans both roots and produces a reviewable plan before filesystem mutation.
+- **Dry-Run Review**. Every sync scans both roots and produces a reviewable plan before filesystem mutation. Rename-shaped rows show the observed prior target path and planned target path, including visually meaningful case-only changes such as `keep.txt -> KEEP.txt` and the actual old-to-new paths for move and move-update operations.
 - **Commit-to-Execute**. Execution happens only for a plan the user has reviewed and explicitly committed; the commitment binds to the plan's deterministic fingerprint and to the reviewed selection, so neither can change under an approval. A committed plan runs immediately when its volumes are free, otherwise it queues, and committed plans execute sequentially in commit order. An uncommitted plan is never executed and never expires into execution — it simply remains reviewable. Scripted and queued execution replay committed plans; nothing plans and executes in one unreviewed step, and every committed execution still preflights first, with material drift refused back to review rather than silently re-planned.
 - **Deletion Policies**. Paired sync supports `trash` by default and `additive`, while `mirror` is available only as an internal policy.
 - **Recent Folders**. The application remembers up to five recent source and destination folders separately.

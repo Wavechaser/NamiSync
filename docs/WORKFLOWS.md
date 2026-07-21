@@ -81,6 +81,10 @@ omits a fingerprint input is rejected instead of decoding to false and
 re-encoding into a different payload. M0 exposes no config, CLI, or GUI control
 for it; when a future interface does, review and commitment will already bind
 the choice rather than letting execution reinterpret filename spelling.
+The interface-facing `PlanOperationView` retains `prior_target_path` separately
+from source and planned target paths. Review adapters use it as the displayed
+origin for recase, move, and move-update rows, so the target-side rename is not
+lost while translating the immutable core plan into a presentation model.
 Workflow JSON keeps valid-Unicode bytes stable and backslash-escapes an
 unpaired surrogate defensively, matching plan, ledger-hash, and history
 serialization without weakening path validation.
