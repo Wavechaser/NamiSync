@@ -7,10 +7,19 @@ while shaping it — later docs (`ARCHITECTURE.md`, `FEATURES.md`,
 file is the record of *why*, the same role `DESIGN_REVIEW.md` plays for M0.
 
 **Documentation precedence**, stated once here because it resolved a real
-conflict during this planning pass (§3, DR-M1-14): `FEATURES.md` owns
+conflict during this planning pass (DR-M1-20, retention): `FEATURES.md` owns
 behavior, `ARCHITECTURE.md` owns contracts, module docs are subordinate to
 both. Where a module doc reads stricter or looser than FEATURES/ARCHITECTURE,
 the module doc is what's stale.
+
+**Standing of this document.** This plan governs unimplemented M1 decisions
+until each is promoted into the active documents. It does not silently
+override `FEATURES.md` or `ARCHITECTURE.md` for anything already implemented;
+where it changes a settled bullet (DR-M1-03's settings-file split, DR-M1-05's
+worker-count relocation), the active document is edited **as that track
+lands**, not deferred indefinitely. Once a decision is promoted, the active
+document wins and this file becomes history — the same lifecycle
+`DESIGN_REVIEW.md` has.
 
 ---
 
@@ -127,15 +136,38 @@ settings changes.
 Binds **separately**, via the existing selection digest: selected op ids.
 **Rechecked live at execution, never fingerprinted:** volume still exists,
 file drift, capacity.
-**Excluded entirely:** execution tuning (worker count), UI presentation
-(sorting, columns, notifications). Defaults changed *after* commitment affect
-only plans created afterward.
-**This resolves the apparent contradiction as drift-refusal, not
-snapshot-immunity:** a semantic setting change *does* affect an outstanding
-commitment — it refuses it back to review at execution time, it never
-silently re-plans and never retroactively changes what already-committed work
-means. DR-M1-06 makes that refusal visible before execution time, not just
-at it.
+**Excluded entirely:** UI presentation (sorting, columns, notifications).
+**Resolved as drift-refusal, not snapshot-immunity:** a semantic setting
+change *does* affect an outstanding commitment — it refuses it back to review
+at execution time; it never silently re-plans and never retroactively changes
+what already-committed work means. DR-M1-06 makes that refusal visible before
+execution time rather than only at it.
+
+**Correction (review finding 1).** An earlier draft of this entry also claimed
+"defaults changed after commitment affect only plans created afterward." That
+is the frozen-plan model and contradicts the drift-refusal model chosen above;
+the sentence was a leftover from an earlier framing and has been removed. Only
+one model is in force: drift refuses.
+
+**Correction (review finding 1, second part).** This entry also claimed worker
+count is excluded from the fingerprint. It is not, twice over: `worker_count`
+is a field on `Plan` (`planning.py:301`), it is hashed inside
+`policy_fingerprint` (`planning.py:404`), and `plan_fingerprint` hashes
+`asdict(plan)` wholesale (`planning.py:411`). Excluding it is therefore
+**implementation work, not a documentation stance**: either move worker count
+out of `SyncOptions`/`Plan` into an execution-tuning input supplied at
+execution time, or accept it as reviewed semantic intent and stop claiming
+otherwise. **Resolution: move it out** — worker count is *Multithreaded Copy
+Workers* tuning, and a plan refusing because the user changed a concurrency
+knob is exactly the false refusal DR-M1-05 exists to prevent. Tracked as Track
+A work.
+
+**Open refinement (not blocking M1).** Fingerprint *equality* is a coarse
+drift test: changing the default deletion policy would refuse a committed
+additive-only plan whose meaning did not change. A tighter test scopes drift
+to the settings that could alter *this* plan's meaning — filters most
+obviously. M1 may ship whole-fingerprint comparison and narrow it later; the
+refusal is conservative in the safe direction.
 **Precision:** one canonical fingerprint function in `core/`, used identically
 by plan construction and by the settings-side comparison — two independent
 serializations of "current semantic settings" would drift in key order alone
@@ -170,7 +202,7 @@ is a bug farm.
 `InventoryRowView`, `ResultCategory` — primitives-only dataclasses in
 `workflows/views.py`, following the existing `PlanOperationView`/
 `RefusalView`/`HistoryRunView` pattern. Being primitives-only means the same
-structure serializes straight to JSON for the web bridge (DR-M1-12) — no
+structure serializes straight to JSON for the web bridge (DR-M1-15..18) — no
 second serialization layer. Retarget the CLI's four `hasattr` sites onto it
 as the proof before the GUI depends on it.
 
@@ -179,14 +211,28 @@ promises ("the app may even close")?**
 Plans currently live in a process-local dict (`self._plans` on
 `LocalWorkflowRuntime`). True durability is `SqliteSessionStore`, which is
 scheduled M2.
-**Resolution:** ship M1 without plan persistence; leave the seam. Mirror the
-existing `SessionStore` protocol with a `PlanStore` protocol and an in-memory
-implementation, so durability later is a new implementation behind the same
-shape, not a facade rewrite. Known M1 limitation to document, not silently
-carry: a GUI task card's plan does not survive a process restart, and until
-M2's durable session store, the task rail only shows its own process's
-sessions — a concurrent CLI run is invisible to it except through volume-lock
-contention.
+**Resolution:** ship M1 without plan persistence.
+
+**Amended per review finding 9.** The original entry proposed a `PlanStore`
+protocol with a single in-memory implementation. The reviewer is right that
+this is a speculative seam for a future single implementation — the
+`SessionStore` precedent is weaker than it looks, since that protocol exists
+because the *dispatcher* genuinely needs injection, whereas a plan store has
+one in-process consumer and no second present-tense implementer.
+**Middle ground adopted:** keep the existing private dictionary, but route
+all access through named methods on the runtime/facade
+(`save_plan`/`get_plan`/`drop_plan`) rather than touching the dict directly.
+That is the "opening" B7 asked for — M2 swaps the internals without changing
+a caller — with no protocol declared before a second implementation exists.
+
+Known M1 limitations to document, not silently carry: a task card's plan does
+not survive a process restart, and until M2's durable session store the task
+rail only shows its own process's sessions — a concurrent CLI run is invisible
+to it except through volume-lock contention. Also (review finding 10's
+corollary): the plan dictionary now grows for the life of a long-running GUI
+process where the CLI's process-per-command previously hid that; closing a
+task card must call `drop_plan`, matching the dispatcher's existing
+close-drops-record behavior.
 
 ### History and event schema
 
@@ -232,11 +278,39 @@ volume → resolve root → call the existing `WalkingScanner` once →
 `record_inventory`. No new scanner code.
 
 Volume resolution ladder (workflow-level, using the already-supported
-`VolumeId(serial, fs_type)` + volume-relative path):
-- volume found, unique → resolve location-relative root, scan
+`VolumeId(serial, fs_type)` + volume-relative path). **Five states, not three**
+(review finding 2) — a mounted volume whose configured root is gone is not the
+same condition as an absent volume or an access failure, and collapsing them
+would produce wrong missing-marking or a misleading "offline" label:
+- volume found, unique, root present → **resolved**; scan
 - volume not mounted → **offline**, not missing (per *Offline Volumes*)
 - two+ volumes report the same identity → **ambiguous**, explicit user choice
   required (per *Cloned-Volume Ambiguity*), never resolved silently
+- volume found, configured relative root absent → **root_missing**; a real
+  condition needing user action (moved/deleted folder), never a location full
+  of missing rows
+- volume found, root present but unreadable → **root_unavailable**
+  (permissions, IO error); an access failure, distinct from absence
+
+**Blocking contract gap (review finding 2).** The scoped-refresh behavior
+`INVENTORY.md` describes is currently **unreachable in code**. A selected scan
+always reports `complete=False` (`scanner.py:252`:
+`complete = requested_scope.kind is ScanScopeKind.FULL`), while the recorder's
+selected-path missing branch requires `complete=True` (`recorder.py:573`).
+No selected scan can ever reach it. M1 must close this with either a
+scanner/core contract change (a completeness notion that is honest about
+scope — "complete for the requested scope" distinct from "full-tree complete")
+or a separate typed scoped-observation result. Still **no new scanner
+module** — but this is producer/contract work, not pure integration, and it
+was missing from this plan's original scope.
+
+**First-location sequence (review finding 2).** Resolving an
+already-recorded location is not enough — nothing produces the *first*
+non-paired scan today. The explicit sequence: selected path →
+host/volume/location registration (`ensure_host`, `observe_volume`,
+`ensure_location`) → scan → role-free inventory recording — **and never
+`ensure_mapping`**, per *Untracked Ingest Sources* and INVENTORY.md's rule
+that location scans never create or infer mapping roles.
 
 Resolution runs **pre-submission, in the facade** — not inside a session —
 because there is deliberately no `WAITING_INPUT` state; sessions never block
@@ -266,21 +340,44 @@ exactly, and — since DR-M1-10 already makes the event/history plumbing
 mandatory for standalone verify anyway — costs little extra to add.
 **Resolution: in-session phase (shape (a))**, with three amendments so it
 doesn't corrupt existing invariants:
-1. **Don't union item vocabularies.** Add a separate `integrity:
+1. **Don't union item vocabularies — and fix the runner's accumulator, which
+   the field alone does not.** Add a separate `integrity:
    tuple[IntegrityOutcome, ...]` field on `OperationResult`, empty for every
-   existing producer. `_result_to_dict` and the history observer both assume
-   `operations` is `ItemOutcome`-only today; this keeps axis separation
-   instead of fighting that assumption.
+   existing producer. But that is insufficient by itself (review finding 3):
+   `run_session`'s observed emit duck-types items into one list —
+   `isinstance(body, ItemOutcome) or (hasattr(body, "item_id") and
+   hasattr(body, "path"))` (`session.py:255-258`) — and `IntegrityOutcome`
+   carries both `item_id` and `path` (`integrity.py:180-182`). It would be
+   swept into `operations` on every cancel/failure path regardless of the new
+   field. The runner needs **typed accumulator routing**: replace the
+   `hasattr` catch-all with explicit type dispatch into separate sync and
+   integrity accumulators. (Noted for the irony: this is the same structural
+   duck-typing this plan removes from the CLI, living in core.)
 2. **Phase-scoped progress.** The verify phase emits its own `PhaseChanged` +
    `Progress` with its own totals; transfer-byte progress and verify
    read-byte progress are never summed (per *Content-Byte Accounting*).
-3. **A verify-phase exception is an itemized error outcome, not a session
-   failure.** The copies already succeeded; "never wrong, only behind"
-   forbids the terminal lying about that. Unexpected exceptions during the
-   integrity phase become `error` integrity outcomes plus a warning — they
-   never unwind a successful execution into `FAILED`. Mismatches were never
-   failures to begin with; they're the finding, reported on the integrity
-   axis.
+3. **A verify-phase failure degrades the integrity axis; it never rewrites
+   filesystem truth — but it must be *reported*, not swallowed.** The copies
+   already succeeded; "never wrong, only behind" forbids the terminal lying
+   about that. **Amended per review finding 3:** a bare tuple of outcomes
+   cannot express a phase-wide failure that occurs *before any item exists*
+   (selection construction fails, the reader can't initialize). The field is
+   therefore an **`IntegrityPhaseResult`** carrying status, outcomes, byte
+   counts, and an optional error — not a tuple. Filesystem status may remain
+   `COMPLETED`, but the result must then say verification is
+   incomplete/degraded rather than silently reporting a clean run. Do **not**
+   blanket-convert unexpected exceptions into per-item errors, and do **not**
+   catch `BaseException` — narrow expected failures to item outcomes, let the
+   phase result carry the rest.
+4. **Pause during the verify phase needs a real continuation.**
+   `_ExecutionInvocation.snapshot()` returns `encode_execution_request(...)`
+   (`runtime.py:427`) — the original request only, with no phase marker and no
+   verifier state. Resuming a session paused mid-verification would repeat
+   outcomes or lose phase progress entirely. The continuation payload must
+   carry an explicit **phase** plus *both* the execution set and the integrity
+   selection/completion state. This is the amendment that makes shape (a)
+   honest about pause; without it, in-session verification is only safe for
+   sessions that are never paused.
 
 **DR-M1-13 — Scheduling.**
 **Resolution:** early in Track B — it's the one M1 item that isn't purely
@@ -297,7 +394,7 @@ staging artifact; that's now stale.
 throwaway and becomes an actual starting point (rewrite its stated premise
 away from "before touching the real PySide6 UI"). `DESKTOP_UI.md` needs a
 deliberate rewrite, not a find-and-replace: *Threading And Worker Lifecycle*
-dissolves into the single-outbound-pump rule (DR-M1-12 below); roughly a
+dissolves into the single-outbound-pump rule (DR-M1-18 below); roughly a
 third of the PoC-regression list is Qt-specific (proxy-style double-free,
 stylesheet subcontrols, `QMenu.exec()` hangs, combo arrows, thread-affinity
 guards) and should be translated where the underlying concern survives
@@ -312,8 +409,37 @@ embedding. Raw `WebMessageReceived` isn't pywebview's public surface; its
 bridge (`js_api`/`expose()`) is.
 **Resolution: keep the posture, adapt the mechanism.** Expose exactly **one**
 function, `dispatch(command_json)`; schema validation and an explicit
-command allowlist sit behind it; nothing else is reachable; remote navigation
-disabled. Security-equivalent to raw messages, achievable in pywebview.
+command allowlist sit behind it; nothing else is reachable.
+
+**Amended per review finding 4 — the inbound half alone is not
+security-equivalent.** Four gaps this decision originally left open:
+
+1. **Outbound transport is unspecified, and the naive form breaks the
+   hostile-filename defense.** Interpolating serialized event data into an
+   `evaluate_js` string reintroduces exactly the injection DR-M1-16 exists to
+   prevent, one layer down — a filename becomes JS source. Outbound must be
+   **data-safe**: pass values as structured arguments to a fixed, pre-loaded
+   JS receiver function, never string-built script. No event payload is ever
+   concatenated into executable text.
+2. **No sender-origin value.** pywebview's exposed functions run on separate
+   threads and do not surface WebView2's sender origin, so the adapter cannot
+   authenticate a caller the way raw `WebMessageReceived` would. Compensate
+   with explicit **trusted-origin and navigation enforcement**: navigation
+   locked to the packaged asset origin, external navigation and new-window
+   requests refused outright.
+3. **The renderer must be forced.** pywebview documents an MSHTML fallback;
+   silently accepting it means the product is not reliably WebView2 and the
+   CSP/isolation assumptions above do not hold. Force Edge Chromium and
+   **fail actionably** if the WebView2 runtime is unavailable — a clear
+   install prompt, never a degraded silent fallback.
+4. **Separate asset serving from the API surface.** pywebview's built-in local
+   server is for packaged UI assets only; it is not an event/API channel and
+   must not become one. Restricted to static packaged assets.
+
+Implementation follows the vendor security guidance:
+[pywebview bridge](https://pywebview.flowrl.com/guide/interdomain),
+[renderer selection](https://pywebview.flowrl.com/guide/web_engine),
+[WebView2 security](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security).
 
 **DR-M1-16 — Structural XSS defense, not sanitization.**
 NamiSync deliberately retains hostile filenames as escaped scan evidence
@@ -372,6 +498,16 @@ subscribing and return an already-terminal result directly — a short session
 can finish between submit and subscribe, and `subscribe()` raises
 `SessionNotFound` once the hub is gone.
 
+**Mandatory shutdown contract (review finding 10).** Removing the poll is
+only safe with an explicit teardown path: an indefinite `next()` on a stream
+nobody closes hangs its thread forever, and with it window close or app exit.
+`SessionObserver` therefore **retains every stream it opens and closes them
+all before joining observer threads** — `EventStream.close()` sets `_closed`
+and calls `notify_all()`, which is what makes a blocked `next()` raise
+`StopIteration` and let the thread exit. Required coverage, none of which
+exists today: explicit unsubscribe of a live session, window close during an
+active session, and application shutdown with sessions still running.
+
 ### Maintenance and retention
 
 **DR-M1-20 — Where does history retention run?**
@@ -382,12 +518,26 @@ maintenance, which M1 doesn't have. `DESKTOP_UI.md` says retention runs
 per the precedence rule) these agree.
 **Resolution:** M1 retention is **user-invoked**, a facade-invoked workflow
 function against a writable history connection — not a daemon, not UI SQL,
-an app-owned artifact exempt from the pipeline-mutation law but still
-guarded and history-logged. Uses the same bounded busy timeout as every other
-writer, and must never run inside the audit path — a retention sweep
-blocking the audit pump would degrade a live session's `audit` axis for an
-unrelated maintenance call. When scheduled maintenance arrives later, it
-becomes a session kind wrapping this same function, not a rewrite.
+an app-owned artifact exempt from the pipeline-mutation law. Uses the same
+bounded busy timeout as every other writer. When scheduled maintenance
+arrives later, it becomes a session kind wrapping this same function, not a
+rewrite.
+
+**Corrected per review finding 6.** The original entry claimed retention was
+"history-logged" with session-like semantics while explicitly *not* being a
+session, and asserted it would never degrade audit without any mechanism
+enforcing that. Both claims are withdrawn:
+- A plain function is **not** a session and does not get session or history
+  semantics. It produces no history envelope of its own in M1. If a durable
+  record of retention runs is wanted, that is the argument for making it a
+  maintenance session — deferred, not smuggled in.
+- "Never runs inside the audit path" is not self-enforcing. A retention
+  write holding the history SQLite write lock can overlap a live session's
+  audit timeout and degrade its `audit` axis. M1 **gates retention until
+  active audit writers drain** — the facade refuses to start a sweep while
+  any live session holds an audit subscription, and the user retries. That is
+  the honest M1 bound; coordinated history-writer custody is a maintenance
+  session's job, and it is deferred with it.
 
 ---
 
@@ -401,9 +551,19 @@ becomes a session kind wrapping this same function, not a rewrite.
   `commit_and_execute`)
 - `SessionObserver`: sink-based (DR-M1-19), resubscribe + `Gap` recovery,
   get-before-subscribe race fix, no polling
-- `ResultCategory` classification (refused/canceled/failed/degraded/
-  partial/all-noop/success), shared by CLI exit-code mapping and future GUI
-  headline/color mapping
+- `ResultCategory` classification, shared by CLI exit-code mapping and GUI
+  headline/color mapping. **Four axes, not one (review finding 8):**
+  `filesystem`, `integrity`, `recording`, and `audit` stay independent —
+  a single generic `degraded` must never hide whether the cause was a hash
+  mismatch, a lagging ledger, or a failed history write. Categories:
+  refused, canceled, failed, partial, all-noop, success, plus the integrity
+  axis's **mismatch** and **verification-incomplete**. Headline precedence is
+  defined explicitly (mismatch outranks recording/audit degradation — it is
+  the signal this application exists to surface, per *Mismatch Severity*),
+  with the non-headline axes still rendered rather than dropped
+- Move `worker_count` out of `SyncOptions`/`Plan` into an execution-time
+  tuning input, so a concurrency change cannot invalidate a commitment
+  (DR-M1-05)
 - `workflows/views.py`: `SessionEventView`, `SessionRecordView`,
   `OperationResultView`, `IntegrityOutcomeView`, `InventoryRowView`
   (DR-M1-07)
@@ -424,9 +584,19 @@ becomes a session kind wrapping this same function, not a rewrite.
 
 - `run_integrity` workflow (inventory / baseline / verify / import), gated
   by the integrity preflight (DR-M1-11)
-- Inventory workflow: volume resolution ladder + scoped scan-and-record
-  reusing the existing scanner (DR-M1-11); acknowledge/restore, staleness
-  queries against `LedgerRepository`
+- Inventory workflow: five-state volume resolution ladder + first-location
+  registration sequence + scoped scan-and-record reusing the existing scanner
+  (DR-M1-11); acknowledge/restore, staleness queries against
+  `LedgerRepository`
+- Scoped-completeness contract fix so selected refreshes can actually reconcile
+  (DR-M1-11 — currently unreachable; `scanner.py:252` vs `recorder.py:573`)
+- **Mapping-filter/exclusion persistence** — `INVENTORY.md` assigns it to M1
+  ("mapping-filter state ... remain M1 work") and this plan originally omitted
+  it (review finding 7). Filtered rows are marked excluded, never missing or
+  deleted, and an exclusion can never become a target deletion candidate
+- **`rebaseline` entry points** — the verifier already implements explicit
+  rebaseline (*Accept and Re-Baseline*); M1 must expose it via CLI and UI, not
+  leave it callable-but-unreachable (review finding 7)
 - Dispatcher registration for verify/baseline/inventory session kinds with
   correct per-kind pause capability
 - `IntegrityOutcome` added to `core/events.py`'s `EventBody` (schema
@@ -488,9 +658,20 @@ skip:
   leaving the commitment itself intact (DR-M1-05/06) — this test could not
   exist before the settings store does; it's the actual deliverable, not the
   store.
-- A cloned volume attached after a verify session is committed/queued gets
-  caught by the integrity preflight at resume, not silently resolved
-  (DR-M1-11).
+- A cloned volume attached after a verify session is **queued** (integrity
+  workflows carry no commitment) is caught by the integrity preflight at
+  resume/wakeup, not silently resolved (DR-M1-11).
+- A selected inventory refresh actually reconciles the requested keys — the
+  regression that proves the `scanner.py:252` / `recorder.py:573`
+  completeness gap is closed rather than still unreachable (DR-M1-11).
+- A session paused mid-verification resumes without repeating or losing
+  integrity outcomes, proving the continuation carries phase + integrity
+  selection state, not just the execution request (DR-M1-12).
+- An outbound bridge message carrying a hostile filename reaches JS as
+  structured data and never as interpolated script text (DR-M1-15).
+- Observer teardown: unsubscribe, window close, and app shutdown with a live
+  session each terminate every observer thread rather than blocking forever
+  (DR-M1-19).
 - A verify-phase exception during post-execution verification leaves the
   execution's filesystem status `COMPLETED` and reports the exception as an
   integrity-axis error, never as execution `FAILED` (DR-M1-12).
@@ -501,3 +682,199 @@ skip:
   proving equivalent-request/equivalent-result-classification across
   interfaces before a second interface exists to test it against
   (DR-M1-02/07).
+
+---
+
+## 6. Sanity Review Notes — 2026-07-22
+
+This section records the adversarial review of the plan. It is appended rather
+than folded into the decision log so the original planning rationale remains
+visible. Findings are implementation gates unless explicitly marked
+non-blocking.
+
+**Disposition (2026-07-22).** All ten findings were verified against the code
+and resolved into §2 and §3 above. Four load-bearing claims were confirmed at
+source and are the reason this review mattered:
+
+| Finding | Verified at | Status |
+| --- | --- | --- |
+| 1 — worker count is fingerprinted despite the doc's claim | `planning.py:301`, `:404`, `:411` (`asdict(plan)`) | Confirmed; DR-M1-05 corrected, relocation added to Track A |
+| 2 — scoped missing-marking is unreachable | `scanner.py:252` vs `recorder.py:573` | Confirmed; contract fix added to Track B |
+| 3 — runner sweeps integrity outcomes into `operations` | `session.py:255-258` duck-types on `item_id`+`path`; `integrity.py:180-182` has both | Confirmed and *worse* than reported — the new field alone fixes nothing |
+| 3 — pause loses verifier state | `runtime.py:427` snapshots the request only | Confirmed; continuation amendment added |
+
+Two findings were resolved **against** the reviewer's prescription, with
+reasons recorded inline:
+
+- **Finding 1's remedy.** The reviewer prescribed the frozen-plan model and
+  deleting DR-M1-06. The diagnosis (self-contradictory text) was right; the
+  prescription reverses a decision already taken. Drift-refusal stands; the
+  stale frozen-plan sentence was removed instead. Fingerprint coarseness is
+  recorded as an open, non-blocking refinement.
+- **Finding 9 (`PlanStore` speculative).** Partially accepted. The protocol is
+  dropped, but the seam intent is kept as named runtime methods — satisfying
+  the anti-speculation rule without discarding the durability opening.
+
+Finding 5's residual lossiness is **accepted as-is**: semantic settings use
+reread-before-write best effort, without a mutex or compare-and-swap. Two
+processes reading the same version can still overwrite each other; the
+window is milliseconds, the writers are rare, and the data is recoverable by
+re-entering it. Revisit if it ever bites. The finding's second half — that
+`interfaces/service.py` must reach `db/settings.py` through the injected
+runtime rather than importing it — is **accepted and binding**, since the
+import law forbids `interfaces → db` outright.
+
+The editorial corrections (stale `DR-M1-12` cross-references, the precedence
+note's wrong attribution, "committed verify session", and this document's
+standing relative to the active docs) are all applied above.
+
+### Blocking findings
+
+#### 1. Commitment semantics contradict themselves
+
+DR-M1-05 says that defaults changed after commitment affect only new plans, but
+then says that the same semantic change refuses an outstanding commitment.
+Those are different policies. The frozen-plan model is the settled choice:
+the commitment executes its reviewed policy snapshot, and current defaults do
+not invalidate it. A live prohibition should be a separate revocation/deny
+policy rather than fingerprint equality. Under that model DR-M1-06 should be
+removed. If live settings revocation is retained instead, the text must stop
+claiming that changed defaults affect only future plans.
+
+Excluding `worker_count` from `policy_fingerprint` is also insufficient while
+`worker_count` remains a field on `Plan`: the full plan fingerprint hashes the
+whole plan. It must be moved outside the committed plan or explicitly accepted
+as semantic intent.
+
+#### 2. The inventory producer and state vocabulary are incomplete
+
+DR-M1-11 distinguishes online, offline, and ambiguous volumes, but omits
+`ROOT_MISSING` and `ROOT_UNAVAILABLE`. A mounted volume whose configured
+relative root is absent is not the same as an unmounted volume or an access
+failure.
+
+The existing selected scanner reports `complete=False`, while the recorder's
+selected-path missing reconciliation requires `scan.complete=True`. Therefore
+the proposed scoped missing behavior is currently unreachable. M1 needs either
+a scanner/core contract change or a separate typed scoped-observation result;
+it does not need a new scanner module, but it does need new producer/contract
+work.
+
+The plan also needs the first-location sequence explicitly: selected path →
+host/volume/location registration → scan → role-free inventory recording,
+without creating a mapping. Resolving an already-recorded location is not
+enough to produce the first non-paired scan.
+
+#### 3. In-session verification lacks a safe result and continuation shape
+
+Adding `OperationResult.integrity` does not by itself stop the generic session
+runner from collecting objects with `item_id` and `path` into its existing
+`operations` tuple. Cancellation would still mix `IntegrityOutcome` values
+into sync operation results.
+
+Pausing during the verification phase also serializes the execution request but
+not verifier selection/completion state. Resume would repeat outcomes or lose
+phase progress. The continuation must carry an explicit phase plus both the
+execution set and integrity selection state, and the runner needs typed
+accumulator routing.
+
+A tuple of outcomes is insufficient for a phase-wide failure before an item
+exists. Use an integrity phase result containing status, outcomes, byte counts,
+and an optional error. Unexpected exceptions should not be converted blindly
+into item errors or caught as `BaseException`. Copy success may remain
+`COMPLETED`, but the result must say that verification is incomplete/degraded.
+
+#### 4. The pywebview bridge is not yet security-equivalent to raw WebView2
+messages
+
+DR-M1-15 defines an inbound `dispatch` function but not a safe outbound
+mechanism. pywebview exposed functions run on separate threads and do not
+provide WebView2's sender-origin value. The plan therefore needs an explicit
+trusted-origin/navigation enforcement mechanism and a data-safe host-to-JS
+transport. Interpolating serialized event data into `evaluate_js` would
+undermine the hostile-filename defense.
+
+The plan must also force the Edge Chromium renderer and fail actionably when it
+is unavailable. pywebview documents an MSHTML fallback; accepting that fallback
+means the product is not reliably WebView2. Static asset serving through
+pywebview's built-in local server must be distinguished from an event/API
+server and restricted to packaged UI assets.
+
+The bridge implementation must follow the relevant security guidance:
+
+- [pywebview JavaScript/Python bridge](https://pywebview.flowrl.com/guide/interdomain)
+- [pywebview renderer selection](https://pywebview.flowrl.com/guide/web_engine)
+- [Microsoft WebView2 security guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security)
+
+### Significant corrections
+
+#### 5. Settings concurrency is still lossy
+
+Rereading immediately before replacement narrows the race but does not prevent
+two processes from reading the same version and overwriting each other's
+changes. Semantic settings deserve a named mutex/file lock or revision-based
+compare-and-swap. The plan should also state that `interfaces/service.py`
+reaches `db/settings.py` through an injected workflow/runtime service so the
+import law remains intact.
+
+#### 6. Retention lifecycle and audit isolation are unresolved
+
+DR-M1-20 calls retention facade-invoked, workflow-owned, and history-logged,
+but does not make it a dispatcher session. It also cannot guarantee that
+retention never degrades audit if its SQLite write lock overlaps the audit
+timeout. Either make retention a maintenance session with coordinated
+history-writer custody, or explicitly gate it until active audit writers drain.
+If it remains a plain function, remove the claim that it has the same session
+and history semantics as long-running activities.
+
+#### 7. M1 scope omits already-defined behavior
+
+The plan should explicitly include:
+
+- the implemented verifier's explicit `rebaseline` operation and its CLI/UI
+  entry point;
+- mapping-filter/exclusion persistence, which the inventory contract assigns
+  to M1; and
+- role-free location creation for the first inventory scan.
+
+#### 8. Result classification needs an integrity axis
+
+Track A's `ResultCategory` list includes refused, canceled, failed, degraded,
+partial, all-noop, and success, but not mismatch or incomplete verification.
+Define headline precedence while preserving `filesystem`, `integrity`,
+`recording`, and `audit` as independent axes. A single generic `degraded`
+category must not hide whether the problem was a hash finding, ledger lag, or
+history failure.
+
+#### 9. `PlanStore` is speculative in the current milestone
+
+DR-M1-08 proposes a protocol with only an in-memory implementation for an M2
+durability change. That is an abstraction for a future single implementation
+and conflicts with the repository rule to avoid speculative seams. Keep the
+existing private in-memory plan dictionary until durable plan/session storage
+is actually implemented, unless M1 has a present-tense second consumer for the
+protocol.
+
+#### 10. Blocking observers need an explicit shutdown contract
+
+Replacing the CLI's polling with an indefinite `stream.next()` is sound only
+if `SessionObserver.close()` retains and closes every stream before joining
+observer threads. Add unsubscribe, window-close, and application-shutdown
+tests; otherwise a live session can leave the GUI waiting forever.
+
+### Non-blocking editorial and terminology corrections
+
+- The opening documentation-precedence note attributes the conflict to
+  `DR-M1-14`, although that decision is the toolkit decision rather than the
+  precedence decision.
+- The DR-M1-07 paragraph points bridge serialization to `DR-M1-12`; the bridge
+  decisions are DR-M1-15 through DR-M1-18.
+- DR-M1-14 says the single-outbound-pump rule is “DR-M1-12 below”; the pump is
+  specified under DR-M1-18.
+- “Committed verify session” in the acceptance notes is inconsistent with the
+  plan's non-commitment integrity workflow. Use “queued verify session” or
+  “verify session admitted with a stale volume snapshot.”
+- The precedence rule says `FEATURES.md` owns behavior while this plan
+  intentionally postpones the corresponding active-document edits. Either
+  state that this plan governs unimplemented M1 decisions until promotion, or
+  update the affected active documents before implementation starts.
