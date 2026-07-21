@@ -234,6 +234,7 @@ class LocalWorkflowRuntime:
                     kind=operation.kind.value,
                     source_path=operation.source_rel_path,
                     target_path=operation.target_rel_path,
+                    prior_target_path=operation.prior_target_rel_path,
                     reason=operation.reason.value,
                     blocked_reason=None
                     if operation.blocked_reason is None

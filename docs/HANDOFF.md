@@ -1,63 +1,46 @@
 # NamiSync Session Handoff
 
-Date: 2026-07-20
+Date: 2026-07-21
 
 ## Session Outcome
 
-Restored empty-directory cleanup on targets that do not provide stable file
-identities, including FAT-style volumes. The executor now follows the shared
-evidence rule: identity binds exactly when the reviewed scan supplied it;
-absent identity is absent evidence rather than an execution veto.
+Plan review now exposes the actual target-side origin of rename-shaped
+operations. `PlanOperationView` retains `prior_target_path`, the local workflow
+runtime populates it from `PlanOperation.prior_target_rel_path`, and the CLI
+prefers it over the source path when rendering an operation.
 
-Also restored the advertised crashed-copy recovery path: after successful
-preflight, execution now removes exact prior-run temps once from the same
-touched target-parent scope used for reclaimable-capacity accounting.
+A case-only operation therefore renders as `keep.txt -> KEEP.txt` instead of
+the misleading `KEEP.txt -> KEEP.txt`. The same presentation fix applies to
+ordinary `move` and `move_update` rows, which previously hid their old target
+path.
 
 ## Changes
 
-- Narrowed only the `directory_cleanup` guard. It continues to ignore the
-  directory mtime and link-count churn caused by successful child operations.
-- The guard still requires exact directory kind, size, attributes, and creation
-  time. When a reviewed identity exists, a replacement directory is still
-  rejected as target drift.
-- `RemoveDirectory`/`rmdir` remains the final atomic emptiness check, so cleanup
-  cannot remove a directory containing entries.
-- Replaced the identity-veto regression with an identity-less convergence test
-  and added a counter-test proving immutable metadata drift is still rejected.
-- Updated `BUGS.md`, `EXECUTOR.md`, `FEATURES.md`, `ARCHITECTURE.md`, and the
-  README changelog to describe the conditional-identity policy.
-- Added a shared exact temp-owner parser, retained preflight's touched-parent
-  scope in `ObservedWorld`, and excluded current-run temps from reclaimable-byte
-  accounting.
-- Added the post-verdict, pre-copy sweep. It removes only different-run regular
-  files with exact generated names; current-run temps remain owned by the
-  per-operation retry/cancel path, and cleanup failure stops before copying.
-- Documented the recovery contract in `CORE.md`, `PREFLIGHT.md`, `EXECUTOR.md`,
-  `WORKFLOWS.md`, `FEATURES.md`, `ARCHITECTURE.md`, `BUGS.md`, and the README
-  changelog without replacing this handoff's earlier context.
+- Added nullable `prior_target_path` to the interface-facing plan-operation
+  read model and populated it at the sole workflow construction boundary.
+- Made plan rendering select the prior target as the displayed origin when it
+  exists, while preserving existing source-to-target rendering for all other
+  operations.
+- Added CLI regressions for recase, move, and move-update rendering plus a
+  workflow-boundary assertion that prior-target evidence survives translation.
+- Updated command-line, interfaces, workflow, feature, bug-log, README, and
+  handoff documentation.
 
 ## Verification
 
-- Directory-cleanup regression selection: 6 passed.
-- Focused executor suite: 52 passed.
-- Full suite: 288 passed in 7.41s.
+- Focused CLI/workflow suite: 26 passed in 2.03s.
+- Full suite: 308 passed in 7.94s.
 - Import-linter: 7 contracts kept, 0 broken (41 files, 137 dependencies).
 - `git diff --check`: clean apart from expected LF-to-CRLF notices.
-- Temp-recovery focused selection: 112 passed.
-- Current full suite after final same-volume hardening: 291 passed in 7.57s.
-- Current import-linter: 7 contracts kept, 0 broken (41 files, 137
-  dependencies).
+- Plan fingerprints, payloads, selection, commitment, and execution semantics
+  are unchanged.
 
 ## Immediate Next Context
 
-- The residual external-writer boundary is deliberate: on an identity-less
-  target, a recreated empty directory could pass the remaining evidence checks.
-  The operating system still refuses deletion if the directory contains an
-  entry.
-- The relaxed matcher remains exclusive to dependency-complete
-  `directory_cleanup` deletes. File deletes and all other operation guards keep
-  their existing evidence rules.
-- M0's single worker permits current-run temp preservation during the run-level
-  sweep; exact per-operation cleanup still handles retry, cancel, and resume.
-  Recovery enumerates direct children only, requires the target root's physical
-  volume, and never enters `.synctrash`.
+- `prior_target_path` is an interface read-model field, not a new serialized
+  plan field; retained plan payloads already carry `prior_target_rel_path`.
+- Future desktop/API plan renderers should use the same precedence as the CLI:
+  prior target when present, otherwise source path.
+- Source casing propagation remains disabled by default and unexposed. This
+  change only makes opted-in recase review meaningful; it does not alter when a
+  recase operation is planned or executed.

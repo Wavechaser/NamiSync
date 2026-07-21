@@ -348,14 +348,19 @@ def _render_plan(review, output: TextIO) -> None:
         file=output,
     )
     for operation in review.operations:
-        source = "" if operation.source_path is None else f"{_safe(operation.source_path)} -> "
+        origin_path = (
+            operation.prior_target_path
+            if operation.prior_target_path is not None
+            else operation.source_path
+        )
+        origin = "" if origin_path is None else f"{_safe(origin_path)} -> "
         exclusion = (
             ""
             if operation.selection_outcome is None
             else f" {operation.selection_outcome.upper()}={operation.selection_reason}"
         )
         print(
-            f"  {operation.kind:11} {source}{_safe(operation.target_path)} "
+            f"  {operation.kind:11} {origin}{_safe(operation.target_path)} "
             f"[{operation.reason}; {operation.content_bytes} bytes]{exclusion}",
             file=output,
         )

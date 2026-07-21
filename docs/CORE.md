@@ -49,6 +49,18 @@ plan serialization and capacity, and root-qualified observation/refusal
 shapes. OS walking and observation remain in operation modules; core stays
 standard-library-only and behavior-free.
 
+`SyncOptions.propagate_source_casing` is a latent, fingerprinted planning
+policy. It defaults to false and survives workflow payload round trips so a
+future configuration or GUI control can expose it without changing the plan
+shape. `OperationReason.CASE_MISMATCH` and
+`UNICODE_NORMALIZATION_MISMATCH` are non-blocking review advisories; collision
+states remain separate typed blockers. The old `BlockedReason.CASE_MISMATCH`
+value remains decodable for compatibility with prior serialized plans, but the
+current planner does not emit it. `OperationKind.RECASE` represents a
+same-Windows-key filename spelling change explicitly, carries prior-target
+evidence, contributes zero content bytes, and never implies update/trash
+semantics.
+
 Executor continuation and collaborator contracts are implemented in
 `core/execution.py`: the mutable `ExecutionSet`, fixed-format `RunId`, typed
 failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
@@ -151,12 +163,24 @@ observation/preflight. Long-path conversion happens only after validation.
 point. The implementation must use a tested Windows-equivalent mapping strategy
 and preserve NTFS-distinct names such as `Straße.txt` and `strasse.txt`.
 
+Unicode normalization is deliberately not part of path identity: NFC and NFD
+spellings remain distinct stored paths. Planner may identify a unique
+same-parent canonical-equivalence pair for review, but no core path helper
+rewrites either spelling.
+
 Filesystem enumeration may observe names outside this lexical contract. Those
 names never enter `FileRecord`, `DirRecord`, `UnsupportedRecord`, or operation
 paths: the scanner retains an escaped typed warning at the nearest valid parent
 and marks the scan incomplete. Canonical plan JSON preserves established UTF-8
 bytes for valid Unicode and defensively emits JSON surrogate escapes for any
 malformed free-form string that reaches serialization.
+
+The same final UTF-8 rule applies at ledger command hashing, history
+hash/detail serialization, and opaque workflow payload encoding: valid Unicode
+bytes remain unchanged, while an unpaired surrogate is emitted as its JSON
+escape instead of raising. Path validation remains the primary boundary; this
+serializer defense prevents a future relaxation or unrelated free-form detail
+from reintroducing raw encoding failures.
 
 `VolumeId(serial, fs_type)` is the stable key. Label and other mutable mount
 facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with

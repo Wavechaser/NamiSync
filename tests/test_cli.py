@@ -24,8 +24,10 @@ from namisync.interfaces.cli import (
     EXIT_USAGE,
     _exit_for_record,
     _render_execution,
+    _render_plan,
     main,
 )
+from namisync.workflows.models import PlanOperationView
 
 from _db_fixtures import FakeClock, NOW
 
@@ -81,6 +83,53 @@ def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
 
     assert _exit_for_record(record) == EXIT_PARTIAL
     assert "completed with exceptions: blocked=1; deferred=1" in stdout.getvalue()
+
+
+def test_plan_review_renders_prior_target_for_rename_operations() -> None:
+    operations = tuple(
+        PlanOperationView(
+            operation_id=str(index),
+            kind=kind,
+            source_path=target,
+            target_path=target,
+            prior_target_path=prior_target,
+            reason=reason,
+            blocked_reason=None,
+            selection_outcome=None,
+            selection_reason=None,
+            content_bytes=content_bytes,
+        )
+        for index, kind, prior_target, target, reason, content_bytes in (
+            (1, "recase", "keep.txt", "KEEP.txt", "case_mismatch", 0),
+            (2, "move", "old.bin", "new.bin", "identity_move", 0),
+            (3, "move_update", "before.dat", "after.dat", "content_changed", 12),
+        )
+    )
+    review = SimpleNamespace(
+        operations=operations,
+        source_path=r"C:\source",
+        target_path=r"D:\target",
+        source_volume="source-volume",
+        target_volume="target-volume",
+        deletion_policy="trash",
+        trash_on_update=True,
+        required_bytes=12,
+        free_bytes=100,
+        reclaimable_temp_bytes=0,
+        fingerprint="fingerprint",
+        selection_digest_hex="selection",
+        warnings=(),
+        refusals=(),
+    )
+    output = io.StringIO()
+
+    _render_plan(review, output)
+
+    rendered = output.getvalue()
+    assert "keep.txt -> KEEP.txt" in rendered
+    assert "old.bin -> new.bin" in rendered
+    assert "before.dat -> after.dat" in rendered
+    assert "KEEP.txt -> KEEP.txt" not in rendered
 
 
 def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> None:
@@ -197,6 +246,34 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     assert "completed" in history_output.getvalue()
     assert str(source) in history_output.getvalue()
     assert history_errors.getvalue() == ""
+
+
+def test_case_only_name_advisory_does_not_suppress_changed_content(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "KEEP.txt").write_bytes(b"changed source content")
+    (target / "keep.txt").write_bytes(b"old")
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("execute\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS, (stdout.getvalue(), stderr.getvalue())
+    assert (target / "keep.txt").read_bytes() == b"changed source content"
+    assert [entry.name for entry in target.iterdir() if entry.is_file()] == ["keep.txt"]
+    assert "update=1" in stdout.getvalue()
+    assert stderr.getvalue() == ""
 
 
 def test_successful_rerun_removes_prior_run_temp_from_touched_parent(

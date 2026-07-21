@@ -75,6 +75,20 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
+The payload also round-trips the fingerprinted
+`SyncOptions.propagate_source_casing` seam as a required field. A payload that
+omits a fingerprint input is rejected instead of decoding to false and
+re-encoding into a different payload. M0 exposes no config, CLI, or GUI control
+for it; when a future interface does, review and commitment will already bind
+the choice rather than letting execution reinterpret filename spelling.
+The interface-facing `PlanOperationView` retains `prior_target_path` separately
+from source and planned target paths. Review adapters use it as the displayed
+origin for recase, move, and move-update rows, so the target-side rename is not
+lost while translating the immutable core plan into a presentation model.
+Workflow JSON keeps valid-Unicode bytes stable and backslash-escapes an
+unpaired surrogate defensively, matching plan, ledger-hash, and history
+serialization without weakening path validation.
+
 M0 automatically selects the maximal safe dependency-closed subset. Directly
 blocked items remain in the reviewed plan as `BLOCKED`; operations touching
 their source/target correspondence region or depending on an exclusion become
@@ -187,8 +201,8 @@ import from handling refusal differently than baseline/verify.
 - A blocked item cannot refuse independent safe work merely by existing in the
   plan; its overlapping target correspondence and dependent operations remain
   excluded.
-- Incomplete scans allow guarded copy/update/mkdir/noop work but never admit
-  move, move-update, trash, or delete operations.
+- Incomplete scans allow guarded copy/update/mkdir/noop/recase work but never
+  admit move, move-update, trash, or delete operations.
 - No workflow waits for human input; mandatory review is between terminated and
   newly submitted sessions.
 - An uncommitted execution or one whose plan/selection no longer matches is

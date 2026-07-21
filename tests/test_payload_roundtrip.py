@@ -12,7 +12,11 @@ a failing build rather than a field-report mystery.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
+import json
+
+import pytest
 
 from namisync.core.evidence import Outcome
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
@@ -39,19 +43,57 @@ from namisync.core.planning import (
     PlanFingerprint,
     PlanOperation,
     PreservationPolicy,
+    SyncOptions,
     plan_fingerprint,
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path
-from namisync.workflows.models import ExecutionRequest
+from namisync.workflows.models import ExecutionRequest, PlanRequest
 from namisync.workflows.payloads import (
+    decode_plan_request,
     decode_execution_request,
+    encode_plan_request,
     encode_execution_request,
 )
 from namisync.workflows.sync import _commitment_error
 
 
 NOW = datetime(2026, 7, 19, 12, 30, tzinfo=timezone.utc)
+
+
+def test_plan_request_round_trips_latent_source_casing_policy() -> None:
+    request = PlanRequest(
+        "request",
+        r"C:\source",
+        r"D:\target",
+        SyncOptions(propagate_source_casing=True),
+    )
+
+    decoded = decode_plan_request(encode_plan_request(request))
+
+    assert decoded.options.propagate_source_casing
+
+
+def test_plan_request_requires_fingerprinted_source_casing_policy() -> None:
+    encoded = encode_plan_request(
+        PlanRequest("request", r"C:\source", r"D:\target")
+    )
+    value = json.loads(encoded.decode("utf-8"))
+    del value["options"]["propagate_source_casing"]
+    missing_policy = json.dumps(value, separators=(",", ":")).encode("utf-8")
+
+    with pytest.raises(KeyError):
+        decode_plan_request(missing_policy)
+
+
+def test_plan_request_encoding_escapes_unpaired_surrogates_defensively() -> None:
+    hostile = "request_\udcff"
+    request = PlanRequest(hostile, r"C:\source", r"D:\target")
+
+    encoded = encode_plan_request(request)
+
+    assert b"request_\\udcff" in encoded
+    assert decode_plan_request(encoded).request_id == hostile
 
 
 def _op_id(number: int) -> OpId:
@@ -201,8 +243,20 @@ def _rich_plan() -> Plan:
         intended=_stat(size=5, identity=identity),
         reason=OperationReason.METADATA_MATCH,
     )
-    blocked = PlanOperation(
+    recase = PlanOperation(
         op_id=_op_id(9),
+        kind=OperationKind.RECASE,
+        source_rel_path="KEEP.bin",
+        target_rel_path="KEEP.bin",
+        source_expected=_stat(size=5, identity=identity),
+        target_expected=_stat(size=5, identity=identity),
+        intended=_stat(size=5, identity=identity),
+        prior_target_rel_path="keep.bin",
+        prior_target_expected=_stat(size=5, identity=identity),
+        reason=OperationReason.CASE_MISMATCH,
+    )
+    blocked = PlanOperation(
+        op_id=_op_id(10),
         kind=OperationKind.COPY,
         source_rel_path="conflict.bin",
         target_rel_path="conflict.bin",
@@ -214,7 +268,18 @@ def _rich_plan() -> Plan:
         blocked_reason=BlockedReason.CASE_COLLISION,
     )
 
-    operations = (mkdir, copy, update, move, move_update, trash, delete, noop, blocked)
+    operations = (
+        mkdir,
+        copy,
+        update,
+        move,
+        move_update,
+        trash,
+        delete,
+        noop,
+        recase,
+        blocked,
+    )
     placeholder = Plan(
         source_root=Root(r"C:\source", "source"),
         target_root=Root(r"E:\target", "target"),
@@ -250,8 +315,6 @@ def _rich_plan() -> Plan:
         required_bytes=61,
         fingerprint=PlanFingerprint("0" * 64),
     )
-    from dataclasses import replace
-
     return replace(placeholder, fingerprint=plan_fingerprint(placeholder))
 
 
@@ -263,7 +326,7 @@ def _rich_execution_request() -> ExecutionRequest:
         selection=selection,
         run_id=validated_run_id("a" * 32),
         # a partial continuation, as a paused/resumed set would carry
-        status={_op_id(1): Outcome.SUCCEEDED, _op_id(9): Outcome.FAILED},
+        status={_op_id(1): Outcome.SUCCEEDED, _op_id(10): Outcome.FAILED},
         commitment=Commitment(plan.fingerprint, selection_digest(selection), NOW),
     )
     return ExecutionRequest(xset, NOW)
@@ -280,6 +343,32 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
     assert decoded.execution_set.status == original.execution_set.status
     assert decoded.execution_set.commitment == original.execution_set.commitment
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
+
+
+def test_execution_payload_escapes_unpaired_surrogates_defensively() -> None:
+    original = _rich_execution_request()
+    hostile = "source_\udcff"
+    changed_plan = replace(
+        original.execution_set.plan,
+        source_root=Root(r"C:\source_" + "\udcff", hostile),
+        fingerprint=PlanFingerprint("0" * 64),
+    )
+    changed_plan = replace(changed_plan, fingerprint=plan_fingerprint(changed_plan))
+    changed_set = replace(
+        original.execution_set,
+        plan=changed_plan,
+        commitment=Commitment(
+            changed_plan.fingerprint,
+            selection_digest(original.execution_set.selection),
+            NOW,
+        ),
+    )
+
+    encoded = encode_execution_request(ExecutionRequest(changed_set, NOW))
+    decoded = decode_execution_request(encoded)
+
+    assert b"source_\\udcff" in encoded
+    assert decoded.execution_set.plan.source_root.root_id == hostile
 
 
 def test_decoded_plan_recomputes_the_same_fingerprint() -> None:

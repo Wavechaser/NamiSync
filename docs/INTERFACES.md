@@ -28,7 +28,9 @@ Plan review identifies the exact runnable selection plus blocked and deferred
 items. A filesystem-completed safe subset is rendered as `completed with
 exceptions` and returns the documented partial exit category; it is not
 collapsed into either clean success or execution failure. Detailed history uses
-the same outcome/reason fields.
+the same outcome/reason fields. Rename-shaped review rows prefer the workflow
+view's prior target path as their displayed origin, so recase, move, and
+move-update approvals show the actual old-to-new target spelling.
 
 The implemented options and numeric exits are recorded in
 [COMMANDLINE.md](COMMANDLINE.md). Queue control, machine output, integrity

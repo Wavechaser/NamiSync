@@ -39,6 +39,7 @@ class OperationKind(StrEnum):
     UPDATE = "update"
     MOVE = "move"
     MOVE_UPDATE = "move_update"
+    RECASE = "recase"
     MKDIR = "mkdir"
     TRASH = "trash"
     DELETE = "delete"
@@ -57,6 +58,7 @@ class OperationReason(StrEnum):
     DIRECTORY_CLEANUP = "directory_cleanup"
     UNSUPPORTED = "unsupported"
     CASE_MISMATCH = "case_mismatch"
+    UNICODE_NORMALIZATION_MISMATCH = "unicode_normalization_mismatch"
     CASE_COLLISION = "case_collision"
     TYPE_COLLISION = "type_collision"
     POLICY_COLLISION = "policy_collision"
@@ -171,6 +173,7 @@ class SyncOptions:
     destination_policy: DestinationPolicy = IdentityDestinationPolicy()
     worker_count: int = 1
     trash_on_update: bool = True
+    propagate_source_casing: bool = False
     internal_mirror_authorized: bool = False
 
     def __post_init__(self) -> None:
@@ -399,6 +402,7 @@ def policy_fingerprint(options: SyncOptions) -> str:
         },
         "worker_count": options.worker_count,
         "trash_on_update": options.trash_on_update,
+        "propagate_source_casing": options.propagate_source_casing,
     }
     return hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
 

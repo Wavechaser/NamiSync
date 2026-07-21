@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,9 +24,11 @@ from namisync.core.planning import (
     PlanFingerprint,
     PlanOperation,
     PreservationPolicy,
+    SyncOptions,
     plan_fingerprint,
     selection_digest,
 )
+from namisync.db.connections import connect_ledger_reader
 from namisync.core.session import Disposition, OperationResult, RunContext, SessionState
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
 from namisync.workflows.selection import ExclusionReason, derive_execution_selection
@@ -176,23 +179,30 @@ def test_selection_closes_over_dependencies_of_excluded_operations() -> None:
     assert excluded[dependent.op_id].reason == ExclusionReason.BLOCKED_DEPENDENCY
 
 
-def test_incomplete_scan_keeps_additive_and_noop_work_but_withholds_destructive_and_moves() -> None:
+def test_incomplete_scan_keeps_guarded_work_but_withholds_destructive_and_moves() -> None:
     operations = (
         _operation(1, OperationKind.MKDIR, "folder", source="folder"),
         _operation(2, OperationKind.COPY, "copy.bin", source="copy.bin"),
         _operation(3, OperationKind.UPDATE, "update.bin", source="update.bin"),
         _operation(4, OperationKind.NOOP, "same.bin", source="same.bin"),
-        _operation(5, OperationKind.TRASH, "trash.bin"),
-        _operation(6, OperationKind.DELETE, "delete.bin"),
         _operation(
-            7,
+            5,
+            OperationKind.RECASE,
+            "KEEP.bin",
+            source="KEEP.bin",
+            prior_target="keep.bin",
+        ),
+        _operation(6, OperationKind.TRASH, "trash.bin"),
+        _operation(7, OperationKind.DELETE, "delete.bin"),
+        _operation(
+            8,
             OperationKind.MOVE,
             "moved.bin",
             source="moved.bin",
             prior_target="old.bin",
         ),
         _operation(
-            8,
+            9,
             OperationKind.MOVE_UPDATE,
             "moved-update.bin",
             source="moved-update.bin",
@@ -215,6 +225,7 @@ def test_incomplete_scan_keeps_additive_and_noop_work_but_withholds_destructive_
         OperationKind.COPY,
         OperationKind.UPDATE,
         OperationKind.NOOP,
+        OperationKind.RECASE,
     }
     assert {
         excluded[operation.op_id].reason
@@ -339,7 +350,13 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
         source="normal.txt",
         content_bytes=17,
     )
-    withheld = _operation(3, OperationKind.TRASH, "old.txt")
+    withheld = _operation(
+        3,
+        OperationKind.MOVE,
+        "new.txt",
+        source="new.txt",
+        prior_target="old.txt",
+    )
     plan = _plan_with(
         (blocked, copied, withheld),
         source_complete=False,
@@ -374,6 +391,7 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
     assert selected == frozenset({copied.op_id})
     assert review.selection_digest_hex == selection_digest(selected).hex()
     assert review.required_bytes == 17
+    assert review.operations[2].prior_target_path == "old.txt"
     assert execution.execution_set.commitment is not None
     assert execution.execution_set.commitment.selection_digest == selection_digest(
         selected
@@ -557,3 +575,88 @@ def test_execution_refuses_plan_content_that_no_longer_matches_fingerprint() -> 
     assert result.status is SessionState.REFUSED
     assert result.disposition is Disposition.UNRUN
     assert "plan content" in saved[0].commitment_error
+
+
+def _real_cycle(
+    runtime: LocalWorkflowRuntime,
+    source: Path,
+    target: Path,
+    *,
+    request_id: str,
+    run_id: str,
+) -> tuple[object, OperationResult]:
+    """Drive one real plan, commitment, and execution against live roots."""
+
+    request = PlanRequest(
+        request_id=request_id,
+        source_path=str(source),
+        target_path=str(target),
+        options=SyncOptions(propagate_source_casing=True),
+    )
+    context = RunContext(lambda _: None, lambda: None)
+    plan_result = runtime.open_plan(runtime.prepare_plan(request).payload).run(context)
+    assert plan_result.status is SessionState.COMPLETED
+    review = runtime.get_plan_review(request_id)
+    execution = runtime.commit_plan(request_id, run_id=run_id, committed_at=NOW)
+    payload = runtime.prepare_execution(execution).payload
+    return review, runtime.open_execution(payload).run(context)
+
+
+def test_opt_in_recase_runs_end_to_end_without_copying_or_trashing(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "KEEP.txt").write_bytes(b"same content")
+    (target / "keep.txt").write_bytes(b"same content")
+    observed = os.stat(source / "KEEP.txt")
+    os.utime(target / "keep.txt", ns=(observed.st_mtime_ns, observed.st_mtime_ns))
+    identity_before = os.stat(target / "keep.txt").st_ino
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        review, result = _real_cycle(
+            runtime, source, target, request_id="a" * 32, run_id="b" * 32
+        )
+
+        # The planner chose a rename over a rewrite, and review names both spellings.
+        assert [operation.kind for operation in review.operations] == ["recase"]
+        recase = review.operations[0]
+        assert recase.prior_target_path == "keep.txt"
+        assert recase.target_path == "KEEP.txt"
+        assert recase.content_bytes == 0
+        assert review.required_bytes == 0
+
+        # The executor renamed in place: no bytes, no displaced version, same file.
+        assert result.status is SessionState.COMPLETED
+        assert result.bytes_total == 0
+        assert [entry.name for entry in target.iterdir()] == ["KEEP.txt"]
+        assert (target / "KEEP.txt").read_bytes() == b"same content"
+        assert os.stat(target / "KEEP.txt").st_ino == identity_before
+        assert not (target / ".synctrash").exists()
+
+        # The ledger followed the new spelling instead of retaining a stale row.
+        connection = connect_ledger_reader(runtime.ledger_path)
+        try:
+            assert {
+                row["rel_path"] for row in connection.execute("SELECT rel_path FROM inventory")
+            } == {"KEEP.txt"}
+            assert [
+                row["kind"] for row in connection.execute("SELECT kind FROM operations")
+            ] == [OperationKind.RECASE.value]
+        finally:
+            connection.close()
+
+        # A second reviewed cycle converges instead of recasing forever.
+        rerun_review, rerun_result = _real_cycle(
+            runtime, source, target, request_id="c" * 32, run_id="d" * 32
+        )
+
+        assert [operation.kind for operation in rerun_review.operations] == ["noop"]
+        assert rerun_result.status is SessionState.COMPLETED
+        assert [entry.name for entry in target.iterdir()] == ["KEEP.txt"]
+        assert not (target / ".synctrash").exists()
+    finally:
+        runtime.close()

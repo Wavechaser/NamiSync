@@ -27,6 +27,12 @@ payload is a no-op; a different payload raises `TokenConflictError`. A failed
 history transaction propagates to the dispatcher acknowledgement without
 mutating the provisional filesystem or ledger result.
 
+Event/finalization hashes and stored operation-detail JSON keep existing valid
+Unicode bytes/text unchanged and defensively backslash-escape malformed
+surrogate code units. This is not a path-policy relaxation: validated paths
+still reject them, while arbitrary typed detail can no longer crash history
+serialization if one arrives from another boundary.
+
 The M0 outcome vocabulary now includes `BLOCKED` in addition to succeeded,
 skipped, failed, canceled, and deferred. Direct plan blockers use `BLOCKED`;
 safe-subset collateral exclusions remain `DEFERRED` with typed reasons such as

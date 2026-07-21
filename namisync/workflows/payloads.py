@@ -41,6 +41,15 @@ from .models import ExecutionRequest, PlanRequest
 _SCHEMA_VERSION = 1
 
 
+def _json_bytes(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8", errors="backslashreplace")
+
+
 def _volume(value: VolumeId | None) -> object:
     if value is None:
         return None
@@ -319,10 +328,11 @@ def encode_plan_request(request: PlanRequest) -> bytes:
             "filters": list(request.options.filters.patterns),
             "worker_count": request.options.worker_count,
             "trash_on_update": request.options.trash_on_update,
+            "propagate_source_casing": request.options.propagate_source_casing,
             "internal_mirror_authorized": request.options.internal_mirror_authorized,
         },
     }
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _json_bytes(value)
 
 
 def decode_plan_request(payload: bytes) -> PlanRequest:
@@ -344,6 +354,7 @@ def decode_plan_request(payload: bytes) -> PlanRequest:
             destination_policy=IdentityDestinationPolicy(),
             worker_count=int(options["worker_count"]),
             trash_on_update=bool(options["trash_on_update"]),
+            propagate_source_casing=bool(options["propagate_source_casing"]),
             internal_mirror_authorized=bool(options["internal_mirror_authorized"]),
         ),
     )
@@ -368,7 +379,7 @@ def encode_execution_request(request: ExecutionRequest) -> bytes:
         },
         "started_at": None if request.started_at is None else request.started_at.isoformat(),
     }
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return _json_bytes(value)
 
 
 def decode_execution_request(payload: bytes) -> ExecutionRequest:

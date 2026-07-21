@@ -19,9 +19,11 @@ The M0 scanner, planner, and preflight modules are implemented as a headless
 pipeline surface. Scans retain deterministic typed filesystem evidence and
 explicit completeness; planning is pure, correspondence-aware, dependency
 ordered, and byte-stable; hostile filesystem names become escaped incomplete-
-scan evidence instead of aborting review, and exact-case source/target
-mismatches remain visible blocked conflicts. Preflight separates scoped
-read-only observation from exhaustive typed judgment.
+scan evidence instead of aborting review. Exact-case and NFC/NFD filename-form
+mismatches remain visible as non-blocking advisories while their ordinary
+update/no-op work continues; the unexposed opt-in casing policy uses a zero-byte
+rename when content already matches. Preflight separates scoped read-only
+observation from exhaustive typed judgment.
 
 The M0 persistence foundation is implemented: a serialized run-bound recorder
 is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
@@ -120,12 +122,21 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Made rename review truthful: recase, move, and move-update rows now show the
+  observed prior target path changing to the planned target path, including
+  visible case-only changes such as `keep.txt -> KEEP.txt`.
 - Fixed crashed-copy temp recovery: successful executions now sweep exact
   prior-run temps once from preflight's touched target parents before copying,
   while preserving current-run temps, lookalikes, untouched paths, and trash.
-- Hardened scan and plan review against hostile filesystem names and case-only
-  conflicts: invalid names become typed incomplete-scan evidence, surrogates
-  cannot reach canonical encoding, and casing mismatches are explicit blockers.
+- Hardened filename handling without suppressing sync work: invalid names become
+  typed incomplete-scan evidence, surrogates cannot reach canonical encoding,
+  and unique case-only or NFC/NFD filename-form differences are explicit
+  non-blocking advisories. Target spelling is preserved by default; a
+  fingerprinted, currently unexposed option can propagate source basename
+  casing with a zero-byte, no-trash rename when content already matches.
+- Made every fingerprinted plan-request option mandatory on decode and extended
+  malformed-surrogate-safe JSON encoding to ledger idempotency hashes, history
+  hashes/detail, and opaque workflow payloads while preserving valid Unicode.
 - Added safe partial sync: blocked work is itemized and quarantined, incomplete
   scans are additive-only, independent work and no-op correspondence refreshes
   continue, and CLI/history report blocked or deferred items with a distinct

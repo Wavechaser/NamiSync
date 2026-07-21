@@ -51,6 +51,9 @@ matching, metadata access, or record construction. A name that the filesystem
 can expose but the root-relative path contract cannot represent is skipped,
 reported as `PATH_UNREPRESENTABLE` with an escaped display spelling and nearest
 valid parent, and makes the scan incomplete; safe siblings remain reviewable.
+Valid Unicode filenames are retained byte-for-code-point as observed. Scanner
+does not normalize NFC/NFD spelling; planner may annotate a one-to-one
+canonically equivalent source/target pair without changing either name.
 
 ## Walking Rules
 

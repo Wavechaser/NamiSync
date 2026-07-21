@@ -44,6 +44,7 @@ class PlanOperationView:
     kind: str
     source_path: str | None
     target_path: str
+    prior_target_path: str | None
     reason: str
     blocked_reason: str | None
     selection_outcome: str | None
