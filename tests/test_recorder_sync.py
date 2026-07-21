@@ -7,10 +7,14 @@ import pytest
 from namisync.core.evidence import Provenance
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.db.connections import connect_ledger_reader
-from namisync.db.recorder import StaleRecordingError
+from namisync.db.recorder import StaleRecordingError, _payload_hash
 from namisync.db.writer import TokenConflictError
 
 from _db_fixtures import attestation, file_stat, operation, plan, setup_recorder
+
+
+def test_recorder_payload_hash_escapes_unpaired_surrogates_defensively() -> None:
+    assert len(_payload_hash({"detail": "bad_\udcff"})) == 32
 
 
 def test_copy_records_only_attested_target_evidence_and_is_idempotent(tmp_path: Path) -> None:

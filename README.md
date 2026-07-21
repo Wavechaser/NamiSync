@@ -21,8 +21,9 @@ explicit completeness; planning is pure, correspondence-aware, dependency
 ordered, and byte-stable; hostile filesystem names become escaped incomplete-
 scan evidence instead of aborting review. Exact-case and NFC/NFD filename-form
 mismatches remain visible as non-blocking advisories while their ordinary
-update/no-op work continues. Preflight separates scoped read-only observation
-from exhaustive typed judgment.
+update/no-op work continues; the unexposed opt-in casing policy uses a zero-byte
+rename when content already matches. Preflight separates scoped read-only
+observation from exhaustive typed judgment.
 
 The M0 persistence foundation is implemented: a serialized run-bound recorder
 is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
@@ -129,7 +130,10 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
   and unique case-only or NFC/NFD filename-form differences are explicit
   non-blocking advisories. Target spelling is preserved by default; a
   fingerprinted, currently unexposed option can propagate source basename
-  casing through atomic replacement.
+  casing with a zero-byte, no-trash rename when content already matches.
+- Made every fingerprinted plan-request option mandatory on decode and extended
+  malformed-surrogate-safe JSON encoding to ledger idempotency hashes, history
+  hashes/detail, and opaque workflow payloads while preserving valid Unicode.
 - Added safe partial sync: blocked work is itemized and quarantined, incomplete
   scans are additive-only, independent work and no-op correspondence refreshes
   continue, and CLI/history report blocked or deferred items with a distinct

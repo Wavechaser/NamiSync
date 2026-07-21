@@ -39,6 +39,7 @@ class OperationKind(StrEnum):
     UPDATE = "update"
     MOVE = "move"
     MOVE_UPDATE = "move_update"
+    RECASE = "recase"
     MKDIR = "mkdir"
     TRASH = "trash"
     DELETE = "delete"

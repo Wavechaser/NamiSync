@@ -397,6 +397,9 @@ def plan(
             matched = _metadata_equal(source_record.stat, target_record.stat, granularity)
             kind = OperationKind.NOOP if matched else OperationKind.UPDATE
             target_path = item.target_rel_path
+            prior_target_path: str | None = None
+            prior_target_expected: FileStat | None = None
+            intended = source_record.stat
             if normalization_mismatch:
                 reason = OperationReason.UNICODE_NORMALIZATION_MISMATCH
                 target_path = target_record.rel_path
@@ -408,20 +411,35 @@ def plan(
                 if options.propagate_source_casing and desired_name != observed_path.name:
                     target_path = str(observed_path.parent / desired_name)
                     if matched:
-                        kind = OperationKind.UPDATE
+                        kind = OperationKind.RECASE
+                        prior_target_path = target_record.rel_path
+                        prior_target_expected = target_record.stat
+                        intended = target_record.stat
             else:
                 reason = OperationReason.METADATA_MATCH if matched else OperationReason.METADATA_CHANGED
             content_operations.append(
                 PlanOperation(
-                    op_id=deterministic_operation_id(kind, source_record.rel_path, target_path, None, reason),
+                    op_id=deterministic_operation_id(
+                        kind,
+                        source_record.rel_path,
+                        target_path,
+                        prior_target_path,
+                        reason,
+                    ),
                     kind=kind,
                     source_rel_path=source_record.rel_path,
                     target_rel_path=target_path,
                     source_expected=source_record.stat,
                     target_expected=target_record.stat,
-                    intended=source_record.stat,
-                    metadata=source_record.metadata,
-                    content_bytes=0 if kind is OperationKind.NOOP else source_record.size,
+                    intended=intended,
+                    prior_target_rel_path=prior_target_path,
+                    prior_target_expected=prior_target_expected,
+                    metadata=intended.metadata,
+                    content_bytes=(
+                        source_record.size
+                        if kind is OperationKind.UPDATE
+                        else 0
+                    ),
                     dependencies=dependencies,
                     reason=reason,
                 )

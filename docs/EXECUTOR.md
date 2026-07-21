@@ -116,13 +116,10 @@ touches the current target. With trash-on-update enabled it then:
 5. applies the new file's readonly bit and remaining post-publish metadata;
 6. performs the best-effort parent flush, re-stats, and records success.
 
-When a reviewed plan opts into source-basename casing propagation, the same
-atomic replacement publishes to the source-spelled basename. Ordinary
-case-insensitive NTFS recases the existing directory entry; there is no separate
-case-only executor primitive. Default plans retain the observed target spelling,
-and an exact-path preflight refusal protects a case-sensitive target where the
-case variant is a distinct or absent path. Parent-directory recasing is not
-implemented.
+When changed content also carries an opted-in basename casing change, this same
+required update publishes at the source-spelled basename. Metadata-equal casing
+changes use the zero-byte recase operation below instead of copying content or
+creating an update trash entry.
 
 No crash point leaves the live path absent. A crash after hardlink creation but
 before replacement leaves the old live inode with link count two; that is a
@@ -148,6 +145,18 @@ not scheduler-bounded; tests assert the bounded data consequence, not a timing
 claim.
 
 ## Other Operations
+
+### Recase
+
+Validate the reviewed source and old target, require the old and requested paths
+to share one Windows path key while differing in exact spelling, flush pending
+recorder state, and perform the existing same-volume non-replacing rename. On
+ordinary case-insensitive NTFS the destination aliases the source object and the rename
+updates only its directory-entry spelling. On a case-sensitive target a
+distinct occupied destination makes the primitive fail without overwrite. The
+executor flushes the parent, re-stats the same file, and records the new target
+spelling and correspondence. It transfers zero bytes, preserves file identity
+and metadata, creates no trash entry, and never recases parent directories.
 
 ### Move
 
@@ -283,7 +292,7 @@ The implementation has no sibling-module import; workflow supplies the reviewed
 and freshly preflighted set, dispatcher/session owns custody and terminal
 aggregation, and the run-bound recorder owns durable ledger interpretation.
 
-The focused M0 suite exercises all eight operation kinds; atomic conditional
+The focused M0 suite exercises all nine operation kinds; atomic conditional
 publish and displacement; hardlink and copy-backup update paths; source and
 target drift; ACL and readonly ordering; prior-run exact temp recovery and
 current-run/lookalike isolation; reparse/off-volume
@@ -334,6 +343,9 @@ and durable run-token idempotency.
 - Move occupancy, vanished-old-path, wrong type, and retained-missing-row cases
   produce correct filesystem and recorder outcomes without rolling back other
   earned records.
+- Recase preserves target identity/metadata and requested basename spelling,
+  transfers zero bytes, creates no trash, rejects source/old-target drift, and
+  cannot overwrite a distinct destination.
 - Directory create/delete tests cover full chains, wrong types, nonempty races,
   no recursive unplanned deletion, and metadata application only after every
   child operation has settled; every created empty or non-empty directory comes

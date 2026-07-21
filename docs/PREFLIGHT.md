@@ -44,11 +44,12 @@ resolution/writability, current filters from the injected settings reader, and
 one injected UTC timestamp.
 
 Stats are keyed by `Subject(root, rel_path_key)`, never by relative-path string
-alone, but observation still passes the plan's exact relative-path spelling to
-the filesystem. Thus an opt-in case-only replacement resolves on ordinary
-case-insensitive NTFS while a case-sensitive target can report the differently
-spelled path absent or distinct and refuse as drift. Preflight never normalizes
-NFC/NFD spelling.
+alone, but observation still passes planned relative-path spelling to the
+filesystem. A `recase` operation deliberately gives its old and requested names
+the same subject key and validates the reviewed old-target evidence. The
+executor's non-replacing rename is the final occupancy guard: an ordinary
+case-insensitive target aliases the same object, while a distinct case-sensitive
+destination cannot be overwritten. Preflight never normalizes NFC/NFD spelling.
 
 Every path is first lexically validated, then opened/resolved under its root
 with long-path-safe, reparse-aware handling. Reclaimable temp accounting accepts
@@ -67,8 +68,9 @@ Preflight returns all applicable typed refusals, grouped per operation and for
 the run. It verifies:
 
 - move, move-update, trash, and delete are selected only when both original
-  scans were complete modulo recorded ignores; guarded copy, update, mkdir, and
-  noop do not rely on proving tree-wide absence and remain admissible;
+  scans were complete modulo recorded ignores; guarded copy, update, mkdir,
+  noop, and non-replacing recase do not rely on proving tree-wide absence and
+  remain admissible;
 - roots remain distinct, non-nested, and bound to the reviewed volume evidence;
 - cloned/ambiguous volumes are not guessed;
 - selection is dependency-closed;
@@ -167,9 +169,9 @@ refused until that profile exists.
   writes nothing.
 - Instrumentation proves observation stats only selected touched paths and
   required parents/roots; an unrelated change never refuses the plan.
-- Incomplete-scan copy/update/mkdir/noop selections pass, while any manually
-  selected move/move-update/trash/delete is refused with the applicable source/
-  target completeness code.
+- Incomplete-scan copy/update/mkdir/noop/recase selections pass, while any
+  manually selected move/move-update/trash/delete is refused with the
+  applicable source/target completeness code.
 - A manually selected operation overlapping blocked correspondence is refused;
   ordinary workflow selection quarantines it before commitment.
 - Source drift, target drift, type change, identity change, destination

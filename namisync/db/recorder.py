@@ -104,7 +104,7 @@ def _payload_hash(value: object) -> bytes:
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8")
+    ).encode("utf-8", errors="backslashreplace")
     return hashlib.sha256(encoded).digest()
 
 
@@ -854,6 +854,9 @@ class SyncRunRecorder:
 
     def record_moved(self, op: OpId, target: FileStat) -> None:
         self._record(op, OperationKind.MOVE, {"target": target}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
+
+    def record_recased(self, op: OpId, target: FileStat) -> None:
+        self._record(op, OperationKind.RECASE, {"target": target}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
 
     def record_move_updated(self, op: OpId, attestation: Attestation) -> None:
         self._record(op, OperationKind.MOVE_UPDATE, {"attestation": attestation}, lambda connection, plan_op, at: self._record_move(connection, plan_op, attestation.subject, at, attestation))

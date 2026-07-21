@@ -69,6 +69,9 @@ class FakeRecorder:
     def record_moved(self, op, target) -> None:
         self._record("moved", op, target)
 
+    def record_recased(self, op, target) -> None:
+        self._record("recased", op, target)
+
     def record_move_updated(self, op, attestation) -> None:
         self._record("move_updated", op, attestation)
 
@@ -1513,6 +1516,70 @@ def test_move_uses_nonreplacing_target_rename_and_records_result(tmp_path: Path)
     assert (target / "new.bin").read_bytes() == b"moved"
     assert recorder.calls[0][0] == "moved"
     assert result.bytes_total == 0
+
+
+def test_recase_renames_in_place_without_copy_or_trash(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "KEEP.txt").write_bytes(b"same")
+    (target / "keep.txt").write_bytes(b"same")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "KEEP.txt")
+    target_stat = fs.stat(target, "keep.txt")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.RECASE,
+        source_rel_path="KEEP.txt",
+        target_rel_path="KEEP.txt",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=target_stat,
+        prior_target_rel_path="keep.txt",
+        prior_target_expected=target_stat,
+        reason=OperationReason.CASE_MISMATCH,
+    )
+
+    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    recased = fs.stat(target, "KEEP.txt")
+    assert result.status is SessionState.COMPLETED
+    assert recased is not None
+    assert recased.file_identity == target_stat.file_identity
+    assert (target / "KEEP.txt").read_bytes() == b"same"
+    assert [path.name for path in target.iterdir()] == ["KEEP.txt"]
+    assert [call[0] for call in recorder.calls] == ["recased"]
+    assert result.bytes_total == 0
+    assert not (target / ".synctrash").exists()
+
+
+def test_recase_refuses_source_drift_before_renaming_target(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / "KEEP.txt"
+    source_file.write_bytes(b"same")
+    (target / "keep.txt").write_bytes(b"same")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "KEEP.txt")
+    target_stat = fs.stat(target, "keep.txt")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.RECASE,
+        source_rel_path="KEEP.txt",
+        target_rel_path="KEEP.txt",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=target_stat,
+        prior_target_rel_path="keep.txt",
+        prior_target_expected=target_stat,
+        reason=OperationReason.CASE_MISMATCH,
+    )
+    source_file.unlink()
+
+    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    assert result.status is SessionState.FAILED
+    assert [path.name for path in target.iterdir()] == ["keep.txt"]
+    assert recorder.calls == []
 
 
 @pytest.mark.parametrize("old_missing", [False, True])

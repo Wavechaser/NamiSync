@@ -41,7 +41,15 @@ retained-missing destination row. A pure move preserves that row's content hash,
 provenance, and `last_verified_at` — a same-volume rename keeps size, mtime, and
 identity — so a later verify verifies against carried-forward evidence instead of
 re-baselining; a move of a never-hashed file simply carries no hash. Move-update
-overwrites content and therefore records fresh `copy` evidence.
+overwrites content and therefore records fresh `copy` evidence. Recase recording
+uses the same row/correspondence reconciliation while requiring the explicit
+`recase` operation kind; it updates only stored target spelling and observed
+stat, preserving content evidence with the same file identity.
+
+Idempotency payload hashes encode valid Unicode exactly as before and
+backslash-escape an unpaired surrogate rather than raising. Validated relative
+paths still reject such code units upstream; the encoding rule is defensive for
+free-form evidence and for future contract changes.
 
 Workflow exclusions do not call the main-ledger recorder: blocked intent and
 deferred quarantine/withholding are audit-history facts, not durable filesystem
@@ -63,7 +71,8 @@ the source's post-read stat remains separate drift evidence and is never stored
 as target identity. At minimum the protocol covers:
 
 - run/session start and filesystem-result window;
-- confirmed copy/update/move/trash/delete/mkdir/no-op correspondence;
+- confirmed copy/update/move/move-update/recase/trash/delete/mkdir/no-op
+  correspondence;
 - complete/scoped inventory reconciliation and missing/reappearance state;
 - conditional baseline, verify, rebaseline, and external hash import;
 - mapping/location/rebind and soft-delete state;

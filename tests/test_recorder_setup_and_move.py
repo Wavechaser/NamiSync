@@ -216,3 +216,51 @@ def test_move_reconciles_retained_missing_destination_without_rolling_back_prior
             connection.close()
     finally:
         setup.recorder.close()
+
+
+def test_recase_updates_target_spelling_and_correspondence(tmp_path: Path) -> None:
+    source = file_stat(identity_index=20)
+    target = file_stat(identity_index=21, volume_serial="target-serial")
+    recase = operation(
+        OperationKind.RECASE,
+        source_path="KEEP.txt",
+        target_path="KEEP.txt",
+        source=source,
+        target=target,
+        intended=target,
+        prior_target_path="keep.txt",
+        reason=OperationReason.CASE_MISMATCH,
+    )
+    sync_plan = plan((recase,))
+    setup = setup_recorder(tmp_path / "ledger.db", sync_plan)
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.target_location_id,
+                setup.host_id,
+                _target_scan(sync_plan, (_record("keep.txt", target),)),
+                "target-1",
+                NOW,
+            )
+        )
+
+        setup.run.record_recased(recase.op_id, target)
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            target_row = connection.execute(
+                "SELECT rel_path FROM inventory WHERE location_id = ? AND rel_path_key = 'KEEP.TXT'",
+                (setup.target_location_id,),
+            ).fetchone()
+            assert target_row["rel_path"] == "KEEP.txt"
+            assert connection.execute(
+                "SELECT kind FROM operations"
+            ).fetchone()["kind"] == OperationKind.RECASE.value
+            assert connection.execute(
+                "SELECT count(*) FROM mapping_correspondence WHERE mapping_id = ?",
+                (setup.mapping_id,),
+            ).fetchone()[0] == 1
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()

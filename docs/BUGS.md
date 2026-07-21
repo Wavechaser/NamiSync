@@ -57,6 +57,13 @@ to a global chronological list.
 
 ### M0 integration
 
+- MODERATE - FIXED (2026-07-21). Fingerprinted option decoding. A plan-request
+  payload that omitted `propagate_source_casing` decoded as false and then
+  re-encoded with the field present, so one accepted payload did not have a
+  byte-stable semantic round trip for an input to `policy_fingerprint`. Cause:
+  the newly added flag alone used `.get(..., False)` while every neighboring
+  semantic option was required; fixed by requiring the field during decode and
+  retaining explicit round-trip coverage.
 - SEVERE - FIXED (2026-07-20). Safe partial execution. One blocked item or an
   incomplete scan refused the whole sync, while simply omitting blockers could
   expose target-only deletion from incomplete source evidence. Cause: workflow
@@ -86,6 +93,14 @@ to a global chronological list.
 
 ### M0 integration
 
+- MINOR - FIXED (2026-07-21). Defensive JSON encoding consistency. Path
+  validation prevented unpaired surrogates from reaching ledger/history
+  records, but ledger idempotency hashing, history hashing/detail storage, and
+  opaque workflow payload encoding would still raise if a malformed code unit
+  arrived through free-form detail or a future relaxed boundary. Cause: only
+  canonical plan JSON used the defensive final UTF-8 encoding rule; fixed by
+  applying the same valid-Unicode-compatible backslash escaping at all three
+  module boundaries and round-tripping hostile history detail in tests.
 - SEVERE - FIXED (2026-07-20). Unsafe filename isolation. One NTFS, SMB,
   archive, or WSL-originated name outside NamiSync's relative-path contract
   could abort planning; an unpaired surrogate could later crash ID or fingerprint
@@ -103,6 +118,14 @@ to a global chronological list.
 
 ### M0 hardening
 
+- MODERATE - FIXED (2026-07-21). Opt-in casing propagation cost. A
+  metadata-equal case-only filename change was represented as `update`, causing
+  a full source-content rewrite, capacity charge, and trash backup merely to
+  change directory-entry spelling. Cause: the first propagation seam reused the
+  only operation that could publish a requested spelling; fixed with an
+  explicit zero-byte `recase` operation that carries old/new spellings, uses a
+  same-volume non-replacing rename, preserves identity/metadata, records updated
+  correspondence, and creates no trash entry.
 - MODERATE - FIXED (2026-07-21). Filename-form advisory execution. A
   case-only source/target filename pair blocked even when source metadata had
   changed, suppressing the required update; canonically equivalent NFC/NFD

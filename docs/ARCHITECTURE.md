@@ -577,7 +577,10 @@ one-codepoint uppercase — never `casefold()`, which merged `Straße`/`strasse`
 into one row in the PoC). Root-constrained path validation (rejects absolute,
 drive-qualified, `..`, ambiguous suffix/device/stream spellings, NUL, unpaired
 surrogates, and root-escaping). Canonical JSON preserves valid-Unicode bytes and
-escapes malformed surrogate code units rather than raising.
+escapes malformed surrogate code units rather than raising. Ledger command
+hashing, history hash/detail serialization, and opaque workflow payloads use
+the same final UTF-8 rule so free-form evidence cannot reopen that raw encoding
+failure; path validation still rejects malformed path spellings upstream.
 
 **Flesh.** None. Core is all bones by definition.
 
@@ -639,7 +642,7 @@ standard-attribute-aware metadata diffing, explicit
 directory chains, correspondence-qualified file moves, composite move-update,
 planned-removal cleanup, symmetric filters, deterministic surrogate-safe
 serialization, non-blocking exact-case and canonical-Unicode advisories,
-conditional source-basename casing propagation, and the shared hardlink-aware
+zero-byte conditional source-basename recasing, and the shared hardlink-aware
 capacity function. Non-everything scopes and content evidence remain deferred.
 
 **Contract.**
@@ -677,9 +680,12 @@ operation; conflict blocking; capacity planning; `Scope.everything()`.
 Exact-case mismatches across one source/target Windows key are typed advisories
 on the ordinary update/no-op operation, not conflicts that suppress changed
 content. The default keeps the observed target spelling. A fingerprinted,
-payload-stable `propagate_source_casing` seam can force replacement at the
-source basename spelling, but is off and unexposed by default and does not
-recase parent directories. One-to-one same-parent file pairs whose basenames
+payload-stable `propagate_source_casing` seam emits an explicit zero-byte
+`recase` operation for metadata-equal files; changed files still use their
+required update at the requested spelling. Recasing is a same-key,
+non-replacing rename that preserves content, identity, metadata, and trash
+state. It is off and unexposed by default and does not recase parent
+directories. One-to-one same-parent file pairs whose basenames
 are canonically equivalent under NFC carry a separate non-blocking Unicode
 normalization advisory; the planner preserves observed spelling, performs no
 normalization, and refuses to guess among ambiguous candidates or steal an
@@ -710,7 +716,7 @@ grouping) with enrichment metadata supplied by the workflow.
 - `KEEP.txt`/`keep.txt` evidence produces a visible typed advisory while changed
   metadata still updates and matching metadata remains a no-op. Default target
   spelling is stable; the opt-in policy recases only the file basename through
-  atomic replacement.
+  a zero-byte non-replacing rename with no trash entry.
 - A one-to-one NFC/NFD basename pair produces exactly one non-blocking advisory
   update/no-op at the observed target spelling. Canonical ambiguity is never
   guessed through and an exact match is never reassigned.
@@ -780,9 +786,9 @@ resume remains continue-or-refuse).
 - `observe()` stats only operation-touched paths; an unrelated change elsewhere
   in either tree never causes refusal (PoC regression — the original whole-tree
   preflight over-refused and was slow).
-- An incomplete scan permits selected copy/update/mkdir/noop work but refuses
-  selected move/move-update/trash/delete work; manually reintroduced blocked
-  correspondence is also refused.
+- An incomplete scan permits selected copy/update/mkdir/noop/recase work but
+  refuses selected move/move-update/trash/delete work; manually reintroduced
+  blocked correspondence is also refused.
 - A nearly-full target whose exact prior-run temps in touched parents free the
   needed space is **not** refused; current-run temps and out-of-scope artifacts
   are not credited to the run-level sweep.
@@ -791,12 +797,12 @@ resume remains continue-or-refuse).
 
 ### 4.5 executor
 
-**Implementation status (2026-07-18).** The M0 native single-worker executor
-and its core execution contracts are implemented for all eight operation kinds,
-with conditional publish, guarded trash/delete, deferred directory metadata,
-continuation state, bounded retries, throttled progress, and post-mutation typed
-recording. ADS, restartable copies, parallel workers, and IO throttling remain
-deferred as described below.
+**Implementation status (2026-07-21).** The M0 native single-worker executor
+and its core execution contracts are implemented for all nine operation kinds,
+with conditional publish, zero-byte non-replacing recase, guarded trash/delete,
+deferred directory metadata, continuation state, bounded retries, throttled
+progress, and post-mutation typed recording. ADS, restartable copies, parallel
+workers, and IO throttling remain deferred as described below.
 
 **Contract.**
 `execute(xset, ctx, recorder, policies, fs) -> OperationResult`. The workflow owns the
@@ -859,7 +865,7 @@ and process-local retry continuations for committed update/move-update sub-steps
 which revalidate the exact prepared/published and backup/trash evidence before
 resuming rather than restarting against the executor's own prior mutation.
 
-**Flesh — now.** copy/update/move/mkdir-with-metadata/trash/delete/noop;
+**Flesh — now.** copy/update/recase/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
 the op, records nothing); trash-on-update; root-local trash with volume-identity resolution;
 one post-verdict, pre-copy prior-run temp sweep over preflight's exact touched
@@ -1110,7 +1116,7 @@ Everything downstream falls out of this split:
   the full reviewed plan. Direct blockers are `BLOCKED`; path-correspondence or
   dependency collateral is `DEFERRED`; incomplete scans globally withhold
   move, move-update, trash, and delete while retaining guarded copy, update,
-  mkdir, and noop. The plan fingerprint still binds full intent and the
+  mkdir, noop, and recase. The plan fingerprint still binds full intent and the
   commitment digest binds the exact runnable subset.
 - **There is no no-gate path.** Every execution session consumes a *committed*
   `ExecutionSet` — one a human reviewed and explicitly committed, bound to the

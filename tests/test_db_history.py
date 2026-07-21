@@ -85,6 +85,31 @@ def test_history_round_trips_sync_axes_and_ordered_operations(tmp_path: Path) ->
     assert snapshot.operations[0].detail == {"bytes": 7}
 
 
+def test_history_hash_and_detail_json_escape_unpaired_surrogates(
+    tmp_path: Path,
+) -> None:
+    record = _record("session-hostile-detail")
+    context = HistoryContext("run-hostile-detail", "host-1")
+    hostile = "bad_\udcff"
+    item = ItemOutcome(
+        "op-hostile",
+        "noop",
+        "safe.txt",
+        Outcome.SKIPPED,
+        detail={"message": hostile},
+    )
+    result = OperationResult(SessionState.COMPLETED, operations=(item,))
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        observer.on_event(_envelope(record, 1, item))
+        observer.finalize(result)
+        with HistoryRepository(store.path) as repository:
+            snapshot = repository.get("run-hostile-detail")
+
+    assert snapshot.operations[0].detail == {"message": hostile}
+
+
 def test_history_records_blocked_outcome_and_aggregate(tmp_path: Path) -> None:
     record = _record("session-blocked")
     context = HistoryContext("run-blocked", "host-1")

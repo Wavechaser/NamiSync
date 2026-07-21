@@ -1016,6 +1016,16 @@ def _execute_operation(
         )
     if operation.kind is OperationKind.MOVE:
         return _move(operation, xset, recorder, fs, target_root, state)
+    if operation.kind is OperationKind.RECASE:
+        return _recase(
+            operation,
+            xset,
+            recorder,
+            fs,
+            source_root,
+            target_root,
+            state,
+        )
     if operation.kind is OperationKind.MOVE_UPDATE:
         return _move_update(
             operation,
@@ -1403,6 +1413,70 @@ def _move(
         xset.plan.target_profile.stable_file_identity,
     )
     _record(state, detail, lambda: recorder.record_moved(operation.op_id, moved))
+    return _Settled(Outcome.SUCCEEDED, detail=detail)
+
+
+def _recase(
+    operation: PlanOperation,
+    xset: ExecutionSet,
+    recorder: Recorder,
+    fs: ExecutorFileSystem,
+    source_root: Path,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled:
+    old_rel, old_expected = _prior_target(operation)
+    if operation.source_rel_path is None or operation.source_expected is None:
+        raise OperationFailure(
+            ExecutionReason.SOURCE_MISSING,
+            "recase operation lacks source evidence",
+        )
+    if (
+        old_rel == operation.target_rel_path
+        or normalize_relative_path(old_rel)
+        != normalize_relative_path(operation.target_rel_path)
+    ):
+        raise OperationFailure(
+            ExecutionReason.UNSAFE_PATH,
+            "recase paths must differ only by Windows filename casing",
+        )
+    _guard_present(
+        fs,
+        source_root,
+        operation.source_rel_path,
+        operation.source_expected,
+        missing=ExecutionReason.SOURCE_MISSING,
+        drift=ExecutionReason.SOURCE_DRIFT,
+    )
+    _guard_present(
+        fs,
+        target_root,
+        old_rel,
+        old_expected,
+        missing=ExecutionReason.TARGET_MISSING,
+        drift=ExecutionReason.TARGET_DRIFT,
+    )
+    old = fs.resolve(target_root, old_rel, must_exist=True)
+    new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    _flush_before_destructive(recorder, state)
+    try:
+        fs.rename_new(old, new)
+    except FileExistsError as error:
+        raise OperationFailure(
+            ExecutionReason.DESTINATION_OCCUPIED,
+            "recase destination is a distinct occupied entry",
+            cause=error,
+        ) from error
+    detail = _durability_detail(fs, old.parent, new.parent)
+    recased = _profiled_stat(
+        _require_stat_path(fs, new),
+        xset.plan.target_profile.stable_file_identity,
+    )
+    _record(
+        state,
+        detail,
+        lambda: recorder.record_recased(operation.op_id, recased),
+    )
     return _Settled(Outcome.SUCCEEDED, detail=detail)
 
 

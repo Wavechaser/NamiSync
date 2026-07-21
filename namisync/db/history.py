@@ -104,15 +104,21 @@ def _primitive(value: object) -> object:
     return value
 
 
+def _json_bytes(value: object) -> bytes:
+    return json.dumps(
+        _primitive(value),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8", errors="backslashreplace")
+
+
+def _json_text(value: object) -> str:
+    return _json_bytes(value).decode("utf-8")
+
+
 def _hash(value: object) -> bytes:
-    return hashlib.sha256(
-        json.dumps(
-            _primitive(value),
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).digest()
+    return hashlib.sha256(_json_bytes(value)).digest()
 
 
 class HistoryStore:
@@ -291,12 +297,7 @@ class HistoryObserver:
                         item.path,
                         item.outcome.value,
                         item.reason,
-                        json.dumps(
-                            _primitive(item.detail),
-                            ensure_ascii=False,
-                            sort_keys=True,
-                            separators=(",", ":"),
-                        ),
+                        _json_text(item.detail),
                     )
                     for order, (seq, item) in enumerate(self._items)
                 ),

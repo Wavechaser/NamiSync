@@ -101,10 +101,12 @@ continues to emit complete deterministic intent and does not hide those items.
   update and matching metadata plans a no-op. The typed `case_mismatch` reason
   is a non-blocking review advisory. By default the operation preserves the
   target's observed spelling. The latent `propagate_source_casing=True` policy
-  instead forces an update at the source basename spelling; the native atomic
-  replacement recases that directory entry on ordinary case-insensitive NTFS.
-  It does not recase parent directories, and case-sensitive targets can refuse
-  the exact-path preflight rather than being guessed through.
+  instead emits a zero-byte `recase` operation when metadata already matches,
+  carrying both observed and requested spellings for a same-volume rename. If
+  content metadata changed, the required update also publishes at the requested
+  spelling. Recasing does not create a trash version, rewrite content, or recase
+  parent directories; a distinct occupied case-sensitive destination is refused
+  by the non-replacing rename rather than overwritten.
 - A one-to-one source/target file pair in the same exact parent whose basenames
   differ only by canonical NFC/NFD representation retains the normal update or
   no-op result with a typed `unicode_normalization_mismatch` advisory. Planning
@@ -221,11 +223,14 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   visible; one-to-one case and NFC/NFD spelling mismatches are non-blocking
   typed advisories whose underlying update/no-op work remains executable.
 - Default planning preserves target spelling. Opt-in source-basename casing is
-  fingerprinted, survives workflow-payload round trips, and forces an atomic
-  replacement only when the basename casing differs.
+  fingerprinted, survives workflow-payload round trips, and emits a zero-byte
+  same-key `recase` only when matching metadata makes content replacement
+  unnecessary. The payload field is required because omitting a fingerprinted
+  policy input cannot be losslessly defaulted during decode.
 - Incomplete source or target scans yield a reviewable full plan whose workflow
-  selection admits copy/update/mkdir/noop and withholds move/move-update/trash/
-  delete; preflight refuses any caller that reintroduces withheld operations.
+  selection admits copy/update/mkdir/noop/recase and withholds move/move-update/
+  trash/delete; preflight refuses any caller that reintroduces withheld
+  operations.
 - Capacity property tests never undercount any allowed worker schedule and use
   the exact same function as preflight.
 - No-hardlink update fixtures include displaced-version backup bytes under every
@@ -242,11 +247,11 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
 
 ## M0 Verification
 
-`tests/test_planner.py` contains 30 filesystem-free planner tests covering
+`tests/test_planner.py` contains 31 filesystem-free planner tests covering
 random input order, byte-identical serialization, directory convergence,
 cleanup dependencies, move disqualifiers, policy collisions, symmetric
 filters, case/NFC advisory behavior, long paths, and hardlink-aware capacity.
-Payload and native replacement coverage proves the latent recasing seam; a
+Payload and native rename coverage proves the latent recasing seam; a
 reviewed-sync regression proves changed content is not suppressed by a casing
 advisory and default target spelling is retained.
 Shared path/serialization contracts are covered in

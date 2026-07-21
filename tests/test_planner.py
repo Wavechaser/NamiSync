@@ -345,9 +345,45 @@ def test_case_only_file_mismatch_is_advisory_without_suppressing_content_work(
     assert operation.content_bytes == expected_bytes
 
 
-def test_source_casing_propagation_is_opt_in_and_forces_replacement() -> None:
-    source = _scan("source", SOURCE_VOLUME, files=(_file("KEEP.txt"),))
-    target = _scan("target", TARGET_VOLUME, files=(_file("keep.txt"),))
+def test_source_casing_propagation_is_opt_in_and_plans_zero_byte_recase() -> None:
+    source_record = _file("KEEP.txt", identity=FileIdentity("SRC", 1))
+    target_record = _file("keep.txt", identity=FileIdentity("DST", 2))
+    source = _scan("source", SOURCE_VOLUME, files=(source_record,))
+    target = _scan("target", TARGET_VOLUME, files=(target_record,))
+
+    result = _plan(
+        source,
+        target,
+        options=SyncOptions(propagate_source_casing=True),
+    )
+
+    operation = result.operations[0]
+    assert operation.kind is OperationKind.RECASE
+    assert operation.target_rel_path == "KEEP.txt"
+    assert operation.prior_target_rel_path == "keep.txt"
+    assert operation.target_expected == target_record.stat
+    assert operation.prior_target_expected == target_record.stat
+    assert operation.intended == target_record.stat
+    assert operation.reason is OperationReason.CASE_MISMATCH
+    assert not operation.blocked
+    assert operation.content_bytes == 0
+    assert result.required_bytes == 0
+    assert policy_fingerprint(SyncOptions()) != policy_fingerprint(
+        SyncOptions(propagate_source_casing=True)
+    )
+
+
+def test_source_casing_propagation_keeps_required_content_update() -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file("KEEP.txt", mtime=2_000),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file("keep.txt", mtime=1_000),),
+    )
 
     result = _plan(
         source,
@@ -358,12 +394,9 @@ def test_source_casing_propagation_is_opt_in_and_forces_replacement() -> None:
     operation = result.operations[0]
     assert operation.kind is OperationKind.UPDATE
     assert operation.target_rel_path == "KEEP.txt"
+    assert operation.prior_target_rel_path is None
     assert operation.reason is OperationReason.CASE_MISMATCH
-    assert not operation.blocked
     assert operation.content_bytes == 10
-    assert policy_fingerprint(SyncOptions()) != policy_fingerprint(
-        SyncOptions(propagate_source_casing=True)
-    )
 
 
 def test_case_only_directory_mismatch_does_not_block_descendant_content() -> None:

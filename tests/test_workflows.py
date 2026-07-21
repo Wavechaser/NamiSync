@@ -176,23 +176,30 @@ def test_selection_closes_over_dependencies_of_excluded_operations() -> None:
     assert excluded[dependent.op_id].reason == ExclusionReason.BLOCKED_DEPENDENCY
 
 
-def test_incomplete_scan_keeps_additive_and_noop_work_but_withholds_destructive_and_moves() -> None:
+def test_incomplete_scan_keeps_guarded_work_but_withholds_destructive_and_moves() -> None:
     operations = (
         _operation(1, OperationKind.MKDIR, "folder", source="folder"),
         _operation(2, OperationKind.COPY, "copy.bin", source="copy.bin"),
         _operation(3, OperationKind.UPDATE, "update.bin", source="update.bin"),
         _operation(4, OperationKind.NOOP, "same.bin", source="same.bin"),
-        _operation(5, OperationKind.TRASH, "trash.bin"),
-        _operation(6, OperationKind.DELETE, "delete.bin"),
         _operation(
-            7,
+            5,
+            OperationKind.RECASE,
+            "KEEP.bin",
+            source="KEEP.bin",
+            prior_target="keep.bin",
+        ),
+        _operation(6, OperationKind.TRASH, "trash.bin"),
+        _operation(7, OperationKind.DELETE, "delete.bin"),
+        _operation(
+            8,
             OperationKind.MOVE,
             "moved.bin",
             source="moved.bin",
             prior_target="old.bin",
         ),
         _operation(
-            8,
+            9,
             OperationKind.MOVE_UPDATE,
             "moved-update.bin",
             source="moved-update.bin",
@@ -215,6 +222,7 @@ def test_incomplete_scan_keeps_additive_and_noop_work_but_withholds_destructive_
         OperationKind.COPY,
         OperationKind.UPDATE,
         OperationKind.NOOP,
+        OperationKind.RECASE,
     }
     assert {
         excluded[operation.op_id].reason
