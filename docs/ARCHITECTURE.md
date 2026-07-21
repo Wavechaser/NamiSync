@@ -633,14 +633,14 @@ ignore filtering; capability profiling; placeholder detection
 
 ### 4.3 planner
 
-**Implementation status (2026-07-20).** The pure M0 planner and its core plan
+**Implementation status (2026-07-21).** The pure M0 planner and its core plan
 contracts are implemented: identity assignment, timestamp- and
 standard-attribute-aware metadata diffing, explicit
 directory chains, correspondence-qualified file moves, composite move-update,
 planned-removal cleanup, symmetric filters, deterministic surrogate-safe
-serialization, typed exact-case mismatch blocking, and the shared
-hardlink-aware capacity function. Non-everything scopes and content evidence
-remain deferred.
+serialization, non-blocking exact-case and canonical-Unicode advisories,
+conditional source-basename casing propagation, and the shared hardlink-aware
+capacity function. Non-everything scopes and content evidence remain deferred.
 
 **Contract.**
 `plan(source: ScanResult, target: ScanResult, correspondence: MappingSnapshot,
@@ -674,8 +674,17 @@ chain + emptied-dir cleanup — no directory-level move op exists in M0, and the
 decomposition must exist regardless: a folder whose children also changed
 content cannot collapse into one rename); composite move-update as one
 operation; conflict blocking; capacity planning; `Scope.everything()`.
-Exact-case mismatches across one source/target Windows key are distinct blocked
-conflicts, not metadata no-ops; directory conflicts block dependent descendants.
+Exact-case mismatches across one source/target Windows key are typed advisories
+on the ordinary update/no-op operation, not conflicts that suppress changed
+content. The default keeps the observed target spelling. A fingerprinted,
+payload-stable `propagate_source_casing` seam can force replacement at the
+source basename spelling, but is off and unexposed by default and does not
+recase parent directories. One-to-one same-parent file pairs whose basenames
+are canonically equivalent under NFC carry a separate non-blocking Unicode
+normalization advisory; the planner preserves observed spelling, performs no
+normalization, and refuses to guess among ambiguous candidates or steal an
+exactly matched target. Same-side case collisions and type collisions remain
+blocked.
 **Flesh — deferred.** Content-aware no-op; hash-based move detection; retained
 human conflict resolution; `Scope.pattern/explicit/recorded_run` (filters,
 partial exec, replay — all new scope constructors, zero planner-shape change);
@@ -698,9 +707,13 @@ grouping) with enrichment metadata supplied by the workflow.
 - On a stable-identity-less root, no `move` operation is ever emitted.
 - A file whose identity appears at two paths, or with `nlink>1`, is never part
   of a move.
-- Metadata-equal `KEEP.txt`/`keep.txt` evidence produces a visible typed
-  conflict, never a silent no-op; a directory mismatch blocks its dependent
-  region without guessing a case-only rename.
+- `KEEP.txt`/`keep.txt` evidence produces a visible typed advisory while changed
+  metadata still updates and matching metadata remains a no-op. Default target
+  spelling is stable; the opt-in policy recases only the file basename through
+  atomic replacement.
+- A one-to-one NFC/NFD basename pair produces exactly one non-blocking advisory
+  update/no-op at the observed target spelling. Canonical ambiguity is never
+  guessed through and an exact match is never reassigned.
 - A renamed source folder decomposes into per-file moves, a full mkdir chain,
   and emptied-dir cleanup; the rerun converges to zero operations and the
   rename itself copies no content bytes.

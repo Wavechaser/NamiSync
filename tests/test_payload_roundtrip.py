@@ -39,19 +39,35 @@ from namisync.core.planning import (
     PlanFingerprint,
     PlanOperation,
     PreservationPolicy,
+    SyncOptions,
     plan_fingerprint,
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path
-from namisync.workflows.models import ExecutionRequest
+from namisync.workflows.models import ExecutionRequest, PlanRequest
 from namisync.workflows.payloads import (
+    decode_plan_request,
     decode_execution_request,
+    encode_plan_request,
     encode_execution_request,
 )
 from namisync.workflows.sync import _commitment_error
 
 
 NOW = datetime(2026, 7, 19, 12, 30, tzinfo=timezone.utc)
+
+
+def test_plan_request_round_trips_latent_source_casing_policy() -> None:
+    request = PlanRequest(
+        "request",
+        r"C:\source",
+        r"D:\target",
+        SyncOptions(propagate_source_casing=True),
+    )
+
+    decoded = decode_plan_request(encode_plan_request(request))
+
+    assert decoded.options.propagate_source_casing
 
 
 def _op_id(number: int) -> OpId:

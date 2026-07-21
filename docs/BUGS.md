@@ -103,11 +103,23 @@ to a global chronological list.
 
 ### M0 hardening
 
+- MODERATE - FIXED (2026-07-21). Filename-form advisory execution. A
+  case-only source/target filename pair blocked even when source metadata had
+  changed, suppressing the required update; canonically equivalent NFC/NFD
+  spellings were instead misclassified as unrelated copy/removal work with no
+  warning. Cause: the initial casing fix made spelling visibility a conflict
+  gate, and planning compared only Windows case keys without a conservative
+  canonical-equivalence advisory pass; fixed by retaining normal update/no-op
+  semantics under typed non-blocking reasons, preserving target spelling by
+  default, adding a fingerprinted but currently unexposed source-basename
+  recasing option, and pairing only unique same-parent NFC-equivalent files that
+  are not already exact matches.
 - MODERATE - FIXED (2026-07-20). Case-sensitive name reconciliation. A pair
   such as `KEEP.txt` and `keep.txt` was reported as a metadata no-op forever,
   hiding unconverged target casing. Cause: Windows-key grouping discarded target
-  spelling before no-op classification; fixed with a typed `case_mismatch`
-  blocker and dependency propagation through mismatched directory regions.
+  spelling before no-op classification; initially made visible with a typed
+  `case_mismatch` blocker. The 2026-07-21 follow-up above retains that typed
+  visibility without suppressing content work.
 - MODERATE - FIXED (2026-07-19). File attribute reconciliation. A readonly,
   hidden, or system attribute change with unchanged size and mtime planned as
   `noop`, leaving the target stale. Cause: equality checked only size and

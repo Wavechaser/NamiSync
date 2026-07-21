@@ -36,12 +36,13 @@ Planner and preflight both call `calculate_required_bytes()`; neither stores or
 guesses target free space.
 
 `options` contains deletion and preservation policies, the symmetric mapping
-filter snapshot, and the selected `DestinationPolicy` plus any already-extracted
-enrichment metadata. `MappingSnapshot` contains prior accepted pairs/no-ops,
-retained missing rows, and ambiguity/hardlink disqualifiers keyed by canonical
-path. Observed target free space is deliberately absent: review and execution
-call `observe()` and judge the same pure required-byte formula against current
-space.
+filter snapshot, the selected `DestinationPolicy`, and the latent
+`propagate_source_casing` policy plus any already-extracted enrichment metadata.
+The casing policy defaults to false and is not exposed by a config file, CLI, or
+GUI yet. `MappingSnapshot` contains prior accepted pairs/no-ops, retained missing
+rows, and ambiguity/hardlink disqualifiers keyed by canonical path. Observed
+target free space is deliberately absent: review and execution call `observe()`
+and judge the same pure required-byte formula against current space.
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
@@ -93,13 +94,23 @@ continues to emit complete deterministic intent and does not hide those items.
 - Target-only files/directories follow additive/trash/internal-mirror policy.
 - Directory cleanup reasons about removals planned in this same plan, not only
   the pre-scan tree.
-- Case and file/directory collisions become blocked operations with no guessed
-  winner.
-- A single source and target entry that share a Windows path key but differ in
-  exact spelling become a typed `case_mismatch` blocked conflict, even when
-  their metadata matches. Directory mismatches block dependent descendants.
-  M0 does not pretend that an ordinary no-op converged casing or attempt an
-  unsafe case-only move through the existing absence-guarded move contract.
+- Same-side case collisions and file/directory collisions become blocked
+  operations with no guessed winner.
+- A single source and target file that share a Windows path key but differ in
+  exact spelling retain the normal metadata result: changed content plans an
+  update and matching metadata plans a no-op. The typed `case_mismatch` reason
+  is a non-blocking review advisory. By default the operation preserves the
+  target's observed spelling. The latent `propagate_source_casing=True` policy
+  instead forces an update at the source basename spelling; the native atomic
+  replacement recases that directory entry on ordinary case-insensitive NTFS.
+  It does not recase parent directories, and case-sensitive targets can refuse
+  the exact-path preflight rather than being guessed through.
+- A one-to-one source/target file pair in the same exact parent whose basenames
+  differ only by canonical NFC/NFD representation retains the normal update or
+  no-op result with a typed `unicode_normalization_mismatch` advisory. Planning
+  preserves the target's observed spelling and never normalizes either name.
+  Ambiguous groups and target entries already claimed by exact matches are not
+  paired heuristically.
 - Move detection requires unambiguous prior source correspondence, stable
   identity, link count one, unique identity occurrence, and a safe target-side
   move. It never equates source and target filesystem IDs.
@@ -206,8 +217,12 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   target-side move.
 - Move-update has one operation id and no intermediate state that can be
   recorded as final success.
-- Case and file/directory collisions are blocked and visible; independent work
-  remains executable after dependency closure.
+- Same-side case collisions and file/directory collisions are blocked and
+  visible; one-to-one case and NFC/NFD spelling mismatches are non-blocking
+  typed advisories whose underlying update/no-op work remains executable.
+- Default planning preserves target spelling. Opt-in source-basename casing is
+  fingerprinted, survives workflow-payload round trips, and forces an atomic
+  replacement only when the basename casing differs.
 - Incomplete source or target scans yield a reviewable full plan whose workflow
   selection admits copy/update/mkdir/noop and withholds move/move-update/trash/
   delete; preflight refuses any caller that reintroduces withheld operations.
@@ -227,8 +242,12 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
 
 ## M0 Verification
 
-`tests/test_planner.py` contains 22 filesystem-free planner tests covering
+`tests/test_planner.py` contains 30 filesystem-free planner tests covering
 random input order, byte-identical serialization, directory convergence,
 cleanup dependencies, move disqualifiers, policy collisions, symmetric
-filters, long paths, and hardlink-aware capacity. Shared path/serialization
-contracts are covered in `tests/test_core_scanplan.py`.
+filters, case/NFC advisory behavior, long paths, and hardlink-aware capacity.
+Payload and native replacement coverage proves the latent recasing seam; a
+reviewed-sync regression proves changed content is not suppressed by a casing
+advisory and default target spelling is retained.
+Shared path/serialization contracts are covered in
+`tests/test_core_scanplan.py`.

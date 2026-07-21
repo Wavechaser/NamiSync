@@ -41,6 +41,7 @@ from namisync.core.planning import (
     SyncOptions,
     calculate_required_bytes,
     deterministic_operation_id,
+    policy_fingerprint,
     serialize_plan,
 )
 from namisync.modules.planner import plan
@@ -311,8 +312,18 @@ def test_case_type_and_unsupported_conflicts_are_blocked_while_independent_work_
     assert not independent.blocked
 
 
-@pytest.mark.parametrize("target_mtime", [1_000, 2_000])
-def test_case_only_file_mismatch_is_a_visible_blocked_conflict(target_mtime: int) -> None:
+@pytest.mark.parametrize(
+    ("target_mtime", "expected_kind", "expected_bytes"),
+    [
+        (1_000, OperationKind.NOOP, 0),
+        (2_000, OperationKind.UPDATE, 10),
+    ],
+)
+def test_case_only_file_mismatch_is_advisory_without_suppressing_content_work(
+    target_mtime: int,
+    expected_kind: OperationKind,
+    expected_bytes: int,
+) -> None:
     source = _scan(
         "source",
         SOURCE_VOLUME,
@@ -327,13 +338,35 @@ def test_case_only_file_mismatch_is_a_visible_blocked_conflict(target_mtime: int
     result = _plan(source, target)
 
     operation = next(item for item in result.operations if item.source_rel_path == "KEEP.txt")
-    assert operation.kind is OperationKind.NOOP
+    assert operation.kind is expected_kind
     assert operation.target_rel_path == "keep.txt"
     assert operation.reason is OperationReason.CASE_MISMATCH
-    assert operation.blocked_reason is BlockedReason.CASE_MISMATCH
+    assert operation.blocked_reason is None
+    assert operation.content_bytes == expected_bytes
 
 
-def test_case_only_directory_mismatch_blocks_the_ambiguous_region() -> None:
+def test_source_casing_propagation_is_opt_in_and_forces_replacement() -> None:
+    source = _scan("source", SOURCE_VOLUME, files=(_file("KEEP.txt"),))
+    target = _scan("target", TARGET_VOLUME, files=(_file("keep.txt"),))
+
+    result = _plan(
+        source,
+        target,
+        options=SyncOptions(propagate_source_casing=True),
+    )
+
+    operation = result.operations[0]
+    assert operation.kind is OperationKind.UPDATE
+    assert operation.target_rel_path == "KEEP.txt"
+    assert operation.reason is OperationReason.CASE_MISMATCH
+    assert not operation.blocked
+    assert operation.content_bytes == 10
+    assert policy_fingerprint(SyncOptions()) != policy_fingerprint(
+        SyncOptions(propagate_source_casing=True)
+    )
+
+
+def test_case_only_directory_mismatch_does_not_block_descendant_content() -> None:
     source = _scan(
         "source",
         SOURCE_VOLUME,
@@ -349,20 +382,86 @@ def test_case_only_directory_mismatch_blocks_the_ambiguous_region() -> None:
 
     result = _plan(source, target)
 
-    directory = next(
-        item
-        for item in result.operations
-        if item.reason is OperationReason.CASE_MISMATCH and item.source_expected.kind is EntryKind.DIRECTORY
-    )
-    assert directory.target_rel_path == "folder"
-    assert directory.blocked_reason is BlockedReason.CASE_MISMATCH
     child = next(
         item
         for item in result.operations
         if item.source_rel_path == r"Folder\child.txt"
     )
-    assert child.blocked_reason is BlockedReason.BLOCKED_DEPENDENCY
-    assert child.dependencies == (directory.op_id,)
+    assert child.kind is OperationKind.NOOP
+    assert child.target_rel_path == r"folder\child.txt"
+    assert child.reason is OperationReason.CASE_MISMATCH
+    assert not child.blocked
+
+    propagation_result = _plan(
+        source,
+        target,
+        options=SyncOptions(propagate_source_casing=True),
+    )
+    propagation_child = next(
+        item
+        for item in propagation_result.operations
+        if item.source_rel_path == r"Folder\child.txt"
+    )
+    assert propagation_child.kind is OperationKind.NOOP
+    assert propagation_child.target_rel_path == r"folder\child.txt"
+
+
+@pytest.mark.parametrize(
+    ("target_mtime", "expected_kind"),
+    [
+        (1_000, OperationKind.NOOP),
+        (2_000, OperationKind.UPDATE),
+    ],
+)
+def test_unicode_normalization_mismatch_is_advisory_and_preserves_target_spelling(
+    target_mtime: int,
+    expected_kind: OperationKind,
+) -> None:
+    source_name = "caf\u00e9.txt"
+    target_name = "cafe\u0301.txt"
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file(source_name, mtime=1_000),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file(target_name, mtime=target_mtime),),
+    )
+
+    result = _plan(source, target)
+
+    assert len(result.operations) == 1
+    operation = result.operations[0]
+    assert operation.kind is expected_kind
+    assert operation.source_rel_path == source_name
+    assert operation.target_rel_path == target_name
+    assert operation.reason is OperationReason.UNICODE_NORMALIZATION_MISMATCH
+    assert not operation.blocked
+
+
+def test_unicode_normalization_advisory_does_not_steal_an_exact_match() -> None:
+    composed = "caf\u00e9.txt"
+    decomposed = "cafe\u0301.txt"
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file(composed), _file(decomposed)),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file(decomposed),),
+    )
+
+    result = _plan(source, target)
+
+    operations = {item.source_rel_path: item for item in result.operations}
+    assert operations[composed].kind is OperationKind.COPY
+    assert operations[composed].reason is OperationReason.SOURCE_ONLY
+    assert operations[decomposed].kind is OperationKind.NOOP
+    assert operations[decomposed].reason is OperationReason.METADATA_MATCH
 
 
 def test_incomplete_scans_remain_reviewable_but_are_snapshotted_unexecutable() -> None:

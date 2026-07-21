@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime
 import hashlib
+import os
 from pathlib import Path
 import time
 from typing import Callable
@@ -263,6 +264,20 @@ def test_native_directory_flush_succeeds_on_target_ntfs(tmp_path: Path) -> None:
     _, target = _roots(tmp_path)
 
     assert NativeFileSystem().flush_directory(target)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows filename casing")
+def test_native_atomic_replace_uses_requested_destination_casing(tmp_path: Path) -> None:
+    _, target = _roots(tmp_path)
+    existing = target / "keep.txt"
+    replacement = target / "replacement.tmp"
+    existing.write_bytes(b"old")
+    replacement.write_bytes(b"new")
+
+    NativeFileSystem().replace(replacement, target / "KEEP.txt")
+
+    assert [path.name for path in target.iterdir()] == ["KEEP.txt"]
+    assert (target / "KEEP.txt").read_bytes() == b"new"
 
 
 class UnavailableDirectoryFlushFileSystem(NativeFileSystem):

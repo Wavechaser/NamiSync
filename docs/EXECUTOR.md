@@ -116,6 +116,14 @@ touches the current target. With trash-on-update enabled it then:
 5. applies the new file's readonly bit and remaining post-publish metadata;
 6. performs the best-effort parent flush, re-stats, and records success.
 
+When a reviewed plan opts into source-basename casing propagation, the same
+atomic replacement publishes to the source-spelled basename. Ordinary
+case-insensitive NTFS recases the existing directory entry; there is no separate
+case-only executor primitive. Default plans retain the observed target spelling,
+and an exact-path preflight refusal protects a case-sensitive target where the
+case variant is a distinct or absent path. Parent-directory recasing is not
+implemented.
+
 No crash point leaves the live path absent. A crash after hardlink creation but
 before replacement leaves the old live inode with link count two; that is a
 benign, scan-visible hardlink warning which disables move detection until the

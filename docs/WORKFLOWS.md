@@ -75,6 +75,12 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
+The payload also round-trips the fingerprinted
+`SyncOptions.propagate_source_casing` seam with a backward-compatible false
+default. M0 exposes no config, CLI, or GUI control for it; when a future
+interface does, review and commitment will already bind the choice rather than
+letting execution reinterpret filename spelling.
+
 M0 automatically selects the maximal safe dependency-closed subset. Directly
 blocked items remain in the reviewed plan as `BLOCKED`; operations touching
 their source/target correspondence region or depending on an exclusion become

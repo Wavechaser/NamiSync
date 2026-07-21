@@ -199,6 +199,34 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     assert history_errors.getvalue() == ""
 
 
+def test_case_only_name_advisory_does_not_suppress_changed_content(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "KEEP.txt").write_bytes(b"changed source content")
+    (target / "keep.txt").write_bytes(b"old")
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("execute\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS, (stdout.getvalue(), stderr.getvalue())
+    assert (target / "keep.txt").read_bytes() == b"changed source content"
+    assert [entry.name for entry in target.iterdir() if entry.is_file()] == ["keep.txt"]
+    assert "update=1" in stdout.getvalue()
+    assert stderr.getvalue() == ""
+
+
 def test_successful_rerun_removes_prior_run_temp_from_touched_parent(
     tmp_path: Path,
 ) -> None:

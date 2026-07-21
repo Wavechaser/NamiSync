@@ -1,63 +1,56 @@
 # NamiSync Session Handoff
 
-Date: 2026-07-20
+Date: 2026-07-21
 
 ## Session Outcome
 
-Restored empty-directory cleanup on targets that do not provide stable file
-identities, including FAT-style volumes. The executor now follows the shared
-evidence rule: identity binds exactly when the reviewed scan supplied it;
-absent identity is absent evidence rather than an execution veto.
+Filename-form differences are now review advisories rather than execution
+blockers. A case-only source/target pair still plans its normal metadata update
+or no-op, so changed source content is no longer suppressed. A unique
+same-parent file pair whose basenames differ only by NFC/NFD representation is
+handled the same way under a distinct advisory without normalizing either name.
 
-Also restored the advertised crashed-copy recovery path: after successful
-preflight, execution now removes exact prior-run temps once from the same
-touched target-parent scope used for reclaimable-capacity accounting.
+Target spelling remains unchanged by default. A fingerprinted
+`SyncOptions.propagate_source_casing` seam can opt into source-basename casing
+through the existing atomic replacement path, but no config, CLI, or GUI control
+exposes it yet. Parent-directory recasing remains out of scope.
 
 ## Changes
 
-- Narrowed only the `directory_cleanup` guard. It continues to ignore the
-  directory mtime and link-count churn caused by successful child operations.
-- The guard still requires exact directory kind, size, attributes, and creation
-  time. When a reviewed identity exists, a replacement directory is still
-  rejected as target drift.
-- `RemoveDirectory`/`rmdir` remains the final atomic emptiness check, so cleanup
-  cannot remove a directory containing entries.
-- Replaced the identity-veto regression with an identity-less convergence test
-  and added a counter-test proving immutable metadata drift is still rejected.
-- Updated `BUGS.md`, `EXECUTOR.md`, `FEATURES.md`, `ARCHITECTURE.md`, and the
-  README changelog to describe the conditional-identity policy.
-- Added a shared exact temp-owner parser, retained preflight's touched-parent
-  scope in `ObservedWorld`, and excluded current-run temps from reclaimable-byte
-  accounting.
-- Added the post-verdict, pre-copy sweep. It removes only different-run regular
-  files with exact generated names; current-run temps remain owned by the
-  per-operation retry/cancel path, and cleanup failure stops before copying.
-- Documented the recovery contract in `CORE.md`, `PREFLIGHT.md`, `EXECUTOR.md`,
-  `WORKFLOWS.md`, `FEATURES.md`, `ARCHITECTURE.md`, `BUGS.md`, and the README
-  changelog without replacing this handoff's earlier context.
+- Planner emits `case_mismatch` and `unicode_normalization_mismatch` as typed,
+  non-blocking operation reasons while preserving ordinary update/no-op kinds,
+  target before-state, and content-byte accounting.
+- NFC/NFD pairing is conservative: exact parent, canonical-equivalent basename,
+  exactly one unmatched candidate on each side, and no reassignment of a target
+  already claimed by an exact Windows-key match.
+- Default plans use the observed target spelling. Opt-in basename recasing is
+  included in the policy fingerprint and plan-request payload; old payloads
+  decode it as false.
+- The legacy `BlockedReason.CASE_MISMATCH` enum remains decodable for prior plan
+  payload compatibility, but new plans do not emit it.
+- Native Windows coverage proves atomic replacement can recase an ordinary NTFS
+  directory entry. Planner coverage proves changed content continues, default
+  spelling stability, opt-in behavior, parent-directory non-propagation, and
+  NFC/NFD ambiguity handling. A real reviewed-sync regression proves a changed
+  differently cased source updates the target while retaining target spelling.
+- Updated scanner, planner, preflight, executor, core, workflow, feature,
+  architecture, bug-log, README, and handoff documentation.
 
 ## Verification
 
-- Directory-cleanup regression selection: 6 passed.
-- Focused executor suite: 52 passed.
-- Full suite: 288 passed in 7.41s.
+- Focused regression/planner/payload/executor suite: 90 passed in 1.36s.
+- Full suite: 298 passed in 7.90s.
 - Import-linter: 7 contracts kept, 0 broken (41 files, 137 dependencies).
 - `git diff --check`: clean apart from expected LF-to-CRLF notices.
-- Temp-recovery focused selection: 112 passed.
-- Current full suite after final same-volume hardening: 291 passed in 7.57s.
-- Current import-linter: 7 contracts kept, 0 broken (41 files, 137
-  dependencies).
+- Native recasing test ran on Windows as part of both focused and full suites.
 
 ## Immediate Next Context
 
-- The residual external-writer boundary is deliberate: on an identity-less
-  target, a recreated empty directory could pass the remaining evidence checks.
-  The operating system still refuses deletion if the directory contains an
-  entry.
-- The relaxed matcher remains exclusive to dependency-complete
-  `directory_cleanup` deletes. File deletes and all other operation guards keep
-  their existing evidence rules.
-- M0's single worker permits current-run temp preservation during the run-level
-  sweep; exact per-operation cleanup still handles retry, cancel, and resume.
-  Recovery enumerates direct children only, requires the target root's physical
-  volume, and never enters `.synctrash`.
+- `propagate_source_casing` is intentionally a latent policy with a false
+  default. A future settings/UI task may expose it without changing plan or
+  payload shape; review and commitment already bind the value.
+- Recasing is basename-only. A directory case difference is non-blocking and
+  retains the target directory's observed spelling.
+- NFC/NFD advisories do not establish generalized Unicode homograph safety.
+  They flag only unique canonical-equivalence pairs and never normalize names;
+  ambiguous or non-canonically-equivalent lookalikes remain distinct entries.

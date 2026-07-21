@@ -319,6 +319,7 @@ def encode_plan_request(request: PlanRequest) -> bytes:
             "filters": list(request.options.filters.patterns),
             "worker_count": request.options.worker_count,
             "trash_on_update": request.options.trash_on_update,
+            "propagate_source_casing": request.options.propagate_source_casing,
             "internal_mirror_authorized": request.options.internal_mirror_authorized,
         },
     }
@@ -344,6 +345,7 @@ def decode_plan_request(payload: bytes) -> PlanRequest:
             destination_policy=IdentityDestinationPolicy(),
             worker_count=int(options["worker_count"]),
             trash_on_update=bool(options["trash_on_update"]),
+            propagate_source_casing=bool(options.get("propagate_source_casing", False)),
             internal_mirror_authorized=bool(options["internal_mirror_authorized"]),
         ),
     )

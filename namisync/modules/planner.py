@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import replace
 from pathlib import PureWindowsPath
 from typing import Iterable, Sequence
@@ -68,6 +69,50 @@ def _group_by_key(records: Iterable[object]) -> dict[str, list[object]]:
     for values in grouped.values():
         values.sort(key=lambda item: item.rel_path)  # type: ignore[attr-defined]
     return grouped
+
+
+def _normalization_signature(path: str) -> tuple[str, str]:
+    parsed = PureWindowsPath(path)
+    return str(parsed.parent), unicodedata.normalize("NFC", parsed.name)
+
+
+def _normalization_pairs(
+    assignment: Assignment,
+    target_files: Sequence[FileRecord],
+    target_files_by_key: dict[str, list[object]],
+) -> dict[tuple[str, str], FileRecord]:
+    directly_matched_target_keys = {
+        item.target_rel_path_key
+        for item in assignment.items
+        if target_files_by_key.get(item.target_rel_path_key)
+    }
+    desired_groups: dict[tuple[str, str], list[DestinationAssignment]] = {}
+    for item in assignment.items:
+        if target_files_by_key.get(item.target_rel_path_key):
+            continue
+        desired_groups.setdefault(
+            _normalization_signature(item.target_rel_path), []
+        ).append(item)
+
+    target_groups: dict[tuple[str, str], list[FileRecord]] = {}
+    for record in target_files:
+        if record.rel_path_key in directly_matched_target_keys:
+            continue
+        target_groups.setdefault(
+            _normalization_signature(record.rel_path), []
+        ).append(record)
+
+    pairs: dict[tuple[str, str], FileRecord] = {}
+    for signature, desired in desired_groups.items():
+        targets = target_groups.get(signature, ())
+        if len(desired) != 1 or len(targets) != 1:
+            continue
+        item = desired[0]
+        target = targets[0]
+        if item.target_rel_path == target.rel_path:
+            continue
+        pairs[(item.source_rel_path_key, item.source_rel_path)] = target
+    return pairs
 
 
 def _identity_counts(records: Iterable[FileRecord]) -> dict[FileIdentity, int]:
@@ -216,6 +261,9 @@ def plan(
     target_files_by_key = _group_by_key(target_files)
     target_dirs_by_key = _group_by_key(target_dirs)
     source_dirs_by_key = _group_by_key(source_dirs)
+    normalization_pairs = _normalization_pairs(
+        assignment, target_files, target_files_by_key
+    )
 
     assigned_target_groups: dict[str, list[DestinationAssignment]] = {}
     for item in assignment.items:
@@ -235,35 +283,12 @@ def plan(
         directory_key = normalize_relative_path(directory_path)
         existing_dirs = target_dirs_by_key.get(directory_key, [])
         existing_files = target_files_by_key.get(directory_key, [])
+        if existing_dirs:
+            continue
         source_candidates = source_dirs_by_key.get(directory_key, [])
         source_directory = source_candidates[0] if len(source_candidates) == 1 and isinstance(source_candidates[0], DirRecord) else None
         parent_operation = _nearest_created_parent(directory_path, created_directories)
         dependencies = (parent_operation.op_id,) if parent_operation is not None else ()
-        if existing_dirs:
-            target_directory = (
-                existing_dirs[0]
-                if len(existing_dirs) == 1 and isinstance(existing_dirs[0], DirRecord)
-                else None
-            )
-            if (
-                source_directory is not None
-                and target_directory is not None
-                and source_directory.rel_path != target_directory.rel_path
-            ):
-                operation = _blocked_operation(
-                    kind=OperationKind.NOOP,
-                    source_rel_path=source_directory.rel_path,
-                    target_rel_path=target_directory.rel_path,
-                    source_expected=source_directory.stat,
-                    target_expected=target_directory.stat,
-                    intended=source_directory.stat,
-                    reason=OperationReason.CASE_MISMATCH,
-                    blocked_reason=BlockedReason.CASE_MISMATCH,
-                    dependencies=dependencies,
-                )
-                mkdir_operations.append(operation)
-                created_directories[directory_key] = operation
-            continue
         if len(source_candidates) > 1 or existing_files or source_directory is None:
             operation = _blocked_operation(
                 kind=OperationKind.MKDIR,
@@ -305,6 +330,12 @@ def plan(
         if not isinstance(source_record, FileRecord):
             raise TypeError("source file index contained a non-file record")
         target_values = target_files_by_key.get(item.target_rel_path_key, [])
+        normalization_target = normalization_pairs.get(
+            (item.source_rel_path_key, item.source_rel_path)
+        )
+        normalization_mismatch = not target_values and normalization_target is not None
+        if normalization_mismatch:
+            target_values = [normalization_target]
         target_directory_values = target_dirs_by_key.get(item.target_rel_path_key, [])
         parent_operation = _nearest_created_parent(item.target_rel_path, created_directories)
         dependencies = (parent_operation.op_id,) if parent_operation is not None else ()
@@ -363,41 +394,39 @@ def plan(
             target_record = target_values[0]
             if not isinstance(target_record, FileRecord):
                 raise TypeError("target file index contained a non-file record")
-            if source_record.rel_path != target_record.rel_path:
-                content_operations.append(
-                    _blocked_operation(
-                        kind=OperationKind.NOOP,
-                        source_rel_path=source_record.rel_path,
-                        target_rel_path=target_record.rel_path,
-                        source_expected=source_record.stat,
-                        target_expected=target_record.stat,
-                        intended=source_record.stat,
-                        reason=OperationReason.CASE_MISMATCH,
-                        blocked_reason=BlockedReason.CASE_MISMATCH,
-                        dependencies=dependencies,
-                    )
-                )
-                claimed_target_keys.add(item.target_rel_path_key)
-                continue
             matched = _metadata_equal(source_record.stat, target_record.stat, granularity)
             kind = OperationKind.NOOP if matched else OperationKind.UPDATE
-            reason = OperationReason.METADATA_MATCH if matched else OperationReason.METADATA_CHANGED
+            target_path = item.target_rel_path
+            if normalization_mismatch:
+                reason = OperationReason.UNICODE_NORMALIZATION_MISMATCH
+                target_path = target_record.rel_path
+            elif item.target_rel_path != target_record.rel_path:
+                reason = OperationReason.CASE_MISMATCH
+                target_path = target_record.rel_path
+                desired_name = PureWindowsPath(item.target_rel_path).name
+                observed_path = PureWindowsPath(target_record.rel_path)
+                if options.propagate_source_casing and desired_name != observed_path.name:
+                    target_path = str(observed_path.parent / desired_name)
+                    if matched:
+                        kind = OperationKind.UPDATE
+            else:
+                reason = OperationReason.METADATA_MATCH if matched else OperationReason.METADATA_CHANGED
             content_operations.append(
                 PlanOperation(
-                    op_id=deterministic_operation_id(kind, source_record.rel_path, item.target_rel_path, None, reason),
+                    op_id=deterministic_operation_id(kind, source_record.rel_path, target_path, None, reason),
                     kind=kind,
                     source_rel_path=source_record.rel_path,
-                    target_rel_path=item.target_rel_path,
+                    target_rel_path=target_path,
                     source_expected=source_record.stat,
                     target_expected=target_record.stat,
                     intended=source_record.stat,
                     metadata=source_record.metadata,
-                    content_bytes=0 if matched else source_record.size,
+                    content_bytes=0 if kind is OperationKind.NOOP else source_record.size,
                     dependencies=dependencies,
                     reason=reason,
                 )
             )
-            claimed_target_keys.add(item.target_rel_path_key)
+            claimed_target_keys.add(target_record.rel_path_key)
             continue
 
         move = _move_pair(

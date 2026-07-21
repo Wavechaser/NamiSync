@@ -44,7 +44,11 @@ resolution/writability, current filters from the injected settings reader, and
 one injected UTC timestamp.
 
 Stats are keyed by `Subject(root, rel_path_key)`, never by relative-path string
-alone.
+alone, but observation still passes the plan's exact relative-path spelling to
+the filesystem. Thus an opt-in case-only replacement resolves on ordinary
+case-insensitive NTFS while a case-sensitive target can report the differently
+spelled path absent or distinct and refuse as drift. Preflight never normalizes
+NFC/NFD spelling.
 
 Every path is first lexically validated, then opened/resolved under its root
 with long-path-safe, reparse-aware handling. Reclaimable temp accounting accepts
