@@ -1,32 +1,34 @@
-# Hash Pipeline and Algorithm Refactor
+# Hash Pipeline and XXH3 Refactor
 
 Status: investigation and planning completed 2026-07-22. Nothing below is
-implemented. This is both the plan for two related performance tracks and the
-decision log for the choices made while shaping them, in the same role
-`M1_PLAN.md` plays for M1 and `DESIGN_REVIEW.md` plays for M0.
+implemented. This document records two independent M1 performance tracks:
+single-file copy pipelining and the wholesale replacement of SHA-256 content
+hashing with XXH3-128.
 
 **Standing.** This document governs the unimplemented hash-throughput work
 until each decision is promoted into the active documents. `FEATURES.md` owns
-behavior, `ARCHITECTURE.md` owns contracts, module docs are subordinate to
-both; where this plan changes a settled bullet, the active document is edited
-**as that track lands**, not deferred. Once promoted, the active document
+behavior, `ARCHITECTURE.md` owns contracts, and module documents are
+subordinate to both. Where this plan changes a settled contract, the active
+document is updated as that track lands. Once promoted, the active document
 wins and this file becomes history.
 
 ---
 
 ## 1. What Prompted This
 
-Benchmarking showed the verifier is CPU-bound as expected, but the executor
-was *also* CPU-bound in some configurations, capped by SHA-256 throughput on
-the copying thread. The original M1 assumption was that multithreaded verify
-was the answer. This investigation asked a narrower question: what is
-actually limiting `NativeCopyBackend.copy`, and would supporting a faster
-hash algorithm help more than threading?
+Benchmarking showed two independent limits in the current
+`NativeCopyBackend.copy` loop:
 
-The answer turned out to be **both, in a specific order**, and the reasoning
-depends on measurements that contradict the first plausible guess. Section 2
-records the measurements because they are the entire basis for the decisions
-in Section 3.
+1. `read -> write -> hash` is serialized in one thread, leaving substantial
+   source and target throughput unused even without hashing.
+2. SHA-256 caps a pipelined copy at roughly 2 GiB/s per hashing thread on the
+   development machine.
+
+The first problem calls for a bounded three-stage pipeline inside one file
+copy. The second calls for a faster content hash. These changes complement
+one another but solve different problems: XXH3-128 removes hashing as the
+reason to execute multiple files concurrently; it does not remove the need to
+overlap one file's reads, writes, and hashing.
 
 ---
 
@@ -37,356 +39,322 @@ in Section 3.
 - CPU: Intel Core i7-13700K, 16C/24T, SHA-NI present
 - RAM: 64 GB
 - Python 3.13.14, `xxhash` 3.8.1
-- Source: `F:` — WD_BLACK SN850X 4 TB
-- Target: `G:` — WD_BLACK SN850X 4 TB (separate physical disk)
+- Source: `F:` - WD_BLACK SN850X 4 TB
+- Target: `G:` - WD_BLACK SN850X 4 TB (separate physical disk)
 - 8 GiB workload, 4 MiB chunks (the `chunk_size` default in
   `executor.py` and `integrity.py`)
-- **Unbuffered IO** (`FILE_FLAG_NO_BUFFERING`), sector-aligned buffers
+- Unbuffered IO (`FILE_FLAG_NO_BUFFERING`), sector-aligned buffers
 
 The unbuffered requirement is not incidental. A first pass using ordinary
-buffered IO with a 1 GiB file on a 64 GB machine measured a fully
-page-cached read leg on the slower `C:` volume (Samsung 970 EVO Plus, Gen3)
-and produced numbers that understated the hash cost by roughly half. Any
-future re-measurement must defeat the page cache and must not silently copy
-within one volume when the intent is cross-volume.
+buffered IO with a 1 GiB file on a 64 GB machine measured a fully page-cached
+read leg on the slower `C:` volume and understated the hash cost by roughly
+half. Any future re-measurement must defeat the page cache and must not
+silently copy within one volume when the intent is cross-volume.
 
 ### 2.2 Hash Throughput, Single Thread, No IO
 
 | Algorithm | MiB/s |
-|---|---|
+|---|---:|
 | xxh3_128 | 35 433 |
 | xxh3_64 | 34 491 |
 | xxh64 | 19 616 |
 | sha256 | 2 441 |
 | blake2b | 1 067 |
 
-SHA-256 is hardware-accelerated on this CPU and is consequently *faster than
-BLAKE2b and faster than MD5*. Any intuition that "a non-cryptographic hash is
-obviously faster" is only correct here because XXH3 is roughly 14.5x SHA-256;
-it does not generalize to the BLAKE family, which is slower.
+SHA-256 is hardware-accelerated on this CPU and is consequently faster than
+BLAKE2b and MD5. XXH3-128 is nevertheless roughly 14.5 times faster than
+SHA-256 and fast enough to leave storage or the copy loop as the bottleneck.
 
 ### 2.3 IO Ceilings
 
 | Operation | MiB/s |
-|---|---|
+|---|---:|
 | read-only, unbuffered | 5 433 |
 | write-only, unbuffered | 5 316 |
 
 ### 2.4 Copy Loop: Serial vs Pipelined
 
-Serial is the exact current `NativeCopyBackend.copy` shape — `read → write →
+Serial is the exact current `NativeCopyBackend.copy` shape: `read -> write ->
 update` in one thread. Pipelined is a three-stage version with separate
-reader, writer, and hasher threads and a recycled buffer pool. Digests were
-asserted identical between the two shapes for every algorithm.
+reader/coordinator, writer, and hasher threads over a recycled buffer pool.
+Digests were asserted identical between the two shapes for every measured
+algorithm.
 
-| Algorithm | Serial | Pipelined | Gain |
-|---|---|---|---|
+| Algorithm | Serial MiB/s | Pipelined MiB/s | Gain |
+|---|---:|---:|---:|
 | none (hashless) | 2 637 | 5 254 | +99.2% |
 | xxh3_128 | 2 118 | 5 318 | +151.1% |
 | sha256 | 1 261 | 1 910 | +51.5% |
 | blake2b | 591 | 971 | +64.1% |
 
 Run-to-run variance across passes was roughly 5% (hashless serial measured
-2 680 and 2 637 on two runs; sha256 serial 1 189 and 1 261). Treat all
-figures as approximate; the ratios are what matter.
+2 680 and 2 637 on two runs; SHA-256 serial measured 1 189 and 1 261). Treat
+all figures as approximate; the ratios are what matter.
 
 ### 2.5 What the Numbers Mean
 
-**The serial loop wastes half the disk before hashing enters the picture.**
-Hashless serial reaches 2 637 MiB/s against disks that sustain 5 300+,
-because `read`, `write`, and `update` are serialized in one thread and their
-throughputs combine harmonically rather than overlapping. Pipelining alone
-recovers this to 5 254 — effectively the IO ceiling.
+**The serial loop wastes roughly half the available IO throughput before
+hashing enters the picture.** Hashless serial reaches 2 637 MiB/s against
+disks that sustain 5 300+ MiB/s because the stages run consecutively.
+Pipelining recovers the hashless path to 5 254 MiB/s.
 
-**SHA-256 currently costs 52% of achievable throughput** (2 637 → 1 261 in
-the serial shape).
+**SHA-256 currently costs 52% of achievable serial throughput** (2 637 to
+1 261 MiB/s). In the pipeline it becomes the slowest stage and caps the path
+at roughly 1 900-2 400 MiB/s.
 
-**Pipelining converts SHA-256 from a tax into a hard ceiling.** Once stages
-overlap, throughput becomes the slowest stage. With SHA-256 that stage is the
-hash at 2 441 MiB/s, and the measured pipelined result is 1 910. With
-XXH3 the hash stage disappears entirely and the pipeline reaches 5 318.
-
-**Neither change alone gets more than roughly 2 000 MiB/s:**
+**XXH3-128 makes hashing negligible but does not replace pipelining.** Serial
+XXH3-128 reaches only 2 118 MiB/s; pipelined XXH3-128 reaches 5 318 MiB/s.
 
 | Configuration | MiB/s | vs today |
-|---|---|---|
-| Serial + sha256 (today) | 1 261 | — |
-| Pipeline only, keep sha256 | 1 910 | +51% |
+|---|---:|---:|
+| Serial + SHA-256 (today) | 1 261 | - |
+| Pipeline only, keep SHA-256 | 1 910 | +51% |
 | Algorithm only, stay serial | 2 118 | +68% |
-| **Both** | **5 318** | **+322%** |
+| Pipeline + XXH3-128 | 5 318 | +322% |
 
-### 2.6 The Crossover — Where XXH3 Stops Mattering
+### 2.6 Where the Algorithm Change Matters
 
-Pipelined SHA-256 saturates at roughly 1 900–2 400 MiB/s. Below that, the
-copy path is IO-bound and **SHA-256 is already free**. The algorithm choice
-therefore only matters when the slower end of the copy path sustains more
-than about 2 GB/s.
+Pipelined SHA-256 saturates at roughly 1 900-2 400 MiB/s. Below that, the copy
+path is already storage-bound and changing the hash does not improve transfer
+speed. The algorithm replacement is therefore a fast-path optimization for
+high-throughput storage, while the pipeline addresses structural
+serialization on every medium.
 
-On the development machine's own hardware that means SN850X-to-SN850X or the
-Optane volumes qualify; the portable SSDs, the USB-NVMe enclosure, the 16 TB
-spinning disks, and any network target do not. This is the single most
-important constraint on the work: **the algorithm track is a fast-path
-optimization, not a general one.** The pipeline track, by contrast, helps
-everywhere, because read/write serialization costs throughput on slow media
-too.
+The replacement still has a broader architectural benefit: a single XXH3-128
+stream is fast enough that NamiSync does not need concurrent file execution or
+parallel verification merely to overcome content-hash CPU throughput.
 
 ### 2.7 Bench Reproduction
 
-The bench scripts are session scratch artifacts and are not committed. To
-reproduce, a script must:
+The bench scripts are session scratch artifacts and are not committed. A
+reproduction must:
 
-1. Open source and target with `FILE_FLAG_NO_BUFFERING` and sector-aligned
-   buffers, or otherwise guarantee cache-cold reads.
-2. Use a workload comfortably larger than any plausible cache effect.
-3. Copy **across two physical volumes**, and record which volumes.
+1. Use unbuffered handles and correctly aligned buffers, or otherwise prove
+   that reads are cache-cold.
+2. Use a workload comfortably larger than plausible cache effects.
+3. Copy across two physical volumes and record which volumes.
 4. Assert digest equality between serial and pipelined shapes.
-5. Report a hashless baseline alongside every hashed measurement, since the
-   hashless number is what separates IO cost from hash cost.
+5. Report a hashless baseline alongside hashed measurements.
+6. Also benchmark the actual buffered executor path before treating the
+   unbuffered throughput as a production guarantee.
 
-Any figure in Section 2 that is re-derived on other hardware should be
-recorded with its own environment block rather than overwriting these.
+Figures re-derived on other hardware should be recorded with their own
+environment block rather than overwriting these results.
 
 ---
 
 ## 3. Decision Log
 
-Numbered `DR-HASH-##` to avoid colliding with `DR-M1-##` in `M1_PLAN.md` and
-`DESIGN_REVIEW.md`'s M0 numbering.
+### DR-HASH-01 - Keep the pipeline and algorithm tracks independent
 
-### DR-HASH-01 — Pipeline before algorithm
+**Tension.** Both changes improve throughput, but they address different
+limits and have different failure surfaces.
 
-**Tension.** Both changes yield roughly +50–70% alone; the 4.2x needs both.
-Which lands first?
+**Resolution.** Implement the pipelined copy backend as an independent track.
+The XXH3-128 replacement neither absorbs nor weakens that work.
 
-**Resolution.** Pipeline first, as an independent track that ships on its
-own.
+**Why.** The pipeline changes concurrency and cancellation inside the byte
+loop but no evidence format. The hash replacement changes the content-evidence
+contract and dependency but requires no concurrent file execution. Either can
+be implemented and verified without making the other partially present.
 
-**Why.** It is a universal win — read/write serialization costs throughput on
-every medium, not just above the 2 GB/s crossover. It requires no format
-change, no configuration surface, no new outcome states, and no dependency.
-Critically it is *contained*: the `CopyBackend` protocol at
-`core/execution.py:148` already isolates the byte loop, so the entire change
-lives inside `NativeCopyBackend` in `modules/executor.py`. It is also a
-prerequisite for the algorithm track to pay off fully — a faster hash in a
-serial loop tops out at 2 118 MiB/s.
+### DR-HASH-02 - Use one canonical content algorithm: XXH3-128
 
-### DR-HASH-02 — Support multiple algorithms rather than switching wholesale
+**Tension.** Supporting SHA-256 alongside XXH3-128 would retain a
+cryptographic option but would introduce algorithm selection, per-item
+dispatch, configuration, mixed-algorithm behavior, and a larger test matrix.
 
-**Tension.** A wholesale switch to XXH3 is roughly half a day. Supporting
-both is 2–3 days. Ledger and history contain no production data and can be
-reset, so the migration cost that would normally dominate this comparison is
-zero.
+**Resolution.** Replace SHA-256 content hashing wholesale with XXH3-128.
+NamiSync exposes no content-hash setting and supports no alternative canonical
+content algorithm in M1.
 
-**Resolution.** Support both. SHA-256 stays the default.
+**Why.** NamiSync's integrity promise covers accidental corruption and media
+defects, not deliberate adversarial modification. XXH3-128 supplies a
+128-bit content fingerprint at throughput well above the measured IO ceiling.
+Keeping SHA-256 would add product semantics without serving a current product
+requirement.
 
-**Why.** Section 2.6 is the argument. Below the crossover, SHA-256 is
-already free because the path is IO-bound; deleting a zero-cost option to
-save two days is a poor trade. The registry indirection is the small part of
-the work — most of the 2–3 days is test churn that a wholesale switch
-incurs anyway. Retaining SHA-256 also keeps cryptographic evidence available
-for users who want it, and keeps the unwritten sidecar-import module able to
-consume TeraCopy `.sha256` files without a special case.
+The algorithm identifier remains part of stored content evidence so evidence
+is self-describing. Its only accepted value is `xxh3_128`, and its digest is
+exactly 16 bytes.
 
-**Explicitly not a factor.** Deliberate tampering is out of scope for
-NamiSync, which targets naturally occurring defects such as bit rot. The
-cryptographic strength of SHA-256 is retained as a side benefit, not as a
-security guarantee the product makes.
+### DR-HASH-03 - Limit the replacement to content evidence
 
-### DR-HASH-03 — Algorithm is fixed per location
+**Tension.** NamiSync also uses SHA-256 for plan fingerprints, selection
+digests, custody keys, history chaining, and recorder identity. Those hashes
+protect canonical internal contracts rather than bulk file throughput.
 
-**Tension.** If the configured algorithm can differ from the algorithm stored
-on a row, VERIFY compares digests of different lengths at
-`modules/verifier.py:329` and reports `HASH_MISMATCH` — a **false bit-rot
-alarm**, the worst possible failure for this tool.
+**Resolution.** Replace SHA-256 only in the copy-attestation and integrity
+verification paths. Internal control-plane and database identity hashes remain
+SHA-256.
 
-**Resolution.** The algorithm is a per-location property chosen at location
-creation. VERIFY reads the algorithm **from the baseline row**, not from
-configuration. BASELINE reads it from the location's configuration.
+**Why.** Those inputs are small, so changing them provides no measurable
+performance benefit and needlessly changes stable identifiers and custody
+contracts.
 
-**Why.** This makes a cross-algorithm comparison structurally impossible in
-VERIFY rather than merely guarded against. The remaining guard (DR-HASH-04)
-becomes defensive rather than load-bearing.
+### DR-HASH-04 - Defer cross-file parallelism until measurements require it
 
-### DR-HASH-04 — Algorithm change is a rebaseline, not a mismatch
+**Tension.** Concurrent file execution and verification can improve some
+multi-device or small-file workloads, but they add scheduling, memory,
+progress, cancellation, and device-contention complexity.
 
-**Tension.** A user who changes a location's algorithm still needs a defined
-path, and the existing invariant at `core/integrity.py:247` requires VERIFY
-to have established evidence.
+**Resolution.** M1 uses one file operation at a time. Each copy may pipeline
+that file's read, write, and hash stages. Verification remains single-stream.
+Parallel file execution or verification requires a later benchmark showing a
+real workload that remains underutilized after XXH3-128.
 
-**Resolution.** One new `IntegrityReason` — `ALGORITHM_MISMATCH` — reported
-by a guard placed next to the existing `BASELINE_EXISTS` check at
-`modules/verifier.py:253`, before any read occurs. It does not advance
-`last_verified_at` and does not report `MISMATCHED`. Migration is performed
-by the existing `IntegrityMode.REBASELINE`.
-
-**Why.** The machinery already exists. `REBASELINE` is defined at
-`core/integrity.py:48` and exposed at `modules/verifier.py:100`, and the
-invariants at `core/integrity.py:245-249` already give it the correct
-semantics: rebaseline does not advance verification time, which is exactly
-right for an algorithm migration — the file was re-hashed, not verified.
-Placing the guard before the read also avoids paying IO for a comparison that
-cannot succeed.
-
-### DR-HASH-05 — Single evidence column group; rejected two-column split
-
-**Tension.** A proposal to carry two ledger digest columns, one per
-algorithm, with flags recording which is populated. The stated goal was to
-eliminate cross-algorithm comparison and mixed-inventory concerns at the
-schema level.
-
-**Resolution.** Rejected. Keep the single evidence group.
-
-**Why.** The digest is not a standalone column. It is one field of a
-**14-column evidence group** (`db/schema.py:98-110`): algorithm, digest,
-size, provenance, observed_at, seven `attested_*` subject-stat fields, and
-`last_verified_at`. That group is bound to a *single read* —
-`modules/verifier.py:342-356` takes `observed_at` from the clock at hash time
-and `subject` from the `after` stat of the same open handle. `Attestation`
-means one read, one algorithm, one observed subject, and that binding is what
-makes it evidence rather than a cached value.
-
-Two digest columns therefore force a choice, and all three branches are worse
-than the single column:
-
-- **Share the evidence group.** Unsound. Two digests computed from two reads
-  at different times sit under one `content_observed_at` and one
-  `attested_mtime_ns`; if the file changed between them the row asserts
-  something false. This directly attacks the integrity property the product
-  exists to provide.
-- **Duplicate the group per algorithm.** Sound, but roughly ten additional
-  columns, and the all-or-nothing CHECK at `db/schema.py:120-129` becomes two
-  independent groups plus an at-least-one rule. Every future algorithm is
-  another `ALTER TABLE`.
-- **Require both digests from one read.** Sound and cheap — XXH3 alongside
-  SHA-256 is nearly free — but self-defeating. Always computing both means
-  always paying SHA-256's 2 441 MiB/s ceiling, which pipelined is ~1 910
-  MiB/s, precisely the status quo. The entire gain evaporates.
-
-The only thing the split genuinely buys is per-file coexistence, allowing an
-incremental algorithm change without a full rebaseline. That is real but
-worth less than it appears, because the only honest way to populate both
-digests is the self-defeating third branch.
-
-**If coexistence is later wanted**, the correct shape is a child table keyed
-`(inventory_id, algorithm)` carrying a complete evidence group per row — not
-more columns. That models `Attestation` exactly as `core/evidence.py` already
-defines it and makes future algorithms a zero-schema-change addition. Cost is
-roughly one day over the single-column plan, since `db/repositories.py:103`
-and the two recorder UPDATE paths (`db/recorder.py:656`, `:1129`) move from
-column access to a join and an upsert.
-
-**Note on the reset argument.** "The DB can be nuked" is true today and was
-correctly used to discount migration cost in DR-HASH-02. It is deliberately
-*not* used to justify schema shapes here: the reset window closes at v1.0,
-and the schema chosen now should be the one wanted then.
+**Why.** The measured XXH3-128 stage is not the bottleneck. Concurrency should
+solve observed device utilization, not compensate for the retired SHA-256
+ceiling.
 
 ---
 
 ## 4. Implementation
 
-Two independent tracks. Track 1 ships alone and is worth shipping alone.
+### 4.1 Track 1 - Pipelined Copy Backend
 
-### 4.1 Track 1 — Pipelined Copy Backend
+The pipeline remains contained inside `NativeCopyBackend` in
+`modules/executor.py`. The `CopyBackend` call boundary stays synchronous: it
+returns one `CopyDigest` or raises only after all worker threads have stopped.
 
-Entirely contained within `NativeCopyBackend` in `modules/executor.py:93`.
-The `CopyBackend` protocol at `core/execution.py:148` is unchanged, so no
-caller, policy, or contract outside the class is affected.
+Use one caller/coordinator thread, one writer thread, and one hasher thread
+over a bounded recycled buffer pool. Eight 4 MiB buffers measured well and
+consume roughly 32 MiB because writer and hasher share the same buffer.
+Ordinary buffered IO does not require sector-aligned buffers; alignment only
+becomes a contract if the executor separately adopts unbuffered IO.
 
-Shape: a reader thread, a writer thread, and a hasher thread over a recycled
-pool of aligned buffers (8 buffers measured well). Each chunk is handed to
-both the writer and the hasher; the buffer returns to the free pool once both
-consumers release it.
+#### Buffer lifecycle
 
-Constraints to preserve:
+```text
+free
+  -> coordinator reads and assigns sequence number
+  -> queued once to writer and once to hasher
+  -> writer acknowledgement + hasher acknowledgement
+  -> coordinator reports progress in sequence order
+  -> free
+```
 
-- `checkpoint()` and `on_chunk` are per-chunk callbacks in the current
-  contract. Keep both **in the reader thread** so their ordering and
-  cancellation semantics are unchanged and no caller needs to become
-  thread-safe.
-- Forward-progress and short-write handling in the writer must retain the
-  current `written is None or written <= 0` guard.
-- Cancellation must not deadlock: a checkpoint raising mid-stream has to
-  drain or abandon queues without leaving threads joined forever.
-- The digest must be byte-identical to the serial shape. The bench asserted
-  this; the test suite should too.
+The buffer must not be mutated or returned to the free pool until both
+consumers acknowledge it. The writer and hasher each consume a FIFO queue;
+the coordinator still tracks sequence numbers explicitly so completion and
+progress ordering are testable.
 
-An open question is whether the executor should also move to unbuffered IO.
-The bench used it to defeat the page cache, but the executor currently opens
-files through ordinary buffered `open()`. The pipelining gain is structural
-and should hold either way; whether unbuffered helps or hurts real copies is
-a separate measurement, not assumed here.
+#### Callback semantics
 
-### 4.2 Track 2 — Multi-Algorithm Support
+`checkpoint()` and `on_chunk()` stay on the original caller/coordinator
+thread. Workers never call either callback.
 
-| Change | Size |
+- Call `checkpoint()` before admitting each new read, matching the current
+  chunk-boundary cancellation point.
+- Call `on_chunk(size)` only after that chunk has been fully written to the
+  owned temporary file and included in the digest.
+- Release progress in sequence order, even if worker acknowledgements arrive
+  at different times.
+
+Calling `on_chunk()` immediately after the read would be incorrect: progress
+would lead completed work and would overcount when the writer fails.
+Progress means written-to-temp and hashed, not durably published.
+
+#### Cancellation and failure
+
+The implementation needs a shared abort flag and a first-error slot.
+
+- A cancellation or pause exception stops new reads, signals abort, shuts down
+  both queues, joins both workers in `finally`, then re-raises the original
+  control exception.
+- A worker may finish its current chunk after abort, but must not start useful
+  work on later queued chunks. Queued buffers are consumed and released so no
+  producer or peer remains blocked on the bounded pool.
+- Writer errors stop further writes. Hasher errors prevent any digest from
+  being returned. Reader and callback errors follow the same abort-and-join
+  path.
+- Retain the existing short-write loop and the
+  `written is None or written <= 0` forward-progress guard.
+- The caller never observes a return or exception while a worker is still
+  running.
+
+Because the executor publishes only after `copy()` returns, cancellation or
+worker failure leaves at most an owned temporary file, which the existing
+executor cleanup path removes.
+
+Explicit `Thread`, bounded `Queue`, and small buffer-state records are favored
+over a general thread pool: ownership, draining, and shutdown need to remain
+visible and deterministic.
+
+### 4.2 Track 2 - Wholesale XXH3-128 Content Hashing
+
+This track deliberately has no registry, algorithm setting, location
+preference, or per-run algorithm field.
+
+| Change | Required result |
 |---|---|
-| New `HashAlgorithm` registry: name → factory, digest size | ~40 lines |
-| `core/evidence.py:50-62` — `Literal["sha256"]` → validated name; fixed 32-byte check → registry length | ~5 lines |
-| `core/execution.py:137-143` — add `algorithm` to `CopyDigest`; length check via registry | ~5 lines |
-| `modules/executor.py` — `ExecutorPolicies.algorithm` field; backend uses it; `_attestation` at `:2100` reads it from `CopyDigest` instead of the literal at `:2104` | ~10 lines |
-| `modules/verifier.py` — `VerifierContext.algorithm`; construct via registry at `:294`; algorithm at `:345` from context | ~10 lines |
-| `db/repositories.py:120` — read the stored `content_algorithm` instead of hardcoding | 1 line |
-| DR-HASH-04 guard + new `IntegrityReason` | ~15 lines |
-| `pyproject.toml` — `xxhash` dependency | 1 line |
-| **DB schema / migration** | **none** |
-| **CLI** | **none yet** |
+| `pyproject.toml` | Add the pinned/compatible `xxhash` dependency |
+| `core/evidence.py` | `ContentEvidence.algorithm` accepts only `xxh3_128`; digest length is exactly 16 bytes |
+| `core/execution.py` | `CopyDigest` validates a 16-byte XXH3-128 digest |
+| `modules/executor.py` | `NativeCopyBackend` creates `xxh3_128`; copy attestation records `xxh3_128` |
+| `modules/verifier.py` | Baseline, verify, and rebaseline all create `xxh3_128` and record that identifier |
+| `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
+| Tests and fixtures | Replace SHA-256 content expectations with canonical XXH3-128 bytes |
 
-Two notes on that table:
+The third-party `xxhash` package must not be imported by `core`, which is
+standard-library-only. The concrete hashing calls belong in the executor and
+verifier modules. Core owns only the fixed evidence contract: identifier,
+digest bytes, and length.
 
-`content_algorithm` is already a real per-row column written from
-`attestation.content.algorithm` (`db/recorder.py:666`) and compared in the
-idempotence check (`db/recorder.py:710`). The only place it is discarded is
-the hardcoded `"sha256"` on read at `db/repositories.py:120`. **The DB layer
-needs no schema change**, independent of the reset question.
-
-`interfaces/cli.py` does not expose baseline, verify, or rebaseline at all
-today, so no interface work is required by this track. The per-location
-algorithm setting from DR-HASH-03 lands with whichever M1 track introduces
-location configuration, and should be treated as a dependency on that track
-rather than duplicated here.
-
-`chunk_size` is the precedent for how the algorithm threads through: a
-defaulted dataclass field on `VerifierContext` (`core/integrity.py:289`) and
-`ExecutorPolicies` (`modules/executor.py:152`). Following it introduces no new
-plumbing concept.
+The existing non-content SHA-256 uses in `core/planning.py`,
+`dispatcher/custody.py`, `db/history.py`, and `db/recorder.py` are explicitly
+unchanged.
 
 ### 4.3 Test Impact
 
-Seven test files reference `sha256`, `ContentEvidence`, or `CopyDigest`:
-`tests/_db_fixtures.py`, `tests/core/test_session_events.py`,
-`tests/modules/test_verifier.py`, `tests/test_core_scanplan.py`,
-`tests/test_executor.py`, `tests/test_recorder_inventory_integrity.py`,
-`tests/test_scanner.py`.
+Required pipeline coverage:
 
-Most churn is mechanical — threading an `algorithm` through constructors.
-New coverage needed:
+- Serial reference and pipelined copy produce identical XXH3-128 digests and
+  byte counts across empty, partial-chunk, exact-chunk, and multi-chunk files.
+- `on_chunk()` occurs only after both write and hash acknowledgement and is
+  emitted in sequence order.
+- Short writes make forward progress; zero/`None` writes fail.
+- Reader, writer, hasher, and callback failures terminate and join both
+  workers without deadlock.
+- Cancel and pause at each pipeline stage terminate cleanly, publish nothing,
+  and allow owned-temp cleanup.
+- The bounded pool is actually bounded and buffers are never reused before
+  both consumers release them.
 
-- Round-trip baseline → verify parametrized across algorithms.
-- DR-HASH-04: VERIFY against a row whose algorithm differs reports
-  `ALGORITHM_MISMATCH`, does not report `MISMATCHED`, does not advance
-  `last_verified_at`, and performs no read.
-- REBASELINE migrates a row from one algorithm to another.
-- Pipelined and serial copy backends produce identical digests.
-- Cancellation mid-copy in the pipelined backend terminates cleanly.
+Required content-hash coverage:
+
+- Official XXH3-128 vectors produce canonical 16-byte digest values.
+- Copy attestation round-trips through the recorder and repository as
+  `xxh3_128` without byte-order changes.
+- Baseline followed by verify succeeds; changed content reports
+  `HASH_MISMATCH`.
+- Invalid identifier, non-bytes digest, and wrong digest length are rejected.
+- Existing plan, selection, history, custody, and recorder identity hashes
+  remain unchanged.
+- The supported Windows/Python build can import the `xxhash` dependency and
+  construct both streaming executor and verifier hashers.
 
 ### 4.4 Estimate
 
-Track 1: ~1 day plus tests. Track 2: ~1 day production code, ~1 day test
-churn, ~0.5 day for the DR-HASH-04 path and its tests.
+- Track 1: approximately 2-3 implementation days including deterministic
+  cancellation/failure handling and focused tests. The earlier one-day
+  estimate omitted acknowledgement and shutdown semantics.
+- Track 2: approximately 1 implementation day plus 1 day for fixtures,
+  vectors, persistence round-trips, and regression tests.
 
-These are estimates from a static read of the call sites, not from an
-attempted implementation.
+These remain estimates from the measured prototype and a static read of the
+call sites, not from an attempted production implementation.
 
 ---
 
 ## 5. Deferred
 
-- **Multithreaded verify.** Unchanged as an M1 item and independent of both
-  tracks here. The verifier is parallel across files, so it scales with cores
-  rather than capping at a single-stream ceiling.
-- **Per-file multi-algorithm evidence.** Only via the child table in
-  DR-HASH-05, only if a concrete need appears.
-- **Unbuffered executor IO.** Needs its own measurement (§4.1).
-- **Additional algorithms.** The registry makes BLAKE3 or others additive,
-  but §2.2 shows the BLAKE family is slower than hardware SHA-256 on this
-  class of CPU, so there is no throughput case for them today.
+- **Concurrent file execution.** Reconsider only if post-XXH3 measurements
+  show that a real workload leaves relevant devices underutilized.
+- **Parallel verification.** Same gate: demonstrate an IO-utilization problem
+  after XXH3-128 before adding workers.
+- **Unbuffered executor IO.** Needs its own measurement; the current benchmark
+  does not establish that it improves the production buffered path.
+- **Additional content algorithms.** Require a concrete product need and a
+  new decision covering semantics, evidence compatibility, and tests. No
+  registry or dormant extension mechanism is added in M1.
