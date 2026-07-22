@@ -68,7 +68,7 @@ Unbaselined/Missing/Reappeared/Acknowledged filters and live counts. Mismatch is
 visually prominent and persistent, distinct from ordinary modification.
 
 Inventory actions share one action definition across menus/buttons/context:
-inventory refresh, selected verify, baseline, rebaseline, import hashes,
+inventory refresh, selected verify, baseline, rebaseline,
 acknowledge/restore missing, and copy path. Scope labels include active-filter
 and visible present-row count. Right-click first selects the valid index under
 the pointer; blank space acts on nothing.

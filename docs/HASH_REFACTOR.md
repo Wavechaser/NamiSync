@@ -178,6 +178,15 @@ The algorithm identifier remains part of stored content evidence so evidence
 is self-describing. Its only accepted value is `xxh3_128`, and its digest is
 exactly 16 bytes.
 
+A required `hasher_factory` collaborator does not weaken this decision. It is
+dependency inversion for the concrete package, not algorithm selection: the
+factory takes no algorithm name, core accepts only the `xxh3_128` identifier,
+and `ContentEvidence`/`CopyDigest` reject any digest that is not exactly 16
+bytes. Verifier validates the produced digest length before baseline
+comparison, so a bad factory is an internal contract failure rather than a
+false `HASH_MISMATCH`. There is no registry, lookup, or configurable branch to
+generalize.
+
 ### DR-HASH-03 - Limit the replacement to content evidence
 
 **Tension.** NamiSync also uses SHA-256 for plan fingerprints, selection
@@ -289,17 +298,33 @@ preference, or per-run algorithm field.
 | Change | Required result |
 |---|---|
 | `pyproject.toml` | Add the pinned/compatible `xxhash` dependency |
-| `core/evidence.py` | `ContentEvidence.algorithm` accepts only `xxh3_128`; digest length is exactly 16 bytes |
+| `core/evidence.py` | `ContentEvidence.algorithm` accepts only `xxh3_128`; digest length is exactly 16 bytes; define the standard-library-only streaming hasher/factory protocol used by both consumers |
 | `core/execution.py` | `CopyDigest` validates a 16-byte XXH3-128 digest |
-| `modules/executor.py` | `NativeCopyBackend` creates `xxh3_128`; copy attestation records `xxh3_128` |
-| `modules/verifier.py` | Baseline, verify, and rebaseline all create `xxh3_128` and record that identifier |
+| `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
+| `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |
+| `modules/verifier.py` | Baseline, verify, and rebaseline obtain a hasher from the context, require a 16-byte result before any comparison, and record `xxh3_128` |
+| `workflows/runtime.py` | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`; the M1 integrity workflow supplies it to `VerifierContext` in the same pass |
 | `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
 | Tests and fixtures | Replace SHA-256 content expectations with canonical XXH3-128 bytes |
 
 The third-party `xxhash` package must not be imported by `core`, which is
-standard-library-only. The concrete hashing calls belong in the executor and
-verifier modules. Core owns only the fixed evidence contract: identifier,
-digest bytes, and length.
+standard-library-only. Executor and verifier also do not construct the
+third-party implementation themselves: they consume the required factory
+seam, while workflow composition supplies the single concrete XXH3-128
+constructor. Core owns the fixed evidence contract plus the structural
+streaming protocol; it does not own a concrete factory or an algorithm map.
+
+`ExecutorPolicies` currently declares
+`copy_backend: CopyBackend = field(default_factory=NativeCopyBackend)`. Once
+`NativeCopyBackend` requires its collaborator, that default is invalid. Drop
+the default and make workflow composition pass the fully constructed backend
+explicitly. Do not preserve the default by making the module import or create
+the concrete XXH3 implementation.
+
+`VerifierContext` has no production construction site yet because the M1
+integrity workflow is not wired. Add its required factory field now and wire
+that workflow in the same pass; postponing the seam until after M1 would only
+create avoidable constructor churn.
 
 The existing non-content SHA-256 uses in `core/planning.py`,
 `dispatcher/custody.py`, `db/history.py`, and `db/recorder.py` are explicitly
@@ -329,6 +354,8 @@ Required content-hash coverage:
 - Baseline followed by verify succeeds; changed content reports
   `HASH_MISMATCH`.
 - Invalid identifier, non-bytes digest, and wrong digest length are rejected.
+- A factory returning a non-XXH-shaped digest fails as a collaborator contract
+  error before verification comparison; it never becomes `HASH_MISMATCH`.
 - Existing plan, selection, history, custody, and recorder identity hashes
   remain unchanged.
 - The supported Windows/Python build can import the `xxhash` dependency and
@@ -357,4 +384,7 @@ call sites, not from an attempted production implementation.
   does not establish that it improves the production buffered path.
 - **Additional content algorithms.** Require a concrete product need and a
   new decision covering semantics, evidence compatibility, and tests. No
-  registry or dormant extension mechanism is added in M1.
+  registry or dormant extension mechanism is added in M1. The required,
+  parameterless hasher factory is only the inversion seam for the one pinned
+  implementation; turning it into an algorithm-keyed factory would violate
+  DR-HASH-02.

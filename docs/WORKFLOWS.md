@@ -1,6 +1,6 @@
 # Workflows Module
 
-Status: M0 reviewed sync and history implemented. M1 inventory/integrity/import
+Status: M0 reviewed sync and history implemented. M1 inventory/integrity
 and later queue, maintenance, replay, undo/repair, and ingest remain deferred.
 
 ## Purpose
@@ -110,7 +110,7 @@ outcomes.
 
 ## Integrity Workflow
 
-Inventory, baseline, verify, rebaseline, and hash import are location-centric,
+Inventory, baseline, verify, and rebaseline are location-centric,
 not plan- or mapping-dependent. The workflow resolves one selected location,
 performs full or selected refresh, commits inventory, constructs canonical
 selection, runs the integrity module, flushes recorder, and returns inventory
@@ -122,8 +122,8 @@ scan before missing marking. UI receives refreshed inventory at the scan-to-hash
 handoff so it never shows stale/empty rows during work.
 
 Verify and baseline register pause support and retain per-item status so resume
-freshly guards only the remaining selection. Scan, plan, and hash import register
-pause unsupported and remain cooperatively cancelable.
+freshly guards only the remaining selection. Scan and plan register pause
+unsupported and remain cooperatively cancelable.
 
 ## Other Workflows
 

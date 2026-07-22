@@ -1,6 +1,9 @@
 # TeraCopy Hash Import Module
 
-Status: draft contract. Priority: M1 integrity workflow.
+Status: obsolete planning record. Hash import was removed from M1 and the
+active product scope on 2026-07-22 when NamiSync selected one canonical
+XXH3-128 content-evidence algorithm. This file is historical context only and
+must not guide implementation.
 
 ## Purpose
 

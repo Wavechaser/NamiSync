@@ -92,7 +92,7 @@ and unconditional release; it does not add a second terminal path.
 
 Pause is a generic per-workflow-registration capability. Execution supports it
 from M0 through mutable `ExecutionSet.status`; verify and baseline add an
-item-status continuation in M1. Scan, plan, and hash import refuse pause cleanly
+item-status continuation in M1. Scan and plan refuse pause cleanly
 and remain cancelable. A pause unwinds, forces recorder flush where applicable,
 persists the workflow-owned continuation, releases custody, and emits no
 terminal.

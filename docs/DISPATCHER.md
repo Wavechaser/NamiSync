@@ -47,8 +47,8 @@ results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
 Pause is accepted only when the registered kind declares a continuation:
-execution in M0 and verify/baseline item-list sessions in M1. Scan, plan, and
-hash import refuse pause without changing state and remain cancelable. An
+execution in M0 and verify/baseline item-list sessions in M1. Scan and plan
+refuse pause without changing state and remain cancelable. An
 accepted pause raises `PauseRequested`, unwinds after workflow continuation
 state is retained, and reports `PAUSED` only after custody is released. Resume
 re-enters admission at the back of every required volume queue, never preempts a

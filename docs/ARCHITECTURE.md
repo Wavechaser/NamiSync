@@ -136,9 +136,9 @@ abandoned by a mid-copy pause is reclaimed by ordinary orphaned-temp recovery.
 
 Pause is a per-kind capability, declared once at workflow registration and
 enforced through the transition table: only session kinds with a continuation
-state accept it — execution from M0, the verifier's item-list sessions
-(verify/baseline) from M1 — while scan/plan and import sessions (seconds of
-work, no continuation) refuse pause cleanly and remain cancelable. The
+state accept it — execution from M0 and the verifier's item-list sessions
+(verify/baseline) from M1 — while scan/plan sessions (seconds of work, no
+continuation) refuse pause cleanly and remain cancelable. The
 recorder needs no pause behavior at all: it is call-driven, not stream-driven —
 while nothing executes it simply receives no calls, and the pause-drain forced
 flush (§4.7) has already committed every completed operation's evidence before
@@ -970,7 +970,7 @@ zero completed commands. Cross-process contention is bounded and visible.
 
 **Bones.** Single serialized writer; the conditional-recording primitive (write
 gated on row id + state + size + mtime still matching the observation) shared by
-copy/verify/baseline/import; bounded-window durability with forced flush before
+copy/verify/baseline; bounded-window durability with forced flush before
 any destructive op, at pause-drain, and at terminal; run-token idempotency;
 WAL + foreign keys + bounded busy timeout; the §3 schema-freeze columns. History
 has **no** foreign key to the ledger and its failures never roll back real work —
@@ -987,8 +987,8 @@ enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 `history` command. The observer is cheap precisely because it is only an event
 subscriber; nothing calls it.
 Conditional verify/baseline/rebaseline recording landed early with the isolated
-verifier during M0 construction. **Flesh — M1.** Hash-import recording; history
-integrity/import summaries and retained issue detail; retention sweeps
+verifier during M0 construction. **Flesh — M1.** History integrity summaries
+and retained issue detail; retention sweeps
 (writable connection); integrity workflow composition.
 **Flesh — deferred.** General migration module; legacy import; scheduled backup/quick-check
 (as an ordinary session); export/import; ledger merge across hosts.
@@ -1147,7 +1147,7 @@ sessions and exposes the resulting typed history reads.
 **Flesh — implemented (M0).** Paired sync (both phases), automatic safe-subset
 selection, local composition, CLI terminal review/commit, and history browsing.
 **Flesh — deferred.** One-location integrity
-(inventory/baseline/verify/import, M1); queue-driven second sessions;
+(inventory/baseline/verify, M1); queue-driven second sessions;
 replay-from-history; DB maintenance session; undo/repair (each generated as an
 ordinary plan through the same pipeline — the *Pipeline-Only Mutation* law);
 `run_ingest` — scan → enrich (`MetadataExtractor`, its own cancellable stage)

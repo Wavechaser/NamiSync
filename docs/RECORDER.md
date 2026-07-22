@@ -1,13 +1,13 @@
 # Recorder Module
 
 Status: M0 sync recording, ledger setup, inventory reconciliation, and the
-shared conditional integrity write are implemented. Hash import and maintenance
-recording remain later work.
+shared conditional integrity write are implemented. Maintenance recording
+remains later work.
 
 ## Purpose
 
 Recorder is the only write path into the main ledger. Executor, inventory
-reconciliation, verifier, baseline, hash import, rebind, annotations, and later
+reconciliation, verifier, baseline, rebind, annotations, and later
 maintenance issue typed commands; none executes SQL directly. Recorder
 serializes in-process writes, applies conditional evidence rules, batches within
 a bounded durability window, and fails visibly.
@@ -74,7 +74,7 @@ as target identity. At minimum the protocol covers:
 - confirmed copy/update/move/move-update/recase/trash/delete/mkdir/no-op
   correspondence;
 - complete/scoped inventory reconciliation and missing/reappearance state;
-- conditional baseline, verify, rebaseline, and external hash import;
+- conditional baseline, verify, and rebaseline;
 - mapping/location/rebind and soft-delete state;
 - namespaced annotations;
 - `flush()` at explicit durability boundaries.

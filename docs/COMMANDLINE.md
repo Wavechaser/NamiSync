@@ -45,7 +45,6 @@ digest; no flag combination plans and executes in one unreviewed invocation.
   and report typed counts/issues.
 - `verify LOCATION [scope]`: refresh appropriately, verify, and return an
   integrity-issue exit status when needed.
-- `import-hashes LOCATION SIDECAR`: explicitly import one TeraCopy sidecar.
 
 Integrity commands accept both `--database` and `--history-database`; tests use
 temporary values for both. A selected location is never inferred by falling
@@ -159,7 +158,7 @@ transport replacement behind the same command adapter in M2.
   dispatcher volume policy.
 - Location-only commands require exactly the selected usable location and never
   require/fallback to a paired root.
-- History prints sync operations and integrity/import detail by activity kind,
+- History prints sync operations and integrity detail by activity kind,
   including pruned-detail explanation.
 - Invalid path, permission, volume ambiguity, stale plan, and capacity refusal
   messages each state the next user action.

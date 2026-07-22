@@ -8,6 +8,10 @@ supports baseline, verify, explicit rebaseline, pause/cancel continuation, and
 cache-honest Windows unbuffered reads. The end-user integrity workflow remains
 an M1 integration task because inventory refresh, persisted integrity history,
 dispatcher registration, and interface composition are separate layers.
+M1 also replaces bulk content evidence with fixed XXH3-128 and pipelines each
+copy's read/write/hash stages; file-level execution and verification workers
+remain deferred until post-replacement measurements justify them. Internal
+plan, custody, history, and database identity hashes remain SHA-256.
 
 The M0 dispatcher is also implemented: generic sessions run concurrently when
 their resource sets are disjoint, serialize when they overlap, use real
@@ -31,7 +35,7 @@ mapping correspondence, runs, and distinct observed/attested evidence; typed
 repositories are read-only; and an independent history observer stores sync
 envelopes, summaries, and ordered operations, including blocked/deferred safe-
 subset exclusions. A narrow history v1-to-v2 migration preserves existing runs;
-general migrations, backup/retention, hash import, and richer integrity history
+general migrations, backup/retention, and richer integrity history
 remain later phases.
 
 The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
@@ -94,6 +98,10 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
   milestone order.
 - [`DESIGN_REVIEW.md`](docs/DESIGN_REVIEW.md): resolved decision ledger from
   hardening the architecture and module contracts.
+- [`M1_PLAN.md`](docs/M1_PLAN.md): resolved M1 scope, sequencing, and decision
+  record for work not yet promoted into active component contracts.
+- [`HASH_REFACTOR.md`](docs/HASH_REFACTOR.md): measured single-file pipeline
+  and fixed XXH3-128 content-hash plan for M1.
 - [`CORE.md`](docs/CORE.md): shared types, session/event contracts, path safety,
   identity, time, and evidence.
 - [`SCANNER.md`](docs/SCANNER.md): filesystem observation and completeness.
@@ -103,7 +111,6 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 - [`EXECUTOR.md`](docs/EXECUTOR.md): guarded filesystem mutation and recovery.
 - [`INVENTORY.md`](docs/INVENTORY.md): role-free retained location evidence.
 - [`VERIFIER.md`](docs/VERIFIER.md): baseline, verification, and rebaseline.
-- [`HASH_IMPORT.md`](docs/HASH_IMPORT.md): safe TeraCopy SHA-256 import.
 - [`INGEST.md`](docs/INGEST.md): latent metadata-sorted media ingest workflow.
 - [`RECORDER.md`](docs/RECORDER.md): sole main-ledger write path.
 - [`DATABASE.md`](docs/DATABASE.md): schemas, repositories, migrations, and data

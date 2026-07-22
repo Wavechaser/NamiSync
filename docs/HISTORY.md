@@ -1,7 +1,7 @@
 # History Module
 
 Status: minimal independent sync history storage, observer integration, and CLI
-browsing are implemented for M0. Integrity/import detail, retention, task
+browsing are implemented for M0. Integrity detail, retention, task
 grouping, replay, discard audit, and export remain later work.
 
 ## Purpose
@@ -43,7 +43,7 @@ do not add separate top-level outcome categories.
 `HistoryRepository` returns immutable typed run and operation snapshots through
 a read-only connection. The M0 CLI reaches these reads through the workflow
 composition root; the database module itself owns no interface policy. No M0
-method implements retention or integrity/import detail. Recent-run rendering
+method implements retention or integrity detail. Recent-run rendering
 derives blocked/deferred exception counts from those typed item rows, while
 detailed rendering lists each path and reason.
 
@@ -67,7 +67,7 @@ best-effort: a process crash may lose at most the bounded in-flight buffer.
 
 Every explicit attempt is recordable: success, partial failure, all-noop,
 blocked, capacity/preflight refusal, cancellation, unexpected exception,
-baseline, verify, import, maintenance, and later queued discard. Early returns
+baseline, verify, maintenance, and later queued discard. Early returns
 must not bypass the envelope.
 
 Run-token uniqueness makes repeated delivery idempotent. Sequence gaps,
@@ -81,7 +81,6 @@ integrity errors, not silently ignored.
   and deferred quarantine/withholding.
 - Integrity: selected scope, typed per-file integrity issues/outcomes, counts,
   and evidence provenance.
-- Hash import: imported/known/conflict/invalid/stale outcomes.
 - Subject-only activities render one location/subject, never `None → None`.
 - No-op/refused/canceled attempts retain an envelope and truthful zero-work
   detail where applicable.
@@ -89,7 +88,8 @@ integrity errors, not silently ignored.
 M0 stores sync envelopes, summaries, and ordered operations sufficient for CLI
 history. The history schema is version 2; startup transactionally adds
 `blocked_count` when opening a version-1 store and preserves existing runs. M1
-adds integrity/import detail and retention.
+adds generic phase summaries, one ordered phase/item-type-tagged heterogeneous
+result-item stream, integrity detail, and retention.
 
 ## Failure Semantics
 
@@ -165,7 +165,7 @@ M0 tests cover sync axis/detail round-trip, ordered outcomes, blocked/no-op/refu
 attempts, exact duplicate delivery, conflicting duplicate diagnosis, idempotent
 run finalization, read-only browsing, and failure isolation. Buffer pressure,
 acknowledgement timeout, and single-terminal settlement are dispatcher tests.
-Integrity/import renderers, retention, replay, discard audit, and export remain
+Integrity renderers, retention, replay, discard audit, and export remain
 future acceptance gates.
 
 - Every terminal path listed above produces exactly one idempotent envelope with
@@ -174,7 +174,7 @@ future acceptance gates.
   duplicate payload is diagnosed.
 - Reliable item order and sequence round-trip; an injected gap is detected and
   surfaced.
-- Sync, integrity, import, maintenance, and subject-only renderers return their
+- Sync, integrity, maintenance, and subject-only renderers return their
   typed detail and never invent source/target roles.
 - All-noop and zero-mutation refusal remain browseable.
 - Unexpected SQLite/OS/domain exceptions still attempt truthful failed history

@@ -172,8 +172,10 @@ below describe settled behavior, not current M0 runtime claims.
 
 - **ADS Preservation**. Alternate-data-stream preservation remains unrealized executor flesh, but its contract is settled: enumeration happens at copy time in the executor, which already holds the file — no scanner, planner, or schema change, and the scanner stays role-free. NTFS updates a file's modification time when any stream is written, so ordinary metadata diffing already schedules the update that re-copies streams (a test-verified assumption before the feature ships) — though a writer that suppresses or restores mtime evades that signal, so the feature claims stream refresh only through ordinary update scheduling, never independent ADS-only convergence. Streams are user data: a requested stream that fails to copy on a capable target fails the operation, and a mapping requesting ADS onto a stream-incapable target volume surfaces as a mapping-level warning at plan time. Documented residuals: stream bytes are not counted by capacity planning, and stream content is copied but not attested — ledger hashes cover the main data stream only.
 - **User-Edited Partial Execution**. Future user-selected subsets will reuse M0's dependency closure, summary/capacity recomputation, commitment binding, and explicit deferred-outcome foundation.
+- **XXH3-128 Content Evidence**. M1 replaces SHA-256 only for bulk copy attestation, baseline, and verification with one fixed XXH3-128 algorithm; plan fingerprints, custody, history, and other small internal identity hashes remain SHA-256. No content-hash setting or alternate content algorithm is exposed.
+- **Pipelined Single-File Copy**. One copy overlaps its bounded read, write, and XXH3-128 stages while preserving ordered progress, cooperative cancellation, temporary-file cleanup, and atomic publish. This is internal pipelining, not concurrent file execution.
 - **Restartable Large-File Copy**. Large-file copies will support resuming from an interrupted offset with a persisted partial digest, instead of restarting from zero.
-- **Multithreaded Copy Workers**. Independent copy operations will run across parallel workers under one session, with merged progress and ordering handled by the session rather than the copy loop, and capacity accounting already sized for every concurrent in-flight temp file.
+- **Conditional Parallel File Execution**. File-level workers remain deferred after the XXH3-128 content-hash replacement; they are introduced only if post-replacement measurements show a real multi-device or small-file workload leaving relevant devices underutilized. Single-file read/write/hash pipelining is independent of this decision.
 - **Background IO Throttling**. Execution will support a pacing knob for background or lower-priority runs, independent of the progress-reporting throttle.
 - **Robocopy Copy Backend**. NamiSync will evaluate an optional Robocopy backend for bulk moves that accept copy-now, baseline-later trust, while retaining its own planning, trash, and safety controls.
 
@@ -202,20 +204,14 @@ below describe settled behavior, not current M0 runtime claims.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
 - **Verifier Operation Implemented**. The isolated baseline, verify, and explicit rebaseline operation now provides cache-honest Windows reads, typed per-file outcomes, safe conditional ledger recording, and lossless pause/cancel continuation. Inventory selection, workflow registration, history detail, and UI/CLI composition remain the M1 product surface.
 
-- **Multithreaded Verification**. Verification speed can be CPU-bound on faster disks, the verifier should run multithreaded conditionally.
+- **Conditional Parallel Verification**. Verification remains single-stream after the XXH3-128 content-hash replacement unless post-replacement measurements demonstrate an IO-utilization problem that file-level workers solve.
 - **Automatic Background Integrity**. Background hashing and verification remain unrealized.
 - **Repair Guidance**. When one side of a mapping mismatches its evidence, verification will compare both sides' current hashes against recorded evidence and diagnose which side is damaged, as a first step toward a guided restore from the healthy side.
 
-## TERACOPY HASH IMPORT
-
-- **SHA-256 Sidecar Parsing**. NamiSync reads UTF-8 TeraCopy `.sha256` sidecars with safe relative paths and duplicate-entry checks.
-- **Existing-Inventory Import**. Sidecar hashes are accepted only for existing, present, unchanged, unhashed inventory rows inside the selected location.
-- **Hash Protection**. Established database hashes are never overwritten; matching values are reported as known and differing values as conflicts.
-
 ## RECORDER
 
-- **Single Write Path**. The recorder is the only code path that writes the main ledger; execution, verification, baseline, and TeraCopy import all call it rather than issuing SQL of their own.
-- **Conditional Recording Primitive**. Every hash or verification write is conditional on the row's current id, state, size, and modification time still matching what was observed; a mismatch discards the write instead of recording evidence about a file that has already moved on. This one primitive is what makes hash-on-copy, baseline, verify, and sidecar import all safe against the same race.
+- **Single Write Path**. The recorder is the only code path that writes the main ledger; execution, verification, and baseline all call it rather than issuing SQL of their own.
+- **Conditional Recording Primitive**. Every hash or verification write is conditional on the row's current id, state, size, and modification time still matching what was observed; a mismatch discards the write instead of recording evidence about a file that has already moved on. This one primitive makes hash-on-copy, baseline, and verify safe against the same race.
 - **Provenance Tagging**. Every hash write records how it was attested — inherited from a copy's source stream, a direct read-back, or an independent verification — so displayed trust never overstates what was actually checked.
 - **Bounded-Window Durability**. Ledger commits batch by operation count or elapsed time rather than one write per operation, with an immediate forced flush before any destructive operation, at pause-drain, and at session terminal — bounding the crash window to at most one batch without weakening the never-wrong-only-behind guarantee.
 - **Idempotent Recording**. The recorder treats a repeated run token as a no-op, backed by the ledger's own uniqueness constraint as the last line of defense.
@@ -257,9 +253,9 @@ below describe settled behavior, not current M0 runtime claims.
 
 ## HISTORY
 
-- **Independent Audit Store**. Sync, baseline, verification, and TeraCopy import attempts are recorded in a separate local history database.
+- **Independent Audit Store**. Sync, baseline, and verification attempts are recorded in a separate local history database.
 - **Audit Delivery Guarantee**. History subscribes at session admission on the reliable event plane under one clear contract: every audit event is delivered within the timeout, or the session result says `audit=DEGRADED` — nothing is ever silently lost behind a result claiming OK. When its bounded buffer fills, the producer briefly waits at a checkpoint boundary rather than discarding audit events, with the wait capped by a generous timeout — a stalled or failed history writer degrades the session's audit status loudly and blocking stops, rather than holding filesystem work hostage. History finalizes each run in a bounded two-phase step: it acknowledges its final write before the immutable terminal event is released to other subscribers, so the result's audit status already tells the truth about the history row itself; an acknowledgement timeout degrades the audit status and releases the terminal anyway. A history write failure is surfaced loudly on the session result but never blocks, fails, or falsifies filesystem work, and a process crash loses at most the bounded in-flight buffer — the same never-wrong-only-behind posture as the ledger.
-- **Typed Run Details**. History retains activity-specific summaries and ordered sync operations or integrity issues.
+- **Typed Run Details**. History retains generic phase summaries plus one ordered, nominally typed result-item stream. Every item carries explicit phase and item-type tags, so sync and integrity outcomes can coexist without duck typing or parallel domain lists.
 - **No-Op and Cancellation Audit**. Explicit no-op and canceled activities are recorded alongside successful and failed activities.
 - **Blocked And Deferred Audit**. Safe-subset runs retain every direct blocker as the sixth `BLOCKED` outcome and retain quarantined or incomplete-scan-withheld work as `DEFERRED` with typed reasons and itemized paths. The history schema stores a blocked summary count without multiplying quarantine/withholding into new top-level categories.
 - **History Idempotency**. Repeating a recorded run token does not create a duplicate history entry.
@@ -280,7 +276,6 @@ below describe settled behavior, not current M0 runtime claims.
 - **Inventory Command**. `nami-sync inventory` scans one location and prints its retained inventory and mapping guidance.
 - **Baseline Command**. `nami-sync baseline` creates missing baselines and reports integrity counts and issues.
 - **Verify Command**. `nami-sync verify` verifies one location and returns a failing exit code when integrity issues are found.
-- **Hash Import Command**. `nami-sync import-hashes` imports explicit TeraCopy sidecars for one location.
 - **History Command**. `nami-sync history` lists recent audit runs or prints one retained entry with detail.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
 - **No-Subcommand Behavior**. Until a desktop implementation exists, running `nami-sync` or `python -m namisync` with no subcommand prints usage and exits nonzero; nothing ever runs implicitly.
@@ -323,7 +318,7 @@ below describe settled behavior, not current M0 runtime claims.
 ## CROSS-PROCESS SAFETY
 
 - **Physical-Volume Guard**. Filesystem workflows acquire deterministic cross-process locks for all required local physical volumes and refuse unsafe or contended volumes.
-- **Root-Constrained Paths**. Planner, executor, and sidecar workflows reject absolute, drive-qualified, parent-traversing, or root-escaping relative paths.
+- **Root-Constrained Paths**. Planner and executor workflows reject absolute, drive-qualified, parent-traversing, or root-escaping relative paths.
 - **Long-Path Support**. Filesystem workflows use `\\?\`-prefixed paths throughout so path length never becomes a silent failure mode, including for planned destination paths that are longer than their source.
 - **External-Writer Boundary**. Volume locks arbitrate NamiSync processes only; external processes writing into a managed root mid-execution are outside the safety contract on every mutation, not just some. Conditional primitives enforce exactly their own condition — non-replacing renames guarantee destination absence, `CREATE_NEW` guarantees temp freshness, `RemoveDirectory` guarantees emptiness — and no path-based primitive binds source identity, so each residual race is bounded by its data consequence, never by elapsed time (the window is usually tiny, but a descheduled process can stretch it): trash-routed operations at worst preserve the wrong item recoverably, moves at worst misplace without destroying, and only update's replace and internal mirror deletes can destroy an external writer's file — never NamiSync's own displaced version, and never its evidence. `ReplaceFileW`, the supported single-call replacement with optional backup, is deliberately not used: it merges the replaced file's attributes, ACLs, and named streams into the replacement and documents partial-state failure cases — hardlink/copy-backup-then-replace is a chosen tradeoff, not the only Windows primitive.
 
