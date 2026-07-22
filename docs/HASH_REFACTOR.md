@@ -12,6 +12,11 @@ subordinate to both. Where this plan changes a settled contract, the active
 document is updated as that track lands. Once promoted, the active document
 wins and this file becomes history.
 
+**Destructive boundary.** This refactor carries no hash-import feature and no
+database compatibility path. M1 deletes and recreates both the main ledger and
+history databases so every retained content-evidence row starts under the
+single XXH3-128 contract.
+
 ---
 
 ## 1. What Prompted This
@@ -158,6 +163,12 @@ loop but no evidence format. The hash replacement changes the content-evidence
 contract and dependency but requires no concurrent file execution. Either can
 be implemented and verified without making the other partially present.
 
+The tracks are independent in semantics, not in diff surface: both edit
+`NativeCopyBackend`. Land Track 1 first using whichever canonical content
+hasher exists in that revision, then let Track 2 replace construction of the
+hasher stage with the fixed XXH3-128 factory seam. This keeps Track 1
+independently shippable and minimizes merge/conflict churn.
+
 ### DR-HASH-02 - Use one canonical content algorithm: XXH3-128
 
 **Tension.** Supporting SHA-256 alongside XXH3-128 would retain a
@@ -216,6 +227,30 @@ real workload that remains underutilized after XXH3-128.
 solve observed device utilization, not compensate for the retired SHA-256
 ceiling.
 
+### DR-HASH-05 - Drop hash import and reset both databases
+
+**Tension.** Existing development ledger evidence is SHA-256-bound, while the
+new core contract accepts only `xxh3_128`. Preserving old rows would require
+multi-algorithm semantics or a conversion path that this refactor explicitly
+rejects.
+
+**Resolution.** Hash import is not part of M1 or the active product scope.
+NamiSync does not parse or import checksum sidecars and does not provide an
+`import-hashes` workflow, command, recorder path, or history activity.
+
+The refactor is a destructive unreleased boundary: delete and recreate both
+the main ledger and history databases. No ledger rows, content evidence,
+history rows, or run details are carried across it, and no database converter
+is implemented. Settings files are not databases and are not part of this
+reset.
+
+**Why.** There is no production database liability. A clean reset is cheaper
+and safer than retaining SHA-256 evidence that the new fixed contract cannot
+validate. Runtime handling remains explicit rather than silently interpreting
+old bytes: an old schema/version is refused with an actionable reset message;
+development/test upgrade steps remove the old local database files and let
+NamiSync create fresh ones.
+
 ---
 
 ## 4. Implementation
@@ -235,18 +270,42 @@ becomes a contract if the executor separately adopts unbuffered IO.
 #### Buffer lifecycle
 
 ```text
-free
-  -> coordinator reads and assigns sequence number
-  -> queued once to writer and once to hasher
-  -> writer acknowledgement + hasher acknowledgement
-  -> coordinator reports progress in sequence order
-  -> free
+                              writer releases lease(completed=...)
+                            /
+free -> coordinator reads buffer
+       and creates two leases
+                            \
+                              hasher releases lease(completed=...)
+
+final lease release
+  -> if neither consumer discarded: publish ChunkComplete(sequence, size)
+  -> always return buffer directly to free pool
+
+coordinator consumes ChunkComplete
+  -> reports progress in sequence order
 ```
 
 The buffer must not be mutated or returned to the free pool until both
-consumers acknowledge it. The writer and hasher each consume a FIFO queue;
-the coordinator still tracks sequence numbers explicitly so completion and
-progress ordering are testable.
+consumers release their lease. Each buffer carries a thread-safe remaining
+consumer count initialized to two plus a `discarded` flag. Writer and hasher
+each release exactly once in `finally`, including failure and abort paths. A
+release with `completed=False` sets `discarded`; the final release returns the
+buffer directly to the free pool regardless of success.
+
+Only a genuine dual completion publishes immutable
+`ChunkComplete(sequence, size)` metadata. If either consumer skipped,
+discarded, or failed its work, the buffer is recycled but no completion record
+is emitted and `on_chunk()` can never count it. Publish the completion record
+before returning the buffer so the record exists before reuse, and use a
+nonblocking producer queue such as `SimpleQueue`; a bounded completion queue
+can recreate the two-queue deadlock this ownership model removes.
+
+The coordinator never returns buffers. It drains completion records before
+and after scheduling reads and after EOF, reports them in sequence order, and
+may safely process a record after its buffer has already been reused because
+the record contains no buffer reference. Writer and hasher each consume a FIFO
+work queue; sequence checks make the normal-path ordering invariant explicit
+and testable.
 
 #### Callback semantics
 
@@ -255,6 +314,10 @@ thread. Workers never call either callback.
 
 - Call `checkpoint()` before admitting each new read, matching the current
   chunk-boundary cancellation point.
+- When the free pool is empty, wait with a bounded timeout. On each timeout,
+  inspect the first-error slot and call `checkpoint()` before waiting again;
+  never block forever on the free queue while control or worker failure is
+  pending.
 - Call `on_chunk(size)` only after that chunk has been fully written to the
   owned temporary file and included in the digest.
 - Release progress in sequence order, even if worker acknowledgements arrive
@@ -264,6 +327,12 @@ Calling `on_chunk()` immediately after the read would be incorrect: progress
 would lead completed work and would overcount when the writer fails.
 Progress means written-to-temp and hashed, not durably published.
 
+The production dispatcher checkpoint is an idempotent raise-or-return guard:
+it reads pause/cancel flags under a lock and carries no per-call accounting.
+Polling therefore changes call frequency but not semantics. Exact checkpoint
+call count is not a `CopyBackend` contract; cancellation tests synchronize on
+pipeline stage state rather than raising on an ordinal callback invocation.
+
 #### Cancellation and failure
 
 The implementation needs a shared abort flag and a first-error slot.
@@ -272,8 +341,14 @@ The implementation needs a shared abort flag and a first-error slot.
   both queues, joins both workers in `finally`, then re-raises the original
   control exception.
 - A worker may finish its current chunk after abort, but must not start useful
-  work on later queued chunks. Queued buffers are consumed and released so no
-  producer or peer remains blocked on the bounded pool.
+  work on later queued chunks. Queued buffers are consumed and released with
+  `completed=False` so no producer or peer remains blocked on the bounded pool
+  and no discarded chunk produces progress.
+- Once abort is observed, the coordinator stops draining completion records,
+  stops calling `on_chunk()`, and applies no normal-path sequence assertions.
+  A genuine completion racing with abort may remain queued and is ignored.
+  Teardown must preserve the initiating control/error exception rather than
+  mask it with a progress-order assertion or secondary cleanup failure.
 - Writer errors stop further writes. Hasher errors prevent any digest from
   being returned. Reader and callback errors follow the same abort-and-join
   path.
@@ -334,21 +409,36 @@ unchanged.
 
 Required pipeline coverage:
 
-- Serial reference and pipelined copy produce identical XXH3-128 digests and
-  byte counts across empty, partial-chunk, exact-chunk, and multi-chunk files.
+- Serial reference and pipelined copy produce identical digest bytes and byte
+  counts under whichever canonical content hasher is active in that revision,
+  across empty, partial-chunk, exact-chunk, and multi-chunk files.
 - `on_chunk()` occurs only after both write and hash acknowledgement and is
   emitted in sequence order.
+- Exhausting the free pool while completions are pending cannot deadlock;
+  final worker release recycles the buffer without coordinator intervention.
+- A write/hash discard releases both leases, returns the buffer, emits no
+  `ChunkComplete`, and advances no progress.
 - Short writes make forward progress; zero/`None` writes fail.
 - Reader, writer, hasher, and callback failures terminate and join both
   workers without deadlock.
 - Cancel and pause at each pipeline stage terminate cleanly, publish nothing,
-  and allow owned-temp cleanup.
+  stop completion draining without a teardown ordering assertion, preserve the
+  initiating exception, and allow owned-temp cleanup.
 - The bounded pool is actually bounded and buffers are never reused before
   both consumers release them.
+- Cancellation tests use explicit pipeline-stage synchronization rather than
+  depending on an exact checkpoint call count.
 
 Required content-hash coverage:
 
-- Official XXH3-128 vectors produce canonical 16-byte digest values.
+- Canonical XXH3-128 digest bytes are the unsigned 128-bit result encoded
+  big-endian, exactly `intdigest().to_bytes(16, "big")`, matching
+  python-xxhash `digest()`/`hexdigest()` rather than native-structure byte
+  order.
+- The seed-zero empty-input streaming vector is pinned:
+  `xxh3_128(b"").digest().hex() ==
+  "99aa06d3014798d86001c324468d497f"`, and the same bytes equal the
+  big-endian encoding of `intdigest()`.
 - Copy attestation round-trips through the recorder and repository as
   `xxh3_128` without byte-order changes.
 - Baseline followed by verify succeeds; changed content reports
@@ -360,6 +450,8 @@ Required content-hash coverage:
   remain unchanged.
 - The supported Windows/Python build can import the `xxhash` dependency and
   construct both streaming executor and verifier hashers.
+- Refactor setup/tests delete and recreate both ledger and history databases;
+  no old SHA-256 evidence or history detail survives the boundary.
 
 ### 4.4 Estimate
 
