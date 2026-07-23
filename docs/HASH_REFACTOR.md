@@ -48,13 +48,18 @@ overlap one file's reads, writes, and hashing.
 - Target: `G:` - WD_BLACK SN850X 4 TB (separate physical disk)
 - 8 GiB workload, 4 MiB chunks (the `chunk_size` default in
   `executor.py` and `integrity.py`)
-- Unbuffered IO (`FILE_FLAG_NO_BUFFERING`), sector-aligned buffers
+- Two IO regimes: an unbuffered ceiling (`FILE_FLAG_NO_BUFFERING`,
+  sector-aligned buffers) and the buffered production shape
+  (`open(buffering=0)` FileIO with immutable `read()`), which is what the
+  design ships
+- All throughput figures are Python microbenchmarks, harness-bound rather than
+  storage-bound (see the caveat at the end of 2.4)
 
-The unbuffered requirement is not incidental. A first pass using ordinary
-buffered IO with a 1 GiB file on a 64 GB machine measured a fully page-cached
-read leg on the slower `C:` volume and understated the hash cost by roughly
-half. Any future re-measurement must defeat the page cache and must not
-silently copy within one volume when the intent is cross-volume.
+The unbuffered ceiling is a reference bound, not the shipped path. A first pass
+using ordinary buffered IO with a 1 GiB file on a 64 GB machine measured a
+fully page-cached read leg on the slower `C:` volume and understated the hash
+cost by roughly half. Any cache-cold re-measurement must defeat the page cache
+and must not silently copy within one volume when the intent is cross-volume.
 
 ### 2.2 Hash Throughput, Single Thread, No IO
 
@@ -79,11 +84,17 @@ SHA-256 and fast enough to leave storage or the copy loop as the bottleneck.
 
 ### 2.4 Copy Loop: Serial vs Pipelined
 
+Two IO regimes were measured. The unbuffered numbers establish a storage
+ceiling and are not the shipped path; the buffered numbers are the production
+shape the design implements (DR-HASH-06).
+
 Serial is the exact current `NativeCopyBackend.copy` shape: `read -> write ->
 update` in one thread. The original pipelined prototype used separate
 reader/coordinator, writer, and hasher stages over a forked recycled-buffer
 pool. Digests were asserted identical between the two shapes for every
 measured algorithm.
+
+**Unbuffered ceiling** (`FILE_FLAG_NO_BUFFERING`, sector-aligned buffers):
 
 | Algorithm | Serial MiB/s | Pipelined MiB/s | Gain |
 |---|---:|---:|---:|
@@ -92,16 +103,56 @@ measured algorithm.
 | sha256 | 1 261 | 1 910 | +51.5% |
 | blake2b | 591 | 971 | +64.1% |
 
-Run-to-run variance across passes was roughly 5% (hashless serial measured
-2 680 and 2 637 on two runs; SHA-256 serial measured 1 189 and 1 261). Treat
-all figures as approximate; the ratios are what matter.
+**Buffered production shape** (`open(buffering=0)` FileIO, immutable `read()`,
+linear `reader -> hasher -> writer`, target temp preallocated), XXH3-128:
+
+| Configuration | MiB/s | vs serial |
+|---|---:|---:|
+| serial read() (today) | ~1 234 | - |
+| pipelined read() + preallocation (chosen) | ~2 700-3 100 | +120% to +150% |
+
+The buffered path reaches roughly half the unbuffered ceiling because cached
+writes cross memory twice and the cache manager schedules writeback. The design
+accepts that in exchange for no alignment constraint, no partial-tail handling,
+and no volume-rejection fallback; the unbuffered ceiling is recorded as a
+deferred option, not a plan.
+
+Run-to-run variance across passes was roughly 5% (unbuffered hashless serial
+measured 2 680 and 2 637; SHA-256 serial 1 189 and 1 261). Treat all figures as
+approximate; the ratios, not the absolute rates, are the finding.
+
+**These absolute figures are harness-bound, not storage-bound.**
+CrystalDiskMark reports the same SN850X target sustaining about 5 475 MiB/s
+sequential write at QD1 and 6 530 at QD8, above every pipelined figure here.
+GIL contention, per-chunk queue handoff, and syscall overhead cap the Python
+prototype below device speed, so a native implementation would post higher
+absolute rates. What transfers to production is the structure, that overlapping
+the stages roughly doubles serial throughput, not the specific MiB/s.
 
 Follow-up microbenchmarks compared that fork with a linear
 `reader -> hasher -> writer` pipeline using immutable `read()` chunks. Their
 throughput difference was within measurement noise. `readinto()` with
 recycled mutable buffers was about 10% faster in isolation, but requires the
 lease and reuse protocol rejected by DR-HASH-06. Preallocating the target temp
-improved both shapes by about 10%.
+improved both shapes by about 10% (measured with `truncate()`; the shipped
+`FileAllocationInfo` request is expected to match or exceed it).
+
+A controlled contention pass ran both topologies at shallow (two-slot) and
+deep (eight-slot) queue depth under an 8-16 thread external optimizer,
+interleaved to equalize load exposure and hold execution order fixed:
+
+| Depth | line/fork ratio |
+|---|---:|
+| 2 (shallow) | ~0.95-1.01 |
+| 8 (deep) | ~1.04-1.10 |
+
+The line's disadvantage under load is small (single-digit percent) and shifts
+in the direction deep queues predict: a deeper write queue lets the writer coast
+through hasher preemption, so line at depth 8 matches or slightly beats fork.
+An earlier run had shown a much larger line-specific dip, but that ran line last
+on a write-thrashed drive; once order and drive state are controlled, the
+pure CPU-contention effect is minor. This is the second reason to size the
+queue near eight chunks rather than two (2.4 memory paragraph and 4.1).
 
 Starting two workers per file cost about 10% at 4 KiB and became negligible
 by 4 MiB. M1 accepts that small-file penalty: filesystem enumeration, open,
@@ -110,6 +161,11 @@ serial mode would add a branch and test matrix without a demonstrated
 user-visible benefit.
 
 ### 2.5 What the Numbers Mean
+
+The rates in this subsection are the unbuffered-ceiling figures; they isolate
+where hash cost sits relative to IO cost. The shipped buffered path lands lower
+in absolute terms (2.4) but the hash-versus-IO decomposition below holds, and
+the harness caveat applies.
 
 **The serial loop wastes roughly half the available IO throughput before
 hashing enters the picture.** Hashless serial reaches 2 637 MiB/s against
@@ -130,6 +186,10 @@ XXH3-128 reaches only 2 118 MiB/s; pipelined XXH3-128 reaches 5 318 MiB/s.
 | Algorithm only, stay serial | 2 118 | +68% |
 | Pipeline + XXH3-128 | 5 318 | +322% |
 
+These are unbuffered-ceiling rates; the shipped buffered path scales down
+proportionally (2.4). The point is the decomposition: neither change alone
+clears ~2 GiB/s, and only both together remove hashing as a limit.
+
 ### 2.6 Where the Algorithm Change Matters
 
 Pipelined SHA-256 saturates at roughly 1 900-2 400 MiB/s. Below that, the copy
@@ -137,6 +197,15 @@ path is already storage-bound and changing the hash does not improve transfer
 speed. The algorithm replacement is therefore a fast-path optimization for
 high-throughput storage, while the pipeline addresses structural
 serialization on every medium.
+
+That threshold assumes SHA-NI. The measured 2 441 MiB/s SHA-256 rate depends on
+those extensions, absent from mainstream Intel desktop parts from roughly 2015
+to 2020 (Skylake through Comet Lake). Without them a portable software SHA-256
+runs closer to 600-800 MiB/s, below every SSD in the test set, so on those
+machines SHA-256 would bottleneck nearly every copy rather than only the
+fastest, while XXH3-128 stays memory-bound at tens of GiB/s regardless. The
+replacement therefore helps more on weaker or older CPUs, not less; the
+fast-path framing above is the SHA-NI best case for the retired algorithm.
 
 The replacement still has a broader architectural benefit: a single XXH3-128
 stream is fast enough that NamiSync does not need concurrent file execution or
@@ -281,6 +350,15 @@ the reviewed source size before streaming.
 No serial fast path is added for small files. The measured worker-startup
 penalty is accepted at 4 KiB and is negligible by 4 MiB.
 
+The line's one structural weakness relative to the fork is that its writer is
+fed through the hasher rather than directly, so a preempted hasher can stall the
+writer under external CPU load. Controlled measurement (2.4) put that
+disadvantage in the single-digit percent range and showed a deep queue closing
+it; the larger dip seen in an early run was drive-state degradation compounded
+with load, not the topology. The chosen ~eight-chunk queue depth (4.1) is the
+mitigation, so this weakness does not offset the linear pipeline's structural
+simplicity.
+
 **Why.** In a linear pipeline, writer completion proves that the chunk was
 already hashed, so progress needs one acknowledgement rather than a join of
 two asynchronous consumers. Immutable objects make reuse races impossible,
@@ -325,10 +403,24 @@ order without sequence numbers or an acknowledgement join.
 
 Do not use `readinto()`, mutable recycled buffers, a free-buffer pool, leases,
 reference counts, or discard flags. Python object references own chunk
-lifetime. Bound the two data queues so backpressure also bounds memory. With
-4 MiB chunks, two waiting slots per data queue plus at most one chunk in each
-active stage caps unique payload near 28 MiB, close to the measured 32 MiB
-prototype without a separate buffer allocator.
+lifetime. Bound the two data queues so backpressure also bounds memory.
+
+Only one file streams at a time (DR-HASH-04), so per-copy memory is not scarce
+and queue depth is chosen for throughput, not to minimize RAM. Size the
+combined in-flight payload to about the measured prototype (roughly eight
+4 MiB chunks, ~32 MiB) so the reader and hasher can run ahead and keep the
+writer from starving during bursty device writeback. The 2 GiB/s-class
+measurements used that depth; a shallow two-slot queue would bound memory
+tighter but need not reproduce them. Depth beyond what covers writer jitter
+adds RAM without throughput, since the slowest stage still sets the rate.
+
+Depth also absorbs external CPU contention. In the line topology the writer is
+fed through the hasher, so a preempted hasher can starve the writer; a deeper
+write queue gives the writer buffered chunks to consume across that gap. A
+contention pass (2.4) confirmed the direction: the line's small under-load
+disadvantage at two slots closes by eight. Eight chunks covers both device
+writeback jitter and scheduler preemption, so no separate contention tuning is
+needed.
 
 Normal EOF is an explicit sentinel. The hasher finalizes the digest and
 forwards EOF only after consuming every preceding chunk; the writer reports
@@ -358,6 +450,18 @@ the copy succeeded:
   fail the operation before bytes are copied.
 - Short-write checks, digest byte count, flushes, post-copy source guards, and
   owned-temp cleanup remain mandatory.
+
+#### Published-size guard
+
+After publish and the post-copy stat, assert `published.size == digest.size`
+before recording the attestation. The copy loop and source-drift guards already
+compare against the reviewed source size; this adds the missing equality
+between the bytes hashed and the bytes that reached the target, so any size
+divergence (including a future allocation or truncation defect) fails the
+operation loudly at write time instead of surfacing later as a content
+`ValueError` when the verifier first reads the row. `Attestation` may also
+enforce `content.size == subject.size` in `__post_init__` as a cheap structural
+backstop.
 
 #### Callback semantics
 
@@ -488,6 +592,8 @@ Required pipeline coverage:
   allocation failures abort before streaming.
 - Source shrink/growth after preallocation is still rejected by byte-count
   and post-copy drift guards, and the owned temp is removed.
+- A published file whose size differs from the hashed byte count fails the
+  operation before recording, rather than persisting mismatched evidence.
 - A 4 KiB file uses the same pipeline rather than a separate serial fast path.
 
 Required content-hash coverage:
