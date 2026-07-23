@@ -2,29 +2,66 @@
 <title>NamiSync — UI overhaul mockup</title>
 <style>
 /* ============================================================
-   NamiSync is a dark-only Fusion/QSS desktop app by deliberate
-   design choice (see docs/GUI.md: "A light mode is intentionally
-   not implemented"). This mockup honors that — it is not themed
-   for light mode because the real app isn't either.
+   Stack change: NamiSync is moving from PySide6/Fusion+QSS to a
+   WebView2 shell, which is what makes this pass possible — real
+   CSS, real shadows, real flyouts instead of what QSS could fake.
+   This mockup follows the Fluent 2 (Windows 11) design language:
+   Segoe UI Variable type, 4px control / 8px card corner radius,
+   subtle low-opacity borders, and a Mica-style window background.
 
-   Every color below is the app's *actual* theme.py token, not an
-   invented palette — this is meant to be buildable in QSS, not a
-   flight of fancy. Font pairing mirrors the app too: Segoe UI is
-   the real Fusion default; Consolas is the real log/mono font
-   (see theme.py QPlainTextEdit rule) — reused here for paths and
-   hashes since that's already the app's own "data" face.
+   Mica itself can't be simulated in a browser (it's a live
+   backdrop material composited by the OS), so per instruction it
+   is stood in here with a solid fill: #1A2225. Every other token
+   below is a solid, buildable color — nothing depends on an
+   unrenderable effect.
+
+   Status/kind highlight colors (accent, ok, fail, k-update,
+   k-move, k-conflict) are carried over unchanged from the app's
+   existing palette — only the neutral/background scale was
+   reworked to fit Fluent 2 and the new Mica-placeholder base.
+
+   Dark-only, by the same deliberate choice docs/GUI.md states for
+   the real app ("A light mode is intentionally not implemented").
    ============================================================ */
 
 :root {
-  --bg: #0f0f10;
-  --surface: #1a1a1c;
-  --surface-alt: #202023;
-  --field: #232326;
-  --border: #2c2c30;
-  --border-strong: #3a3a40;
-  --text: #e8e8ea;
-  --text-muted: #9a9aa0;
-  --text-disabled: #5f5f66;
+  /* The webpage around the window mockup is plain neutral gray — it has no
+     relationship to the app's own Mica tint, so it must not borrow any of
+     the tokens below (that's what read as "the whole page is green"). */
+  --host-bg: #1c1c1c;
+  --host-surface: #242424;
+  --host-border: #363636;
+  --host-text: #eaeaea;
+  --host-text-muted: #9a9a9a;
+
+  /* Mica placeholder — solid stand-in per instruction. Applies ONLY to the
+     window's own base, the title/menu bar, and the tabs column; it is the
+     one deliberately-tinted surface in the app. */
+  --mica: #1a2225;
+
+  /* Main content pane: a solid, opaque card floating on top of the Mica
+     base (margin around .page reveals --mica in the gap). Everything
+     inside it is layered off #101010, not off Mica. */
+  --card-bg: #101010;
+  --card-surface: #1a1a1a;
+  --card-surface-alt: #202020;
+  --card-field: #242424;
+  --card-field-hover: #2e2e2e;
+
+  /* Neutral text/border tokens: true grays, no hue skew, reused as-is on
+     Mica, the card, and the host page — Fluent 2 text/stroke tokens are
+     plain white/black at fixed opacity regardless of what backdrop they
+     sit on, they don't pick up the tint of the surface under them. */
+  --border: #333333;
+  --border-strong: #474747;
+  --text: #f2f2f2;
+  --text-muted: #9c9c9c;
+  --text-disabled: #5a5a5a;
+  --card-text: #d0d0d0;
+
+  --hover-overlay: rgba(255,255,255,0.06);
+  --pressed-overlay: rgba(255,255,255,0.10);
+
   --accent: #0078d4;
   --accent-hover: #1684d7;
   --accent-pressed: #006cbe;
@@ -33,9 +70,10 @@
   --k-update: #33aaee;
   --k-move: #bb88ee;
   --k-conflict: #ffdd44;
-  --card-text: #c8c8cc;
-  --font-ui: "Segoe UI", "Segoe UI Variable", "Segoe UI Variable Text", system-ui, sans-serif;
-  --font-mono: Consolas, "Cascadia Mono", "SFMono-Regular", Menlo, monospace;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SFMono-Regular", Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -44,7 +82,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow-x: hidden;
-  background: var(--bg);
+  background: var(--host-bg);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: 13px;
@@ -55,12 +93,12 @@ body { min-height: 100vh; display: flex; justify-content: center; }
 
 ::selection { background: var(--accent); color: #fff; }
 
-button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 
 ::-webkit-scrollbar { width: 11px; height: 11px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border: 3px solid var(--bg); border-radius: 8px; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background: #46464e; background-clip: padding-box; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border: 3px solid var(--card-bg); border-radius: 8px; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #5c5c5c; background-clip: padding-box; }
 
 .mockup-stage {
   width: 100%;
@@ -74,72 +112,64 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
   width: 100%;
   /* A real window is a bounded size — without a hard height here, nothing
      below has anything to overflow *inside*, so a long list just grows the
-     whole page instead of getting its own scrollbar. 800px gives a bit more
-     breathing room than MainWindow's real 760px default (main_window.py). */
-  height: min(800px, calc(100vh - 64px));
-  background: var(--bg);
+     whole page instead of getting its own scrollbar. */
+  height: min(820px, calc(100vh - 64px));
+  background: var(--mica);
   border: 1px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7);
 }
 
-.titlebar {
-  height: 32px;
+/* ---------- header: brand + menu + window controls, one row ---------- */
+/* Win11 apps that ship a custom title bar (Terminal, Notepad, Explorer's
+   Fluent shell) fold branding, the menu, and the caption buttons into one
+   draggable strip rather than stacking a bare caption row above a separate
+   menu bar — that's the read on the reference screenshots too, where the
+   wordmark and the menu sit on the same line with nothing above them. */
+.app-header {
+  height: 48px;
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  padding: 0 0 0 12px;
+  align-items: stretch;
+  background: var(--mica);
   border-bottom: 1px solid var(--border-strong);
   -webkit-user-select: none;
   user-select: none;
 }
-.titlebar .glyph {
-  width: 14px; height: 14px; border-radius: 3px;
-  background: var(--accent);
-  margin-right: 8px;
+.brand {
   flex: 0 0 auto;
-}
-.titlebar .name { font-size: 12px; color: var(--text-muted); flex: 1; }
-.titlebar .winctl { display: flex; align-items: stretch; height: 100%; }
-.titlebar .winctl button {
-  width: 44px; height: 100%; border: none; background: transparent;
-  color: var(--text-muted); cursor: default; font-size: 11px;
-  display: flex; align-items: center; justify-content: center;
-}
-.titlebar .winctl button:hover { background: #232326; color: var(--text); }
-.titlebar .winctl button.close:hover { background: var(--fail); color: #1a0000; }
-
-/* ---------- menu bar ---------- */
-
-.menubar {
-  flex: 0 0 auto;
+  width: 242px;
   display: flex;
-  border-bottom: 1px solid var(--border);
-  padding: 0 4px;
-  position: relative;
-  z-index: 30;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
 }
+.brand .glyph { width: 16px; height: 16px; border-radius: 4px; background: var(--accent); flex: 0 0 auto; }
+.brand .name { font-size: 15px; font-weight: 600; letter-spacing: 0.1px; color: var(--text); }
+
+.menubar { flex: 1 1 auto; display: flex; align-items: center; gap: 2px; padding: 0 6px; }
 .menu { position: relative; }
 .menu > .menu-label {
   border: none; background: transparent; color: var(--text);
-  padding: 5px 10px; font-size: 12.5px; cursor: default; border-radius: 4px;
+  padding: 7px 12px; font-size: 13px; cursor: default; border-radius: var(--radius-sm);
 }
-.menu > .menu-label u { text-decoration: underline; text-underline-offset: 1px; }
-.menu > .menu-label:hover, .menu.open > .menu-label { background: var(--field); }
+.menu > .menu-label u { text-decoration: underline; text-underline-offset: 2px; }
+.menu > .menu-label:hover, .menu.open > .menu-label { background: var(--hover-overlay); }
+.menu.open > .menu-label { background: var(--pressed-overlay); }
 .menu-drop {
-  position: absolute; top: calc(100% + 2px); left: 0;
-  min-width: 230px; background: var(--surface);
-  border: 1px solid var(--border-strong); border-radius: 6px;
+  position: absolute; top: calc(100% + 4px); left: 0;
+  min-width: 230px; background: var(--card-surface);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
   padding: 4px; display: none;
-  box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6);
+  box-shadow: 0 16px 32px -8px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.35);
 }
 .menu.open .menu-drop { display: block; }
 .menu-item {
   display: flex; align-items: center; gap: 14px;
-  padding: 6px 10px; border-radius: 4px; cursor: default;
+  padding: 7px 10px; border-radius: var(--radius-sm); cursor: default;
   font-size: 12.5px; justify-content: space-between;
 }
 .menu-item:hover:not(.disabled) { background: var(--accent); color: #fff; }
@@ -148,9 +178,18 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .menu-item .shortcut { color: var(--text-muted); font-size: 11px; }
 .menu-sep { height: 1px; background: var(--border); margin: 4px 6px; }
 
+.winctl { flex: 0 0 auto; display: flex; align-items: stretch; }
+.winctl button {
+  width: 46px; border: none; background: transparent;
+  color: var(--text-muted); cursor: default; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+}
+.winctl button:hover { background: var(--hover-overlay); color: var(--text); }
+.winctl button.close:hover { background: #c42b1c; color: #fff; }
+
 /* ---------- shell: rail + page ---------- */
 
-.shell { flex: 1 1 auto; display: flex; min-height: 0; }
+.shell { flex: 1 1 auto; display: flex; min-height: 0; background: var(--mica); }
 
 .rail {
   width: 242px; flex: 0 0 auto;
@@ -158,23 +197,34 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
   display: flex; flex-direction: column;
 }
 .new-task {
-  flex: 0 0 auto; height: 34px; border: none; border-bottom: 1px solid var(--border-strong);
+  flex: 0 0 auto; height: 36px; border: none; border-bottom: 1px solid var(--border-strong);
   background: transparent; color: var(--text-muted); text-align: left; padding: 0 14px;
   font-size: 13px; cursor: default;
 }
-.new-task:hover { background: #1c1c1f; color: var(--text); }
+.new-task:hover { background: var(--hover-overlay); color: var(--text); }
 
-.rail-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; }
+.rail-scroll { flex: 1 1 auto; overflow-y: auto; overflow-x: hidden; padding: 6px 8px; }
 
+/* Tabs read as a plain list on Mica, not a stack of boxed cards: an inactive
+   task is just a row with a hairline separator underneath it. Only the
+   active task gets a filled, rounded rectangle — and it's filled with the
+   same solid --card-bg as the floating content pane, so the highlight
+   visually "belongs to" the card it opens. */
 .task-card {
   position: relative;
-  padding: 10px 10px 12px 13px;
-  border-bottom: 1px solid var(--border-strong);
+  margin: 0 0 1px;
+  padding: 10px 11px 11px 10px;
+  border-radius: var(--radius-sm);
   border-left: 3px solid transparent;
   cursor: default;
 }
-.task-card:hover { background: #17171a; }
-.task-card.selected { background: var(--surface); }
+.task-card:not(:last-child) { border-bottom: 1px solid var(--border); }
+.task-card:hover { background: var(--hover-overlay); }
+.task-card.selected {
+  background: var(--card-bg);
+  border-bottom-color: transparent;
+}
+.task-card.selected:hover { background: var(--card-bg); }
 .task-card[data-tone="ok"] { border-left-color: var(--ok); }
 .task-card[data-tone="fail"] { border-left-color: var(--fail); }
 .task-card[data-tone="busy"] { border-left-color: var(--accent); }
@@ -186,15 +236,13 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .card-status.tone-fail { color: var(--fail); }
 .card-close {
   border: none; background: transparent; color: var(--text-disabled);
-  font-size: 10px; padding: 1px 4px; border-radius: 4px; cursor: default;
+  font-size: 10px; padding: 1px 4px; border-radius: var(--radius-sm); cursor: default;
 }
-.card-close:hover { color: var(--text); background: rgba(255,255,255,0.1); }
+.card-close:hover { color: var(--text); background: var(--hover-overlay); }
 
 .card-line { font-size: 11px; color: var(--text-muted); height: 15px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-/* Borrows the otherwise-blank date line for a live throughput/ETA summary
-   while a task is running (the date itself only exists once it completes). */
 .card-line.live { color: var(--accent); }
-.task-card.selected .card-line.path { color: #b7b7bc; }
+.task-card.selected .card-line.path { color: var(--card-text); }
 .card-line.path { font-family: var(--font-mono); }
 
 .card-progress { margin-top: 6px; height: 4px; border-radius: 2px; background: var(--border-strong); overflow: hidden; }
@@ -202,226 +250,210 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 
 /* ---------- page ---------- */
 
-.page { flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto; padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 13px; }
+/* The content pane is a solid, opaque card floating on the Mica base — the
+   margin on all four sides (including between the rail and the card) is
+   what leaves --mica visible as a border around it. */
+.page {
+  flex: 1 1 auto; min-width: 0; min-height: 0; overflow-y: auto;
+  margin: 12px 12px 12px 12px;
+  background: var(--card-bg);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px -10px rgba(0,0,0,0.6);
+  padding: 18px 22px 18px; display: flex; flex-direction: column; gap: 16px;
+}
 
-.section-label { font-size: 13px; color: var(--text); width: 92px; flex: 0 0 auto; padding-top: 6px; }
+/* ---------- setup: editable form (fresh task / Edit clicked) ---------- */
 
-/* form row */
-.form-grid { display: flex; flex-direction: column; gap: 6px; }
-.form-row { display: flex; align-items: center; gap: 8px; }
-/* Trying a line-style field instead of the boxed QComboBox look — QSS can do
-   this on a real QComboBox/QLineEdit with `border: none; border-bottom: ...`,
-   it isn't dropping any real capability, just a different frame. */
+.setup-form { display: flex; flex-direction: column; gap: 10px; }
+.path-row { display: flex; align-items: center; gap: 10px; }
+.path-row .row-label { font-size: 13px; color: var(--text); width: 56px; flex: 0 0 auto; }
+
 .field {
   position: relative;
   flex: 1 1 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  background: transparent; border: none; border-bottom: 1px solid var(--border-strong);
-  border-radius: 0; padding: 6px 3px 7px; min-width: 0; cursor: default;
+  background: var(--card-field); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); padding: 7px 10px; min-width: 0; cursor: default;
 }
-.field:hover { border-bottom-color: var(--accent); }
-.field:has(.field-dropdown.open) { border-bottom-color: var(--accent); }
+.field:hover { background: var(--card-field-hover); }
+.field:has(.field-dropdown.open) { border-color: var(--accent); }
 .field.empty .field-text { color: var(--text-disabled); }
 .field-text { font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.field-caret { color: var(--text-disabled); font-size: 9px; flex: 0 0 auto; }
+.field-caret { color: var(--text-muted); font-size: 9px; flex: 0 0 auto; }
 
-/* Simulated recent-paths popup — a real QComboBox already keeps the last 5
-   folders per role (see db/state.py load_recent_directories) and shows them
-   exactly like this via QComboBox QAbstractItemView. */
 .field-dropdown {
-  display: none; position: absolute; top: calc(100% + 4px); left: -3px; right: -3px;
-  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 4px; box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6); z-index: 25;
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--card-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  padding: 4px; box-shadow: 0 16px 32px -8px rgba(0,0,0,0.55); z-index: 25;
 }
 .field-dropdown.open { display: block; }
 .field-dropdown .opt {
-  padding: 6px 9px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px;
+  padding: 7px 9px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 12px;
   color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .field-dropdown .opt:hover { background: var(--accent); color: #fff; }
 
-/* Setup form grays out and stops responding to clicks while a job runs,
-   matching the real app's setup_form.setEnabled(False) during execution and
-   verification — inputs stay visible but untouchable mid-run. */
-.form-grid.busy { pointer-events: none; }
-.form-grid.busy .section-label { color: var(--text-disabled); }
-.form-grid.busy .field { border-bottom-color: var(--border); }
-.form-grid.busy .field-text { color: var(--text-disabled) !important; }
-.form-grid.busy .field-caret { color: var(--border); }
+.setup-form.busy .path-row .row-label { color: var(--text-disabled); }
+.setup-form.busy .field { background: var(--card-surface); border-color: var(--border); }
+.setup-form.busy .field-text { color: var(--text-disabled) !important; }
+.setup-form.busy .field-caret { color: var(--border); }
 
-.btn {
-  border: 1px solid var(--border-strong); background: var(--field); color: var(--text);
-  border-radius: 6px; padding: 6px 14px; font-size: 12.5px; cursor: default; flex: 0 0 auto;
+.setup-lower { display: flex; align-items: stretch; gap: 16px; margin-top: 4px; }
+.comments-box {
+  flex: 1 1 auto; min-width: 0; resize: none; background: var(--card-field);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  color: var(--text); padding: 10px 12px; font-size: 12.5px; line-height: 1.5;
 }
-.btn:hover:not(:disabled) { background: #2b2b2f; }
-.btn:active:not(:disabled) { background: #1f1f22; }
-.btn:disabled { color: var(--text-disabled); background: #1c1c1f; border-color: var(--border); cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
-.btn.primary:disabled { background: #24365c; border-color: #24365c; color: #6c7f9f; }
+.comments-box::placeholder { color: var(--text-disabled); }
+.comments-box:hover { background: var(--card-field-hover); }
+.comments-box:focus { outline: none; border-color: var(--accent); }
+.comments-box.tall { height: 96px; }
+.comments-box.compact { height: 34px; }
 
-/* options: the toggle now lives on the view-action row, beside the
-   Plan/Inventory switcher; its drawer unfolds as a full-width shelf directly
-   beneath that row instead of a narrow indented column. */
-.toggle-link {
-  border: none; background: transparent; color: var(--text); font-size: 12.5px;
-  display: flex; align-items: center; gap: 6px; padding: 3px 4px; cursor: default; border-radius: 4px;
-  flex: 0 0 auto;
+.toggle-matrix { flex: 0 0 auto; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.toggle-group { display: flex; gap: 6px; }
+.toggle-btn {
+  border: 1px solid var(--border-strong); background: var(--card-field); color: var(--text-muted);
+  border-radius: var(--radius-sm); padding: 6px 16px; font-size: 12.5px; cursor: default;
 }
-.toggle-link:hover { background: #1c1c1f; }
-.toggle-link .chev { font-size: 9px; color: var(--text-muted); transition: none; display: inline-block; }
-.toggle-link.open .chev { transform: rotate(90deg); }
+.toggle-btn:hover:not(.active) { background: var(--card-field-hover); color: var(--text); }
+.toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 
-.options-pane {
-  display: none; margin: 2px 0 4px; padding: 12px 16px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-}
-.options-pane.open { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
-.opt-row { display: flex; align-items: center; gap: 10px; }
-.opt-row label.opt-label { flex: 0 0 auto; color: var(--text); font-size: 12.5px; }
-.select {
-  background: var(--field); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 5px 26px 5px 9px; font-size: 12.5px; min-width: 140px; position: relative;
-  display: inline-flex; align-items: center; justify-content: space-between; cursor: default; gap: 8px;
-}
-.select .arrow { color: var(--text-muted); font-size: 9px; }
-.check-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.checkbox { width: 15px; height: 15px; border: 1px solid var(--border-strong); border-radius: 3px; background: var(--field); flex: 0 0 auto; position: relative; }
-.checkbox.checked, .checkbox.indeterminate { background: var(--accent); border-color: var(--accent); }
-.checkbox.checked::after {
-  content: ""; position: absolute; left: 4px; top: 1px; width: 4px; height: 8px;
-  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(40deg);
-}
-.checkbox.indeterminate::after {
-  content: ""; position: absolute; left: 3px; top: 6px; width: 7px; height: 2px; background: #fff;
-}
-/* Row selection checkboxes: same visual token as the options-pane checkbox,
-   reused in the tree so multi-select doesn't require ctrl/shift-click. A
-   folder's box reflects its children — solid check when all are selected,
-   dash when the selection is mixed. */
-.row-check { cursor: default; }
-.row-check:hover { border-color: var(--accent); }
+.setup-actions { display: flex; justify-content: flex-end; }
 
-/* summary band: the status headline is the page's highest-priority text now
-   — the affected-size counter is demoted into a quiet right-aligned stack
-   beside it (see docs discussion 2026-07-14). No divider above it — with the
-   line-style fields just above, a border here read as one line too many.
-   summary-top centers the (single-line) headline against side-col's own
-   two lines, so the big headline reads level with that whole stack rather
-   than pinned to its top; status-detail spans full width below both. */
-.summary-row { display: flex; flex-direction: column; gap: 6px; padding: 12px 2px 6px; }
-.summary-top { display: flex; align-items: center; gap: 20px; }
+/* ---------- setup: collapsed summary card (task already scanned/run) ---------- */
+
+.setup-summary {
+  display: flex; align-items: stretch; gap: 20px;
+  background: var(--card-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 14px 18px;
+}
+.summary-paths { flex: 1 1 0; min-width: 0; position: relative; padding-right: 56px; }
+.summary-paths .path-line { display: flex; gap: 8px; font-size: 12.5px; line-height: 22px; overflow: hidden; }
+.summary-paths .path-label { color: var(--text-muted); flex: 0 0 auto; }
+.summary-paths .path-value { font-family: var(--font-mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.edit-link {
+  position: absolute; top: 0; right: 0; border: none; background: transparent;
+  color: var(--accent); font-size: 12.5px; padding: 3px 6px; border-radius: var(--radius-sm); cursor: default;
+}
+.edit-link:hover { background: var(--hover-overlay); text-decoration: underline; }
+
+.summary-right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.pill-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  border: 1px solid var(--border-strong); background: var(--card-field); color: var(--text-muted);
+  border-radius: var(--radius-sm); padding: 4px 12px; font-size: 12px; cursor: default;
+}
+.pill.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* ---------- status block ---------- */
+
+.status-block { display: flex; flex-direction: column; gap: 4px; padding: 2px 2px 0; }
+.status-top { display: flex; align-items: flex-start; gap: 20px; }
 .status-headline { flex: 1; min-width: 0; font-size: 22px; font-weight: 700; line-height: 28px; text-wrap: balance; }
 .status-headline.tone-ok { color: var(--ok); }
 .status-headline.tone-fail { color: var(--fail); }
-/* Reserves one line's height even when empty (busy tasks, or a fresh task
-   with nothing to report yet), so this line's presence/absence never shifts
-   the rest of the page — see the exec-line note just below for why busy
-   tasks render this empty instead of duplicating it. */
-.status-detail { font-size: 12px; line-height: 16px; min-height: 16px; color: var(--text-muted); }
+.status-side { flex: 0 0 auto; text-align: right; font-size: 12.5px; line-height: 18px; color: var(--text-muted); padding-top: 4px; }
+.status-side b { color: var(--text); font-weight: 600; }
 
-.side-col {
-  flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end;
-  gap: 3px; max-width: 320px; min-width: 0;
+.status-detail-row { display: flex; align-items: baseline; gap: 16px; min-height: 16px; font-size: 12px; color: var(--text-muted); }
+.status-detail-row .detail-text { flex: 1 1 auto; min-width: 0; }
+.status-detail-row .current-file {
+  flex: 0 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 6px; overflow: hidden;
 }
-.big-size { font-size: 13px; line-height: 18px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.big-size.dim { color: var(--text-disabled); }
-.big-size .bs-label { color: var(--text-disabled); }
-.big-size .bs-value { font-weight: 600; }
-.side-note-slot { font-size: 11px; line-height: 13px; min-height: 13px; color: var(--text-muted); }
-.options-summary-inline { font-size: 11px; color: var(--text-muted); }
-
-/* The live exec detail (%, count, ETA, throughput) and the current-file
-   message share one line directly above the progress bars — reserved at a
-   constant height on every page, busy or not, so switching tasks never
-   shifts the page underneath it. */
-.exec-line { display: flex; align-items: baseline; gap: 12px; min-height: 16px; margin-bottom: 4px; }
-.exec-line .info { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.exec-line .current-file {
-  flex: 1; min-width: 0; display: flex; justify-content: flex-end; align-items: baseline; gap: 6px;
-  font-size: 12px; color: var(--text-muted); overflow: hidden;
-}
-.exec-line .current-file .op { flex: 0 0 auto; white-space: nowrap; }
-/* Truncate from the *start* so the tail of the path stays readable: the
-   rtl wrapper makes "the end" visually the left side for ellipsis purposes,
-   while dir="ltr" on the inner span keeps the actual characters in normal
-   reading order — the two must stay scoped to this inner element only, or
-   the op/path pair itself gets visually reordered (see 2026-07-15 note). */
-.exec-line .current-file .pth-wrap {
+.status-detail-row .current-file .op { flex: 0 0 auto; white-space: nowrap; }
+/* Truncate from the *start* so the tail of the path stays readable: the rtl
+   wrapper makes "the end" visually the left side for ellipsis purposes,
+   while dir="ltr" on the inner span keeps characters in reading order. */
+.status-detail-row .pth-wrap {
   direction: rtl; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   min-width: 0; max-width: 100%;
 }
-.exec-line .current-file .pth { font-family: var(--font-mono); }
+.status-detail-row .pth { font-family: var(--font-mono); }
 
 /* progress */
 .progress-area { display: flex; flex-direction: column; gap: 4px; }
-.bar { height: 10px; border-radius: 5px; background: #26262a; overflow: hidden; }
+.bar { height: 10px; border-radius: 5px; background: var(--card-surface-alt); overflow: hidden; }
 .bar.file { height: 8px; }
 .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
 
 /* view action row */
-.view-action-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.view-action-row { display: flex; align-items: center; gap: 8px; }
 .segment-group { display: flex; }
 .segment {
-  border: 1px solid var(--border-strong); padding: 5px 20px; font-size: 12.5px;
-  background: transparent; color: var(--text-muted); cursor: default;
+  border: 1px solid var(--border-strong); padding: 6px 22px; font-size: 12.5px;
+  background: var(--card-field); color: var(--text-muted); cursor: default;
 }
-.segment.left { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
-.segment.right { border-top-right-radius: 6px; border-bottom-right-radius: 6px; border-left: none; }
+.segment.left { border-top-left-radius: var(--radius-sm); border-bottom-left-radius: var(--radius-sm); }
+.segment.right { border-top-right-radius: var(--radius-sm); border-bottom-right-radius: var(--radius-sm); border-left: none; }
+.segment:hover:not(.active) { background: var(--card-field-hover); color: var(--text); }
 .segment.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .view-spacer { flex: 1; }
 .starters { display: flex; gap: 6px; }
 
+.btn {
+  border: 1px solid var(--border-strong); background: var(--card-field); color: var(--text);
+  border-radius: var(--radius-sm); padding: 7px 16px; font-size: 12.5px; cursor: default; flex: 0 0 auto;
+}
+.btn:hover:not(:disabled) { background: var(--card-field-hover); }
+.btn:active:not(:disabled) { background: var(--pressed-overlay); }
+.btn:disabled { color: var(--text-disabled); background: var(--card-surface); border-color: var(--border); cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn.primary:active:not(:disabled) { background: var(--accent-pressed); }
+.btn.primary:disabled { background: #294056; border-color: #294056; color: #7d94a6; }
+
 /* filter rows */
 .filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .chip {
-  border: 1px solid var(--border-strong); border-radius: 6px; padding: 3px 12px 3px 13px;
-  font-size: 12px; color: var(--text-muted); background: transparent; cursor: default;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 4px 13px 4px 13px;
+  font-size: 12px; color: var(--text-muted); background: var(--card-field); cursor: default;
   display: inline-flex; align-items: center; gap: 6px;
 }
 .chip .n { font-variant-numeric: tabular-nums; }
-.chip:hover { border-color: #4a4a52; }
-.chip.active { background: var(--text); border-color: var(--text); color: var(--surface); }
+.chip:hover:not(.active) { background: var(--card-field-hover); color: var(--text); }
+.chip.active { background: var(--text); border-color: var(--text); color: var(--card-surface); }
 .filter-spacer { flex: 1; }
 .free-space { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 
 /* content / tree */
 .content-stack {
   position: relative;
-  flex: 1 1 auto; min-height: 220px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  flex: 1 1 auto; min-height: 220px; background: var(--card-surface);
+  border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden;
   display: flex; flex-direction: column;
 }
 .reset-view-btn {
   position: absolute; bottom: 10px; right: 10px; z-index: 15;
-  background: rgba(26, 26, 28, 0.92); border: 1px solid var(--border-strong); border-radius: 14px;
+  background: rgba(26, 26, 26, 0.92); border: 1px solid var(--border-strong); border-radius: 14px;
   padding: 5px 12px; font-size: 11.5px; color: var(--text-muted); cursor: default;
   box-shadow: 0 6px 16px -4px rgba(0, 0, 0, 0.6);
 }
-.reset-view-btn:hover { color: var(--text); border-color: #4a4a52; background: rgba(35, 35, 38, 0.96); }
+.reset-view-btn:hover { color: var(--text); border-color: var(--border-strong); background: rgba(46, 46, 46, 0.96); }
 .placeholder {
   flex: 1; display: flex; align-items: center; justify-content: center;
   text-align: center; color: var(--text-muted); font-size: 13px; padding: 30px;
   border: none;
 }
 .placeholder .ph-wrap { max-width: 340px; }
-.placeholder .ph-mark { width: 34px; height: 34px; margin: 0 auto 12px; border: 1.5px dashed var(--border-strong); border-radius: 8px; }
+.placeholder .ph-mark { width: 34px; height: 34px; margin: 0 auto 12px; border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); }
 
 .tree-scroll { flex: 1; overflow: auto; }
 .tree-header, .tree-row { display: grid; align-items: center; }
 .plan-tree .tree-header, .plan-tree .tree-row { grid-template-columns: minmax(230px,2.2fr) 108px 84px 100px 88px minmax(130px,1fr); }
 .inventory-tree .tree-header, .inventory-tree .tree-row { grid-template-columns: minmax(230px,2.3fr) 90px 100px 88px minmax(120px,1fr); }
 .tree-header {
-  position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--card-surface); border-bottom: 1px solid var(--border);
   z-index: 2;
 }
-.tree-header .cell { padding: 6px 8px; font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
+.tree-header .cell { padding: 7px 8px; font-size: 11.5px; font-weight: 600; color: var(--text-muted); }
 .tree-row { cursor: default; }
 /* Alternation follows the flattened *visual* row order (JS-applied .row-alt),
    not DOM nth-child — folder rows and their children live at different
    nesting depths, so nth-child restarts its odd/even count inside every
    .tree-children and mostly skips folder header rows entirely. */
-.tree-row.row-alt { background: var(--surface-alt); }
-.tree-row:hover { background: #26262a; }
+.tree-row.row-alt { background: var(--card-surface-alt); }
+.tree-row:hover { background: var(--card-field-hover); }
 .tree-row.selected { background: var(--accent); }
 .tree-row.selected .cell, .tree-row.selected .item-name { color: #fff !important; }
 .tree-row .cell { padding: 4px 8px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -442,7 +474,7 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .tree-node.collapsed > .tree-children { display: none; }
 .tree-node.collapsed > .tree-row .disclosure { transform: rotate(-90deg); display: inline-block; }
 
-.review-band { padding: 6px 8px 2px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0; }
+.review-band { padding: 6px 8px 2px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.2px; }
 .review-divider { height: 1px; background: var(--border); margin: 2px 0 4px; }
 
 .k-copy, .k-mkdir { color: var(--ok); }
@@ -473,10 +505,19 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .row-mini-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 
 /* log */
+.log-row { display: flex; align-items: flex-start; }
+.toggle-link {
+  border: none; background: transparent; color: var(--text); font-size: 12.5px;
+  display: flex; align-items: center; gap: 6px; padding: 4px 6px; cursor: default; border-radius: var(--radius-sm);
+  flex: 0 0 auto;
+}
+.toggle-link:hover { background: var(--hover-overlay); }
+.toggle-link .chev { font-size: 9px; color: var(--text-muted); transition: none; display: inline-block; }
+.toggle-link.open .chev { transform: rotate(90deg); }
 .log-view {
   display: none; font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-  padding: 8px 10px; max-height: 130px; overflow-y: auto; white-space: pre-wrap;
+  background: var(--card-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 8px 10px; max-height: 130px; overflow-y: auto; white-space: pre-wrap; margin-top: 6px;
 }
 .log-view.open { display: block; }
 .log-view div { padding: 1px 0; }
@@ -484,7 +525,8 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 /* commit row: contextual per view — Cancel/Pause/Execute on Plan,
    Cancel/Pause/Verify on Inventory, so the row always matches the content
    beneath it instead of showing an action the visible view can't use. */
-.commit-row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding-top: 2px; }
+.commit-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; }
+.commit-actions { display: flex; align-items: center; gap: 8px; }
 
 /* Verify is a folded split button: the main action plus a caret that
    unfolds "Verify selected" — same verb, narrower scope, one control
@@ -494,12 +536,12 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 .split-caret {
   border-top-left-radius: 0; border-bottom-left-radius: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.25);
-  padding: 6px 10px; font-size: 9px;
+  padding: 7px 10px; font-size: 9px;
 }
 .split-menu {
   display: none; position: absolute; bottom: calc(100% + 6px); right: 0; min-width: 170px;
-  background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 4px; box-shadow: 0 -12px 28px -8px rgba(0, 0, 0, 0.6); z-index: 30;
+  background: var(--card-surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  padding: 4px; box-shadow: 0 -16px 32px -8px rgba(0, 0, 0, 0.55); z-index: 30;
 }
 .split-menu.open { display: block; }
 
@@ -507,24 +549,25 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 
 /* context menu */
 .ctx-menu {
-  position: fixed; min-width: 220px; background: var(--surface);
-  border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px;
-  box-shadow: 0 12px 28px -8px rgba(0,0,0,0.6); display: none; z-index: 100;
+  position: fixed; min-width: 220px; background: var(--card-surface);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 4px;
+  box-shadow: 0 16px 32px -8px rgba(0,0,0,0.55); display: none; z-index: 100;
 }
 .ctx-menu.open { display: block; }
 
-/* small note for reviewers, not part of the app itself */
+/* small note for reviewers, not part of the app itself — plain neutral
+   gray, deliberately not tied to any of the app's own tokens above. */
 .note {
   max-width: 1180px; margin: 0 auto 10px; padding: 10px 14px;
-  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface);
-  color: var(--text-muted); font-size: 12px; line-height: 1.5;
+  border: 1px solid var(--host-border); border-radius: var(--radius-md); background: var(--host-surface);
+  color: var(--host-text-muted); font-size: 12px; line-height: 1.5;
 }
-.note b { color: var(--text); }
+.note b { color: var(--host-text); }
 .note.palette-note { margin: 10px auto 0; }
 .palette-swatches { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; }
 .swatch { display: flex; align-items: center; gap: 8px; }
 .swatch-chip {
-  width: 22px; height: 22px; border-radius: 6px; flex: 0 0 auto;
+  width: 22px; height: 22px; border-radius: var(--radius-sm); flex: 0 0 auto;
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 .swatch-label { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
@@ -532,6 +575,7 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 
 @media (max-width: 760px) {
   .rail { width: 190px; }
+  .brand { width: 190px; }
   .card-line { display: none; }
 }
 </style>
@@ -539,64 +583,68 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
 <div class="mockup-stage">
   <div class="note">
     Click a task card to switch tasks. Click <b>Sync / Integrity</b> to toggle views (each
-    task retains its own). Click filter chips, right-click an inventory row, and expand
-    <b>Options</b> / <b>Log</b> — all live. Window controls and the title bar are decorative.
+    task retains its own). Click <b>Edit</b> on a scanned task to reopen its setup form,
+    click the mode/deletion/verify toggles, click filter chips, right-click an inventory row,
+    and expand <b>Log</b> — all live. Window controls and the title bar are decorative.
   </div>
 
   <div class="window">
-    <div class="titlebar">
-      <div class="glyph"></div>
-      <div class="name">NamiSync</div>
+    <div class="app-header">
+      <div class="brand">
+        <div class="glyph"></div>
+        <div class="name">NamiSync</div>
+      </div>
+
+      <div class="menubar" id="menubar">
+        <div class="menu" data-menu="file">
+          <button class="menu-label"><u>F</u>ile</button>
+          <div class="menu-drop">
+            <div class="menu-item"><span>Import TeraCopy <u>h</u>ashes…</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-item"><span>E<u>x</u>it</span></div>
+          </div>
+        </div>
+        <div class="menu" data-menu="sync">
+          <button class="menu-label"><u>S</u>ync</button>
+          <div class="menu-drop">
+            <div class="menu-item"><span><u>N</u>ew task</span><span class="shortcut">Ctrl+T</span></div>
+            <div class="menu-item"><span><u>C</u>lose task</span><span class="shortcut">Ctrl+W</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-item"><span>Sca<u>n</u> / Plan</span><span class="shortcut">F5</span></div>
+            <div class="menu-item"><span><u>E</u>xecute</span><span class="shortcut">Ctrl+Enter</span></div>
+            <div class="menu-item disabled"><span><u>C</u>ancel</span><span class="shortcut">Esc</span></div>
+          </div>
+        </div>
+        <div class="menu" data-menu="integrity">
+          <button class="menu-label"><u>I</u>ntegrity</button>
+          <div class="menu-drop">
+            <div class="menu-item"><span><u>I</u>nventory</span></div>
+            <div class="menu-item"><span>Create <u>b</u>aseline</span></div>
+            <div class="menu-item"><span><u>V</u>erify location</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-item"><span>Verify <u>s</u>elected</span></div>
+            <div class="menu-item"><span><u>A</u>cknowledge missing</span></div>
+            <div class="menu-item"><span><u>R</u>estore acknowledged</span></div>
+          </div>
+        </div>
+        <div class="menu" data-menu="history">
+          <button class="menu-label"><u>H</u>istory</button>
+          <div class="menu-drop">
+            <div class="menu-item"><span><u>B</u>rowse history…</span></div>
+          </div>
+        </div>
+        <div class="menu" data-menu="help">
+          <button class="menu-label">Hel<u>p</u></button>
+          <div class="menu-drop">
+            <div class="menu-item"><span><u>A</u>bout NamiSync</span></div>
+          </div>
+        </div>
+      </div>
+
       <div class="winctl">
         <button title="mockup">–</button>
         <button title="mockup">▢</button>
         <button class="close" title="mockup">✕</button>
-      </div>
-    </div>
-
-    <div class="menubar" id="menubar">
-      <div class="menu" data-menu="file">
-        <button class="menu-label"><u>F</u>ile</button>
-        <div class="menu-drop">
-          <div class="menu-item"><span>Import TeraCopy <u>h</u>ashes…</span></div>
-          <div class="menu-sep"></div>
-          <div class="menu-item"><span>E<u>x</u>it</span></div>
-        </div>
-      </div>
-      <div class="menu" data-menu="task">
-        <button class="menu-label"><u>T</u>ask</button>
-        <div class="menu-drop">
-          <div class="menu-item"><span><u>N</u>ew task</span><span class="shortcut">Ctrl+T</span></div>
-          <div class="menu-item"><span><u>C</u>lose task</span><span class="shortcut">Ctrl+W</span></div>
-          <div class="menu-sep"></div>
-          <div class="menu-item"><span><u>S</u>can / Plan</span><span class="shortcut">F5</span></div>
-          <div class="menu-item"><span><u>E</u>xecute</span><span class="shortcut">Ctrl+Enter</span></div>
-          <div class="menu-item disabled"><span><u>C</u>ancel</span><span class="shortcut">Esc</span></div>
-        </div>
-      </div>
-      <div class="menu" data-menu="integrity">
-        <button class="menu-label"><u>I</u>ntegrity</button>
-        <div class="menu-drop">
-          <div class="menu-item"><span><u>I</u>nventory</span></div>
-          <div class="menu-item"><span>Create <u>b</u>aseline</span></div>
-          <div class="menu-item"><span><u>V</u>erify location</span></div>
-          <div class="menu-sep"></div>
-          <div class="menu-item"><span>Verify <u>s</u>elected</span></div>
-          <div class="menu-item"><span><u>A</u>cknowledge missing</span></div>
-          <div class="menu-item"><span><u>R</u>estore acknowledged</span></div>
-        </div>
-      </div>
-      <div class="menu" data-menu="history">
-        <button class="menu-label"><u>H</u>istory</button>
-        <div class="menu-drop">
-          <div class="menu-item"><span><u>B</u>rowse history…</span></div>
-        </div>
-      </div>
-      <div class="menu" data-menu="help">
-        <button class="menu-label">Hel<u>p</u></button>
-        <div class="menu-drop">
-          <div class="menu-item"><span><u>A</u>bout NamiSync</span></div>
-        </div>
       </div>
     </div>
 
@@ -613,19 +661,26 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
   </div>
 
   <div class="note palette-note">
-    <b>Color palette</b> — the actual <code>theme.py</code> tokens this mockup is built from
-    (see the <code>:root</code> block in this file's &lt;style&gt;), not a separate design pass.
+    <b>Color palette</b> — the Fluent 2 token set this mockup is built from
+    (see the <code>:root</code> block in this file's &lt;style&gt;). <b>--mica</b> is the
+    one deliberately-tinted surface (title bar + tabs column); the main pane
+    is a solid, neutral <b>--card-*</b> card floating on top of it. The host
+    page around the window uses its own plain <b>--host-*</b> grays,
+    unrelated to either. Accent and kind/status colors are carried over
+    unchanged from the app's existing theme.
     <div class="palette-swatches">
-      <div class="swatch"><span class="swatch-chip" style="background:var(--bg)"></span><span class="swatch-label"><b>--bg</b>#0f0f10</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--surface)"></span><span class="swatch-label"><b>--surface</b>#1a1a1c</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--surface-alt)"></span><span class="swatch-label"><b>--surface-alt</b>#202023</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--field)"></span><span class="swatch-label"><b>--field</b>#232326</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--border)"></span><span class="swatch-label"><b>--border</b>#2c2c30</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--border-strong)"></span><span class="swatch-label"><b>--border-strong</b>#3a3a40</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--text)"></span><span class="swatch-label"><b>--text</b>#e8e8ea</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--text-muted)"></span><span class="swatch-label"><b>--text-muted</b>#9a9aa0</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--text-disabled)"></span><span class="swatch-label"><b>--text-disabled</b>#5f5f66</span></div>
-      <div class="swatch"><span class="swatch-chip" style="background:var(--card-text)"></span><span class="swatch-label"><b>--card-text</b>#c8c8cc</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--host-bg)"></span><span class="swatch-label"><b>--host-bg</b>#1c1c1c (webpage backdrop)</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--host-surface)"></span><span class="swatch-label"><b>--host-surface</b>#242424</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--mica)"></span><span class="swatch-label"><b>--mica</b>#1a2225 (placeholder)</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--card-bg)"></span><span class="swatch-label"><b>--card-bg</b>#101010 (floating pane)</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--card-surface)"></span><span class="swatch-label"><b>--card-surface</b>#1a1a1a</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--card-surface-alt)"></span><span class="swatch-label"><b>--card-surface-alt</b>#202020</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--card-field)"></span><span class="swatch-label"><b>--card-field</b>#242424</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--border)"></span><span class="swatch-label"><b>--border</b>#333333</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--border-strong)"></span><span class="swatch-label"><b>--border-strong</b>#474747</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--text)"></span><span class="swatch-label"><b>--text</b>#f2f2f2</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--text-muted)"></span><span class="swatch-label"><b>--text-muted</b>#9c9c9c</span></div>
+      <div class="swatch"><span class="swatch-chip" style="background:var(--text-disabled)"></span><span class="swatch-label"><b>--text-disabled</b>#5a5a5a</span></div>
       <div class="swatch"><span class="swatch-chip" style="background:var(--accent)"></span><span class="swatch-label"><b>--accent</b>#0078d4</span></div>
       <div class="swatch"><span class="swatch-chip" style="background:var(--accent-hover)"></span><span class="swatch-label"><b>--accent-hover</b>#1684d7</span></div>
       <div class="swatch"><span class="swatch-chip" style="background:var(--accent-pressed)"></span><span class="swatch-label"><b>--accent-pressed</b>#006cbe</span></div>
@@ -1099,7 +1154,7 @@ const TASKS = {
     planHTML: null, planCounts: null,
     invHTML: INV_TREE_ISSUES,
     invCounts: { all: 7, verified: 3, baseline: 1, unbaselined: 1, missing: 1, reappeared: 1, acknowledged: 1 },
-    freeSpace: "",
+    freeSpace: "2.8 TB free",
     scanEnabled: false, scanTip: "Choose a distinct Source and Destination to plan a paired sync.",
     integrityEnabled: true,
     executeEnabled: false, cancelEnabled: false,
@@ -1143,17 +1198,35 @@ const TASKS = {
 };
 
 const CARD_ORDER = ["photos", "archive", "footage", "coldstorage", "fresh"];
-const CARD_TITLE = {
-  photos: { status: "Plan Ready" },
-  archive: { status: "Executing…" },
-  footage: { status: "Verification Error" },
-  coldstorage: { status: "Execution complete" },
-  fresh: { status: "New task" },
-};
+
+const MODE_LABELS = { sync: "Sync", ingest: "Ingest", integrity: "Integrity" };
+const DELETION_LABELS = { trash: "Trash deletion", additive: "Additive" };
 
 let currentId = "photos";
-const viewState = {}; // per-task retained view + inventory filter
-CARD_ORDER.forEach(id => { viewState[id] = { view: TASKS[id].view, filter: "all", invFilter: "all" }; });
+const viewState = {}; // per-task retained view, filters, form-open state, and toggle-matrix picks
+CARD_ORDER.forEach(id => {
+  const t = TASKS[id];
+  // Target-less tasks are still "configured" — an integrity-only task (like
+  // "footage") intentionally has no destination, so presence of a source is
+  // what actually distinguishes a real task from a truly blank one.
+  const configured = !!t.source;
+  viewState[id] = {
+    view: t.view,
+    filter: "all",
+    invFilter: "all",
+    // A task with no source/target yet always starts on the editable setup
+    // form (matches the New Task screenshot); once it has both, it starts
+    // collapsed into the summary card with an Edit link to reopen the form.
+    formOpen: !configured,
+    // An unconfigured task has no real settings yet, so it takes the New
+    // Task screenshot's defaults rather than parsing a placeholder options
+    // string. A configured task with a source but no target (integrity-only,
+    // e.g. "footage") infers Integrity mode; everything else is Sync.
+    mode: !configured ? "sync" : (t.target ? "sync" : "integrity"),
+    deletion: !configured ? "trash" : (t.options.includes("trash deletion") ? "trash" : "additive"),
+    verified: !configured ? true : !t.options.includes("not verified"),
+  };
+});
 
 function fmtHeader(cols) {
   return `<div class="tree-header">${cols.map(c => `<div class="cell">${c}</div>`).join("")}</div>`;
@@ -1189,10 +1262,6 @@ function renderRail() {
   });
 }
 
-function starterButtons(t) {
-  if (t === undefined) return "";
-}
-
 function fieldHTML(role, value, placeholder) {
   const recents = RECENT_PATHS[role]
     .map(p => `<div class="opt" data-path="${p}">${p}</div>`)
@@ -1205,19 +1274,60 @@ function fieldHTML(role, value, placeholder) {
     </div>`;
 }
 
+function toggleGroupHTML(name, options, activeKey) {
+  return `
+    <div class="toggle-group" data-group="${name}">
+      ${options.map(([key, label]) => `<button class="toggle-btn ${key === activeKey ? "active" : ""}" data-key="${key}">${label}</button>`).join("")}
+    </div>`;
+}
+
+function setupBlockHTML(t, vs) {
+  if (vs.formOpen) {
+    return `
+      <div class="setup-form ${t.busy ? "busy" : ""}" id="setupForm">
+        <div class="path-row"><div class="row-label">Source</div>${fieldHTML("source", t.source, "Source folder")}<button class="btn" ${t.busy ? "disabled" : ""} title="Choose source folder">Browse</button></div>
+        <div class="path-row"><div class="row-label">Target</div>${fieldHTML("target", t.target, "Destination folder")}<button class="btn" ${t.busy ? "disabled" : ""} title="Choose destination folder">Browse</button></div>
+        <div class="setup-lower">
+          <textarea class="comments-box tall" placeholder="Comments…"></textarea>
+          <div class="toggle-matrix">
+            ${toggleGroupHTML("mode", [["sync", "Sync"], ["ingest", "Ingest"], ["integrity", "Integrity"]], vs.mode)}
+            ${toggleGroupHTML("deletion", [["trash", "Trash deletion"], ["additive", "Additive"]], vs.deletion)}
+            ${toggleGroupHTML("verify", [["true", "Verified"], ["false", "Sync Only"]], String(vs.verified))}
+          </div>
+        </div>
+        <div class="setup-actions">
+          <button class="btn primary" id="btnScan" ${t.scanEnabled ? "" : "disabled"} title="${t.scanEnabled ? "Generate dry-run plan" : (t.scanTip || "")}">Scan / Plan</button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="setup-summary" id="setupSummary">
+      <div class="summary-paths">
+        <div class="path-line"><span class="path-label">Source:</span><span class="path-value">${t.source}</span></div>
+        <div class="path-line"><span class="path-label">Target:</span><span class="path-value">${t.target || "—"}</span></div>
+        <button class="edit-link" id="editLink">Edit</button>
+      </div>
+      <div class="summary-right">
+        <textarea class="comments-box compact" placeholder="Comments…"></textarea>
+        <div class="pill-row">
+          <span class="pill">${MODE_LABELS[vs.mode]}</span>
+          <span class="pill ${vs.verified ? "on" : ""}">${vs.verified ? "Verified" : "Sync Only"}</span>
+          <span class="pill on">${DELETION_LABELS[vs.deletion]}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderPage() {
   const t = TASKS[currentId];
   const vs = viewState[currentId];
   const page = document.getElementById("page");
 
-  const sourceField = fieldHTML("source", t.source, "Source folder");
-  const targetField = fieldHTML("target", t.target, "Destination folder");
-
-  const planStarters = `
-    <button class="btn" id="btnScan" ${t.scanEnabled ? "" : "disabled"} title="${t.scanEnabled ? "Generate dry-run plan" : (t.scanTip || "")}">Scan / Plan</button>`;
   const invStarters = `
     <button class="btn" id="btnInventory" ${t.integrityEnabled ? "" : "disabled"} title="${t.integrityEnabled ? "Scan the selected integrity location" : (t.integrityTip || "")}">Inventory</button>
     <button class="btn" id="btnBaseline" ${t.integrityEnabled ? "" : "disabled"} title="Hash files with no stored baseline">Create baseline</button>`;
+  const planStarters = `
+    <button class="btn" id="btnScan2" ${t.scanEnabled ? "" : "disabled"} title="${t.scanEnabled ? "Generate dry-run plan" : (t.scanTip || "")}">Scan / Plan</button>`;
 
   const pauseDisabled = t.cancelEnabled ? "" : "disabled";
   const cancelBtn = `<button class="btn" id="btnCancel" ${t.cancelEnabled ? "" : "disabled"} title="Cancel current work">Cancel</button>`;
@@ -1234,47 +1344,36 @@ function renderPage() {
       </div>
     </div>`;
 
+  const hasResults = !vs.formOpen;
+
   page.innerHTML = `
-    <div class="form-grid ${t.busy ? "busy" : ""}">
-      <div class="form-row"><div class="section-label">Source</div>${sourceField}<button class="btn" ${t.busy ? "disabled" : ""} title="Choose source folder">Browse</button></div>
-      <div class="form-row"><div class="section-label">Destination</div>${targetField}<button class="btn" ${t.busy ? "disabled" : ""} title="Choose destination folder">Browse</button></div>
-    </div>
+    ${setupBlockHTML(t, vs)}
 
-    <div class="summary-row">
-      <div class="summary-top">
+    ${hasResults ? `
+    <div class="status-block">
+      <div class="status-top">
         <div class="status-headline ${t.headlineTone === "ok" ? "tone-ok" : t.headlineTone === "fail" ? "tone-fail" : ""}">${t.headline}</div>
-        <div class="side-col">
-          <div class="big-size ${t.bigSize ? "" : "dim"}">${t.bigSize ? `<span class="bs-label">Affected volume:</span> <span class="bs-value">${t.bigSize}</span>` : "—"}</div>
-          <div class="side-note-slot">${t.freeSpace || ""}</div>
-        </div>
+        <div class="status-side">${t.bigSize ? `<b>${t.bigSize}</b> Affected${t.freeSpace ? ` · ${t.freeSpace.split("·")[0].trim().replace(/free$/i, "Free")}` : ""}` : ""}</div>
       </div>
-      ${t.barsVisible ? "" : `<div class="status-detail">${t.detail}</div>`}
+      <div class="status-detail-row">
+        <div class="detail-text">${(t.barsVisible ? t.progressInfo : t.detail || "").replace(/, /g, " · ")}</div>
+        <div class="current-file">${t.barsVisible && t.progressPath ? `<span class="op">${t.progressOp}</span><span class="pth-wrap"><span class="pth" dir="ltr">${t.progressPath}</span></span>` : ""}</div>
+      </div>
     </div>
 
+    ${t.barsVisible ? `
     <div class="progress-area">
-      <div class="exec-line">
-        <div class="info">${t.barsVisible ? t.progressInfo : ""}</div>
-        <div class="current-file">${t.barsVisible ? `<span class="op">${t.progressOp}</span><span class="pth-wrap"><span class="pth" dir="ltr">${t.progressPath}</span></span>` : ""}</div>
-      </div>
-      <div class="bar"><i style="width:${t.barsVisible ? t.barOverall : 0}%"></i></div>
-      <div class="bar file"><i style="width:${t.barsVisible ? t.barFile : 0}%"></i></div>
-    </div>
+      <div class="bar"><i style="width:${t.barOverall}%"></i></div>
+      <div class="bar file"><i style="width:${t.barFile}%"></i></div>
+    </div>` : ""}
 
     <div class="view-action-row">
       <div class="segment-group">
         <button class="segment left ${vs.view === "plan" ? "active" : ""}" id="segPlan" title="Show the dry-run plan">Sync</button>
         <button class="segment right ${vs.view === "inventory" ? "active" : ""}" id="segInv" title="Show the location inventory">Integrity</button>
       </div>
-      <button class="toggle-link" id="optToggle"><span class="chev">▸</span> Options</button>
-      <div class="options-summary-inline">${t.options}</div>
       <div class="view-spacer"></div>
       <div class="starters">${vs.view === "plan" ? planStarters : invStarters}</div>
-    </div>
-
-    <div class="options-pane" id="optPane">
-      <div class="opt-row"><label class="opt-label">Deletion policy</label><div class="select"><span>trash</span><span class="arrow">▾</span></div></div>
-      <div class="opt-row"><label class="opt-label">Integrity location</label><div class="select"><span>Destination</span><span class="arrow">▾</span></div></div>
-      <div class="check-row"><span class="checkbox"></span> Verify execution</div>
     </div>
 
     <div class="filter-row" id="planFilterRow" style="display:${vs.view === "plan" ? "flex" : "none"}">
@@ -1297,17 +1396,21 @@ function renderPage() {
 
     <div class="content-stack" id="contentStack"></div>
 
-    <button class="toggle-link" id="logToggle" style="align-self:flex-start"><span class="chev">▸</span> Log${t.log.length ? ` (${t.log.length})` : ""}</button>
-    <div class="log-view" id="logView">${t.log.map(l => `<div>${l}</div>`).join("") || "<div>—</div>"}</div>
-
     <div class="commit-row">
-      ${cancelBtn}
-      ${pauseBtn}
-      ${vs.view === "plan" ? executeBtn : verifySplitBtn}
+      <div class="log-row">
+        <button class="toggle-link" id="logToggle"><span class="chev">▸</span> Log${t.log.length ? ` (${t.log.length})` : ""}</button>
+      </div>
+      <div class="commit-actions">
+        ${cancelBtn}
+        ${pauseBtn}
+        ${vs.view === "plan" ? executeBtn : verifySplitBtn}
+      </div>
     </div>
+    <div class="log-view" id="logView">${t.log.map(l => `<div>${l}</div>`).join("") || "<div>—</div>"}</div>
+    ` : ""}
   `;
 
-  renderContent();
+  if (hasResults) renderContent();
   wirePage();
 }
 
@@ -1315,6 +1418,7 @@ function renderContent() {
   const t = TASKS[currentId];
   const vs = viewState[currentId];
   const stack = document.getElementById("contentStack");
+  if (!stack) return;
   let hasTree = false;
   if (vs.view === "plan") {
     if (!t.planHTML) {
@@ -1525,19 +1629,40 @@ document.addEventListener("click", (e) => {
 });
 
 function wirePage() {
+  const t = TASKS[currentId];
   const vs = viewState[currentId];
 
-  document.getElementById("optToggle").addEventListener("click", (e) => {
-    e.currentTarget.classList.toggle("open");
-    document.getElementById("optPane").classList.toggle("open");
-  });
-  document.getElementById("logToggle").addEventListener("click", (e) => {
-    e.currentTarget.classList.toggle("open");
-    document.getElementById("logView").classList.toggle("open");
+  const editLink = document.getElementById("editLink");
+  if (editLink) {
+    editLink.addEventListener("click", () => { vs.formOpen = true; renderPage(); });
+  }
+
+  document.querySelectorAll(".toggle-matrix .toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".toggle-group").dataset.group;
+      const key = btn.dataset.key;
+      if (group === "mode") vs.mode = key;
+      else if (group === "deletion") vs.deletion = key;
+      else if (group === "verify") vs.verified = key === "true";
+      renderPage();
+    });
   });
 
-  document.getElementById("segPlan").addEventListener("click", () => { vs.view = "plan"; renderPage(); });
-  document.getElementById("segInv").addEventListener("click", () => { vs.view = "inventory"; renderPage(); });
+  const btnScan = document.getElementById("btnScan");
+  if (btnScan) btnScan.addEventListener("click", () => { if (t.source && t.target) { vs.formOpen = false; renderPage(); } });
+
+  const logToggle = document.getElementById("logToggle");
+  if (logToggle) {
+    logToggle.addEventListener("click", (e) => {
+      e.currentTarget.classList.toggle("open");
+      document.getElementById("logView").classList.toggle("open");
+    });
+  }
+
+  const segPlan = document.getElementById("segPlan");
+  const segInv = document.getElementById("segInv");
+  if (segPlan) segPlan.addEventListener("click", () => { vs.view = "plan"; renderPage(); });
+  if (segInv) segInv.addEventListener("click", () => { vs.view = "inventory"; renderPage(); });
 
   document.querySelectorAll("#planFilterRow .chip").forEach(chip => {
     chip.addEventListener("click", () => { vs.filter = chip.dataset.filter; renderPage(); });
@@ -1548,7 +1673,8 @@ function wirePage() {
 
   // Recent-paths popup — only wired while the field isn't grayed out/busy.
   document.querySelectorAll(".field").forEach(field => {
-    if (field.closest(".form-grid").classList.contains("busy")) return;
+    const form = field.closest(".setup-form");
+    if (form && form.classList.contains("busy")) return;
     field.addEventListener("click", () => {
       const dd = field.querySelector(".field-dropdown");
       const wasOpen = dd.classList.contains("open");
