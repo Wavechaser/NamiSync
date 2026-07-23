@@ -1,6 +1,6 @@
 # Hash Pipeline and XXH3 Refactor
 
-Status: investigation and planning completed 2026-07-22. Nothing below is
+Status: investigation and planning last revised 2026-07-23. Nothing below is
 implemented. This document records two independent M1 performance tracks:
 single-file copy pipelining and the wholesale replacement of SHA-256 content
 hashing with XXH3-128.
@@ -80,10 +80,10 @@ SHA-256 and fast enough to leave storage or the copy loop as the bottleneck.
 ### 2.4 Copy Loop: Serial vs Pipelined
 
 Serial is the exact current `NativeCopyBackend.copy` shape: `read -> write ->
-update` in one thread. Pipelined is a three-stage version with separate
-reader/coordinator, writer, and hasher threads over a recycled buffer pool.
-Digests were asserted identical between the two shapes for every measured
-algorithm.
+update` in one thread. The original pipelined prototype used separate
+reader/coordinator, writer, and hasher stages over a forked recycled-buffer
+pool. Digests were asserted identical between the two shapes for every
+measured algorithm.
 
 | Algorithm | Serial MiB/s | Pipelined MiB/s | Gain |
 |---|---:|---:|---:|
@@ -95,6 +95,19 @@ algorithm.
 Run-to-run variance across passes was roughly 5% (hashless serial measured
 2 680 and 2 637 on two runs; SHA-256 serial measured 1 189 and 1 261). Treat
 all figures as approximate; the ratios are what matter.
+
+Follow-up microbenchmarks compared that fork with a linear
+`reader -> hasher -> writer` pipeline using immutable `read()` chunks. Their
+throughput difference was within measurement noise. `readinto()` with
+recycled mutable buffers was about 10% faster in isolation, but requires the
+lease and reuse protocol rejected by DR-HASH-06. Preallocating the target temp
+improved both shapes by about 10%.
+
+Starting two workers per file cost about 10% at 4 KiB and became negligible
+by 4 MiB. M1 accepts that small-file penalty: filesystem enumeration, open,
+metadata, and publish costs already dominate that workload, and a second
+serial mode would add a branch and test matrix without a demonstrated
+user-visible benefit.
 
 ### 2.5 What the Numbers Mean
 
@@ -251,6 +264,31 @@ old bytes: an old schema/version is refused with an actionable reset message;
 development/test upgrade steps remove the old local database files and let
 NamiSync create fresh ones.
 
+### DR-HASH-06 - Use immutable reads and a linear pipeline
+
+**Tension.** A forked `readinto()` design can reuse mutable buffers and was
+about 10% faster in a microbenchmark, but `CopyBackend` accepts `BinaryIO`,
+whose required read operation is `read()`. Safely sharing and recycling a
+mutable buffer between independent writer and hasher consumers requires
+leases, a dual-acknowledgement join, discard state, and careful teardown.
+
+**Resolution.** Retain `source.read(chunk_size)` and pass each immutable
+`bytes` object through a bounded `reader -> hasher -> writer` pipeline. The
+caller performs reads, one worker hashes each chunk before forwarding the
+same object, and one worker writes it. The target temp is preallocated from
+the reviewed source size before streaming.
+
+No serial fast path is added for small files. The measured worker-startup
+penalty is accepted at 4 KiB and is negligible by 4 MiB.
+
+**Why.** In a linear pipeline, writer completion proves that the chunk was
+already hashed, so progress needs one acknowledgement rather than a join of
+two asynchronous consumers. Immutable objects make reuse races impossible,
+bounded queues retain backpressure, and follow-up measurements found no
+meaningful throughput difference between the line and fork topologies.
+Preallocation recovers roughly the same performance increment as mutable
+buffer reuse without importing its ownership protocol.
+
 ---
 
 ## 4. Implementation
@@ -261,51 +299,65 @@ The pipeline remains contained inside `NativeCopyBackend` in
 `modules/executor.py`. The `CopyBackend` call boundary stays synchronous: it
 returns one `CopyDigest` or raises only after all worker threads have stopped.
 
-Use one caller/coordinator thread, one writer thread, and one hasher thread
-over a bounded recycled buffer pool. Eight 4 MiB buffers measured well and
-consume roughly 32 MiB because writer and hasher share the same buffer.
-Ordinary buffered IO does not require sector-aligned buffers; alignment only
-becomes a contract if the executor separately adopts unbuffered IO.
-
-#### Buffer lifecycle
+Use the calling thread as reader/coordinator plus one hasher thread and one
+writer thread. Keep the existing `source.read(chunk_size)` contract. Each read
+returns a fresh immutable `bytes` object, and the same object moves through
+two bounded FIFO queues:
 
 ```text
-                              writer releases lease(completed=...)
-                            /
-free -> coordinator reads buffer
-       and creates two leases
-                            \
-                              hasher releases lease(completed=...)
+caller/reader -> hash queue -> hasher -> write queue -> writer
+                                                   \
+                                                    completion size
+                                                           |
+                                                           v
+                                                    caller/on_chunk
 
-final lease release
-  -> if neither consumer discarded: publish ChunkComplete(sequence, size)
-  -> always return buffer directly to free pool
-
-coordinator consumes ChunkComplete
-  -> reports progress in sequence order
+steady state:
+reader: chunk 5    hasher: chunk 4    writer: chunk 3
 ```
 
-The buffer must not be mutated or returned to the free pool until both
-consumers release their lease. Each buffer carries a thread-safe remaining
-consumer count initialized to two plus a `discarded` flag. Writer and hasher
-each release exactly once in `finally`, including failure and abort paths. A
-release with `completed=False` sets `discarded`; the final release returns the
-buffer directly to the free pool regardless of success.
+The hasher updates its streaming digest before placing the chunk on the write
+queue. The writer retains the existing short-write loop and publishes the
+chunk size to a nonblocking completion queue only after the entire chunk has
+been written. Therefore one writer completion proves both hash and write
+completion. A single FIFO path also makes completion order identical to read
+order without sequence numbers or an acknowledgement join.
 
-Only a genuine dual completion publishes immutable
-`ChunkComplete(sequence, size)` metadata. If either consumer skipped,
-discarded, or failed its work, the buffer is recycled but no completion record
-is emitted and `on_chunk()` can never count it. Publish the completion record
-before returning the buffer so the record exists before reuse, and use a
-nonblocking producer queue such as `SimpleQueue`; a bounded completion queue
-can recreate the two-queue deadlock this ownership model removes.
+Do not use `readinto()`, mutable recycled buffers, a free-buffer pool, leases,
+reference counts, or discard flags. Python object references own chunk
+lifetime. Bound the two data queues so backpressure also bounds memory. With
+4 MiB chunks, two waiting slots per data queue plus at most one chunk in each
+active stage caps unique payload near 28 MiB, close to the measured 32 MiB
+prototype without a separate buffer allocator.
 
-The coordinator never returns buffers. It drains completion records before
-and after scheduling reads and after EOF, reports them in sequence order, and
-may safely process a record after its buffer has already been reused because
-the record contains no buffer reference. Writer and hasher each consume a FIFO
-work queue; sequence checks make the normal-path ordering invariant explicit
-and testable.
+Normal EOF is an explicit sentinel. The hasher finalizes the digest and
+forwards EOF only after consuming every preceding chunk; the writer reports
+successful completion only after consuming every preceding write. The caller
+performs a final completion drain, joins both workers, validates their result,
+and only then returns `CopyDigest`.
+
+#### Target-temp preallocation
+
+Extend the existing filesystem seam to
+`create_temp(path, *, allocation_size: int)`. `_prepare_copy()` passes
+`operation.source_expected.size`, which is the reviewed size already guarded
+before streaming and checked again through byte-count and source-drift guards
+after streaming.
+
+`NativeFileSystem.create_temp()` still creates the owned temp exclusively,
+then requests the reviewed allocation with Windows
+`SetFileInformationByHandle(FileAllocationInfo)`. Allocation size and logical
+EOF remain distinct: the request reserves target space while ordinary writes
+advance EOF. Skip the request for zero-byte files.
+
+Preallocation is an optimization and early resource check, not evidence that
+the copy succeeded:
+
+- Unsupported allocation requests fall back to ordinary streaming.
+- Disk-full, quota, permission, and other substantive allocation failures
+  fail the operation before bytes are copied.
+- Short-write checks, digest byte count, flushes, post-copy source guards, and
+  owned-temp cleanup remain mandatory.
 
 #### Callback semantics
 
@@ -314,14 +366,14 @@ thread. Workers never call either callback.
 
 - Call `checkpoint()` before admitting each new read, matching the current
   chunk-boundary cancellation point.
-- When the free pool is empty, wait with a bounded timeout. On each timeout,
-  inspect the first-error slot and call `checkpoint()` before waiting again;
-  never block forever on the free queue while control or worker failure is
-  pending.
-- Call `on_chunk(size)` only after that chunk has been fully written to the
-  owned temporary file and included in the digest.
-- Release progress in sequence order, even if worker acknowledgements arrive
-  at different times.
+- Drain ready writer completions before each read, while waiting to enqueue,
+  and after normal EOF.
+- When a bounded data queue is full, wait with a timeout. On each timeout,
+  inspect the first-error slot and call `checkpoint()` before waiting again.
+- Call `on_chunk(size)` for each drained writer completion. Because the
+  hasher is upstream, that chunk has already been included in the digest.
+- The single writer's FIFO completions are already in read order; no
+  coordinator-side reordering state is needed.
 
 Calling `on_chunk()` immediately after the read would be incorrect: progress
 would lead completed work and would overcount when the writer fails.
@@ -340,18 +392,20 @@ The implementation needs a shared abort flag and a first-error slot.
 - A cancellation or pause exception stops new reads, signals abort, shuts down
   both queues, joins both workers in `finally`, then re-raises the original
   control exception.
-- A worker may finish its current chunk after abort, but must not start useful
-  work on later queued chunks. Queued buffers are consumed and released with
-  `completed=False` so no producer or peer remains blocked on the bounded pool
-  and no discarded chunk produces progress.
+- Use Python 3.13 `Queue.shutdown(immediate=True)` on both bounded data queues
+  during abort. It releases blocked producers and consumers and drops queued
+  chunk references; the pipeline does not use `Queue.join()`.
+- A worker may finish its current chunk after abort, but the hasher must not
+  forward another chunk and the writer must not publish another completion
+  after observing abort.
 - Once abort is observed, the coordinator stops draining completion records,
-  stops calling `on_chunk()`, and applies no normal-path sequence assertions.
-  A genuine completion racing with abort may remain queued and is ignored.
+  stops calling `on_chunk()`, and ignores any completion racing with abort.
   Teardown must preserve the initiating control/error exception rather than
-  mask it with a progress-order assertion or secondary cleanup failure.
+  mask it with queue-shutdown or cleanup failure.
 - Writer errors stop further writes. Hasher errors prevent any digest from
-  being returned. Reader and callback errors follow the same abort-and-join
-  path.
+  being returned. The first failing worker stores its error and shuts down
+  both data queues so the caller and peer cannot remain blocked. Reader and
+  callback errors follow the same abort-and-join path.
 - Retain the existing short-write loop and the
   `written is None or written <= 0` forward-progress guard.
 - The caller never observes a return or exception while a worker is still
@@ -361,9 +415,9 @@ Because the executor publishes only after `copy()` returns, cancellation or
 worker failure leaves at most an owned temporary file, which the existing
 executor cleanup path removes.
 
-Explicit `Thread`, bounded `Queue`, and small buffer-state records are favored
-over a general thread pool: ownership, draining, and shutdown need to remain
-visible and deterministic.
+Explicit `Thread`, bounded `Queue`, and one nonblocking completion queue are
+favored over a general thread pool: handoff, progress, and shutdown remain
+visible and deterministic without inventing buffer ownership state.
 
 ### 4.2 Track 2 - Wholesale XXH3-128 Content Hashing
 
@@ -412,22 +466,29 @@ Required pipeline coverage:
 - Serial reference and pipelined copy produce identical digest bytes and byte
   counts under whichever canonical content hasher is active in that revision,
   across empty, partial-chunk, exact-chunk, and multi-chunk files.
-- `on_chunk()` occurs only after both write and hash acknowledgement and is
-  emitted in sequence order.
-- Exhausting the free pool while completions are pending cannot deadlock;
-  final worker release recycles the buffer without coordinator intervention.
-- A write/hash discard releases both leases, returns the buffer, emits no
-  `ChunkComplete`, and advances no progress.
+- A source implementing `read()` but not `readinto()` is sufficient.
+- Each immutable chunk reaches the writer only after the hasher consumes it;
+  no chunk is mutated or copied during handoff.
+- `on_chunk()` occurs only after the line's hash and full-write stages and is
+  emitted in read order.
+- Filling either bounded data queue applies backpressure without deadlock or
+  exceeding the configured resident-payload bound.
 - Short writes make forward progress; zero/`None` writes fail.
 - Reader, writer, hasher, and callback failures terminate and join both
   workers without deadlock.
-- Cancel and pause at each pipeline stage terminate cleanly, publish nothing,
-  stop completion draining without a teardown ordering assertion, preserve the
-  initiating exception, and allow owned-temp cleanup.
-- The bounded pool is actually bounded and buffers are never reused before
-  both consumers release them.
+- Cancel and pause at each pipeline stage terminate cleanly, publish no target
+  file, stop completion draining, preserve the initiating exception, and
+  allow owned-temp cleanup.
+- Immediate queue shutdown releases callers or workers blocked on either
+  handoff and does not replace the initiating failure with `ShutDown`.
 - Cancellation tests use explicit pipeline-stage synchronization rather than
   depending on an exact checkpoint call count.
+- Temp creation requests the exact reviewed source allocation; zero-length and
+  unsupported-allocation paths continue correctly, while substantive
+  allocation failures abort before streaming.
+- Source shrink/growth after preallocation is still rejected by byte-count
+  and post-copy drift guards, and the owned temp is removed.
+- A 4 KiB file uses the same pipeline rather than a separate serial fast path.
 
 Required content-hash coverage:
 
@@ -455,9 +516,10 @@ Required content-hash coverage:
 
 ### 4.4 Estimate
 
-- Track 1: approximately 2-3 implementation days including deterministic
-  cancellation/failure handling and focused tests. The earlier one-day
-  estimate omitted acknowledgement and shutdown semantics.
+- Track 1: approximately 2 implementation days including native
+  preallocation, deterministic cancellation/failure handling, and focused
+  tests. The linear pipeline removes the prior lease and dual-acknowledgement
+  work, but queue shutdown and failure coverage remain substantive.
 - Track 2: approximately 1 implementation day plus 1 day for fixtures,
   vectors, persistence round-trips, and regression tests.
 
@@ -474,6 +536,12 @@ call sites, not from an attempted production implementation.
   after XXH3-128 before adding workers.
 - **Unbuffered executor IO.** Needs its own measurement; the current benchmark
   does not establish that it improves the production buffered path.
+- **Mutable `readinto()` buffers or a fork topology.** Reconsider only if a
+  production-shaped benchmark shows a user-visible gain large enough to
+  justify explicit buffer ownership and dual-consumer completion state.
+- **Small-file serial fast path.** The measured pipeline penalty is accepted
+  for M1. Reconsider only if directory-level workloads, rather than isolated
+  4 KiB microbenchmarks, show a user-visible regression.
 - **Additional content algorithms.** Require a concrete product need and a
   new decision covering semantics, evidence compatibility, and tests. No
   registry or dormant extension mechanism is added in M1. The required,
