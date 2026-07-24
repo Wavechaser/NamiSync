@@ -35,15 +35,15 @@ preallocating temps too small to benefit, rebuilding Win32 bindings, flushing
 the temp twice, reopening it after metadata, and replaying all metadata after
 publish even when publication preserved it.
 
-The first problem therefore calls for an adaptive backend: a bounded
-three-stage pipeline for files large enough to amortize it and a direct serial
-loop for smaller files. The second calls for a faster content hash. The
-remaining fixed costs call for fewer native setup calls, one pre-publish file
+The first problem therefore calls for one bounded three-stage pipeline used by
+every copied file, with its chunk size derived from the reviewed source size.
+The second calls for a faster content hash. The remaining fixed costs call for
+fewer native setup calls, conditional preallocation, one pre-publish file
 durability barrier, and conditional post-publish metadata repair. These
 changes complement one another but solve different problems: XXH3-128 removes
 hashing as the reason to execute multiple files concurrently; it does not
-remove the need to overlap large-file reads, writes, and hashing or to reduce
-per-file executor overhead.
+remove the need to overlap reads, writes, and hashing or to reduce per-file
+executor overhead.
 
 ---
 
@@ -119,7 +119,7 @@ linear `reader -> hasher -> writer`, target temp preallocated), XXH3-128:
 | Configuration | MiB/s | vs serial |
 |---|---:|---:|
 | serial read() (today) | ~1 234 | - |
-| pipelined read() + preallocation (large-file path) | ~2 700-3 100 | +120% to +150% |
+| pipelined read() + preallocation (measured large-file shape) | ~2 700-3 100 | +120% to +150% |
 
 The buffered path reaches roughly half the unbuffered ceiling because cached
 writes cross memory twice and the cache manager schedules writeback. The design
@@ -167,11 +167,10 @@ queue near eight chunks rather than two (2.4 memory paragraph and 4.1).
 Starting two workers per file cost about 10% at 4 KiB and became negligible
 by 4 MiB. That isolated result does not establish the production crossover:
 filesystem open, metadata, flush, publish, and recording costs dominate tiny
-files, while the pipeline begins helping only when a file spans enough chunks
-to overlap stages. Track 1 therefore retains the current serial loop as a real
-small-file engine and selects the engine once from the reviewed source size.
-A directory-level size sweep chooses the crossover; it is not guessed from
-the 4 KiB microbenchmark.
+files, so avoiding worker startup has no demonstrated user-visible benefit.
+Track 1 accepts that bounded cost and uses the same pipeline for every size.
+A lazy worker-spin-up fast exit remains documented only as a deferred option
+gated by a directory-level workload, not the isolated 4 KiB result.
 
 ### 2.5 What the Numbers Mean
 
@@ -238,7 +237,7 @@ reproduction must:
 6. Also benchmark the actual buffered executor path before treating the
    unbuffered throughput as a production guarantee.
 7. Sweep realistic file-size distributions, not only one large file, and
-   report serial/pipeline crossover, preallocation crossover, total operations
+   report adaptive chunk candidates, preallocation crossover, total operations
    per second, and fixed finalization time separately.
 8. Record reader-blocked time, writer-starved time, and resident-payload
    high-water bytes so queue tuning is based on stage starvation rather than
@@ -256,9 +255,9 @@ environment block rather than overwriting these results.
 **Tension.** Both changes improve throughput, but they address different
 limits and have different failure surfaces.
 
-**Resolution.** Implement the adaptive serial/pipelined copy backend and its
-executor IO/finalization reductions as an independent track. The XXH3-128
-replacement neither absorbs nor weakens that work.
+**Resolution.** Implement the all-size adaptive-chunk pipeline and its executor
+IO/finalization reductions as an independent track. The XXH3-128 replacement
+neither absorbs nor weakens that work.
 
 **Why.** The pipeline changes concurrency and cancellation inside the byte
 loop but no evidence format. The hash replacement changes the content-evidence
@@ -320,10 +319,11 @@ contracts.
 multi-device or small-file workloads, but they add scheduling, memory,
 progress, cancellation, and device-contention complexity.
 
-**Resolution.** M1 uses one file operation at a time. Each copy may pipeline
-that file's read, write, and hash stages. Verification remains single-stream.
-Parallel file execution or verification requires a later benchmark showing a
-real workload that remains underutilized after XXH3-128.
+**Resolution.** M1 uses one file operation at a time. Every normal content
+copy pipelines that file's read, write, and hash stages. The separate hashless
+trash-backup loop remains serial as specified in 4.1. Verification remains
+single-stream. Parallel file execution or verification requires a later
+benchmark showing a real workload that remains underutilized after XXH3-128.
 
 **Why.** The measured XXH3-128 stage is not the bottleneck. Concurrency should
 solve observed device utilization, not compensate for the retired SHA-256
@@ -384,52 +384,42 @@ one byte ledger makes the memory ceiling truthful across both queues, and
 follow-up measurements found no meaningful throughput difference between the
 line and fork topologies.
 
-### DR-HASH-07 - Select a real serial engine for smaller files
+### DR-HASH-07 - Pipeline every size and adapt only the chunk
 
-**Tension.** Making the pipeline "act serial" would retain worker and queue
-startup while adding a special execution mode inside the harder code path.
-Always using the current serial loop would leave large-file overlap on the
-table. Fixed chunk and preallocation policies likewise charge small files for
-work that may not repay its setup cost.
+**Tension.** A fixed 4 MiB read is proven for large files but gives small and
+medium files few chunks to overlap and sets a coarse checkpoint interval.
+A size-selected dual-engine serial/pipelined hybrid avoids worker startup on
+tiny files, but it adds backend selection, protocol inputs, threshold policy,
+and a larger cancellation/failure test matrix for a benefit measured only in
+an isolated 4 KiB microbenchmark.
 
-**Resolution.** `NativeCopyBackend.copy()` receives the reviewed
-`expected_size` and selects exactly once between private `_copy_serial` and
-`_copy_pipelined` engines. The serial engine uses no queue or worker thread.
-Both engines share only the hasher construction, full-write helper,
-checkpoint/progress contract, and result validation needed to keep their
-outputs identical.
+**Resolution.** Every normal copy uses the same
+`reader -> hasher -> writer` pipeline, including empty and sub-chunk files.
+`_prepare_copy()` derives a positive actual `chunk_size` from the reviewed
+source size and `ExecutorPolicies.max_chunk_size`, then passes that actual
+value through the existing `CopyBackend.copy(..., chunk_size=...)` contract.
+`CopyBackend` does not receive `expected_size`, choose an engine, or reinterpret
+`chunk_size` as a ceiling.
 
-`expected_size` is a tuning input, not an EOF boundary or success claim. Both
-engines still read until actual EOF and return the observed byte count so
-source growth and shrink remain detectable.
+Use a small fixed set of candidate chunk sizes selected by a
+production-shaped size sweep rather than a continuous formula. The selected
+chunk never exceeds `max_chunk_size`; zero-byte files receive the smallest
+positive candidate and immediately encounter EOF. The candidate values and
+size bands are private executor constants, not user settings. Record the
+measured table and rationale before landing them.
 
-The selected engine also chooses its chunk size from the reviewed size and a
-measured policy. The pipeline retains the measured 4 MiB chunk size. The
-serial path may use a smaller chunk where that reduces peak chunk residency or
-checkpoint latency without losing throughput to extra syscalls. A file no
-larger than one pipeline chunk cannot overlap stages and is always serial; a
-production-shaped size sweep determines whether the serial region extends
-farther.
+Target-temp preallocation remains independently conditional because temp
+creation already has the reviewed size. `_prepare_copy()` passes an allocation
+request only above its measured crossover; zero-byte and smaller copies skip
+it. Only allow-listed errors that mean `FileAllocationInfo` is unsupported
+fall back to ordinary streaming; disk-full, quota, permission, unknown, and
+other substantive failures remain operation failures.
 
-Target-temp preallocation is independently conditional because temp creation
-precedes the backend call. `_prepare_copy()` passes an allocation request only
-above its measured size crossover; zero-byte and smaller copies skip it.
-Only allow-listed errors that mean `FileAllocationInfo` is unsupported fall
-back to ordinary streaming; disk-full, quota, permission, unknown, and other
-substantive failures remain operation failures. The preallocation crossover
-need not equal the serial/pipeline crossover.
-
-The crossover values are private implementation constants established by the
-benchmark matrix, not user settings or new executor policy surface. The
-initial measurement bands are `<= 4 MiB`, `4-16 MiB`, and `>= 16 MiB`, but
-those are experiment bins rather than shipping thresholds.
-
-**Why.** Selection at the synchronous backend boundary keeps pipeline
-shutdown semantics out of the serial path. Passing expected size explicitly
-also avoids inferring policy from the first read or duplicating planner
-knowledge. Keeping the allocation gate at temp creation respects the current
-executor/filesystem boundary rather than adding a strategy object solely to
-couple two separately measured cutovers.
+**Why.** Size affects one scalar chosen before the backend call, while
+streaming, hashing, progress, cancellation, and teardown retain one code path.
+Renaming only the executor policy to `max_chunk_size` makes its ceiling role
+explicit without changing the `CopyBackend` protocol. Lazy worker spin-up is
+deferred rather than left as unmeasured production structure.
 
 ### DR-HASH-08 - Finalize each temp once before publication
 
@@ -467,11 +457,18 @@ time during rename/replace, so "no readonly requested" is not proof that all
 published metadata survived. Conversely, an unconditional full replay is not
 needed when the observed values already match.
 
-The copy-backup path uses the same close, metadata, single-flush, publish, and
-conditional-repair primitives. An update using a hardlink backup is a required
-special case: clearing readonly on the live old inode also clears it on the
-trash hardlink. Restore and flush that displaced inode when required before
-recording the update.
+Copied backups share only the sequential source opener, full-write helper, and
+close/finalize/single-flush/publish/conditional-repair filesystem primitives.
+They retain a dedicated hashless serial byte loop and do not use
+`CopyBackend`, pipeline workers, adaptive engine selection, or preallocation
+in Track 1. A copied backup reads the old target and writes its trash temp on
+the same target volume, and the measured cross-volume hashed-pipeline result
+does not establish a benefit for that shape. Reconsider backup pipelining or
+preallocation only with a separate hardlink-unsupported update benchmark.
+
+An update using a hardlink backup is a required special case: clearing
+readonly on the live old inode also clears it on the trash hardlink. Restore
+and flush that displaced inode when required before recording the update.
 
 Directory flushing is unchanged. Parent directories are still flushed after
 publication and before durable recording; reducing file-handle flushes does
@@ -498,8 +495,12 @@ wrap them as unbuffered Python file objects; retain equivalent sharing,
 long-path, and close ownership behavior.
 
 The pipeline's combined in-flight byte window is NamiSync's application-level
-readahead. Do not add another source-prefetch queue or multiple outstanding
-reads to the buffered backend.
+readahead. `O_SEQUENTIAL` is complementary OS-level read-ahead: it lets the
+Windows cache manager prefetch cached pages outside NamiSync's application
+payload queues, without creating app-owned chunks, completion records, or
+another cancellation path. "Do not add another source-prefetch queue" means
+do not add a second application buffering layer or multiple outstanding reads
+to the buffered backend; it does not prohibit the cache-manager hint.
 
 **Why.** Binding once removes pure setup repetition. The sequential flag gives
 the Windows cache manager accurate access intent at the handle boundary with
@@ -510,7 +511,7 @@ to a separately measured direct-IO design, not this buffered pipeline.
 
 ## 4. Implementation
 
-### 4.1 Track 1 - Adaptive Copy Backend and Finalization
+### 4.1 Track 1 - Adaptive-Chunk Pipeline and Finalization
 
 Land Track 1 in reviewable steps, running focused executor tests after each:
 
@@ -518,34 +519,31 @@ Land Track 1 in reviewable steps, running focused executor tests after each:
 2. consolidate pre-publish metadata and the remaining temp flush into one
    native finalization handle, then make post-publish repair observational and
    conditional;
-3. pass reviewed size through `CopyBackend`, retain a true serial engine, and
-   add measured adaptive chunk/preallocation selection; and
+3. rename the executor policy to `max_chunk_size`, derive the actual
+   `chunk_size` before the backend call, and add measured conditional
+   preallocation; and
 4. add the linear pipeline with one combined byte budget and deterministic
    teardown.
 
 This order takes the fixed per-file reductions first and leaves the concurrency
-change until the serial reference and finalization path are stable.
+change until finalization and the current copy behavior are stable.
 
-The adaptive copy implementation remains contained inside
-`NativeCopyBackend` in `modules/executor.py`. Extend the `CopyBackend` protocol
-with the reviewed `expected_size`; do not hide that input in a concrete
-backend constructor. The call boundary stays synchronous: it returns one
-`CopyDigest` or raises only after the selected serial loop finishes or all
-pipeline workers have stopped.
+The pipeline remains contained inside `NativeCopyBackend` in
+`modules/executor.py`. Keep the `CopyBackend.copy(..., chunk_size=...)`
+protocol unchanged: `chunk_size` is the positive actual read size for that
+call. Rename only `ExecutorPolicies.chunk_size` to
+`ExecutorPolicies.max_chunk_size`.
 
-Select `_copy_serial` or `_copy_pipelined` before the first read. Both return
-the same `CopyDigest`, report the byte count checked by the executor against
-`expected_size`, retain the full-write forward-progress guard, and deliver
-`checkpoint()` and `on_chunk()` on the caller thread. The executor retains the
-existing `SOURCE_DRIFT` mapping for a size mismatch. Neither engine treats
-`expected_size` as a read limit; each reads through actual EOF. The serial
-implementation is the direct `read -> full write -> hash` reference path; it
-does not instantiate pipeline queues or threads.
+Before creating the temp, `_prepare_copy()` calls one private pure helper with
+the reviewed source size and policy maximum. The helper returns the actual
+chunk size from the measured fixed candidate table. Pass that value to
+`CopyBackend.copy()`. The backend does not receive the reviewed size and has
+no serial/pipeline selection branch.
 
-For the pipeline, use the calling thread as reader/coordinator plus one hasher
-thread and one writer thread. Keep the existing `source.read(chunk_size)`
-contract. Each read returns a fresh immutable `bytes` object, and the same
-object moves through two FIFO queues:
+Every invocation uses the calling thread as reader/coordinator plus one hasher
+thread and one writer thread, including empty and very small files. Use
+`source.read(chunk_size)` for ordinary reads. Each read returns a fresh
+immutable `bytes` object, and the same object moves through two FIFO queues:
 
 ```text
 caller/reader -> hash queue -> hasher -> write queue -> writer
@@ -584,20 +582,21 @@ separate item cap on each FIFO to bound control objects and catch accounting
 defects, but do not derive resident memory by adding two independently full
 byte allowances.
 
-The combined payload window remains roughly eight 4 MiB chunks (~32 MiB) so
-the reader and hasher can run ahead and keep the writer from starving during
-bursty device writeback. The 2 GiB/s-class measurements used that window; a
-shallow two-slot equivalent need not reproduce them. Budget beyond what covers
-writer jitter adds RAM without throughput, since the slowest stage still sets
-the rate.
+The combined payload window remains ~32 MiB: eight chunks at the 4 MiB maximum
+and more items when the adaptive policy selects a smaller chunk. The separate
+item cap is a safety bound and must not accidentally turn the measured smaller
+chunk policies into a much smaller byte window. The 2 GiB/s-class measurements
+used the eight-by-4-MiB shape; a shallow two-slot equivalent need not reproduce
+them. Budget beyond what covers writer jitter adds RAM without throughput,
+since the slowest stage still sets the rate.
 
-Depth also absorbs external CPU contention. In the line topology the writer is
-fed through the hasher, so a preempted hasher can starve the writer; a deeper
-write queue gives the writer buffered chunks to consume across that gap. A
-contention pass (2.4) confirmed the direction: the line's small under-load
-disadvantage at two slots closes by eight. Eight chunks covers both device
-writeback jitter and scheduler preemption, so no separate contention tuning is
-needed.
+Payload depth also absorbs external CPU contention. In the line topology the
+writer is fed through the hasher, so a preempted hasher can starve the writer;
+a deeper write queue gives the writer buffered chunks to consume across that
+gap. A contention pass (2.4) confirmed the direction at the 4 MiB maximum: the
+line's small under-load disadvantage at two slots closes by eight. The same
+32 MiB budget, rather than a fixed item count, carries that protection across
+adaptive chunk sizes.
 
 Normal EOF is an explicit sentinel. The hasher finalizes the digest and
 forwards EOF only after consuming every preceding chunk; the writer reports
@@ -622,20 +621,20 @@ sequential-access hint and returns the same unbuffered `BinaryIO` surface.
 This is a cache-manager hint, not direct IO and not a second queue. Preserve
 the current source sharing and long-path behavior and prove descriptor closure
 on every construction failure. Copied backups use the same sequential source
-opener rather than retaining a second path-opening implementation.
+opener rather than retaining a second path-opening implementation; that
+opener reuse does not route their bytes through `CopyBackend`.
 
-The backend receives the reviewed size and uses private measured constants to
-choose:
+`_prepare_copy()` uses the reviewed size for two independent decisions before
+creating the temp:
 
-- serial versus pipeline engine;
-- the serial read chunk size, capped by the existing 4 MiB pipeline chunk.
+- select the actual positive pipeline `chunk_size` from the measured candidate
+  table, capped by `ExecutorPolicies.max_chunk_size`; and
+- decide whether to pass an allocation request.
 
-Separately, `_prepare_copy()` uses the reviewed size to decide whether to pass
-an allocation request while creating the temp. Zero-byte files remain serial
-and perform no allocation request. Files no larger than one pipeline chunk
-remain serial because they cannot overlap two chunks. Do not expose either
-cutover as a user setting. Before landing, run the size-distribution benchmark
-from 2.7 and replace the experimental bands in DR-HASH-07 with measured
+Zero-byte and small files still enter the pipeline; they merely skip
+preallocation where the allocation policy says it cannot repay setup. Do not
+expose the chunk bands or allocation crossover as user settings. Before
+landing, run the size-distribution benchmark from 2.7 and record the measured
 constants and rationale.
 
 #### Target-temp preallocation
@@ -662,6 +661,20 @@ the copy succeeded:
   fail the operation before bytes are copied.
 - Short-write checks, digest byte count, flushes, post-copy source guards, and
   owned-temp cleanup remain mandatory.
+
+#### Copied-backup byte loop
+
+`NativeFileSystem.copy_backup()` remains a dedicated serial, hashless copy. It
+does not call `NativeCopyBackend`, start pipeline workers, request an adaptive
+chunk, or preallocate its trash temp in Track 1. Refactor its inline writes to
+reuse the ordinary full-write forward-progress helper, and use the shared
+sequential source opener. Its fixed read chunk remains 4 MiB unless a separate
+same-volume backup benchmark justifies another policy.
+
+After that byte loop, copied backups do share the common writer-close and
+native finalization sequence below. "Shared finalization" does not imply
+shared streaming policy or add ACL preservation that `copy_backup()` does not
+currently perform.
 
 #### Temp finalization and conditional published repair
 
@@ -696,26 +709,34 @@ the differing fields through one handle, flush the file, close it, and obtain
 the final stat used for attestation. Parent-directory flushes remain after this
 step.
 
-Apply the same primitive sequence to copied backups. For hardlink backups,
-restore and flush the displaced inode through its trash path if clearing the
-live target's readonly bit changed that inode.
+Apply the same post-loop finalization sequence to copied backups. For hardlink
+backups, restore and flush the displaced inode through its trash path if
+clearing the live target's readonly bit changed that inode.
 
 #### Published-size guard
 
-After publish and the post-copy stat, assert `published.size == digest.size`
-before recording the attestation. The copy loop and source-drift guards already
-compare against the reviewed source size; this adds the missing equality
-between the bytes hashed and the bytes that reached the target, so any size
-divergence (including a future allocation or truncation defect) fails the
-operation loudly at write time instead of surfacing later as a content
-`ValueError` when the verifier first reads the row. `Attestation` may also
-enforce `content.size == subject.size` in `__post_init__` as a cheap structural
-backstop.
+Put the executor-specific guard in `_attestation()`, the single constructor
+chokepoint used by COPY, UPDATE, and MOVE_UPDATE. Before constructing evidence,
+perform an explicit, non-`assert` check that
+`subject.size == digest.size`. The copy loop and source-drift guards already
+compare the observed byte count against the reviewed source size; this adds the
+missing equality between the bytes hashed and the published target. Keeping it
+in `_attestation()` prevents three operation-site copies and makes a future
+allocation or truncation defect fail before any recorder call.
+
+Also enforce `content.size == subject.size` in
+`Attestation.__post_init__`. That is deliberately a global core invariant, not
+only a copy-path backstop: it applies to verifier-created attestations,
+repository/readback reconstruction, and every future provenance. The
+executor's `_attestation()` check remains useful for its local failure
+boundary and message; the dataclass invariant prevents any other construction
+path from representing content evidence as bound to a differently sized
+subject.
 
 #### Callback semantics
 
 `checkpoint()` and `on_chunk()` stay on the original caller/coordinator
-thread in both engines. Pipeline workers never call either callback.
+thread. Pipeline workers never call either callback.
 
 - Call `checkpoint()` before admitting each new read, matching the current
   chunk-boundary cancellation point.
@@ -728,8 +749,6 @@ thread in both engines. Pipeline workers never call either callback.
   hasher is upstream, that chunk has already been included in the digest.
 - The single writer's FIFO completions are already in read order; no
   coordinator-side reordering state is needed.
-- In the serial engine, call `on_chunk(size)` only after that chunk has been
-  fully written and hashed, preserving the same externally visible meaning.
 
 Calling `on_chunk()` immediately after the read would be incorrect: progress
 would lead completed work and would overcount when the writer fails.
@@ -787,7 +806,7 @@ preference, or per-run algorithm field.
 | Change | Required result |
 |---|---|
 | `pyproject.toml` | Add the pinned/compatible `xxhash` dependency |
-| `core/evidence.py` | `ContentEvidence.algorithm` accepts only `xxh3_128`; digest length is exactly 16 bytes; define the standard-library-only streaming hasher/factory protocol used by both consumers |
+| `core/evidence.py` | `ContentEvidence.algorithm` accepts only `xxh3_128`; digest length is exactly 16 bytes; `Attestation` globally requires content and subject sizes to match; define the standard-library-only streaming hasher/factory protocol used by both consumers |
 | `core/execution.py` | `CopyDigest` validates a 16-byte XXH3-128 digest |
 | `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
 | `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |
@@ -795,6 +814,13 @@ preference, or per-run algorithm field.
 | `workflows/runtime.py` | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`; the M1 integrity workflow supplies it to `VerifierContext` in the same pass |
 | `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
 | Tests and fixtures | Replace SHA-256 content expectations with canonical XXH3-128 bytes |
+
+Repository reconstruction deliberately reads the stored algorithm identifier
+even though `xxh3_128` is the only valid value today. Hardcoding `xxh3_128`
+would be equivalent only for valid rows; it would silently reinterpret a
+corrupt or unsupported stored identifier instead of letting the fixed
+`ContentEvidence` contract reject it. This preserves self-description and
+validation, not dormant multi-algorithm support.
 
 The third-party `xxhash` package must not be imported by `core`, which is
 standard-library-only. Executor and verifier also do not construct the
@@ -823,18 +849,20 @@ unchanged.
 
 Required pipeline coverage:
 
-- Serial reference and pipelined copy produce identical digest bytes and byte
-  counts under whichever canonical content hasher is active in that revision,
-  across empty, partial-chunk, exact-chunk, and multi-chunk files.
-- Backend selection uses only the reviewed expected size, occurs before the
-  first read, and creates no worker or queue for serial files. Files no larger
-  than one pipeline chunk are serial; measured threshold boundary cases select
-  the intended engine.
-- Both engines read to actual EOF rather than stopping at expected size, and
+- The pipelined copy produces the same digest bytes and byte count as a
+  test-local serial reference under whichever canonical content hasher is
+  active in that revision, across empty, partial-chunk, exact-chunk, and
+  multi-chunk files.
+- Empty, smaller-than-one-chunk, exact-chunk, and multi-chunk production calls
+  all instantiate and cleanly stop the same pipeline workers; there is no
+  size-selected serial branch.
+- The adaptive chunk helper returns a positive candidate no greater than
+  `ExecutorPolicies.max_chunk_size`, selects the expected band at every
+  boundary, and passes that actual value through the unchanged
+  `CopyBackend.copy(..., chunk_size=...)` contract.
+- The pipeline reads to actual EOF rather than stopping at reviewed size, and
   the executor preserves `SOURCE_DRIFT` classification for observed shrink or
   growth.
-- Adaptive serial chunking never exceeds the configured pipeline chunk, emits
-  progress with the same semantics, and preserves checkpoint responsiveness.
 - A source implementing `read()` but not `readinto()` is sufficient.
 - Each immutable chunk reaches the writer only after the hasher consumes it;
   no chunk is mutated or copied during handoff.
@@ -844,6 +872,8 @@ Required pipeline coverage:
   backpressure without deadlock. A chunk moving between queues is charged
   once, the resident-payload high-water never exceeds the configured budget,
   and every completion or abort releases its charge exactly once.
+- The item cap accommodates the intended 32 MiB payload window at every
+  adaptive chunk candidate while still bounding control-object count.
 - Short writes make forward progress; zero/`None` writes fail.
 - Reader, writer, hasher, and callback failures terminate and join both
   workers without deadlock.
@@ -861,15 +891,23 @@ Required pipeline coverage:
   streaming.
 - Source shrink/growth after preallocation is still rejected by byte-count
   and post-copy drift guards, and the owned temp is removed.
-- A published file whose size differs from the hashed byte count fails the
-  operation before recording, rather than persisting mismatched evidence.
+- `_attestation()` rejects a published size that differs from the hashed byte
+  count for COPY, UPDATE, and MOVE_UPDATE before any recorder call.
+- `Attestation.__post_init__` rejects mismatched content/subject sizes for
+  copy, verifier, repository/readback, and other construction paths as a
+  global core invariant.
 - Cached source opening carries the sequential hint, retains required sharing
   and long-path behavior, and closes the descriptor on success and failure.
 - Win32 DLL loading and function-signature binding occur once rather than once
   per file.
-- Normal copy and copied-backup paths perform no writer flush, apply ACL and
+- Normal copy paths perform no writer flush, apply any preserved ACL and
   pre-publish metadata after writer close, and issue exactly one temp-file
   flush before publication.
+- Copied-backup paths likewise perform no writer flush and issue one
+  post-metadata temp-file flush, without adding a new ACL-copy contract.
+- Copied backups use their dedicated serial hashless loop and shared
+  sequential opener/full-write/finalization helpers, but do not invoke
+  `CopyBackend`, start pipeline workers, or request preallocation.
 - Temp finalization acquires its handle before applying a preserved ACL, so a
   restrictive copied descriptor cannot strand metadata or flush work that
   still requires that handle.
@@ -911,12 +949,12 @@ Required content-hash coverage:
 
 ### 4.4 Estimate
 
-- Track 1: approximately 3-4 implementation days including the measured
-  size-policy sweep, serial/pipeline selection, native allocation and
-  finalization, deterministic cancellation/failure handling, and focused
-  tests. The linear pipeline removes the prior lease and
-  dual-acknowledgement work, but combined-budget accounting, selective
-  metadata repair, queue shutdown, and failure coverage remain substantive.
+- Track 1: approximately 3 implementation days including the adaptive
+  chunk/preallocation sweep, native allocation and finalization, deterministic
+  cancellation/failure handling, and focused tests. The single pipeline
+  removes hybrid selection and the prior lease/dual-acknowledgement work, but
+  combined-budget accounting, selective metadata repair, queue shutdown, and
+  failure coverage remain substantive.
 - Track 2: approximately 1 implementation day plus 1 day for fixtures,
   vectors, persistence round-trips, and regression tests.
 
@@ -929,6 +967,20 @@ call sites, not from an attempted production implementation.
 
 - **Concurrent file execution.** Reconsider only if post-XXH3 measurements
   show that a real workload leaves relevant devices underutilized.
+- **Lazy worker spin-up for zero/one-chunk files.** Track 1 initially starts
+  the pipeline for every normal copy. If a production-shaped directory
+  workload later shows a material end-to-end cost from worker and queue
+  startup, prefer one engine with a lazy preamble over a size-selected hybrid.
+  The caller reads chunk 1 and then attempts chunk 2 before creating queues or
+  workers. Empty input returns the empty digest inline. If chunk 2 is EOF, the
+  caller hashes chunk 1, fully writes it, emits `on_chunk`, and returns. If
+  chunk 2 contains data, the caller starts the existing pipeline, admits both
+  chunks in order, and continues normally. This retains one streaming
+  implementation: the inline exit is the one-iteration body, not a second
+  serial engine. It also needs no `expected_size` protocol input or
+  size-selection threshold. Before activation, prove checkpoint behavior on
+  both reads, short-read correctness, digest/progress equivalence, and
+  cancellation/failure teardown across the lazy-start boundary.
 - **Cross-file batching or large-first/small-last passes.** The plan already
   contains global operation knowledge, but reordering alone does not remove
   file opens, metadata work, flushes, recorder calls, or database commits. It
@@ -938,7 +990,11 @@ call sites, not from an attempted production implementation.
   preparation, keep reversible copy-to-temp work separate from a plan-order
   coordinator that guards, publishes, flushes, records, and settles each
   operation. Directory-flush coalescing and recorder transaction batching are
-  separate durability decisions, not implied by file ordering.
+  separate durability decisions, not implied by file ordering. This deferral
+  also covers a depth-one "publish pipeline" that overlaps file N
+  finalization/flush/publish with file N+1 writes: it creates two live
+  operations and may turn sequential IO into harmful contention on rotational
+  media.
 - **Parallel verification.** Same gate: demonstrate an IO-utilization problem
   after XXH3-128 before adding workers.
 - **Direct/unbuffered executor IO, including overlapped readahead.** The
