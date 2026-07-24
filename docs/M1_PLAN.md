@@ -680,6 +680,15 @@ or direct UI SQL.
 
 ### Stage 2 — Executor and Hash Refactor
 
+0. **Precondition — run the size sweep before landing tunables.** The adaptive
+   chunk candidate table and the preallocation crossover are measured
+   constants, not guessed (`HASH_REFACTOR.md` §2.7, DR-HASH-07). Before landing
+   step 1's adaptive selection, run the standard synthetic distribution
+   (1,000×4 KiB, 512×128 KiB, 64×4 MiB, 4×128 MiB, 1×4 GiB) cross-volume and
+   record the resulting chunk bands, preallocation crossover, per-size
+   operations/second, and fixed finalization time as the committed constants
+   with rationale. A step-1 diff that ships guessed or placeholder constants
+   does not satisfy this stage.
 1. Land all of `HASH_REFACTOR.md` Track 1, not merely "the pipeline":
    adaptive chunk selection, the combined 32 MiB byte budget, immutable linear
    reader/hasher/writer handoff, conditional preallocation, sequential source
@@ -814,6 +823,15 @@ skip:
 - The XXH3-128 replacement and copy pipeline satisfy every collaborator,
   vector, acknowledgement, failure, and cancellation test listed in
   `HASH_REFACTOR.md`; M1 does not weaken that document's gates.
+- "Pipeline every size" is validated end to end, not only by microbench. The
+  standard synthetic distribution (1,000×4 KiB, 512×128 KiB, 64×4 MiB,
+  4×128 MiB, 1×4 GiB) runs cross-volume, and the small-file band's end-to-end
+  throughput and operations/second are recorded and do not regress against the
+  pre-refactor serial executor beyond the accepted worker-startup cost stated
+  in `HASH_REFACTOR.md` §2.4. A green correctness-only pipeline test does not
+  satisfy this bullet: the measurement is a named gate with recorded numbers,
+  and a regression past the accepted margin blocks the stage
+  (`HASH_REFACTOR.md` §2.7(7), DR-HASH-07).
 - Ledger v1, history v1, and history v2 are all refused with the same
   actionable reset posture; the old history migrator cannot label a partially
   migrated database as v3, and reset setup recreates both databases together
@@ -868,6 +886,203 @@ skip:
   interfaces before a second interface exists to test it against
   (DR-M1-02/07).
 
+### 5.1 Cross-Module Contract Gates (prove before integration)
+
+The §5 notes above check per-decision behavior. This section exists because the
+failure mode the plan most fears is two modules that each pass their own tests
+while disagreeing about a shared contract — a disagreement that only surfaces
+at Stage 4 integration. Each gate below names both sides of a seam and the test
+that makes a disagreement fail *before* they are wired together. The anti-slack
+rules from `HASH_REFACTOR.md` §4.5 apply verbatim: inject the named divergence,
+assert the typed result, and reject any test that would still pass if the two
+sides were mis-wired.
+
+**Blocking doc reconciliation before Stage 4.** `WORKFLOWS.md` lines 106-108
+still specify linked-verify selection as "built ledger-first from the inventory
+rows execution just recorded, not handed over from the executor." That directly
+contradicts DR-M1-12 §1 ("the immediate evidence handoff does not query the
+ledger") and §3 (candidates carry evidence "whether or not a ledger row
+exists"). Per this plan's precedence rule the module doc is the stale side, but
+it is exactly the sentence a low-context implementer will build to — and a
+ledger-first selection silently drops every candidate whose copy-ledger write
+was `DEGRADED`, the one case §3 says must still verify. Update `WORKFLOWS.md`
+106-108 to the published-evidence handoff as Stage 1/4 lands, and keep the gate
+XV-2 below as the executable proof.
+
+#### Execute → verify handoff (the highest-fear seam)
+
+- **XV-1 — Published-evidence cardinality.** Every settled COPY/UPDATE/
+  MOVE_UPDATE yields exactly one `ExecutionSet.published_evidence` entry;
+  `set(published_evidence) == {settled byte-producing op_ids}`. Fault-inject one
+  `_settle()` to mark status succeeded but omit evidence and assert the session
+  reports a named verification-incomplete invariant error, not a clean
+  all-verified terminal. *Not satisfied by* asserting `published_evidence` is
+  non-empty after a single copy.
+- **XV-2 — Candidates come from the handoff, not the ledger.** Run a copy whose
+  copy-ledger transaction is fault-injected to fail (recording `DEGRADED`) but
+  whose bytes published; assert the verify phase *still* produces a candidate
+  and reports `verified` + `recording degraded`. A ledger-first implementation
+  yields zero candidates here — this is the executable form of the doc
+  reconciliation above. *Not satisfied by* the happy path where the ledger row
+  exists (both sources agree).
+- **XV-3 — One recorder lifetime across both phases.** Run
+  execute → pause → resume → verify → settle; assert exactly one run window and
+  one compound terminal in the ledger, the reopened recorder reuses the same run
+  token idempotently (no token-conflict, no duplicate row), and a repeated close
+  during the pause is a no-op. *Not satisfied by* an execute→verify run with no
+  pause between, where close/reopen idempotency is never exercised.
+- **XV-4 — Continuation carries phase, not just the request.** Pause mid-verify
+  after k of n items; resume and assert exactly the remaining n−k items are
+  produced (none repeated, none lost) and the terminal phase came from the
+  explicit `phase=verify` discriminator, not inferred from accumulated items;
+  the serialized continuation contains phase + candidates + completed-
+  verification ids/bytes. *Not satisfied by* pausing only in the execute phase.
+- **XV-5 — Published evidence survives an in-process pause (only).** Pause
+  execution after some COPYs published but before settle; resume same-process
+  and assert every already-published op still has its exact
+  `PublishedCopyEvidence` and is verified. Separately restart the process and
+  assert resume is not offered (no false durable-resume claim). *Not satisfied
+  by* pausing only at a boundary where the executor already returned.
+- **XV-6 — Four axes stay independent under compound results.** A copy succeeds;
+  force *stat-stable* target-byte corruption (bytes changed, size and mtime
+  preserved) so readback mismatches; assert filesystem=`COMPLETED` AND
+  integrity=`mismatch` AND the copy outcome unchanged. Target *stat* drift is
+  `modified`, not `mismatch` (DR-M1-12) — assert that boundary separately. A
+  conditional verification write that goes stale after a byte match reports
+  `verified` + `recording degraded/stale`, never `HASH_MISMATCH`. *Not
+  satisfied by* asserting only that "the session reports a problem."
+- **XV-7 — Phase byte counters are never summed.** Copy+verify of a known-size
+  file exposes two independent phase counters (each reaching the size once), not
+  one reaching 2×; a verify-phase failure before any item produces a
+  `PhaseResult` with the error, not an empty success. *Not satisfied by*
+  asserting a single total "reaches the size," which a double-counting single
+  counter also satisfies.
+
+#### Result vocabulary, history, classification
+
+- **XV-8 — Nominal `ResultItem`, not duck-typing.** A mixed session emits one
+  `ItemOutcome` (phase=execute) and one `IntegrityOutcome` (phase=verify) where
+  *both objects expose `item_id` and `path`* (the real `integrity.py` type
+  does); assert `OperationResult.items` is one ordered length-2 list, each entry
+  keeps its own `item_type`/`phase`, and neither was routed into a separate
+  operations tuple; history round-trips both `item_type` tags distinctly. *Not
+  satisfied by* using the real (with-`path`) `IntegrityOutcome` and asserting
+  only that it lands in `items` — the current `hasattr` duck-typing collects it
+  too; the discriminator is that each entry keeps its own `item_type`/`phase`
+  and is not swept into a separate operations tuple.
+- **XV-9 — `IntegrityOutcome` reaches history.** Run a standalone verify, read
+  the persisted history detail back, and assert each `IntegrityOutcome` is
+  present with its integrity fields; feed `HistoryObserver` an unknown
+  `EventBody` subtype and assert it raises rather than silently no-ops. *Not
+  satisfied by* asserting the in-memory terminal result rather than reading the
+  history database.
+- **XV-10 — Headline precedence keeps all four axes visible.** Construct a
+  result that is simultaneously partial + mismatch + recording-degraded +
+  audit-degraded; assert headline == `partial` and all three secondary axes
+  remain individually renderable; drive the *adjacent* precedence pairs
+  (mismatch vs canceled, canceled vs verification-incomplete) and assert the
+  headline flips at each boundary. *Not satisfied by* testing only far-apart
+  pairs and never asserting the secondary axes survive the view model.
+
+#### Settings snapshot and fingerprint
+
+- **XV-11 — Executor never re-reads global settings.** Commit a plan, mutate
+  *every* global semantic setting (filters, deletion, trash-on-update,
+  preservation, casing), then execute; assert filesystem effects match the
+  original snapshot and the session neither refuses nor changes behavior; a
+  static scan asserts no executor/preflight symbol reads `db/settings` at
+  execution time and no `SettingsReader`/`ObservedWorld` live-settings field or
+  `FILTER_DRIFT`/`OPTIONS_DRIFT` path remains. *Not satisfied by* editing one
+  setting, where a lingering self-comparison passes trivially.
+- **XV-12 — `worker_count` fully removed, codec still lossless.** Assert
+  `worker_count` is absent from `Plan`, `SyncOptions`, and the encoded payload;
+  two plans differing only in a would-be `worker_count` produce identical
+  `plan_fingerprint` and `policy_fingerprint`; a full plan round-trips through
+  the JSON codec across every op kind byte-identically with a stable
+  fingerprint. *Not satisfied by* removing it from `SyncOptions` only while it
+  stays defaulted on `Plan` (the `asdict(plan)` fingerprint still hashes it) and
+  both test plans default it identically.
+
+#### Inventory, volume resolution, scanner ↔ recorder
+
+- **XV-13 — `ScanResult.complete` means complete-for-scope, recorder branches on
+  `is_full_scan`.** A selected refresh over {A,B} in a location also holding
+  {C,D}, with A present and B absent, marks B missing and leaves C,D untouched
+  (no location-wide sweep); an interrupted selected scan sets `complete=False`
+  and marks nothing missing; confirm the recorder chose the selected branch via
+  `is_full_scan`, not via `complete`. *Not satisfied by* asserting only that A/B
+  reconcile while never asserting C,D are preserved.
+- **XV-14 — Five volume states → distinct recorder behavior, none marks
+  missing wrongly.** For each state assert the outcome:
+  resolved→scan+reconcile; offline→zero missing + offline label;
+  ambiguous→refusal requiring user choice; root_missing→distinct actionable
+  state, zero missing; root_unavailable→access-failure state, zero missing.
+  Specifically inject a mounted volume with a deleted configured root and assert
+  no rows flip to missing. *Not satisfied by* aliasing root_missing/
+  root_unavailable back onto offline (the "no missing marked" assertion still
+  passes while the user-actionable distinction is lost).
+- **XV-15 — Integrity preflight re-resolves the volume on resume/wakeup.** Queue
+  a verify session, swap in a duplicate-identity (ambiguous) volume before
+  wakeup, and assert the resume/wakeup path detects ambiguous-at-resume and
+  refuses/escalates rather than hashing, through the reopened invocation — not
+  only at original submit. *Not satisfied by* checking the ambiguous case only
+  at submit time, where every implementation checks.
+
+#### XXH3 / attestation / factory seam (cross-module composition)
+
+- **XV-16 — Both consumers wired in one track, same factory, right openers.**
+  This seam is proven by `HASH_REFACTOR.md` §4.5 gates C4 (copy→verify
+  round-trip = `verified`), C5 (same hasher object, different openers at
+  composition), C6 (global size invariant on the readback path), C7
+  (self-describing reconstruction), and C8 (import law + required backend). The
+  M1-specific obligation on top: assert `VerifierContext` gains the required
+  factory *field* in Track 2 while its first *production construction* is
+  Stage 3, and that copy and verify evidence written across the single
+  destructive reset use the identical encoding. *Not satisfied by* landing the
+  executor and verifier hasher wiring in different stages, which lets copy write
+  `xxh3_128` while verify still computes `sha256` during the reset window.
+
+#### Bridge, observer, schema reservation, checkpoint
+
+- **XV-17 — History-v3 shape reserved at the single reset.** Introspect the v3
+  schema created at reset and assert it already contains the generic-item and
+  phase-summary storage Stage 4's `PhaseResult` persistence needs; assert
+  Stage 4's compound write succeeds against the un-bumped v3 schema (no ALTER,
+  no second version bump) and no Stage 1/3 producer writes phase-summary rows.
+  *Not satisfied by* defining v3 to cover only standalone integrity items and
+  discovering the gap at Stage 4 (a silent second reset).
+- **XV-18 — Observer closes every stream before joining threads.** Start a live
+  session, then trigger (a) explicit unsubscribe, (b) window close mid-session,
+  (c) app shutdown with the session running; assert every observer thread
+  terminates within a bounded deadline and `close()` was called on every opened
+  stream before join; separately submit a session that completes before
+  subscribe and assert an already-terminal result is returned, not
+  `SessionNotFound`. *Not satisfied by* only covering a session that ends
+  naturally before teardown, where blocked-`next()`-needs-close never runs.
+- **XV-19 — Bridge: ids in, escaped text out, origin re-checked
+  independently.** Feed the scanner's hostile-name corpus through a real
+  `dispatch` round-trip; assert every filename reaches JS only as escaped
+  display text via `textContent` (grep proves zero `innerHTML`/`evaluate_js`
+  for app data), no command can be built from a raw path (ids only), and — with
+  navigation hardening deliberately bypassed in-test — a dispatch from a
+  non-packaged origin is rejected on the origin recheck alone. *Not satisfied
+  by* one benign filename and a single-file `innerHTML` grep.
+- **XV-20 — Checkpoint is stateless; tests don't count it.** Cancel at each
+  pipeline stage and assert clean teardown via stage-state synchronization; then
+  double the checkpoint poll frequency and assert identical cancellation
+  outcomes and identical digest/progress on non-canceled runs. *Not satisfied
+  by* a checkpoint that raises on its Nth call — it passes while coupling to a
+  count the contract explicitly disclaims.
+
+**Six code anchors these gates hang on** (confirm they still sit here before
+writing the tests, since the finalized policy commit and ongoing edits move
+lines): `planning.py:301`/`:403`/`:411` (`worker_count` in `policy_fingerprint`
+at :403; `asdict(plan)` at :411), `scanner.py:252` (selected scan forces
+`complete=False`), `recorder.py:573` (selected-missing requires
+`complete=True`), `session.py:255-258` (`hasattr` duck-typing),
+`integrity.py:179-182` (`IntegrityOutcome` has `item_id`+`path`),
+`runtime.py:427` (pause snapshots the request only).
+
 ---
 
 ## 6. Sanity Review Notes — 2026-07-22, revised 2026-07-24
@@ -885,9 +1100,9 @@ source and are the reason this review mattered:
 
 | Finding | Verified at | Status |
 | --- | --- | --- |
-| 1 — worker count is fingerprinted despite the doc's claim | `planning.py:301`, `:404`, `:411` (`asdict(plan)`) | Confirmed; DR-M1-05 now removes it without replacement |
+| 1 — worker count is fingerprinted despite the doc's claim | `planning.py:301`, `:403` (`policy_fingerprint`), `:411` (`asdict(plan)`) | Confirmed; DR-M1-05 now removes it without replacement |
 | 2 — scoped missing-marking is unreachable | `scanner.py:252` vs `recorder.py:573` | Confirmed; contract fix added to Stage 3 |
-| 3 — runner sweeps integrity outcomes into `operations` | `session.py:255-258` duck-types on `item_id`+`path`; `integrity.py:180-182` has both | Confirmed; nominal `ResultItem` plus one phase-tagged heterogeneous list replaces duck typing |
+| 3 — runner sweeps integrity outcomes into `operations` | `session.py:255-258` duck-types on `item_id`+`path`; `integrity.py:179-182` has both | Confirmed; nominal `ResultItem` plus one phase-tagged heterogeneous list replaces duck typing |
 | 3 — pause loses verifier state | `runtime.py:427` snapshots the request only | Confirmed; explicit continuation phase flag and completion state added |
 
 Later decisions refined three original dispositions, with the binding result

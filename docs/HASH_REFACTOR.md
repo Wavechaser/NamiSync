@@ -239,7 +239,11 @@ reproduction must:
 7. Sweep realistic file-size distributions, not only one large file, and
    validate the fixed adaptive chunk bands, find the preallocation crossover,
    and report total operations per second and fixed finalization time
-   separately.
+   separately. The standard synthetic distribution is 1,000×4 KiB,
+   512×128 KiB, 64×4 MiB, 4×128 MiB, and 1×4 GiB, run cross-volume. Parts may
+   be re-run in isolation, but the small-file band is mandatory: it is the only
+   measurement that validates pipelining every size (2.4), and its per-size
+   operations/second is the number M1 gates on (`M1_PLAN.md` §5).
 8. Record reader-blocked time, writer-starved time, and resident-payload
    high-water bytes so queue tuning is based on stage starvation rather than
    throughput alone.
@@ -353,6 +357,13 @@ existing history v1→v2 shortcut is removed or disabled before raising
 constant and would otherwise mislabel a v1 database as v3 after applying only
 the v2 shape. Ledger v1, history v1, and history v2 all take the same
 actionable reset path.
+
+The new schema *shapes* this reset materializes are owned by `M1_PLAN.md`
+Stage 1, not by this document. The history-v3 shape in particular includes the
+generic-item and phase-summary storage that DR-M1-10 reserves at this single
+boundary so Stage 4 needs no second bump. Recreating a hash-only history schema
+that omits that reserved storage is a defect against M1, not a smaller-scope
+convenience: the coordinated reset here must land the full Stage 1 shapes.
 
 **Why.** There is no production database liability. A clean reset is cheaper
 and safer than retaining SHA-256 evidence that the new fixed contract cannot
@@ -846,7 +857,8 @@ preference, or per-run algorithm field.
 | `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
 | `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |
 | `modules/verifier.py` | Baseline, verify, and rebaseline obtain a hasher from the context, require a 16-byte result before any comparison, and record `xxh3_128` |
-| `workflows/runtime.py` | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`; the later M1 integrity stage supplies the same constructor when it creates production `VerifierContext` values |
+| `workflows/runtime.py` — Stage 2 half | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`. **Lands with Track 2.** |
+| `workflows/runtime.py` — Stage 3 half | The later M1 inventory/integrity stage supplies the same constructor when it first creates production `VerifierContext` values. **Does not land in Stage 2:** Track 2 adds the `VerifierContext` factory *field*, but its first production construction site is Stage 3 (see the prose below). |
 | `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
 | Tests and fixtures | Replace SHA-256 content expectations with canonical XXH3-128 bytes |
 
@@ -1006,6 +1018,345 @@ Required content-hash coverage:
 
 These remain estimates from the measured prototype and a static read of the
 call sites, not from an attempted production implementation.
+
+### 4.5 Acceptance Criteria
+
+4.3 lists the tests to write. This section is the standard those tests are held
+to: each item is a pass/fail gate, and a green suite that does not satisfy the
+gate is not done. The refactor rewrites the copy state machine, finalization,
+and the content hash, so it must re-prove the executor contracts it inherits
+(Part A), not only its own new behavior (Parts B and C).
+
+**How to read these gates (anti-slack rules).** Every gate must be able to
+fail. A test that would still pass if the behavior under test were deleted does
+not satisfy its gate, and reviewers reject it. Concretely:
+
+- **Inject the failure the gate names.** A happy-path copy that asserts
+  `target == source` exercises almost none of this document. Where a gate names
+  a fault (worker error, mid-stream read failure, cancel at stage N, a source
+  that grows during streaming), the test injects exactly that fault.
+- **Assert the typed reason, not "it failed."** Pin the exact
+  `ExecutionReason` / integrity outcome / exception type. "Raised" or "failed"
+  passes for the wrong reason.
+- **Prove completeness by content, never by size or existence.** Preallocation
+  makes a zero-filled temp of the correct logical size look complete; atomicity
+  and drift gates assert full-content digest of the published file, not
+  `size`/`exists`.
+- **Spy filesystems prove call shape and ordering; they do not prove
+  durability or atomicity.** Any gate that says *durable*, *atomic publish*, or
+  *conditional refusal* requires at least one real-filesystem test — a no-op
+  flush or an unconditional `os.replace` in a stub backend satisfies a spy but
+  not the OS.
+- **Invariants are raised exceptions, not `assert`.** `assert` vanishes under
+  `python -O` (a documented PoC-class bug); every invariant gate constructs the
+  violating value and asserts a real exception under `-O`.
+- **Cover every path a "global" claim names.** An invariant said to hold for
+  executor, verifier, and repository/readback construction is exercised on all
+  three, not only the copy path.
+
+#### A. Preserved executor and verifier contracts (re-proven against the refactored path)
+
+These already pass for M0 (`EXECUTOR.md`, `VERIFIER.md` acceptance). The gate is
+that they still pass *through the new pipeline, single-handle finalization, and
+XXH3 hasher* — the refactor is the reason each is now at risk.
+
+- **A1 — Crash-atomic publish, no partial file.** Fault injected at each
+  pipeline stage (reader/hasher/writer) and specifically after preallocation
+  but before EOF leaves at most an owned temp and never a published target; the
+  published path is byte-for-byte a complete prior or complete new version by
+  full-content digest. Include a file whose reviewed size equals its allocation
+  request. *Not satisfied by* size/existence checks or happy-path-only copies.
+- **A2 — Owned-temp grammar and exclusive create.** The temp created during a
+  real copy matches `^<name>\.synctmp-<run-id>-<op-id>$` with *this* run/op ids
+  and was made with an exclusive/`CREATE_NEW` primitive (a second create at the
+  same name fails); a preallocated temp still matches the exact shape. *Not
+  satisfied by* a `*.synctmp*` glob or a hardcoded basename.
+- **A3 — Temp cleanup on every non-publishing exit.** For each of source drift,
+  reader/hasher/writer/callback error, cancel, pause, and substantive
+  preallocation failure — all of which fail *before* publish — zero files
+  matching the current run's temp grammar remain, cleaned by the current-run
+  per-operation path, not by a later run's recovery sweep. (Published-size
+  mismatch fails *after* publish; its post-condition is B18, not temp cleanup.)
+- **A4 — Source-missing maps to `SOURCE_MISSING`.** A source absent at touch
+  yields exactly `SOURCE_MISSING` (not a generic `OSError`/sharing error from
+  the new `O_SEQUENTIAL` opener), no temp, no attestation. *Not satisfied by*
+  asserting only that it "failed."
+- **A5 — Source-drift by byte count, reading to real EOF.** A source that grows
+  past reviewed size, and separately one that shrinks, each yield `SOURCE_DRIFT`
+  with no publish and the temp removed — and the observed byte count/digest
+  reflects the post-mutation bytes, proving the backend read to actual EOF
+  rather than stopping at the reviewed/preallocated size. *Not satisfied by*
+  mutating only mtime, or by a reader capped at reviewed size (which makes the
+  byte-count guard structurally unable to fire).
+- **A6 — Conditional publish refuses an appeared/vanished target.** On a real
+  filesystem, a destination created after preflight for an expected-absence
+  COPY makes the real conditional primitive fail atomically
+  (`DESTINATION_OCCUPIED`/`TARGET_DRIFT`) with the prior file byte-unchanged; a
+  vanished required target yields `TARGET_MISSING`. *Not satisfied by* a stub
+  backend whose publish is an unconditional overwrite.
+- **A7 — Recording follows durability.** The parent-directory flush occurs
+  before any `record_*` call and no recorder call precedes it; a fault after
+  digest finalization but before/during publish + parent-flush records nothing.
+  (The single pre-publish flush count and its post-`FILE_BASIC_INFO` sequencing
+  are *new* DR-HASH-08 behavior — gate B14 — not an M0 contract; M0 flushes the
+  temp twice and uses `os.utime`.) *Not satisfied by* building the attestation
+  from `CopyDigest` the moment `copy()` returns and testing only the happy path.
+- **A8 — Metadata mask and last-access preserved.** With an unmanaged attribute
+  (e.g. `NOT_CONTENT_INDEXED`) plus managed hidden+system on the source, the
+  published target retains the unmanaged attribute and the managed ones, mtime
+  equals normalized source mtime, last-access equals mtime, and creation time is
+  preserved; a `created_ns` of `None` never overwrites the real creation time.
+  Re-assert through a triggered repair. *Not satisfied by* checking only mtime,
+  or fixtures that never set an unmanaged attribute or a `None` creation time.
+- **A9 — Readonly withheld then applied.** Copying a readonly source publishes
+  from a non-readonly temp (`publish_new`/rename succeeds for COPY) and the
+  published target is readonly afterward *via the post-publish repair branch*
+  (assert the repair ran). *Not satisfied by* a non-readonly source, which makes both halves
+  trivial.
+- **A10 — Copy-backup stays serial and hashless.** On a no-hardlink target, the
+  update backup transfers via the dedicated serial loop with a fixed 4 MiB
+  chunk, starts no pipeline/hasher workers, does not preallocate its trash temp,
+  and copies no ACL — yet still performs writer-close + one post-metadata flush
+  + atomic publish inside the run trash directory. Spy the injected
+  `copy_backend` and worker factory and assert zero calls during backup. *Not
+  satisfied by* asserting only backup content equality.
+- **A11 — Hardlink-backup displaced-inode restore.** Updating a readonly file
+  on a hardlink-capable target restores readonly on the trash-hardlinked inode
+  and flushes it through the trash path before recording, while the new live
+  target carries its own readonly. *Not satisfied by* a non-readonly source or
+  inspecting only the live target.
+- **A12 — Retry/continuation idempotency.** A sharing violation mid-copy is
+  retried within bound: the retry removes the prior owned temp and re-creates it
+  without a `CREATE_NEW` collision and converges to one published target; an
+  update after backup resumes at replace, recognizing the existing
+  backup/published state rather than re-creating and colliding. *Not satisfied
+  by* a mock that reuses the same temp handle so the cleanup-before-recreate
+  path never runs.
+- **A13 — Four independent truth axes.** A recorder failure post-publish keeps
+  filesystem `COMPLETED` with `recording=DEGRADED` (reconcilable), never
+  relabelling the copy as byte-failed; a hasher-worker failure fails the copy
+  with no attestation; audit degradation is reported independently. *Not
+  satisfied by* all-green runs where the axis fields are populated but never
+  asserted under partial failure.
+- **A14 — Cache-honest verification survives the shared helpers.** The verifier
+  still opens via the unbuffered cache-honest reader (reports
+  `windows-unbuffered`, denies writer/delete sharing, pre/post stats from one
+  handle) with its own 4 MiB chunk, and a reparse/alignment/containment reject
+  yields `unsupported`, never `verified`. *Not satisfied by* verifying a
+  just-written cached file, which matches from cache.
+- **A15 — Composite move-update never-neither.** Faults at each move-update
+  stage leave old and/or new present (never neither), exactly one ledger
+  transition, and the `_attestation()` published-size guard runs for
+  MOVE_UPDATE before any recorder call. *Not satisfied by* testing the guard and
+  crash-atomicity only for COPY and assuming MOVE_UPDATE is transitively
+  covered (its attestation is *cached* in the continuation — a distinct path).
+- **A16 — Recovery scope isolation with preallocated temps.** Seed a prior-run
+  exact temp (including a preallocated/sparse one), a current-run temp, a
+  substring lookalike, an exact-name directory, an off-volume mount, and a
+  `.synctrash` entry; recovery removes only the prior-run exact regular files
+  (plain and preallocated) in scope and a sweep failure halts before copy
+  allocation. *Not satisfied by* seeding only a plain zero-byte prior-run temp.
+
+#### B. New Track 1 behavior — pipeline, finalization, preallocation
+
+The 4.3 pipeline tests are necessary but not sufficient; these close the
+loopholes a byte-equal-but-wrong implementation would slip through. The first
+two are the ones a passing correctness suite most easily hides.
+
+- **B1 — The stages actually overlap.** With the writer blocked on chunk 1
+  until signaled, the reader/hasher advance to at least chunk 2 (ideally to the
+  budget depth) *before* chunk 1's completion drains. A serial
+  read-all-then-hash-then-write, or a pool that starts threads but serializes
+  handoffs, must fail this. *Not satisfied by* digest-equality tests or a
+  thread-count spy — overlap, not thread existence, is the contract.
+- **B2 — Lookahead is bounded.** With the writer blocked indefinitely and a
+  source far larger than the budget, resident/queued chunks and reserved bytes
+  plateau at the budget (≤ ~32 MiB, ≤ 32 items/FIFO) and the reader blocks on
+  reservation — it does not buffer the whole source. *Not satisfied by* a
+  source smaller than the budget, or asserting a `Queue(maxsize=N)` exists by
+  construction.
+- **B3 — Shallow-window and grown-source paths are deadlock-free.** With
+  `max_chunk_size=256 KiB` against a source that grows past its reviewed band,
+  and separately a run that hits the item cap before the byte budget, both
+  complete (or classify `SOURCE_DRIFT`) within a watchdog deadline with both
+  workers joined. *Not satisfied by* testing only the default 4 MiB ceiling with
+  conforming sources.
+- **B4 — Worker failure while the coordinator is blocked.** Fill the write
+  queue (block the writer), then make the writer raise; the coordinator, blocked
+  mid-enqueue, wakes within a deadline via the timeout + first-error slot, joins
+  both workers, and re-raises the writer's original error (not `ShutDown`).
+  Repeat with the hasher. *Not satisfied by* injecting the error while the
+  coordinator is idle/draining.
+- **B5 — Mid-stream source read error.** A `source.read()` that succeeds for K
+  chunks then raises `OSError` makes `copy()` re-raise that exact `OSError` (not
+  `ShutDown`), both workers non-alive before the raise is observed, no publish,
+  temp left for cleanup. *Not satisfied by* testing only source-missing-at-open,
+  which routes through a different guard.
+- **B6 — Callback error teardown.** An `on_chunk()` that raises mid-drain (and a
+  `checkpoint()` raising a non-control error) follows the abort-and-join path:
+  `copy()` re-raises that exact exception, both workers joined, nothing
+  published. *Not satisfied by* only ever using a no-op `on_chunk`.
+- **B7 — Final-chunk write failure after digest completion.** A writer that
+  fails on the *last* chunk (after the hasher already finalized the digest over
+  all source bytes) makes `copy()` raise — not return a complete-looking
+  `CopyDigest` for a short temp; a merely-slow final write blocks the return.
+  This proves the return is gated on the final writer completion, not on hasher
+  EOF. *Not satisfied by* failing only non-final chunks.
+- **B8 — Byte budget: no leak on the clean path.** After a clean multi-chunk
+  copy including one whose size is not a chunk multiple (short-final-chunk
+  charge-down), reserved bytes return exactly to zero and peak never exceeded
+  the budget; N back-to-back copies start from an identical free budget. *Not
+  satisfied by* checking the budget only after an abort.
+- **B9 — First-error single winner.** Simultaneous hasher and writer failures
+  with distinguishable types make `copy()` re-raise exactly one (the
+  first-stored), never a `ShutDown`; a Cancel racing a worker error preserves
+  the Cancel. *Not satisfied by* only ever injecting a single failing stage.
+- **B10 — Bounded cancellation latency.** With the cancel flag set after chunk K
+  on a large source, at most one further read is admitted
+  (`reads_admitted ≤ K+1`) before `Canceled`/`PauseRequested` propagates,
+  synchronizing on stage state. *Not satisfied by* cancelling before the copy or
+  between operations, or asserting an ordinal checkpoint count (explicitly not a
+  contract).
+- **B11 — `on_chunk` suppressed after abort.** After abort is observed no
+  `on_chunk` fires and cumulative reported bytes do not increase; queued
+  completions are dropped, not drained-and-reported. *Not satisfied by*
+  asserting totals only on successful copies.
+- **B12 — Progress is written-and-hashed, in read order, on the caller
+  thread.** With a writer failing on chunk 3 of 5, cumulative `bytes_done`
+  never exceeds bytes actually written before failure, the emitted `on_chunk`
+  sizes arrive in strict read order and sum to exactly the bytes written before
+  failure (no `CopyDigest` is returned in this run), no `on_chunk` fires for the
+  failed chunk, and every callback ran on the thread that called `copy()`
+  (assert thread identity); on a separate clean multi-chunk run the emitted
+  sizes sum exactly to `digest.size` in read order. *Not satisfied by* asserting
+  only the end-of-copy total on a fully successful run.
+- **B13 — Adaptive chunk is actually wired, not the ceiling.** Unit-test the
+  band helper (0 and just-below-8 MiB → 256 KiB; 8 MiB and just-below-32 MiB →
+  1 MiB; 32 MiB and up → 4 MiB; each capped by `max_chunk_size`) *and* spy the
+  `chunk_size` argument `_prepare_copy` actually passes into
+  `CopyBackend.copy()` for a spread of sizes; `ExecutorPolicies(max_chunk_size=0)`
+  raises. *Not satisfied by* testing the helper in isolation while the call site
+  still passes the ceiling — a digest test cannot tell one 4 MiB chunk from
+  sixteen 256 KiB chunks.
+- **B14 — Single finalization handle, one real flush.** Zero flushes on the
+  content-writer handle; exactly one `FlushFileBuffers` on the finalization
+  handle, sequenced after `FILE_BASIC_INFO`; the handle is acquired *before* the
+  ACL is applied (prove with a restrictive-ACL source whose descriptor would
+  deny a later reopen — finalization still completes basic-info + flush through
+  the held handle). A zero-flush build fails. *Not satisfied by* asserting
+  `flush_count == 1` without checking which handle or when.
+- **B15 — Real-filesystem durability barrier.** At least one real-FS test:
+  after publish+record, a crash/kill simulation shows the published content and
+  the intended mtime/creation/attributes durable on re-read. A no-op or
+  wrong-handle flush must fail this. *Not satisfied by* spy-filesystem ordering
+  assertions alone.
+- **B16 — Conditional post-publish repair is stat-driven.** (a) A publish that
+  preserved everything performs zero post-publish metadata *writes* and zero
+  target flush, takes exactly one post-publish comparison stat of the target,
+  and reuses *that post-publish target stat* for the published-size guard and
+  attestation (DR-HASH-08); (b) simulated
+  name-tunneling restoring creation time plus a deferred readonly triggers
+  selective repair of *only* those fields, exactly one target flush, and a final
+  re-stat; (c) supported target-filesystem timestamp rounding alone triggers no
+  repair (comparison uses the normalized temp baseline, not raw source
+  nanoseconds). *Not satisfied by* always full-replaying metadata (masks the
+  no-op fast path) or gating repair only on "readonly requested."
+- **B17 — Attestation subject is the post-repair re-stat.** When repair fires,
+  `attestation.subject` and the published-size guard use the final re-stat
+  (repaired mtime/creation/readonly), not the normalized temp baseline; on the
+  no-repair path the post-publish comparison stat is reused — never a
+  pre-publish temp stat, whose size trivially equals `digest.size` and would
+  neuter the published-size guard. *Not satisfied by* testing attestation-
+  subject only on the clean path where the observations are identical.
+- **B18 — Published-size guard on all three kinds.** A published target whose
+  logical size differs from the hashed byte count makes `_attestation()` fail
+  before any recorder call for COPY, UPDATE, *and* MOVE_UPDATE, with a specific
+  size-mismatch failure (not a bare `AssertionError`). Because the guard sits in
+  `_attestation()` (post-publish), the failure leaves the wrong-sized target
+  *published* with no attestation recorded: assert the operation settles FAILED,
+  zero `record_*` calls, and the wrong target left in place — this is not a
+  temp-cleanup case. *Not satisfied by* adding the check only in `_copy` and
+  testing only COPY.
+- **B19 — One file streams at a time.** Driving an `ExecutionSet` of several
+  COPY ops, at most one `CopyBackend.copy` pipeline is active at any instant (a
+  concurrency probe records max simultaneous == 1); a pool-based
+  reimplementation with max == 2 fails. This defends the per-copy budget
+  rationale. *Not satisfied by* single-copy tests, which never observe
+  cross-file concurrency.
+- **B20 — Preallocation error classes.** Temp creation requests the exact
+  reviewed allocation only above the measured crossover; an allow-listed
+  "unsupported" result falls back to ordinary streaming while disk-full, quota,
+  permission, and unknown errors fail the operation before any bytes are
+  copied; zero-byte and sub-crossover copies request no allocation. *Not
+  satisfied by* testing only the supported-and-succeeds path.
+
+#### C. New Track 2 behavior — XXH3-128 evidence and layering
+
+- **C1 — Canonical encoding and vectors.** `xxh3_128(b"").digest().hex() ==
+  "99aa06d3014798d86001c324468d497f"` and equals `intdigest().to_bytes(16,
+  "big")`; a one-byte flip changes the digest and yields `mismatched`. *Not
+  satisfied by* pinning one non-empty fixture computed with the same
+  (possibly wrong) endianness on both write and read.
+- **C2 — Length gates in all three places.** `CopyDigest` and `ContentEvidence`
+  accept 16 bytes and reject 32; `algorithm` accepts only `xxh3_128`. *Not
+  satisfied by* changing the literal to 16 while a 32-byte fixture lingers in a
+  helper.
+- **C3 — Bad factory is a collaborator error, never `HASH_MISMATCH`.** A
+  factory returning a wrong-length (e.g. 20-byte) digest makes the verifier
+  raise a contract error *before* any baseline comparison, distinct from
+  `HASH_MISMATCH`; `HASH_MISMATCH` is reserved for two valid 16-byte digests
+  that differ. The guard is length-only (DR-HASH-02), so a non-canonical
+  *byte order* — still 16 bytes — is C1's concern, not this gate. *Not
+  satisfied by* injecting a wrong-but-16-byte value, which passes the length
+  gate and only surfaces at comparison.
+- **C4 — Copy and verify share one factory (round-trip).** End-to-end: copy a
+  file (records `xxh3_128`), then verify the same file → `verified`/`baselined`,
+  never `mismatched`; the stored digest is byte-identical between copy and
+  verify; `last_verified_at` stays unset until the verifier read. *Not satisfied
+  by* unit-testing the two hashers separately against their own fixtures — the
+  one seam that catches a one-sided wiring or byte-order split is the round-trip.
+- **C5 — Same hasher, different opener at the composition seam.** One
+  composition-level test asserts `NativeCopyBackend` and `VerifierContext` obtain
+  digests from the *identical* factory object (byte-identical digests) *and*
+  that the verifier's handle reports `windows-unbuffered` while the executor's
+  reports the `O_SEQUENTIAL` cached hint — provably different opener objects.
+  *Not satisfied by* testing the shared hasher and the unbuffered reader in two
+  separate tests; a build that accidentally shares the opener passes each alone.
+- **C6 — Attestation size invariant is global and real.** `Attestation` with
+  `content.size != subject.size` raises (a real exception under `python -O`)
+  when constructed directly, via executor `_attestation`, *and* via repository
+  readback reconstruction; a size-mismatched stored row cannot round-trip into a
+  valid object. *Not satisfied by* an `assert`, or by testing only the executor
+  path.
+- **C7 — Self-describing reconstruction.** A ledger row with a corrupt or
+  unsupported stored algorithm identifier makes repository reconstruction raise
+  via the `ContentEvidence` contract (not relabel to `xxh3_128`); a valid row
+  round-trips carrying its own stored identifier. *Not satisfied by* hardcoding
+  `xxh3_128` and testing only valid rows.
+- **C8 — Import law and required backend.** An import contract test proves
+  `core/*.py` has zero third-party imports — no `xxhash`, including inside
+  function bodies; `ExecutorPolicies` cannot be constructed without an explicit
+  `hasher_factory`-backed `copy_backend`; only `workflows/runtime.py` imports the
+  concrete XXH3 constructor. *Not satisfied by* a top-of-file grep (a hidden
+  in-function import passes it) or a lazily-raising default factory.
+- **C9 — Identity hashes remain SHA-256.** Pin known-input→known-output SHA-256
+  vectors for a plan fingerprint, commitment/selection digest, custody key,
+  history-chain link, and recorder identity; assert the `hasher_factory` seam is
+  not referenced in `core/planning.py`, `dispatcher/custody.py`, `db/history.py`,
+  or `db/recorder.py`. *Not satisfied by* asserting "a fingerprint exists" — a
+  blanket `sha256→xxhash` replace passes that while silently changing every
+  internal identifier.
+- **C10 — Schema reset refuses old versions.** Opening a ledger v1, history v1,
+  and history v2 database is each refused with the actionable reset message —
+  not migrated, not stamped v3 — and the retired history v1→v2 shortcut is
+  removed/disabled so it cannot write the new constant onto a partially-migrated
+  schema. *Not satisfied by* testing only that a fresh database works.
+- **C11 — `modified` vs `mismatched` boundary intact.** Changed size/mtime →
+  `modified`; identical stats + differing XXH3 digest → `mismatched` (the bitrot
+  signal); a null-hash row during verify → `baselined` with `last_verified`
+  unset; provenance is stored exactly per path (`copy`/`verify`/`readback`).
+  *Not satisfied by* accepting either `modified` or `mismatched` for a change
+  that also moved the stats.
 
 ---
 
