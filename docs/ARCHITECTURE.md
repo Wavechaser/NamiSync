@@ -590,11 +590,13 @@ declared shape-only, with no implementation at all until its first consumer
 arrives. New behavior is a new implementation behind the same shape — never an
 edit to a consumer.
 
-M1 removes the fingerprinted `worker_count` setting rather than replacing it
-with another file-concurrency protocol. Workflow composition imports the one
-concrete XXH3-128 constructor and supplies the same required, parameterless
-`HasherFactory` to `NativeCopyBackend` and `VerifierContext`; `core` and the
-operation modules do not construct or import the third-party implementation.
+M1 Stage 1 removed the fingerprinted `worker_count` setting rather than
+replacing it with another file-concurrency protocol, placed the parameterless
+`StreamingHasher`/`HasherFactory` shape in standard-library-only core, and
+declared the compatible `xxhash` runtime dependency. Stage 2 workflow
+composition imports the one concrete XXH3-128 constructor and supplies that
+factory to `NativeCopyBackend` and `VerifierContext`; `core` and the operation
+modules do not construct or import the third-party implementation.
 
 ---
 
@@ -797,12 +799,12 @@ grouping) with enrichment metadata supplied by the workflow.
 
 ### 4.4 preflight
 
-**Implementation status (2026-07-20).** Scoped read-only observation and pure
+**Implementation status (2026-07-24).** Scoped read-only observation and pure
 typed judgment are implemented for selection-aware scan completeness, blocked
 correspondence, root/volume, dependency, direct and parent evidence, capacity,
-trash, containment, and path representation checks. M1 removes the obsolete
-live-settings collaborator and drift checks; commitment validation remains
-correctly outside this module at execution-workflow entry.
+trash, containment, and path representation checks. M1 Stage 1 removed the
+obsolete live-settings collaborator and drift checks; commitment validation
+remains correctly outside this module at execution-workflow entry.
 
 **Contract.** Two functions, deliberately split so purity is real rather than
 claimed:
@@ -1070,7 +1072,8 @@ state. Immediate
 readback is independent evidence against ordinary copy/IO/recording failures,
 not a defense against malicious in-process executor code.
 
-**Flesh — deferred.** Multithreaded verification (per-volume-side worker policy);
+**Flesh — deferred.** Benchmark-justified multithreaded verification with
+per-volume safety policy (no worker-count setting is reserved);
 IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 (diagnose which side is damaged).
 
@@ -1103,14 +1106,20 @@ its own database. `schema.py` owns both schemas and the version stamps.
 planning receives a snapshot through injected runtime composition, while
 admitted execution never rereads it.
 
-**Implementation status (2026-07-20).** The versioned ledger/history schemas,
-safe writer/read-only connection factories, canonical UTC codec, serialized
-retrying writer, run-bound sync recorder, batched inventory reconciliation,
-conditional baseline/verify/rebaseline writes, typed ledger repositories, and
-minimal sync history observer/repository, blocked/deferred item audit, and the
-transactional additive history v1-to-v2 migration are implemented. M0 commands commit
-eagerly, so `flush()` preserves the final boundary while the crash window is
-zero completed commands. Cross-process contention is bounded and visible.
+**Implementation status (2026-07-24).** Ledger v2 and history v3 are active.
+Their safe writer/read-only connection factories, canonical UTC codec,
+serialized retrying writer, run-bound sync recorder, batched inventory
+reconciliation, conditional baseline/verify/rebaseline writes, typed ledger
+repositories, and minimal sync history observer/repository are implemented.
+The sync observer stores blocked/deferred operation items through history v3's
+generic item table and intentionally writes no phase-summary rows yet. Ledger
+v1 and history v1/v2 are refused without mutation; the temporary pre-migrator
+recovery is manual deletion of both local databases or the explicit
+development reset helper, never automatic startup deletion. `settings.py`
+implements named-mutex-serialized partial semantic-settings commits. M0
+commands commit eagerly, so `flush()` preserves the final boundary while the
+crash window is zero completed commands. Cross-process contention is bounded
+and visible.
 
 **Bones.** Single serialized writer; the conditional-recording primitive (write
 gated on row id + state + size + mtime still matching the observation) shared by
@@ -1428,6 +1437,12 @@ tree, inventory tree, and history dialog consume facade views only.
 Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting)
 directly; it is separate from database-owned semantic settings and needs no
 cross-interface writer mutex.
+
+**Stage 1 implementation status (2026-07-24).** The isolated UI-state store and
+a dependency-free hostile-navigation/bridge spike implement and test the
+forced-renderer call shape, native `CoreWebView2` guards, exact-origin dispatch
+recheck, strict versioned allowlist, and structured return boundary. They do
+not create a window, frontend assets, event drain, or pywebview dependency.
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
 

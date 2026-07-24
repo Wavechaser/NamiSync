@@ -12,7 +12,7 @@ a failing build rather than a field-report mystery.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import datetime, timezone
 import json
 
@@ -84,6 +84,32 @@ def test_plan_request_requires_fingerprinted_source_casing_policy() -> None:
 
     with pytest.raises(KeyError):
         decode_plan_request(missing_policy)
+
+
+def test_worker_count_is_absent_from_contracts_and_payloads() -> None:
+    assert "worker_count" not in {field.name for field in fields(SyncOptions)}
+    assert "worker_count" not in {field.name for field in fields(Plan)}
+    with pytest.raises(TypeError):
+        SyncOptions(worker_count=2)  # type: ignore[call-arg]
+
+    plan_payload = encode_plan_request(
+        PlanRequest("request", r"C:\source", r"D:\target")
+    )
+    execution_payload = encode_execution_request(_rich_execution_request())
+    assert b"worker_count" not in plan_payload
+    assert b"worker_count" not in execution_payload
+
+
+def test_workflow_payload_v1_is_refused_after_contract_change() -> None:
+    value = json.loads(
+        encode_plan_request(
+            PlanRequest("request", r"C:\source", r"D:\target")
+        ).decode("utf-8")
+    )
+    value["schema_version"] = 1
+
+    with pytest.raises(ValueError, match="unsupported workflow payload schema"):
+        decode_plan_request(json.dumps(value).encode("utf-8"))
 
 
 def test_plan_request_encoding_escapes_unpaired_surrogates_defensively() -> None:
@@ -308,7 +334,6 @@ def _rich_plan() -> Plan:
         deletion_policy=DeletionPolicy.ADDITIVE,
         trash_on_update=True,
         policy_fingerprint="p" * 64,
-        worker_count=1,
         required_volumes=frozenset(
             {VolumeId("A1B2C3D4", "NTFS"), VolumeId("99887766", "EXFAT")}
         ),

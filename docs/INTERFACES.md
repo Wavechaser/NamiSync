@@ -1,7 +1,8 @@
 # Interfaces Layer
 
-Status: M0 CLI implemented; desktop remains later under the current
-architecture and API remains latent.
+Status: M0 CLI is implemented. M1 Stage 1 adds isolated cosmetic UI-state
+storage and a tested WebView2 security spike; the desktop host remains Stage 6
+and the API remains latent.
 
 ## Purpose
 
@@ -35,6 +36,30 @@ move-update approvals show the actual old-to-new target spelling.
 The implemented options and numeric exits are recorded in
 [COMMANDLINE.md](COMMANDLINE.md). Queue control, machine output, integrity
 commands, and the desktop action layer remain deferred.
+
+## M1 Stage 1 Desktop Foundations
+
+`interfaces/ui_state.py` owns strict-shape `ui-state.json` independently
+from database-owned semantic defaults. It retains at most five source and five
+target recents separately, deduplicates Windows spellings, and stores only
+cosmetic window/column/sort mappings. Atomic replacement prevents torn JSON;
+cross-process semantic write coordination deliberately remains in the database
+settings store.
+
+`interfaces/web/security_spike.py` proves the security-sensitive host shape
+without shipping a desktop or adding a pywebview dependency. Startup explicitly
+requests `gui="edgechromium"` and turns only pywebview's renderer-unavailable
+failure into an actionable WebView2 message. Once the native control exists,
+the spike attaches `NavigationStarting` and `NewWindowRequested` handlers on
+`CoreWebView2`, cancels every popup, and cancels navigation away from the exact
+packaged scheme/host/effective port.
+
+The only public bridge method is versioned, size-bounded, allowlisted
+`dispatch`. It rechecks the current exact origin on every call, accepts one
+strict JSON request object, and returns a JSON-safe structured result. There is
+no `evaluate_js`, `run_js`, or `Window.state` data path. The actual Stage 6 host
+must preserve this shape and add the bounded/coalesced event drain plus escaped
+DOM rendering.
 
 ## Common Adapter Contract
 
@@ -137,3 +162,6 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
   explicit runtime errors on violation even under `python -O`.
 - Database override tests write neither ledger nor history to real user paths.
 - Read-only history/status remains usable during an active mutating session.
+- The security spike forces Edge Chromium, attaches both native navigation
+  guards, rejects a dispatch after hostile navigation, and exposes only the
+  versioned allowlisted structured endpoint.

@@ -262,8 +262,11 @@ chunk size so fast disks cannot flood UI queues.
 
 - Partial execution uses the existing selection/dependency/capacity model and
   explicit `DEFERRED`; it cannot skip closure checks.
-- Multiple workers are enabled only by `WorkerCountPolicy`, plan-snapshotted
-  capacity, deterministic outcome aggregation, and per-volume characteristics.
+- File-level concurrency has no current setting or protocol. It may return only
+  after a workload benchmark demonstrates underutilization and the resulting
+  design preserves capacity, deterministic outcome aggregation, and
+  per-volume safety; Stage 1 deliberately removed `worker_count` without a
+  replacement.
 - Restartable copy requires a versioned partial-file/digest checkpoint whose
   ownership and source snapshot are validated before reuse.
 - ADS preservation, when exposed later, enumerates and validates source streams

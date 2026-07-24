@@ -1,9 +1,10 @@
 # Database Module
 
 Status: schema bones, safe connection factories, the M0 ledger/repositories,
-inventory reconciliation, and minimal sync history are implemented. One narrow
-history v1-to-v2 migration is implemented; general migrations, retention,
-backup/protection workflows, and richer history remain later work.
+inventory reconciliation, minimal sync history, and M1 Stage 1's
+ledger-v2/history-v3 reset boundary and semantic settings store are
+implemented. General migrations, retention, backup/protection workflows, and
+richer history consumers remain later work.
 
 ## Purpose And Boundaries
 
@@ -13,13 +14,14 @@ ledger stores durable operational evidence; the history database stores an
 independent activity audit. They have separate connections, versions,
 retention, failure domains, and no cross-database foreign keys.
 
-Live databases are local, never placed in a cloud-synced managed root. Settings
-live in a separate local settings file; semantic settings used by a plan are
-snapshotted into that plan.
+Live databases are local, never placed in a cloud-synced managed root.
+Schema-versioned semantic defaults live in database-owned `settings.json`;
+semantic settings used by a plan are snapshotted into that plan. Cosmetic UI
+state is interface-owned and never shares this file.
 
 ## Implemented Foundation
 
-`schema.py` creates a version-1 ledger and version-2 history schema. The ledger
+`schema.py` creates a version-2 ledger and version-3 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
 correspondence, run/operation tokens, generic annotations, and nullable hardlink
@@ -36,11 +38,27 @@ values. Canonical path selections are queried in bounded 400-key chunks, and
 mapping correspondence is returned with stable source/target volume evidence
 and hardlink/duplicate-identity disqualification. Reads never refresh state.
 
-History version 2 adds the run-level `blocked_count`; opening a version-1
-history database adds that column transactionally with a zero default and
-preserves existing runs. Other version mismatches are explicitly refused.
-Reset remains an external/manual operation; no general ordered migration,
-backup, retention, export/import, or maintenance writer is claimed yet.
+History version 3 retains the run envelope/summary and replaces operation-only
+detail with generic `history_items` tagged by item type and phase. It also
+reserves `history_phases` for later phase-summary producers. The current sync
+observer writes only `item_type=operation`, `phase=execute` items and writes no
+phase rows.
+
+Opening ledger v1 or history v1/v2 raises the same actionable
+`SchemaResetRequired` family without altering the old tables or version stamp.
+During this pre-release window the user must close NamiSync and manually delete
+both local database files before restarting. `reset_databases()` is an explicit
+development/test helper that validates both exact paths before deleting their
+database/WAL/SHM artifacts and recreates both current schemas; normal startup
+never calls it. No general ordered migration, backup, retention, export/import,
+or maintenance writer is claimed yet.
+
+`settings.py` owns `SemanticSettingsStore`. A commit takes a deterministic
+Windows named mutex, rereads the latest document while holding it, applies only
+the supplied patch fields, and atomically replaces the UTF-8 JSON file. This
+prevents two processes editing unrelated settings from reverting one another.
+The store accepts user-facing `trash` and `additive`; hidden `mirror` is not a
+persistable preference.
 
 ## Main Ledger Shape
 
@@ -115,12 +133,11 @@ future explicit policy with impact review, not an incidental scan cleanup.
 
 ## Schema Evolution
 
-Both databases start with a version stamp. The implemented history v1-to-v2
-step is deliberately additive and transactional. Before broader real evidence
-must survive a schema change, a dedicated ordered migration module takes an atomic backup,
-checks supported source versions, migrates transactionally, verifies integrity,
-and restores/refuses safely on failure. Early reset-and-refuse behavior is
-acceptable only before user evidence exists and must be explicit.
+Both databases start with a version stamp. The active pre-release boundary is
+reset-and-refuse: no startup migration or partial schema repair runs. Before
+real user evidence must survive a schema change, a dedicated ordered migration
+module will take an atomic backup, check supported source versions, migrate
+transactionally, verify integrity, and restore/refuse safely on failure.
 
 Legacy import/merge is separate from normal startup migration. It never guesses
 volume/location correspondence.
@@ -167,10 +184,10 @@ round trips, and duplicated time/host formatting.
 
 Fresh-schema, pragma, read-only, cross-location trigger, canonical path,
 volume/rebind, 33k reconciliation, bounded repository query, WAL concurrency,
-independent history round-trip, and the additive history v1-to-v2 migration are
-covered in the M0 suite. Criteria for retention, general migrations, backups,
-exports, and cloud-provider discovery remain future gates rather than current
-implementation claims.
+independent history round-trip, old-schema refusal, coordinated development
+reset, and settings concurrency are covered. Criteria for retention, general
+migrations, backups, exports, and cloud-provider discovery remain future gates
+rather than current implementation claims.
 
 - Fresh schemas contain every freeze field, version stamp, index, uniqueness,
   and foreign-key/trigger constraint required above.
@@ -191,8 +208,12 @@ implementation claims.
 - History run envelopes round-trip filesystem status, independent
   recording/audit axes, and `Disposition` without deriving them from detail
   count or text.
-- Version-1 history upgrades transactionally to version 2, preserving prior runs
-  and initializing `blocked_count` to zero.
+- Ledger v1 and history v1/v2 are refused without schema/content mutation and
+  with an actionable instruction to recreate both local databases.
+- The explicit coordinated development reset recreates ledger v2/history v3;
+  normal startup never deletes either database.
+- Concurrent semantic-settings patches preserve unrelated fields because the
+  read-modify-replace cycle is serialized across processes.
 - Retention uses a writable connection, canonical time comparison, preserves
   summaries when pruning detail, and is idempotent.
 - Concurrent recorder/repository/history access does not lose committed evidence

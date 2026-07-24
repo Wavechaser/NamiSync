@@ -171,14 +171,11 @@ class SyncOptions:
     preservation: PreservationPolicy = PreservationPolicy()
     filters: FilterSet = FilterSet()
     destination_policy: DestinationPolicy = IdentityDestinationPolicy()
-    worker_count: int = 1
     trash_on_update: bool = True
     propagate_source_casing: bool = False
     internal_mirror_authorized: bool = False
 
     def __post_init__(self) -> None:
-        if self.worker_count < 1:
-            raise ValueError("worker count must be positive")
         if self.deletion_policy is DeletionPolicy.MIRROR and not self.internal_mirror_authorized:
             raise ValueError("mirror deletion requires explicit internal authorization")
 
@@ -298,13 +295,12 @@ class Plan:
     deletion_policy: DeletionPolicy
     trash_on_update: bool
     policy_fingerprint: str
-    worker_count: int
     required_volumes: frozenset[VolumeId]
     required_bytes: int
     fingerprint: PlanFingerprint
 
     def __post_init__(self) -> None:
-        if self.worker_count < 1 or self.required_bytes < 0:
+        if self.required_bytes < 0:
             raise ValueError("invalid plan capacity snapshot")
         known_ids: set[OpId] = set()
         for operation in self.operations:
@@ -400,7 +396,6 @@ def policy_fingerprint(options: SyncOptions) -> str:
             "name": options.destination_policy.name,
             "version": options.destination_policy.version,
         },
-        "worker_count": options.worker_count,
         "trash_on_update": options.trash_on_update,
         "propagate_source_casing": options.propagate_source_casing,
     }

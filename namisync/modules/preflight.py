@@ -29,7 +29,6 @@ from namisync.core.pathing import (
     validate_relative_path,
 )
 from namisync.core.planning import (
-    FilterSet,
     OperationKind,
     PlanOperation,
     calculate_required_bytes,
@@ -45,12 +44,6 @@ from namisync.core.preflight import (
     TrashObservation,
     Verdict,
 )
-
-
-class SettingsReader(Protocol):
-    def read_filters(self) -> FilterSet: ...
-
-    def read_policy_fingerprint(self) -> str: ...
 
 
 class ObservationFileSystem(Protocol):
@@ -70,18 +63,6 @@ class ObservationFileSystem(Protocol):
     def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation: ...
 
     def now_utc(self) -> datetime: ...
-
-
-class StaticSettingsReader:
-    def __init__(self, filters: FilterSet, policy_fingerprint: str) -> None:
-        self._filters = filters
-        self._policy_fingerprint = policy_fingerprint
-
-    def read_filters(self) -> FilterSet:
-        return self._filters
-
-    def read_policy_fingerprint(self) -> str:
-        return self._policy_fingerprint
 
 
 def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
@@ -265,7 +246,6 @@ def _operation_subjects(xset: ExecutionSet) -> tuple[dict[Subject, tuple[Root, s
 def observe(
     xset: ExecutionSet,
     fs: ObservationFileSystem,
-    settings: SettingsReader,
 ) -> ObservedWorld:
     """Read the current scoped world without making any safety decision."""
 
@@ -312,14 +292,6 @@ def observe(
             trash = TrashObservation(None, False, False, False, False, False, str(error))
     else:
         trash = None
-    settings_error = None
-    try:
-        current_filters = settings.read_filters()
-        current_policy_fingerprint = settings.read_policy_fingerprint()
-    except (OSError, PermissionError, ValueError) as error:
-        current_filters = xset.plan.filter_snapshot
-        current_policy_fingerprint = xset.plan.policy_fingerprint
-        settings_error = str(error)
     return ObservedWorld(
         stats=stats,
         paths=paths,
@@ -328,10 +300,7 @@ def observe(
         free_space=free_space,
         reclaimable_temp_bytes=reclaimable,
         trash=trash,
-        current_filters=current_filters,
-        current_policy_fingerprint=current_policy_fingerprint,
         observed_at=fs.now_utc(),
-        settings_error=settings_error,
     )
 
 
@@ -411,18 +380,6 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
         and _paths_overlap(source_root.resolved_path, target_root.resolved_path)
     ):
         refusals.append(Refusal(RefusalCode.ROOTS_OVERLAP))
-
-    if world.current_filters != plan.filter_snapshot:
-        refusals.append(Refusal(RefusalCode.FILTER_DRIFT))
-    if world.current_policy_fingerprint != plan.policy_fingerprint:
-        refusals.append(Refusal(RefusalCode.OPTIONS_DRIFT))
-    if world.settings_error is not None:
-        refusals.append(
-            Refusal(
-                RefusalCode.OBSERVATION_UNAVAILABLE,
-                detail=f"semantic settings unavailable: {world.settings_error}",
-            )
-        )
 
     operations_by_id = {operation.op_id: operation for operation in plan.operations}
     remaining = xset.remaining()

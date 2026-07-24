@@ -1,5 +1,11 @@
 # Features
 
+Implementation note (2026-07-24): M1 Stage 1 has landed its contract, schema,
+settings, dependency, and security prerequisites. The canonical XXH3-128
+content producers, integrity/compound result producers, facade, and desktop
+host remain assigned to later M1 stages even where the settled behavior below
+is already stated.
+
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
 behavior; bullets after it are unrealized future work — some already
@@ -236,10 +242,11 @@ below describe settled behavior, not current M0 runtime claims.
 - **Mapping-Scoped State**. Shared physical locations can participate in multiple mappings while retaining independent source identity and correspondence state.
 - **Run Idempotency**. Executor run tokens uniquely correlate and protect repeated ledger recording.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
-- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` under database ownership and serialize cross-process read-modify-replace writes; settings that shape a plan are snapshotted into it. Recents, window geometry, and other cosmetic state live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
+- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. Recents, window geometry, columns, and sorting live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
-- **M1 Evidence Reset Boundary**. Because the canonical content algorithm and generic integrity/history result shape change together before release, M1 resets both the ledger and history databases as one coordinated development boundary and refuses every older schema with an actionable reset message. Settings and UI state survive; no partial migration is claimed.
-- **M0 Ledger Implemented**. Versioned ledger/history schemas now freeze identity and evidence fields, enforce mapping-correspondence location integrity, separate observed from attested stats, expose read-only typed inventory/mapping/run repositories, and refuse configured database paths inside managed roots.
+- **M1 Evidence Reset Boundary**. Ledger v2 and history v3 are active. Ledger v1 and history v1/v2 are refused without mutation and tell the user to close NamiSync and manually recreate both local databases during this temporary pre-migrator window; normal startup never deletes data. Settings and UI state survive.
+- **M1 Generic History Reservation**. History v3 stores current sync detail as explicitly tagged operation/execute items and reserves phase summaries plus other item types for their Stage 3/4 producers, without writing placeholder phase rows.
+- **M0 Ledger Implemented**. The active ledger/history schemas freeze identity and evidence fields, enforce mapping-correspondence location integrity, separate observed from attested stats, expose read-only typed inventory/mapping/run repositories, and refuse configured database paths inside managed roots.
 
 - **Hardlink Groups**. Schema room is reserved for grouping paths that share one file identity, so hard-link-aware correspondence and, later, hard-link preservation on copy remain additive rather than a rework.
 - **Named Mappings**. A mapping will carry a user-assigned display name distinct from its source and target paths.

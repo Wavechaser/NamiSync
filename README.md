@@ -41,15 +41,31 @@ update/no-op work continues; the unexposed opt-in casing policy uses a zero-byte
 rename when content already matches. Preflight separates scoped read-only
 observation from exhaustive typed judgment.
 
-The M0 persistence foundation is implemented: a serialized run-bound recorder
+The M1 contract foundation is now implemented. `worker_count` and execution's
+false live-settings drift check are gone, so admitted runs consume only their
+reviewed immutable policy snapshot. Schema-versioned semantic defaults live in
+database-owned `settings.json` with named-mutex-serialized partial commits;
+cosmetic recents/window/column/sort state lives separately in interface-owned
+`ui-state.json`. The measured `xxhash` 3.x runtime is now a declared project
+dependency, while the content producers remain unchanged until their atomic
+Stage 2 switch. A security spike proves the future pywebview host can force
+Edge Chromium, install native WebView2 navigation/new-window guards, recheck
+the packaged origin on its single versioned `dispatch`, and return application
+data structurally without executing JavaScript text. The desktop host itself
+still waits for M1 Stage 6.
+
+The M0 persistence implementation remains the operational base: a serialized run-bound recorder
 is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
 mapping correspondence, runs, and distinct observed/attested evidence; typed
 repositories are read-only; and an independent history observer stores sync
 envelopes, summaries, and ordered operations, including blocked/deferred safe-
-subset exclusions. A narrow history v1-to-v2 migration preserves existing runs;
-M1 instead introduces one coordinated pre-release reset to ledger v2/history
-v3 for XXH3-128 and generic phase-tagged integrity history. Older schemas are
-refused rather than partially migrated. General migrations, backup, and
+subset exclusions. The active schema boundary is now ledger v2/history v3:
+history reserves generic phase-tagged item and phase-summary storage, while the
+existing sync observer writes operation/execute tags and no phase rows yet.
+Ledger v1 and history v1/v2 are refused without mutation and require manual
+deletion/reset of the local database files. The actual XXH3-128 producer switch
+still lands atomically for executor and verifier in Stage 2, after which local
+development databases must be recreated. General migrations, backup, and
 cross-process-coordinated retention remain later phases.
 
 The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
@@ -144,6 +160,12 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Landed M1 Stage 1 contracts and semantics: removed `worker_count` and
+  execution-time settings drift refusal, added the shared streaming-hasher
+  protocol and compatible `xxhash` dependency, activated ledger v2/history v3
+  with explicit reset-only stale schema handling and reserved generic history
+  storage, split semantic/UI state persistence, and proved the hostile-
+  navigation structured WebView2 bridge boundary.
 - Made rename review truthful: recase, move, and move-update rows now show the
   observed prior target path changing to the planned target path, including
   visible case-only changes such as `keep.txt -> KEEP.txt`.

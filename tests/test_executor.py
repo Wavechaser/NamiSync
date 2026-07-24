@@ -169,7 +169,6 @@ def _plan(
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=trash_on_update,
         policy_fingerprint="p" * 64,
-        worker_count=1,
         required_volumes=frozenset(),
         required_bytes=sum(operation.content_bytes for operation in operations),
         fingerprint=PlanFingerprint("f" * 64),

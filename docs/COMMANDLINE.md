@@ -33,6 +33,12 @@ outside the managed roots; defaults are the local
 `%LOCALAPPDATA%\NamiSync\ledger.db` and
 `%LOCALAPPDATA%\NamiSync\history.db`.
 
+During the temporary M1 pre-migrator boundary, opening ledger v1 or history
+v1/v2 fails before schema mutation with an instruction to close NamiSync and
+manually delete both local database files, then rerun the command. Startup does
+not delete either database automatically. This is development-state recovery,
+not a migration or preservation promise.
+
 For noninteractive use, mandatory review cannot be waived by a casual `--yes`.
 The command surface may expose a separate queue-release flag that executes only
 already committed sets. A commitment binds plan fingerprint plus exact selection

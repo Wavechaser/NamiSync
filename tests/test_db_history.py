@@ -73,6 +73,16 @@ def test_history_round_trips_sync_axes_and_ordered_operations(tmp_path: Path) ->
 
         with HistoryRepository(store.path) as repository:
             snapshot = repository.get("run-1")
+        connection = connect_history_reader(store.path)
+        try:
+            stored_item = connection.execute(
+                "SELECT item_type, phase, result FROM history_items"
+            ).fetchone()
+            phase_count = int(
+                connection.execute("SELECT COUNT(*) FROM history_phases").fetchone()[0]
+            )
+        finally:
+            connection.close()
 
     assert snapshot.filesystem_status is SessionState.COMPLETED
     assert snapshot.recording is RecordingStatus.DEGRADED
@@ -83,6 +93,8 @@ def test_history_round_trips_sync_axes_and_ordered_operations(tmp_path: Path) ->
     assert len(snapshot.operations) == 1
     assert snapshot.operations[0].event_seq == 2
     assert snapshot.operations[0].detail == {"bytes": 7}
+    assert tuple(stored_item) == ("operation", "execute", Outcome.SUCCEEDED.value)
+    assert phase_count == 0
 
 
 def test_history_hash_and_detail_json_escape_unpaired_surrogates(

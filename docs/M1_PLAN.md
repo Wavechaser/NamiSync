@@ -1,7 +1,8 @@
 # M1 Plan
 
-Status: planning decisions revised and reconciled 2026-07-24. Nothing below is
-implemented yet. This is both the milestone plan and the decision log for the choices made
+Status: planning decisions revised and reconciled 2026-07-24. Stage 1
+(contracts and semantics) landed on 2026-07-24; Stages 2-6 remain
+unimplemented. This is both the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
 their code stages land. This file remains the detailed record of *why* and of
@@ -118,7 +119,7 @@ assumed — expect to touch fixtures that construct runtimes directly.
 ### Settings
 
 **DR-M1-03 — One settings file or two?**
-The single `StaticSettingsReader` is fed the plan's own filter snapshot
+Before Stage 1, the single `StaticSettingsReader` was fed the plan's own filter snapshot
 (`runtime.py:125`), so the filter-drift check preflight already implements
 compares a value against itself — there is no live settings source at all.
 Building one raised where it lives: `db/`, `workflows/`, or the new
@@ -139,7 +140,7 @@ directly.
 This amends the FEATURES.md *Local Settings File* bullet from one file to
 two — the smaller edit, given what it buys.
 **Also removes obsolete preflight plumbing:** the `SettingsReader` protocol
-and `StaticSettingsReader` currently exist only to feed live filter/policy
+and `StaticSettingsReader` existed only to feed live filter/policy
 values into execution preflight. The runtime supplies the plan's own values,
 so those checks compare a snapshot with itself today; under the frozen-session
 model they are conceptually wrong as well. M1 removes the settings collaborator
@@ -186,9 +187,9 @@ Commitment has three explicit bindings:
 file drift, capacity.
 **Excluded entirely:** UI presentation (sorting, columns, notifications).
 
-`worker_count` is not semantic intent, but it is currently embedded in both
-`SyncOptions` and `Plan`, so the full plan fingerprint binds it accidentally.
-M1 removes it rather than relocating it to another public setting: concurrent
+`worker_count` is not semantic intent, but before Stage 1 it was embedded in
+both `SyncOptions` and `Plan`, so the full plan fingerprint bound it
+accidentally. Stage 1 removed it rather than relocating it to another public setting: concurrent
 file execution is deferred by `HASH_REFACTOR.md`, and a dormant tuning knob
 would serve no current behavior.
 
@@ -268,7 +269,7 @@ close-drops-record behavior.
 Tagged `ResultItem` values and generic phase summaries need a home in history
 detail, while `HASH_REFACTOR.md` makes existing main-ledger content evidence
 incompatible by replacing SHA-256 with the single `xxh3_128` contract. History
-is currently v2 with one narrow v1→v2 migration; the main ledger is v1.
+was v2 with one narrow v1→v2 migration before Stage 1; the main ledger was v1.
 
 **Resolution — reset both databases, migrate neither.** NamiSync is unreleased
 and tested only in closed environments. M1 bumps both schema versions, refuses
@@ -277,8 +278,8 @@ deletes/recreates both databases as one development boundary. No ledger rows,
 content evidence, history rows, or run detail cross the boundary. Settings
 files are not databases and survive it.
 
-The existing `_migrate_history()` shortcut must be removed or disabled before
-the history constant is raised: it currently writes the current
+The former `_migrate_history()` shortcut had to be removed before the history
+constant was raised: it wrote the current
 `HISTORY_SCHEMA_VERSION`, so merely changing that constant to 3 would falsely
 promote a v1 database to v3 after applying only the v2 column change. Required
 coverage refuses ledger v1, history v1, and history v2 rather than silently
@@ -667,6 +668,22 @@ or direct UI SQL.
 ## 3. Dependency-Ordered Deliverables
 
 ### Stage 1 — Contracts and Semantics
+
+**Implemented 2026-07-24.** The code-bearing Stage 1 prerequisites are live:
+`worker_count` and the false live-settings drift path are removed; opaque
+workflow payloads are v2; ledger v2/history v3 refuse old schemas and reserve
+generic item/phase storage; the explicit development reset recreates both
+databases; semantic settings and cosmetic UI state have their split owners;
+the compatible `xxhash>=3.8.1,<4` runtime dependency is declared; and the
+WebView2 security spike proves forced Edge Chromium, native navigation guards,
+exact-origin dispatch, and structured pull/RPC.
+
+The standard-library-only `StreamingHasher`/`HasherFactory` contract is now in
+core. The actual `ContentEvidence`/`CopyDigest`, executor, verifier, repository,
+and fixture switch to 16-byte `xxh3_128` remains one atomic Stage 2 Track 2
+change, as DR-HASH-01/02 require. Likewise, nominal integrity result/event code
+still waits for its Stage 3 producer and compound continuation/result code
+waits for Stage 4; only their final history storage shape was reserved here.
 
 - Freeze the execute → verify state machine, candidate set, four independent
   truth axes, pause/cancel/failure behavior, process-close limitation, and
@@ -1089,10 +1106,10 @@ ledger query and silently drop every candidate whose copy-ledger write was
   by* a checkpoint that raises on its Nth call — it passes while coupling to a
   count the contract explicitly disclaims.
 
-**Six code anchors these gates hang on** (confirm they still sit here before
-writing the tests, since the finalized policy commit and ongoing edits move
-lines): `planning.py:301`/`:403`/`:411` (`worker_count` in `policy_fingerprint`
-at :403; `asdict(plan)` at :411), `scanner.py:252` (selected scan forces
+**Historical code anchors these gates came from** (line numbers record the
+reviewed pre-Stage-1 tree and are not current navigation): `planning.py:301`/
+`:403`/`:411` (`worker_count` in `policy_fingerprint` at :403; `asdict(plan)`
+at :411), `scanner.py:252` (selected scan forces
 `complete=False`), `recorder.py:573` (selected-missing requires
 `complete=True`), `session.py:255-258` (`hasattr` duck-typing),
 `integrity.py:179-182` (`IntegrityOutcome` has `item_id`+`path`),
@@ -1169,10 +1186,10 @@ and current defaults do not invalidate it. DR-M1-06 is retained only as the
 lifecycle/interaction rule for editing task-local bound controls; its former
 advisory drift-refusal behavior is removed.
 
-Excluding `worker_count` from `policy_fingerprint` is also insufficient while
-`worker_count` remains a field on `Plan`: the full plan fingerprint hashes the
-whole plan. Because concurrent file execution is now deferred, M1 removes the
-field without replacing it with another setting.
+Excluding `worker_count` from `policy_fingerprint` would also have been
+insufficient while `worker_count` remained a field on `Plan`: the full plan
+fingerprint hashes the whole plan. Because concurrent file execution is
+deferred, Stage 1 removed the field without replacing it with another setting.
 
 #### 2. The inventory producer and state vocabulary are incomplete
 

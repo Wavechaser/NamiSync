@@ -142,7 +142,6 @@ def plan(operations: tuple[PlanOperation, ...]) -> Plan:
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=True,
         policy_fingerprint="p" * 64,
-        worker_count=1,
         required_volumes=frozenset({source_volume, target_volume}),
         required_bytes=sum(item.content_bytes for item in operations),
         fingerprint=PlanFingerprint("f" * 64),

@@ -218,8 +218,9 @@ imports inside the verifier.
   produce a disclosed unsupported/deferred outcome.
 - Progress emission is throttled under fast-disk simulation and remains
   monotonic; a chunk flood cannot drive full-widget updates per MiB.
-- Parallel verifier tests, when enabled, preserve one outcome/write per row and
-  respect per-volume worker policy.
+- Verification remains single-stream with no worker-count setting. Any future
+  parallel verifier design requires workload evidence and must preserve one
+  outcome/write per row plus per-volume safety.
 - Unexpected SQLite/OS errors still produce an audited activity envelope and a
   truthful terminal.
 - Pause after any item count preserves exactly those outcomes/writes, releases

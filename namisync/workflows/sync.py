@@ -36,7 +36,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.modules.executor import ExecutorPolicies
-from namisync.modules.preflight import ObservationFileSystem, SettingsReader
+from namisync.modules.preflight import ObservationFileSystem
 
 from .models import ExecutionDetails, PlanArtifact, PlanRequest, RefusalView
 from .selection import ExecutionSelection, derive_execution_selection
@@ -52,7 +52,7 @@ class RunRecording(Protocol):
 
 Scanner = Callable[[Root, IgnoreSet, RunContext], ScanResult]
 Planner = Callable[[ScanResult, ScanResult, MappingSnapshot, SyncOptions, Scope], Plan]
-Observer = Callable[[ExecutionSet, ObservationFileSystem, SettingsReader], ObservedWorld]
+Observer = Callable[[ExecutionSet, ObservationFileSystem], ObservedWorld]
 Preflight = Callable[[ExecutionSet, ObservedWorld], Verdict]
 Executor = Callable[
     [
@@ -72,7 +72,6 @@ class SyncDependencies:
     planner: Planner
     correspondence: Callable[[ScanResult, ScanResult], MappingSnapshot]
     observation_fs: ObservationFileSystem
-    settings: Callable[[Plan], SettingsReader]
     observer: Observer
     preflight: Preflight
     executor: Executor
@@ -114,7 +113,7 @@ def run_plan(
     preview = ExecutionSet(plan, decision.selection, run_id)
 
     ctx.emit(PhaseChanged("review-preflight"))
-    world = deps.observer(preview, deps.observation_fs, deps.settings(plan))
+    world = deps.observer(preview, deps.observation_fs)
     verdict = deps.preflight(preview, world)
     deps.save_plan(
         PlanArtifact(request, source_scan, target_scan, plan, verdict)
@@ -145,7 +144,7 @@ def run_execution(
         xset.selection,
     )
     ctx.emit(PhaseChanged("execution-preflight"))
-    world = deps.observer(xset, deps.observation_fs, deps.settings(xset.plan))
+    world = deps.observer(xset, deps.observation_fs)
     verdict = deps.preflight(xset, world)
     refusals = refusal_views(verdict)
     deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))

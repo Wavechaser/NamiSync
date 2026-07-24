@@ -1,9 +1,10 @@
 # Workflows Module
 
-Status: M0 reviewed sync and history implemented. M1 inventory/integrity,
+Status: M0 reviewed sync and history are implemented, with M1 Stage 1's
+immutable admitted-policy and payload-v2 contract. M1 inventory/integrity,
 linked post-execution verification, facade/CLI expansion, and desktop shell are
-specified but not implemented. Queue durability, maintenance/retention,
-replay, undo/repair, and ingest remain later work.
+specified but not implemented. Queue durability, maintenance/retention, replay,
+undo/repair, and ingest remain later work.
 
 ## Purpose
 
@@ -14,9 +15,11 @@ declare required resources to dispatcher. They do not implement scan/diff/copy/
 hash/SQL/UI behavior and never coordinate through signals or callbacks-for-
 control.
 
-Every dependency arrives through one composition-root `deps` object: clock,
-scanner/change source, repositories, planner/policies, observer/preflight,
-executor, recorder, verifier/importer, and settings snapshots.
+Every runtime dependency arrives through one composition-root `deps` object:
+clock, scanner/change source, repositories, planner/policies,
+observer/preflight, executor, recorder, and later verifier/importer. Planning
+adapters may snapshot semantic defaults when constructing a request; admitted
+execution does not receive or reread a settings provider.
 
 ## Reviewed Sync
 
@@ -85,7 +88,12 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
-The payload also round-trips the fingerprinted
+Stage 1 advances the opaque plan/execution codec to version 2 and removes
+`worker_count` from `SyncOptions`, `Plan`, fingerprints, and both payloads
+without adding a replacement execution setting. Version-1 workflow payloads
+are refused instead of being guessed into the changed contract.
+
+The payload round-trips the fingerprinted
 `SyncOptions.propagate_source_casing` seam as a required field. A payload that
 omits a fingerprint input is rejected instead of decoding to false and
 re-encoding into a different payload. M0 exposes no config, CLI, or GUI control
@@ -222,6 +230,8 @@ interfaces present that as partial completion rather than clean full success.
 - Interfaces submit typed requests and present events/results; no interface
   reaches around workflow to call executor/SQL.
 - Settings shaping a plan are snapshotted, not read opportunistically later.
+- Fresh preflight observes filesystem/volume safety only; it never compares
+  admitted intent with newer global defaults.
 
 Workflow is the sole preflight owner: it sequences fresh observe → preflight →
 scoped prior-run temp recovery → execute under custody on every start/resume.

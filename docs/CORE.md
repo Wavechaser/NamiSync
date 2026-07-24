@@ -1,7 +1,9 @@
 # Core Module
 
 Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
-and recording contracts implemented with their owning operation modules.
+and recording contracts are implemented. M1 Stage 1 removes the retired
+worker-count/live-settings semantics and adds the shared streaming-hasher
+protocol; the XXH3-128 content producer switch remains Stage 2.
 
 ## Purpose
 
@@ -34,9 +36,9 @@ attestation format.
 - `RunContext`, nonblocking cooperative pause/cancel checkpoint protocol, and
   the generic session runner that alone resolves pause/cancel and emits
   `Terminal`.
-- Protocols for recorder, clock, failure policy, copy backend, worker count,
-  change source, destination policy, metadata extraction, session storage, and
-  filesystem observations needed by module contracts.
+- Protocols for recorder, clock, failure policy, copy backend, streaming hasher
+  factory, change source, destination policy, metadata extraction, session
+  storage, and filesystem observations needed by module contracts.
 - Windows relative-path normalization, validation, containment, and long-path
   conversion helpers.
 - Pure shared calculations such as capacity requirements and deterministic
@@ -194,11 +196,19 @@ All domain timestamps come from one injected `Clock`, are timezone-aware UTC,
 and are normalized once before persistence or event emission. Presentation
 converts to local time.
 
-`ContentEvidence` owns SHA-256 digest, size, provenance, and observation time.
-`Attestation` joins that content to the exact subject `FileStat`. For copy and
-update, the subject is the published target re-statted after publication; the
-source's post-read stat is separate drift-guard evidence. No consumer may treat
-copy-stream evidence as readback verification.
+`StreamingHasher` and `HasherFactory` define the parameterless, standard-
+library-only dependency boundary shared by future content producers. Stage 1
+does not create or select a concrete third-party implementation in core.
+
+The currently executing M0 pipeline still gives `ContentEvidence` a SHA-256
+digest, size, provenance, and observation time. Stage 2 changes
+`ContentEvidence`, `CopyDigest`, executor, verifier, persistence, and fixtures
+together to the one 16-byte `xxh3_128` contract; mixed content algorithms are
+not an allowed intermediate state. `Attestation` joins content evidence to the
+exact subject `FileStat`. For copy and update, the subject is the published
+target re-statted after publication; the source's post-read stat is separate
+drift-guard evidence. No consumer may treat copy-stream evidence as readback
+verification.
 
 `OperationResult.status` reports filesystem truth only. Ledger persistence and
 history persistence are independent `recording` and `audit`

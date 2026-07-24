@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Mapping, NamedTuple
 
 from .models import FileStat, VolumeEvidence, VolumeId
-from .planning import FilterSet, OpId
+from .planning import OpId
 
 
 class Subject(NamedTuple):
@@ -52,10 +52,7 @@ class ObservedWorld:
     free_space: int | None
     reclaimable_temp_bytes: int
     trash: TrashObservation | None
-    current_filters: FilterSet
-    current_policy_fingerprint: str
     observed_at: datetime
-    settings_error: str | None = None
 
     def __post_init__(self) -> None:
         if self.free_space is not None and self.free_space < 0:
@@ -88,8 +85,6 @@ class RefusalCode(StrEnum):
     SIZE_CHANGED = "size_changed"
     MTIME_CHANGED = "mtime_changed"
     METADATA_CHANGED = "metadata_changed"
-    FILTER_DRIFT = "filter_drift"
-    OPTIONS_DRIFT = "options_drift"
     INSUFFICIENT_SPACE = "insufficient_space"
     TRASH_UNAVAILABLE = "trash_unavailable"
     TRASH_ESCAPE = "trash_escape"

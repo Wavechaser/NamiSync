@@ -1,8 +1,9 @@
 # Planner Module
 
-Status: M0 path-preserving paired-sync implementation complete. Later scopes,
-content evidence, ingest policies, replay, repair, and undo reuse the same plan
-shape.
+Status: M0 path-preserving paired-sync implementation complete. M1 Stage 1
+removes the unused worker-count field from the immutable plan contract. Later
+scopes, content evidence, ingest policies, replay, repair, and undo reuse the
+same plan shape.
 
 ## Purpose
 
@@ -134,8 +135,9 @@ content. Live trash consumes space until a retention workflow actually removes
 it. Reclaimable orphan temps are an observation used by preflight, not optimistic
 planner state.
 
-The plan snapshots the worker-count/concurrency assumption used by the formula;
-executor may use fewer workers but never more without re-planning/re-preflight.
+Stage 1 removed `worker_count` from options, plans, fingerprints, and payloads.
+The current executor admits one file operation at a time, and the capacity
+contract has no dormant file-concurrency tuning input.
 
 The function consumes target `CapabilityProfile.supports_hardlinks`, populated
 from the Windows `FILE_SUPPORTS_HARD_LINKS` volume flag. For each concurrently
@@ -231,11 +233,11 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   selection admits copy/update/mkdir/noop/recase and withholds move/move-update/
   trash/delete; preflight refuses any caller that reintroduces withheld
   operations.
-- Capacity property tests never undercount any allowed worker schedule and use
-  the exact same function as preflight.
+- Capacity property tests cover the current sequential operation schedule and
+  use the exact same function as preflight.
 - No-hardlink update fixtures include displaced-version backup bytes under every
-  allowed worker schedule; hardlink-capable fixtures do not charge content bytes
-  for the link itself.
+  supported operation ordering; hardlink-capable fixtures do not charge content
+  bytes for the link itself.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
 - A readonly/hidden/system-only difference with unchanged size and mtime plans

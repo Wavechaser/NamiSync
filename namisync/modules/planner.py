@@ -629,7 +629,6 @@ def plan(
         deletion_policy=options.deletion_policy,
         trash_on_update=options.trash_on_update,
         policy_fingerprint=policy_fingerprint(options),
-        worker_count=options.worker_count,
         required_volumes=required_volumes,
         required_bytes=required_bytes,
         fingerprint=PlanFingerprint("0" * 64),

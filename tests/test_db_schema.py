@@ -15,8 +15,10 @@ from namisync.db.connections import (
 from namisync.db.schema import (
     HISTORY_SCHEMA_VERSION,
     LEDGER_SCHEMA_VERSION,
+    SchemaResetRequired,
     initialize_history,
     initialize_ledger,
+    reset_databases,
 )
 
 
@@ -165,85 +167,144 @@ def test_database_path_is_refused_inside_managed_root(tmp_path: Path) -> None:
     assert validate_database_path(outside, managed_roots=(managed,)) == outside.resolve()
 
 
-def test_history_v1_migrates_blocked_count_without_losing_runs(tmp_path: Path) -> None:
-    path = tmp_path / "history.db"
+def _seed_schema_version(path: Path, version: int) -> None:
     connection = sqlite3.connect(path)
     try:
-        connection.executescript(
-            """
-            CREATE TABLE schema_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT;
-            INSERT INTO schema_metadata(key, value) VALUES ('schema_version', '1');
-            CREATE TABLE history_runs (
-                id INTEGER PRIMARY KEY,
-                run_token TEXT NOT NULL UNIQUE,
-                session_id TEXT NOT NULL,
-                activity_kind TEXT NOT NULL,
-                host_key TEXT NOT NULL,
-                subject_kind TEXT,
-                subject_id TEXT,
-                source_context TEXT,
-                target_context TEXT,
-                started_at TEXT NOT NULL,
-                ended_at TEXT NOT NULL,
-                filesystem_status TEXT NOT NULL,
-                recording_status TEXT NOT NULL,
-                audit_status TEXT NOT NULL,
-                disposition TEXT NOT NULL,
-                canceled INTEGER NOT NULL,
-                bytes_done INTEGER NOT NULL,
-                bytes_total INTEGER NOT NULL,
-                succeeded_count INTEGER NOT NULL,
-                skipped_count INTEGER NOT NULL,
-                failed_count INTEGER NOT NULL,
-                canceled_count INTEGER NOT NULL,
-                deferred_count INTEGER NOT NULL,
-                error_type TEXT,
-                error_message TEXT,
-                payload_hash BLOB NOT NULL
-            ) STRICT;
-            CREATE TABLE history_operations (
-                run_id INTEGER NOT NULL,
-                item_order INTEGER NOT NULL,
-                event_seq INTEGER,
-                item_id TEXT NOT NULL,
-                kind TEXT NOT NULL,
-                path TEXT NOT NULL,
-                outcome TEXT NOT NULL,
-                reason TEXT,
-                detail_json TEXT NOT NULL,
-                PRIMARY KEY(run_id, item_order),
-                UNIQUE(run_id, item_id)
-            ) STRICT;
-            INSERT INTO history_runs(
-                run_token, session_id, activity_kind, host_key,
-                started_at, ended_at, filesystem_status, recording_status,
-                audit_status, disposition, canceled, bytes_done, bytes_total,
-                succeeded_count, skipped_count, failed_count, canceled_count,
-                deferred_count, payload_hash
-            ) VALUES (
-                'existing', 'session', 'sync', 'host',
-                '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:01+00:00',
-                'completed', 'ok', 'ok', 'ran', 0, 0, 0, 1, 0, 0, 0, 0, X'00'
-            );
-            """
+        connection.execute(
+            "CREATE TABLE schema_metadata "
+            "(key TEXT PRIMARY KEY, value TEXT NOT NULL) STRICT"
         )
+        connection.execute(
+            "INSERT INTO schema_metadata(key, value) "
+            "VALUES ('schema_version', ?)",
+            (str(version),),
+        )
+        connection.execute("CREATE TABLE legacy_marker (value TEXT) STRICT")
+        connection.execute("INSERT INTO legacy_marker(value) VALUES ('preserve')")
+        connection.commit()
     finally:
         connection.close()
 
-    initialize_history(path)
 
-    reader = connect_history_reader(path)
+@pytest.mark.parametrize("version", [1, 2])
+def test_history_v1_and_v2_are_refused_without_mutation(
+    tmp_path: Path, version: int
+) -> None:
+    path = tmp_path / f"history-v{version}.db"
+    _seed_schema_version(path, version)
+
+    with pytest.raises(SchemaResetRequired, match="reset both database files together"):
+        initialize_history(path)
+
+    connection = sqlite3.connect(path)
     try:
-        version = int(
-            reader.execute(
+        retained_version = int(
+            connection.execute(
                 "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
             ).fetchone()[0]
         )
-        row = reader.execute(
-            "SELECT run_token, blocked_count FROM history_runs"
-        ).fetchone()
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
     finally:
-        reader.close()
+        connection.close()
 
-    assert version == HISTORY_SCHEMA_VERSION == 2
-    assert tuple(row) == ("existing", 0)
+    assert retained_version == version
+    assert tables == {"schema_metadata", "legacy_marker"}
+    assert not path.with_name(path.name + "-wal").exists()
+    assert not path.with_name(path.name + "-shm").exists()
+    check = sqlite3.connect(path)
+    try:
+        assert check.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    finally:
+        check.close()
+
+
+def test_ledger_v1_is_refused_without_mutation(tmp_path: Path) -> None:
+    path = tmp_path / "ledger-v1.db"
+    _seed_schema_version(path, 1)
+
+    with pytest.raises(SchemaResetRequired, match="reset both database files together"):
+        initialize_ledger(path)
+
+    connection = sqlite3.connect(path)
+    try:
+        version = int(
+            connection.execute(
+                "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+            ).fetchone()[0]
+        )
+        marker = connection.execute("SELECT value FROM legacy_marker").fetchone()[0]
+    finally:
+        connection.close()
+
+    assert version == 1
+    assert marker == "preserve"
+    assert not path.with_name(path.name + "-wal").exists()
+    assert not path.with_name(path.name + "-shm").exists()
+    check = sqlite3.connect(path)
+    try:
+        assert check.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    finally:
+        check.close()
+
+
+def test_coordinated_reset_recreates_final_m1_schema_shapes(tmp_path: Path) -> None:
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    _seed_schema_version(ledger, 1)
+    _seed_schema_version(history, 2)
+
+    assert reset_databases(ledger, history) == (ledger.resolve(), history.resolve())
+
+    ledger_reader = connect_ledger_reader(ledger)
+    history_reader = connect_history_reader(history)
+    try:
+        ledger_version = int(
+            ledger_reader.execute(
+                "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+            ).fetchone()[0]
+        )
+        history_version = int(
+            history_reader.execute(
+                "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+            ).fetchone()[0]
+        )
+        history_tables = {
+            row[0]
+            for row in history_reader.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        item_columns = {
+            row[1] for row in history_reader.execute("PRAGMA table_info(history_items)")
+        }
+        phase_columns = {
+            row[1] for row in history_reader.execute("PRAGMA table_info(history_phases)")
+        }
+        phase_count = int(
+            history_reader.execute("SELECT COUNT(*) FROM history_phases").fetchone()[0]
+        )
+    finally:
+        history_reader.close()
+        ledger_reader.close()
+
+    assert ledger_version == LEDGER_SCHEMA_VERSION == 2
+    assert history_version == HISTORY_SCHEMA_VERSION == 3
+    assert {"history_items", "history_phases"} <= history_tables
+    assert {"item_type", "phase", "item_id", "result", "detail_json"} <= item_columns
+    assert {
+        "phase_order",
+        "phase",
+        "status",
+        "items_done",
+        "items_total",
+        "bytes_done",
+        "bytes_total",
+        "error",
+        "detail_json",
+    } <= phase_columns
+    assert phase_count == 0

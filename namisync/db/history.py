@@ -283,15 +283,17 @@ class HistoryObserver:
                 ).fetchone()["id"]
             )
             connection.executemany(
-                """INSERT INTO history_operations(
-                       run_id, item_order, event_seq, item_id, kind, path,
-                       outcome, reason, detail_json
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO history_items(
+                       run_id, item_order, event_seq, item_type, phase,
+                       item_id, kind, path, result, reason, detail_json
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     (
                         run_id,
                         order,
                         seq,
+                        "operation",
+                        "execute",
                         item.item_id,
                         item.kind,
                         item.path,
@@ -351,13 +353,14 @@ class HistoryRepository:
                 item_id=item["item_id"],
                 kind=item["kind"],
                 path=item["path"],
-                outcome=Outcome(item["outcome"]),
+                outcome=Outcome(item["result"]),
                 reason=item["reason"],
                 detail=json.loads(item["detail_json"]),
             )
             for item in self._connection.execute(
-                """SELECT * FROM history_operations
-                    WHERE run_id = ? ORDER BY item_order""",
+                """SELECT * FROM history_items
+                    WHERE run_id = ? AND item_type = 'operation'
+                    ORDER BY item_order""",
                 (row["id"],),
             )
         )

@@ -104,9 +104,9 @@ support, seek-penalty knowledge, maximum path behavior, ADS support, and
 `supports_hardlinks` read from `FILE_SUPPORTS_HARD_LINKS` rather than a probe or
 filesystem-name table. ADS support is one volume-capability bit only; collecting
 it does not inspect any file's streams.
-Unknowns degrade conservatively: unknown seek penalty behaves like HDD for
-worker policy; absent stable identity disables identity moves; coarse timestamps
-control planner comparison tolerance.
+Unknowns degrade conservatively: unknown seek penalty behaves like HDD for any
+future parallelism decision; absent stable identity disables identity moves;
+coarse timestamps control planner comparison tolerance.
 
 The stable volume key is `(serial, fs_type)`; labels are mutable corroborating
 evidence. Relabeling does not rebind, a changed filesystem type does, and

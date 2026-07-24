@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 
 import pytest
 
@@ -10,6 +11,7 @@ from namisync.core.evidence import (
     Outcome,
     Provenance,
     RecordingStatus,
+    HasherFactory,
 )
 from namisync.core.events import (
     SCHEMA_VERSION,
@@ -75,6 +77,14 @@ def test_content_evidence_requires_sha256_bytes_and_aware_utc() -> None:
         )
     with pytest.raises(TypeError, match="FileStat"):
         Attestation(evidence, None)  # type: ignore[arg-type]
+
+
+def test_streaming_hasher_factory_is_a_standard_structural_contract() -> None:
+    factory: HasherFactory = hashlib.sha256
+    hasher = factory()
+    hasher.update(b"NamiSync")
+
+    assert hasher.digest() == hashlib.sha256(b"NamiSync").digest()
 
 
 @pytest.mark.parametrize("path", ["success", "cancel", "failure"])

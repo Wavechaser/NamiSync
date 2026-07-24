@@ -45,12 +45,7 @@ from namisync.modules.executor import (
     execute,
 )
 from namisync.modules.planner import plan
-from namisync.modules.preflight import (
-    LocalObservationFileSystem,
-    StaticSettingsReader,
-    observe,
-    preflight,
-)
+from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 from namisync.modules.scanner import NativeScannerBackend, WalkingScanner
 
 from .models import (
@@ -122,9 +117,6 @@ class LocalWorkflowRuntime:
             planner=plan,
             correspondence=self._correspondence,
             observation_fs=self._observation_fs,
-            settings=lambda value: StaticSettingsReader(
-                value.filter_snapshot, value.policy_fingerprint
-            ),
             observer=observe,
             preflight=preflight,
             executor=execute,

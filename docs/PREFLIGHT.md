@@ -1,47 +1,48 @@
 # Preflight Module
 
-Status: M0 observation and pure judgment implementation complete. Fresh
-preflight remains mandatory immediately before every managed-data mutation,
-on resume, and on queued wakeup.
+Status: M0 observation and pure judgment implementation complete, with M1
+Stage 1's immutable reviewed-policy semantics. Fresh preflight remains
+mandatory immediately before every managed-data mutation, on resume, and on
+queued wakeup.
 
 ## Purpose
 
 Preflight separates current-world observation from pure judgment:
 
 ```python
-observe(xset: ExecutionSet, fs: FileSystem,
-        settings: SettingsReader) -> ObservedWorld
+observe(xset: ExecutionSet, fs: FileSystem) -> ObservedWorld
 preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict
 ```
 
 ## Implemented M0 Surface
 
 `namisync.modules.preflight.observe()` consumes an injected read-only
-filesystem and settings reader. It records only remaining selected-operation
-subjects, required target parents, both roots, capacity, exact reclaimable temp
-bytes, trash safety, settings, and one UTC timestamp. The native local backend
-performs no cleanup or hydration.
+filesystem. It records only remaining selected-operation subjects, required
+target parents, both roots, capacity, exact reclaimable temp bytes, trash
+safety, and one UTC timestamp. The native local backend performs no cleanup or
+hydration.
 
 `preflight()` consumes only the immutable `ObservedWorld` contract in
 `namisync.core.preflight`. It reports all applicable typed run- and
 operation-level refusals for unsafe operations selected from incomplete scans,
 root/volume ambiguity, broken selection dependencies, blocked/quarantined work,
-direct or parent-path drift, policy drift, insufficient capacity, trash safety,
+direct or parent-path drift, insufficient capacity, trash safety,
 containment, and target path representation. Commitment checking remains at the
 execution-workflow entry, as review preflight intentionally works before a
 commitment exists.
 
-`observe()` performs read-only IO, including reading current semantic settings,
-and decides nothing. `preflight()` performs no IO and changes nothing. Neither
-repairs, re-plans, drops, cleans, or executes operations.
+`observe()` performs read-only filesystem/volume IO and decides nothing.
+`preflight()` performs no IO and changes nothing. Neither repairs, re-plans,
+drops, cleans, or executes operations. Admitted execution uses the immutable
+reviewed policy snapshot already bound into the plan; it never reinterprets the
+run from newer global defaults.
 
 ## Observation Boundary
 
 Observation touches only remaining selected-operation paths and their required
 parents/roots. It records source and target stats (or absence), root/physical
 volume evidence, free space, exact reclaimable owned-temp bytes, trash path
-resolution/writability, current filters from the injected settings reader, and
-one injected UTC timestamp.
+resolution/writability, and one injected UTC timestamp.
 
 Stats are keyed by `Subject(root, rel_path_key)`, never by relative-path string
 alone, but observation still passes planned relative-path spelling to the
@@ -80,7 +81,6 @@ the run. It verifies:
   before-state within capability granularity;
 - expected absence is still absence and expected destination occupancy/type is
   unchanged;
-- current semantic filter/options/policy fingerprint equals the plan snapshot;
 - current required bytes for remaining operations fit free space plus safely
   reclaimable owned temps;
 - trash resolves beneath the target, on the same physical volume, without a
@@ -125,7 +125,6 @@ probes support or substitutes a filesystem-name guess.
 
 - Planner embeds every before-state and policy snapshot needed for judgment.
 - Core supplies path/volume/evidence types and the shared capacity function.
-- Workflow supplies the injected settings reader used by observation.
 - Dispatcher holds/acquires required volume custody around execution; preflight
   verifies identity but does not own locks.
 - Workflow alone invokes fresh observe/preflight immediately before executor

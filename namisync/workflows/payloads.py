@@ -38,7 +38,7 @@ from namisync.core.planning import (
 from .models import ExecutionRequest, PlanRequest
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 def _json_bytes(value: object) -> bytes:
@@ -246,7 +246,6 @@ def _plan(value: Plan) -> dict[str, object]:
         "deletion_policy": value.deletion_policy.value,
         "trash_on_update": value.trash_on_update,
         "policy_fingerprint": value.policy_fingerprint,
-        "worker_count": value.worker_count,
         "required_volumes": [_volume(item) for item in sorted(value.required_volumes)],
         "required_bytes": value.required_bytes,
         "fingerprint": str(value.fingerprint),
@@ -301,7 +300,6 @@ def _decode_plan(value: object) -> Plan:
         deletion_policy=DeletionPolicy(str(item["deletion_policy"])),
         trash_on_update=bool(item["trash_on_update"]),
         policy_fingerprint=str(item["policy_fingerprint"]),
-        worker_count=int(item["worker_count"]),
         required_volumes=required_volumes,
         required_bytes=int(item["required_bytes"]),
         fingerprint=PlanFingerprint(str(item["fingerprint"])),
@@ -326,7 +324,6 @@ def encode_plan_request(request: PlanRequest) -> bytes:
                 "preserve_acl": request.options.preservation.preserve_acl,
             },
             "filters": list(request.options.filters.patterns),
-            "worker_count": request.options.worker_count,
             "trash_on_update": request.options.trash_on_update,
             "propagate_source_casing": request.options.propagate_source_casing,
             "internal_mirror_authorized": request.options.internal_mirror_authorized,
@@ -352,7 +349,6 @@ def decode_plan_request(payload: bytes) -> PlanRequest:
             ),
             filters=FilterSet(tuple(str(value) for value in _list(options["filters"]))),
             destination_policy=IdentityDestinationPolicy(),
-            worker_count=int(options["worker_count"]),
             trash_on_update=bool(options["trash_on_update"]),
             propagate_source_casing=bool(options["propagate_source_casing"]),
             internal_mirror_authorized=bool(options["internal_mirror_authorized"]),

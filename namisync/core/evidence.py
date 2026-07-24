@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Protocol, TypeAlias
 
 from namisync.core.models import FileStat
 
@@ -34,6 +35,17 @@ class Provenance(StrEnum):
     COPY_ATTESTED = "copy"
     READBACK_ATTESTED = "readback"
     VERIFY_ATTESTED = "verify"
+
+
+class StreamingHasher(Protocol):
+    """Standard-library-only streaming content-hasher seam."""
+
+    def update(self, data: bytes) -> None: ...
+
+    def digest(self) -> bytes: ...
+
+
+HasherFactory: TypeAlias = Callable[[], StreamingHasher]
 
 
 def _require_utc(value: datetime, field_name: str) -> None:

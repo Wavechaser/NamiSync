@@ -8,14 +8,20 @@ from typing import Iterable
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
+    connect_history_reader,
     connect_history_writer,
+    connect_ledger_reader,
     connect_ledger_writer,
     validate_database_path,
 )
 
 
-LEDGER_SCHEMA_VERSION = 1
-HISTORY_SCHEMA_VERSION = 2
+LEDGER_SCHEMA_VERSION = 2
+HISTORY_SCHEMA_VERSION = 3
+
+
+class SchemaResetRequired(sqlite3.DatabaseError):
+    """An incompatible pre-release schema must be reset, never migrated."""
 
 
 _LEDGER_SCHEMA = f"""
@@ -284,18 +290,44 @@ CREATE TABLE IF NOT EXISTS history_runs (
 CREATE INDEX IF NOT EXISTS history_runs_started_idx
 ON history_runs(started_at DESC, id DESC);
 
-CREATE TABLE IF NOT EXISTS history_operations (
+CREATE TABLE IF NOT EXISTS history_items (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
     item_order INTEGER NOT NULL,
     event_seq INTEGER,
+    item_type TEXT NOT NULL,
+    phase TEXT NOT NULL,
     item_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
+    kind TEXT,
     path TEXT NOT NULL,
-    outcome TEXT NOT NULL,
+    result TEXT NOT NULL,
     reason TEXT,
     detail_json TEXT NOT NULL,
     PRIMARY KEY(run_id, item_order),
-    UNIQUE(run_id, item_id)
+    UNIQUE(run_id, item_type, item_id),
+    CHECK(length(item_type) > 0),
+    CHECK(length(phase) > 0),
+    CHECK(length(result) > 0)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS history_phases (
+    run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
+    phase_order INTEGER NOT NULL,
+    phase TEXT NOT NULL,
+    status TEXT NOT NULL,
+    items_done INTEGER NOT NULL,
+    items_total INTEGER,
+    bytes_done INTEGER NOT NULL,
+    bytes_total INTEGER,
+    error TEXT,
+    detail_json TEXT NOT NULL,
+    PRIMARY KEY(run_id, phase_order),
+    UNIQUE(run_id, phase),
+    CHECK(length(phase) > 0),
+    CHECK(length(status) > 0),
+    CHECK(items_done >= 0),
+    CHECK(items_total IS NULL OR items_total >= items_done),
+    CHECK(bytes_done >= 0),
+    CHECK(bytes_total IS NULL OR bytes_total >= bytes_done)
 ) STRICT;
 
 COMMIT;
@@ -312,49 +344,69 @@ def _initialize(
 ) -> Path:
     resolved = validate_database_path(path, managed_roots=managed_roots)
     resolved.parent.mkdir(parents=True, exist_ok=True)
+    if resolved.exists():
+        read = connect_history_reader if history else connect_ledger_reader
+        readonly = read(resolved, busy_timeout_ms=busy_timeout_ms)
+        try:
+            version = _existing_schema_version(readonly, history=history)
+            expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
+            if version is not None and version != expected:
+                _raise_reset_required(version, history=history)
+        finally:
+            readonly.close()
     connect = connect_history_writer if history else connect_ledger_writer
     connection = connect(resolved, busy_timeout_ms=busy_timeout_ms)
     try:
+        version = _existing_schema_version(connection, history=history)
+        expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
+        if version is not None and version != expected:
+            _raise_reset_required(version, history=history)
         connection.executescript(schema)
         version = int(
             connection.execute(
                 "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
             ).fetchone()[0]
         )
-        if history:
-            version = _migrate_history(connection, version)
-        expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
         if version != expected:
-            raise sqlite3.DatabaseError(
-                f"unsupported schema version {version}; expected {expected}"
-            )
+            _raise_reset_required(version, history=history)
     finally:
         connection.close()
     return resolved
 
 
-def _migrate_history(connection: sqlite3.Connection, version: int) -> int:
-    if version != 1:
-        return version
-    columns = {
-        row[1] for row in connection.execute("PRAGMA table_info(history_runs)")
-    }
-    connection.execute("BEGIN IMMEDIATE")
-    try:
-        if "blocked_count" not in columns:
-            connection.execute(
-                "ALTER TABLE history_runs "
-                "ADD COLUMN blocked_count INTEGER NOT NULL DEFAULT 0"
-            )
-        connection.execute(
-            "UPDATE schema_metadata SET value = ? WHERE key = 'schema_version'",
-            (str(HISTORY_SCHEMA_VERSION),),
+def _existing_schema_version(
+    connection: sqlite3.Connection, *, history: bool
+) -> int | None:
+    tables = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
         )
-        connection.execute("COMMIT")
-    except BaseException:
-        connection.execute("ROLLBACK")
-        raise
-    return HISTORY_SCHEMA_VERSION
+    }
+    if not tables:
+        return None
+    if "schema_metadata" not in tables:
+        _raise_reset_required("unversioned", history=history)
+    row = connection.execute(
+        "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
+    ).fetchone()
+    if row is None:
+        _raise_reset_required("missing", history=history)
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        _raise_reset_required("invalid", history=history)
+
+
+def _raise_reset_required(version: object, *, history: bool) -> None:
+    database = "history" if history else "ledger"
+    raise SchemaResetRequired(
+        f"unsupported {database} schema version {version}; "
+        "NamiSync M1 requires ledger v2 and history v3. "
+        "Close every NamiSync process, manually delete or otherwise reset both "
+        "database files together, and restart."
+    )
 
 
 def initialize_ledger(
@@ -385,3 +437,44 @@ def initialize_history(
         busy_timeout_ms=busy_timeout_ms,
         managed_roots=managed_roots,
     )
+
+
+def reset_databases(
+    ledger_path: str | Path,
+    history_path: str | Path,
+    *,
+    busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
+    managed_roots: Iterable[str | Path] = (),
+) -> tuple[Path, Path]:
+    """Destructively recreate the ledger and history as one explicit boundary."""
+
+    roots = tuple(managed_roots)
+    ledger = validate_database_path(ledger_path, managed_roots=roots)
+    history = validate_database_path(history_path, managed_roots=roots)
+    if ledger == history:
+        raise ValueError("ledger and history databases must use distinct paths")
+    for path in (ledger, history):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    for path in (ledger, history):
+        _delete_sqlite_artifacts(path)
+    return (
+        initialize_ledger(
+            ledger,
+            busy_timeout_ms=busy_timeout_ms,
+            managed_roots=roots,
+        ),
+        initialize_history(
+            history,
+            busy_timeout_ms=busy_timeout_ms,
+            managed_roots=roots,
+        ),
+    )
+
+
+def _delete_sqlite_artifacts(path: Path) -> None:
+    for candidate in (
+        path,
+        path.with_name(path.name + "-wal"),
+        path.with_name(path.name + "-shm"),
+    ):
+        candidate.unlink(missing_ok=True)

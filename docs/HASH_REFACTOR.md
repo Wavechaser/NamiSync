@@ -1,7 +1,11 @@
 # Hash Pipeline, XXH3, and Executor IO Refactor
 
-Status: investigation and planning last revised 2026-07-24. Nothing below is
-implemented. This document records two independent M1 performance tracks:
+Status: investigation and planning last revised 2026-07-24. M1 Stage 1
+prerequisites are implemented: the standard-library-only streaming hasher
+protocol, compatible `xxhash>=3.8.1,<4` project dependency,
+ledger-v2/history-v3 schema/reset boundary, and removal of the fingerprinted
+`worker_count` setting. Neither performance track below is implemented. This
+document records two independent M1 performance tracks:
 an adaptive single-file copy backend with cheaper finalization, and the
 wholesale replacement of SHA-256 content hashing with XXH3-128.
 
@@ -851,8 +855,8 @@ preference, or per-run algorithm field.
 
 | Change | Required result |
 |---|---|
-| `pyproject.toml` | Add the pinned/compatible `xxhash` dependency |
-| `core/evidence.py` | `ContentEvidence.algorithm` accepts only `xxh3_128`; digest length is exactly 16 bytes; `Attestation` globally requires content and subject sizes to match; define the standard-library-only streaming hasher/factory protocol used by both consumers |
+| `pyproject.toml` | **Stage 1 complete:** declares compatible `xxhash>=3.8.1,<4`; Track 2 consumes it |
+| `core/evidence.py` | **Stage 1 protocol complete:** the standard-library-only streaming hasher/factory seam is defined. Track 2 makes `ContentEvidence.algorithm` accept only `xxh3_128`, requires exactly 16 digest bytes, and globally requires attestation content/subject sizes to match |
 | `core/execution.py` | `CopyDigest` validates a 16-byte XXH3-128 digest |
 | `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
 | `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |

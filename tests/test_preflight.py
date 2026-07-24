@@ -6,6 +6,7 @@ import copy
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path, PureWindowsPath
+import inspect
 
 import pytest
 
@@ -47,12 +48,7 @@ from namisync.core.preflight import (
     TrashObservation,
 )
 from namisync.modules.planner import plan
-from namisync.modules.preflight import (
-    LocalObservationFileSystem,
-    StaticSettingsReader,
-    observe,
-    preflight,
-)
+from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 
 
 NOW = datetime(2026, 7, 18, tzinfo=timezone.utc)
@@ -184,8 +180,6 @@ def _world(xset: ExecutionSet, *, free_space: int = 10_000) -> ObservedWorld:
         free_space,
         0,
         TrashObservation(r"C:\target\.synctrash", True, True, True, True, True),
-        xset.plan.filter_snapshot,
-        xset.plan.policy_fingerprint,
         NOW,
     )
 
@@ -199,6 +193,27 @@ def test_pure_preflight_accepts_matching_snapshot_without_filesystem() -> None:
     verdict = preflight(xset, _world(xset))
     assert verdict.ok
     assert verdict.refusals == ()
+
+
+def test_execution_preflight_has_no_live_settings_drift_path() -> None:
+    import namisync.core.preflight as core_preflight
+    import namisync.modules.preflight as module_preflight
+    import namisync.workflows.sync as sync_workflow
+
+    source = "\n".join(
+        inspect.getsource(module)
+        for module in (core_preflight, module_preflight, sync_workflow)
+    )
+    for retired in (
+        "SettingsReader",
+        "StaticSettingsReader",
+        "current_filters",
+        "current_policy_fingerprint",
+        "settings_error",
+        "FILTER_DRIFT",
+        "OPTIONS_DRIFT",
+    ):
+        assert retired not in source
 
 
 def test_preflight_accepts_new_identity_when_scan_had_no_identity_evidence() -> None:
@@ -351,7 +366,7 @@ def test_touched_evidence_drift_yields_typed_refusal(mutation: str, expected: Re
     assert expected in _codes(xset, replace(world, stats=stats))
 
 
-def test_root_swap_clone_filter_and_option_drift_are_typed() -> None:
+def test_root_swap_and_clone_are_typed() -> None:
     xset = _xset(options=SyncOptions(filters=FilterSet(("*.tmp",))))
     world = _world(xset)
     roots = dict(world.roots)
@@ -360,17 +375,10 @@ def test_root_swap_clone_filter_and_option_drift_are_typed() -> None:
         volume_id=VolumeId("SWAPPED", "NTFS"),
         volume_evidence=VolumeEvidence(device_id="clone", clone_ambiguous=True),
     )
-    drifted = replace(
-        world,
-        roots=roots,
-        current_filters=FilterSet(),
-        current_policy_fingerprint="different",
-    )
+    drifted = replace(world, roots=roots)
     assert {
         RefusalCode.ROOT_CHANGED,
         RefusalCode.VOLUME_CLONE_AMBIGUOUS,
-        RefusalCode.FILTER_DRIFT,
-        RefusalCode.OPTIONS_DRIFT,
     } <= _codes(xset, drifted)
 
 
@@ -548,11 +556,7 @@ def test_observation_is_read_only_and_stats_only_remaining_touched_paths_and_par
     selected = ExecutionSet(xset.plan, frozenset({first_copy.op_id}), xset.run_id)
     fs = InstrumentedFileSystem(selected)
     before = fs.user_state
-    world = observe(
-        selected,
-        fs,
-        StaticSettingsReader(selected.plan.filter_snapshot, selected.plan.policy_fingerprint),
-    )
+    world = observe(selected, fs)
     assert fs.user_state == before
     assert set(fs.root_calls) == {"source", "target"}
     assert ("source", r"folder\one.bin") in fs.stat_calls
@@ -625,22 +629,6 @@ def test_observation_failure_is_evidence_and_refuses_affected_operation() -> Non
     stats = dict(world.stats)
     stats[subject] = StatObservation(None, "access denied")
     assert RefusalCode.OBSERVATION_UNAVAILABLE in _codes(xset, replace(world, stats=stats))
-
-
-def test_settings_observation_failure_is_retained_as_refusal_evidence() -> None:
-    xset = _xset()
-    fs = InstrumentedFileSystem(xset)
-
-    class BrokenSettings:
-        def read_filters(self):
-            raise PermissionError("settings denied")
-
-        def read_policy_fingerprint(self):
-            raise AssertionError("second settings read must not be attempted")
-
-    world = observe(xset, fs, BrokenSettings())
-    assert world.settings_error == "settings denied"
-    assert RefusalCode.OBSERVATION_UNAVAILABLE in _codes(xset, world)
 
 
 def test_partial_remaining_selection_recomputes_capacity_from_shared_formula() -> None:
