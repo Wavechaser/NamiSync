@@ -53,8 +53,13 @@ def _wait_until(
 
 def _backend(
     factory: Callable[[], object] = xxh3_128,
+    *,
+    collect_metrics: bool = False,
 ) -> NativeCopyBackend:
-    return NativeCopyBackend(hasher_factory=factory)  # type: ignore[arg-type]
+    return NativeCopyBackend(
+        hasher_factory=factory,  # type: ignore[arg-type]
+        collect_metrics=collect_metrics,
+    )
 
 
 def _serial_digest(
@@ -201,6 +206,56 @@ def test_pipeline_matches_serial_digest_and_starts_both_workers_for_every_size(
     assert target.getvalue() == data
     assert sum(progress) == len(data)
     _assert_workers_joined(workers)
+
+
+def test_pipeline_metrics_are_dormant_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_perf_counter = time.perf_counter
+
+    class DiagnosticClock:
+        samples = 0
+
+        @staticmethod
+        def perf_counter() -> float:
+            DiagnosticClock.samples += 1
+            return real_perf_counter()
+
+        @staticmethod
+        def sleep(seconds: float) -> None:
+            threading.Event().wait(seconds)
+
+    monkeypatch.setattr(executor_module, "time", DiagnosticClock)
+    backend = _backend()
+
+    result = backend.copy(
+        io.BytesIO(b"diagnostics-off"),
+        io.BytesIO(),
+        chunk_size=1024,
+        checkpoint=lambda: None,
+        on_chunk=lambda _size: None,
+    )
+
+    assert result.size == len(b"diagnostics-off")
+    assert backend.last_metrics is None
+    assert DiagnosticClock.samples == 0
+
+    enabled = _backend(collect_metrics=True)
+    enabled.copy(
+        io.BytesIO(b"diagnostics-on"),
+        io.BytesIO(),
+        chunk_size=1024,
+        checkpoint=lambda: None,
+        on_chunk=lambda _size: None,
+    )
+
+    metrics = enabled.last_metrics
+    assert DiagnosticClock.samples > 0
+    assert metrics is not None
+    assert metrics.reader_blocked_seconds >= 0
+    assert metrics.writer_starved_seconds > 0
+    assert 0 < metrics.payload_high_water <= executor_module._PIPELINE_BYTE_BUDGET
+    assert metrics.reserved_bytes == 0
 
 
 class _WrongWidthHasher:
@@ -387,7 +442,7 @@ def test_b2_blocked_writer_caps_lookahead_at_32_mib_budget() -> None:
     capacity_wait = threading.Event()
     source = _BudgetSource(chunks=20)
     target = _DiscardingBlockedTarget(release_writer)
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
 
     def checkpoint() -> None:
         frame = inspect.currentframe()
@@ -418,10 +473,11 @@ def test_b2_blocked_writer_caps_lookahead_at_32_mib_budget() -> None:
     assert call.errors == []
     assert source.reads == 20
     assert target.written == 20 * chunk_size
-    metrics = backend._last_metrics
+    metrics = backend.last_metrics
     assert metrics is not None
     assert metrics.payload_high_water == executor_module._PIPELINE_BYTE_BUDGET
     assert metrics.payload_high_water == 32 * 1024 * 1024
+    assert metrics.reader_blocked_seconds > 0
     assert metrics.reserved_bytes == 0
 
 
@@ -523,7 +579,7 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
     plateau_reads: list[int] = []
     source = _ItemCapSource(chunk_count, chunk_size)
     target = _DiscardingBlockedTarget(release_writer)
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
 
     def checkpoint() -> None:
         frame = inspect.currentframe()
@@ -568,7 +624,7 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
     assert source.reads == chunk_count
     assert source.eof_read.is_set()
     assert target.written == chunk_count * chunk_size
-    metrics = backend._last_metrics
+    metrics = backend.last_metrics
     assert metrics is not None
     assert metrics.payload_high_water < executor_module._PIPELINE_BYTE_BUDGET
     assert metrics.reserved_bytes == 0
@@ -593,7 +649,7 @@ def test_b3_shallow_grown_source_hits_item_cap_then_hands_off_eof(
     source = _ItemCapSource(chunk_count, chunk_size)
     target = _DiscardingBlockedTarget(release_writer)
     progress: list[int] = []
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
     call = _start_copy(
         backend,
         source,  # type: ignore[arg-type]
@@ -619,7 +675,7 @@ def test_b3_shallow_grown_source_hits_item_cap_then_hands_off_eof(
     assert source.reads == chunk_count
     assert target.written == chunk_count * chunk_size
     assert progress == [chunk_size] * chunk_count
-    metrics = backend._last_metrics
+    metrics = backend.last_metrics
     assert metrics is not None
     assert metrics.payload_high_water < executor_module._PIPELINE_BYTE_BUDGET
     assert metrics.reserved_bytes == 0
@@ -831,7 +887,7 @@ def test_b5_midstream_oserror_is_preserved_and_joins_workers(
     workers = _capture_worker_threads(monkeypatch)
     failure = OSError("injected midstream source read failure")
     first_write_done = threading.Event()
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
 
     with pytest.raises(
         OSError,
@@ -847,8 +903,8 @@ def test_b5_midstream_oserror_is_preserved_and_joins_workers(
 
     assert caught.value is failure
     _assert_workers_joined(workers)
-    assert backend._last_metrics is not None
-    assert backend._last_metrics.reserved_bytes == 0
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.reserved_bytes == 0
 
 
 class _BlockedFailingTarget:
@@ -1225,7 +1281,7 @@ def test_on_chunk_failure_aborts_and_suppresses_queued_callbacks(
     target = _BurstTarget(len(chunks), release_writer, all_written)
     failure = InjectedPipelineFailure("progress callback failed")
     callbacks: list[int] = []
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
 
     def on_chunk(size: int) -> None:
         callbacks.append(size)
@@ -1245,8 +1301,8 @@ def test_on_chunk_failure_aborts_and_suppresses_queued_callbacks(
     assert target.writes == len(chunks)
     assert callbacks == [1]
     _assert_workers_joined(workers)
-    assert backend._last_metrics is not None
-    assert backend._last_metrics.reserved_bytes == 0
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.reserved_bytes == 0
 
 
 class _AbortRaceTarget:
@@ -1317,7 +1373,7 @@ def test_b11_worker_abort_during_drain_suppresses_remaining_callbacks(
         allow_failure,
     )
     callbacks: list[int] = []
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
 
     def on_chunk(size: int) -> None:
         callbacks.append(size)
@@ -1341,8 +1397,8 @@ def test_b11_worker_abort_during_drain_suppresses_remaining_callbacks(
     assert caught.value is failure
     assert target.writes == 3
     assert callbacks == [1]
-    assert backend._last_metrics is not None
-    assert backend._last_metrics.reserved_bytes == 0
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.reserved_bytes == 0
 
 
 def test_checkpoint_failure_is_preserved_and_joins_workers(
@@ -1881,7 +1937,7 @@ def test_b8_repeated_short_final_chunks_release_the_entire_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workers = _capture_worker_threads(monkeypatch)
-    backend = _backend()
+    backend = _backend(collect_metrics=True)
     chunk_size = 1024
     data = b"x" * (2 * chunk_size + 17)
 
@@ -1900,7 +1956,7 @@ def test_b8_repeated_short_final_chunks_release_the_entire_budget(
         assert progress == [chunk_size, chunk_size, 17]
         assert result.digest == _serial_digest(data)
         assert result.size == len(data)
-        metrics = backend._last_metrics
+        metrics = backend.last_metrics
         assert metrics is not None
         assert metrics.reserved_bytes == 0
         assert metrics.payload_high_water <= executor_module._PIPELINE_BYTE_BUDGET

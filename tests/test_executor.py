@@ -811,6 +811,7 @@ def test_cached_source_open_uses_the_sequential_hint_and_closes(
 class FinalizationOrderFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.last_access_values: list[int] = []
         self.acl_applied = False
         self.writer_flushes = 0
 
@@ -830,6 +831,7 @@ class FinalizationOrderFileSystem(NativeFileSystem):
 
     def _set_basic_info(self, handle, basic) -> None:
         self.calls.append("basic")
+        self.last_access_values.append(basic.LastAccessTime)
         super()._set_basic_info(handle, basic)
 
     def _flush_handle(self, handle) -> None:
@@ -852,6 +854,15 @@ def test_temp_finalization_holds_one_handle_before_acl_and_flushes_once(
     fs = FinalizationOrderFileSystem()
     intended = fs.stat_path(source)
     assert intended is not None
+    initial_temp = temp.stat(follow_symlinks=False)
+    requested_access_ns = max(
+        0, initial_temp.st_mtime_ns - 2_000_000_000
+    )
+    os.utime(
+        temp,
+        ns=(requested_access_ns, initial_temp.st_mtime_ns),
+    )
+    preserved_access_ns = temp.stat(follow_symlinks=False).st_atime_ns
 
     finalized = fs.finalize_temp(
         temp,
@@ -862,6 +873,55 @@ def test_temp_finalization_holds_one_handle_before_acl_and_flushes_once(
 
     assert finalized.size == len(b"payload")
     assert fs.calls == ["open", "acl", "basic", "flush", "close"]
+    assert fs.last_access_values == [0]
+    assert temp.stat(follow_symlinks=False).st_atime_ns == preserved_access_ns
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires native metadata handles")
+def test_apply_metadata_changes_mtime_without_managing_atime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "metadata.bin"
+    path.write_bytes(b"payload")
+    fs = NativeFileSystem()
+    observed = fs.stat_path(path)
+    assert observed is not None
+    requested_access_ns = max(0, observed.mtime_ns - 3_000_000_000)
+    requested_mtime_ns = max(0, observed.mtime_ns - 1_000_000_000)
+    os.utime(path, ns=(requested_access_ns, observed.mtime_ns))
+    preserved_access_ns = path.stat(follow_symlinks=False).st_atime_ns
+    bindings = executor_module._WINDOWS
+    assert bindings is not None
+    native_set_file_time = bindings.set_file_time
+    access_arguments: list[object] = []
+
+    def recording_set_file_time(
+        handle,
+        created,
+        accessed,
+        modified,
+    ):
+        access_arguments.append(accessed)
+        return native_set_file_time(handle, created, accessed, modified)
+
+    monkeypatch.setattr(
+        bindings,
+        "set_file_time",
+        recording_set_file_time,
+    )
+
+    fs.apply_metadata(
+        path,
+        replace(observed, mtime_ns=requested_mtime_ns),
+        preserve_created=False,
+        apply_readonly=False,
+    )
+
+    after = path.stat(follow_symlinks=False)
+    assert access_arguments == [None]
+    assert after.st_atime_ns == preserved_access_ns
+    assert after.st_mtime_ns == requested_mtime_ns
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires native metadata handles")
@@ -908,11 +968,9 @@ class PublishedMetadataSpyFileSystem(NativeFileSystem):
         self.open_calls = 0
         self.flush_calls = 0
 
-    def _stat_path_and_access(
-        self, path: Path
-    ) -> tuple[FileStat, int] | None:
+    def _stat_path(self, path: Path) -> FileStat | None:
         self.stat_calls += 1
-        return super()._stat_path_and_access(path)
+        return super()._stat_path(path)
 
     def _open_metadata_handle(self, path: Path) -> int:
         self.open_calls += 1
@@ -929,7 +987,7 @@ class PublishedMetadataSpyFileSystem(NativeFileSystem):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires native metadata handles")
-def test_preserved_publish_reuses_one_stat_without_repair_or_target_flush(
+def test_atime_change_does_not_trigger_publish_repair_or_target_flush(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source.bin"
@@ -944,6 +1002,10 @@ def test_preserved_publish_reuses_one_stat_without_repair_or_target_flush(
         temp, intended, preserve_created=True, acl_source=None
     )
     fs.publish_new(temp, target)
+    changed_access_ns = max(0, finalized.mtime_ns - 1_000_000_000)
+    os.utime(target, ns=(changed_access_ns, finalized.mtime_ns))
+    before_access_ns = target.stat(follow_symlinks=False).st_atime_ns
+    assert before_access_ns != finalized.mtime_ns
     fs.reset_counts()
 
     published = fs.ensure_published_metadata(
@@ -958,6 +1020,7 @@ def test_preserved_publish_reuses_one_stat_without_repair_or_target_flush(
     assert fs.stat_calls == 1
     assert fs.open_calls == 0
     assert fs.flush_calls == 0
+    assert target.stat(follow_symlinks=False).st_atime_ns == before_access_ns
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires native metadata handles")
@@ -1024,13 +1087,11 @@ class NoRepairReuseFileSystem(NativeFileSystem):
         self.target_comparisons = 0
         self.target_metadata_opens = 0
 
-    def _stat_path_and_access(
-        self, path: Path
-    ) -> tuple[FileStat, int] | None:
-        result = super()._stat_path_and_access(path)
+    def _stat_path(self, path: Path) -> FileStat | None:
+        result = super()._stat_path(path)
         if path == self.published_path and result is not None:
             self.target_comparisons += 1
-            self.comparison_stat = result[0]
+            self.comparison_stat = result
         return result
 
     def _open_metadata_handle(self, path: Path) -> int:
@@ -1122,7 +1183,7 @@ def test_copy_attests_to_exact_postpublish_repair_stat(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires native metadata handles")
-def test_repair_restores_last_access_and_preserved_source_attributes(
+def test_attribute_repair_preserves_atime_and_source_attributes(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source.bin"
@@ -1160,6 +1221,7 @@ def test_repair_restores_last_access_and_preserved_source_attributes(
     assert before_repair is not None
     wrong_access = max(0, finalized.mtime_ns - 1_000_000_000)
     os.utime(target, ns=(wrong_access, finalized.mtime_ns))
+    before_access_ns = target.stat(follow_symlinks=False).st_atime_ns
     fs.reset_counts()
 
     try:
@@ -1172,7 +1234,7 @@ def test_repair_restores_last_access_and_preserved_source_attributes(
         )
         target_info = target.stat(follow_symlinks=False)
 
-        assert target_info.st_atime_ns == target_info.st_mtime_ns
+        assert target_info.st_atime_ns == before_access_ns
         assert published.metadata.created_ns == before_repair.metadata.created_ns
         assert published.metadata.attributes & 0x1
         assert published.metadata.attributes & 0x2

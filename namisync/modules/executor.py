@@ -270,11 +270,25 @@ class SystemClock:
         return datetime.now(UTC)
 
 
-@dataclass(slots=True)
-class _PipelineMetrics:
+@dataclass(frozen=True, slots=True)
+class CopyPipelineMetrics:
+    """Opt-in diagnostic snapshot from the most recent copy."""
+
     reader_blocked_seconds: float = 0.0
     writer_starved_seconds: float = 0.0
     payload_high_water: int = 0
+    reserved_bytes: int = 0
+
+
+@dataclass(slots=True)
+class _PipelineDiagnostics:
+    reader_blocked_seconds: float = 0.0
+    writer_starved_seconds: float = 0.0
+    payload_high_water: int = 0
+
+
+@dataclass(slots=True)
+class _PipelineAccounting:
     reserved_bytes: int = 0
 
 
@@ -325,11 +339,25 @@ def _finish_content_hasher(hasher: StreamingHasher) -> bytes:
 class NativeCopyBackend:
     """Bounded immutable reader -> hasher -> writer byte pipeline."""
 
-    def __init__(self, *, hasher_factory: HasherFactory) -> None:
+    def __init__(
+        self,
+        *,
+        hasher_factory: HasherFactory,
+        collect_metrics: bool = False,
+    ) -> None:
         if not callable(hasher_factory):
             raise TypeError("content hasher factory must be callable")
+        if not isinstance(collect_metrics, bool):
+            raise TypeError("collect_metrics must be a bool")
         self._hasher_factory = hasher_factory
-        self._last_metrics: _PipelineMetrics | None = None
+        self._collect_metrics = collect_metrics
+        self._last_metrics: CopyPipelineMetrics | None = None
+
+    @property
+    def last_metrics(self) -> CopyPipelineMetrics | None:
+        """Return the last opt-in snapshot, or None when collection is off."""
+
+        return self._last_metrics
 
     def copy(
         self,
@@ -349,7 +377,11 @@ class NativeCopyBackend:
         abort = Event()
         first_error = _FirstPipelineError()
         writer_done = Event()
-        metrics = _PipelineMetrics()
+        accounting = _PipelineAccounting()
+        diagnostics = (
+            _PipelineDiagnostics() if self._collect_metrics else None
+        )
+        self._last_metrics = None
         digest_result: list[bytes] = []
         total_read = 0
 
@@ -399,19 +431,25 @@ class NativeCopyBackend:
         def writer_worker() -> None:
             try:
                 while not abort.is_set():
-                    started_waiting = time.perf_counter()
+                    started_waiting = (
+                        time.perf_counter()
+                        if diagnostics is not None
+                        else None
+                    )
                     try:
                         item = write_queue.get(timeout=_PIPELINE_POLL_SECONDS)
                     except Empty:
-                        metrics.writer_starved_seconds += (
-                            time.perf_counter() - started_waiting
-                        )
+                        if started_waiting is not None:
+                            diagnostics.writer_starved_seconds += (
+                                time.perf_counter() - started_waiting
+                            )
                         continue
                     except ShutDown:
                         return
-                    metrics.writer_starved_seconds += (
-                        time.perf_counter() - started_waiting
-                    )
+                    if started_waiting is not None:
+                        diagnostics.writer_starved_seconds += (
+                            time.perf_counter() - started_waiting
+                        )
                     if item is _PIPELINE_EOF:
                         writer_done.set()
                         return
@@ -466,8 +504,8 @@ class NativeCopyBackend:
                     return
                 if abort.is_set():
                     return
-                metrics.reserved_bytes -= completed
-                if metrics.reserved_bytes < 0:
+                accounting.reserved_bytes -= completed
+                if accounting.reserved_bytes < 0:
                     raise RuntimeError("pipeline payload accounting underflow")
                 if abort.is_set():
                     return
@@ -478,8 +516,11 @@ class NativeCopyBackend:
 
         def wait_for_capacity(reservation: int) -> None:
             wait_started: float | None = None
-            while metrics.reserved_bytes + reservation > _PIPELINE_BYTE_BUDGET:
-                if wait_started is None:
+            while (
+                accounting.reserved_bytes + reservation
+                > _PIPELINE_BYTE_BUDGET
+            ):
+                if wait_started is None and diagnostics is not None:
                     wait_started = time.perf_counter()
                 try:
                     checkpoint()
@@ -487,11 +528,16 @@ class NativeCopyBackend:
                     raise_checkpoint_failure(error)
                 raise_worker_error()
                 drain_completions()
-                if metrics.reserved_bytes + reservation <= _PIPELINE_BYTE_BUDGET:
+                if (
+                    accounting.reserved_bytes + reservation
+                    <= _PIPELINE_BYTE_BUDGET
+                ):
                     break
                 time.sleep(_PIPELINE_POLL_SECONDS)
             if wait_started is not None:
-                metrics.reader_blocked_seconds += time.perf_counter() - wait_started
+                diagnostics.reader_blocked_seconds += (
+                    time.perf_counter() - wait_started
+                )
 
         def put_coordinator(
             queue: Queue[bytes | object], value: bytes | object
@@ -507,12 +553,12 @@ class NativeCopyBackend:
                 try:
                     queue.put(value, timeout=_PIPELINE_POLL_SECONDS)
                     if wait_started is not None:
-                        metrics.reader_blocked_seconds += (
+                        diagnostics.reader_blocked_seconds += (
                             time.perf_counter() - wait_started
                         )
                     return
                 except Full:
-                    if wait_started is None:
+                    if wait_started is None and diagnostics is not None:
                         wait_started = time.perf_counter()
                 except ShutDown:
                     try:
@@ -536,26 +582,28 @@ class NativeCopyBackend:
                 raise_worker_error()
                 drain_completions()
                 wait_for_capacity(chunk_size)
-                metrics.reserved_bytes += chunk_size
-                metrics.payload_high_water = max(
-                    metrics.payload_high_water, metrics.reserved_bytes
-                )
+                accounting.reserved_bytes += chunk_size
+                if diagnostics is not None:
+                    diagnostics.payload_high_water = max(
+                        diagnostics.payload_high_water,
+                        accounting.reserved_bytes,
+                    )
                 try:
                     chunk = source.read(chunk_size)
                 except BaseException:
-                    metrics.reserved_bytes -= chunk_size
+                    accounting.reserved_bytes -= chunk_size
                     raise
                 if not chunk:
-                    metrics.reserved_bytes -= chunk_size
+                    accounting.reserved_bytes -= chunk_size
                     put_coordinator(hash_queue, _PIPELINE_EOF)
                     break
                 if not isinstance(chunk, bytes):
-                    metrics.reserved_bytes -= chunk_size
+                    accounting.reserved_bytes -= chunk_size
                     raise TypeError("copy source read() must return bytes")
                 if len(chunk) > chunk_size:
-                    metrics.reserved_bytes -= chunk_size
+                    accounting.reserved_bytes -= chunk_size
                     raise OSError("copy source returned more bytes than requested")
-                metrics.reserved_bytes -= chunk_size - len(chunk)
+                accounting.reserved_bytes -= chunk_size - len(chunk)
                 total_read += len(chunk)
                 put_coordinator(hash_queue, chunk)
                 del chunk
@@ -584,12 +632,18 @@ class NativeCopyBackend:
             for thread in started:
                 thread.join()
             if abort.is_set():
-                metrics.reserved_bytes = 0
-            self._last_metrics = metrics
+                accounting.reserved_bytes = 0
+            if diagnostics is not None:
+                self._last_metrics = CopyPipelineMetrics(
+                    reader_blocked_seconds=diagnostics.reader_blocked_seconds,
+                    writer_starved_seconds=diagnostics.writer_starved_seconds,
+                    payload_high_water=diagnostics.payload_high_water,
+                    reserved_bytes=accounting.reserved_bytes,
+                )
 
         if len(digest_result) != 1:
             raise RuntimeError("copy pipeline did not produce one digest")
-        if metrics.reserved_bytes != 0:
+        if accounting.reserved_bytes != 0:
             raise RuntimeError("copy pipeline leaked payload reservations")
         return CopyDigest(digest=digest_result[0], size=total_read)
 
@@ -683,12 +737,9 @@ class NativeFileSystem:
         return self.stat_path(path)
 
     def stat_path(self, path: Path) -> FileStat | None:
-        observation = self._stat_path_and_access(path)
-        return None if observation is None else observation[0]
+        return self._stat_path(path)
 
-    def _stat_path_and_access(
-        self, path: Path
-    ) -> tuple[FileStat, int] | None:
+    def _stat_path(self, path: Path) -> FileStat | None:
         if not os.path.lexists(path):
             return None
         self._reject_reparse(path)
@@ -701,21 +752,18 @@ class NativeFileSystem:
             size = 0
         else:
             raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
-        return (
-            FileStat(
-                kind=kind,
-                size=size,
-                mtime_ns=info.st_mtime_ns,
-                file_identity=FileIdentity(
-                    self._volume_serial(path), int(info.st_ino)
-                ),
-                nlink=info.st_nlink,
-                metadata=MetadataSnapshot(
-                    attributes=int(getattr(info, "st_file_attributes", 0)),
-                    created_ns=self._created_ns(info),
-                ),
+        return FileStat(
+            kind=kind,
+            size=size,
+            mtime_ns=info.st_mtime_ns,
+            file_identity=FileIdentity(
+                self._volume_serial(path), int(info.st_ino)
             ),
-            info.st_atime_ns,
+            nlink=info.st_nlink,
+            metadata=MetadataSnapshot(
+                attributes=int(getattr(info, "st_file_attributes", 0)),
+                created_ns=self._created_ns(info),
+            ),
         )
 
     def owned_temp(self, target: Path, run_id: RunId, op_id: OpId) -> Path:
@@ -839,9 +887,22 @@ class NativeFileSystem:
     ) -> None:
         # Reparse points are rejected at resolution, so the Windows build does
         # not need (and does not support) ``follow_symlinks=False`` here.
-        os.utime(path, ns=(stat.mtime_ns, stat.mtime_ns))
-        if preserve_created and stat.metadata.created_ns is not None and os.name == "nt":
-            self._set_creation_time(path, stat.metadata.created_ns)
+        # Last-access time is deliberately outside executor metadata policy.
+        if os.name == "nt":
+            self._set_windows_file_times(
+                path,
+                created_ns=(
+                    stat.metadata.created_ns
+                    if preserve_created
+                    else None
+                ),
+                modified_ns=stat.mtime_ns,
+            )
+        else:
+            observed_access_ns = path.stat(
+                follow_symlinks=False
+            ).st_atime_ns
+            os.utime(path, ns=(observed_access_ns, stat.mtime_ns))
         desired = stat.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
         if not apply_readonly:
             desired &= ~_READONLY
@@ -928,7 +989,7 @@ class NativeFileSystem:
                 handle,
                 _FileBasicInfo(
                     creation,
-                    modified,
+                    0,
                     modified,
                     0,
                     desired_attributes,
@@ -958,12 +1019,10 @@ class NativeFileSystem:
     ) -> FileStat:
         """Observe once and repair only publication-damaged managed fields."""
 
-        observation = self._stat_path_and_access(path)
-        if observation is None:
+        observed = self._stat_path(path)
+        if observed is None:
             raise FileNotFoundError(path)
-        observed, observed_access_ns = observation
         repair_mtime = observed.mtime_ns != finalized_temp.mtime_ns
-        repair_access = observed_access_ns != finalized_temp.mtime_ns
         repair_created = (
             preserve_created
             and intended.metadata.created_ns is not None
@@ -977,12 +1036,7 @@ class NativeFileSystem:
         repair_attributes = (
             observed.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
         ) != desired_managed
-        if not (
-            repair_mtime
-            or repair_access
-            or repair_created
-            or repair_attributes
-        ):
+        if not (repair_mtime or repair_created or repair_attributes):
             return observed
 
         if os.name != "nt":
@@ -1017,11 +1071,6 @@ class NativeFileSystem:
                 and finalized_temp.metadata.created_ns is not None
                 else current.CreationTime
             )
-            last_access = (
-                _windows_ticks(finalized_temp.mtime_ns)
-                if repair_access
-                else current.LastAccessTime
-            )
             last_write = (
                 _windows_ticks(finalized_temp.mtime_ns)
                 if repair_mtime
@@ -1037,7 +1086,7 @@ class NativeFileSystem:
                 handle,
                 _FileBasicInfo(
                     creation,
-                    last_access,
+                    0,
                     last_write,
                     0,
                     attributes,
@@ -1305,6 +1354,19 @@ class NativeFileSystem:
         )
 
     def _set_creation_time(self, path: Path, created_ns: int) -> None:
+        self._set_windows_file_times(
+            path,
+            created_ns=created_ns,
+            modified_ns=None,
+        )
+
+    def _set_windows_file_times(
+        self,
+        path: Path,
+        *,
+        created_ns: int | None,
+        modified_ns: int | None,
+    ) -> None:
         assert _WINDOWS is not None
         handle = _WINDOWS.create_file(
             _win32_path(path),
@@ -1317,11 +1379,22 @@ class NativeFileSystem:
         )
         if handle == _INVALID_HANDLE_VALUE:
             raise ctypes.WinError(ctypes.get_last_error())
-        intervals = _windows_ticks(created_ns)
-        filetime = wintypes.FILETIME(intervals & 0xFFFFFFFF, intervals >> 32)
+        created = (
+            None
+            if created_ns is None
+            else _filetime(created_ns)
+        )
+        modified = (
+            None
+            if modified_ns is None
+            else _filetime(modified_ns)
+        )
         try:
             if not _WINDOWS.set_file_time(
-                handle, ctypes.byref(filetime), None, None
+                handle,
+                None if created is None else ctypes.byref(created),
+                None,
+                None if modified is None else ctypes.byref(modified),
             ):
                 raise ctypes.WinError(ctypes.get_last_error())
         finally:
@@ -1378,6 +1451,11 @@ def _win32_path(path: Path) -> str:
 
 def _windows_ticks(unix_ns: int) -> int:
     return unix_ns // 100 + _WINDOWS_EPOCH_TICKS
+
+
+def _filetime(unix_ns: int) -> wintypes.FILETIME:
+    intervals = _windows_ticks(unix_ns)
+    return wintypes.FILETIME(intervals & 0xFFFFFFFF, intervals >> 32)
 
 
 def _unix_ns(windows_ticks: int) -> int:

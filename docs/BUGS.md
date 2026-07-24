@@ -26,6 +26,15 @@ to a global chronological list.
 
 ## EXECUTOR
 
+### M1 executor refactor
+
+- MODERATE - FIXED (2026-07-25). Post-publish metadata repair. On volumes with
+  last-access updates enabled, observing a renamed file could change its access
+  time and force the otherwise conditional second metadata rewrite and flush on
+  every copy. Cause: executor normalized and compared access time as managed
+  metadata; fixed by removing access time from executor policy while retaining
+  mtime, creation-time, and standard-attribute repair.
+
 ### M0 hardening
 
 - MODERATE - FIXED (2026-07-20). Orphaned temporary-file recovery. Temps left
