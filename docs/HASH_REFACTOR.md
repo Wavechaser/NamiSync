@@ -346,6 +346,13 @@ history rows, or run details are carried across it, and no database converter
 is implemented. Settings files are not databases and are not part of this
 reset.
 
+Both schema versions are bumped and every older version is refused. The
+existing history v1→v2 shortcut is removed or disabled before raising
+`HISTORY_SCHEMA_VERSION`: its current implementation writes the current
+constant and would otherwise mislabel a v1 database as v3 after applying only
+the v2 shape. Ledger v1, history v1, and history v2 all take the same
+actionable reset path.
+
 **Why.** There is no production database liability. A clean reset is cheaper
 and safer than retaining SHA-256 evidence that the new fixed contract cannot
 validate. Runtime handling remains explicit rather than silently interpreting
@@ -811,7 +818,7 @@ preference, or per-run algorithm field.
 | `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
 | `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |
 | `modules/verifier.py` | Baseline, verify, and rebaseline obtain a hasher from the context, require a 16-byte result before any comparison, and record `xxh3_128` |
-| `workflows/runtime.py` | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`; the M1 integrity workflow supplies it to `VerifierContext` in the same pass |
+| `workflows/runtime.py` | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`; the later M1 integrity stage supplies the same constructor when it creates production `VerifierContext` values |
 | `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
 | Tests and fixtures | Replace SHA-256 content expectations with canonical XXH3-128 bytes |
 
@@ -836,10 +843,14 @@ the default and make workflow composition pass the fully constructed backend
 explicitly. Do not preserve the default by making the module import or create
 the concrete XXH3 implementation.
 
-`VerifierContext` has no production construction site yet because the M1
-integrity workflow is not wired. Add its required factory field now and wire
-that workflow in the same pass; postponing the seam until after M1 would only
-create avoidable constructor churn.
+Track 2 owns the verifier replacement as well as the copy replacement:
+`VerifierContext` gains the required factory field, and baseline, verify, and
+rebaseline switch to XXH3-128 with focused module tests here. It does **not**
+prematurely construct a production integrity session. `VerifierContext` has no
+production construction site until M1's later inventory/integrity stage; that
+stage wires the already-fixed seam without reopening the algorithm decision.
+Splitting the two consumers across plans would permit copy evidence and
+verification evidence to drift during the same destructive schema boundary.
 
 The existing non-content SHA-256 uses in `core/planning.py`,
 `dispatcher/custody.py`, `db/history.py`, and `db/recorder.py` are explicitly
@@ -946,6 +957,9 @@ Required content-hash coverage:
   construct both streaming executor and verifier hashers.
 - Refactor setup/tests delete and recreate both ledger and history databases;
   no old SHA-256 evidence or history detail survives the boundary.
+- Ledger v1, history v1, and history v2 are refused rather than migrated; the
+  retired v1→v2 history shortcut cannot stamp a partial schema with the new
+  version.
 
 ### 4.4 Estimate
 

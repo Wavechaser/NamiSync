@@ -1,9 +1,9 @@
 # M1 Plan
 
-Status: planning decisions resolved and reconciled 2026-07-22. Nothing below is implemented
-yet. This is both the milestone plan and the decision log for the choices made
+Status: planning decisions revised and reconciled 2026-07-24. Nothing below is
+implemented yet. This is both the milestone plan and the decision log for the choices made
 while shaping it — later docs (`ARCHITECTURE.md`, `FEATURES.md`,
-`DESKTOP_UI.md`, `INTERFACES.md`) get updated as each track lands, and this
+`DESKTOP_UI.md`, `INTERFACES.md`) get updated as each stage lands, and this
 file is the record of *why*, the same role `DESIGN_REVIEW.md` plays for M0.
 
 **Documentation precedence**, stated once here because it resolved a real
@@ -16,7 +16,7 @@ the module doc is what's stale.
 until each is promoted into the active documents. It does not silently
 override `FEATURES.md` or `ARCHITECTURE.md` for anything already implemented;
 where it changes a settled bullet (DR-M1-03's settings-file split, DR-M1-05's
-worker-count removal), the active document is edited **as that track
+worker-count removal), the active document is edited **as that stage
 lands**, not deferred indefinitely. Once a decision is promoted, the active
 document wins and this file becomes history — the same lifecycle
 `DESIGN_REVIEW.md` has.
@@ -27,29 +27,59 @@ document wins and this file becomes history — the same lifecycle
 
 `ARCHITECTURE.md` §6 compresses M1 to one line — "integrate the verifier
 through baseline + inventory + history integrity detail + retention." That
-undersells it. The verifier operation module is done; M1 builds the **second
+both undersells it and retains one stale scope item: retention is deferred by
+DR-M1-20 until cross-process history-writer custody exists. The verifier
+operation module is done; M1 builds the **second
 workflow family** it plugs into: a one-location, no-plan, no-commitment shape
 that M0 never needed, plus the interface substrate that M0's CLI never had to
 build properly because it only ever had one workflow to drive.
 
-Three tracks, run in parallel, kept **functionally integrated but modularly
-implemented** — each has its own module boundary, but Track B and Track C are
-both clients of Track A from day one rather than parallel forks that get
-reconciled later:
+M1 is a dependency graph, not three nominally parallel tracks. Its binding
+sequence is:
 
-- **Track A — Interface substrate.** The composition root, session
-  observation, result classification, and view-model vocabulary that both the
-  CLI and the new web UI need, extracted from where M0 left them (mostly
-  inside `interfaces/cli.py`).
-- **Track B — Integrity spine.** `run_integrity`, inventory reads
-  (acknowledge/restore/staleness), history v3 detail, retention, and the CLI
-  commands that expose them.
-- **Track C — Web desktop shell.** pywebview host, versioned bridge, task
-  rail / plan tree / inventory tree / history dialog, built only against
-  Track A's facade.
+1. **Contracts and semantics.** Settle the fixed content-evidence contract,
+   both-database reset boundary, generic standalone-integrity event/result
+   vocabulary, settings semantics, and the post-execution state machine. This
+   stage decides compound-session semantics but does not merge unused
+   compound-only abstractions.
+2. **Executor refactor according to `HASH_REFACTOR.md`.** Land Track 1's full
+   adaptive pipeline and IO/finalization reductions first. Land Track 2's
+   wholesale XXH3-128 replacement second, including both executor and verifier
+   consumers; production integrity-workflow wiring remains in the next stage.
+3. **Inventory and integrity.** Build inventory production and standalone
+   baseline/verify/rebaseline sessions against the now-fixed contracts.
+4. **Integration.** Add post-execution verification as one vertical slice:
+   published-evidence continuation, transient verification candidates,
+   compound phase results, pause/resume encoding, history, and views become
+   live together rather than appearing as dormant seams in separate modules.
+5. **Facade and CLI.** Retarget the existing CLI and expose the new workflows
+   through one interface service.
+6. **GUI shell.** Build the pywebview/WebView2 shell only against the settled
+   facade, views, and compound result contract.
 
-Track B's CLI commands land after Track A retargets `cli.py` onto the
-facade, or get ported once it does — not written twice.
+The graph still permits bounded parallel development. These are work lanes,
+not permission to merge a consumer before its prerequisite:
+
+- HASH Track 1 may run beside a Stage 3 branch containing the
+  standalone-integrity event/result implementation and inventory producer
+  because their semantics and main diff surfaces are independent. That branch
+  merges its vocabulary with its first producer and does not finish
+  baseline/verify wiring until HASH Track 2 is available.
+- The inventory producer work — volume/root resolution, first-location
+  registration, scoped completeness, and exclusion persistence — may run
+  beside the HASH executor work after its core contracts are fixed. Standalone
+  verification wiring still waits for HASH Track 2.
+- Facade extraction that preserves existing M0 behavior may run beside late
+  inventory/integrity work after result and view contracts stabilize. New CLI
+  commands wait for their workflows.
+- A static GUI layout and hostile-navigation bridge spike may run early, but
+  no GUI binding to session/result data lands before the facade and integration
+  contracts are settled.
+
+Post-execution integration itself is deliberately serial after standalone
+integrity. It is the proof that the executor, verifier, recorder, continuation,
+history, and result contracts compose; splitting that proof among parallel
+module changes would hide the very semantic failures the stage exists to find.
 
 ---
 
@@ -99,8 +129,8 @@ directly.
 **Resolution: split into two files, two owners.**
 - `settings.json`, owned by `db/` (schema-versioned, atomic temp+replace
   write): semantic keys that shape a plan (filters, default deletion policy,
-  trash-on-update default) and operational keys (history retention). Written
-  through the facade on explicit settings commits.
+  trash-on-update default). Written through the facade on explicit settings
+  commits. No unused retention key ships while retention is deferred.
 - `ui-state.json`, owned by `interfaces/`: recents (5 source + 5 target,
   maintained separately, per the settled FEATURES bullet), window geometry,
   column/sort state. Plain file the GUI owns outright; `interfaces/` may
@@ -233,22 +263,29 @@ close-drops-record behavior.
 
 ### History and event schema
 
-**DR-M1-09 — History schema v2 → v3 for integrity detail: migrate, or
-reset?**
+**DR-M1-09 — Ledger/history schema reset, or migration?**
 Tagged `ResultItem` values and generic phase summaries need a home in history
-detail; the schema is currently v2 with one narrow v1→v2 migration and a
-stated "reset-and-refuse posture" otherwise. A second narrow migration was floated, then a chain-runner
-(ordered `(from, to, fn)` steps) to guarantee v1→v2→v3 ran in order rather
-than skipped.
-**Resolution — reset, not migrate.** NamiSync is unreleased and tested only
-in closed environments; a lean migrator now that gets upgraded into a real
-one later costs more than accepting a schema-version-mismatch reset on a
-database holding nothing of value. **No migration path ships in M1.** The
-existing reset-and-refuse posture (refuse to open a stale-version database;
-user deletes and lets it recreate) covers the v2→v3 bump. The general,
-versioned migration module stays deferred past M3, unchanged from
-`ARCHITECTURE.md`'s build order — this decision does not pull it forward,
-it explicitly declines to.
+detail, while `HASH_REFACTOR.md` makes existing main-ledger content evidence
+incompatible by replacing SHA-256 with the single `xxh3_128` contract. History
+is currently v2 with one narrow v1→v2 migration; the main ledger is v1.
+
+**Resolution — reset both databases, migrate neither.** NamiSync is unreleased
+and tested only in closed environments. M1 bumps both schema versions, refuses
+every older ledger or history version with one actionable reset message, and
+deletes/recreates both databases as one development boundary. No ledger rows,
+content evidence, history rows, or run detail cross the boundary. Settings
+files are not databases and survive it.
+
+The existing `_migrate_history()` shortcut must be removed or disabled before
+the history constant is raised: it currently writes the current
+`HISTORY_SCHEMA_VERSION`, so merely changing that constant to 3 would falsely
+promote a v1 database to v3 after applying only the v2 column change. Required
+coverage refuses ledger v1, history v1, and history v2 rather than silently
+upgrading any of them.
+
+The general versioned migration module stays deferred past M3, unchanged from
+`ARCHITECTURE.md`'s build order. This decision does not pull it forward; it
+explicitly declines to.
 
 **DR-M1-10 — Ordering: view vocabulary vs. verifier wiring vs. post-exec
 verify (DR-M1-13)?**
@@ -257,14 +294,21 @@ verify (DR-M1-13)?**
 (`HistoryObserver.on_event` only collects `ItemOutcome`, and the generic
 `_primitive` hasher doesn't error on the unrecognized type — it just isn't
 appended). Wiring the verifier to a session before adding the nominal
-`ResultItem` contract, phase/item tags, and `PhaseResult` serialization would
-produce integrity history that comes back empty or structurally ambiguous
-with no failure anywhere.
-**Resolution:** vocabulary before wiring, confirmed as the single critical
-path for Track B — the event union, serializer, and view models block
-*both* standalone verify sessions and DR-M1-13's in-session integrity phase.
-Do this first in Track B, not first-out-of-enthusiasm on the more visible
-work.
+`ResultItem` contract and phase/item tags would produce integrity history that
+comes back empty or structurally ambiguous with no failure anywhere.
+**Resolution:** vocabulary before its first producer, but no dormant
+compound-session scaffolding. The nominal `ResultItem`, integrity event union,
+explicit `item_type`/`phase`, serializer, history support, and views land with
+standalone `run_integrity`, which consumes them immediately. Compound-only
+contracts — published-evidence continuation, transient post-copy candidates,
+generic `PhaseResult`, and an execute/verify continuation discriminator — land
+together in the later post-execution integration slice. "Settle semantics
+early" means freeze their behavior and tests now, not spread unused optional
+fields through every layer before integration. The one deliberate exception is
+the final history-v3 storage shape: it reserves phase-summary storage before
+HASH Track 2 performs the single coordinated database reset, so Stage 4 does
+not force a second schema bump. No producer/serializer uses that storage until
+the integration slice.
 
 ### Inventory and volume resolution
 
@@ -340,55 +384,117 @@ the medium is attested, wrong for a verified-offload use. An in-session phase
 holds custody through both, matches the desired one-tab/one-session UX
 exactly, and — since DR-M1-10 already makes the event/history plumbing
 mandatory for standalone verify anyway — costs little extra to add.
-**Resolution: in-session phase (shape (a))**, with four amendments so it
-doesn't corrupt existing invariants:
-1. **One nominally typed heterogeneous item list, with an explicit phase on
-   every payload.** Add a nominal `ResultItem` marker in `core`; both
-   `ItemOutcome` and `IntegrityOutcome` implement it. Each result item carries
-   a `phase` value such as `execute` or `verify`, and serialized items carry an
-   explicit `item_type` tag as well. `OperationResult` exposes one
-   `items: tuple[ResultItem, ...]` in emission order — not separate operation
-   and integrity lists, and not a bare union inferred by shape.
+**Resolution: one in-session execute → verify state machine**, with these
+binding contracts:
 
-   `run_session` accumulates only `isinstance(body, ResultItem)`. Delete the
-   current `hasattr(item_id/path)` duck typing; the runner and dispatcher stay
-   domain-blind because they know only the marker, phase, and generic item
-   identity. History/serialization identifies an item by at least
-   `(item_type, item_id)` so ids from different domains cannot collide. Views
-   may group or filter the heterogeneous list by phase without changing the
-   stored result shape.
-2. **Phase-scoped progress.** The verify phase emits its own `PhaseChanged` +
-   `Progress` with its own totals; transfer-byte progress and verify
-   read-byte progress are never summed (per *Content-Byte Accounting*).
-3. **A verify-phase failure degrades the integrity axis; it never rewrites
-   filesystem truth — but it must be *reported*, not swallowed.** The copies
-   already succeeded; "never wrong, only behind" forbids the terminal lying
-   about that. A generic **`PhaseResult`** list sits beside `items`, with one
-   entry per entered phase: `phase`, status, byte counts, and optional error.
-   This represents a failure before any item exists without creating a
-   domain-specific integrity field. Filesystem status may remain `COMPLETED`,
-   but the verify `PhaseResult` must then say verification is incomplete.
-   Do **not** blanket-convert unexpected exceptions into per-item errors, and
-   do **not** catch `BaseException`; narrow expected failures to result items
-   and let the phase result carry phase-wide failure.
-4. **Pause during the verify phase needs a real continuation.**
-   `_ExecutionInvocation.snapshot()` returns `encode_execution_request(...)`
-   (`runtime.py:427`) — the original request only, with no phase marker and no
-   verifier state. Resuming a session paused mid-verification would repeat
-   outcomes or lose phase progress entirely. The continuation payload must
-   carry an explicit **phase flag** plus both the execution set and the
-   integrity selection/completion state, including enough identity to avoid
-   re-emitting already completed `ResultItem` values. The phase flag is
-   mandatory even when only one phase has emitted items: resume never infers
-   phase from list contents. This is the amendment that makes shape (a)
-   honest about pause; without it, in-session verification is only safe for
-   sessions that are never paused.
+1. **The immediate evidence handoff does not query the ledger.**
+   `ExecutionSet`, which already owns mutable pause continuation, gains
+   `published_evidence: op_id → PublishedCopyEvidence`. Every successfully
+   settled `COPY`, `UPDATE`, or `MOVE_UPDATE` has exactly one entry containing
+   its post-publish `Attestation` and whether the copy-ledger transaction
+   succeeded. `_settle()` stores successful status and evidence together
+   before emitting the reliable item outcome. A successful byte-producing
+   status without evidence is an internal invariant failure and makes
+   verification incomplete.
+
+   This must live in continuation rather than only an executor return value:
+   the executor does not return when it pauses. The execution payload encodes
+   `published_evidence` alongside status, so a same-process pause during
+   execution preserves evidence for already published operations. M1's
+   process-local session store still means no pause or evidence continuation
+   survives closing/restarting the application; durable resume remains M2.
+
+2. **The recorder is a guard and durable store, not an independent digest
+   oracle.** It validates reviewed operation identity, kind, provenance,
+   size/stat binding, intended metadata, and idempotent payload identity, but
+   it cannot recompute whether digest bytes came from the source. A rejected
+   or failed record degrades recording and execution continues. Immediate
+   readback therefore consumes the transient copy attestation; the ledger is
+   the durable source for later standalone integrity runs.
+
+   A malicious in-process executor is outside this trust model: it could lie
+   consistently to any in-process handoff or interfere with result reporting.
+   Independent readback protects against ordinary copy bugs, IO corruption,
+   and recorder failure, not hostile executable code.
+
+3. **Post-copy candidates are not inventory-row selections.** The verifier
+   gains a transient candidate contract rooted in successful byte-producing
+   publishes, carrying expected post-publish stat and copy attestation whether
+   or not a ledger row exists. It shares the existing guarded
+   open/stat/hash/classification body with ledger-bound verification rather
+   than duplicating a byte loop. When copy evidence was durably recorded, a
+   matching readback may conditionally advance ledger verification state.
+   When it was not, byte classification still completes while the recording
+   axis remains degraded; M1 does not invent fake row ids or silently
+   reconstruct a missing sync transaction.
+
+4. **Filesystem, integrity, recording, and audit remain separate truths.**
+   A publish may be `succeeded`, its readback `verified`, and its ledger
+   recording `degraded` at the same time. A readback mismatch does not rewrite
+   the already successful filesystem operation, and a successful ledger write
+   does not prove readback. Conditional verification recording that becomes
+   stale after a match reports `verified + recording degraded/stale`, not a
+   false hash failure.
+
+5. **One nominally typed heterogeneous item list.** `ItemOutcome` and
+   `IntegrityOutcome` implement `ResultItem`; each carries an explicit
+   `phase`, and serialization carries `item_type`. `OperationResult.items`
+   preserves emission order. `run_session` accumulates only nominal
+   `ResultItem` values, never the current `hasattr(item_id/path)` duck type.
+   History identity includes at least `(item_type, item_id)`.
+
+6. **Phase-scoped progress and phase-wide truth.** Transfer and readback byte
+   counts are never summed. A generic `PhaseResult` for each entered phase
+   carries status, phase-local counts, and optional error, so a failure before
+   any verification item exists remains visible. Unexpected exceptions are
+   not blanket-converted into item errors and `BaseException` is not caught.
+
+7. **Explicit continuation state.** The payload is a discriminated
+   continuation, not an execution request plus optional fields:
+   `phase=execute` carries the execution set/status/published evidence;
+   `phase=verify` additionally carries transient candidates and completed
+   verification ids/bytes. Resume never infers phase from emitted items and
+   never re-emits a completed reliable result.
+
+The state transitions are fixed before implementation:
+
+```text
+execute
+  pause  -> snapshot execute status + published evidence
+  cancel -> terminal canceled; do not start new readback work
+  settle -> verify when at least one successful byte-producing candidate exists
+
+verify
+  pause    -> snapshot candidates + completion state
+  cancel   -> filesystem truth retained; verification canceled/incomplete
+  mismatch -> filesystem truth retained; integrity mismatch
+  record failure -> byte result retained; recording degraded
+  complete -> one compound terminal result
+```
+
+Successful publishes remain eligible for verification even when a later
+independent operation makes execution partial/failed. `NOOP`, metadata-only
+move, directory, trash, and delete operations are not post-copy candidates.
+Target stat drift before/during readback is `modified`, not `hash mismatch`.
+The logical sync recording remains unfinished through both phases and is
+finished once at compound terminal settlement. A pause may close and
+idempotently reopen its process-local recorder on resume; one invocation
+exposes narrow execution and integrity recorder views rather than opening
+competing writers.
 
 **DR-M1-13 — Scheduling.**
-**Resolution:** early in Track B — it's the one M1 item that isn't purely
-additive (it touches `run_execution` and `OperationResult`), so it should
-settle before Track C builds UI against that result shape, and before it
-collides with other work on the same surface.
+**Resolution:** decide the state machine early, implement it later as one
+vertical integration slice after standalone integrity works. The slice may be
+reviewed as ordered commits, but it does not merge dormant compound-only seams:
+
+1. executor evidence and its payload round-trip;
+2. transient verifier candidates sharing the existing classifier;
+3. compound phase/result and continuation encoding;
+4. `run_execution` wiring plus recorder lifetime;
+5. history/view/facade consumption and end-to-end pause/failure tests.
+
+All five are one integration gate. Stage 6 does not bind to compound results
+until it passes.
 
 ### GUI toolkit and bridge
 
@@ -399,12 +505,12 @@ staging artifact; that's now stale.
 throwaway and becomes an actual starting point (rewrite its stated premise
 away from "before touching the real PySide6 UI"). `DESKTOP_UI.md` needs a
 deliberate rewrite, not a find-and-replace: *Threading And Worker Lifecycle*
-dissolves into the single-outbound-pump rule (DR-M1-18 below); roughly a
+dissolves into the single bounded event-drain rule (DR-M1-18 below); roughly a
 third of the PoC-regression list is Qt-specific (proxy-style double-free,
 stylesheet subcontrols, `QMenu.exec()` hangs, combo arrows, thread-affinity
 guards) and should be translated where the underlying concern survives
 (thread-affinity marshaling → bridge message ordering) or retired where it
-doesn't. Tracked as a Track C deliverable, not a side effect of this doc.
+doesn't. Tracked as a Stage 6 deliverable, not a side effect of this doc.
 Naming: `interfaces/desktop` → `interfaces/web`, reflected in import-linter
 contracts (DR-M1-01).
 
@@ -419,19 +525,25 @@ command allowlist sit behind it; nothing else is reachable.
 **Amended per review finding 4 — the inbound half alone is not
 security-equivalent.** Four gaps this decision originally left open:
 
-1. **Outbound transport is unspecified, and the naive form breaks the
-   hostile-filename defense.** Interpolating serialized event data into an
-   `evaluate_js` string reintroduces exactly the injection DR-M1-16 exists to
-   prevent, one layer down — a filename becomes JS source. Outbound must be
-   **data-safe**: pass values as structured arguments to a fixed, pre-loaded
-   JS receiver function, never string-built script. No event payload is ever
-   concatenated into executable text.
+1. **Host-initiated JavaScript is unnecessary and forbidden for application
+   data.** Interpolating serialized event data into `evaluate_js` would make a
+   filename JavaScript source; pywebview's `evaluate_js` also has no structured
+   argument channel. JavaScript initiates every exchange through
+   `dispatch(command_json)` and receives ordinary structured return values.
+   Live delivery uses one outstanding `next_events`/event-drain request against
+   a bounded Python queue. Neither `evaluate_js`, `run_js`, nor
+   `Window.state` is an application-data channel. No event payload is ever
+   executable text.
 2. **No sender-origin value.** pywebview's exposed functions run on separate
    threads and do not surface WebView2's sender origin, so the adapter cannot
-   authenticate a caller the way raw `WebMessageReceived` would. Compensate
-   with explicit **trusted-origin and navigation enforcement**: navigation
-   locked to the packaged asset origin, external navigation and new-window
-   requests refused outright.
+   authenticate a caller the way raw `WebMessageReceived` would. Public
+   `before_load` is not a documented cancellation hook, and pywebview's
+   Windows backend otherwise redirects a new-window request into the existing
+   view when external opening is disabled. The WebView host therefore installs
+   narrow native WebView2 `NavigationStarting` and `NewWindowRequested`
+   handlers that cancel every URL outside the exact packaged asset origin.
+   Every `dispatch()` call also rejects unless the current top-level URL is
+   that exact origin. This is backend hardening, not a second message API.
 3. **The renderer must be forced.** pywebview documents an MSHTML fallback;
    silently accepting it means the product is not reliably WebView2 and the
    CSP/isolation assumptions above do not hold. Force Edge Chromium and
@@ -459,10 +571,12 @@ JS never sends a path back over the bridge — only ids; the adapter resolves
 server-side. View models carry paths in the **escaped display form** the
 scanner's own hostile-name handling already produces (never raw
 `rel_path`) — malformed surrogate code units are unrepresentable in UTF-8 and
-would mangle or fail on the message channel raw regardless. Sink side: strict
-CSP (`default-src 'self'`, no inline script), `textContent`-only rendering,
-no `innerHTML` anywhere, and the scanner's existing hostile-name corpus reused
-as UI rendering fixtures — the web equivalent of the CLI's `_safe()`.
+would mangle or fail on the message channel raw regardless. Sink side:
+`textContent`-only rendering, no `innerHTML` anywhere, and the scanner's
+existing hostile-name corpus reused as UI rendering fixtures — the web
+equivalent of the CLI's `_safe()`. The CSP is explicit: `default-src 'none';
+script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none';
+frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`.
 
 **DR-M1-17 — Bridge protocol versioning.**
 Commands and view models are a new Python↔JS contract shipping in two halves,
@@ -472,13 +586,15 @@ prevent.
 first commit — same law as the event envelope, applied one layer up.
 
 **DR-M1-18 — Large trees over the bridge.**
-A directory-rename decomposition can be thousands of rows; pushing a whole
-plan through one `evaluate_js` call is a latency/memory cliff, and naive
-per-event pushing rebuilds the PoC's per-chunk UI flood one language over.
-**Resolution:** small state-change events push through the bridge; the plan
-tree, inventory tree, and history detail are paged **pull** commands. One
-serialized outbound queue coalesces `Progress` to its latest snapshot before
-marshaling — the `LOSSY` delivery class, applied at the bridge boundary.
+A directory-rename decomposition can be thousands of rows, and naive per-event
+delivery rebuilds the PoC's per-chunk UI flood one language over.
+**Resolution:** all bridge data is pull/RPC. The plan tree, inventory tree, and
+history detail use paged commands. For live state, JavaScript holds at most one
+`next_events` request; Python returns a bounded batch as structured data and
+the client immediately asks again. The Python event queue preserves reliable
+order, coalesces `Progress` to its latest snapshot before return, and wakes the
+outstanding request during window shutdown. This retains the `LOSSY` delivery
+class at the bridge boundary without creating a host-to-JS execution channel.
 
 **DR-M1-19 — Session observation: one thread per live session now, kept
 swappable for later.**
@@ -493,8 +609,8 @@ surface is a **sink** (`observe(session_id, sink)`), never a raw
 `EventStream` — `EventStream` never escapes `interfaces/service`. The sink is
 keyed by session id, not subscription identity, so a future multiplexer
 changes internals only. Resubscribe/gap handling lives in the observer
-(already required by DR-M1-01/07). All producers converge on the single
-outbound pump (DR-M1-18) regardless of thread count.
+(already required by DR-M1-01/07). All producers converge on the bounded
+event-drain queue (DR-M1-18) regardless of thread count.
 **Two fixes to get right the first time, not the tenth:** (1) block on
 `stream.next()` with no timeout and exit on `Terminal`/`StopIteration`
 instead of the CLI's current `timeout=0.1` poll that also re-checks
@@ -521,151 +637,165 @@ daemon**, not against a plain function call — and describes *scheduled*
 maintenance, which M1 doesn't have. `DESKTOP_UI.md` says retention runs
 "through workflow, not direct UI SQL." Read together (FEATURES owns behavior,
 per the precedence rule) these agree.
-**Resolution:** M1 retention is **user-invoked**, a facade-invoked workflow
-function against a writable history connection — not a daemon, not UI SQL,
-an app-owned artifact exempt from the pipeline-mutation law. Uses the same
-bounded busy timeout as every other writer. When scheduled maintenance
-arrives later, it becomes a session kind wrapping this same function, not a
-rewrite.
+**Resolution: defer retention from M1.** A facade-local "active audit writers"
+gate cannot see a concurrent CLI/GUI process, while `SerializedWriter`
+serializes only one process-local connection. A retention write could
+therefore outlast another process's audit timeout and degrade the audit axis
+despite the apparent gate.
 
-**Corrected per review finding 6.** The original entry claimed retention was
-"history-logged" with session-like semantics while explicitly *not* being a
-session, and asserted it would never degrade audit without any mechanism
-enforcing that. Both claims are withdrawn:
-- A plain function is **not** a session and does not get session or history
-  semantics. It produces no history envelope of its own in M1. If a durable
-  record of retention runs is wanted, that is the argument for making it a
-  maintenance session — deferred, not smuggled in.
-- "Never runs inside the audit path" is not self-enforcing. A retention
-  write holding the history SQLite write lock can overlap a live session's
-  audit timeout and degrade its `audit` axis. M1 **gates retention until
-  active audit writers drain** — the facade refuses to start a sweep while
-  any live session holds an audit subscription; the UI disables the action
-  with an explanation until the gate clears, and CLI reports the same
-  actionable condition. The sweep is expected to be short on M1-sized local
-  databases. That is the honest M1 bound; coordinated history-writer custody
-  is a maintenance session's job, and it is deferred with it.
+Retention returns with maintenance-session work, where every audit writer and
+the sweep can participate in explicit cross-process history-writer custody.
+M1 adds no retention command, facade function, GUI action, partial local gate,
+or direct UI SQL.
 
 ---
 
-## 3. Track Deliverables
+## 3. Dependency-Ordered Deliverables
 
-### Track A — Interface Substrate
+### Stage 1 — Contracts and Semantics
 
-- `interfaces/service.py`: composition root (registry + per-kind pause
-  capability table, moved out of `cli.py`), runtime/dispatcher lifecycle
-  management, plan/execute sequencing (`plan_and_review`,
-  `commit_and_execute`)
-- `SessionObserver`: sink-based (DR-M1-19), resubscribe + `Gap` recovery,
-  get-before-subscribe race fix, no polling
-- `ResultCategory` classification, shared by CLI exit-code mapping and GUI
-  headline/color mapping. **Four axes, not one (review finding 8):**
-  `filesystem`, `integrity`, `recording`, and `audit` stay independent —
-  a single generic `degraded` must never hide whether the cause was a hash
-  mismatch, a lagging ledger, or a failed history write. Categories:
-  refused, canceled, failed, partial, all-noop, success, plus the integrity
-  axis's **mismatch** and **verification-incomplete**. Headline precedence is:
-  **failed > partial > refused > mismatch > canceled >
-  verification-incomplete > recording/audit degradation > all-noop >
-  success**. Cancellation sits below mismatch because it is deliberate user
-  input, but remains adjacent to incomplete verification. The non-headline
-  axes are always rendered rather than dropped
+- Freeze the execute → verify state machine, candidate set, four independent
+  truth axes, pause/cancel/failure behavior, process-close limitation, and
+  recorder lifetime from DR-M1-12. These decisions are acceptance inputs, not
+  dormant implementation seams.
+- Define the single XXH3-128 content-evidence contract and parameterless
+  standard-library-only hasher protocol consumed by executor and verifier.
+- Define the ledger v2/history v3 schemas and one destructive reset procedure.
+  History v3 includes the final generic item and phase-summary storage needed
+  by Stages 3/4; this storage reservation is the sole compound-only seam that
+  lands before its producer. Remove/disable the v1→v2 history migrator before
+  changing the current constant (DR-M1-09).
 - Remove `worker_count` from `SyncOptions`, `Plan`, payloads, and fingerprints;
-  do not replace it with an execution setting while concurrent file execution
-  is deferred (DR-M1-05; `HASH_REFACTOR.md`)
-- Add the nominal `ResultItem` marker, phase-tagged heterogeneous
-  `OperationResult.items`, generic `PhaseResult` summaries, and the explicit
-  continuation phase flag before either integrity producer is wired
-  (DR-M1-12)
+  do not replace it while file-level concurrency is deferred (DR-M1-05).
+- Settle nominal standalone-integrity result/event vocabulary:
+  `ResultItem`, explicit `item_type`/`phase`, generic serialization, item
+  identity, history detail, and view shapes. These land with the standalone
+  integrity producer in Stage 3, not as unused fields in Stage 1.
+- Settle settings ownership and snapshot semantics; implement
+  `db/settings.py` with named-mutex-serialized read-modify-replace and
+  `interfaces/ui_state.py` for cosmetic state (DR-M1-03/04/05).
+- Complete a hostile-navigation bridge spike proving forced Edge Chromium,
+  native cancellation of untrusted navigation/new windows, exact-origin
+  rejection in `dispatch`, and structured pull/RPC without `evaluate_js`.
+
+### Stage 2 — Executor and Hash Refactor
+
+1. Land all of `HASH_REFACTOR.md` Track 1, not merely "the pipeline":
+   adaptive chunk selection, the combined 32 MiB byte budget, immutable linear
+   reader/hasher/writer handoff, conditional preallocation, sequential source
+   hint, hoisted Win32 bindings, one temp flush, combined
+   metadata/finalization handle, conditional post-publish repair, backup-loop
+   boundaries, and attestation size invariants.
+2. Land `HASH_REFACTOR.md` Track 2 after Track 1: replace content SHA-256 with
+   XXH3-128 in both copy and verifier implementations, add the one concrete
+   factory at composition, update repositories/fixtures, and apply the
+   coordinated ledger/history reset. The verifier implementation and
+   `VerifierContext` seam belong to this HASH track; construction of production
+   integrity sessions waits for Stage 3.
+
+No file-level concurrency, serial/pipelined engine split, batching, publish
+pipeline, or direct IO is introduced.
+
+### Stage 3 — Inventory and Standalone Integrity
+
+- Inventory workflow: five-state volume resolution, first-location
+  registration, scoped scan-and-record using the existing scanner,
+  acknowledge/restore, and staleness queries (DR-M1-11).
+- Fix scoped completeness so selected refreshes can reconcile
+  (`scanner.py:252` vs `recorder.py:573`).
+- Persist mapping-filter/exclusion state: excluded rows are never marked
+  missing/deleted and cannot become target deletion candidates.
+- Land the nominal result/event/history/view vocabulary from Stage 1 together
+  with its first producer. `IntegrityOutcome` enters `EventBody`; history and
+  views preserve `item_type`, `phase`, item order, and integrity detail.
+- Implement `run_integrity` for inventory, baseline, verify, and rebaseline,
+  with integrity preflight and dispatcher registration for each supported
+  session kind/pause capability.
+- Expose no CLI/UI entry points yet; exercise the workflow and serialization
+  contracts directly.
+
+The inventory producer sub-lane may run beside Stage 2 after Stage 1 contracts
+are fixed. Standalone baseline/verify/rebaseline waits for HASH Track 2 and
+the inventory selection producer.
+
+### Stage 4 — Post-Execution Integration
+
+Land DR-M1-12/13 as one vertical integration gate:
+
+- execution-owned `PublishedCopyEvidence` continuation and payload round-trip;
+- transient post-copy verification candidates sharing the standalone
+  verifier's guarded classifier;
+- conditional verification recording without making ledger-row existence a
+  prerequisite for byte classification;
+- one heterogeneous item list plus compound-only `PhaseResult`;
+- explicit execute/verify continuation and phase-scoped progress;
+- one logical recording spanning both phases, with idempotent pause/reopen and
+  one compound terminal settlement;
+- history, views, failure classification, and pause/resume consumption; and
+- end-to-end tests for partial execution, degraded recording, mismatch,
+  target drift, pause in both phases, cancellation, and unexpected
+  verify-phase failure.
+
+No compound-only abstraction merges earlier without its consumer except the
+final history-v3 storage reservation required to keep one destructive schema
+boundary.
+
+### Stage 5 — Facade and CLI
+
+- `interfaces/service.py`: composition root, registry and per-kind pause
+  table, runtime/dispatcher lifecycle, plan/execute sequencing, workflow
+  commands, and result classification.
+- `SessionObserver`: sink-based observation, resubscribe/`Gap` recovery,
+  get-before-subscribe race fix, blocking reads, and explicit stream-close/join
+  shutdown (DR-M1-19).
+- `ResultCategory` preserves filesystem, integrity, recording, and audit axes.
+  Headline precedence is **failed > partial > refused > mismatch > canceled >
+  verification-incomplete > recording/audit degradation > all-noop >
+  success**; non-headline axes remain visible.
 - `workflows/views.py`: `SessionEventView`, `SessionRecordView`,
-  `OperationResultView`, `IntegrityOutcomeView`, `InventoryRowView`
-  (DR-M1-07)
-- `db/settings.py` (semantic + operational, named-mutex-serialized
-  read-modify-replace) and
-  `interfaces/ui_state.py` (cosmetic) (DR-M1-03/04); remove the execution
-  preflight settings reader and drift refusals; canonical snapshot fingerprint
-  function remains in `core/` (DR-M1-05)
-- Runtime/facade `save_plan`/`get_plan`/`drop_plan` seams over the existing
-  private in-memory dictionary; no `PlanStore` abstraction (DR-M1-08)
-- Remove the duplicated path validator in `cli.py` (`_validated_paths`
-  duplicates `workflows/sync.py`'s `_validated_roots`); facade exposes the
-  workflow's own check as a pre-submit call
-- Retarget `cli.py` onto the facade; 13 existing end-to-end tests as the
-  regression net (DR-M1-02)
-- Import-linter contracts: `cli`/`web` mutually forbidden, both import
-  `service`, `service` imports neither
+  `OperationResultView`, `IntegrityOutcomeView`, and `InventoryRowView`.
+- Runtime/facade `save_plan`/`get_plan`/`drop_plan` methods over the existing
+  process-local dictionary; no speculative `PlanStore`.
+- Remove the duplicated CLI path validator, retarget the existing CLI onto the
+  facade, then add `inventory`, `baseline`, `verify`, and `rebaseline`.
+- Import-linter: `cli`/`web` mutually forbidden, both import `service`,
+  `service` imports neither. Preserve the existing 13 CLI end-to-end tests.
 
-### Track B — Integrity Spine
+Pure facade extraction that preserves M0 behavior may begin after Stage 1's
+result/view contracts settle, in parallel with late Stage 3 work. New commands
+and final classification wait for Stages 3 and 4.
 
-- Land `HASH_REFACTOR.md`'s fixed XXH3-128 content-evidence contract and
-  parameterless hasher-factory inversion seam before wiring `run_integrity`:
-  `ExecutorPolicies` requires an explicitly constructed `NativeCopyBackend`,
-  workflow composition supplies the sole XXH3 implementation, and the new
-  production `VerifierContext` construction receives the same seam
-- Land the bounded single-file read/write/hash copy pipeline as the independent
-  executor track defined by `HASH_REFACTOR.md`; it does not introduce
-  concurrent file execution
-- `run_integrity` workflow (inventory / baseline / verify), gated
-  by the integrity preflight (DR-M1-11)
-- Inventory workflow: five-state volume resolution ladder + first-location
-  registration sequence + scoped scan-and-record reusing the existing scanner
-  (DR-M1-11); acknowledge/restore, staleness queries against
-  `LedgerRepository`
-- Scoped-completeness contract fix so selected refreshes can actually reconcile
-  (DR-M1-11 — currently unreachable; `scanner.py:252` vs `recorder.py:573`)
-- **Mapping-filter/exclusion persistence** — `INVENTORY.md` assigns it to M1
-  ("mapping-filter state ... remain M1 work") and this plan originally omitted
-  it (review finding 7). Filtered rows are marked excluded, never missing or
-  deleted, and an exclusion can never become a target deletion candidate
-- **`rebaseline` entry points** — the verifier already implements explicit
-  rebaseline (*Accept and Re-Baseline*); M1 must expose it via CLI and UI, not
-  leave it callable-but-unreachable (review finding 7)
-- Dispatcher registration for verify/baseline/inventory session kinds with
-  correct per-kind pause capability
-- `IntegrityOutcome` added to `core/events.py`'s `EventBody` (schema
-  version bump); both outcome types implement nominal `ResultItem`, and
-  serializer/history/view support preserves `item_type`, `phase`, item order,
-  and `PhaseResult` summaries (blocks on Track A's DR-M1-07 — the critical
-  path, DR-M1-10/12)
-- Post-execution verification as an in-session phase of `run_execution`
-  (DR-M1-12/13), scheduled early
-- History schema v3: integrity summaries and retained issue detail — via
-  reset, not migration (DR-M1-09)
-- Retention sweep function on a writable history connection, facade-invoked
-  (DR-M1-20)
-- CLI commands: `inventory`, `baseline`, `verify` — built
-  against Track A's facade once it exists
+### Stage 6 — Web Desktop Shell
 
-### Track C — Web Desktop Shell
-
-- pywebview host; `nami-sync-gui` entry point + no-subcommand launch
-- Bridge: single `dispatch(command_json)`, schema-validated, allowlisted,
-  versioned (DR-M1-15/17); ids-not-paths + escaped-display rule (DR-M1-16);
-  push for small events, pull for plan/inventory/history trees (DR-M1-18);
-  result messages carry explicit `item_type` and `phase` fields rather than
-  asking JavaScript to infer either from payload shape
-- CSP (`default-src 'self'`, no inline script), `textContent`-only
-  rendering, no `innerHTML`, remote navigation disabled
-- Task rail, single-page task shell, plan tree, inventory tree, history
-  dialog — built only against Track A's views/facade
-- GUI single-instance lock via a named mutex (the dispatcher's existing
-  cross-process volume-mutex pattern, applied to instance ownership)
-- `DESKTOP_UI.md` rewrite for the web target (DR-M1-14); `ui_mockup/`'s
-  stated premise updated to reflect it's now a real starting point
+- pywebview host; `nami-sync-gui` entry point plus no-subcommand launch.
+- Exactly one versioned, schema-validated, allowlisted
+  `dispatch(command_json)` method. All data uses structured pull/RPC; live
+  events use one bounded/coalescing `next_events` drain.
+- Force Edge Chromium; fail actionably without WebView2. Install native
+  cancellation hooks for untrusted navigation/new windows and reject every
+  dispatch outside the exact packaged origin.
+- Opaque ids rather than command paths, explicit `item_type`/`phase`,
+  hardened CSP, `textContent` only, no `innerHTML`, and hostile-name fixtures.
+- Task rail, task shell, plan tree, inventory tree, and history dialog built
+  only against Stage 5's facade/views.
+- GUI single-instance named mutex.
+- Rewrite `DESKTOP_UI.md` for the web target and update `ui_mockup/` from
+  staging artifact to implementation starting point.
 
 ---
 
 ## 4. Explicitly Deferred (not M1)
 
-- General, versioned migration module — stays past M3 (DR-M1-09); M1 uses
-  reset-and-refuse for the v2→v3 history bump
+- General, versioned migration module — stays past M3 (DR-M1-09); M1 refuses
+  every stale ledger/history version and resets both databases
 - Durable plan/session persistence (`SqliteSessionStore`) — M2; M1 ships the
   named runtime/facade access seams only, with no storage abstraction
   (DR-M1-08)
 - Cross-process task visibility in the GUI — depends on the same M2 durable
   session store
-- Scheduled/daemon-driven maintenance — M1 retention is user-invoked only
-  (DR-M1-20)
+- History retention and scheduled/daemon-driven maintenance — deferred until a
+  maintenance session coordinates cross-process custody with every audit
+  writer (DR-M1-20)
 - Observer thread multiplexing — not needed at M1/M2 scale; sink API keeps it
   swappable (DR-M1-19)
 - Concurrent file execution, multithreaded verification, background
@@ -676,7 +806,7 @@ enforcing that. Both claims are withdrawn:
 
 ## 5. Acceptance Notes
 
-Each track's work should land with the same standard the M0 module docs use:
+Each stage's work should land with the same standard the M0 module docs use:
 a named failure-injection or regression test per behavior, not just "tested."
 Specific ones worth calling out because they don't exist yet and are easy to
 skip:
@@ -684,6 +814,10 @@ skip:
 - The XXH3-128 replacement and copy pipeline satisfy every collaborator,
   vector, acknowledgement, failure, and cancellation test listed in
   `HASH_REFACTOR.md`; M1 does not weaken that document's gates.
+- Ledger v1, history v1, and history v2 are all refused with the same
+  actionable reset posture; the old history migrator cannot label a partially
+  migrated database as v3, and reset setup recreates both databases together
+  (DR-M1-09).
 - A global semantic-settings change leaves an admitted plan's captured
   snapshot and execution behavior unchanged, while a task-local edit during
   review invalidates that plan and requires replanning (DR-M1-05/06).
@@ -700,12 +834,25 @@ skip:
   result items, proving the continuation carries the explicit phase flag plus
   integrity selection/completion state, not just the execution request
   (DR-M1-12).
+- A session paused after one or more successful publishes but before/during
+  verification round-trips the exact `PublishedCopyEvidence` for every settled
+  byte-producing operation. Closing/restarting the M1 process does not claim
+  to resume that state (DR-M1-12).
+- A copy-ledger failure followed by matching target readback reports
+  filesystem succeeded + integrity verified + recording degraded. A mismatch
+  or target-stat drift remains an integrity result and never rewrites the copy
+  outcome (DR-M1-12).
 - A canceled or failed mixed-phase session returns one ordered heterogeneous
   `items` list whose entries retain nominal `item_type` and `phase` tags; no
   integrity item is lost or swept into an operation-only accumulator
   (DR-M1-12).
-- An outbound bridge message carrying a hostile filename reaches JS as
-  structured data and never as interpolated script text (DR-M1-15).
+- A hostile filename returned by `dispatch` reaches JS as structured data and
+  never as interpolated script text; application-data delivery invokes neither
+  `evaluate_js`, `run_js`, nor `Window.state` (DR-M1-15/18).
+- Native WebView2 hooks cancel external navigation and new-window requests,
+  and a dispatch attempted from any non-packaged top-level origin is rejected
+  even if navigation hardening is deliberately bypassed in the test
+  (DR-M1-15).
 - Observer teardown: unsubscribe, window close, and app shutdown with a live
   session each terminate every observer thread rather than blocking forever
   (DR-M1-19).
@@ -716,28 +863,30 @@ skip:
 - A hostile filename never reaches JS as anything but its escaped display
   form, and no bridge command can be constructed from a raw path (DR-M1-16) —
   reuse the scanner's existing hostile-name corpus as the fixture set.
-- The CLI's 13 end-to-end tests pass unchanged after the Track A retarget,
+- The CLI's 13 end-to-end tests pass unchanged after the Stage 5 retarget,
   proving equivalent-request/equivalent-result-classification across
   interfaces before a second interface exists to test it against
   (DR-M1-02/07).
 
 ---
 
-## 6. Sanity Review Notes — 2026-07-22
+## 6. Sanity Review Notes — 2026-07-22, revised 2026-07-24
 
 This section records the adversarial review of the plan. It is appended rather
 than folded into the decision log so the original planning rationale remains
 visible. Findings are implementation gates unless explicitly marked
 non-blocking.
 
-**Disposition (2026-07-22).** All ten findings were verified against the code
-and resolved into §2 and §3 above. Four load-bearing claims were confirmed at
+**Disposition (revised 2026-07-24).** All ten findings were verified against
+the code and resolved into §2 and §3 above. Later executor/integration review
+replaced the original retention gate, bridge transport, and post-execution
+handoff dispositions. Four load-bearing claims were confirmed at
 source and are the reason this review mattered:
 
 | Finding | Verified at | Status |
 | --- | --- | --- |
 | 1 — worker count is fingerprinted despite the doc's claim | `planning.py:301`, `:404`, `:411` (`asdict(plan)`) | Confirmed; DR-M1-05 now removes it without replacement |
-| 2 — scoped missing-marking is unreachable | `scanner.py:252` vs `recorder.py:573` | Confirmed; contract fix added to Track B |
+| 2 — scoped missing-marking is unreachable | `scanner.py:252` vs `recorder.py:573` | Confirmed; contract fix added to Stage 3 |
 | 3 — runner sweeps integrity outcomes into `operations` | `session.py:255-258` duck-types on `item_id`+`path`; `integrity.py:180-182` has both | Confirmed; nominal `ResultItem` plus one phase-tagged heterogeneous list replaces duck typing |
 | 3 — pause loses verifier state | `runtime.py:427` snapshots the request only | Confirmed; explicit continuation phase flag and completion state added |
 
@@ -747,10 +896,12 @@ recorded in the decision log above:
 - **Finding 1's remedy.** Frozen per-session settings snapshots are now the
   settled model. DR-M1-06 describes lifecycle UX rather than advisory drift
   refusal, and `worker_count` is removed rather than relocated.
-- **Finding 3's remedy.** The result does not grow parallel domain lists. A
-  nominal `ResultItem` marker, one heterogeneous phase-tagged item list,
-  generic phase summaries, and an explicit continuation phase flag guide the
-  runner, history, views, and resume payload.
+- **Finding 3's remedy.** The result does not grow parallel domain lists.
+  Standalone-integrity vocabulary lands with its producer; compound-only
+  phase summaries, published evidence, transient candidates, and continuation
+  state land later as one post-execution vertical slice. Successful copy
+  attestations live in `ExecutionSet` continuation rather than being
+  rediscovered through a ledger query.
 - **Finding 9 (`PlanStore` speculative).** No protocol or storage abstraction
   is introduced. Named runtime/facade methods preserve only the present-tense
   access seam around the existing dictionary.
@@ -761,9 +912,12 @@ settings for an interface's lifetime. `interfaces/service.py` still reaches
 `db/settings.py` through the injected runtime rather than importing it, since
 the import law forbids `interfaces → db` outright.
 
-Finding 6's plain-function resolution is explicitly accepted for M1. The
-facade gates the short retention sweep until active audit writers drain; it
-does not gain dispatcher-session or history semantics.
+Finding 4 now uses JS-initiated structured pull/RPC only and requires native
+WebView2 navigation cancellation plus exact-origin dispatch rejection.
+
+Finding 6 is deferred rather than locally gated. A facade cannot observe audit
+writers in another process; retention waits for maintenance-session work with
+cross-process history-writer custody.
 
 Finding 8's headline precedence is now explicit, with deliberate cancellation
 below integrity mismatch and adjacent to incomplete verification. All four
@@ -773,7 +927,7 @@ The editorial corrections (stale `DR-M1-12` cross-references, the precedence
 note's wrong attribution, "committed verify session", and this document's
 standing relative to the active docs) are all applied above.
 
-### Blocking findings
+### Original blocking findings (resolved above)
 
 #### 1. Commitment semantics contradict themselves
 
@@ -824,6 +978,11 @@ phase progress. The continuation carries an explicit phase flag plus both the
 execution set and integrity selection/completion state; phase is never inferred
 from accumulated items.
 
+Later review closed the earlier execute→verify evidence gap as well:
+successful copy attestations are stored with operation status in
+`ExecutionSet.published_evidence`, and post-copy verification consumes
+transient candidates rather than requiring a successful ledger query.
+
 The heterogeneous item tuple is still insufficient for a phase-wide failure
 before an item exists. Generic `PhaseResult` entries carry phase status, byte
 counts, and an optional error alongside the item list. Unexpected exceptions
@@ -841,6 +1000,10 @@ trusted-origin/navigation enforcement mechanism and a data-safe host-to-JS
 transport. Interpolating serialized event data into `evaluate_js` would
 undermine the hostile-filename defense.
 
+The revised resolution removes host-to-JS application-data transport entirely:
+JavaScript drains structured results through `dispatch`, while native WebView2
+handlers enforce navigation and each dispatch rechecks the top-level origin.
+
 The plan must also force the Edge Chromium renderer and fail actionably when it
 is unavailable. pywebview documents an MSHTML fallback; accepting that fallback
 means the product is not reliably WebView2. Static asset serving through
@@ -853,7 +1016,7 @@ The bridge implementation must follow the relevant security guidance:
 - [pywebview renderer selection](https://pywebview.flowrl.com/guide/web_engine)
 - [Microsoft WebView2 security guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security)
 
-### Significant corrections
+### Original significant corrections (resolved above)
 
 #### 5. Settings concurrency is still lossy
 
@@ -869,10 +1032,10 @@ import law remains intact.
 DR-M1-20 calls retention facade-invoked, workflow-owned, and history-logged,
 but does not make it a dispatcher session. It also cannot guarantee that
 retention never degrades audit if its SQLite write lock overlaps the audit
-timeout. Either make retention a maintenance session with coordinated
-history-writer custody, or explicitly gate it until active audit writers drain.
-If it remains a plain function, remove the claim that it has the same session
-and history semantics as long-running activities.
+timeout. The first review allowed a facade-local active-writer gate; the later
+cross-process review rejected it because another CLI/GUI process is invisible
+to that facade. The binding resolution is §4 deferral until a maintenance
+session provides coordinated history-writer custody.
 
 #### 7. M1 scope omits already-defined behavior
 
@@ -886,7 +1049,8 @@ The plan should explicitly include:
 
 #### 8. Result classification needs an integrity axis
 
-Track A's `ResultCategory` list includes refused, canceled, failed, degraded,
+The original interface-track `ResultCategory` list included refused, canceled,
+failed, degraded,
 partial, all-noop, and success, but not mismatch or incomplete verification.
 Define headline precedence while preserving `filesystem`, `integrity`,
 `recording`, and `audit` as independent axes. A single generic `degraded`
@@ -918,8 +1082,8 @@ tests; otherwise a live session can leave the GUI waiting forever.
   precedence decision.
 - The DR-M1-07 paragraph points bridge serialization to `DR-M1-12`; the bridge
   decisions are DR-M1-15 through DR-M1-18.
-- DR-M1-14 says the single-outbound-pump rule is “DR-M1-12 below”; the pump is
-  specified under DR-M1-18.
+- DR-M1-14 formerly pointed the outbound rule to DR-M1-12; the bounded
+  event-drain rule is specified under DR-M1-18.
 - “Committed verify session” in the acceptance notes is inconsistent with the
   plan's non-commitment integrity workflow. Use “queued verify session” or
   “verify session admitted with a stale volume snapshot.”
