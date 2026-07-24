@@ -237,8 +237,9 @@ reproduction must:
 6. Also benchmark the actual buffered executor path before treating the
    unbuffered throughput as a production guarantee.
 7. Sweep realistic file-size distributions, not only one large file, and
-   report adaptive chunk candidates, preallocation crossover, total operations
-   per second, and fixed finalization time separately.
+   validate the fixed adaptive chunk bands, find the preallocation crossover,
+   and report total operations per second and fixed finalization time
+   separately.
 8. Record reader-blocked time, writer-starved time, and resident-payload
    high-water bytes so queue tuning is based on stage starvation rather than
    throughput alone.
@@ -408,12 +409,32 @@ value through the existing `CopyBackend.copy(..., chunk_size=...)` contract.
 `CopyBackend` does not receive `expected_size`, choose an engine, or reinterpret
 `chunk_size` as a ceiling.
 
-Use a small fixed set of candidate chunk sizes selected by a
-production-shaped size sweep rather than a continuous formula. The selected
-chunk never exceeds `max_chunk_size`; zero-byte files receive the smallest
-positive candidate and immediately encounter EOF. The candidate values and
-size bands are private executor constants, not user settings. Record the
-measured table and rationale before landing them.
+Use this fixed M1 policy, based only on the reviewed source size:
+
+| Reviewed size | Selected chunk |
+| --- | ---: |
+| less than 8 MiB | 256 KiB |
+| at least 8 MiB and less than 32 MiB | 1 MiB |
+| at least 32 MiB | 4 MiB |
+
+Then cap the selected value by `max_chunk_size`. The 8 MiB and 32 MiB
+promotion points each start the new band with eight chunks, while a conforming
+file below either promotion has at most 32 chunks. Switching directly to a
+4 MiB chunk at a 4 MiB file would instead collapse that file to one chunk and
+remove the overlap the pipeline is intended to create. A smaller candidate is
+not justified: there is no evidence that extra 64 KiB queue handoffs below
+256 KiB repay their cost while fixed open, worker, metadata, flush, and publish
+work remains. Revisit the table only with a production-shaped distribution
+benchmark, not as an implementation-time tuning choice.
+
+Zero-byte files select 256 KiB before the policy ceiling is applied and
+immediately encounter EOF. The selected value remains fixed for the whole copy
+even if the source grows; the backend still reads to actual EOF and the
+executor classifies the size mismatch as `SOURCE_DRIFT`. The values and bands
+are private executor constants, not user settings. This adaptive policy
+applies only to normal `CopyBackend` copies. The dedicated copied-backup loop
+and the non-pipelined verifier retain their 4 MiB read chunks unless their own
+measurements justify a change.
 
 Target-temp preallocation remains independently conditional because temp
 creation already has the reviewed size. `_prepare_copy()` passes an allocation
@@ -467,7 +488,7 @@ needed when the observed values already match.
 Copied backups share only the sequential source opener, full-write helper, and
 close/finalize/single-flush/publish/conditional-repair filesystem primitives.
 They retain a dedicated hashless serial byte loop and do not use
-`CopyBackend`, pipeline workers, adaptive engine selection, or preallocation
+`CopyBackend`, pipeline workers, adaptive chunk selection, or preallocation
 in Track 1. A copied backup reads the old target and writes its trash temp on
 the same target volume, and the measured cross-volume hashed-pipeline result
 does not establish a benefit for that shape. Reconsider backup pipelining or
@@ -539,13 +560,14 @@ The pipeline remains contained inside `NativeCopyBackend` in
 `modules/executor.py`. Keep the `CopyBackend.copy(..., chunk_size=...)`
 protocol unchanged: `chunk_size` is the positive actual read size for that
 call. Rename only `ExecutorPolicies.chunk_size` to
-`ExecutorPolicies.max_chunk_size`.
+`ExecutorPolicies.max_chunk_size`, retaining its 4 MiB default.
 
 Before creating the temp, `_prepare_copy()` calls one private pure helper with
 the reviewed source size and policy maximum. The helper returns the actual
-chunk size from the measured fixed candidate table. Pass that value to
-`CopyBackend.copy()`. The backend does not receive the reviewed size and has
-no serial/pipeline selection branch.
+chunk size from the fixed 256 KiB / 1 MiB / 4 MiB table at the 8 MiB and
+32 MiB boundaries, capped by the policy maximum. Pass that value to
+`CopyBackend.copy()`. The backend does not receive the reviewed size, revise
+the selection if the source grows, or have a serial/pipeline selection branch.
 
 Every invocation uses the calling thread as reader/coordinator plus one hasher
 thread and one writer thread, including empty and very small files. Use
@@ -590,12 +612,18 @@ defects, but do not derive resident memory by adding two independently full
 byte allowances.
 
 The combined payload window remains ~32 MiB: eight chunks at the 4 MiB maximum
-and more items when the adaptive policy selects a smaller chunk. The separate
-item cap is a safety bound and must not accidentally turn the measured smaller
-chunk policies into a much smaller byte window. The 2 GiB/s-class measurements
-used the eight-by-4-MiB shape; a shallow two-slot equivalent need not reproduce
-them. Budget beyond what covers writer jitter adds RAM without throughput,
-since the slowest stage still sets the rate.
+and more items when the adaptive policy selects a smaller chunk. Cap each FIFO
+at 32 entries. With the default 4 MiB policy ceiling and a source matching its
+reviewed size, the two smaller bands contain no more than 32 chunks in the
+entire file, while the byte budget limits the 4 MiB band to eight resident
+chunks. A source that grows across its reviewed band, or a deliberately lower
+`max_chunk_size`, may encounter the item cap before filling 32 MiB. Those paths
+may run with a shallower window but must remain correct and deadlock-free; a
+smaller configured ceiling is not entitled to the default throughput shape.
+The 2 GiB/s-class measurements used the eight-by-4-MiB shape; a shallow
+two-slot equivalent need not reproduce them. Budget beyond what covers writer
+jitter adds RAM without throughput, since the slowest stage still sets the
+rate.
 
 Payload depth also absorbs external CPU contention. In the line topology the
 writer is fed through the hasher, so a preempted hasher can starve the writer;
@@ -634,15 +662,15 @@ opener reuse does not route their bytes through `CopyBackend`.
 `_prepare_copy()` uses the reviewed size for two independent decisions before
 creating the temp:
 
-- select the actual positive pipeline `chunk_size` from the measured candidate
+- select the actual positive pipeline `chunk_size` from the fixed three-band
   table, capped by `ExecutorPolicies.max_chunk_size`; and
 - decide whether to pass an allocation request.
 
 Zero-byte and small files still enter the pipeline; they merely skip
 preallocation where the allocation policy says it cannot repay setup. Do not
 expose the chunk bands or allocation crossover as user settings. Before
-landing, run the size-distribution benchmark from 2.7 and record the measured
-constants and rationale.
+landing, run the size-distribution benchmark from 2.7, validate the fixed chunk
+bands, and record its results and the measured allocation crossover.
 
 #### Target-temp preallocation
 
@@ -867,13 +895,14 @@ Required pipeline coverage:
 - Empty, smaller-than-one-chunk, exact-chunk, and multi-chunk production calls
   all instantiate and cleanly stop the same pipeline workers; there is no
   size-selected serial branch.
-- The adaptive chunk helper returns a positive candidate no greater than
-  `ExecutorPolicies.max_chunk_size`, selects the expected band at every
-  boundary, and passes that actual value through the unchanged
-  `CopyBackend.copy(..., chunk_size=...)` contract.
+- The adaptive chunk helper selects 256 KiB below 8 MiB, 1 MiB from 8 MiB
+  through less than 32 MiB, and 4 MiB from 32 MiB upward; zero and both sides
+  of each exact boundary are covered. It caps the result by
+  `ExecutorPolicies.max_chunk_size` and passes that positive actual value
+  through the unchanged `CopyBackend.copy(..., chunk_size=...)` contract.
 - The pipeline reads to actual EOF rather than stopping at reviewed size, and
-  the executor preserves `SOURCE_DRIFT` classification for observed shrink or
-  growth.
+  the initially selected chunk remains fixed while the executor preserves
+  `SOURCE_DRIFT` classification for observed shrink or growth.
 - A source implementing `read()` but not `readinto()` is sufficient.
 - Each immutable chunk reaches the writer only after the hasher consumes it;
   no chunk is mutated or copied during handoff.
@@ -883,8 +912,11 @@ Required pipeline coverage:
   backpressure without deadlock. A chunk moving between queues is charged
   once, the resident-payload high-water never exceeds the configured budget,
   and every completion or abort releases its charge exactly once.
-- The item cap accommodates the intended 32 MiB payload window at every
-  adaptive chunk candidate while still bounding control-object count.
+- With the default policy ceiling, each FIFO's 32-entry cap accommodates every
+  conforming smaller-band file and the 4 MiB band's eight-chunk byte window. A
+  source that grows across its reviewed band or a deliberately smaller policy
+  ceiling may receive a shallower window without deadlock. Exercise EOF
+  handoff after a smaller-band producer has filled all 32 entries.
 - Short writes make forward progress; zero/`None` writes fail.
 - Reader, writer, hasher, and callback failures terminate and join both
   workers without deadlock.
@@ -963,12 +995,12 @@ Required content-hash coverage:
 
 ### 4.4 Estimate
 
-- Track 1: approximately 3 implementation days including the adaptive
-  chunk/preallocation sweep, native allocation and finalization, deterministic
-  cancellation/failure handling, and focused tests. The single pipeline
-  removes hybrid selection and the prior lease/dual-acknowledgement work, but
-  combined-budget accounting, selective metadata repair, queue shutdown, and
-  failure coverage remain substantive.
+- Track 1: approximately 3 implementation days including adaptive-band
+  validation and the preallocation sweep, native allocation and finalization,
+  deterministic cancellation/failure handling, and focused tests. The single
+  pipeline removes hybrid selection and the prior lease/dual-acknowledgement
+  work, but combined-budget accounting, selective metadata repair, queue
+  shutdown, and failure coverage remain substantive.
 - Track 2: approximately 1 implementation day plus 1 day for fixtures,
   vectors, persistence round-trips, and regression tests.
 
