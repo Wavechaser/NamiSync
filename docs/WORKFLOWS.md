@@ -1,7 +1,9 @@
 # Workflows Module
 
-Status: M0 reviewed sync and history implemented. M1 inventory/integrity
-and later queue, maintenance, replay, undo/repair, and ingest remain deferred.
+Status: M0 reviewed sync and history implemented. M1 inventory/integrity,
+linked post-execution verification, facade/CLI expansion, and desktop shell are
+specified but not implemented. Queue durability, maintenance/retention,
+replay, undo/repair, and ingest remain later work.
 
 ## Purpose
 
@@ -38,16 +40,24 @@ executor, recorder, verifier/importer, and settings snapshots.
 1. Accept only an explicit `Commitment` whose plan fingerprint and selection
    digest match the reviewed `ExecutionSet`; refuse before preflight otherwise.
 2. Reacquire required physical-volume custody.
-3. Load current semantic environment without altering the reviewed snapshot.
-4. Freshly observe/preflight under execution custody; refusal mutates nothing.
+3. Consume the immutable semantic snapshot bound into the reviewed plan; never
+   reread global defaults to decide admitted filesystem behavior.
+4. Freshly observe/preflight filesystem and volume state under execution
+   custody; refusal mutates nothing.
 5. After a successful verdict, remove exact prior-run temps once from the
    observed touched-target-parent scope; cleanup failure stops before executor
    admission, so capacity credited by preflight cannot become unsafe.
-6. Execute selected dependency-closed work and record through recorder.
-7. Optionally start a separately scoped linked verification phase/session as
-   specified by the request.
-8. Return truthful filesystem, ledger-recording, audit, and verification
-   aggregates with independent axes.
+6. Execute selected dependency-closed work and record through recorder. Settle
+   each successful `COPY`, `UPDATE`, or `MOVE_UPDATE` status together with its
+   `PublishedCopyEvidence`; a byte-producing success without evidence is an
+   internal incomplete-verification error.
+7. If requested and at least one eligible publish succeeded, continue inside
+   the same session and volume custody into post-execution verification.
+   Construct transient candidates from published evidence, not from a ledger
+   query, so readback still runs when copy-ledger recording degraded.
+8. Finish the one logical recorder invocation and return one compound result:
+   ordered phase-tagged execution/integrity items, phase-local progress, and
+   independent filesystem, integrity, ledger-recording, and audit axes.
 
 Human review occurs between sessions with nothing running. Commitment is the
 durable preauthorization and has no time expiry, but it binds exactly one plan
@@ -103,19 +113,42 @@ terminal result without rewriting successful filesystem status. Blocked intent
 never writes the main ledger; selected no-ops still execute their live guard and
 refresh source/target correspondence. Durable plan files, user selection
 editing, queue release, linked verification, and integrity workflows are not
-part of this implementation slice. When linked verification lands, its
-selection is built ledger-first from the inventory rows execution just
-recorded, not handed over from the executor, which surfaces only op-level
-outcomes.
+part of the implemented M0 slice.
+
+M1 linked verification deliberately does not build its immediate candidate set
+from inventory rows. The execution continuation retains each successfully
+published operation's post-publish attestation and copy-recording disposition,
+then turns those values into transient verifier candidates. This survives an
+in-process pause because the evidence is encoded beside execution status;
+neither the continuation nor process-local plans survive closing/restarting the
+M1 application. Later standalone integrity sessions use durable ledger evidence.
+
+Compound transition rules are explicit:
+
+```text
+execute
+  pause  -> snapshot operation status + published evidence
+  cancel -> terminal canceled; do not start new readback work
+  settle -> enter verify only when requested and candidates exist
+
+verify
+  pause     -> snapshot candidates + completed ids/bytes
+  cancel    -> retain filesystem truth; integrity is canceled/incomplete
+  mismatch  -> retain filesystem truth; report integrity finding
+  exception -> retain filesystem truth; incomplete verify PhaseResult
+  complete  -> settle one compound terminal result
+```
 
 ## Integrity Workflow
 
 Inventory, baseline, verify, and rebaseline are location-centric,
-not plan- or mapping-dependent. The workflow resolves one selected location,
-performs full or selected refresh, commits inventory, constructs canonical
-selection, runs the integrity module, flushes recorder, and returns inventory
-plus typed outcomes. Missing inventory is created automatically; the user is
-not told to run a hidden prerequisite manually.
+not plan- or mapping-dependent. The workflow resolves or registers one selected
+location, re-resolves its volume identity at start/resume, performs full or
+selected refresh, commits inventory, constructs canonical selection, runs the
+integrity module with the required XXH3-128 factory, flushes recorder, and
+returns inventory plus nominal phase-tagged outcomes. Missing inventory is
+created automatically; the user is not told to run a hidden prerequisite
+manually.
 
 Selected verification uses scoped refresh. Full verify uses a complete location
 scan before missing marking. UI receives refreshed inventory at the scan-to-hash
@@ -141,16 +174,29 @@ unsupported and remain cooperatively cancelable.
 
 Workflow catches typed module failures at the correct boundary, preserves
 already-earned item/filesystem results, and lets the generic session runner
-produce terminal. Filesystem-derived `SessionState`, ledger `recording`, and
-history `audit` statuses are independent. A history failure/timeout degrades
-only `audit`. The runner drains and finalizes history first, settles the audit
-axis from its bounded acknowledgement, and only then releases the immutable
-Terminal.
+produce terminal. Filesystem, integrity, ledger `recording`, and history
+`audit` statuses are independent. A verify-phase mismatch or exception never
+rewrites successful execution; a ledger failure never suppresses byte
+classification; a history failure/timeout degrades only `audit`. The runner
+drains and finalizes history first, settles the audit axis from its bounded
+acknowledgement, and only then releases the immutable Terminal.
 
-Paused execution continues from `ExecutionSet.status` after fresh preflight.
-Paused baseline/verify use their item-status continuation and fresh remaining
-selection guard. Unsupported pause requests for scan/plan/import are typed
-control rejections with no lifecycle mutation.
+Execution and integrity outcomes implement one nominal `ResultItem` contract
+with explicit `item_type` and `phase` tags. Entered phases also produce generic
+`PhaseResult` summaries so a phase-wide failure before its first item is not
+mistaken for empty success. Transfer and readback byte counts remain separate;
+they are never summed into a misleading doubled total.
+
+Paused execution continues from an explicit discriminated continuation after
+fresh preflight. `phase=execute` carries execution status and published
+evidence; `phase=verify` also carries transient candidates plus completed
+verification ids/bytes. Resume never infers phase from prior events or re-emits
+a completed reliable result. The compound run's recorder may close at
+pause-drain and reopen the same token idempotently on resume; it finalizes the
+logical sync only once after both entered phases settle. Paused standalone
+baseline/verify use their item-status continuation and fresh
+remaining-selection guard. Unsupported pause requests for scan/plan/import are
+typed control rejections with no lifecycle mutation.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An
@@ -218,8 +264,16 @@ import from handling refusal differently than baseline/verify.
 - Pause/resume preserves completed execution and verifier-item outcomes and
   fresh-guards remaining work; scan/plan/import refuse pause without losing
   cancelability.
-- Linked verify selection equals successful eligible executed operations and is
-  handed to UI at the execution-to-verification phase boundary.
+- Linked verify candidates equal successful byte-producing publishes and are
+  derived from `PublishedCopyEvidence`, including copies whose ledger write
+  degraded. The execution-to-verification boundary exposes refreshed phase
+  state to the UI without releasing volume custody.
+- Pause during either compound phase resumes from the explicit phase
+  discriminator without losing published evidence, repeating completed
+  outcomes, or claiming survival across an application restart.
+- Compound results preserve one ordered heterogeneous item list, separate
+  phase byte counters, and independent filesystem, integrity, recording, and
+  audit axes.
 - Replay/undo/repair never execute retained historical operations directly and
   always create a new reviewed plan.
 - Plan-only option changes invalidate plan but preserve inventory; location

@@ -127,12 +127,13 @@ is why pause is free instead of an unpayable retrofit.
 
 Pause never blocks in place — a blocked stack would hold the volume custody
 that `PAUSED` promises to release. Both pause and cancel *unwind*. The
-continuation state a pause must preserve already exists: the `ExecutionSet`'s
-per-operation status records what completed, so everything unreached is the
-remaining work. A paused execution is therefore exactly a queued job again —
-an `ExecutionSet` awaiting a second session — and resume is the same
-observe → preflight → execute path as any queue wakeup. An in-flight temp file
-abandoned by a mid-copy pause is reclaimed by ordinary orphaned-temp recovery.
+continuation state a pause must preserve is explicit. In the execute phase,
+`ExecutionSet` records completed operation status plus published copy evidence,
+so everything unreached is remaining work. In the optional M1 verify phase, the
+discriminated continuation also records transient candidates, completed ids,
+and verified bytes. Resume is the same fresh observe/preflight path as any queue
+wakeup and never infers phase from emitted events. An in-flight temp abandoned
+by a mid-copy pause is reclaimed by ordinary orphaned-temp recovery.
 
 Pause is a per-kind capability, declared once at workflow registration and
 enforced through the transition table: only session kinds with a continuation
@@ -174,9 +175,11 @@ discipline — scan, plan, execute, verify, import, maintenance, and dummy
 sessions all inherit it identically.
 
 Terminal results for cancel and failure paths are assembled by the runner from
-the session's own emitted RELIABLE `ItemOutcome` stream (pause emits no
-terminal at all — the session isn't over). Control-flow exceptions carry no
-payload; what makes the unwind lossless is a **module obligation**: an
+the session's emitted RELIABLE events whose payload nominally implements
+`ResultItem` — execution `ItemOutcome` and integrity `IntegrityOutcome`; it
+never duck-types on `item_id`/`path` (pause emits no terminal at all — the
+session isn't over). Control-flow exceptions carry no payload; what makes the
+unwind lossless is a **module obligation**: an
 item-processing module's own `finally` emits a `CANCELED` outcome for the
 in-flight item and every unreached selected item before `Canceled` leaves the
 module — while on `PauseRequested` it emits nothing for them, because they
@@ -215,11 +218,13 @@ class PhaseChanged: phase: str                                # RELIABLE
 class Progress:     items_done: int; items_total: int | None  # LOSSY
                     bytes_done: int; bytes_total: int | None
                     current_path: str | None
-class ItemOutcome:  item_id: str; kind: str; path: str        # RELIABLE
+class ItemOutcome:  item_id: str; item_type: Literal["operation"] # RELIABLE
+                    phase: Literal["execute"]; kind: str; path: str
                     outcome: Outcome; reason: str | None
                     detail: Mapping[str, object]
 class IntegrityOutcome:                                       # RELIABLE; M1 producer
-                    item_id: str; path: str                   # typed, never a stringly reason
+                    item_id: str; item_type: Literal["integrity"]
+                    phase: str; path: str   # baseline|verify|rebaseline; typed
                     result: IntegrityResult   # verified|baselined|mismatched|modified|
                                               # missing|unsupported|canceled|error
 class Gap:          first_missed_seq: int     # ejection notice: the FIRST event an
@@ -405,6 +410,8 @@ class ExecutionSet:           # plan + selection + mutable per-op status
     commitment: Commitment | None   # execution REFUSES a None or mismatched one
     status: dict[OpId, Outcome] # doubles as the pause/resume continuation:
                                 # everything unreached is the remaining work
+    published_evidence: dict[OpId, "PublishedCopyEvidence"]
+                                # exactly one per settled COPY/UPDATE/MOVE_UPDATE
 
 class Subject(NamedTuple):      # never a bare string key — both roots share
     root: RootId                # the same rel paths on almost every operation
@@ -417,7 +424,6 @@ class ObservedWorld:            # a scoped SNAPSHOT — the impure half of prefl
     free_space: int
     reclaimable_temp_bytes: int
     volumes: Mapping[Root, VolumeId | None]
-    current_filters: FilterSet  # settings in effect NOW — reading config is IO too
     observed_at: datetime
 
 @dataclass(frozen=True)
@@ -440,8 +446,8 @@ class Provenance(StrEnum):
 
 @dataclass(frozen=True)
 class ContentEvidence:          # what the BYTES are
-    algorithm: Literal["sha256"]
-    digest: bytes
+    algorithm: Literal["xxh3_128"]  # the one canonical bulk-content algorithm
+    digest: bytes                # exactly 16 bytes
     size: int
     provenance: Provenance
     observed_at: datetime
@@ -455,6 +461,22 @@ class Attestation:              # content + the SUBJECT it describes, as one uni
                                 # move and drift evidence. The source's own
                                 # post-read stat lives separately as the drift
                                 # guard's evidence.
+    # global invariant: content.size == subject.size
+
+class ResultItem:               # nominal base, never attribute duck typing
+    item_id: str
+    item_type: str              # serialized discriminator
+    phase: str
+
+@dataclass(frozen=True)
+class PhaseResult:
+    phase: str
+    status: str
+    items_done: int
+    items_total: int | None
+    bytes_done: int
+    bytes_total: int | None
+    error: str | None           # preserves phase-wide failure before item 1
 
 class RecordingStatus(StrEnum):
     OK       = "ok"
@@ -471,14 +493,22 @@ class Disposition(StrEnum):
 @dataclass(frozen=True)
 class OperationResult:
     status: SessionState        # terminal member — FILESYSTEM truth only
+    integrity: IntegritySummary # typed aggregate of per-item integrity truth;
+                                # independent from filesystem status
     recording: RecordingStatus  # ledger truth — never folded into status
     audit: RecordingStatus      # history truth — same axis rules (§2.3)
     disposition: Disposition    # CANCELED + UNRUN = discarded before start
     canceled: bool
-    operations: tuple[ItemResult, ...]
-    bytes_done: int
-    bytes_total: int
+    items: tuple[ResultItem, ...]       # ordered execution + integrity items
+    phases: tuple[PhaseResult, ...]     # phase-local truth and byte totals
 ```
+
+Copy, baseline, and verification evidence are deliberately single-valued:
+`xxh3_128` is not a user setting and there is no dual-algorithm transition.
+Repositories still reconstruct from the stored algorithm identifier so the
+field remains self-describing and a future schema change cannot silently
+reinterpret old bytes. Plan fingerprints, custody keys, history identities,
+and other small non-content hashes remain SHA-256.
 
 ### 2.7 Protocols — the extension seams (bones = the protocol; flesh = each impl)
 
@@ -499,11 +529,23 @@ class Clock(Protocol):
 class FailurePolicy(Protocol):
     def on_item_failed(self, op, error) -> Decision: ...   # Continue | Stop | Retry(after)
 
-class CopyBackend(Protocol):
-    def copy(self, src, dst_tmp, ctx: RunContext) -> Digest: ...  # bytes only; publish is the machine's
+class StreamingHasher(Protocol):       # stdlib-only core seam
+    def update(self, data: bytes) -> None: ...
+    def digest(self) -> bytes: ...
 
-class WorkerCountPolicy(Protocol):
-    def workers_for(self, profile: CapabilityProfile) -> int: ...
+HasherFactory = Callable[[], StreamingHasher]
+
+@dataclass(frozen=True)
+class CopyDigest:
+    digest: bytes
+    size: int
+
+class CopyBackend(Protocol):
+    def copy(self, src, dst_tmp, *, chunk_size: int,
+             checkpoint: Checkpoint,
+             on_chunk: Callable[[int], None]) -> CopyDigest: ...
+    # chunk_size is the positive actual read size selected by the executor,
+    # never a ceiling or an engine-selection hint; publish stays in the machine
 
 class ChangeSource(Protocol):
     def scan(self, root: Root, ctx: RunContext) -> ScanResult: ...  # walking impl now; USN later
@@ -526,13 +568,19 @@ class MetadataExtractor(Protocol):   # ships with ingest, not M0; ExifTool -stay
 
 Every protocol **used** in M0 ships with its degenerate implementation:
 `flush()` is a no-op, `FailurePolicy` always returns `Continue`
-(skip-and-record), `CopyBackend` is native-only, `WorkerCountPolicy` always
-returns 1, `ChangeSource` is the walking scanner, and `DestinationPolicy`
+(skip-and-record), `CopyBackend` is native-only, `ChangeSource` is the walking
+scanner, and `DestinationPolicy`
 assigns every file its own relative path (`meta` is always empty in M0). A
 *latent* protocol — one no M0 code calls, like `MetadataExtractor` — is
 declared shape-only, with no implementation at all until its first consumer
 arrives. New behavior is a new implementation behind the same shape — never an
 edit to a consumer.
+
+M1 removes the fingerprinted `worker_count` setting rather than replacing it
+with another file-concurrency protocol. Workflow composition imports the one
+concrete XXH3-128 constructor and supplies the same required, parameterless
+`HasherFactory` to `NativeCopyBackend` and `VerifierContext`; `core` and the
+operation modules do not construct or import the third-party implementation.
 
 ---
 
@@ -556,6 +604,15 @@ them. Retrofitting identity is the worst migration there is.
   features' provenance keys (ingest origin evidence in particular) can never
   collide with early ad-hoc labels.
 - **Nullable file-identity group** — room for future hardlink grouping.
+
+M1 is one deliberate pre-release schema boundary, not an incremental migration:
+the ledger advances to v2 for canonical XXH3-128 content evidence and history
+advances to v3 for nominal phase-tagged result items plus reserved compound
+phase summaries. Ledger v1 and history v1/v2 are refused with one actionable
+reset posture, and development setup deletes/recreates both databases together.
+The existing narrow history v1→v2 migrator must not stamp a v3 database.
+Settings files survive this reset. A general migration framework remains later
+work.
 - **Schema-version stamp** on both databases; the migration module is separate
   from the sync path but the stamp is present from row zero.
 
@@ -728,16 +785,16 @@ grouping) with enrichment metadata supplied by the workflow.
 
 **Implementation status (2026-07-20).** Scoped read-only observation and pure
 typed judgment are implemented for selection-aware scan completeness, blocked
-correspondence, root/volume, dependency, direct and parent evidence, settings,
-capacity, trash, containment, and path representation checks. Commitment
-validation remains correctly outside this module at execution-workflow entry.
+correspondence, root/volume, dependency, direct and parent evidence, capacity,
+trash, containment, and path representation checks. M1 removes the obsolete
+live-settings collaborator and drift checks; commitment validation remains
+correctly outside this module at execution-workflow entry.
 
 **Contract.** Two functions, deliberately split so purity is real rather than
 claimed:
 
 ```python
-def observe(xset: ExecutionSet, fs: FileSystem,
-            settings: SettingsReader) -> ObservedWorld: ...   # impure, IO only, no judgement
+def observe(xset: ExecutionSet, fs: FileSystem) -> ObservedWorld: ... # impure IO only
 def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict: ... # pure, judgement only, no IO
 ```
 
@@ -745,11 +802,11 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict: ... # pure, 
 remaining selected operations name (keyed `(root, rel_path_key)`, never a bare
 string — both roots share the same rel paths), reads free space, resolves root
 volume identity, retains the touched target-parent set, sums only exact
-different-run temp bytes that execution will sweep from that set, and snapshots
-the semantic configuration currently in effect (`current_filters`, read through
-the injected `SettingsReader`) — reading settings is IO too. It decides nothing.
-`preflight()` renders every verdict from that snapshot alone and never touches
-the filesystem.
+different-run temp bytes that execution will sweep from that set, and decides
+nothing. `preflight()` renders every verdict from that snapshot alone and never
+touches the filesystem. Planning already embedded the reviewed semantic
+snapshot in the committed plan; execution consumes it and never rereads global
+defaults.
 
 The split is a bone, for three reasons: `preflight()` becomes exhaustively
 testable against synthetic worlds with no temp directories; the expensive IO
@@ -769,11 +826,11 @@ deferred/failed/blocked op), blocked-correspondence quarantine, operation-class
 scan-completeness gating, staleness, capacity
 (counting reclaimable orphaned-temp bytes as recoverable), safety (roots resolve
 to recorded `VolumeId`; trash resolves onto the target volume without reparse
-escape and is writable), filter-snapshot drift (`plan.filter_snapshot` vs
-`world.current_filters`). Commitment checking is deliberately **not** a
-preflight check — preflight also runs at review time, before any commitment
-exists, and must render the same verdicts there; the execution session's entry
-refuses an uncommitted set before preflight even runs (§4.9).
+escape and is writable). Commitment/policy-fingerprint checking is deliberately
+**not** a preflight check — preflight also runs at review time, before any
+commitment exists. The execution session entry verifies the captured semantic
+snapshot and refuses an uncommitted or mismatched set before preflight runs
+(§4.9); a later global-default change affects only future plans.
 **Flesh — deferred.** User-edited partial selections and a graceful
 `continue-with-skips` resume tier (M0 automatic safe-subset execution exists;
 resume remains continue-or-refuse).
@@ -794,6 +851,9 @@ resume remains continue-or-refuse).
   are not credited to the run-level sweep.
 - Running the same `preflight` at review, at execution start, and at resume
   yields consistent verdicts for an unchanged world.
+- Changing global semantic defaults after commitment does not alter or refuse
+  the admitted plan; changing a task-local bound value during review invalidates
+  that plan and requires a new fingerprint and commitment.
 
 ### 4.5 executor
 
@@ -871,10 +931,51 @@ the op, records nothing); trash-on-update; root-local trash with volume-identity
 one post-verdict, pre-copy prior-run temp sweep over preflight's exact touched
 parents plus per-operation current-run temp cleanup; per-op continue-on-failure;
 chunked cancellation.
+
+**Flesh — M1 executor/hash refactor.** Every normal copy uses one immutable
+linear `caller/reader → hasher worker → writer worker` pipeline; there is no
+size-selected serial engine and no concurrent file execution. `_prepare_copy()`
+selects the actual read size from reviewed source size and the 4 MiB
+`max_chunk_size` default:
+
+| Reviewed size | Actual chunk before policy ceiling |
+| --- | ---: |
+| less than 8 MiB | 256 KiB |
+| at least 8 MiB and less than 32 MiB | 1 MiB |
+| at least 32 MiB | 4 MiB |
+
+One combined 32 MiB payload ledger owns each immutable chunk across both
+bounded FIFOs; each FIFO has 32 entries. The caller performs checkpoint and
+progress callbacks, and `on_chunk(size)` occurs only after the hasher consumed
+and the writer fully wrote that chunk. The selected size remains fixed if the
+source grows; the backend reads to actual EOF and the executor reports
+`SOURCE_DRIFT`. A deliberately lower `max_chunk_size` may reduce the effective
+window but cannot weaken correctness or deadlock freedom.
+
+Normal target temps are conditionally preallocated above a measured crossover.
+Windows bindings are hoisted and bound once. Buffered source handles carry the
+sequential-access cache hint, complementary to the application's bounded
+payload lookahead; no second application readahead queue exists. Temp metadata
+and the sole pre-publish `FlushFileBuffers` call share one finalization handle.
+After atomic publish, the executor observes metadata and reopens for repair only
+when publication changed a required value, especially readonly application.
+The copied-backup fallback shares finalization primitives but retains its
+dedicated serial, hashless 4 MiB byte loop without preallocation.
+
+The source stream and published target are bound by two size invariants:
+`CopyDigest.size` must equal the reviewed/observed copy byte count at the
+executor boundary, and every `Attestation` globally requires
+`content.size == subject.size`. Copy and verifier both use the required
+XXH3-128 factory, but the verifier retains its independent cache-honest opener
+and fixed 4 MiB reads.
+
 **Flesh — deferred.** Validated partial execution (`DEFERRED` outcomes);
 executor-time ADS stream copy (per the settled FEATURES → *ADS Preservation*
-contract); restartable large-file copy; multithreaded copy workers; background
-IO throttling; Robocopy backend.
+contract); restartable large-file copy; concurrent file workers; background
+IO throttling; Robocopy backend; batching; direct/unbuffered copy IO;
+overlapped cross-file publish; and lazy worker startup for zero/one-chunk files.
+If directory-level measurements justify the last item, it remains one pipeline
+with an inline first-chunk fast exit rather than a maintained serial engine.
 
 **Acceptance criteria.**
 - Every executor path — success, failure, cancel, pause, refusal, exception —
@@ -908,13 +1009,24 @@ IO throttling; Robocopy backend.
   trash, and the update residual's worst case matches the documented bound
   with no silent ledger corruption.
 - Cancellation during a multi-GiB copy takes effect within one chunk.
+- The adaptive helper selects and caps the exact three bands at both
+  boundaries; empty, partial, exact, and multi-chunk files all exercise the
+  same backend, and a growing source keeps its initial selection before failing
+  as `SOURCE_DRIFT`.
+- Pipeline failure, pause, cancellation, callback error, full-queue EOF, and
+  worker teardown release every payload charge exactly once, join both workers,
+  preserve the initiating error, and publish no partial target.
+- A successful copy cannot construct evidence whose hashed byte count differs
+  from the published target size.
 - All volume locks are released on every terminal path (custody is the
   session's, not the executor's — but the executor must not leak temps).
 
 ### 4.6 verifier
 
 **Contract.** `verify|baseline|rebaseline(selection, ctx, recorder,
-reader=None) -> IntegrityRunResult`. Records through `recorder`.
+reader=None) -> IntegrityRunResult`. `VerifierContext` requires the same
+parameterless `HasherFactory` used by the copy backend. Records through
+`recorder`.
 
 **Bones.** Per-file `IntegrityOutcome` emission (no silent-until-done); the
 cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached
@@ -932,6 +1044,16 @@ same preflight-on-resume posture). The callable module, real Windows unbuffered
 reader, and conditional ledger primitive are present before M1, but inventory
 refresh, integrity workflow/history detail, dispatcher registration, and
 interfaces remain the M1 product gate.
+
+M1 replaces content SHA-256 in baseline, verify, rebaseline, and copy together
+with canonical XXH3-128; no interval exists where the two consumers write
+different evidence formats. Ledger-bound selections and transient post-copy
+candidates share one guarded open/stat/hash/classification body. The latter
+carry `PublishedCopyEvidence` directly from execution and remain classifiable
+when the copy-ledger transaction failed; only a candidate with durable matching
+row evidence may conditionally advance ledger verification state. Immediate
+readback is independent evidence against ordinary copy/IO/recording failures,
+not a defense against malicious in-process executor code.
 
 **Flesh — deferred.** Multithreaded verification (per-volume-side worker policy);
 IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
@@ -952,12 +1074,19 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
   records nothing.
 - Reads bypass the page cache (or defer past cache pressure) so a match attests
   the medium, not a just-written buffer.
+- A matching transient post-copy candidate is classified even when no ledger
+  row was written; recording remains degraded instead of suppressing readback.
+- Copy and verifier evidence round-trip through the same XXH3-128 factory and
+  16-byte encoding while retaining different source/readback opener semantics.
 
 ### 4.7 db (recorder + repositories + history observer)
 
 **Contract.** `recorder.py` implements `Recorder` and is the sole ledger writer.
 `repositories.py` holds all reads. `history.py` is an event-stream observer with
 its own database. `schema.py` owns both schemas and the version stamps.
+`settings.py` owns schema-versioned semantic defaults in `settings.json`;
+planning receives a snapshot through injected runtime composition, while
+admitted execution never rereads it.
 
 **Implementation status (2026-07-20).** The versioned ledger/history schemas,
 safe writer/read-only connection factories, canonical UTC codec, serialized
@@ -988,10 +1117,17 @@ enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 subscriber; nothing calls it.
 Conditional verify/baseline/rebaseline recording landed early with the isolated
 verifier during M0 construction. **Flesh — M1.** History integrity summaries
-and retained issue detail; retention sweeps
-(writable connection); integrity workflow composition.
-**Flesh — deferred.** General migration module; legacy import; scheduled backup/quick-check
-(as an ordinary session); export/import; ledger merge across hosts.
+and retained issue detail; generic `ResultItem` persistence; reserved compound
+`PhaseResult` storage used by linked verification; integrity workflow
+composition; and the coordinated ledger-v2/history-v3 reset.
+Semantic-settings commits hold a named cross-process mutex only across
+read-current → modify-owned-keys → temp-write → atomic-replace, so concurrent
+GUI/CLI writers cannot lose one another's updates.
+**Flesh — deferred.** History retention waits for a maintenance session with
+cross-process history-writer custody; no M1 retention setting, facade action, or
+direct UI SQL exists. Also deferred: general migration module; legacy import;
+scheduled backup/quick-check (as an ordinary session); export/import; ledger
+merge across hosts.
 
 **Acceptance criteria.**
 - Two parallel disjoint-volume runs both record completely; neither silently
@@ -1005,8 +1141,9 @@ and retained issue detail; retention sweeps
   `OperationalError` (PoC SEVERE parameter-limit bug).
 - A move onto a path occupied by a retained missing row clears that row first
   and does not roll back the whole run (PoC SEVERE data-loss bug).
-- Retention runs on a writable connection and actually removes expired rows (PoC
-  SEVERE write-through-readonly bug).
+- When retention eventually returns, it runs on a writable connection under
+  cross-process history-writer custody and actually removes expired rows (PoC
+  SEVERE write-through-readonly bug); this is not an M1 gate.
 - Every ledger commit follows its filesystem observation and precedes the next
   batch boundary; a crash loses at most one batch and never a committed truth.
 - A repeated run token is a no-op in both databases.
@@ -1089,18 +1226,41 @@ forward. The only place modules meet.
 
 ```python
 def run_plan(req: PlanRequest, ctx, deps) -> Plan: ...            # session 1: scan → plan → observe → preflight
-def run_execution(xset: ExecutionSet, ctx, deps) -> OperationResult: ...# session 2: observe → preflight → execute;
-                                                                   # consumes a COMMITTED ExecutionSet only
-def run_integrity(req, ctx, deps) -> IntegrityResult: ...          # inventory / baseline / verify / import
+def run_execution(cont: ExecutionContinuation, ctx, deps) -> OperationResult: ...
+    # session 2: observe → preflight → execute [→ verify];
+    # consumes a COMMITTED ExecutionSet only
+def run_integrity(req, ctx, deps) -> IntegrityRunResult: ...
+    # standalone inventory / baseline / verify / rebaseline
+
+@dataclass(frozen=True)
+class PublishedCopyEvidence:
+    attestation: Attestation
+    copy_recorded: bool
+
+@dataclass(frozen=True)
+class ExecuteContinuation:
+    phase: Literal["execute"]
+    execution_set: ExecutionSet
+
+@dataclass(frozen=True)
+class VerifyContinuation:
+    phase: Literal["verify"]
+    execution_set: ExecutionSet
+    candidates: tuple[PostCopyCandidate, ...]       # verify phase only
+    completed_verification_ids: frozenset[str]     # verify phase only
+    verified_bytes: int                            # verify phase only
+
+ExecutionContinuation = ExecuteContinuation | VerifyContinuation
 ```
 
 **A sync is two sessions, not one.** This is how mandatory dry-run review
 coexists with *sessions never block on a human*: review happens **between**
 sessions, not inside one. `run_plan` terminates with a `Plan` as its result —
-locks released, nothing running, no state pending. The human reviews at their
-leisure (minutes or days; the app may even close). Submitting the reviewed
-`ExecutionSet` starts `run_execution`, which re-observes and re-preflights
-because the world has moved on since review.
+locks released, nothing running, no state pending. The human reviews while the
+M1 process retains that plan. Closing the application loses process-local plans
+and continuations; durable plan/session recovery remains M2 and M1 never claims
+otherwise. Submitting the reviewed `ExecutionSet` starts `run_execution`, which
+re-observes and re-preflights because the world has moved on since review.
 
 Everything downstream falls out of this split:
 
@@ -1129,10 +1289,35 @@ Everything downstream falls out of this split:
   already-committed sets); nothing plans and executes in one unreviewed
   breath. Committed sets execute sequentially in commit order when they
   contend, immediately when their volumes are free.
+- **Linked verification is a phase, not a chained session.** If requested,
+  `run_execution` retains the same session and volume custody after execution,
+  derives transient candidates from every successfully settled `COPY`,
+  `UPDATE`, and `MOVE_UPDATE`, and calls the verifier's shared guarded
+  classifier. It does not query the ledger to rediscover candidates: a failed
+  copy-ledger transaction degrades recording but cannot suppress immediate
+  readback of published bytes.
+- **Published evidence is continuation state.** `_settle()` stores operation
+  success and its `PublishedCopyEvidence` together before emitting the reliable
+  result. A successful byte-producing status without evidence makes
+  verification incomplete. `phase=execute` preserves statuses plus published
+  evidence; `phase=verify` additionally preserves candidates and completed
+  verification ids/bytes. Same-process pause/resume is lossless; application
+  restart is not supported until M2.
+- **Compound truth remains separable.** One ordered nominal `ResultItem` list
+  preserves execution and integrity outcomes with explicit phase/type tags,
+  while `PhaseResult` keeps transfer and readback progress separate.
+  Filesystem, integrity, recording, and audit axes never rewrite one another.
+  A target stat change is `modified`; only stat-stable byte divergence is a
+  mismatch.
+- **One logical recording spans both phases.** Workflow opens one recorder
+  invocation and exposes narrow execution/integrity views rather than competing
+  writers. It finishes the logical run once at compound terminal settlement; a
+  pause may close and idempotently reopen the same run token on resume.
 
 **Bones.** The two-session split; top-to-bottom sequencing (scan → plan →
-observe → preflight → execute/verify); no signals, no callbacks-for-control;
-every dependency arrives via `deps`.
+observe → preflight → execute [→ verify], or location resolve/register → scan
+→ inventory → standalone integrity); the explicit execute/verify continuation;
+no signals, no callbacks-for-control; every dependency arrives via `deps`.
 
 **Implementation status (2026-07-20).** M0 paired sync now runs both dispatcher
 sessions through schema-versioned opaque payloads. Planning reads prior
@@ -1146,13 +1331,16 @@ sessions and exposes the resulting typed history reads.
 
 **Flesh — implemented (M0).** Paired sync (both phases), automatic safe-subset
 selection, local composition, CLI terminal review/commit, and history browsing.
-**Flesh — deferred.** One-location integrity
-(inventory/baseline/verify, M1); queue-driven second sessions;
-replay-from-history; DB maintenance session; undo/repair (each generated as an
-ordinary plan through the same pipeline — the *Pipeline-Only Mutation* law);
-`run_ingest` — scan → enrich (`MetadataExtractor`, its own cancellable stage)
-→ plan (template `DestinationPolicy`) → the same review gate, preflight, and
-executor as sync.
+**Flesh — M1.** Role-free one-location inventory; standalone
+inventory/baseline/verify/rebaseline sessions; integrity preflight on start and
+resume; in-session post-execution verification; nominal mixed result/history
+items and phase summaries; a shared facade and expanded CLI; and the desktop
+shell. **Flesh — deferred.** Queue-driven durable second sessions;
+replay-from-history; DB maintenance/retention session; undo/repair (each
+generated as an ordinary plan through the same pipeline — the
+*Pipeline-Only Mutation* law); `run_ingest` — scan → enrich
+(`MetadataExtractor`, its own cancellable stage) → plan (template
+`DestinationPolicy`) → the same review gate, preflight, and executor as sync.
 
 **Acceptance criteria.**
 - The workflow reads top-to-bottom as sequential calls; control flow is visible,
@@ -1171,6 +1359,15 @@ executor as sync.
   exclusions are separately itemized and presented as partial completion.
 - An execution session refuses an uncommitted or fingerprint-mismatched
   `ExecutionSet` before preflight even runs.
+- Every successful byte-producing operation supplies exactly one published
+  evidence entry, and linked verification consumes that handoff even when the
+  copy-ledger write failed.
+- Pause in either compound phase resumes only remaining work from the explicit
+  phase discriminator, without repeating reliable outcomes; restarting the M1
+  process offers no false resume.
+- Verify mismatch, incomplete verification, ledger degradation, and audit
+  degradation remain visible without changing an already successful
+  filesystem phase.
 - Every mutation of managed user data flows through plan → preflight → execute —
   including future undo and repair — so their conflicts with later runs surface
   in ordinary plan review.
@@ -1186,9 +1383,34 @@ translate user intent into `submit`.
 `history`; runnable/blocked/deferred review and partial-completion exit 6; real
 entry-point wiring; no-subcommand prints usage and exits nonzero until the
 desktop exists.
-**Flesh — deferred.** Full CLI surface; web API; desktop UI (task rail, trees,
-mismatch-severity, cancel/pause safety messaging, completion toasts, mapping
-list). Toolkit choice deliberately deferred — the doc names no GUI framework.
+**Flesh — M1.** `interfaces/service.py` becomes the shared facade/composition
+surface for both adapters, with typed commands/views, session observation,
+result classification across all four axes, and process-local
+`save_plan`/`get_plan`/`drop_plan` methods (no speculative `PlanStore`). The CLI
+is retargeted without changing equivalent M0 behavior, then gains inventory,
+baseline, verify, and rebaseline. CLI and desktop adapters may import the
+service but not one another; the service reaches database-owned settings
+through its injected workflow/runtime dependency and never imports `db`
+directly.
+
+`ResultCategory` chooses one headline without hiding secondary axes:
+`failed > partial > refused > mismatch > canceled >
+verification-incomplete > recording/audit degradation > all-noop > success`.
+Filesystem, integrity, recording, and audit details remain individually
+renderable regardless of the headline.
+
+The M1 desktop is a pywebview host forced to Edge Chromium/WebView2. It exposes
+one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
+bounded/coalescing event drain, cancels untrusted navigation/new-window
+requests through native hooks, and rejects dispatch outside the exact packaged
+origin. UI commands carry opaque ids rather than paths; rendered filenames use
+escaped display strings and `textContent`, never raw HTML. The task rail, plan
+tree, inventory tree, and history dialog consume facade views only.
+Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting)
+directly; it is separate from database-owned semantic settings and needs no
+cross-interface writer mutex.
+**Flesh — deferred.** Web API, durable cross-process task visibility, richer
+desktop surfaces, and other interfaces behind the same facade.
 
 **Acceptance criteria.**
 - The real entry points (`nami-sync`, `python -m namisync`) dispatch by actual
@@ -1228,8 +1450,14 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
 11. **Commit-to-execute** — mutation of managed user data happens only under a
     committed, fingerprint-bound, human-reviewed plan; scripts and queues
     replay commitments, never mint them.
-12. **Axis-separated truth** — filesystem status, ledger recording status, and
+12. **Axis-separated truth** — filesystem, integrity, ledger recording, and
     audit status are reported separately; no axis ever rewrites another.
+13. **Canonical content evidence** — copy, baseline, and verification use only
+    XXH3-128 with a 16-byte digest, and attested byte count equals subject size.
+    Non-content identity hashes remain SHA-256.
+14. **Explicit compound continuation** — execute/verify phase, published
+    evidence, candidates, and completed readback state are serialized facts;
+    phase is never inferred from prior events.
 
 ---
 
@@ -1245,17 +1473,34 @@ list). Toolkit choice deliberately deferred — the doc names no GUI framework.
   `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
   isolated verifier operation may land in parallel during M0 construction, but
   does not broaden this shipping gate without its inventory/workflow surface.
-- **M1 — integrity.** integrate the verifier through baseline + inventory +
-  history integrity detail + retention. Verify is additive once inventory rows
-  and the recorder exist; the operation module and cache-honest Windows reader
-  are already available for that composition.
+- **M1 — integrity product and executor refactor.** Build in this dependency
+  order:
+  1. contracts and semantics — canonical XXH3-128 evidence, nominal result
+     items/phase summaries, four truth axes, execute→verify continuation,
+     two-database reset boundary, split settings ownership, and facade/bridge
+     security contracts;
+  2. executor refactor — first the complete adaptive pipeline and Windows
+     IO/finalization reductions from `HASH_REFACTOR.md` Track 1, then the
+     coordinated executor+verifier XXH3-128 replacement and ledger-v2/
+     history-v3 reset from Track 2;
+  3. role-free inventory plus standalone baseline/verify/rebaseline workflows;
+  4. in-session post-execution verification as one vertical integration slice;
+  5. shared facade and CLI expansion; and
+  6. the pywebview/WebView2 desktop shell against settled facade views.
+
+  After the contracts are fixed, HASH Track 1 may proceed beside inventory
+  production and standalone result/event work. Standalone hashing waits for
+  HASH Track 2; post-execution integration waits for standalone integrity;
+  new CLI commands wait for their workflows; GUI data binding waits for the
+  facade and compound contracts. History retention is not part of M1.
 - **M2 — durability & scope.** `SqliteSessionStore` behind the existing
   protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
-  producer); single queue-owner lock; durable queue; filters (via new `Scope`
-  constructors); event conflation.
-- **M3+ — surface & scale.** web/desktop UI against the then-stable event
-  protocol; multithreaded copy/verify; USN change source; migration module;
-  data-protection features.
+  producer); single queue-owner lock; durable queue and plans; event
+  conflation; and cross-process task visibility.
+- **M3+ — maintenance & scale.** Cross-process-coordinated history retention
+  and data protection; file-level copy/verify concurrency only after new
+  utilization evidence; USN change source; migration module; ingest,
+  replay/repair, and additional interfaces.
 
 Each milestone is gated by its modules' §4 acceptance criteria. A criterion is
 not "tested" until it has a failure-injection or regression test named after the

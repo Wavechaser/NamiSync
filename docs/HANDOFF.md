@@ -1,46 +1,55 @@
 # NamiSync Session Handoff
 
-Date: 2026-07-21
+Date: 2026-07-24
 
 ## Session Outcome
 
-Plan review now exposes the actual target-side origin of rename-shaped
-operations. `PlanOperationView` retains `prior_target_path`, the local workflow
-runtime populates it from `PlanOperation.prior_target_rel_path`, and the CLI
-prefers it over the source path when rendering an operation.
+The finalized M1 decisions are now promoted from `M1_PLAN.md` and
+`HASH_REFACTOR.md` into the active cross-cutting product and architecture
+documents. This was a documentation-only reconciliation; no runtime behavior
+changed.
 
-A case-only operation therefore renders as `keep.txt -> KEEP.txt` instead of
-the misleading `KEEP.txt -> KEEP.txt`. The same presentation fix applies to
-ordinary `move` and `move_update` rows, which previously hid their old target
-path.
+The active documents now consistently specify canonical XXH3-128 content
+evidence, the exact adaptive copy policy and Windows finalization work, the
+in-session execute-to-verify workflow, four independent result axes, explicit
+pause continuation, split settings ownership, the coordinated database reset,
+retention deferral, and the dependency-ordered M1 build.
 
 ## Changes
 
-- Added nullable `prior_target_path` to the interface-facing plan-operation
-  read model and populated it at the sole workflow construction boundary.
-- Made plan rendering select the prior target as the displayed origin when it
-  exists, while preserving existing source-to-target rendering for all other
-  operations.
-- Added CLI regressions for recase, move, and move-update rendering plus a
-  workflow-boundary assertion that prior-target evidence survives translation.
-- Updated command-line, interfaces, workflow, feature, bug-log, README, and
-  handoff documentation.
+- Updated `FEATURES.md` with canonical content evidence, exact adaptive
+  pipelining, finalization/preallocation/readahead decisions, linked
+  verification semantics, split settings, reset posture, and deferred copy and
+  retention work.
+- Updated `ARCHITECTURE.md` with the XXH3-128 and attestation contracts,
+  nominal mixed results and phase summaries, hasher/copy seams, executor
+  pipeline architecture, transient verification candidates, explicit compound
+  continuation, facade/desktop boundaries, and the full M1 build order.
+- Updated `WORKFLOWS.md` to derive post-copy candidates from execution-owned
+  published evidence rather than the ledger, retain volume custody through
+  readback, and preserve separate phase progress and truth axes.
+- Reconciled `M1_PLAN.md` with the fixed 256 KiB / 1 MiB / 4 MiB policy and
+  marked its former workflow-document blocker resolved.
+- Updated `README.md` so its development overview and documentation index match
+  the promoted M1 design.
+- Deliberately left component-specific documents unchanged; they update with
+  the corresponding implementation stages.
 
 ## Verification
 
-- Focused CLI/workflow suite: 26 passed in 2.03s.
-- Full suite: 308 passed in 7.94s.
-- Import-linter: 7 contracts kept, 0 broken (41 files, 137 dependencies).
 - `git diff --check`: clean apart from expected LF-to-CRLF notices.
-- Plan fingerprints, payloads, selection, commitment, and execution semantics
-  are unchanged.
+- Cross-document searches found no remaining active cross-cutting claim that
+  content evidence stays SHA-256, linked verification is ledger-first,
+  execution preflight rereads global settings, or retention ships in M1.
+- No pytest or import-linter run: only Markdown documentation changed.
 
 ## Immediate Next Context
 
-- `prior_target_path` is an interface read-model field, not a new serialized
-  plan field; retained plan payloads already carry `prior_target_rel_path`.
-- Future desktop/API plan renderers should use the same precedence as the CLI:
-  prior target when present, otherwise source path.
-- Source casing propagation remains disabled by default and unexposed. This
-  change only makes opted-in recase review meaningful; it does not alter when a
-  recase operation is planned or executed.
+- Implement M1 in the order frozen in `ARCHITECTURE.md` and `M1_PLAN.md`:
+  contracts/semantics, HASH Track 1 then Track 2, inventory/standalone
+  integrity, post-execution integration, facade/CLI, then GUI shell.
+- HASH Track 1 uses the fixed chunk bands but still benchmarks them and measures
+  the conditional preallocation crossover before landing tunables.
+- Component docs such as `CORE.md`, `EXECUTOR.md`, `VERIFIER.md`, `DATABASE.md`,
+  `INTERFACES.md`, and `DESKTOP_UI.md` intentionally remain implementation-time
+  updates, not sources that override the promoted cross-cutting contracts.

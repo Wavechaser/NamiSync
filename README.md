@@ -9,9 +9,21 @@ cache-honest Windows unbuffered reads. The end-user integrity workflow remains
 an M1 integration task because inventory refresh, persisted integrity history,
 dispatcher registration, and interface composition are separate layers.
 M1 also replaces bulk content evidence with fixed XXH3-128 and pipelines each
-copy's read/write/hash stages; file-level execution and verification workers
-remain deferred until post-replacement measurements justify them. Internal
-plan, custody, history, and database identity hashes remain SHA-256.
+normal copy's read/write/hash stages under one combined 32 MiB byte budget.
+Copy chunks are fixed at 256 KiB below 8 MiB, 1 MiB below 32 MiB, and 4 MiB
+thereafter. The same refactor adds conditional temp preallocation, sequential
+cache hints, hoisted Windows bindings, one pre-publish temp flush, and
+conditional metadata repair. File-level execution/verification workers,
+batching, direct copy IO, and cross-file publish overlap remain deferred until
+new measurements justify them. Internal plan, custody, history, and database
+identity hashes remain SHA-256.
+
+M1's optional post-execution verification is one execute→verify state machine
+inside the same session and volume custody. Successful copy/update/move-update
+publishes hand transient attestations directly to readback even if ledger
+recording degraded; filesystem, integrity, recording, and audit remain
+independent result axes. Same-process pause preserves explicit phase and
+published-evidence continuation, while application-restart recovery remains M2.
 
 The M0 dispatcher is also implemented: generic sessions run concurrently when
 their resource sets are disjoint, serialize when they overlap, use real
@@ -35,8 +47,10 @@ mapping correspondence, runs, and distinct observed/attested evidence; typed
 repositories are read-only; and an independent history observer stores sync
 envelopes, summaries, and ordered operations, including blocked/deferred safe-
 subset exclusions. A narrow history v1-to-v2 migration preserves existing runs;
-general migrations, backup/retention, and richer integrity history
-remain later phases.
+M1 instead introduces one coordinated pre-release reset to ledger v2/history
+v3 for XXH3-128 and generic phase-tagged integrity history. Older schemas are
+refused rather than partially migrated. General migrations, backup, and
+cross-process-coordinated retention remain later phases.
 
 The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
 scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
@@ -98,10 +112,11 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
   milestone order.
 - [`DESIGN_REVIEW.md`](docs/DESIGN_REVIEW.md): resolved decision ledger from
   hardening the architecture and module contracts.
-- [`M1_PLAN.md`](docs/M1_PLAN.md): resolved M1 scope, sequencing, and decision
-  record for work not yet promoted into active component contracts.
-- [`HASH_REFACTOR.md`](docs/HASH_REFACTOR.md): measured single-file pipeline
-  and fixed XXH3-128 content-hash plan for M1.
+- [`M1_PLAN.md`](docs/M1_PLAN.md): detailed M1 decision record, dependency
+  sequence, integration gates, and adversarial acceptance tests.
+- [`HASH_REFACTOR.md`](docs/HASH_REFACTOR.md): measured single-file pipeline,
+  fixed adaptive chunk policy, Windows finalization refactor, and canonical
+  XXH3-128 content-evidence plan for M1.
 - [`CORE.md`](docs/CORE.md): shared types, session/event contracts, path safety,
   identity, time, and evidence.
 - [`SCANNER.md`](docs/SCANNER.md): filesystem observation and completeness.

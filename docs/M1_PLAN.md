@@ -2,9 +2,10 @@
 
 Status: planning decisions revised and reconciled 2026-07-24. Nothing below is
 implemented yet. This is both the milestone plan and the decision log for the choices made
-while shaping it — later docs (`ARCHITECTURE.md`, `FEATURES.md`,
-`DESKTOP_UI.md`, `INTERFACES.md`) get updated as each stage lands, and this
-file is the record of *why*, the same role `DESIGN_REVIEW.md` plays for M0.
+while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
+`FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
+their code stages land. This file remains the detailed record of *why* and of
+the integration gates, the same role `DESIGN_REVIEW.md` plays for M0.
 
 **Documentation precedence**, stated once here because it resolved a real
 conflict during this planning pass (DR-M1-20, retention): `FEATURES.md` owns
@@ -680,17 +681,18 @@ or direct UI SQL.
 
 ### Stage 2 — Executor and Hash Refactor
 
-0. **Precondition — run the size sweep before landing tunables.** The adaptive
-   chunk candidate table and the preallocation crossover are measured
-   constants, not guessed (`HASH_REFACTOR.md` §2.7, DR-HASH-07). Before landing
-   step 1's adaptive selection, run the standard synthetic distribution
-   (1,000×4 KiB, 512×128 KiB, 64×4 MiB, 4×128 MiB, 1×4 GiB) cross-volume and
-   record the resulting chunk bands, preallocation crossover, per-size
-   operations/second, and fixed finalization time as the committed constants
-   with rationale. A step-1 diff that ships guessed or placeholder constants
-   does not satisfy this stage.
+0. **Precondition — validate the fixed chunk bands and measure allocation.**
+   `HASH_REFACTOR.md` DR-HASH-07 fixes the M1 copy policy at 256 KiB below
+   8 MiB, 1 MiB from 8 MiB through less than 32 MiB, and 4 MiB from 32 MiB
+   upward. Before landing step 1, run the standard synthetic distribution
+   (1,000×4 KiB, 512×128 KiB, 64×4 MiB, 4×128 MiB, 1×4 GiB) cross-volume,
+   validate those bands against the production-shaped workload, and record
+   per-size operations/second, fixed finalization time, and the measured
+   preallocation crossover. Revising a fixed band requires evidence; choosing
+   bands ad hoc during implementation does not satisfy this stage.
 1. Land all of `HASH_REFACTOR.md` Track 1, not merely "the pipeline":
-   adaptive chunk selection, the combined 32 MiB byte budget, immutable linear
+   the fixed 256 KiB / 1 MiB / 4 MiB adaptive chunk policy, the combined
+   32 MiB byte budget and 32-entry FIFO caps, immutable linear
    reader/hasher/writer handoff, conditional preallocation, sequential source
    hint, hoisted Win32 bindings, one temp flush, combined
    metadata/finalization handle, conditional post-publish repair, backup-loop
@@ -897,17 +899,13 @@ rules from `HASH_REFACTOR.md` §4.5 apply verbatim: inject the named divergence,
 assert the typed result, and reject any test that would still pass if the two
 sides were mis-wired.
 
-**Blocking doc reconciliation before Stage 4.** `WORKFLOWS.md` lines 106-108
-still specify linked-verify selection as "built ledger-first from the inventory
-rows execution just recorded, not handed over from the executor." That directly
-contradicts DR-M1-12 §1 ("the immediate evidence handoff does not query the
-ledger") and §3 (candidates carry evidence "whether or not a ledger row
-exists"). Per this plan's precedence rule the module doc is the stale side, but
-it is exactly the sentence a low-context implementer will build to — and a
-ledger-first selection silently drops every candidate whose copy-ledger write
-was `DEGRADED`, the one case §3 says must still verify. Update `WORKFLOWS.md`
-106-108 to the published-evidence handoff as Stage 1/4 lands, and keep the gate
-XV-2 below as the executable proof.
+**Resolved doc reconciliation.** `WORKFLOWS.md` previously specified
+linked-verify selection as ledger-first, contradicting DR-M1-12 §1 and §3.
+The active workflow and architecture documents now use the execution-owned
+published-evidence handoff whether or not a ledger row exists. Keep XV-2 below
+as the executable proof: otherwise a later implementation can regress to a
+ledger query and silently drop every candidate whose copy-ledger write was
+`DEGRADED`.
 
 #### Execute → verify handoff (the highest-fear seam)
 
