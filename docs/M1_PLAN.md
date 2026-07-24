@@ -429,6 +429,19 @@ binding contracts:
    axis remains degraded; M1 does not invent fake row ids or silently
    reconstruct a missing sync transaction.
 
+   **Type ownership and import direction:** `PublishedCopyEvidence` lives in
+   `core/execution.py` because `ExecutionSet` stores it.
+   `PostCopyCandidate` lives in `core/integrity.py` because it is a
+   verifier-input contract shared across the workflow/module boundary. The
+   discriminated `ExecuteContinuation | VerifyContinuation` payload is owned
+   by `workflows/` and may reference those core types; core never imports a
+   workflow continuation type. The sync workflow alone translates published
+   evidence into verification candidates. `PostCopyCandidate` contains the
+   verifier-facing values rather than embedding or importing
+   `PublishedCopyEvidence`, so executor and verifier remain sibling modules
+   with no direct dependency. The dispatcher continues to hold only opaque,
+   schema-versioned payload bytes.
+
 4. **Filesystem, integrity, recording, and audit remain separate truths.**
    A publish may be `succeeded`, its readback `verified`, and its ledger
    recording `degraded` at the same time. A readback mismatch does not rewrite
@@ -733,9 +746,13 @@ the inventory selection producer.
 
 Land DR-M1-12/13 as one vertical integration gate:
 
-- execution-owned `PublishedCopyEvidence` continuation and payload round-trip;
-- transient post-copy verification candidates sharing the standalone
-  verifier's guarded classifier;
+- core-owned `PublishedCopyEvidence` in `core/execution.py`, stored by
+  `ExecutionSet`, plus its workflow payload round-trip;
+- core-owned `PostCopyCandidate` in `core/integrity.py`, constructed by the
+  workflow from published evidence and sharing the standalone verifier's
+  guarded classifier;
+- workflow-owned discriminated continuation payloads that depend only on core
+  contracts and remain opaque to the dispatcher;
 - conditional verification recording without making ledger-row existence a
   prerequisite for byte classification;
 - one heterogeneous item list plus compound-only `PhaseResult`;

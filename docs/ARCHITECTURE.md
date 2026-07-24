@@ -403,6 +403,11 @@ class Commitment:               # the durable preauthorization (commit-to-execut
                                 # selection changed after commit invalidates it
     committed_at: datetime
 
+@dataclass(frozen=True)
+class PublishedCopyEvidence:    # core/execution.py
+    attestation: "Attestation"  # core/evidence.py; defined in §2.6
+    copy_recorded: bool
+
 @dataclass
 class ExecutionSet:           # plan + selection + mutable per-op status
     plan: Plan
@@ -410,7 +415,7 @@ class ExecutionSet:           # plan + selection + mutable per-op status
     commitment: Commitment | None   # execution REFUSES a None or mismatched one
     status: dict[OpId, Outcome] # doubles as the pause/resume continuation:
                                 # everything unreached is the remaining work
-    published_evidence: dict[OpId, "PublishedCopyEvidence"]
+    published_evidence: dict[OpId, PublishedCopyEvidence]
                                 # exactly one per settled COPY/UPDATE/MOVE_UPDATE
 
 class Subject(NamedTuple):      # never a bare string key — both roots share
@@ -502,6 +507,15 @@ class OperationResult:
     items: tuple[ResultItem, ...]       # ordered execution + integrity items
     phases: tuple[PhaseResult, ...]     # phase-local truth and byte totals
 ```
+
+`PublishedCopyEvidence` is execution continuation state and therefore lives
+beside `ExecutionSet` in `core/execution.py`. `PostCopyCandidate` is the
+cross-boundary verifier-input contract and lives in `core/integrity.py`; its
+final Stage 4 fields bind a published target to expected content evidence and
+may carry a durable row identity only when recording already returned one.
+It does not embed or import `PublishedCopyEvidence`: the workflow copies the
+verifier-facing values while translating between the two contracts.
+Constructing either type never requires a ledger query.
 
 Copy, baseline, and verification evidence are deliberately single-valued:
 `xxh3_128` is not a user setting and there is no dual-algorithm transition.
@@ -1048,10 +1062,11 @@ interfaces remain the M1 product gate.
 M1 replaces content SHA-256 in baseline, verify, rebaseline, and copy together
 with canonical XXH3-128; no interval exists where the two consumers write
 different evidence formats. Ledger-bound selections and transient post-copy
-candidates share one guarded open/stat/hash/classification body. The latter
-carry `PublishedCopyEvidence` directly from execution and remain classifiable
-when the copy-ledger transaction failed; only a candidate with durable matching
-row evidence may conditionally advance ledger verification state. Immediate
+candidates share one guarded open/stat/hash/classification body. The latter are
+constructed by the workflow from `PublishedCopyEvidence` and remain
+classifiable when the copy-ledger transaction failed; only a candidate with
+durable matching row evidence may conditionally advance ledger verification
+state. Immediate
 readback is independent evidence against ordinary copy/IO/recording failures,
 not a defense against malicious in-process executor code.
 
@@ -1233,11 +1248,6 @@ def run_integrity(req, ctx, deps) -> IntegrityRunResult: ...
     # standalone inventory / baseline / verify / rebaseline
 
 @dataclass(frozen=True)
-class PublishedCopyEvidence:
-    attestation: Attestation
-    copy_recorded: bool
-
-@dataclass(frozen=True)
 class ExecuteContinuation:
     phase: Literal["execute"]
     execution_set: ExecutionSet
@@ -1252,6 +1262,15 @@ class VerifyContinuation:
 
 ExecutionContinuation = ExecuteContinuation | VerifyContinuation
 ```
+
+`ExecuteContinuation` and `VerifyContinuation` are workflow-owned payload
+contracts. They may reference the core-owned `ExecutionSet`,
+`PublishedCopyEvidence`, and `PostCopyCandidate`; core never imports workflow
+payload types. The dispatcher stores and returns their schema-versioned JSON
+envelopes opaquely. The workflow is the sole translator from executor-produced
+`PublishedCopyEvidence` to verifier-consumed `PostCopyCandidate`, so executor
+and verifier remain sibling modules with no direct dependency; the integrity
+contract does not import the execution contract.
 
 **A sync is two sessions, not one.** This is how mandatory dry-run review
 coexists with *sessions never block on a human*: review happens **between**

@@ -32,6 +32,9 @@ retention deferral, and the dependency-ordered M1 build.
   marked its former workflow-document blocker resolved.
 - Updated `README.md` so its development overview and documentation index match
   the promoted M1 design.
+- Pinned linked execution/verification type ownership: core owns
+  `PublishedCopyEvidence` and `PostCopyCandidate`, workflows own the
+  discriminated continuation payloads, and the dispatcher remains opaque.
 - Deliberately left component-specific documents unchanged; they update with
   the corresponding implementation stages.
 
