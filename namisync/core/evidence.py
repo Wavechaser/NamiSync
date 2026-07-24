@@ -48,6 +48,22 @@ class StreamingHasher(Protocol):
 HasherFactory: TypeAlias = Callable[[], StreamingHasher]
 
 
+class HasherContractError(RuntimeError):
+    """A supplied content hasher violated the fixed streaming contract."""
+
+
+def require_content_digest(value: object) -> bytes:
+    """Validate one raw digest returned by the canonical content hasher."""
+
+    if not isinstance(value, bytes):
+        raise HasherContractError("content hasher digest must be bytes")
+    if len(value) != 16:
+        raise HasherContractError(
+            "content hasher digest must contain exactly 16 bytes"
+        )
+    return value
+
+
 def _require_utc(value: datetime, field_name: str) -> None:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field_name} must be timezone-aware")
@@ -59,19 +75,19 @@ def _require_utc(value: datetime, field_name: str) -> None:
 class ContentEvidence:
     """Digest evidence for an exact byte stream."""
 
-    algorithm: Literal["sha256"]
+    algorithm: Literal["xxh3_128"]
     digest: bytes
     size: int
     provenance: Provenance
     observed_at: datetime
 
     def __post_init__(self) -> None:
-        if self.algorithm != "sha256":
-            raise ValueError("only sha256 evidence is supported")
+        if self.algorithm != "xxh3_128":
+            raise ValueError("only xxh3_128 evidence is supported")
         if not isinstance(self.digest, bytes):
-            raise TypeError("sha256 digest must be bytes")
-        if len(self.digest) != 32:
-            raise ValueError("sha256 digest must contain exactly 32 bytes")
+            raise TypeError("xxh3_128 digest must be bytes")
+        if len(self.digest) != 16:
+            raise ValueError("xxh3_128 digest must contain exactly 16 bytes")
         if self.size < 0:
             raise ValueError("evidence size cannot be negative")
         _require_utc(self.observed_at, "observed_at")
@@ -87,3 +103,5 @@ class Attestation:
     def __post_init__(self) -> None:
         if not isinstance(self.subject, FileStat):
             raise TypeError("attestation subject must be FileStat evidence")
+        if self.content.size != self.subject.size:
+            raise ValueError("attestation content size must match its subject")

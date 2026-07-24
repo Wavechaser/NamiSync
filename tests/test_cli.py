@@ -25,6 +25,7 @@ from namisync.interfaces.cli import (
     _exit_for_record,
     _render_execution,
     _render_plan,
+    build_parser,
     main,
 )
 from namisync.workflows.models import PlanOperationView
@@ -54,6 +55,15 @@ def test_no_subcommand_prints_usage_and_returns_nonzero() -> None:
     assert "usage:" in stderr.getvalue()
 
 
+def test_integrity_workflows_have_no_cli_start_commands_yet() -> None:
+    parser = build_parser()
+    choices = next(
+        action.choices for action in parser._actions if action.dest == "command"
+    )
+
+    assert set(choices) == {"sync", "history"}
+
+
 def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
     blocked = ItemOutcome(
         "blocked",
@@ -72,7 +82,7 @@ def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
     record = SimpleNamespace(
         result=OperationResult(
             SessionState.COMPLETED,
-            operations=(blocked, deferred),
+            items=(blocked, deferred),
         )
     )
     details = SimpleNamespace(commitment_error=None, refusals=())
@@ -166,7 +176,7 @@ def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> No
             Envelope(record.session_id, 1, NOW, SCHEMA_VERSION, blocked)
         )
         observer.finalize(
-            OperationResult(SessionState.COMPLETED, operations=(blocked,))
+            OperationResult(SessionState.COMPLETED, items=(blocked,))
         )
     stdout = io.StringIO()
     stderr = io.StringIO()

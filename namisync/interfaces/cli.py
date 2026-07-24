@@ -16,13 +16,18 @@ from namisync.dispatcher import (
     WorkflowRegistration,
 )
 from namisync.workflows import (
+    BASELINE_KIND,
     EXECUTION_KIND,
+    INVENTORY_KIND,
     PLAN_KIND,
+    REBASELINE_KIND,
+    VERIFY_KIND,
     LocalWorkflowRuntime,
     PlanRequest,
     default_database_paths,
     sync_options,
 )
+from namisync.workflows.views import operation_result_view, session_event_view
 
 
 EXIT_SUCCESS = 0
@@ -214,9 +219,10 @@ def _run_history(
             return EXIT_SUCCESS
         for run in runs:
             exception_counts = Counter(
-                item.outcome
-                for item in run.operations
-                if item.outcome in {"blocked", "deferred"}
+                item.result
+                for item in run.items
+                if item.item_type == "operation"
+                and item.result in {"blocked", "deferred"}
             )
             exceptions = (
                 ""
@@ -225,11 +231,15 @@ def _run_history(
                 f"blocked:{exception_counts['blocked']},"
                 f"deferred:{exception_counts['deferred']}"
             )
+            context = (
+                f"{_safe(run.subject_kind)}={_safe(run.subject_id)}"
+                if run.subject_id is not None
+                else f"{_safe(run.source_context)} -> {_safe(run.target_context)}"
+            )
             print(
                 f"{run.run_token}  {run.started_at.isoformat()}  "
                 f"{run.filesystem_status}  ledger={run.recording_status} "
-                f"audit={run.audit_status}  {_safe(run.source_context)} -> "
-                f"{_safe(run.target_context)}{exceptions}",
+                f"audit={run.audit_status}  {context}{exceptions}",
                 file=stdout,
             )
         return EXIT_SUCCESS
@@ -241,24 +251,61 @@ def _run_history(
 
 
 def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:
-    def prepare_plan(request: object) -> PreparedSession:
-        prepared = runtime.prepare_plan(request)
-        return PreparedSession.from_resource_keys(prepared.payload, prepared.resources)
-
-    def prepare_execution(request: object) -> PreparedSession:
-        prepared = runtime.prepare_execution(request)
-        return PreparedSession.from_resource_keys(prepared.payload, prepared.resources)
-
     return Dispatcher(
-        {
-            PLAN_KIND: WorkflowRegistration(prepare_plan, runtime.open_plan),
-            EXECUTION_KIND: WorkflowRegistration(
-                prepare_execution, runtime.open_execution, supports_pause=True
-            ),
-        },
+        _workflow_registry(runtime),
         clock=runtime.clock,
         audit_observer_factory=runtime.audit_observer,
     )
+
+
+def _workflow_registry(
+    runtime: LocalWorkflowRuntime,
+) -> dict[str, WorkflowRegistration]:
+    def registration(
+        prepare,
+        open_invocation,
+        *,
+        supports_pause: bool = False,
+    ) -> WorkflowRegistration:
+        def prepare_session(request: object) -> PreparedSession:
+            prepared = prepare(request)
+            return PreparedSession.from_resource_keys(
+                prepared.payload, prepared.resources
+            )
+
+        return WorkflowRegistration(
+            prepare_session,
+            open_invocation,
+            supports_pause=supports_pause,
+        )
+
+    return {
+        PLAN_KIND: registration(runtime.prepare_plan, runtime.open_plan),
+        EXECUTION_KIND: registration(
+            runtime.prepare_execution,
+            runtime.open_execution,
+            supports_pause=True,
+        ),
+        INVENTORY_KIND: registration(
+            runtime.prepare_inventory,
+            runtime.open_inventory,
+        ),
+        BASELINE_KIND: registration(
+            runtime.prepare_baseline,
+            runtime.open_baseline,
+            supports_pause=True,
+        ),
+        VERIFY_KIND: registration(
+            runtime.prepare_verify,
+            runtime.open_verify,
+            supports_pause=True,
+        ),
+        REBASELINE_KIND: registration(
+            runtime.prepare_rebaseline,
+            runtime.open_rebaseline,
+            supports_pause=True,
+        ),
+    }
 
 
 def _wait_for_result(
@@ -285,12 +332,13 @@ def _wait_for_result(
                 )
                 continue
             last_seq = envelope.seq
-            body = envelope.body
-            if all(hasattr(body, name) for name in ("items_done", "bytes_done")):
-                current = getattr(body, "current_path", None)
+            event = session_event_view(envelope)
+            if event.body_type == "Progress":
+                current = event.body.get("current_path")
                 if current:
                     print(
-                        f"Progress: {body.items_done} items, {body.bytes_done} bytes; "
+                        f"Progress: {event.body['items_done']} items, "
+                        f"{event.body['bytes_done']} bytes; "
                         f"{_safe(current)}",
                         file=stdout,
                     )
@@ -383,10 +431,9 @@ def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
         f"bytes={result.bytes_done}/{result.bytes_total}",
         file=output,
     )
+    view = operation_result_view(result)
     outcomes = Counter(
-        item.outcome.value
-        for item in result.operations
-        if hasattr(item, "outcome")
+        item.result for item in view.items if item.item_type == "operation"
     )
     if outcomes["blocked"] or outcomes["deferred"]:
         print(
@@ -395,12 +442,12 @@ def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
             "Review the itemized exclusions and re-plan after resolving them.",
             file=output,
         )
-    for item in result.operations:
-        if not all(hasattr(item, name) for name in ("kind", "path", "outcome")):
+    for item in view.items:
+        if item.item_type != "operation":
             continue
-        reason = "" if getattr(item, "reason", None) is None else f" ({_safe(item.reason)})"
+        reason = "" if item.reason is None else f" ({_safe(item.reason)})"
         print(
-            f"  {item.kind:11} {_safe(item.path)}: {item.outcome.value}{reason}",
+            f"  {item.kind:11} {_safe(item.path)}: {item.result}{reason}",
             file=output,
         )
     if details.commitment_error:
@@ -423,8 +470,14 @@ def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
 def _render_history_run(run, output: TextIO) -> None:
     print(f"Run: {run.run_token}", file=output)
     print(f"Activity: {run.activity_kind}", file=output)
-    print(f"Source: {_safe(run.source_context)}", file=output)
-    print(f"Target: {_safe(run.target_context)}", file=output)
+    if run.subject_id is not None:
+        print(
+            f"Subject: {_safe(run.subject_kind)}={_safe(run.subject_id)}",
+            file=output,
+        )
+    else:
+        print(f"Source: {_safe(run.source_context)}", file=output)
+        print(f"Target: {_safe(run.target_context)}", file=output)
     print(f"Started: {run.started_at.isoformat()}", file=output)
     print(f"Ended: {run.ended_at.isoformat()}", file=output)
     print(
@@ -433,10 +486,10 @@ def _render_history_run(run, output: TextIO) -> None:
         f"bytes={run.bytes_done}/{run.bytes_total}",
         file=output,
     )
-    for item in run.operations:
+    for item in run.items:
         reason = "" if item.reason is None else f" ({_safe(item.reason)})"
         print(
-            f"  {item.kind:11} {_safe(item.path)}: {item.outcome}{reason}",
+            f"  {item.kind:11} {_safe(item.path)}: {item.result}{reason}",
             file=output,
         )
     if run.error:
@@ -469,10 +522,11 @@ def _exit_for_record(record) -> int:
         return EXIT_FAILED
     if result.recording.value == "degraded" or result.audit.value == "degraded":
         return EXIT_DEGRADED
+    view = operation_result_view(result)
     if any(
-        getattr(getattr(item, "outcome", None), "value", None)
-        in {"blocked", "deferred"}
-        for item in result.operations
+        item.item_type == "operation"
+        and item.result in {"blocked", "deferred"}
+        for item in view.items
     ):
         return EXIT_PARTIAL
     return EXIT_SUCCESS

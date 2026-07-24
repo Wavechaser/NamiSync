@@ -153,7 +153,7 @@ def run_execution(
         return OperationResult(
             status=SessionState.REFUSED,
             disposition=Disposition.UNRUN,
-            operations=exclusion_items,
+            items=exclusion_items,
         )
 
     with deps.open_recording(xset) as recording:
@@ -192,8 +192,8 @@ def run_execution(
         _emit_items(ctx, exclusion_items)
         result = replace(
             result,
-            operations=_merge_operation_results(
-                xset.plan, result.operations, exclusion_items
+            items=_merge_operation_results(
+                xset.plan, result.items, exclusion_items
             ),
         )
         try:
@@ -240,13 +240,11 @@ def _exclusion_items(
 
 def _merge_operation_results(
     plan: Plan,
-    executed: tuple[object, ...],
+    executed: tuple[ItemOutcome, ...],
     excluded: tuple[ItemOutcome, ...],
-) -> tuple[object, ...]:
+) -> tuple[ItemOutcome, ...]:
     by_id = {
-        str(item.item_id): item
-        for item in (*executed, *excluded)
-        if hasattr(item, "item_id")
+        str(item.item_id): item for item in (*executed, *excluded)
     }
     ordered = [
         by_id.pop(str(operation.op_id))

@@ -18,6 +18,8 @@ from .connections import (
 
 LEDGER_SCHEMA_VERSION = 2
 HISTORY_SCHEMA_VERSION = 3
+LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128-mapping-filters-v1"
+HISTORY_CONTRACT_ID = "m1-history-generic-items-phases-v1"
 
 
 class SchemaResetRequired(sqlite3.DatabaseError):
@@ -34,6 +36,10 @@ CREATE TABLE IF NOT EXISTS schema_metadata (
 
 INSERT INTO schema_metadata(key, value)
 VALUES ('schema_version', '{LEDGER_SCHEMA_VERSION}')
+ON CONFLICT(key) DO NOTHING;
+
+INSERT INTO schema_metadata(key, value)
+VALUES ('contract_id', '{LEDGER_CONTRACT_ID}')
 ON CONFLICT(key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS hosts (
@@ -118,7 +124,6 @@ CREATE TABLE IF NOT EXISTS inventory (
 
     missing_since TEXT,
     acknowledged_at TEXT,
-    excluded_at TEXT,
     reappeared_at TEXT,
     unsupported_reason TEXT,
 
@@ -140,6 +145,54 @@ CREATE INDEX IF NOT EXISTS inventory_location_presence_idx
 ON inventory(location_id, presence, rel_path_key);
 CREATE INDEX IF NOT EXISTS inventory_identity_idx
 ON inventory(location_id, file_identity_volume_serial, file_identity_file_index);
+
+CREATE TABLE IF NOT EXISTS mapping_filters (
+    mapping_id INTEGER PRIMARY KEY REFERENCES mappings(id) ON DELETE CASCADE,
+    patterns_json TEXT NOT NULL,
+    snapshot_hash BLOB NOT NULL,
+    updated_at TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS mapping_exclusions (
+    mapping_id INTEGER NOT NULL REFERENCES mappings(id) ON DELETE CASCADE,
+    inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
+    snapshot_hash BLOB NOT NULL,
+    excluded_at TEXT NOT NULL,
+    PRIMARY KEY(mapping_id, inventory_id)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS mapping_exclusions_inventory_idx
+ON mapping_exclusions(inventory_id, mapping_id);
+
+CREATE TRIGGER IF NOT EXISTS mapping_exclusion_location_insert
+BEFORE INSERT ON mapping_exclusions
+WHEN NOT EXISTS (
+    SELECT 1
+      FROM mappings AS mapping
+      JOIN inventory AS row ON row.id = NEW.inventory_id
+     WHERE mapping.id = NEW.mapping_id
+       AND row.location_id IN (
+           mapping.source_location_id, mapping.target_location_id
+       )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'mapping exclusion location mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS mapping_exclusion_location_update
+BEFORE UPDATE ON mapping_exclusions
+WHEN NOT EXISTS (
+    SELECT 1
+      FROM mappings AS mapping
+      JOIN inventory AS row ON row.id = NEW.inventory_id
+     WHERE mapping.id = NEW.mapping_id
+       AND row.location_id IN (
+           mapping.source_location_id, mapping.target_location_id
+       )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'mapping exclusion location mismatch');
+END;
 
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
@@ -256,6 +309,10 @@ INSERT INTO schema_metadata(key, value)
 VALUES ('schema_version', '{HISTORY_SCHEMA_VERSION}')
 ON CONFLICT(key) DO NOTHING;
 
+INSERT INTO schema_metadata(key, value)
+VALUES ('contract_id', '{HISTORY_CONTRACT_ID}')
+ON CONFLICT(key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS history_runs (
     id INTEGER PRIMARY KEY,
     run_token TEXT NOT NULL UNIQUE,
@@ -352,6 +409,8 @@ def _initialize(
             expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
             if version is not None and version != expected:
                 _raise_reset_required(version, history=history)
+            if version is not None:
+                _require_contract_id(readonly, history=history)
         finally:
             readonly.close()
     connect = connect_history_writer if history else connect_ledger_writer
@@ -361,6 +420,8 @@ def _initialize(
         expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
         if version is not None and version != expected:
             _raise_reset_required(version, history=history)
+        if version is not None:
+            _require_contract_id(connection, history=history)
         connection.executescript(schema)
         version = int(
             connection.execute(
@@ -369,6 +430,7 @@ def _initialize(
         )
         if version != expected:
             _raise_reset_required(version, history=history)
+        _require_contract_id(connection, history=history)
     finally:
         connection.close()
     return resolved
@@ -407,6 +469,50 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
         "Close every NamiSync process, manually delete or otherwise reset both "
         "database files together, and restart."
     )
+
+
+def _require_contract_id(
+    connection: sqlite3.Connection, *, history: bool
+) -> None:
+    expected = HISTORY_CONTRACT_ID if history else LEDGER_CONTRACT_ID
+    row = connection.execute(
+        "SELECT value FROM schema_metadata WHERE key = 'contract_id'"
+    ).fetchone()
+    actual = None if row is None else str(row[0])
+    if actual != expected:
+        database = "history" if history else "ledger"
+        value = "missing" if actual is None else actual
+        raise SchemaResetRequired(
+            f"unsupported {database} schema contract {value}; "
+            "NamiSync M1 requires ledger v2 and history v3 with the final "
+            "M1 contract. Close every NamiSync process, manually delete or "
+            "otherwise reset both database files together, and restart."
+        )
+
+
+def _validate_reader_contract(
+    connection: sqlite3.Connection, *, history: bool
+) -> None:
+    version = _existing_schema_version(connection, history=history)
+    expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
+    if version != expected:
+        _raise_reset_required(
+            "empty" if version is None else version,
+            history=history,
+        )
+    _require_contract_id(connection, history=history)
+
+
+def validate_ledger_reader_contract(connection: sqlite3.Connection) -> None:
+    """Refuse an incompatible ledger through an already read-only connection."""
+
+    _validate_reader_contract(connection, history=False)
+
+
+def validate_history_reader_contract(connection: sqlite3.Connection) -> None:
+    """Refuse an incompatible history store through a read-only connection."""
+
+    _validate_reader_contract(connection, history=True)
 
 
 def initialize_ledger(
@@ -476,5 +582,6 @@ def _delete_sqlite_artifacts(path: Path) -> None:
         path,
         path.with_name(path.name + "-wal"),
         path.with_name(path.name + "-shm"),
+        path.with_name(path.name + "-journal"),
     ):
         candidate.unlink(missing_ok=True)

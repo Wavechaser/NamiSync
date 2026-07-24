@@ -77,8 +77,8 @@ def attestation(
 ) -> Attestation:
     return Attestation(
         ContentEvidence(
-            "sha256",
-            bytes([digest_byte]) * 32,
+            "xxh3_128",
+            bytes([digest_byte]) * 16,
             stat.size,
             provenance,
             observed_at,

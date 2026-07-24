@@ -12,15 +12,18 @@ import ntpath
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from hashlib import sha256
 from pathlib import Path, PureWindowsPath
-from typing import Iterator
+from typing import Callable, Iterator
 
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
+    HasherContractError,
+    HasherFactory,
     Provenance,
     RecordingStatus,
+    StreamingHasher,
+    require_content_digest,
 )
 from namisync.core.events import Progress
 from namisync.core.integrity import (
@@ -67,6 +70,33 @@ _ERROR_INVALID_PARAMETER = 87
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
 
 
+def _new_content_hasher(factory: HasherFactory) -> StreamingHasher:
+    try:
+        hasher = factory()
+    except Exception as error:
+        raise HasherContractError("content hasher factory failed") from error
+    if not callable(getattr(hasher, "update", None)):
+        raise HasherContractError("content hasher must provide update(bytes)")
+    if not callable(getattr(hasher, "digest", None)):
+        raise HasherContractError("content hasher must provide digest()")
+    return hasher
+
+
+def _update_content_hasher(hasher: StreamingHasher, chunk: bytes) -> None:
+    try:
+        hasher.update(chunk)
+    except Exception as error:
+        raise HasherContractError("content hasher update failed") from error
+
+
+def _finish_content_hasher(hasher: StreamingHasher) -> bytes:
+    try:
+        digest = hasher.digest()
+    except Exception as error:
+        raise HasherContractError("content hasher digest failed") from error
+    return require_content_digest(digest)
+
+
 def baseline(
     selection: IntegritySelection,
     ctx: VerifierContext,
@@ -84,7 +114,7 @@ def verify(
     recorder: IntegrityRecorder,
     reader: VerificationReader | None = None,
 ) -> IntegrityRunResult:
-    """Classify selected rows against retained stat and SHA-256 evidence."""
+    """Classify selected rows against retained stat and XXH3-128 evidence."""
 
     return _run(selection, ctx, recorder, reader, IntegrityMode.VERIFY)
 
@@ -104,6 +134,18 @@ def rebaseline(
 class _ProcessedItem:
     outcome: IntegrityOutcome
     bytes_read: int = 0
+
+
+@dataclass(frozen=True)
+class _SubjectClassification:
+    """Ledger-neutral result of one guarded subject read."""
+
+    result: IntegrityResult
+    reason: IntegrityReason | None = None
+    detail: str | None = None
+    read_strategy: ReadStrategy | None = None
+    bytes_read: int = 0
+    attestation: Attestation | None = None
 
 
 class _ProgressReporter:
@@ -176,6 +218,7 @@ def _run(
             processed = _ProcessedItem(
                 _outcome(
                     item,
+                    mode,
                     IntegrityResult.CANCELED,
                     IntegrityReason.CANCELED,
                 )
@@ -228,6 +271,7 @@ def _process_item(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 IntegrityResult.ERROR,
                 IntegrityReason.PATH_INVALID,
                 _error_detail(exc),
@@ -238,6 +282,7 @@ def _process_item(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 IntegrityResult.MISSING,
                 IntegrityReason.INVENTORY_MISSING,
             )
@@ -246,6 +291,7 @@ def _process_item(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 IntegrityResult.UNSUPPORTED,
                 IntegrityReason.INVENTORY_UNSUPPORTED,
             )
@@ -254,6 +300,7 @@ def _process_item(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 IntegrityResult.ERROR,
                 IntegrityReason.BASELINE_EXISTS,
             )
@@ -262,87 +309,153 @@ def _process_item(
     expected_stat = item.expected_stat
     if expected_stat is None:  # guarded by IntegritySelectionItem; defensive only
         return _ProcessedItem(
-            _outcome(item, IntegrityResult.ERROR, IntegrityReason.STAT_CHANGED)
+            _outcome(
+                item, mode, IntegrityResult.ERROR, IntegrityReason.STAT_CHANGED
+            )
         )
 
+    classification = _classify_subject(
+        root=item.root,
+        relative_path=validated_path,
+        expected_stat=expected_stat,
+        baseline=item.baseline,
+        mode=mode,
+        ctx=ctx,
+        reader=reader,
+        on_bytes=lambda size: reporter.bytes_processed(
+            size, item.display_path
+        ),
+    )
+    if classification.attestation is None:
+        return _ProcessedItem(
+            _outcome(
+                item,
+                mode,
+                classification.result,
+                classification.reason,
+                classification.detail,
+                read_strategy=classification.read_strategy,
+            ),
+            classification.bytes_read,
+        )
+
+    result = classification.result
+    command_mode = (
+        IntegrityMode.REBASELINE
+        if mode is IntegrityMode.REBASELINE
+        else (
+            IntegrityMode.VERIFY
+            if result is IntegrityResult.VERIFIED
+            else IntegrityMode.BASELINE
+        )
+    )
+    command = IntegrityRecordCommand(
+        mode=command_mode,
+        item_id=item.item_id,
+        row_id=item.row_id,
+        location_id=item.location_id,
+        rel_path_key=item.rel_path_key,
+        scope_token=item.scope_token,
+        expected_state=item.expected_state,
+        expected_stat=expected_stat,
+        expected_baseline=item.baseline,
+        attestation=classification.attestation,
+        advances_last_verified=result is IntegrityResult.VERIFIED,
+        clear_reappeared=item.reappeared_at is not None,
+    )
+    strategy = classification.read_strategy
+    if strategy is None:
+        raise RuntimeError("successful integrity classification lacks a read strategy")
+    return _record_outcome(
+        item,
+        mode,
+        result,
+        strategy,
+        command,
+        recorder,
+        classification.bytes_read,
+    )
+
+
+def _classify_subject(
+    *,
+    root: Path,
+    relative_path: str,
+    expected_stat: FileStat,
+    baseline: Attestation | None,
+    mode: IntegrityMode,
+    ctx: VerifierContext,
+    reader: VerificationReader,
+    on_bytes: Callable[[int], None],
+) -> _SubjectClassification:
+    """Guard, hash, and classify bytes without ledger row identity or writes."""
+
     try:
-        with reader.open(item.root, validated_path) as stream:
+        with reader.open(root, relative_path) as stream:
             before = stream.stat()
             if not _matches_expected_stat(expected_stat, before):
-                return _ProcessedItem(
-                    _outcome(
-                        item,
-                        IntegrityResult.MODIFIED,
-                        IntegrityReason.STAT_CHANGED,
-                        read_strategy=stream.strategy,
-                    )
+                return _SubjectClassification(
+                    result=IntegrityResult.MODIFIED,
+                    reason=IntegrityReason.STAT_CHANGED,
+                    read_strategy=stream.strategy,
                 )
             if (
                 mode is IntegrityMode.VERIFY
-                and item.baseline is not None
-                and not _matches_expected_stat(item.baseline.subject, before)
+                and baseline is not None
+                and not _matches_expected_stat(baseline.subject, before)
             ):
-                return _ProcessedItem(
-                    _outcome(
-                        item,
-                        IntegrityResult.MODIFIED,
-                        IntegrityReason.STAT_CHANGED,
-                        read_strategy=stream.strategy,
-                    )
+                return _SubjectClassification(
+                    result=IntegrityResult.MODIFIED,
+                    reason=IntegrityReason.STAT_CHANGED,
+                    read_strategy=stream.strategy,
                 )
 
-            digest = sha256()
+            digest = _new_content_hasher(ctx.hasher_factory)
             bytes_read = 0
             for chunk in stream.iter_chunks(ctx.chunk_size):
                 ctx.run.checkpoint()
                 if not chunk:
                     continue
-                digest.update(chunk)
+                _update_content_hasher(digest, chunk)
                 bytes_read += len(chunk)
-                reporter.bytes_processed(len(chunk), item.display_path)
+                on_bytes(len(chunk))
 
             after = stream.stat()
             if not _same_open_subject(before, after):
-                return _ProcessedItem(
-                    _outcome(
-                        item,
-                        IntegrityResult.MODIFIED,
-                        IntegrityReason.READ_DRIFT,
-                        read_strategy=stream.strategy,
-                    ),
-                    bytes_read,
+                return _SubjectClassification(
+                    result=IntegrityResult.MODIFIED,
+                    reason=IntegrityReason.READ_DRIFT,
+                    read_strategy=stream.strategy,
+                    bytes_read=bytes_read,
                 )
             if bytes_read != before.size:
-                return _ProcessedItem(
-                    _outcome(
-                        item,
-                        IntegrityResult.ERROR,
-                        IntegrityReason.READ_ERROR,
-                        f"read {bytes_read} bytes from a {before.size}-byte subject",
-                        read_strategy=stream.strategy,
+                return _SubjectClassification(
+                    result=IntegrityResult.ERROR,
+                    reason=IntegrityReason.READ_ERROR,
+                    detail=(
+                        f"read {bytes_read} bytes from a "
+                        f"{before.size}-byte subject"
                     ),
-                    bytes_read,
+                    read_strategy=stream.strategy,
+                    bytes_read=bytes_read,
                 )
 
-            actual_digest = digest.digest()
+            actual_digest = _finish_content_hasher(digest)
             if (
                 mode is IntegrityMode.VERIFY
-                and item.baseline is not None
-                and actual_digest != item.baseline.content.digest
+                and baseline is not None
+                and actual_digest != baseline.content.digest
             ):
-                return _ProcessedItem(
-                    _outcome(
-                        item,
-                        IntegrityResult.MISMATCHED,
-                        IntegrityReason.HASH_MISMATCH,
-                        read_strategy=stream.strategy,
-                    ),
-                    bytes_read,
+                return _SubjectClassification(
+                    result=IntegrityResult.MISMATCHED,
+                    reason=IntegrityReason.HASH_MISMATCH,
+                    read_strategy=stream.strategy,
+                    bytes_read=bytes_read,
                 )
 
             observed_at = ctx.clock.now()
             content = ContentEvidence(
-                algorithm="sha256",
+                algorithm="xxh3_128",
                 digest=actual_digest,
                 size=bytes_read,
                 provenance=Provenance.VERIFY_ATTESTED,
@@ -356,73 +469,40 @@ def _process_item(
             attestation = Attestation(content=content, subject=subject)
             result = (
                 IntegrityResult.VERIFIED
-                if mode is IntegrityMode.VERIFY and item.baseline is not None
+                if mode is IntegrityMode.VERIFY and baseline is not None
                 else IntegrityResult.BASELINED
             )
-            command_mode = (
-                IntegrityMode.REBASELINE
-                if mode is IntegrityMode.REBASELINE
-                else (
-                    IntegrityMode.VERIFY
-                    if result is IntegrityResult.VERIFIED
-                    else IntegrityMode.BASELINE
-                )
-            )
-            command = IntegrityRecordCommand(
-                mode=command_mode,
-                item_id=item.item_id,
-                row_id=item.row_id,
-                location_id=item.location_id,
-                rel_path_key=item.rel_path_key,
-                scope_token=item.scope_token,
-                expected_state=item.expected_state,
-                expected_stat=expected_stat,
-                expected_baseline=item.baseline,
+            return _SubjectClassification(
+                result=result,
+                read_strategy=stream.strategy,
+                bytes_read=bytes_read,
                 attestation=attestation,
-                advances_last_verified=result is IntegrityResult.VERIFIED,
-                clear_reappeared=item.reappeared_at is not None,
             )
-            return _record_outcome(
-                item,
-                result,
-                stream.strategy,
-                command,
-                recorder,
-                bytes_read,
-            )
-    except (Canceled, PauseRequested):
+    except (Canceled, PauseRequested, HasherContractError):
         raise
     except FileNotFoundError as exc:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                IntegrityResult.MISSING,
-                IntegrityReason.NOT_FOUND,
-                _error_detail(exc),
-            )
+        return _SubjectClassification(
+            result=IntegrityResult.MISSING,
+            reason=IntegrityReason.NOT_FOUND,
+            detail=_error_detail(exc),
         )
     except UnsupportedVerification as exc:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                IntegrityResult.UNSUPPORTED,
-                IntegrityReason.UNSUPPORTED_READ,
-                _error_detail(exc),
-            )
+        return _SubjectClassification(
+            result=IntegrityResult.UNSUPPORTED,
+            reason=IntegrityReason.UNSUPPORTED_READ,
+            detail=_error_detail(exc),
         )
     except Exception as exc:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                IntegrityResult.ERROR,
-                IntegrityReason.READ_ERROR,
-                _error_detail(exc),
-            )
+        return _SubjectClassification(
+            result=IntegrityResult.ERROR,
+            reason=IntegrityReason.READ_ERROR,
+            detail=_error_detail(exc),
         )
 
 
 def _record_outcome(
     item: IntegritySelectionItem,
+    mode: IntegrityMode,
     result: IntegrityResult,
     strategy: ReadStrategy,
     command: IntegrityRecordCommand,
@@ -435,6 +515,7 @@ def _record_outcome(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 result,
                 IntegrityReason.RECORDING_ERROR,
                 _error_detail(exc),
@@ -448,6 +529,7 @@ def _record_outcome(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 result,
                 IntegrityReason.RECORDING_STALE,
                 read_strategy=strategy,
@@ -460,6 +542,7 @@ def _record_outcome(
         return _ProcessedItem(
             _outcome(
                 item,
+                mode,
                 result,
                 IntegrityReason.RECORDING_CONFLICT,
                 read_strategy=strategy,
@@ -471,6 +554,7 @@ def _record_outcome(
     return _ProcessedItem(
         _outcome(
             item,
+            mode,
             result,
             read_strategy=strategy,
             record_disposition=disposition,
@@ -481,6 +565,7 @@ def _record_outcome(
 
 def _outcome(
     item: IntegritySelectionItem,
+    mode: IntegrityMode,
     result: IntegrityResult,
     reason: IntegrityReason | None = None,
     detail: str | None = None,
@@ -494,6 +579,7 @@ def _outcome(
         row_id=item.row_id,
         location_id=item.location_id,
         path=item.display_path,
+        phase=mode.value,
         result=result,
         reason=reason,
         detail=detail,

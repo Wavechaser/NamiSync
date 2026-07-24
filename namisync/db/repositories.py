@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -18,10 +19,11 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import normalize_relative_path
-from namisync.core.planning import MappingPair, MappingSnapshot
+from namisync.core.planning import FilterSet, MappingPair, MappingSnapshot
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
-from .timestamps import decode_utc
+from .schema import validate_ledger_reader_contract
+from .timestamps import decode_utc, encode_utc
 
 
 class InventoryPresence(StrEnum):
@@ -45,7 +47,6 @@ class InventorySnapshot:
     scope_token: str
     missing_since: datetime | None
     acknowledged_at: datetime | None
-    excluded_at: datetime | None
     reappeared_at: datetime | None
     unsupported_reason: str | None
     hardlink_group: str | None
@@ -69,6 +70,45 @@ class MappingLookup:
     source_location_id: int
     target_location_id: int
     snapshot: MappingSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class LocationSnapshot:
+    location_id: int
+    volume_id: VolumeId
+    volume_relative_path: str
+    mount_hint: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class MappingInventoryRow:
+    inventory: InventorySnapshot
+    excluded_at: datetime | None
+    excluded_by_filter: bool
+    projection_current: bool
+
+    @property
+    def excluded(self) -> bool:
+        return self.excluded_by_filter
+
+
+@dataclass(frozen=True, slots=True)
+class MappingFilterSnapshot:
+    mapping_id: int
+    filter_snapshot: FilterSet
+    updated_at: datetime | None
+    source_location_id: int
+    target_location_id: int
+    source_rows: tuple[MappingInventoryRow, ...]
+    target_rows: tuple[MappingInventoryRow, ...]
+
+    @property
+    def planner_source_rows(self) -> tuple[InventorySnapshot, ...]:
+        return tuple(row.inventory for row in self.source_rows if not row.excluded)
+
+    @property
+    def planner_target_rows(self) -> tuple[InventorySnapshot, ...]:
+        return tuple(row.inventory for row in self.target_rows if not row.excluded)
 
 
 def _optional_time(value: str | None) -> datetime | None:
@@ -117,7 +157,7 @@ def _attestation(row: sqlite3.Row) -> Attestation | None:
         ),
     )
     content = ContentEvidence(
-        "sha256",
+        str(row["content_algorithm"]),
         bytes(row["content_digest"]),
         int(row["content_size"]),
         Provenance(row["hash_provenance"]),
@@ -142,7 +182,6 @@ def _inventory_snapshot(row: sqlite3.Row) -> InventorySnapshot:
         scope_token=str(row["scope_token"]),
         missing_since=_optional_time(row["missing_since"]),
         acknowledged_at=_optional_time(row["acknowledged_at"]),
-        excluded_at=_optional_time(row["excluded_at"]),
         reappeared_at=_optional_time(row["reappeared_at"]),
         unsupported_reason=row["unsupported_reason"],
         hardlink_group=row["hardlink_group"],
@@ -163,6 +202,11 @@ class LedgerRepository:
         self._connection = connect_ledger_reader(
             self.path, busy_timeout_ms=busy_timeout_ms
         )
+        try:
+            validate_ledger_reader_contract(self._connection)
+        except BaseException:
+            self._connection.close()
+            raise
         if trace_callback is not None:
             self._connection.set_trace_callback(trace_callback)
 
@@ -189,6 +233,163 @@ class LedgerRepository:
                     ).fetchall()
                 )
         return tuple(_inventory_snapshot(row) for row in rows)
+
+    def get_location(self, location_id: int) -> LocationSnapshot:
+        row = self._connection.execute(
+            """SELECT location.id, location.volume_relative_path,
+                      volume.serial, volume.fs_type, volume.device_id
+                 FROM locations AS location
+                 JOIN volumes AS volume ON volume.id = location.volume_id
+                WHERE location.id = ?""",
+            (location_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(location_id)
+        return LocationSnapshot(
+            location_id=int(row["id"]),
+            volume_id=VolumeId(row["serial"], row["fs_type"]),
+            volume_relative_path=row["volume_relative_path"],
+            mount_hint=row["device_id"],
+        )
+
+    def find_location(
+        self, volume_id: VolumeId, volume_relative_path: str
+    ) -> LocationSnapshot | None:
+        key = normalize_relative_path(volume_relative_path, allow_root=True)
+        row = self._connection.execute(
+            """SELECT location.id, location.volume_relative_path, volume.device_id
+                 FROM locations AS location
+                 JOIN volumes AS volume ON volume.id = location.volume_id
+                WHERE volume.serial = ? AND volume.fs_type = ?
+                  AND location.volume_relative_path_key = ?""",
+            (volume_id.serial, volume_id.fs_type, key),
+        ).fetchone()
+        if row is None:
+            return None
+        return LocationSnapshot(
+            location_id=int(row["id"]),
+            volume_id=volume_id,
+            volume_relative_path=row["volume_relative_path"],
+            mount_hint=row["device_id"],
+        )
+
+    def get_stale_inventory(
+        self, location_id: int, verified_before: datetime
+    ) -> tuple[InventorySnapshot, ...]:
+        rows = self._connection.execute(
+            """SELECT * FROM inventory
+                WHERE location_id = ?
+                  AND presence = 'present'
+                  AND entry_kind = 'file'
+                  AND (
+                      last_verified_at IS NULL
+                      OR last_verified_at < ?
+                  )
+                ORDER BY rel_path_key, id""",
+            (location_id, encode_utc(verified_before)),
+        ).fetchall()
+        return tuple(_inventory_snapshot(row) for row in rows)
+
+    def get_unacknowledged_missing(
+        self, location_id: int
+    ) -> tuple[InventorySnapshot, ...]:
+        rows = self._connection.execute(
+            """SELECT * FROM inventory
+                WHERE location_id = ? AND presence = 'missing'
+                  AND acknowledged_at IS NULL
+                ORDER BY rel_path_key, id""",
+            (location_id,),
+        ).fetchall()
+        return tuple(_inventory_snapshot(row) for row in rows)
+
+    def get_mapping_inventory(self, mapping_id: int) -> MappingFilterSnapshot:
+        if self._connection.in_transaction:
+            raise RuntimeError("mapping inventory snapshot requires an idle reader")
+        self._connection.execute("BEGIN")
+        try:
+            mapping = self._connection.execute(
+                """SELECT source_location_id, target_location_id
+                     FROM mappings
+                    WHERE id = ? AND deleted_at IS NULL""",
+                (mapping_id,),
+            ).fetchone()
+            if mapping is None:
+                raise KeyError(mapping_id)
+            filter_row = self._connection.execute(
+                """SELECT patterns_json, snapshot_hash, updated_at
+                     FROM mapping_filters WHERE mapping_id = ?""",
+                (mapping_id,),
+            ).fetchone()
+            raw_patterns = (
+                [] if filter_row is None else json.loads(filter_row["patterns_json"])
+            )
+            if not isinstance(raw_patterns, list) or not all(
+                isinstance(pattern, str) for pattern in raw_patterns
+            ):
+                raise ValueError("stored mapping filter patterns are invalid")
+            patterns = tuple(raw_patterns)
+            filter_snapshot = FilterSet(patterns)
+
+            def rows_for(location_id: int) -> tuple[MappingInventoryRow, ...]:
+                rows = self._connection.execute(
+                    """SELECT inventory.*,
+                              exclusion.excluded_at AS mapping_excluded_at,
+                              exclusion.snapshot_hash AS projection_snapshot_hash
+                         FROM inventory
+                         LEFT JOIN mapping_exclusions AS exclusion
+                           ON exclusion.inventory_id = inventory.id
+                          AND exclusion.mapping_id = ?
+                        WHERE inventory.location_id = ?
+                        ORDER BY inventory.rel_path_key, inventory.id""",
+                    (mapping_id, location_id),
+                ).fetchall()
+                result: list[MappingInventoryRow] = []
+                current_hash = (
+                    None if filter_row is None else bytes(filter_row["snapshot_hash"])
+                )
+                for row in rows:
+                    excluded_by_filter = filter_snapshot.excludes(row["rel_path"])
+                    excluded_at = _optional_time(row["mapping_excluded_at"])
+                    projection_hash = row["projection_snapshot_hash"]
+                    result.append(
+                        MappingInventoryRow(
+                            _inventory_snapshot(row),
+                            excluded_at,
+                            excluded_by_filter,
+                            (excluded_at is not None) == excluded_by_filter
+                            and (
+                                excluded_at is None
+                                or (
+                                    current_hash is not None
+                                    and projection_hash is not None
+                                    and bytes(projection_hash) == current_hash
+                                )
+                            ),
+                        )
+                    )
+                return tuple(result)
+
+            source_location_id = int(mapping["source_location_id"])
+            target_location_id = int(mapping["target_location_id"])
+            snapshot = MappingFilterSnapshot(
+                mapping_id=mapping_id,
+                filter_snapshot=filter_snapshot,
+                updated_at=(
+                    None
+                    if filter_row is None
+                    else decode_utc(filter_row["updated_at"])
+                ),
+                source_location_id=source_location_id,
+                target_location_id=target_location_id,
+                source_rows=rows_for(source_location_id),
+                target_rows=rows_for(target_location_id),
+            )
+            self._connection.execute("COMMIT")
+            return snapshot
+        except BaseException:
+            if self._connection.in_transaction:
+                self._connection.execute("ROLLBACK")
+            raise
 
     def get_mapping_snapshot(self, mapping_id: int) -> MappingSnapshot:
         mapping = self._connection.execute(

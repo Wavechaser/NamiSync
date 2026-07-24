@@ -1,8 +1,8 @@
 # Database Module
 
 Status: schema bones, safe connection factories, the M0 ledger/repositories,
-inventory reconciliation, minimal sync history, and M1 Stage 1's
-ledger-v2/history-v3 reset boundary and semantic settings store are
+inventory/filter reconciliation, generic result history, and M1's
+ledger-v2/history-v3 coordinated reset boundary and semantic settings store are
 implemented. General migrations, retention, backup/protection workflows, and
 richer history consumers remain later work.
 
@@ -24,27 +24,37 @@ state is interface-owned and never shares this file.
 `schema.py` creates a version-2 ledger and version-3 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
-correspondence, run/operation tokens, generic annotations, and nullable hardlink
-group room. Database triggers reject correspondence whose rows do not belong to
-the mapping's source and target locations.
+correspondence and filter projections, run/operation tokens, generic
+annotations, and nullable hardlink group room. Database triggers reject
+correspondence or filter projections whose rows do not belong to the mapping's
+source and target locations.
 
 `connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
-read repositories open SQLite in `mode=ro` and enable `query_only`. Live paths
-can be validated against managed roots before creation. `timestamps.py` is the
-single fixed-width aware-UTC representation used by both schemas.
+read repositories open SQLite in `mode=ro` and enable `query_only`. Before
+exposing a retained reader, both repository constructors validate the numeric
+schema version and exact contract marker through that read-only connection;
+every refusal closes the reader and leaves the database plus WAL/SHM/journal
+sidecars byte-for-byte unchanged. Live paths can be validated against managed
+roots before creation. `timestamps.py` is the single fixed-width aware-UTC
+representation used by both schemas.
 
-`repositories.py` returns immutable inventory, run, and `MappingSnapshot`
-values. Canonical path selections are queried in bounded 400-key chunks, and
-mapping correspondence is returned with stable source/target volume evidence
-and hardlink/duplicate-identity disqualification. Reads never refresh state.
+`repositories.py` returns immutable inventory, mapping-filter, run, and
+`MappingSnapshot` values. Canonical path selections are queried in bounded
+400-key chunks. A mapping-filter view is assembled in one explicit read
+transaction so policy, projection, and inventory cannot come from mixed SQLite
+snapshots. Reads expose projection disagreement but never repair state.
 
 History version 3 retains the run envelope/summary and replaces operation-only
-detail with generic `history_items` tagged by item type and phase. It also
-reserves `history_phases` for later phase-summary producers. The current sync
-observer writes only `item_type=operation`, `phase=execute` items and writes no
-phase rows.
+detail with generic `history_items` tagged by item type and phase. Sync and
+standalone integrity write ordered generic items. `history_phases` is reserved
+for later compound phase-summary producers; Stage 1/3 writes no phase rows.
 
-Opening ledger v1 or history v1/v2 raises the same actionable
+The final M1 schemas carry immutable whole-contract metadata:
+ledger `contract_id=m1-ledger-xxh3-128-mapping-filters-v1` and history
+`contract_id=m1-history-generic-items-phases-v1` (decision
+`M1-SCHEMA-CONTRACT-20260724-02`). Opening ledger v1, history v1/v2, or a
+transitional ledger-v2/history-v3 database with a missing/mismatched marker
+raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete
 both local database files before restarting. `reset_databases()` is an explicit
@@ -73,12 +83,16 @@ The initial schema reserves the expensive identity/evidence bones:
 - optional file identity and nullable hardlink-group room;
 - mappings linking distinct source/target locations with soft `deleted_at`;
 - mapping-scoped correspondence constrained to rows in the mapping's locations;
+- authoritative mapping filter snapshots plus snapshot-hash-tagged
+  `(mapping_id, inventory_id)` exclusion projections constrained to either
+  mapping location;
 - run/op idempotency tokens and actual UTC run window;
 - digest algorithm/value, `ContentEvidence`, attested subject stat, provenance,
   observed/hash/verified times kept semantically distinct;
 - metadata snapshot fields for attributes and creation time; ADS has no scan,
   inventory, or schema representation;
-- presence, acknowledgement, exclusion, reappearance, and unsupported state;
+- physical presence, acknowledgement, reappearance, and unsupported state,
+  independent of mapping-scoped exclusion policy;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
 Drive letters are current mount/display data, never persisted identity. Label
@@ -208,7 +222,8 @@ rather than current implementation claims.
 - History run envelopes round-trip filesystem status, independent
   recording/audit axes, and `Disposition` without deriving them from detail
   count or text.
-- Ledger v1 and history v1/v2 are refused without schema/content mutation and
+- Ledger v1, history v1/v2, and current-number transitional schemas lacking the
+  exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.
 - The explicit coordinated development reset recreates ledger v2/history v3;
   normal startup never deletes either database.

@@ -252,7 +252,7 @@ class WalkingScanner:
         complete = requested_scope.kind is ScanScopeKind.FULL
 
         if requested_scope.kind is ScanScopeKind.PATHS:
-            self._scan_selected(
+            complete = self._scan_selected(
                 resolved,
                 volume,
                 ignores,
@@ -263,7 +263,6 @@ class WalkingScanner:
                 unsupported,
                 warnings,
             )
-            complete = False
         else:
             complete = self._scan_full(
                 resolved,
@@ -467,20 +466,28 @@ class WalkingScanner:
         directories: list[DirRecord],
         unsupported: list[UnsupportedRecord],
         warnings: list[ScanWarning],
-    ) -> None:
+    ) -> bool:
+        complete = True
         for rel_path in scope.selected_paths:
             ctx.checkpoint()
             absolute = join_under_root(root, rel_path)
             try:
                 stat = self._backend.lstat(absolute)
+            except FileNotFoundError as error:
+                warnings.append(
+                    ScanWarning(ScanWarningCode.DISAPPEARED, rel_path, str(error))
+                )
+                continue
             except (OSError, PermissionError) as error:
                 warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
                 unsupported.append(
                     UnsupportedRecord(rel_path, normalize_relative_path(rel_path), self._unsupported_error(error))
                 )
+                complete = False
                 continue
             is_directory = stat_module.S_ISDIR(stat.st_mode) and not _is_reparse(stat)
             if ignores.excludes(rel_path, is_directory=is_directory):
+                complete = False
                 continue
             if _is_placeholder(stat):
                 unsupported.append(
@@ -497,11 +504,21 @@ class WalkingScanner:
                 directories.append(
                     DirRecord(rel_path, normalize_relative_path(rel_path), snapshot.mtime_ns, snapshot.metadata, snapshot.file_identity, snapshot.nlink)
                 )
-            else:
+            elif stat_module.S_ISREG(stat.st_mode):
                 snapshot = _to_stat(stat, EntryKind.FILE, volume)
                 files.append(
                     FileRecord(rel_path, normalize_relative_path(rel_path), snapshot.size, snapshot.mtime_ns, snapshot.file_identity, snapshot.nlink, snapshot.metadata)
                 )
+            else:
+                unsupported.append(
+                    UnsupportedRecord(
+                        rel_path,
+                        normalize_relative_path(rel_path),
+                        UnsupportedReason.UNKNOWN_TYPE,
+                    )
+                )
+                warnings.append(ScanWarning(ScanWarningCode.UNKNOWN_TYPE, rel_path))
+        return complete
 
     @staticmethod
     def _error_code(error: OSError) -> ScanWarningCode:

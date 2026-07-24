@@ -12,15 +12,31 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
-from namisync.core.events import Envelope, ItemOutcome, Progress, StateChanged, Terminal
+from namisync.core.events import (
+    Envelope,
+    Gap,
+    ItemOutcome,
+    PhaseChanged,
+    Progress,
+    StateChanged,
+    Terminal,
+    result_item_from_dict,
+    result_item_to_dict,
+)
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.session import OperationResult, SessionRecord, SessionState
+from namisync.core.session import (
+    OperationResult,
+    ResultItem,
+    SessionRecord,
+    SessionState,
+)
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
     connect_history_reader,
     connect_history_writer,
 )
+from .schema import validate_history_reader_contract
 from .schema import initialize_history
 from .timestamps import decode_utc, encode_utc
 from .writer import RecordingError, SerializedWriter, TokenConflictError
@@ -50,15 +66,10 @@ class HistoryContext:
 
 
 @dataclass(frozen=True, slots=True)
-class HistoryOperationSnapshot:
+class HistoryItemSnapshot:
     item_order: int
     event_seq: int | None
-    item_id: str
-    kind: str
-    path: str
-    outcome: Outcome
-    reason: str | None
-    detail: Mapping[str, object]
+    item: ResultItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,7 +91,7 @@ class HistoryRunSnapshot:
     canceled: bool
     bytes_done: int
     bytes_total: int
-    operations: tuple[HistoryOperationSnapshot, ...]
+    items: tuple[HistoryItemSnapshot, ...]
     error_type: str | None
     error_message: str | None
 
@@ -171,7 +182,7 @@ class HistoryObserver:
         self._record = record
         self._context = context
         self._event_hashes: dict[int, bytes] = {}
-        self._items: list[tuple[int, ItemOutcome]] = []
+        self._items: list[tuple[int, ResultItem]] = []
         self._running_at: datetime | None = record.started_at
         self._closed = False
         self._finalized = False
@@ -199,8 +210,12 @@ class HistoryObserver:
             and self._running_at is None
         ):
             self._running_at = envelope.at
-        if isinstance(envelope.body, ItemOutcome):
+        if isinstance(envelope.body, ResultItem):
             self._items.append((envelope.seq, envelope.body))
+        elif not isinstance(envelope.body, (StateChanged, PhaseChanged, Gap)):
+            raise HistoryIntegrityError(
+                f"unsupported reliable event body: {type(envelope.body).__name__}"
+            )
 
     def finalize(self, result: OperationResult) -> None:
         if self._closed:
@@ -239,7 +254,11 @@ class HistoryObserver:
                 if bytes(prior["payload_hash"]) != payload_hash:
                     raise TokenConflictError("history run token payload changed")
                 return
-            counts = Counter(item.outcome for _, item in self._items)
+            counts = Counter(
+                item.outcome
+                for _, item in self._items
+                if isinstance(item, ItemOutcome)
+            )
             run_id = int(
                 connection.execute(
                     """INSERT INTO history_runs(
@@ -292,14 +311,26 @@ class HistoryObserver:
                         run_id,
                         order,
                         seq,
-                        "operation",
-                        "execute",
+                        item.item_type,
+                        item.phase,
                         item.item_id,
-                        item.kind,
+                        (
+                            item.kind
+                            if isinstance(item, ItemOutcome)
+                            else item.item_type
+                        ),
                         item.path,
-                        item.outcome.value,
-                        item.reason,
-                        _json_text(item.detail),
+                        (
+                            item.outcome.value
+                            if isinstance(item, ItemOutcome)
+                            else item.result.value
+                        ),
+                        (
+                            item.reason
+                            if isinstance(item, ItemOutcome)
+                            else None if item.reason is None else item.reason.value
+                        ),
+                        _json_text(result_item_to_dict(item)),
                     )
                     for order, (seq, item) in enumerate(self._items)
                 ),
@@ -339,6 +370,11 @@ class HistoryRepository:
         self._connection = connect_history_reader(
             self.path, busy_timeout_ms=busy_timeout_ms
         )
+        try:
+            validate_history_reader_contract(self._connection)
+        except BaseException:
+            self._connection.close()
+            raise
 
     def get(self, run_token: str) -> HistoryRunSnapshot:
         row = self._connection.execute(
@@ -346,20 +382,15 @@ class HistoryRepository:
         ).fetchone()
         if row is None:
             raise KeyError(run_token)
-        operations = tuple(
-            HistoryOperationSnapshot(
+        items = tuple(
+            HistoryItemSnapshot(
                 item_order=int(item["item_order"]),
                 event_seq=None if item["event_seq"] is None else int(item["event_seq"]),
-                item_id=item["item_id"],
-                kind=item["kind"],
-                path=item["path"],
-                outcome=Outcome(item["result"]),
-                reason=item["reason"],
-                detail=json.loads(item["detail_json"]),
+                item=_history_item(item),
             )
             for item in self._connection.execute(
                 """SELECT * FROM history_items
-                    WHERE run_id = ? AND item_type = 'operation'
+                    WHERE run_id = ?
                     ORDER BY item_order""",
                 (row["id"],),
             )
@@ -382,7 +413,7 @@ class HistoryRepository:
             canceled=bool(row["canceled"]),
             bytes_done=int(row["bytes_done"]),
             bytes_total=int(row["bytes_total"]),
-            operations=operations,
+            items=items,
             error_type=row["error_type"],
             error_message=row["error_message"],
         )
@@ -407,3 +438,32 @@ class HistoryRepository:
 
     def __exit__(self, exc_type, exc, traceback) -> None:
         self.close()
+
+
+def _history_item(row: sqlite3.Row) -> ResultItem:
+    raw = json.loads(row["detail_json"])
+    if not isinstance(raw, Mapping):
+        raise HistoryIntegrityError("history item payload must be an object")
+    item = result_item_from_dict(raw)
+    data = result_item_to_dict(item)
+    expected = {
+        "item_type": row["item_type"],
+        "phase": row["phase"],
+        "item_id": row["item_id"],
+        "kind": row["kind"],
+        "path": row["path"],
+        "result": row["result"],
+        "reason": row["reason"],
+    }
+    actual = {
+        "item_type": data["item_type"],
+        "phase": data["phase"],
+        "item_id": data["item_id"],
+        "kind": data["kind"],
+        "path": data["path"],
+        "result": data["result"],
+        "reason": data["reason"],
+    }
+    if actual != expected:
+        raise HistoryIntegrityError("history item columns disagree with payload")
+    return item

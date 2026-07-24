@@ -301,8 +301,8 @@ def test_pause_resume_cancel_terminal_retains_pre_pause_item_outcome() -> None:
     assert dispatcher.cancel(session_id).accepted
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
     assert record.result is not None
-    assert len(record.result.operations) == 1
-    earned = record.result.operations[0]
+    assert len(record.result.items) == 1
+    earned = record.result.items[0]
     assert isinstance(earned, ItemOutcome)
     assert earned.item_id == "earned"
     assert dispatcher.shutdown().complete

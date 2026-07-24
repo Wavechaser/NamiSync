@@ -97,6 +97,7 @@ class ExecutionReason(StrEnum):
     SHARING_VIOLATION = "sharing-violation"
     ACL_COPY_FAILED = "acl-copy-failed"
     CLEANUP_FAILED = "cleanup-failed"
+    PUBLISHED_SIZE_MISMATCH = "published-size-mismatch"
     IO_ERROR = "io-error"
     POLICY_STOP = "policy-stop"
     CANCELED = "canceled"
@@ -139,8 +140,10 @@ class CopyDigest:
     size: int
 
     def __post_init__(self) -> None:
-        if len(self.digest) != 32:
-            raise ValueError("copy digest must be SHA-256")
+        if not isinstance(self.digest, bytes):
+            raise TypeError("copy digest must be bytes")
+        if len(self.digest) != 16:
+            raise ValueError("copy digest must be XXH3-128")
         if self.size < 0:
             raise ValueError("copied size cannot be negative")
 
@@ -213,7 +216,9 @@ class ExecutorFileSystem(Protocol):
 
     def open_source(self, path: Path) -> BinaryIO: ...
 
-    def create_temp(self, path: Path) -> BinaryIO: ...
+    def create_temp(
+        self, path: Path, *, allocation_size: int | None
+    ) -> BinaryIO: ...
 
     def flush_file(self, stream: BinaryIO) -> None: ...
 
@@ -229,6 +234,25 @@ class ExecutorFileSystem(Protocol):
     ) -> None: ...
 
     def copy_security(self, source: Path, target: Path) -> None: ...
+
+    def finalize_temp(
+        self,
+        path: Path,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        acl_source: Path | None,
+    ) -> FileStat: ...
+
+    def ensure_published_metadata(
+        self,
+        path: Path,
+        finalized_temp: FileStat,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        apply_readonly: bool,
+    ) -> FileStat: ...
 
     def publish_new(self, temp: Path, target: Path) -> None: ...
 

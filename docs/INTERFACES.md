@@ -1,8 +1,11 @@
 # Interfaces Layer
 
 Status: M0 CLI is implemented. M1 Stage 1 adds isolated cosmetic UI-state
-storage and a tested WebView2 security spike; the desktop host remains Stage 6
-and the API remains latent.
+storage and a tested WebView2 security spike. Stage 3 registers inventory,
+baseline, verify, and rebaseline with the interface-owned production dispatcher
+registry but deliberately adds no parser commands. The shared facade/CLI
+expansion remains Stage 5, the desktop host remains Stage 6, and the API remains
+latent.
 
 ## Purpose
 
@@ -34,8 +37,11 @@ view's prior target path as their displayed origin, so recase, move, and
 move-update approvals show the actual old-to-new target spelling.
 
 The implemented options and numeric exits are recorded in
-[COMMANDLINE.md](COMMANDLINE.md). Queue control, machine output, integrity
-commands, and the desktop action layer remain deferred.
+[COMMANDLINE.md](COMMANDLINE.md). The production composition root registers
+plan, execution, inventory, baseline, verify, and rebaseline with their exact
+pause capabilities; parser choices remain only `sync` and `history`. Queue
+control, machine output, integrity commands, and the desktop action layer remain
+deferred.
 
 ## M1 Stage 1 Desktop Foundations
 

@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pytest
 
 from namisync.core.events import Envelope, ItemOutcome, SCHEMA_VERSION, StateChanged
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.integrity import (
+    IntegrityOutcome,
+    IntegrityReason,
+    IntegrityResult,
+    ReadStrategy,
+    RecordDisposition,
+)
 from namisync.core.session import (
     Disposition,
     OperationResult,
@@ -60,7 +67,7 @@ def test_history_round_trips_sync_axes_and_ordered_operations(tmp_path: Path) ->
         recording=RecordingStatus.DEGRADED,
         audit=RecordingStatus.OK,
         disposition=Disposition.RAN,
-        operations=(item,),
+        items=(item,),
         bytes_done=7,
         bytes_total=7,
     )
@@ -90,9 +97,9 @@ def test_history_round_trips_sync_axes_and_ordered_operations(tmp_path: Path) ->
     assert snapshot.disposition == Disposition.RAN.value
     assert snapshot.started_at == NOW
     assert snapshot.ended_at == NOW
-    assert len(snapshot.operations) == 1
-    assert snapshot.operations[0].event_seq == 2
-    assert snapshot.operations[0].detail == {"bytes": 7}
+    assert len(snapshot.items) == 1
+    assert snapshot.items[0].event_seq == 2
+    assert snapshot.items[0].item == item
     assert tuple(stored_item) == ("operation", "execute", Outcome.SUCCEEDED.value)
     assert phase_count == 0
 
@@ -110,7 +117,7 @@ def test_history_hash_and_detail_json_escape_unpaired_surrogates(
         Outcome.SKIPPED,
         detail={"message": hostile},
     )
-    result = OperationResult(SessionState.COMPLETED, operations=(item,))
+    result = OperationResult(SessionState.COMPLETED, items=(item,))
 
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
         observer = store.observer(record, context)
@@ -119,7 +126,7 @@ def test_history_hash_and_detail_json_escape_unpaired_surrogates(
         with HistoryRepository(store.path) as repository:
             snapshot = repository.get("run-hostile-detail")
 
-    assert snapshot.operations[0].detail == {"message": hostile}
+    assert snapshot.items[0].item == item
 
 
 def test_history_records_blocked_outcome_and_aggregate(tmp_path: Path) -> None:
@@ -132,7 +139,7 @@ def test_history_records_blocked_outcome_and_aggregate(tmp_path: Path) -> None:
         Outcome.BLOCKED,
         reason="unsupported",
     )
-    result = OperationResult(SessionState.COMPLETED, operations=(item,))
+    result = OperationResult(SessionState.COMPLETED, items=(item,))
 
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
         observer = store.observer(record, context)
@@ -149,9 +156,7 @@ def test_history_records_blocked_outcome_and_aggregate(tmp_path: Path) -> None:
         finally:
             connection.close()
 
-    assert snapshot.operations[0].outcome is Outcome.BLOCKED
-    assert snapshot.operations[0].path == "junction"
-    assert snapshot.operations[0].reason == "unsupported"
+    assert snapshot.items[0].item == item
     assert blocked_count == 1
 
 
@@ -169,7 +174,7 @@ def test_history_keeps_noop_refusal_browseable(tmp_path: Path) -> None:
 
     assert snapshot.filesystem_status is SessionState.REFUSED
     assert snapshot.disposition == Disposition.UNRUN.value
-    assert snapshot.operations == ()
+    assert snapshot.items == ()
 
 
 def test_history_duplicate_delivery_is_idempotent_but_conflict_is_diagnosed(
@@ -178,7 +183,7 @@ def test_history_duplicate_delivery_is_idempotent_but_conflict_is_diagnosed(
     record = _record()
     context = HistoryContext("run-1", "host-1")
     item = ItemOutcome("op-1", "noop", "a.txt", Outcome.SKIPPED)
-    result = OperationResult(SessionState.COMPLETED, operations=(item,))
+    result = OperationResult(SessionState.COMPLETED, items=(item,))
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
         first = store.observer(record, context)
         first.on_event(_envelope(record, 1, item))
@@ -193,8 +198,74 @@ def test_history_duplicate_delivery_is_idempotent_but_conflict_is_diagnosed(
         conflicting.on_event(_envelope(record, 1, changed))
         with pytest.raises(TokenConflictError):
             conflicting.finalize(
-                OperationResult(SessionState.FAILED, operations=(changed,))
+                OperationResult(SessionState.FAILED, items=(changed,))
             )
+
+
+def test_history_round_trips_integrity_item_and_rejects_unknown_body(
+    tmp_path: Path,
+) -> None:
+    record = _record("session-integrity", kind="integrity-verify")
+    context = HistoryContext(
+        "run-integrity",
+        "host-1",
+        activity_kind="integrity-verify",
+        subject_kind="location",
+        subject_id="8",
+        target_context=r"C:\library",
+    )
+    item = IntegrityOutcome(
+        item_id="row-12",
+        row_id="12",
+        location_id="8",
+        path="asset.bin",
+        result=IntegrityResult.MISMATCHED,
+        reason=IntegrityReason.HASH_MISMATCH,
+        detail="digest differs",
+        read_strategy=ReadStrategy.WINDOWS_UNBUFFERED,
+        recording=RecordingStatus.DEGRADED,
+        record_disposition=RecordDisposition.STALE,
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        recording=RecordingStatus.DEGRADED,
+        items=(item,),
+        bytes_done=7,
+        bytes_total=7,
+    )
+
+    @dataclass(frozen=True)
+    class UnknownBody:
+        value: str
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        observer.on_event(_envelope(record, 1, item))
+        with pytest.raises(HistoryIntegrityError, match="unsupported reliable"):
+            observer.on_event(_envelope(record, 2, UnknownBody("unknown")))
+        observer.finalize(result)
+        with HistoryRepository(store.path) as repository:
+            snapshot = repository.get("run-integrity")
+        connection = connect_history_reader(store.path)
+        try:
+            stored = connection.execute(
+                """SELECT item_type, phase, result, reason
+                     FROM history_items"""
+            ).fetchone()
+            phase_count = connection.execute(
+                "SELECT count(*) FROM history_phases"
+            ).fetchone()[0]
+        finally:
+            connection.close()
+
+    assert snapshot.items[0].item == item
+    assert tuple(stored) == (
+        "integrity",
+        "verify",
+        "mismatched",
+        "hash-mismatch",
+    )
+    assert phase_count == 0
 
 
 def test_conflicting_duplicate_event_sequence_is_rejected_before_storage(

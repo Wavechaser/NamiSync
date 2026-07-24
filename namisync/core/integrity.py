@@ -14,11 +14,11 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from time import monotonic
-from typing import Callable, Iterator, Mapping, Protocol
+from typing import Callable, ClassVar, Iterator, Mapping, Protocol
 
-from .evidence import Attestation, RecordingStatus
+from .evidence import Attestation, HasherFactory, RecordingStatus
 from .models import FileStat
-from .session import RunContext
+from .session import ResultItem, RunContext
 
 
 class InventoryState(StrEnum):
@@ -157,6 +157,10 @@ class IntegritySelection:
     def processed_bytes(self) -> int:
         return self._processed_bytes
 
+    @property
+    def completed_bytes(self) -> Mapping[str, int]:
+        return dict(self._completed_bytes)
+
     def note_bytes_processed(self, size: int) -> None:
         if size < 0:
             raise ValueError("processed byte increment cannot be negative")
@@ -173,8 +177,10 @@ class IntegritySelection:
 
 
 @dataclass(frozen=True)
-class IntegrityOutcome:
+class IntegrityOutcome(ResultItem):
     """Reliable typed event for one selected inventory row."""
+
+    item_type: ClassVar[str] = "integrity"
 
     item_id: str
     row_id: str
@@ -186,6 +192,15 @@ class IntegrityOutcome:
     read_strategy: ReadStrategy | None = None
     recording: RecordingStatus = RecordingStatus.OK
     record_disposition: RecordDisposition | None = None
+    phase: str = IntegrityMode.VERIFY.value
+
+    def __post_init__(self) -> None:
+        if not self.item_id or not self.row_id or not self.location_id:
+            raise ValueError("integrity outcome identifiers must be non-empty")
+        if not self.path:
+            raise ValueError("integrity outcome path must be non-empty")
+        if self.phase not in {mode.value for mode in IntegrityMode}:
+            raise ValueError("integrity outcome phase must name its integrity mode")
 
 
 @dataclass(frozen=True)
@@ -285,11 +300,14 @@ class VerifierContext:
 
     run: RunContext
     clock: Clock
+    hasher_factory: HasherFactory
     monotonic: Callable[[], float] = monotonic
     chunk_size: int = 4 * 1024 * 1024
     progress_interval_seconds: float = 0.1
 
     def __post_init__(self) -> None:
+        if not callable(self.hasher_factory):
+            raise TypeError("verification hasher factory must be callable")
         if self.chunk_size <= 0:
             raise ValueError("verification chunk size must be positive")
         if self.progress_interval_seconds < 0:

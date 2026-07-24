@@ -1,10 +1,11 @@
 # Inventory Domain
 
-Status: the database retention/reconciliation foundation is implemented; M1
-workflow, selection, acknowledgement/filter controls, and interface composition
-remain. Inventory is not a new sideways-calling operation module: scanner
-observes, workflows coordinate, and database repositories/recorder retain
-state.
+Status: the M1 role-free inventory workflow, scoped reconciliation,
+acknowledgement/restore, mapping-scoped filter persistence, typed queries, and
+standalone integrity selection are implemented. Inventory is not a new
+sideways-calling operation module: scanner observes, workflows coordinate, and
+database repositories/recorder retain state. CLI/UI commands remain deliberately
+unexposed until the later interface stage.
 
 ## Purpose
 
@@ -13,12 +14,13 @@ physical location and what integrity evidence exists. A location may exist with
 zero, one, or many mappings. Inventory state must not be reinterpreted by plan
 view state, mapping role, UI filters, or a partial scan.
 
-## Implemented Persistence Slice
+## Implemented Inventory Slice
 
 The ledger schema stores current observation fields separately from attested
 hash subject fields, including nullable identity/hardlink-group room, presence,
-unsupported reason, missing/acknowledgement/exclusion/reappearance timestamps,
-host provenance, and scope token. Ordinary scans update only current
+unsupported reason, missing/acknowledgement/reappearance timestamps, host
+provenance, and scope token. Mapping exclusion projection timestamps live in
+their separate mapping-scoped table. Ordinary scans update only current
 observation fields and cannot rewrite an established attestation.
 
 `LedgerRecorder.record_inventory()` batches present, directory, and unsupported
@@ -31,8 +33,27 @@ transition.
 `LedgerRepository` returns immutable typed rows and bounded canonical-path
 selections. The conditional integrity recorder writes attestation and optionally
 clears `reappeared_at`/advances true verification time in the same transaction.
-Acknowledgement/restore, mapping-filter state, stale-age queries, and the
-workflow that automatically constructs verifier selections remain M1 work.
+Acknowledgement/restore changes only visibility state, while stale-age queries
+select candidates without mutating them.
+
+The inventory workflow re-resolves stable volume identity before each
+invocation, registers first locations in the exact order host -> volume
+observation -> role-free location -> scan -> inventory recording, and
+never creates a mapping from location-only activity. Resolution preserves five
+distinct outcomes: `resolved`, `offline`, `ambiguous`, `root_missing`, and
+`root_unavailable`. Ambiguity requires an explicit choice before submission;
+a changed candidate set (including a newly mounted clone) refuses before scan
+or hash work at initial start, resume, and queued wakeup. Native root stat and
+probe calls preserve the logical path in workflow details while delegating
+extended-length conversion and directory access to the long-path-safe scanner
+boundary.
+
+The production dispatcher registry contains inventory (pause unsupported) and
+baseline/verify/rebaseline (pause supported), although no CLI/UI start command
+is exposed yet. Integrity continuation stores the exact admitted inventory row
+ids plus completed ids/bytes. A resume always refreshes physical inventory but
+hashes only the original candidate set, so a newly appeared row is retained
+without being swept into an already admitted session.
 
 ## State Model
 
@@ -47,9 +68,13 @@ reviewed preservation. Every walked directory has a `DirRecord`, and typed
 unsupported state is never reconstructed from warning text. ADS is not
 inventory state: the deferred feature enumerates streams only in the executor.
 
-Mapping correspondence is separate and mapping-scoped. A shared location keeps
-one physical inventory while each mapping retains independent source/target
-relationship evidence.
+Mapping correspondence and filtering are separate and mapping-scoped. A shared
+location keeps one physical inventory while each mapping retains independent
+source/target relationship and filter evidence. `mapping_filters` is the
+authoritative current `FilterSet`; planner-facing reads evaluate it
+deterministically for every row. `mapping_exclusions(mapping_id, inventory_id)`
+is only a snapshot-hash-tagged cache/audit projection. A stale projection is
+reported through typed snapshot state and never overrules the current filter.
 
 Hashed rows preserve the stat unit that the hash attests. A later ordinary scan
 must not overwrite those baseline stats merely to reflect current modified
@@ -83,6 +108,12 @@ An unmounted volume is offline, not a location full of missing files. Mapping
 filters mark rows excluded from that mapping view while preserving physical
 inventory evidence. Acknowledging missing hides it from the default view but
 does not delete evidence; restore reverses only acknowledgement.
+
+Complete filter replacement evaluates every current row in both mapping
+locations. The recorder rechecks that exact identity coverage inside the same
+writer transaction before replacing the filter and both projections, closing
+the inventory-row race. A role-free refresh never updates mapping policy; new
+or untouched rows are classified dynamically until a later projection refresh.
 
 ## Location And Mapping Guidance
 
@@ -143,6 +174,9 @@ summary and policy; missing acknowledgement is not pruning.
 - Acknowledgement/restore changes visibility state without deleting evidence.
 - Mapping filters preserve physical rows and cannot turn exclusions into target
   deletion candidates.
+- Two mappings sharing one physical location may exclude the same row
+  differently; a new row and an inverse filter change take effect immediately
+  without stale projection policy.
 - Hashed baseline stats are not overwritten by ordinary observation of modified
   content; verifier classifies it `modified`.
 - A location with >33k files reconciles without SQL variable overflow and with
@@ -151,5 +185,7 @@ summary and policy; missing acknowledgement is not pruning.
   location.
 - Drive-letter/label change resolves the same known volume; filesystem-type
   change requires rebind; simultaneous clone ambiguity requires a choice.
+- Offline, ambiguous, missing-root, and unavailable-root outcomes perform no
+  scan and mark no retained row missing; only `resolved` reconciles.
 - Inventory queries expose zero/one/many mappings without guessing.
 - UI filtering and Plan invalidation cannot clear or mutate inventory state.

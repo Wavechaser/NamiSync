@@ -1,16 +1,17 @@
 # Hash Pipeline, XXH3, and Executor IO Refactor
 
-Status: investigation and planning last revised 2026-07-24. M1 Stage 1
-prerequisites are implemented: the standard-library-only streaming hasher
-protocol, compatible `xxhash>=3.8.1,<4` project dependency,
-ledger-v2/history-v3 schema/reset boundary, and removal of the fingerprinted
-`worker_count` setting. Neither performance track below is implemented. This
-document records two independent M1 performance tracks:
+Status: implementation and acceptance last revised 2026-07-24. Both M1
+performance tracks are implemented: the adaptive single-file pipeline and IO
+finalization changes, followed by the atomic executor/verifier switch to fixed
+XXH3-128 content evidence. M1 Stage 3 now supplies the same exact factory to
+production standalone integrity composition. This document records the
+decisions, measurements, implementation shape, and acceptance gates for two
+independent M1 performance tracks:
 an adaptive single-file copy backend with cheaper finalization, and the
 wholesale replacement of SHA-256 content hashing with XXH3-128.
 
-**Standing.** This document governs the unimplemented hash-throughput work
-until each decision is promoted into the active documents. `FEATURES.md` owns
+**Standing.** This document remains the detailed hash-throughput decision and
+acceptance record after implementation. `FEATURES.md` owns
 behavior, `ARCHITECTURE.md` owns contracts, and module documents are
 subordinate to both. Where this plan changes a settled contract, the active
 document is updated as that track lands. Once promoted, the active document
@@ -255,6 +256,69 @@ reproduction must:
 Figures re-derived on other hardware should be recorded with their own
 environment block rather than overwriting these results.
 
+### 2.8 Final M1 Executor Results
+
+The final current-tip pass ran on Windows 11 with Python 3.13.14 and the
+production-shaped buffered executor: cached sequential source reads, the fixed
+adaptive pipeline, XXH3-128, conditional allocation, native finalization, and
+conditional publication repair. The source was `F:` (WD Black SN850X 1). The
+three physically separate targets were `G:` (WD Black SN850X 2), `E:` (Intel
+Optane 905p 2), and `J:` (Ultrastar DC HC550 2). Each pass ran all five standard
+corpora once after the allocation and three-engine comparison passes. Every
+recorded digest-consistency check passed.
+
+`Final` is the fixed finalization portion of total wall time. `Read block` and
+`Write starve` are cumulative stage-wait seconds. `Peak` is resident pipeline
+payload, not the sum of both FIFO sizes.
+
+| Target | Corpus | Total s | Final s | ops/s | MiB/s | Read block s | Write starve s | Peak MiB |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| SN850X (`G:`) | 1,000×4 KiB | 2.426115 | 1.117480 | 412.182 | 1.610 | 0 | 0.099278 | 0.254 |
+| SN850X (`G:`) | 512×128 KiB | 1.254469 | 0.589136 | 408.141 | 51.018 | 0 | 0.064119 | 0.375 |
+| SN850X (`G:`) | 64×4 MiB | 0.393860 | 0.172582 | 162.494 | 649.977 | 0 | 0.018092 | 2.250 |
+| SN850X (`G:`) | 4×128 MiB | 0.294476 | 0.132547 | 13.583 | 1,738.682 | 0 | 0.023257 | 12.000 |
+| SN850X (`G:`) | 1×4 GiB | 2.013835 | 0.590547 | 0.497 | 2,033.930 | 0 | 0.277525 | 16.000 |
+| Optane (`E:`) | 1,000×4 KiB | 2.966425 | 1.072386 | 337.106 | 1.317 | 0 | 0.141431 | 0.254 |
+| Optane (`E:`) | 512×128 KiB | 1.834070 | 0.672684 | 279.161 | 34.895 | 0 | 0.101058 | 0.375 |
+| Optane (`E:`) | 64×4 MiB | 0.549419 | 0.248531 | 116.487 | 465.947 | 0 | 0.058961 | 2.250 |
+| Optane (`E:`) | 4×128 MiB | 0.578321 | 0.326494 | 6.917 | 885.322 | 0 | 0.032361 | 28.000 |
+| Optane (`E:`) | 1×4 GiB | 3.812030 | 1.969835 | 0.262 | 1,074.493 | 0.073228 | 0.153220 | 32.000 |
+| HDD (`J:`) | 1,000×4 KiB | 19.929609 | 17.966147 | 50.177 | 0.196 | 0 | 0.137491 | 0.254 |
+| HDD (`J:`) | 512×128 KiB | 10.598803 | 9.601175 | 48.307 | 6.038 | 0 | 0.089363 | 0.375 |
+| HDD (`J:`) | 64×4 MiB | 2.703054 | 2.468304 | 23.677 | 94.708 | 0 | 0.049619 | 2.000 |
+| HDD (`J:`) | 4×128 MiB | 2.453846 | 2.290032 | 1.630 | 208.652 | 0 | 0.025814 | 20.000 |
+| HDD (`J:`) | 1×4 GiB | 18.109766 | 3.258926 | 0.055 | 226.176 | 13.390727 | 0.158418 | 32.000 |
+
+A separate controlled pass ran the current executor, the retired serial
+SHA-256 loop, and a serial hashless loop over the same 15 target/corpus pairs.
+For the mandatory 1,000×4 KiB band, the current executor improved operations
+per second over serial SHA-256 by 83.1% on `G:`, 92.1% on `E:`, and 37.6% on
+`J:`; worker startup therefore did not create an end-to-end small-file
+regression. Across the other pairs it improved on serial SHA-256 by
+16.9%–334.9%, except the storage-bound `J:` 4 GiB run at -0.2% (measurement
+noise), and improved on serial hashless by 3.4%–246.5%.
+
+The allocation sweep used three interleaved allocated/unallocated repetitions
+at each prefix. Positive values below mean allocation reduced median wall time:
+
+| Prefix | SN850X `G:` | Optane `E:` | HDD `J:` |
+|---|---:|---:|---:|
+| 1 MiB | +13.9% | +5.4% | -34.2% |
+| 2 MiB | +1.7% | +4.3% | +24.1% |
+| 4 MiB | -2.2% | +0.1% | +24.3% |
+| 8 MiB | +4.2% | +1.1% | +19.1% |
+| 16 MiB | +1.1% | -0.8% | +35.1% |
+| 32 MiB | +0.5% | +0.3% | +4.5% |
+| 64 MiB | +1.6% | -0.4% | +9.7% |
+| 128 MiB | -1.6% | +1.8% | +12.2% |
+
+The solid-state deltas above the small-prefix noise floor are effectively
+neutral, while the HDD gains become consistently positive from 8 MiB upward.
+M1 therefore uses 8 MiB as the conservative private allocation threshold:
+smaller files avoid setup and the 1 MiB HDD regression, while unsupported
+allocation falls back and every substantive allocation error still fails
+before streaming.
+
 ---
 
 ## 3. Decision Log
@@ -361,6 +425,15 @@ existing history v1→v2 shortcut is removed or disabled before raising
 constant and would otherwise mislabel a v1 database as v3 after applying only
 the v2 shape. Ledger v1, history v1, and history v2 all take the same
 actionable reset path.
+
+Decision `M1-SCHEMA-CONTRACT-20260724-02` also qualifies those final numeric
+versions with immutable `contract_id` values:
+`m1-ledger-xxh3-128-mapping-filters-v1` and
+`m1-history-generic-items-phases-v1`. A nonempty database is checked read-only
+for version and then exact marker before any writer or schema script runs.
+Missing or mismatched markers—including transitional databases already labeled
+ledger v2/history v3—are refused through the same reset-both path; they are
+never silently backfilled.
 
 The new schema *shapes* this reset materializes are owned by `M1_PLAN.md`
 Stage 1, not by this document. The history-v3 shape in particular includes the
@@ -853,6 +926,14 @@ visible and deterministic without inventing buffer ownership state.
 This track deliberately has no registry, algorithm setting, location
 preference, or per-run algorithm field.
 
+**Implemented 2026-07-24.** Copy, baseline, verify, and rebaseline use the fixed
+identifier `xxh3_128` and raw 16-byte digest. The sole concrete import is in
+workflow composition, which retains one exact constructor object and injects it
+into both native copy and standalone verifier contexts. The coordinated reset
+creates ledger v2/history v3 with exact immutable final-contract markers and
+refuses older, transitional, missing-marker, or mismatched-marker databases
+before mutation.
+
 | Change | Required result |
 |---|---|
 | `pyproject.toml` | **Stage 1 complete:** declares compatible `xxhash>=3.8.1,<4`; Track 2 consumes it |
@@ -861,8 +942,8 @@ preference, or per-run algorithm field.
 | `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
 | `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |
 | `modules/verifier.py` | Baseline, verify, and rebaseline obtain a hasher from the context, require a 16-byte result before any comparison, and record `xxh3_128` |
-| `workflows/runtime.py` — Stage 2 half | Composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies`. **Lands with Track 2.** |
-| `workflows/runtime.py` — Stage 3 half | The later M1 inventory/integrity stage supplies the same constructor when it first creates production `VerifierContext` values. **Does not land in Stage 2:** Track 2 adds the `VerifierContext` factory *field*, but its first production construction site is Stage 3 (see the prose below). |
+| `workflows/runtime.py` — Stage 2 half | **Complete:** composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies` |
+| `workflows/runtime.py` — Stage 3 half | **Complete:** production standalone inventory/integrity composition supplies that identical retained constructor object to every `VerifierContext` |
 | `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
 | Tests and fixtures | Replace SHA-256 content expectations with canonical XXH3-128 bytes |
 
@@ -880,21 +961,18 @@ seam, while workflow composition supplies the single concrete XXH3-128
 constructor. Core owns the fixed evidence contract plus the structural
 streaming protocol; it does not own a concrete factory or an algorithm map.
 
-`ExecutorPolicies` currently declares
-`copy_backend: CopyBackend = field(default_factory=NativeCopyBackend)`. Once
-`NativeCopyBackend` requires its collaborator, that default is invalid. Drop
-the default and make workflow composition pass the fully constructed backend
-explicitly. Do not preserve the default by making the module import or create
-the concrete XXH3 implementation.
+`ExecutorPolicies.copy_backend` is required, with no default construction.
+Workflow composition passes the fully constructed backend explicitly; the
+module neither imports nor creates the concrete XXH3 implementation.
 
 Track 2 owns the verifier replacement as well as the copy replacement:
-`VerifierContext` gains the required factory field, and baseline, verify, and
-rebaseline switch to XXH3-128 with focused module tests here. It does **not**
-prematurely construct a production integrity session. `VerifierContext` has no
-production construction site until M1's later inventory/integrity stage; that
-stage wires the already-fixed seam without reopening the algorithm decision.
-Splitting the two consumers across plans would permit copy evidence and
-verification evidence to drift during the same destructive schema boundary.
+`VerifierContext` gained the required factory field, and baseline, verify, and
+rebaseline switched to XXH3-128 with focused module tests. Track 2 did not
+prematurely construct a production integrity session; Stage 3 supplied the
+first production verifier context through the already-fixed seam without
+reopening the algorithm decision. The integrated production test proves exact
+factory object identity while also proving the executor uses its sequential
+cached opener and the verifier uses its Windows-unbuffered opener.
 
 The existing non-content SHA-256 uses in `core/planning.py`,
 `dispatcher/custody.py`, `db/history.py`, and `db/recorder.py` are explicitly

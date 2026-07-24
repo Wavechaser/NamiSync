@@ -17,6 +17,7 @@ from namisync.core.session import (
     OperationResult,
     PauseRequested,
     ResourceId,
+    ResultItem,
     SessionId,
     SessionRecord,
     SessionState,
@@ -114,7 +115,7 @@ class Dispatcher:
         self._records: dict[SessionId, SessionRecord] = {}
         self._controls: dict[SessionId, _Control] = {}
         self._hubs: dict[SessionId, EventHub] = {}
-        self._item_events: dict[SessionId, list[object]] = {}
+        self._item_events: dict[SessionId, list[ResultItem]] = {}
         self._pending: deque[SessionId] = deque()
         self._reserved: set[ResourceId] = set()
         self._leases: dict[SessionId, ResourceLease] = {}

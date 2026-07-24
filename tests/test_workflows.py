@@ -303,7 +303,7 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
             Outcome.SUCCEEDED,
         )
         ctx.emit(item)
-        return OperationResult(SessionState.COMPLETED, operations=(item,))
+        return OperationResult(SessionState.COMPLETED, items=(item,))
 
     deps = SimpleNamespace(
         save_execution_details=saved.append,
@@ -319,7 +319,7 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
     result = run_execution(xset, RunContext(events.append, lambda: None), deps)
 
     assert result.status is SessionState.COMPLETED
-    assert [item.outcome for item in result.operations] == [
+    assert [item.outcome for item in result.items] == [
         Outcome.BLOCKED,
         Outcome.SUCCEEDED,
     ]
@@ -433,7 +433,7 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
 
     assert result.status is SessionState.REFUSED
     assert result.disposition is Disposition.UNRUN
-    assert [item.outcome for item in result.operations] == [Outcome.BLOCKED]
+    assert [item.outcome for item in result.items] == [Outcome.BLOCKED]
     assert [item.outcome for item in events if isinstance(item, ItemOutcome)] == [
         Outcome.BLOCKED
     ]

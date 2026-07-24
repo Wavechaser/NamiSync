@@ -126,6 +126,16 @@ class FailureDetail:
     message: str
 
 
+class ResultItem:
+    """Nominal marker for reliable, ordered session result items."""
+
+    __slots__ = ()
+
+    item_id: str
+    item_type: str
+    phase: str
+
+
 @dataclass(frozen=True, slots=True)
 class OperationResult:
     """Axis-separated terminal truth for a generic operation session."""
@@ -135,7 +145,7 @@ class OperationResult:
     audit: RecordingStatus = RecordingStatus.OK
     disposition: Disposition = Disposition.RAN
     canceled: bool = False
-    operations: tuple[object, ...] = ()
+    items: tuple[ResultItem, ...] = ()
     bytes_done: int = 0
     bytes_total: int = 0
     error: FailureDetail | None = None
@@ -143,6 +153,10 @@ class OperationResult:
     def __post_init__(self) -> None:
         if not is_terminal(self.status):
             raise ValueError("operation result status must be terminal")
+        if not isinstance(self.items, tuple):
+            raise TypeError("operation result items must be a tuple")
+        if any(not isinstance(item, ResultItem) for item in self.items):
+            raise TypeError("operation result items must implement ResultItem")
         if self.bytes_done < 0 or self.bytes_total < 0:
             raise ValueError("result byte counts cannot be negative")
         if self.bytes_done > self.bytes_total:
@@ -233,7 +247,7 @@ def run_session(
     finalize_audit: FinalizeAudit,
     publish_result: Callable[[OperationResult], None],
     disposition: Disposition = Disposition.RAN,
-    item_accumulator: list[object] | None = None,
+    item_accumulator: list[ResultItem] | None = None,
 ) -> RunOutcome:
     """Run one workflow and emit its sole terminal event.
 
@@ -243,8 +257,12 @@ def run_session(
     to create a second terminal path.
     """
 
-    from namisync.core.events import ItemOutcome, Progress, Terminal
+    from namisync.core.events import Progress, Terminal
 
+    if item_accumulator is not None and any(
+        not isinstance(item, ResultItem) for item in item_accumulator
+    ):
+        raise TypeError("item accumulator must contain only ResultItem values")
     items = item_accumulator if item_accumulator is not None else []
     latest_progress: Progress | None = None
 
@@ -252,9 +270,7 @@ def run_session(
         nonlocal latest_progress
         if isinstance(body, Terminal):
             raise ValueError("workflow code cannot emit Terminal")
-        if isinstance(body, ItemOutcome) or (
-            hasattr(body, "item_id") and hasattr(body, "path")
-        ):
+        if isinstance(body, ResultItem):
             items.append(body)
         elif isinstance(body, Progress):
             latest_progress = body
@@ -265,6 +281,7 @@ def run_session(
         result = work(context)
         if not isinstance(result, OperationResult):
             raise TypeError("workflow must return OperationResult")
+        result = replace(result, items=tuple(items))
     except PauseRequested:
         settle(SessionState.PAUSED, None)
         return RunOutcome(paused=True, result=None)
@@ -279,7 +296,7 @@ def run_session(
             status=SessionState.CANCELED,
             disposition=disposition,
             canceled=True,
-            operations=tuple(items),
+            items=tuple(items),
             bytes_done=bytes_done,
             bytes_total=bytes_total,
         )
@@ -293,7 +310,7 @@ def run_session(
         result = OperationResult(
             status=SessionState.FAILED,
             disposition=disposition,
-            operations=tuple(items),
+            items=tuple(items),
             bytes_done=bytes_done,
             bytes_total=bytes_total,
             error=FailureDetail(type(error).__name__, str(error)),

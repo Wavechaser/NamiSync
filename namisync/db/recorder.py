@@ -31,7 +31,10 @@ from namisync.core.recording import (
     FinishRunCommand,
     HostCommand,
     InventoryCommand,
+    InventoryVisibilityAction,
+    InventoryVisibilityCommand,
     LocationCommand,
+    MappingFilterCommand,
     MappingCommand,
     SyncRunCommand,
     VolumeCommand,
@@ -435,6 +438,220 @@ class LedgerRecorder:
 
         return self._writer.transact(apply)
 
+    def change_inventory_visibility(
+        self, command: InventoryVisibilityCommand
+    ) -> RecordDisposition:
+        payload_hash = _payload_hash(command)
+        command_key = f"inventory-visibility:{command.command_id}"
+
+        def apply(connection: sqlite3.Connection) -> RecordDisposition:
+            prior = self._command_receipt(connection, command_key, payload_hash)
+            if prior is not None:
+                return prior
+            row = connection.execute(
+                """SELECT location_id, presence, acknowledged_at
+                     FROM inventory WHERE id = ?""",
+                (command.row_id,),
+            ).fetchone()
+            if row is None or int(row["location_id"]) != command.location_id:
+                disposition = RecordDisposition.STALE
+            elif row["presence"] != "missing":
+                disposition = RecordDisposition.STALE
+            elif command.action is InventoryVisibilityAction.ACKNOWLEDGE:
+                if row["acknowledged_at"] is not None:
+                    disposition = RecordDisposition.NOOP
+                else:
+                    connection.execute(
+                        "UPDATE inventory SET acknowledged_at = ? WHERE id = ?",
+                        (encode_utc(command.changed_at), command.row_id),
+                    )
+                    disposition = RecordDisposition.APPLIED
+            elif row["acknowledged_at"] is None:
+                disposition = RecordDisposition.NOOP
+            else:
+                connection.execute(
+                    "UPDATE inventory SET acknowledged_at = NULL WHERE id = ?",
+                    (command.row_id,),
+                )
+                disposition = RecordDisposition.APPLIED
+            self._store_command_receipt(
+                connection,
+                command_key,
+                "inventory-visibility",
+                payload_hash,
+                disposition,
+                command.changed_at,
+            )
+            return disposition
+
+        return self._writer.transact(apply)
+
+    def record_mapping_filter(
+        self, command: MappingFilterCommand
+    ) -> RecordDisposition:
+        payload_hash = _payload_hash(command)
+        command_key = f"mapping-filter:{command.command_id}"
+
+        def apply(connection: sqlite3.Connection) -> RecordDisposition:
+            prior = self._command_receipt(connection, command_key, payload_hash)
+            if prior is not None:
+                return prior
+            mapping = connection.execute(
+                """SELECT source_location_id, target_location_id
+                     FROM mappings
+                    WHERE id = ? AND deleted_at IS NULL""",
+                (command.mapping_id,),
+            ).fetchone()
+            if mapping is None:
+                raise MappingValidationError("mapping filter requires an active mapping")
+            mapping_locations = {
+                int(mapping["source_location_id"]),
+                int(mapping["target_location_id"]),
+            }
+            complete_locations = set(command.complete_location_ids)
+            if not complete_locations.issubset(mapping_locations):
+                raise MappingValidationError(
+                    "mapping-filter completeness names an unrelated location"
+                )
+
+            snapshot_hash = _payload_hash(command.filter_snapshot)
+            prior_filter = connection.execute(
+                "SELECT snapshot_hash FROM mapping_filters WHERE mapping_id = ?",
+                (command.mapping_id,),
+            ).fetchone()
+            if (
+                prior_filter is None
+                or bytes(prior_filter["snapshot_hash"]) != snapshot_hash
+            ) and complete_locations != mapping_locations:
+                raise MappingValidationError(
+                    "a changed mapping filter requires complete evaluation of both locations"
+                )
+
+            evaluations: list[tuple[int, int, bool]] = []
+            evaluation_identities: set[tuple[int, int, str]] = set()
+            for evaluation in command.evaluations:
+                if evaluation.location_id not in mapping_locations:
+                    raise MappingValidationError(
+                        "mapping filter evaluation belongs to another location"
+                    )
+                row = connection.execute(
+                    """SELECT id, rel_path FROM inventory
+                        WHERE id = ? AND location_id = ? AND rel_path_key = ?""",
+                    (
+                        evaluation.row_id,
+                        evaluation.location_id,
+                        evaluation.rel_path_key,
+                    ),
+                ).fetchone()
+                if row is None:
+                    raise StaleRecordingError(
+                        "mapping filter evaluation no longer matches inventory"
+                    )
+                if command.filter_snapshot.excludes(row["rel_path"]) != evaluation.excluded:
+                    raise MappingValidationError(
+                        "mapping filter evaluation disagrees with its filter snapshot"
+                    )
+                identity = (
+                    evaluation.location_id,
+                    int(row["id"]),
+                    evaluation.rel_path_key,
+                )
+                if identity in evaluation_identities:
+                    raise MappingValidationError(
+                        "mapping filter evaluation contains a duplicate inventory row"
+                    )
+                evaluation_identities.add(identity)
+                evaluations.append(
+                    (evaluation.location_id, int(row["id"]), evaluation.excluded)
+                )
+
+            for location_id in complete_locations:
+                current_identities = {
+                    (
+                        int(row["location_id"]),
+                        int(row["id"]),
+                        str(row["rel_path_key"]),
+                    )
+                    for row in connection.execute(
+                        """SELECT id, location_id, rel_path_key
+                             FROM inventory
+                            WHERE location_id = ?""",
+                        (location_id,),
+                    ).fetchall()
+                }
+                covered_identities = {
+                    identity
+                    for identity in evaluation_identities
+                    if identity[0] == location_id
+                }
+                if covered_identities != current_identities:
+                    raise StaleRecordingError(
+                        "complete mapping filter evaluation does not cover current inventory"
+                    )
+
+            patterns_json = json.dumps(
+                list(command.filter_snapshot.patterns),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            connection.execute(
+                """INSERT INTO mapping_filters(
+                       mapping_id, patterns_json, snapshot_hash, updated_at
+                   ) VALUES (?, ?, ?, ?)
+                   ON CONFLICT(mapping_id) DO UPDATE SET
+                       patterns_json = excluded.patterns_json,
+                       snapshot_hash = excluded.snapshot_hash,
+                       updated_at = excluded.updated_at""",
+                (
+                    command.mapping_id,
+                    patterns_json,
+                    snapshot_hash,
+                    encode_utc(command.changed_at),
+                ),
+            )
+            for location_id in complete_locations:
+                connection.execute(
+                    """DELETE FROM mapping_exclusions
+                        WHERE mapping_id = ?
+                          AND inventory_id IN (
+                              SELECT id FROM inventory WHERE location_id = ?
+                          )""",
+                    (command.mapping_id, location_id),
+                )
+            for _, row_id, excluded in evaluations:
+                if not excluded:
+                    connection.execute(
+                        """DELETE FROM mapping_exclusions
+                            WHERE mapping_id = ? AND inventory_id = ?""",
+                        (command.mapping_id, row_id),
+                    )
+                    continue
+                connection.execute(
+                    """INSERT INTO mapping_exclusions(
+                           mapping_id, inventory_id, snapshot_hash, excluded_at
+                       ) VALUES (?, ?, ?, ?)
+                       ON CONFLICT(mapping_id, inventory_id) DO UPDATE SET
+                           snapshot_hash = excluded.snapshot_hash,
+                           excluded_at = excluded.excluded_at""",
+                    (
+                        command.mapping_id,
+                        row_id,
+                        snapshot_hash,
+                        encode_utc(command.changed_at),
+                    ),
+                )
+            self._store_command_receipt(
+                connection,
+                command_key,
+                "mapping-filter",
+                payload_hash,
+                RecordDisposition.APPLIED,
+                command.changed_at,
+            )
+            return RecordDisposition.APPLIED
+
+        return self._writer.transact(apply)
+
     def _validate_inventory_location(
         self, connection: sqlite3.Connection, command: InventoryCommand
     ) -> None:
@@ -642,9 +859,12 @@ class LedgerRecorder:
 
         desired = command.attestation
         already = self._row_matches_attestation(row, desired)
-        verified_ok = not command.advances_last_verified or row["last_verified_at"] == encode_utc(
-            desired.content.observed_at
+        desired_verified_at = (
+            encode_utc(desired.content.observed_at)
+            if command.advances_last_verified
+            else None
         )
+        verified_ok = row["last_verified_at"] == desired_verified_at
         reappeared_ok = not command.clear_reappeared or row["reappeared_at"] is None
         if already and verified_ok and reappeared_ok:
             return RecordDisposition.NOOP
@@ -659,7 +879,7 @@ class LedgerRecorder:
                       attested_file_identity_volume_serial = ?,
                       attested_file_identity_file_index = ?, attested_nlink = ?,
                       attested_attributes = ?, attested_created_ns = ?,
-                      last_verified_at = CASE WHEN ? THEN ? ELSE last_verified_at END,
+                      last_verified_at = ?,
                       reappeared_at = CASE WHEN ? THEN NULL ELSE reappeared_at END
                 WHERE id = ?""",
             (
@@ -676,8 +896,7 @@ class LedgerRecorder:
                 subject.nlink,
                 subject.metadata.attributes,
                 subject.metadata.created_ns,
-                command.advances_last_verified,
-                encode_utc(desired.content.observed_at),
+                desired_verified_at,
                 command.clear_reappeared,
                 command.row_id,
             ),
@@ -1131,7 +1350,8 @@ class SyncRunRecorder:
                    attested_kind = ?, attested_size = ?, attested_mtime_ns = ?,
                    attested_file_identity_volume_serial = ?,
                    attested_file_identity_file_index = ?, attested_nlink = ?,
-                   attested_attributes = ?, attested_created_ns = ?
+                   attested_attributes = ?, attested_created_ns = ?,
+                   last_verified_at = NULL
                  WHERE id = ?""",
             (
                 attestation.content.algorithm,

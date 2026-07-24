@@ -33,8 +33,10 @@ without opening content or fabricating identity.
 
 Full scans retain the walked root plus every reachable directory and declare
 completeness modulo the exact `IgnoreSet`. `ScanScope.selected()` performs
-only named-path stats, never a full walk, and deliberately returns a scoped,
-non-complete result so a consumer cannot use it for missing inference.
+only named-path stats, never a full walk, and reports completeness relative to
+that declared scope. Present, unsupported, and conclusively absent requested
+keys are complete-for-scope; ignored, access-failed, or interrupted requests
+make the scoped result incomplete.
 
 The result contains the resolved root, `VolumeId` plus corroborating
 `VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every walked
@@ -90,9 +92,10 @@ reparse traversal, or root identity change makes the scan reviewable but
 non-executable where absence could drive mutation.
 
 Selected inventory refresh is a separate scoped observation mode. It may update
-named paths but must never infer that unselected rows are missing. The workflow
-and inventory repository own that distinction; the scanner exposes scope and
-completeness clearly enough to enforce it.
+named paths and a complete scoped result may classify a conclusively absent
+requested key as missing. It never implies that an unselected row is missing.
+The recorder branches on `ScanResult.is_full_scan`, not on `complete`, when
+choosing full-tree versus selected reconciliation.
 
 An offline/unmounted volume is not an empty complete scan. It yields a typed
 offline result and cannot trigger missing marking or target-only planning.
@@ -173,12 +176,14 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Long paths above legacy `MAX_PATH` scan successfully without truncation.
 - An offline volume never returns a complete empty snapshot and never causes a
   missing sweep.
-- A scoped refresh of two paths performs no full walk and cannot mark a third
-  row missing.
+- A complete scoped refresh over present A and absent B performs no full walk,
+  may reconcile only A/B, and cannot mark unrequested C/D missing; access
+  failure or interruption makes the scoped result incomplete and marks no
+  requested key missing.
 - Import-linter proves scanner code imports core but no sibling module.
 
 ## M0 Verification
 
-`tests/test_scanner.py` contains 15 focused scanner tests. Shared path and
+`tests/test_scanner.py` contains focused scanner tests. Shared path and
 artifact-grammar coverage lives in `tests/test_core_scanplan.py`; the complete
 suite and import-linter are the release gates.

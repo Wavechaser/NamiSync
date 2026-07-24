@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 
 from .evidence import RecordingStatus
 from .models import ScanResult, VolumeEvidence, VolumeId
-from .planning import OpId, Plan, selection_digest as calculate_selection_digest
+from .pathing import normalize_relative_path
+from .planning import (
+    FilterSet,
+    OpId,
+    Plan,
+    selection_digest as calculate_selection_digest,
+)
 from .session import SessionState
 
 
@@ -133,3 +140,65 @@ class InventoryCommand:
         if not self.scope_token:
             raise ValueError("inventory scope token is required")
         _require_utc(self.observed_at, "observed_at")
+
+
+class InventoryVisibilityAction(StrEnum):
+    ACKNOWLEDGE = "acknowledge"
+    RESTORE = "restore"
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryVisibilityCommand:
+    command_id: str
+    location_id: int
+    row_id: str
+    action: InventoryVisibilityAction
+    changed_at: datetime
+
+    def __post_init__(self) -> None:
+        if not self.command_id or not self.row_id:
+            raise ValueError("inventory visibility identifiers are required")
+        if self.location_id < 1:
+            raise ValueError("inventory visibility location id must be positive")
+        _require_utc(self.changed_at, "changed_at")
+
+
+@dataclass(frozen=True, slots=True)
+class MappingFilterEvaluation:
+    location_id: int
+    row_id: str
+    rel_path_key: str
+    excluded: bool
+
+    def __post_init__(self) -> None:
+        if self.location_id < 1 or not self.row_id or not self.rel_path_key:
+            raise ValueError("mapping filter evaluation identity is required")
+        if self.rel_path_key != normalize_relative_path(self.rel_path_key):
+            raise ValueError("mapping filter evaluation path must be canonical")
+
+
+@dataclass(frozen=True, slots=True)
+class MappingFilterCommand:
+    command_id: str
+    mapping_id: int
+    filter_snapshot: FilterSet
+    evaluations: tuple[MappingFilterEvaluation, ...]
+    complete_location_ids: tuple[int, ...]
+    changed_at: datetime
+
+    def __post_init__(self) -> None:
+        if not self.command_id:
+            raise ValueError("mapping filter command id is required")
+        if self.mapping_id < 1:
+            raise ValueError("mapping id must be positive")
+        identities = [
+            (item.location_id, item.row_id, item.rel_path_key)
+            for item in self.evaluations
+        ]
+        if len(identities) != len(set(identities)):
+            raise ValueError("mapping filter evaluations must be unique")
+        if any(value < 1 for value in self.complete_location_ids):
+            raise ValueError("complete mapping-filter location ids must be positive")
+        if len(self.complete_location_ids) != len(set(self.complete_location_ids)):
+            raise ValueError("complete mapping-filter location ids must be unique")
+        _require_utc(self.changed_at, "changed_at")

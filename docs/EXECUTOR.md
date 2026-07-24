@@ -1,9 +1,11 @@
 # Executor Module
 
-Status: M0 implemented. The native single-worker executor covers every reviewed
-operation kind on local Windows filesystems, with focused acceptance coverage.
-External writers remain outside NamiSync's volume-lock contract; the residual
-update race is documented below rather than presented as closed.
+Status: M1 Stage 2 implemented. The native executor covers every reviewed
+operation kind on local Windows filesystems. Normal copies use one bounded
+reader/hasher/writer pipeline at a time, fixed adaptive chunks, XXH3-128
+evidence, measured conditional preallocation, and single-handle native
+finalization. External writers remain outside NamiSync's volume-lock contract;
+the residual update race is documented below rather than presented as closed.
 
 ## Purpose
 
@@ -72,26 +74,42 @@ documentation rather than becoming a false compare-and-swap guarantee.
 
 1. Validate expected source and destination states.
 2. Create an exclusive exact-name temp in the final target parent and volume.
-3. Stream source bytes through `CopyBackend` in bounded chunks while hashing and
-   checkpointing; backend writes bytes only.
-4. Copy the current source security descriptor only when ACL preservation is
-   opted in; failure fails the operation. ADS is not part of the M0 state
-   machine.
-5. Flush content to the medium, apply creation time/standard attributes under
-   the plan's `PreservationPolicy` except readonly, and flush again when metadata
-   durability requires it. Readonly is applied only after publish.
-6. Re-stat source. Drift fails and removes/quarantines the temp; no attestation
+   At or above the measured private 8 MiB threshold, request exactly the
+   reviewed allocation without advancing logical EOF. Only explicitly
+   unsupported allocation falls back; disk-full, quota, permission, and
+   unknown errors fail before streaming.
+3. Open the source through the cached `O_SEQUENTIAL` path. Select a fixed
+   256 KiB chunk below 8 MiB, 1 MiB below 32 MiB, or 4 MiB thereafter, capped
+   by `ExecutorPolicies.max_chunk_size`.
+4. Stream immutable chunks through caller/reader → hasher → writer under one
+   combined 32 MiB payload budget and 32-item caps on both FIFOs. The hasher
+   and writer are the only workers; the caller admits reads, checkpoints, and
+   reports progress only after hash and full write complete in FIFO order.
+   Every file size, including empty and 4 KiB, uses this same pipeline.
+5. Close the content writer without flushing it. Open one finalization handle
+   before any opted-in ACL is copied, apply normalized creation/mtime/access and
+   managed attributes while withholding readonly, issue exactly one
+   `FlushFileBuffers` on that held handle, and retain its normalized stat.
+   ACL failure fails before publish. ADS remains outside the state machine.
+6. Require the digest byte count to equal the reviewed size, then re-stat the
+   source. Drift fails and removes the exact current-owned temp; no attestation
    is recorded.
 7. Re-check destination expected absence/state at publish and use a conditional
    atomic primitive appropriate to the planned before-state.
 8. Atomically publish with the Windows/local-filesystem primitive.
-9. Open the parent directory with `GENERIC_WRITE` and
+9. Compare one post-publish target stat with the normalized temp baseline.
+   Repair and flush only fields publication changed, including name-tunneled
+   creation time or deferred readonly; otherwise perform no target metadata
+   write, target reopen, or second file flush. The resulting observed stat is
+   reused for the size guard and attestation.
+10. Open the parent directory with `GENERIC_WRITE` and
    `FILE_FLAG_BACKUP_SEMANTICS`, then attempt a best-effort flush. A refused or
    unsupported flush is a per-operation durability warning; the result claims
    durability only for what was actually flushed.
-10. Stat the published target and construct `Attestation(ContentEvidence,
-   target_stat)` so target identity is never confused with source identity.
-11. Call recorder. A recorder failure preserves the filesystem outcome and
+11. Require the published target size to equal the hashed byte count and
+    construct `Attestation(ContentEvidence("xxh3_128", ...), target_stat)` so
+    target identity is never confused with source identity.
+12. Call recorder. A recorder failure preserves the filesystem outcome and
     degrades `RecordingStatus` instead of relabeling the copy as failed.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
@@ -211,8 +229,12 @@ otherwise record a stale/skipped outcome rather than refreshing false evidence.
 
 ## Cancellation, Pause, And Failure
 
-Copy chunks are bounded so cancel/pause latency is bounded. Either request
-unwinds rather than blocking. Executor catches `Canceled` only long enough to
+Pipeline admission checks cancel/pause between reads and while every bounded
+queue operation waits, so at most one further read is admitted after a
+stage-observed request. Either request aborts both workers, joins them, releases
+the complete byte budget, and unwinds rather than blocking. First-error storage
+preserves one original worker/callback/control exception instead of leaking a
+queue-shutdown artifact. Executor catches `Canceled` only long enough to
 clean/retain exact owned temps and emit reliable canceled outcomes for the
 in-flight and unreached selection, then re-raises for runner aggregation and the
 one canceled terminal. Pause abandons/reclaims an in-flight temp through
@@ -285,27 +307,37 @@ whole-tree preflight, broad temp deletion, false byte totals, unsafe
 incomplete-scan destructive execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
 attestation guard, and composite move-update gap.
 
-## M0 Implementation
+## M1 Stage 2 Implementation
 
 `namisync/core/execution.py` owns `ExecutionSet`, validated run identifiers,
 typed executor reasons and decisions, and the filesystem/copy/recorder
 protocols. `namisync/modules/executor.py` supplies `NativeFileSystem`,
 `NativeCopyBackend`, `BoundedFailurePolicy`, `ExecutorPolicies`, and `execute`.
-The implementation has no sibling-module import; workflow supplies the reviewed
-and freshly preflighted set, dispatcher/session owns custody and terminal
-aggregation, and the run-bound recorder owns durable ledger interpretation.
+The module consumes a required parameterless hasher factory and has no
+third-party or sibling-module import; workflow composition owns the sole
+concrete `xxhash.xxh3_128` object and supplies the reviewed, freshly
+preflighted set. Dispatcher/session owns custody and terminal aggregation, and
+the run-bound recorder owns durable ledger interpretation.
 
-The focused M0 suite exercises all nine operation kinds; atomic conditional
-publish and displacement; hardlink and copy-backup update paths; source and
-target drift; ACL and readonly ordering; prior-run exact temp recovery and
-current-run/lookalike isolation; reparse/off-volume
-trash refusal; move/composite failure bounds; dependency continuation; deferred
-directory metadata; cancel, pause, unexpected interruption, simple and
-multi-step bounded sharing retry, recorder degradation, progress throttling,
-and copy attestations. The
-workflow/dispatcher/recorder suites cover the acceptance responsibilities that
+The Stage 2 suite re-proves all nine operation kinds through the new path and
+pins every gate in `HASH_REFACTOR.md` §4.5: stage overlap and FIFO/byte bounds;
+exact first-error teardown; growth/shrink, cancellation, pause, and callback
+paths; adaptive-band wiring; allocation allowlist; exact temp grammar and
+recovery isolation; one finalization handle/flush; conditional repair;
+published-size guards for copy/update/move-update; copy-backup boundaries; and
+the complete move-update stage-fault matrix. The factory/evidence tests also
+prove copy→ledger→Windows-unbuffered verify round-trip, raw 16-byte digest
+contracts, repository reconstruction, and preservation of SHA-256 identity
+hashes. Workflow/dispatcher/recorder suites retain the responsibilities that
 belong outside this module, including fresh preflight, custody, one terminal,
-and durable run-token idempotency.
+durable run-token idempotency, and independent recording/audit status.
+
+The final production-shaped benchmark ran all five standard corpora from
+`F:` NAND to separate `G:` NAND, `E:` Optane, and `J:` HDD targets. It records
+operations/s, throughput, fixed finalization time, stage starvation, payload
+high-water, legacy serial comparisons, and the allocation sweep in
+`HASH_REFACTOR.md` §2.8. The measured 8 MiB allocation threshold and adaptive
+chunk bands remain private constants, not settings.
 
 ## Acceptance Criteria
 
@@ -324,7 +356,9 @@ and durable run-token idempotency.
 - Source mutation during any chunk or before final stat fails the operation and
   records no digest/attestation.
 - Opt-in ACL copy failure fails before publish and leaves the prior live target
-  untouched. ADS has no M0 acceptance case because the policy is not exposed.
+  untouched. A real restrictive-DACL test proves the held finalization handle
+  still sets basic information and flushes after a fresh metadata reopen is
+  denied. ADS has no acceptance case because the policy is not exposed.
 - Target appearance/change after preflight but before mutation is detected by
   the final guard when it occurs before that guard. Faults injected between
   guard and touch prove only the condition owned by the mutation primitive:
@@ -359,9 +393,10 @@ and durable run-token idempotency.
 - Native NTFS parent-directory flush succeeds with a writable directory handle;
   injected refusal remains an honest per-operation durability warning.
 - No-op drift cannot refresh identity, last-seen, hash, or correspondence.
-- Multi-GiB simulated copy cancellation and pause occur within one configured
-  chunk; pause persists completed status, emits no terminal, releases custody,
-  and resume performs fresh preflight at the back of the queue.
+- Stage-synchronized multi-GiB cancellation and pause admit at most one further
+  read, join both workers, and release the full byte budget; pause persists
+  completed status, emits no terminal, releases custody, and resume performs
+  fresh preflight at the back of the queue.
 - Progress totals equal copy/update content bytes exactly and remain monotonic;
   event rate stays under the configured bound.
 - Transient sharing violations retry within bound, including update replace and

@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 from typing import Iterator
 
 import pytest
+from xxhash import xxh3_128
 
+import namisync.modules.verifier as verifier_module
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
+    HasherContractError,
+    HasherFactory,
     Provenance,
     RecordingStatus,
 )
@@ -140,8 +145,8 @@ def _attestation(
 ) -> Attestation:
     return Attestation(
         content=ContentEvidence(
-            algorithm="sha256",
-            digest=sha256(data).digest(),
+            algorithm="xxh3_128",
+            digest=xxh3_128(data).digest(),
             size=len(data),
             provenance=provenance,
             observed_at=_NOW,
@@ -184,10 +189,12 @@ def _context(
     events: list[object],
     checkpoint=lambda: None,
     monotonic=lambda: 0.0,
+    hasher_factory: HasherFactory = xxh3_128,
 ) -> VerifierContext:
     return VerifierContext(
         run=RunContext(emit=events.append, checkpoint=checkpoint),
         clock=_Clock(),
+        hasher_factory=hasher_factory,
         monotonic=monotonic,
         chunk_size=1,
         progress_interval_seconds=0.1,
@@ -196,6 +203,13 @@ def _context(
 
 def _integrity_events(events: list[object]) -> list[IntegrityOutcome]:
     return [event for event in events if isinstance(event, IntegrityOutcome)]
+
+
+def test_xxh3_128_digest_encoding_is_raw_canonical_big_endian() -> None:
+    hasher = xxh3_128()
+
+    assert hasher.digest().hex() == "99aa06d3014798d86001c324468d497f"
+    assert hasher.digest() == hasher.intdigest().to_bytes(16, "big")
 
 
 @pytest.mark.parametrize(
@@ -208,7 +222,7 @@ def _integrity_events(events: list[object]) -> list[IntegrityOutcome]:
             b"abc",
             IntegrityResult.MODIFIED,
         ),
-        (_stat(), b"xyz", IntegrityResult.MISMATCHED),
+        (_stat(), b"abd", IntegrityResult.MISMATCHED),
         (_stat(), b"abc", IntegrityResult.VERIFIED),
     ],
 )
@@ -231,6 +245,118 @@ def test_verify_classifies_stat_drift_before_digest_mismatch(
     assert result.outcomes[0].result is expected_result
     assert len(_integrity_events(events)) == 1
     assert len(recorder.commands) == (1 if expected_result is IntegrityResult.VERIFIED else 0)
+
+
+def test_valid_different_xxh3_digest_remains_a_hash_mismatch(tmp_path: Path) -> None:
+    item = _item(tmp_path)
+    recorder = _Recorder()
+
+    result = verify(
+        IntegritySelection((item,)),
+        _context([]),
+        recorder,
+        _FakeReader(
+            {item.display_path: _StreamSpec(item.expected_stat, (b"abd",))}  # type: ignore[arg-type]
+        ),
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.MISMATCHED
+    assert result.outcomes[0].reason is IntegrityReason.HASH_MISMATCH
+    assert recorder.commands == []
+
+
+def test_wrong_length_hasher_digest_raises_contract_error_before_comparison(
+    tmp_path: Path,
+) -> None:
+    class WrongLengthHasher:
+        def update(self, data: bytes) -> None:
+            del data
+
+        def digest(self) -> bytes:
+            return b"x" * 15
+
+    item = _item(tmp_path)
+    recorder = _Recorder()
+    events: list[object] = []
+
+    with pytest.raises(HasherContractError, match="exactly 16 bytes"):
+        verify(
+            IntegritySelection((item,)),
+            _context(events, hasher_factory=WrongLengthHasher),
+            recorder,
+            _FakeReader(
+                {item.display_path: _StreamSpec(item.expected_stat, (b"xyz",))}  # type: ignore[arg-type]
+            ),
+        )
+
+    assert _integrity_events(events) == []
+    assert recorder.commands == []
+
+
+@pytest.mark.parametrize(
+    ("mode", "runner", "baseline_evidence"),
+    [
+        (IntegrityMode.BASELINE, baseline, None),
+        (IntegrityMode.VERIFY, verify, ...),
+        (IntegrityMode.REBASELINE, rebaseline, ...),
+    ],
+)
+def test_outcomes_carry_the_active_integrity_phase(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    runner,
+    baseline_evidence: Attestation | None | object,
+) -> None:
+    item = _item(tmp_path, baseline_evidence=baseline_evidence)
+
+    result = runner(
+        IntegritySelection((item,)),
+        _context([]),
+        _Recorder(),
+        _FakeReader(
+            {item.display_path: _StreamSpec(item.expected_stat, (b"abc",))}  # type: ignore[arg-type]
+        ),
+    )
+
+    assert result.outcomes[0].phase == mode.value
+
+
+def test_private_classifier_needs_no_ledger_identity_or_recorder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected = _stat(size=8)
+    path = "detached.bin"
+    progress: list[int] = []
+
+    def forbidden_command(*_args, **_kwargs):
+        raise AssertionError("ledger command construction is not classification")
+
+    monkeypatch.setattr(
+        verifier_module, "IntegrityRecordCommand", forbidden_command
+    )
+    classification = verifier_module._classify_subject(
+        root=tmp_path,
+        relative_path=path,
+        expected_stat=expected,
+        baseline=None,
+        mode=IntegrityMode.BASELINE,
+        ctx=_context([]),
+        reader=_FakeReader(
+            {path: _StreamSpec(expected, (b"detached",), expected)}
+        ),
+        on_bytes=progress.append,
+    )
+
+    assert classification.result is IntegrityResult.BASELINED
+    assert classification.reason is None
+    assert classification.bytes_read == 8
+    assert classification.read_strategy is ReadStrategy.WINDOWS_UNBUFFERED
+    assert classification.attestation is not None
+    assert (
+        classification.attestation.content.digest
+        == xxh3_128(b"detached").digest()
+    )
+    assert progress == [8]
 
 
 def test_null_hash_verify_baselines_with_verify_provenance_atomically(
@@ -335,7 +461,7 @@ def test_rebaseline_accepts_fresh_current_stat_without_calling_it_verified(
     assert result.outcomes[0].result is IntegrityResult.BASELINED
     command = recorder.commands[0]
     assert command.mode is IntegrityMode.REBASELINE
-    assert command.expected_baseline.content.digest == sha256(b"old").digest()
+    assert command.expected_baseline.content.digest == xxh3_128(b"old").digest()
     assert command.advances_last_verified is False
     assert command.clear_reappeared is True
 
@@ -644,7 +770,12 @@ def test_runner_aggregates_typed_integrity_outcomes_on_cancel(tmp_path: Path) ->
     def work(run_ctx: RunContext) -> OperationResult:
         verify(
             selection,
-            VerifierContext(run=run_ctx, clock=_Clock(), chunk_size=1),
+            VerifierContext(
+                run=run_ctx,
+                clock=_Clock(),
+                hasher_factory=xxh3_128,
+                chunk_size=1,
+            ),
             _Recorder(),
             _FakeReader({}),
         )
@@ -661,9 +792,9 @@ def test_runner_aggregates_typed_integrity_outcomes_on_cancel(tmp_path: Path) ->
 
     assert outcome.result is not None
     assert outcome.result.status is SessionState.CANCELED
-    assert len(outcome.result.operations) == len(items)
-    assert all(isinstance(item, IntegrityOutcome) for item in outcome.result.operations)
-    assert [item.result for item in outcome.result.operations] == [  # type: ignore[attr-defined]
+    assert len(outcome.result.items) == len(items)
+    assert all(isinstance(item, IntegrityOutcome) for item in outcome.result.items)
+    assert [item.result for item in outcome.result.items] == [
         IntegrityResult.CANCELED,
         IntegrityResult.CANCELED,
     ]
@@ -690,6 +821,7 @@ def test_runner_can_finalize_cancellation_after_partial_byte_progress(
             VerifierContext(
                 run=run_ctx,
                 clock=_Clock(),
+                hasher_factory=xxh3_128,
                 chunk_size=1,
                 progress_interval_seconds=0,
             ),
@@ -717,7 +849,7 @@ def test_runner_can_finalize_cancellation_after_partial_byte_progress(
     assert outcome.result.status is SessionState.CANCELED
     assert outcome.result.bytes_done == 1
     assert outcome.result.bytes_total == 3
-    assert len(outcome.result.operations) == 1
+    assert len(outcome.result.items) == 1
 
 
 def test_runner_retains_verifier_outcomes_across_pause_then_cancel(
@@ -738,14 +870,19 @@ def test_runner_retains_verifier_outcomes_across_pause_then_cancel(
     def work(run_ctx: RunContext) -> OperationResult:
         integrity = verify(
             selection,
-            VerifierContext(run=run_ctx, clock=_Clock(), chunk_size=1),
+            VerifierContext(
+                run=run_ctx,
+                clock=_Clock(),
+                hasher_factory=xxh3_128,
+                chunk_size=1,
+            ),
             recorder,
             reader,
         )
         return OperationResult(
             status=SessionState.COMPLETED,
             recording=integrity.recording,
-            operations=integrity.outcomes,
+            items=integrity.outcomes,
             bytes_done=selection.processed_bytes,
             bytes_total=selection.processed_bytes,
         )
@@ -780,12 +917,12 @@ def test_runner_retains_verifier_outcomes_across_pause_then_cancel(
 
     assert canceled.result is not None
     assert canceled.result.status is SessionState.CANCELED
-    assert [item.result for item in canceled.result.operations] == [  # type: ignore[attr-defined]
+    assert [item.result for item in canceled.result.items] == [
         IntegrityResult.VERIFIED,
         IntegrityResult.CANCELED,
         IntegrityResult.CANCELED,
     ]
-    assert len({item.item_id for item in canceled.result.operations}) == 3  # type: ignore[attr-defined]
+    assert len({item.item_id for item in canceled.result.items}) == 3
 
 
 def test_fast_chunk_flood_is_throttled_and_progress_is_monotonic(tmp_path: Path) -> None:
@@ -816,28 +953,116 @@ def test_fast_chunk_flood_is_throttled_and_progress_is_monotonic(tmp_path: Path)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
-def test_windows_reader_verifies_unbuffered_or_discloses_unsupported(
+def test_windows_reader_uses_read_only_share_and_cache_honest_flags(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "payload.bin"
+    path.write_bytes(b"flag contract")
+    expected = _stat(
+        size=path.stat().st_size,
+        mtime_ns=path.stat().st_mtime_ns,
+        identity=None,
+    )
+    calls: list[tuple[object, ...]] = []
+    closed: list[int] = []
+    native_api = verifier_module._WindowsApi
+
+    class _Kernel32:
+        def CreateFileW(self, *args: object) -> int:
+            calls.append(args)
+            return 73
+
+    class _CapturingApi(native_api):
+        def __init__(self) -> None:
+            self._kernel32 = _Kernel32()
+
+        def sector_size(self, candidate: Path) -> int:
+            assert candidate == path
+            return 4096
+
+        def require_expected_final_path(
+            self, root: Path, relative_path: str, file_handle: int
+        ) -> None:
+            assert root == tmp_path.resolve()
+            assert relative_path == path.name
+            assert file_handle == 73
+
+        def stat(self, handle: int) -> FileStat:
+            assert handle == 73
+            return expected
+
+        def close(self, handle: int) -> None:
+            closed.append(handle)
+
+    monkeypatch.setattr(verifier_module, "_WindowsApi", _CapturingApi)
+
+    with WindowsUnbufferedReader().open(tmp_path, path.name) as stream:
+        assert stream.strategy is ReadStrategy.WINDOWS_UNBUFFERED
+
+    assert len(calls) == 1
+    (
+        opened_path,
+        desired_access,
+        share_mode,
+        security_attributes,
+        creation_disposition,
+        flags,
+        template,
+    ) = calls[0]
+    assert opened_path == verifier_module._extended_path(path)
+    assert desired_access == verifier_module._GENERIC_READ
+    assert share_mode == verifier_module._FILE_SHARE_READ
+    assert share_mode & verifier_module._FILE_SHARE_WRITE == 0
+    assert share_mode & verifier_module._FILE_SHARE_DELETE == 0
+    assert security_attributes is None
+    assert creation_disposition == verifier_module._OPEN_EXISTING
+    assert flags == (
+        verifier_module._FILE_FLAG_NO_BUFFERING
+        | verifier_module._FILE_FLAG_SEQUENTIAL_SCAN
+        | verifier_module._FILE_FLAG_OPEN_REPARSE_POINT
+    )
+    assert template is None
+    assert closed == [73]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
+def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback(
     tmp_path: Path,
 ) -> None:
-    payload = (b"NamiSync cache-honest verifier\n" * 4096) + b"tail"
+    payload = (b"NamiSync cache-honest verifier\n" * 262_144) + b"tail"
     path = tmp_path / "payload.bin"
-    path.write_bytes(payload)
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import os, sys\n"
+                "payload = (b'NamiSync cache-honest verifier\\n' * 262_144)"
+                " + b'tail'\n"
+                "with open(sys.argv[1], 'wb') as handle:\n"
+                "    handle.write(payload)\n"
+                "    handle.flush()\n"
+                "    os.fsync(handle.fileno())\n"
+            ),
+            str(path),
+        ],
+        check=True,
+    )
+    os_stat = path.stat()
+    expected = _stat(
+        size=len(payload),
+        mtime_ns=os_stat.st_mtime_ns,
+        identity=None,
+    )
+    events: list[object] = []
+    context = VerifierContext(
+        run=RunContext(emit=events.append, checkpoint=lambda: None),
+        clock=_Clock(),
+        hasher_factory=xxh3_128,
+    )
+    assert context.chunk_size == 4 * 1024 * 1024
     reader = WindowsUnbufferedReader()
-    strategy_supported = True
-    try:
-        with reader.open(tmp_path, "payload.bin") as stream:
-            expected = stream.stat()
-    except UnsupportedVerification:
-        strategy_supported = False
-        os_stat = path.stat()
-        expected = FileStat(
-            kind=EntryKind.FILE,
-            size=len(payload),
-            mtime_ns=os_stat.st_mtime_ns,
-            file_identity=None,
-            nlink=max(os_stat.st_nlink, 1),
-            metadata=MetadataSnapshot(attributes=0, created_ns=os_stat.st_ctime_ns),
-        )
     item = _item(
         tmp_path,
         path="payload.bin",
@@ -847,19 +1072,131 @@ def test_windows_reader_verifies_unbuffered_or_discloses_unsupported(
 
     result = verify(
         IntegritySelection((item,)),
-        _context([]),
+        context,
         _Recorder(),
         reader,
     )
 
     outcome = result.outcomes[0]
-    if strategy_supported:
-        assert outcome.result is IntegrityResult.VERIFIED
-        assert outcome.read_strategy is ReadStrategy.WINDOWS_UNBUFFERED
+    assert outcome.result is IntegrityResult.VERIFIED
+    assert outcome.reason is None
+    assert outcome.read_strategy is ReadStrategy.WINDOWS_UNBUFFERED
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
+@pytest.mark.parametrize("rejection", ["reparse", "alignment", "containment"])
+def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rejection: str,
+) -> None:
+    payload = b"guarded subject"
+    path = tmp_path / "payload.bin"
+    path.write_bytes(payload)
+    expected = _stat(
+        size=len(payload),
+        mtime_ns=path.stat().st_mtime_ns,
+        identity=None,
+    )
+    closed: list[int] = []
+    native_api = verifier_module._WindowsApi
+
+    if rejection == "reparse":
+        original_reject = verifier_module._reject_reparse_components
+        original_lstat = verifier_module.os.lstat
+
+        def report_reparse(root: Path, relative_path: str) -> None:
+            class _ReportedReparse:
+                st_file_attributes = verifier_module._FILE_ATTRIBUTE_REPARSE_POINT
+
+            def reparse_lstat(current: Path):
+                original_lstat(current)
+                return _ReportedReparse()
+
+            with monkeypatch.context() as patch:
+                patch.setattr(verifier_module.os, "lstat", reparse_lstat)
+                original_reject(root, relative_path)
+
+        monkeypatch.setattr(
+            verifier_module, "_reject_reparse_components", report_reparse
+        )
+        expected_detail = "verification refuses reparse component"
+
+        class _RejectingApi:
+            def __init__(self) -> None:
+                raise AssertionError("reparse rejection must precede Windows API setup")
+
+    elif rejection == "alignment":
+        expected_detail = "volume reported an invalid sector size"
+
+        class _Kernel32:
+            def GetVolumePathNameW(
+                self, _path: str, volume_buffer, _size: int
+            ) -> int:
+                volume_buffer.value = tmp_path.anchor
+                return 1
+
+            def GetDiskFreeSpaceW(self, *_args: object) -> int:
+                return 1
+
+        class _RejectingApi(native_api):
+            def __init__(self) -> None:
+                self._kernel32 = _Kernel32()
+
     else:
-        assert outcome.result is IntegrityResult.UNSUPPORTED
-        assert outcome.reason is IntegrityReason.UNSUPPORTED_READ
-        assert outcome.detail
+        expected_detail = (
+            "the opened handle does not resolve to the selected root-relative path"
+        )
+
+        class _RejectingApi(native_api):
+            def __init__(self) -> None:
+                pass
+
+            def sector_size(self, candidate: Path) -> int:
+                assert candidate == path
+                return 4096
+
+            def open_file(self, candidate: Path) -> int:
+                assert candidate == path
+                return 73
+
+            def open_directory(self, root: Path) -> int:
+                assert root == tmp_path.resolve()
+                return 74
+
+            def final_path(self, handle: int) -> str:
+                return (
+                    r"\\?\C:\selected-root"
+                    if handle == 74
+                    else r"\\?\C:\escaped-root\payload.bin"
+                )
+
+            def close(self, handle: int) -> None:
+                closed.append(handle)
+
+    monkeypatch.setattr(verifier_module, "_WindowsApi", _RejectingApi)
+    recorder = _Recorder()
+    item = _item(
+        tmp_path,
+        path=path.name,
+        expected_stat=expected,
+        baseline_evidence=_attestation(payload, expected),
+    )
+
+    result = verify(
+        IntegritySelection((item,)),
+        _context([]),
+        recorder,
+        WindowsUnbufferedReader(),
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.result is IntegrityResult.UNSUPPORTED
+    assert outcome.result is not IntegrityResult.VERIFIED
+    assert outcome.reason is IntegrityReason.UNSUPPORTED_READ
+    assert outcome.detail is not None and expected_detail in outcome.detail
+    assert recorder.commands == []
+    assert closed == ([74, 73] if rejection == "containment" else [])
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")

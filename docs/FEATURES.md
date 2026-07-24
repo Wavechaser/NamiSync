@@ -1,10 +1,11 @@
 # Features
 
-Implementation note (2026-07-24): M1 Stage 1 has landed its contract, schema,
-settings, dependency, and security prerequisites. The canonical XXH3-128
-content producers, integrity/compound result producers, facade, and desktop
-host remain assigned to later M1 stages even where the settled behavior below
-is already stated.
+Implementation note (2026-07-24): M1 Stages 1-3 have landed their contract,
+schema/settings/security prerequisites, pipelined XXH3-128 executor/verifier
+switch, role-free inventory, standalone integrity workflows, generic history
+items, and production dispatcher registrations. Post-execution compound
+verification, CLI/UI start surfaces, and the desktop host remain assigned to
+later M1 stages even where their settled behavior below is already stated.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -198,6 +199,8 @@ below describe settled behavior, not current M0 runtime claims.
 - **Reappearance Tracking**. Files returning after being marked missing are surfaced as reappeared until a matching hash or new baseline resolves the state.
 - **Selected Inventory Refresh**. Selected paths can be refreshed without walking the entire location or inferring unselected absences.
 - **Evidence Staleness**. Inventory can filter and summarize rows by hash and verification age, and select every row older than a chosen cutoff for re-verification, turning last-seen, hash-observed, and last-verified timestamps into a visible freshness signal instead of silent bookkeeping.
+- **Five-State Volume Resolution**. Every inventory/integrity start, resume, and queued wakeup distinguishes resolved, offline, ambiguous clone, missing root, and unavailable root before scan/hash work; only resolved state can reconcile.
+- **Mapping-Scoped Filters**. One physical location inventory can serve multiple mappings whose authoritative filter snapshots differ. Exclusion projections are audit/cache state only; planner eligibility evaluates the current mapping filter and excluded target rows cannot become deletion candidates.
 
 - **Shared Network Inventory**. Inventory merging across hosts and network locations remains unrealized.
 
@@ -211,7 +214,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Post-Execution Verification**. A sync can continue directly into an optional verification phase while retaining the same session and volume custody. Every successfully published copy, update, or move-update carries transient published evidence into readback even if its ledger write failed; no-op, metadata-only move, directory, trash, and delete work is ineligible. Readback mismatch or incompleteness changes the integrity axis, never the already-settled filesystem result.
 - **Safe Conditional Recording**. Hash and verification results are persisted only when the file state remains consistent with the observation being recorded.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
-- **Verifier Operation Implemented**. The isolated baseline, verify, and explicit rebaseline operation now provides cache-honest Windows reads, typed per-file outcomes, safe conditional ledger recording, and lossless pause/cancel continuation. Inventory selection, workflow registration, history detail, and UI/CLI composition remain the M1 product surface.
+- **Standalone Integrity Implemented**. Baseline, verify, and explicit rebaseline now compose cache-honest Windows reads with fresh inventory selection, conditional ledger recording, exact-candidate pause continuation, subject-scoped generic history, and volume-custodied dispatcher registrations. CLI/UI controls remain deliberately unexposed.
 
 - **Conditional Parallel Verification**. Verification remains single-stream after the XXH3-128 content-hash replacement unless post-replacement measurements demonstrate an IO-utilization problem that file-level workers solve.
 - **Automatic Background Integrity**. Background hashing and verification remain unrealized.
@@ -244,8 +247,8 @@ below describe settled behavior, not current M0 runtime claims.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
 - **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. Recents, window geometry, columns, and sorting live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
-- **M1 Evidence Reset Boundary**. Ledger v2 and history v3 are active. Ledger v1 and history v1/v2 are refused without mutation and tell the user to close NamiSync and manually recreate both local databases during this temporary pre-migrator window; normal startup never deletes data. Settings and UI state survive.
-- **M1 Generic History Reservation**. History v3 stores current sync detail as explicitly tagged operation/execute items and reserves phase summaries plus other item types for their Stage 3/4 producers, without writing placeholder phase rows.
+- **M1 Evidence Reset Boundary**. Ledger v2/history v3 require immutable final-contract markers. Old versions and transitional v2/v3 files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
+- **M1 Generic History Reservation**. History v3 stores explicitly tagged operation/execute and standalone integrity items, while reserving phase summaries for Stage 4 without writing placeholder phase rows.
 - **M0 Ledger Implemented**. The active ledger/history schemas freeze identity and evidence fields, enforce mapping-correspondence location integrity, separate observed from attested stats, expose read-only typed inventory/mapping/run repositories, and refuse configured database paths inside managed roots.
 
 - **Hardlink Groups**. Schema room is reserved for grouping paths that share one file identity, so hard-link-aware correspondence and, later, hard-link preservation on copy remain additive rather than a rework.
@@ -266,13 +269,13 @@ below describe settled behavior, not current M0 runtime claims.
 
 - **Independent Audit Store**. Sync, baseline, and verification attempts are recorded in a separate local history database.
 - **Audit Delivery Guarantee**. History subscribes at session admission on the reliable event plane under one clear contract: every audit event is delivered within the timeout, or the session result says `audit=DEGRADED` — nothing is ever silently lost behind a result claiming OK. When its bounded buffer fills, the producer briefly waits at a checkpoint boundary rather than discarding audit events, with the wait capped by a generous timeout — a stalled or failed history writer degrades the session's audit status loudly and blocking stops, rather than holding filesystem work hostage. History finalizes each run in a bounded two-phase step: it acknowledges its final write before the immutable terminal event is released to other subscribers, so the result's audit status already tells the truth about the history row itself; an acknowledgement timeout degrades the audit status and releases the terminal anyway. A history write failure is surfaced loudly on the session result but never blocks, fails, or falsifies filesystem work, and a process crash loses at most the bounded in-flight buffer — the same never-wrong-only-behind posture as the ledger.
-- **Typed Run Details**. History retains generic phase summaries plus one ordered, nominally typed result-item stream. Every item carries explicit phase and item-type tags, so sync and integrity outcomes can coexist without duck typing or parallel domain lists.
+- **Typed Run Details**. History retains one ordered, nominally typed result-item stream and reserves generic phase-summary storage. Every item carries explicit phase and item-type tags, so sync and integrity outcomes can coexist without duck typing or parallel domain lists.
 - **No-Op and Cancellation Audit**. Explicit no-op and canceled activities are recorded alongside successful and failed activities.
 - **Blocked And Deferred Audit**. Safe-subset runs retain every direct blocker as the sixth `BLOCKED` outcome and retain quarantined or incomplete-scan-withheld work as `DEFERRED` with typed reasons and itemized paths. The history schema stores a blocked summary count without multiplying quarantine/withholding into new top-level categories.
 - **History Idempotency**. Repeating a recorded run token does not create a duplicate history entry.
 - **History Retention**. Summary and detail retention will preserve the run envelope while pruning eligible old detail, but it is deferred beyond M1 until a maintenance session can coordinate cross-process custody with every audit writer. M1 exposes no retention setting, command, or GUI action.
 - **History Browsing**. Retained runs and their details can be inspected in the desktop History dialog or through the CLI.
-- **M0 Sync History Implemented**. The independent store consumes the dispatcher's reliable preterminal observer protocol and persists idempotent sync envelopes, axis-separated summaries, and ordered typed operation details; the workflow composition root now exposes those reads to the CLI.
+- **M1 Generic History Implemented**. The independent store consumes the dispatcher's reliable preterminal observer protocol and persists idempotent sync/inventory/integrity envelopes, axis-separated summaries, and ordered operation/integrity details. Subject-only activities render their location instead of `None -> None`; Stage 3 writes zero phase rows.
 
 - **Task-Grouped History**. GUI activities will be grouped under durable task records while CLI and service activities remain valid without a task parent.
 - **Task Annotations**. Users will be able to add a trimmed plain-text task annotation of up to 256 characters.
@@ -283,10 +286,15 @@ below describe settled behavior, not current M0 runtime claims.
 
 ## COMMANDLINE
 
+The production registry can dispatch Stage 3 activities, but the current parser
+still exposes only `sync` and `history`; the integrity commands below remain
+planned interface work.
+
 - **Sync Command**. `nami-sync sync` runs the plan session, prints the reviewable plan, and asks for explicit terminal confirmation; confirming commits the plan and immediately runs the execution session, declining leaves it uncommitted. A separate flag executes already-committed queued plans for scripted use; no flag combination plans and executes without a review.
 - **Inventory Command**. `nami-sync inventory` scans one location and prints its retained inventory and mapping guidance.
 - **Baseline Command**. `nami-sync baseline` creates missing baselines and reports integrity counts and issues.
 - **Verify Command**. `nami-sync verify` verifies one location and returns a failing exit code when integrity issues are found.
+- **Rebaseline Command**. `nami-sync rebaseline` explicitly accepts current evidence for reviewed modified rows.
 - **History Command**. `nami-sync history` lists recent audit runs or prints one retained entry with detail.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
 - **No-Subcommand Behavior**. Until a desktop implementation exists, running `nami-sync` or `python -m namisync` with no subcommand prints usage and exits nonzero; nothing ever runs implicitly.

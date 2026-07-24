@@ -5,11 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Mapping
+from typing import ClassVar, Mapping
 
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.integrity import (
+    IntegrityMode,
+    IntegrityOutcome,
+    IntegrityReason,
+    IntegrityResult,
+    ReadStrategy,
+    RecordDisposition,
+)
+from namisync.core.session import ResultItem
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class DeliveryClass(StrEnum):
@@ -49,7 +58,10 @@ class Progress:
 
 
 @dataclass(frozen=True, slots=True)
-class ItemOutcome:
+class ItemOutcome(ResultItem):
+    item_type: ClassVar[str] = "operation"
+    phase: ClassVar[str] = "execute"
+
     item_id: str
     kind: str
     path: str
@@ -76,7 +88,15 @@ class Terminal:
     result: "OperationResult"
 
 
-EventBody = StateChanged | PhaseChanged | Progress | ItemOutcome | Gap | Terminal
+EventBody = (
+    StateChanged
+    | PhaseChanged
+    | Progress
+    | ItemOutcome
+    | IntegrityOutcome
+    | Gap
+    | Terminal
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +142,8 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
             "bytes_total": body.bytes_total,
             "current_path": body.current_path,
         }
-    elif isinstance(body, ItemOutcome):
-        body_data = _item_to_dict(body)
+    elif isinstance(body, ResultItem):
+        body_data = result_item_to_dict(body)
     elif isinstance(body, Gap):
         body_data = {"first_missed_seq": body.first_missed_seq}
     elif isinstance(body, Terminal):
@@ -172,8 +192,10 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
             bytes_total=_optional_int(raw["bytes_total"]),
             current_path=_optional_str(raw["current_path"]),
         )
-    elif body_type == "ItemOutcome":
-        body = _item_from_dict(raw)
+    elif body_type in {"ItemOutcome", "IntegrityOutcome"}:
+        body = result_item_from_dict(raw)
+        if type(body).__name__ != body_type:
+            raise ValueError("event body type disagrees with item_type")
     elif body_type == "Gap":
         body = Gap(int(raw["first_missed_seq"]))
     elif body_type == "Terminal":
@@ -184,9 +206,9 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
         error = None
         if isinstance(error_raw, Mapping):
             error = FailureDetail(str(error_raw["type_name"]), str(error_raw["message"]))
-        operations_raw = result_raw.get("operations", ())
-        if not isinstance(operations_raw, list):
-            raise TypeError("terminal operations must be a list")
+        items_raw = result_raw.get("items", ())
+        if not isinstance(items_raw, list):
+            raise TypeError("terminal items must be a list")
         body = Terminal(
             OperationResult(
                 status=SessionState(str(result_raw["status"])),
@@ -194,7 +216,7 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
                 audit=RecordingStatus(str(result_raw["audit"])),
                 disposition=Disposition(str(result_raw["disposition"])),
                 canceled=bool(result_raw["canceled"]),
-                operations=tuple(_item_from_dict(item) for item in operations_raw),
+                items=tuple(result_item_from_dict(item) for item in items_raw),
                 bytes_done=int(result_raw["bytes_done"]),
                 bytes_total=int(result_raw["bytes_total"]),
                 error=error,
@@ -211,41 +233,103 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
     )
 
 
-def _item_to_dict(item: ItemOutcome) -> dict[str, object]:
-    return {
-        "item_id": item.item_id,
-        "kind": item.kind,
-        "path": item.path,
-        "outcome": item.outcome.value,
-        "reason": item.reason,
-        "detail": dict(item.detail),
-    }
+def result_item_to_dict(item: ResultItem) -> dict[str, object]:
+    """Serialize one nominal result item with explicit type and phase tags."""
+
+    if isinstance(item, ItemOutcome):
+        return {
+            "item_type": item.item_type,
+            "phase": item.phase,
+            "item_id": item.item_id,
+            "kind": item.kind,
+            "path": item.path,
+            "result": item.outcome.value,
+            "reason": item.reason,
+            "detail": dict(item.detail),
+        }
+    if isinstance(item, IntegrityOutcome):
+        return {
+            "item_type": item.item_type,
+            "phase": item.phase,
+            "item_id": item.item_id,
+            "row_id": item.row_id,
+            "location_id": item.location_id,
+            "kind": "integrity",
+            "path": item.path,
+            "result": item.result.value,
+            "reason": None if item.reason is None else item.reason.value,
+            "detail": item.detail,
+            "read_strategy": (
+                None if item.read_strategy is None else item.read_strategy.value
+            ),
+            "recording": item.recording.value,
+            "record_disposition": (
+                None
+                if item.record_disposition is None
+                else item.record_disposition.value
+            ),
+        }
+    raise TypeError(f"unsupported result item: {type(item).__name__}")
 
 
-def _item_from_dict(data: Mapping[str, object]) -> ItemOutcome:
-    detail = data.get("detail", {})
-    if not isinstance(detail, Mapping):
-        raise TypeError("item detail must be a mapping")
-    return ItemOutcome(
-        item_id=str(data["item_id"]),
-        kind=str(data["kind"]),
-        path=str(data["path"]),
-        outcome=Outcome(str(data["outcome"])),
-        reason=_optional_str(data.get("reason")),
-        detail=dict(detail),
-    )
+def result_item_from_dict(data: Mapping[str, object]) -> ResultItem:
+    """Deserialize a tagged result item and reject structural guessing."""
+
+    item_type = str(data["item_type"])
+    phase = str(data["phase"])
+    if item_type == ItemOutcome.item_type:
+        if phase != ItemOutcome.phase:
+            raise ValueError("operation result item must use execute phase")
+        detail = data.get("detail", {})
+        if not isinstance(detail, Mapping):
+            raise TypeError("operation item detail must be a mapping")
+        return ItemOutcome(
+            item_id=str(data["item_id"]),
+            kind=str(data["kind"]),
+            path=str(data["path"]),
+            outcome=Outcome(str(data["result"])),
+            reason=_optional_str(data.get("reason")),
+            detail=dict(detail),
+        )
+    if item_type == IntegrityOutcome.item_type:
+        if phase not in {mode.value for mode in IntegrityMode}:
+            raise ValueError("integrity result item has an invalid phase")
+        return IntegrityOutcome(
+            item_id=str(data["item_id"]),
+            row_id=str(data["row_id"]),
+            location_id=str(data["location_id"]),
+            path=str(data["path"]),
+            result=IntegrityResult(str(data["result"])),
+            reason=(
+                None
+                if data.get("reason") is None
+                else IntegrityReason(str(data["reason"]))
+            ),
+            detail=_optional_str(data.get("detail")),
+            read_strategy=(
+                None
+                if data.get("read_strategy") is None
+                else ReadStrategy(str(data["read_strategy"]))
+            ),
+            recording=RecordingStatus(str(data["recording"])),
+            record_disposition=(
+                None
+                if data.get("record_disposition") is None
+                else RecordDisposition(str(data["record_disposition"]))
+            ),
+            phase=phase,
+        )
+    raise ValueError(f"unsupported result item type: {item_type}")
 
 
 def _result_to_dict(result: "OperationResult") -> dict[str, object]:
-    if not all(isinstance(item, ItemOutcome) for item in result.operations):
-        raise TypeError("M0 terminal serialization supports ItemOutcome operations only")
     return {
         "status": result.status.value,
         "recording": result.recording.value,
         "audit": result.audit.value,
         "disposition": result.disposition.value,
         "canceled": result.canceled,
-        "operations": [_item_to_dict(item) for item in result.operations],
+        "items": [result_item_to_dict(item) for item in result.items],
         "bytes_done": result.bytes_done,
         "bytes_total": result.bytes_total,
         "error": (

@@ -9,6 +9,7 @@ from namisync.core.execution import ExecutionSet
 from namisync.core.models import ScanResult
 from namisync.core.planning import Plan, SyncOptions
 from namisync.core.preflight import Verdict
+from namisync.workflows.views import ResultItemView
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,17 +84,11 @@ class ExecutionDetails:
 
 
 @dataclass(frozen=True, slots=True)
-class HistoryOperationView:
-    kind: str
-    path: str
-    outcome: str
-    reason: str | None
-
-
-@dataclass(frozen=True, slots=True)
 class HistoryRunView:
     run_token: str
     activity_kind: str
+    subject_kind: str | None
+    subject_id: str | None
     source_context: str | None
     target_context: str | None
     started_at: datetime
@@ -104,7 +99,7 @@ class HistoryRunView:
     disposition: str
     bytes_done: int
     bytes_total: int
-    operations: tuple[HistoryOperationView, ...]
+    items: tuple[ResultItemView, ...]
     error: str | None
 
 

@@ -7,20 +7,25 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 import ctypes
 from ctypes import wintypes
-import hashlib
 import os
 from pathlib import Path, PureWindowsPath
+from queue import Empty, Full, Queue, ShutDown, SimpleQueue
 import shutil
 import stat as stat_module
+from threading import Event, Lock, Thread
 import time
 from typing import BinaryIO, cast
 
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
+    HasherContractError,
+    HasherFactory,
     Outcome,
     Provenance,
     RecordingStatus,
+    StreamingHasher,
+    require_content_digest,
 )
 from namisync.core.events import ItemOutcome, PhaseChanged, Progress
 from namisync.core.execution import (
@@ -60,13 +65,188 @@ from namisync.core.session import (
 _READONLY = 0x00000001
 _HIDDEN = 0x00000002
 _SYSTEM = 0x00000004
+_NOT_CONTENT_INDEXED = 0x00002000
 _STANDARD_ATTRIBUTE_MASK = _READONLY | _HIDDEN | _SYSTEM
+_PRESERVED_ATTRIBUTE_MASK = _STANDARD_ATTRIBUTE_MASK | _NOT_CONTENT_INDEXED
 _REPARSE_POINT = 0x00000400
 _SHARING_VIOLATIONS = {32, 33}
+_PIPELINE_BYTE_BUDGET = 32 * 1024 * 1024
+_PIPELINE_QUEUE_ITEMS = 32
+_PIPELINE_POLL_SECONDS = 0.01
+_PIPELINE_EOF = object()
+_SMALL_CHUNK_SIZE = 256 * 1024
+_MEDIUM_CHUNK_SIZE = 1024 * 1024
+_LARGE_CHUNK_SIZE = 4 * 1024 * 1024
+_MEDIUM_CHUNK_THRESHOLD = 8 * 1024 * 1024
+_LARGE_CHUNK_THRESHOLD = 32 * 1024 * 1024
+# The cross-volume M1 sweep found the first repeatable HDD benefit at 8 MiB;
+# solid-state targets were neutral, so smaller files avoid the setup cost.
+_PREALLOCATION_THRESHOLD = 8 * 1024 * 1024
+
+_GENERIC_READ = 0x80000000
+_GENERIC_WRITE = 0x40000000
+_FILE_READ_ATTRIBUTES = 0x0080
+_FILE_WRITE_ATTRIBUTES = 0x0100
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_FILE_SHARE_DELETE = 0x00000004
+_OPEN_EXISTING = 3
+_FILE_ATTRIBUTE_NORMAL = 0x00000080
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_BASIC_INFO_CLASS = 0
+_FILE_ALLOCATION_INFO_CLASS = 5
+_WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
+_INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+_ALLOCATION_UNSUPPORTED_ERRORS = frozenset({1, 50, 120})
+
+
+class _FileBasicInfo(ctypes.Structure):
+    _fields_ = [
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", wintypes.DWORD),
+    ]
+
+
+class _ByHandleFileInformation(ctypes.Structure):
+    _fields_ = [
+        ("dwFileAttributes", wintypes.DWORD),
+        ("ftCreationTime", wintypes.FILETIME),
+        ("ftLastAccessTime", wintypes.FILETIME),
+        ("ftLastWriteTime", wintypes.FILETIME),
+        ("dwVolumeSerialNumber", wintypes.DWORD),
+        ("nFileSizeHigh", wintypes.DWORD),
+        ("nFileSizeLow", wintypes.DWORD),
+        ("nNumberOfLinks", wintypes.DWORD),
+        ("nFileIndexHigh", wintypes.DWORD),
+        ("nFileIndexLow", wintypes.DWORD),
+    ]
+
+
+class _FileAllocationInfo(ctypes.Structure):
+    _fields_ = [("AllocationSize", ctypes.c_longlong)]
+
+
+class _WindowsBindings:
+    """Process-lifetime Win32 bindings used by the native executor."""
+
+    def __init__(self) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+
+        self.create_file = kernel32.CreateFileW
+        self.create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        self.create_file.restype = wintypes.HANDLE
+
+        self.close_handle = kernel32.CloseHandle
+        self.close_handle.argtypes = [wintypes.HANDLE]
+        self.close_handle.restype = wintypes.BOOL
+
+        self.flush_file_buffers = kernel32.FlushFileBuffers
+        self.flush_file_buffers.argtypes = [wintypes.HANDLE]
+        self.flush_file_buffers.restype = wintypes.BOOL
+
+        self.get_file_information = kernel32.GetFileInformationByHandle
+        self.get_file_information.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(_ByHandleFileInformation),
+        ]
+        self.get_file_information.restype = wintypes.BOOL
+
+        self.get_file_information_ex = kernel32.GetFileInformationByHandleEx
+        self.get_file_information_ex.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+        ]
+        self.get_file_information_ex.restype = wintypes.BOOL
+
+        self.set_file_information = kernel32.SetFileInformationByHandle
+        self.set_file_information.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+        ]
+        self.set_file_information.restype = wintypes.BOOL
+
+        self.get_attributes = kernel32.GetFileAttributesW
+        self.get_attributes.argtypes = [wintypes.LPCWSTR]
+        self.get_attributes.restype = wintypes.DWORD
+
+        self.set_attributes = kernel32.SetFileAttributesW
+        self.set_attributes.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
+        self.set_attributes.restype = wintypes.BOOL
+
+        self.set_file_time = kernel32.SetFileTime
+        self.set_file_time.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+        ]
+        self.set_file_time.restype = wintypes.BOOL
+
+        self.get_volume_path = kernel32.GetVolumePathNameW
+        self.get_volume_path.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        self.get_volume_path.restype = wintypes.BOOL
+
+        self.get_volume_information = kernel32.GetVolumeInformationW
+        self.get_volume_information.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        self.get_volume_information.restype = wintypes.BOOL
+
+        self.get_security = advapi32.GetFileSecurityW
+        self.get_security.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        self.get_security.restype = wintypes.BOOL
+
+        self.set_security = advapi32.SetFileSecurityW
+        self.set_security.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+        ]
+        self.set_security.restype = wintypes.BOOL
+
+
+_WINDOWS = _WindowsBindings() if os.name == "nt" else None
 
 
 class UnsafeExecutionPath(OSError):
     """A planned path cannot be resolved safely beneath its reviewed root."""
+
+
+class _SecurityCopyFailure(OSError):
+    """A preserved security descriptor could not be applied to the temp."""
 
 
 class OperationFailure(Exception):
@@ -90,8 +270,66 @@ class SystemClock:
         return datetime.now(UTC)
 
 
+@dataclass(slots=True)
+class _PipelineMetrics:
+    reader_blocked_seconds: float = 0.0
+    writer_starved_seconds: float = 0.0
+    payload_high_water: int = 0
+    reserved_bytes: int = 0
+
+
+class _FirstPipelineError:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._error: BaseException | None = None
+
+    def store(self, error: BaseException) -> bool:
+        with self._lock:
+            if self._error is not None:
+                return False
+            self._error = error
+            return True
+
+    def get(self) -> BaseException | None:
+        with self._lock:
+            return self._error
+
+
+def _new_content_hasher(factory: HasherFactory) -> StreamingHasher:
+    try:
+        hasher = factory()
+    except Exception as error:
+        raise HasherContractError("content hasher factory failed") from error
+    if not callable(getattr(hasher, "update", None)):
+        raise HasherContractError("content hasher must provide update(bytes)")
+    if not callable(getattr(hasher, "digest", None)):
+        raise HasherContractError("content hasher must provide digest()")
+    return hasher
+
+
+def _update_content_hasher(hasher: StreamingHasher, chunk: bytes) -> None:
+    try:
+        hasher.update(chunk)
+    except Exception as error:
+        raise HasherContractError("content hasher update failed") from error
+
+
+def _finish_content_hasher(hasher: StreamingHasher) -> bytes:
+    try:
+        digest = hasher.digest()
+    except Exception as error:
+        raise HasherContractError("content hasher digest failed") from error
+    return require_content_digest(digest)
+
+
 class NativeCopyBackend:
-    """Bounded native byte streaming with inline SHA-256 attestation."""
+    """Bounded immutable reader -> hasher -> writer byte pipeline."""
+
+    def __init__(self, *, hasher_factory: HasherFactory) -> None:
+        if not callable(hasher_factory):
+            raise TypeError("content hasher factory must be callable")
+        self._hasher_factory = hasher_factory
+        self._last_metrics: _PipelineMetrics | None = None
 
     def copy(
         self,
@@ -102,23 +340,258 @@ class NativeCopyBackend:
         checkpoint,
         on_chunk,
     ) -> CopyDigest:
-        digest = hashlib.sha256()
-        size = 0
-        while True:
-            checkpoint()
-            chunk = source.read(chunk_size)
-            if not chunk:
-                break
-            view = memoryview(chunk)
-            while view:
-                written = target.write(view)
-                if written is None or written <= 0:
-                    raise OSError("copy backend made no forward write progress")
-                view = view[written:]
-            digest.update(chunk)
-            size += len(chunk)
-            on_chunk(len(chunk))
-        return CopyDigest(digest=digest.digest(), size=size)
+        if chunk_size <= 0:
+            raise ValueError("copy chunk size must be positive")
+
+        hash_queue: Queue[bytes | object] = Queue(maxsize=_PIPELINE_QUEUE_ITEMS)
+        write_queue: Queue[bytes | object] = Queue(maxsize=_PIPELINE_QUEUE_ITEMS)
+        completions: SimpleQueue[int] = SimpleQueue()
+        abort = Event()
+        first_error = _FirstPipelineError()
+        writer_done = Event()
+        metrics = _PipelineMetrics()
+        digest_result: list[bytes] = []
+        total_read = 0
+
+        def shut_down() -> None:
+            abort.set()
+            hash_queue.shutdown(immediate=True)
+            write_queue.shutdown(immediate=True)
+
+        def fail(error: BaseException) -> None:
+            first_error.store(error)
+            shut_down()
+
+        def put_worker(queue: Queue[bytes | object], value: bytes | object) -> None:
+            while not abort.is_set():
+                try:
+                    queue.put(value, timeout=_PIPELINE_POLL_SECONDS)
+                    return
+                except Full:
+                    continue
+                except ShutDown:
+                    return
+
+        def hasher_worker() -> None:
+            try:
+                hasher = _new_content_hasher(self._hasher_factory)
+                while not abort.is_set():
+                    try:
+                        item = hash_queue.get(timeout=_PIPELINE_POLL_SECONDS)
+                    except Empty:
+                        continue
+                    except ShutDown:
+                        return
+                    if item is _PIPELINE_EOF:
+                        digest_result.append(_finish_content_hasher(hasher))
+                        put_worker(write_queue, _PIPELINE_EOF)
+                        return
+                    chunk = cast(bytes, item)
+                    _update_content_hasher(hasher, chunk)
+                    if abort.is_set():
+                        return
+                    put_worker(write_queue, chunk)
+                    del chunk
+                    del item
+            except BaseException as error:
+                fail(error)
+
+        def writer_worker() -> None:
+            try:
+                while not abort.is_set():
+                    started_waiting = time.perf_counter()
+                    try:
+                        item = write_queue.get(timeout=_PIPELINE_POLL_SECONDS)
+                    except Empty:
+                        metrics.writer_starved_seconds += (
+                            time.perf_counter() - started_waiting
+                        )
+                        continue
+                    except ShutDown:
+                        return
+                    metrics.writer_starved_seconds += (
+                        time.perf_counter() - started_waiting
+                    )
+                    if item is _PIPELINE_EOF:
+                        writer_done.set()
+                        return
+                    chunk = cast(bytes, item)
+                    _write_all(target, chunk, "copy backend")
+                    if abort.is_set():
+                        return
+                    completed_size = len(chunk)
+                    del chunk
+                    del item
+                    completions.put(completed_size)
+            except BaseException as error:
+                fail(error)
+
+        hasher_thread = Thread(
+            target=hasher_worker,
+            name="namisync-copy-hasher",
+            daemon=False,
+        )
+        writer_thread = Thread(
+            target=writer_worker,
+            name="namisync-copy-writer",
+            daemon=False,
+        )
+        threads = (hasher_thread, writer_thread)
+
+        def raise_worker_error() -> None:
+            error = first_error.get()
+            if error is not None:
+                raise error
+
+        def raise_checkpoint_failure(error: BaseException) -> None:
+            if isinstance(error, (Canceled, PauseRequested)):
+                raise error
+            raise_worker_error()
+            raise error
+
+        def poll_coordinator() -> None:
+            try:
+                checkpoint()
+            except BaseException as error:
+                raise_checkpoint_failure(error)
+            raise_worker_error()
+
+        def drain_completions() -> None:
+            while True:
+                if abort.is_set():
+                    return
+                try:
+                    completed = completions.get_nowait()
+                except Empty:
+                    return
+                if abort.is_set():
+                    return
+                metrics.reserved_bytes -= completed
+                if metrics.reserved_bytes < 0:
+                    raise RuntimeError("pipeline payload accounting underflow")
+                if abort.is_set():
+                    return
+                poll_coordinator()
+                if abort.is_set():
+                    return
+                on_chunk(completed)
+
+        def wait_for_capacity(reservation: int) -> None:
+            wait_started: float | None = None
+            while metrics.reserved_bytes + reservation > _PIPELINE_BYTE_BUDGET:
+                if wait_started is None:
+                    wait_started = time.perf_counter()
+                try:
+                    checkpoint()
+                except BaseException as error:
+                    raise_checkpoint_failure(error)
+                raise_worker_error()
+                drain_completions()
+                if metrics.reserved_bytes + reservation <= _PIPELINE_BYTE_BUDGET:
+                    break
+                time.sleep(_PIPELINE_POLL_SECONDS)
+            if wait_started is not None:
+                metrics.reader_blocked_seconds += time.perf_counter() - wait_started
+
+        def put_coordinator(
+            queue: Queue[bytes | object], value: bytes | object
+        ) -> None:
+            wait_started: float | None = None
+            while True:
+                try:
+                    checkpoint()
+                except BaseException as error:
+                    raise_checkpoint_failure(error)
+                raise_worker_error()
+                drain_completions()
+                try:
+                    queue.put(value, timeout=_PIPELINE_POLL_SECONDS)
+                    if wait_started is not None:
+                        metrics.reader_blocked_seconds += (
+                            time.perf_counter() - wait_started
+                        )
+                    return
+                except Full:
+                    if wait_started is None:
+                        wait_started = time.perf_counter()
+                except ShutDown:
+                    try:
+                        checkpoint()
+                    except BaseException as error:
+                        raise_checkpoint_failure(error)
+                    raise_worker_error()
+                    raise RuntimeError("copy pipeline shut down without an error")
+
+        started: list[Thread] = []
+        try:
+            for thread in threads:
+                thread.start()
+                started.append(thread)
+
+            while True:
+                try:
+                    checkpoint()
+                except BaseException as error:
+                    raise_checkpoint_failure(error)
+                raise_worker_error()
+                drain_completions()
+                wait_for_capacity(chunk_size)
+                metrics.reserved_bytes += chunk_size
+                metrics.payload_high_water = max(
+                    metrics.payload_high_water, metrics.reserved_bytes
+                )
+                try:
+                    chunk = source.read(chunk_size)
+                except BaseException:
+                    metrics.reserved_bytes -= chunk_size
+                    raise
+                if not chunk:
+                    metrics.reserved_bytes -= chunk_size
+                    put_coordinator(hash_queue, _PIPELINE_EOF)
+                    break
+                if not isinstance(chunk, bytes):
+                    metrics.reserved_bytes -= chunk_size
+                    raise TypeError("copy source read() must return bytes")
+                if len(chunk) > chunk_size:
+                    metrics.reserved_bytes -= chunk_size
+                    raise OSError("copy source returned more bytes than requested")
+                metrics.reserved_bytes -= chunk_size - len(chunk)
+                total_read += len(chunk)
+                put_coordinator(hash_queue, chunk)
+                del chunk
+
+            while not writer_done.is_set():
+                try:
+                    checkpoint()
+                except BaseException as error:
+                    raise_checkpoint_failure(error)
+                raise_worker_error()
+                drain_completions()
+                if writer_done.wait(_PIPELINE_POLL_SECONDS):
+                    break
+            drain_completions()
+            try:
+                checkpoint()
+            except BaseException as error:
+                raise_checkpoint_failure(error)
+            raise_worker_error()
+        except BaseException:
+            shut_down()
+            raise
+        finally:
+            if abort.is_set():
+                shut_down()
+            for thread in started:
+                thread.join()
+            if abort.is_set():
+                metrics.reserved_bytes = 0
+            self._last_metrics = metrics
+
+        if len(digest_result) != 1:
+            raise RuntimeError("copy pipeline did not produce one digest")
+        if metrics.reserved_bytes != 0:
+            raise RuntimeError("copy pipeline leaked payload reservations")
+        return CopyDigest(digest=digest_result[0], size=total_read)
 
 
 class BoundedFailurePolicy:
@@ -146,24 +619,42 @@ class BoundedFailurePolicy:
 class ExecutorPolicies:
     """Snapshotted executor policy implementations and bounded pacing."""
 
+    copy_backend: CopyBackend
     failure: FailurePolicy = field(default_factory=BoundedFailurePolicy)
-    copy_backend: CopyBackend = field(default_factory=NativeCopyBackend)
     clock: Clock = field(default_factory=SystemClock)
-    chunk_size: int = 4 * 1024 * 1024
+    max_chunk_size: int = 4 * 1024 * 1024
     max_retries: int = 3
     progress_interval_seconds: float = 0.1
     monotonic: Callable[[], float] = time.monotonic
     sleep: Callable[[float], None] = time.sleep
 
     def __post_init__(self) -> None:
-        if self.chunk_size <= 0:
-            raise ValueError("copy chunk size must be positive")
+        if self.max_chunk_size <= 0:
+            raise ValueError("maximum copy chunk size must be positive")
         if self.max_retries < 0:
             raise ValueError("maximum retries cannot be negative")
         if self.progress_interval_seconds < 0:
             raise ValueError("progress interval cannot be negative")
         if not callable(self.monotonic) or not callable(self.sleep):
             raise TypeError("executor timing collaborators must be callable")
+
+
+def _copy_chunk_size(reviewed_size: int, max_chunk_size: int) -> int:
+    if reviewed_size < 0:
+        raise ValueError("reviewed copy size cannot be negative")
+    if max_chunk_size <= 0:
+        raise ValueError("maximum copy chunk size must be positive")
+    if reviewed_size < _MEDIUM_CHUNK_THRESHOLD:
+        selected = _SMALL_CHUNK_SIZE
+    elif reviewed_size < _LARGE_CHUNK_THRESHOLD:
+        selected = _MEDIUM_CHUNK_SIZE
+    else:
+        selected = _LARGE_CHUNK_SIZE
+    return min(selected, max_chunk_size)
+
+
+def _allocation_size(reviewed_size: int) -> int | None:
+    return reviewed_size if reviewed_size >= _PREALLOCATION_THRESHOLD else None
 
 
 class NativeFileSystem:
@@ -189,36 +680,15 @@ class NativeFileSystem:
 
     def stat(self, root: Path, relative_path: str) -> FileStat | None:
         path = self.resolve(root, relative_path, must_exist=False)
-        if not os.path.lexists(path):
-            return None
-        self._reject_reparse(path)
-        info = path.stat(follow_symlinks=False)
-        mode = info.st_mode
-        if stat_module.S_ISREG(mode):
-            kind = EntryKind.FILE
-            size = info.st_size
-        elif stat_module.S_ISDIR(mode):
-            kind = EntryKind.DIRECTORY
-            size = 0
-        else:
-            raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
-        attributes = int(getattr(info, "st_file_attributes", 0))
-        identity = FileIdentity(
-            volume_serial=self._volume_serial(path), file_index=int(info.st_ino)
-        )
-        return FileStat(
-            kind=kind,
-            size=size,
-            mtime_ns=info.st_mtime_ns,
-            file_identity=identity,
-            nlink=info.st_nlink,
-            metadata=MetadataSnapshot(
-                attributes=attributes,
-                created_ns=self._created_ns(info),
-            ),
-        )
+        return self.stat_path(path)
 
     def stat_path(self, path: Path) -> FileStat | None:
+        observation = self._stat_path_and_access(path)
+        return None if observation is None else observation[0]
+
+    def _stat_path_and_access(
+        self, path: Path
+    ) -> tuple[FileStat, int] | None:
         if not os.path.lexists(path):
             return None
         self._reject_reparse(path)
@@ -231,16 +701,21 @@ class NativeFileSystem:
             size = 0
         else:
             raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
-        return FileStat(
-            kind=kind,
-            size=size,
-            mtime_ns=info.st_mtime_ns,
-            file_identity=FileIdentity(self._volume_serial(path), int(info.st_ino)),
-            nlink=info.st_nlink,
-            metadata=MetadataSnapshot(
-                attributes=int(getattr(info, "st_file_attributes", 0)),
-                created_ns=self._created_ns(info),
+        return (
+            FileStat(
+                kind=kind,
+                size=size,
+                mtime_ns=info.st_mtime_ns,
+                file_identity=FileIdentity(
+                    self._volume_serial(path), int(info.st_ino)
+                ),
+                nlink=info.st_nlink,
+                metadata=MetadataSnapshot(
+                    attributes=int(getattr(info, "st_file_attributes", 0)),
+                    created_ns=self._created_ns(info),
+                ),
             ),
+            info.st_atime_ns,
         )
 
     def owned_temp(self, target: Path, run_id: RunId, op_id: OpId) -> Path:
@@ -302,10 +777,49 @@ class NativeFileSystem:
                         self.remove_owned_temp(Path(entry.path))
 
     def open_source(self, path: Path) -> BinaryIO:
-        return cast(BinaryIO, path.open("rb", buffering=0))
+        flags = os.O_RDONLY
+        if os.name == "nt":
+            flags |= os.O_BINARY | os.O_SEQUENTIAL
+        descriptor = os.open(path, flags)
+        try:
+            return cast(BinaryIO, os.fdopen(descriptor, "rb", buffering=0))
+        except BaseException:
+            os.close(descriptor)
+            raise
 
-    def create_temp(self, path: Path) -> BinaryIO:
-        return cast(BinaryIO, path.open("xb", buffering=0))
+    def create_temp(
+        self, path: Path, *, allocation_size: int | None
+    ) -> BinaryIO:
+        if allocation_size is not None and allocation_size < 0:
+            raise ValueError("allocation size cannot be negative")
+        flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
+        if os.name == "nt":
+            flags |= os.O_BINARY
+        descriptor = os.open(path, flags, 0o666)
+        try:
+            stream = cast(BinaryIO, os.fdopen(descriptor, "w+b", buffering=0))
+        except BaseException:
+            os.close(descriptor)
+            raise
+        if os.name != "nt" or not allocation_size:
+            return stream
+
+        import msvcrt
+
+        assert _WINDOWS is not None
+        handle = msvcrt.get_osfhandle(stream.fileno())
+        allocation = _FileAllocationInfo(allocation_size)
+        if not _WINDOWS.set_file_information(
+            handle,
+            _FILE_ALLOCATION_INFO_CLASS,
+            ctypes.byref(allocation),
+            ctypes.sizeof(allocation),
+        ):
+            error = ctypes.get_last_error()
+            if error not in _ALLOCATION_UNSUPPORTED_ERRORS:
+                stream.close()
+                raise ctypes.WinError(error)
+        return stream
 
     def flush_file(self, stream: BinaryIO) -> None:
         stream.flush()
@@ -328,7 +842,7 @@ class NativeFileSystem:
         os.utime(path, ns=(stat.mtime_ns, stat.mtime_ns))
         if preserve_created and stat.metadata.created_ns is not None and os.name == "nt":
             self._set_creation_time(path, stat.metadata.created_ns)
-        desired = stat.metadata.attributes & _STANDARD_ATTRIBUTE_MASK
+        desired = stat.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
         if not apply_readonly:
             desired &= ~_READONLY
         self._set_standard_attributes(path, desired)
@@ -337,35 +851,210 @@ class NativeFileSystem:
         if os.name != "nt":
             shutil.copystat(source, target, follow_symlinks=False)
             return
+        assert _WINDOWS is not None
         security_information = 0x1 | 0x2 | 0x4
-        advapi = ctypes.WinDLL("advapi32", use_last_error=True)
-        get_security = advapi.GetFileSecurityW
-        get_security.argtypes = [
-            wintypes.LPCWSTR,
-            wintypes.DWORD,
-            wintypes.LPVOID,
-            wintypes.DWORD,
-            ctypes.POINTER(wintypes.DWORD),
-        ]
-        get_security.restype = wintypes.BOOL
         needed = wintypes.DWORD()
-        get_security(str(source), security_information, None, 0, ctypes.byref(needed))
+        _WINDOWS.get_security(
+            _win32_path(source),
+            security_information,
+            None,
+            0,
+            ctypes.byref(needed),
+        )
         if needed.value == 0:
             raise ctypes.WinError(ctypes.get_last_error())
         buffer = ctypes.create_string_buffer(needed.value)
-        if not get_security(
-            str(source),
+        if not _WINDOWS.get_security(
+            _win32_path(source),
             security_information,
             buffer,
             needed,
             ctypes.byref(needed),
         ):
             raise ctypes.WinError(ctypes.get_last_error())
-        set_security = advapi.SetFileSecurityW
-        set_security.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.LPVOID]
-        set_security.restype = wintypes.BOOL
-        if not set_security(str(target), security_information, buffer):
+        if not _WINDOWS.set_security(
+            _win32_path(target), security_information, buffer
+        ):
             raise ctypes.WinError(ctypes.get_last_error())
+
+    def finalize_temp(
+        self,
+        path: Path,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        acl_source: Path | None,
+    ) -> FileStat:
+        """Apply final temp metadata and issue its sole durability flush."""
+
+        if os.name != "nt":
+            with path.open("r+b", buffering=0) as held:
+                if acl_source is not None:
+                    try:
+                        self.copy_security(acl_source, path)
+                    except Exception as error:
+                        raise _SecurityCopyFailure(str(error)) from error
+                self.apply_metadata(
+                    path,
+                    intended,
+                    preserve_created=preserve_created,
+                    apply_readonly=False,
+                )
+                os.fsync(held.fileno())
+            result = self.stat_path(path)
+            if result is None:
+                raise FileNotFoundError(path)
+            return result
+
+        handle = self._open_metadata_handle(path)
+        try:
+            if acl_source is not None:
+                try:
+                    self.copy_security(acl_source, path)
+                except Exception as error:
+                    raise _SecurityCopyFailure(str(error)) from error
+            current = self._basic_info(handle)
+            desired_attributes = (
+                current.FileAttributes & ~_PRESERVED_ATTRIBUTE_MASK
+            ) | (
+                intended.metadata.attributes
+                & (_PRESERVED_ATTRIBUTE_MASK & ~_READONLY)
+            )
+            creation = current.CreationTime
+            if preserve_created and intended.metadata.created_ns is not None:
+                creation = _windows_ticks(intended.metadata.created_ns)
+            modified = _windows_ticks(intended.mtime_ns)
+            self._set_basic_info(
+                handle,
+                _FileBasicInfo(
+                    creation,
+                    modified,
+                    modified,
+                    0,
+                    desired_attributes,
+                ),
+            )
+            normalized = self._basic_info(handle)
+            self._flush_handle(handle)
+            result = self._stat_handle(handle, normalized)
+        except BaseException:
+            try:
+                self._close_handle(handle)
+            except Exception:
+                pass
+            raise
+        else:
+            self._close_handle(handle)
+            return result
+
+    def ensure_published_metadata(
+        self,
+        path: Path,
+        finalized_temp: FileStat,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        apply_readonly: bool,
+    ) -> FileStat:
+        """Observe once and repair only publication-damaged managed fields."""
+
+        observation = self._stat_path_and_access(path)
+        if observation is None:
+            raise FileNotFoundError(path)
+        observed, observed_access_ns = observation
+        repair_mtime = observed.mtime_ns != finalized_temp.mtime_ns
+        repair_access = observed_access_ns != finalized_temp.mtime_ns
+        repair_created = (
+            preserve_created
+            and intended.metadata.created_ns is not None
+            and observed.metadata.created_ns != finalized_temp.metadata.created_ns
+        )
+        desired_managed = (
+            intended.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+        )
+        if not apply_readonly:
+            desired_managed &= ~_READONLY
+        repair_attributes = (
+            observed.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+        ) != desired_managed
+        if not (
+            repair_mtime
+            or repair_access
+            or repair_created
+            or repair_attributes
+        ):
+            return observed
+
+        if os.name != "nt":
+            self.apply_metadata(
+                path,
+                replace(
+                    finalized_temp,
+                    metadata=replace(
+                        finalized_temp.metadata,
+                        attributes=(
+                            finalized_temp.metadata.attributes
+                            & ~_PRESERVED_ATTRIBUTE_MASK
+                        )
+                        | desired_managed,
+                    ),
+                ),
+                preserve_created=repair_created,
+                apply_readonly=apply_readonly,
+            )
+            self.flush_path(path)
+            repaired = self.stat_path(path)
+            if repaired is None:
+                raise FileNotFoundError(path)
+            return repaired
+
+        handle = self._open_metadata_handle(path)
+        try:
+            current = self._basic_info(handle)
+            creation = (
+                _windows_ticks(finalized_temp.metadata.created_ns)
+                if repair_created
+                and finalized_temp.metadata.created_ns is not None
+                else current.CreationTime
+            )
+            last_access = (
+                _windows_ticks(finalized_temp.mtime_ns)
+                if repair_access
+                else current.LastAccessTime
+            )
+            last_write = (
+                _windows_ticks(finalized_temp.mtime_ns)
+                if repair_mtime
+                else current.LastWriteTime
+            )
+            attributes = (
+                (current.FileAttributes & ~_PRESERVED_ATTRIBUTE_MASK)
+                | desired_managed
+                if repair_attributes
+                else current.FileAttributes
+            )
+            self._set_basic_info(
+                handle,
+                _FileBasicInfo(
+                    creation,
+                    last_access,
+                    last_write,
+                    0,
+                    attributes,
+                ),
+            )
+            final_basic = self._basic_info(handle)
+            self._flush_handle(handle)
+            result = self._stat_handle(handle, final_basic)
+        except BaseException:
+            try:
+                self._close_handle(handle)
+            except Exception:
+                pass
+            raise
+        else:
+            self._close_handle(handle)
+            return result
 
     def publish_new(self, temp: Path, target: Path) -> None:
         os.rename(temp, target)
@@ -383,37 +1072,44 @@ class NativeFileSystem:
         target: Path,
         checkpoint: Callable[[], None],
     ) -> None:
-        with source.open("rb", buffering=0) as reader, temp.open("xb", buffering=0) as writer:
-            while True:
-                checkpoint()
-                chunk = reader.read(4 * 1024 * 1024)
-                if not chunk:
-                    break
-                view = memoryview(chunk)
-                while view:
-                    written = writer.write(view)
-                    if written is None or written <= 0:
-                        raise OSError("backup copy made no forward write progress")
-                    view = view[written:]
-            writer.flush()
-            os.fsync(writer.fileno())
-        source_stat = self.stat_path(source)
-        if source_stat is None:
-            raise FileNotFoundError(source)
-        self.apply_metadata(
-            temp,
-            source_stat,
-            preserve_created=True,
-            apply_readonly=False,
-        )
-        self.flush_path(temp)
-        self.publish_new(temp, target)
-        self.apply_metadata(
-            target,
-            source_stat,
-            preserve_created=True,
-            apply_readonly=True,
-        )
+        published = False
+        try:
+            with self.open_source(source) as reader, self.create_temp(
+                temp, allocation_size=None
+            ) as writer:
+                while True:
+                    checkpoint()
+                    chunk = reader.read(4 * 1024 * 1024)
+                    if not chunk:
+                        break
+                    _write_all(writer, chunk, "backup copy")
+            source_stat = self.stat_path(source)
+            if source_stat is None:
+                raise FileNotFoundError(source)
+            finalized = self.finalize_temp(
+                temp,
+                source_stat,
+                preserve_created=True,
+                acl_source=None,
+            )
+            self.publish_new(temp, target)
+            published = True
+            self.ensure_published_metadata(
+                target,
+                finalized,
+                source_stat,
+                preserve_created=True,
+                apply_readonly=True,
+            )
+        except BaseException as error:
+            if not published:
+                try:
+                    self.remove_owned_temp(temp)
+                except Exception as cleanup_error:
+                    error.add_note(
+                        f"backup temp cleanup failed: {cleanup_error!r}"
+                    )
+            raise
 
     def clear_readonly(self, path: Path) -> None:
         current = self._get_attributes(path)
@@ -463,40 +1159,104 @@ class NativeFileSystem:
                 return True
             except OSError:
                 return False
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        create_file = kernel32.CreateFileW
-        create_file.argtypes = [
-            wintypes.LPCWSTR,
-            wintypes.DWORD,
-            wintypes.DWORD,
-            wintypes.LPVOID,
-            wintypes.DWORD,
-            wintypes.DWORD,
-            wintypes.HANDLE,
-        ]
-        create_file.restype = wintypes.HANDLE
-        handle = create_file(
-            str(path),
-            0x40000000,
-            0x1 | 0x2 | 0x4,
+        assert _WINDOWS is not None
+        handle = _WINDOWS.create_file(
+            _win32_path(path),
+            _GENERIC_WRITE,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
             None,
-            3,
-            0x02000000,
+            _OPEN_EXISTING,
+            _FILE_FLAG_BACKUP_SEMANTICS,
             None,
         )
-        invalid = wintypes.HANDLE(-1).value
-        if handle == invalid:
+        if handle == _INVALID_HANDLE_VALUE:
             return False
         try:
-            flush = kernel32.FlushFileBuffers
-            flush.argtypes = [wintypes.HANDLE]
-            flush.restype = wintypes.BOOL
-            return bool(flush(handle))
+            return bool(_WINDOWS.flush_file_buffers(handle))
         finally:
-            close = kernel32.CloseHandle
-            close.argtypes = [wintypes.HANDLE]
-            close.restype = wintypes.BOOL
-            close(handle)
+            _WINDOWS.close_handle(handle)
+
+    def _open_metadata_handle(self, path: Path) -> int:
+        assert _WINDOWS is not None
+        handle = _WINDOWS.create_file(
+            _win32_path(path),
+            _GENERIC_WRITE | _FILE_READ_ATTRIBUTES | _FILE_WRITE_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None,
+            _OPEN_EXISTING,
+            _FILE_ATTRIBUTE_NORMAL,
+            None,
+        )
+        if handle == _INVALID_HANDLE_VALUE:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return handle
+
+    @staticmethod
+    def _close_handle(handle: int) -> None:
+        assert _WINDOWS is not None
+        if not _WINDOWS.close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    @staticmethod
+    def _basic_info(handle: int) -> _FileBasicInfo:
+        assert _WINDOWS is not None
+        basic = _FileBasicInfo()
+        if not _WINDOWS.get_file_information_ex(
+            handle,
+            _FILE_BASIC_INFO_CLASS,
+            ctypes.byref(basic),
+            ctypes.sizeof(basic),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return basic
+
+    @staticmethod
+    def _set_basic_info(handle: int, basic: _FileBasicInfo) -> None:
+        assert _WINDOWS is not None
+        if not _WINDOWS.set_file_information(
+            handle,
+            _FILE_BASIC_INFO_CLASS,
+            ctypes.byref(basic),
+            ctypes.sizeof(basic),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    @staticmethod
+    def _flush_handle(handle: int) -> None:
+        assert _WINDOWS is not None
+        if not _WINDOWS.flush_file_buffers(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    @staticmethod
+    def _stat_handle(
+        handle: int, basic: _FileBasicInfo | None = None
+    ) -> FileStat:
+        assert _WINDOWS is not None
+        information = _ByHandleFileInformation()
+        if not _WINDOWS.get_file_information(
+            handle, ctypes.byref(information)
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        observed_basic = (
+            NativeFileSystem._basic_info(handle) if basic is None else basic
+        )
+        size = (information.nFileSizeHigh << 32) | information.nFileSizeLow
+        file_index = (
+            information.nFileIndexHigh << 32
+        ) | information.nFileIndexLow
+        return FileStat(
+            kind=EntryKind.FILE,
+            size=size,
+            mtime_ns=_unix_ns(observed_basic.LastWriteTime),
+            file_identity=FileIdentity(
+                f"{information.dwVolumeSerialNumber:08X}", file_index
+            ),
+            nlink=information.nNumberOfLinks,
+            metadata=MetadataSnapshot(
+                attributes=observed_basic.FileAttributes,
+                created_ns=_unix_ns(observed_basic.CreationTime),
+            ),
+        )
 
     def _validate_existing_chain(self, root: Path, candidate: Path) -> None:
         try:
@@ -520,11 +1280,8 @@ class NativeFileSystem:
     def _get_attributes(self, path: Path) -> int:
         if os.name != "nt":
             return _READONLY if not os.access(path, os.W_OK) else 0
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        get_attributes = kernel32.GetFileAttributesW
-        get_attributes.argtypes = [wintypes.LPCWSTR]
-        get_attributes.restype = wintypes.DWORD
-        value = get_attributes(str(path))
+        assert _WINDOWS is not None
+        value = _WINDOWS.get_attributes(_win32_path(path))
         if value == 0xFFFFFFFF:
             raise ctypes.WinError(ctypes.get_last_error())
         return int(value)
@@ -537,72 +1294,50 @@ class NativeFileSystem:
             else:
                 path.chmod(mode | stat_module.S_IWUSR)
             return
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        set_attributes = kernel32.SetFileAttributesW
-        set_attributes.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
-        set_attributes.restype = wintypes.BOOL
-        if not set_attributes(str(path), value):
+        assert _WINDOWS is not None
+        if not _WINDOWS.set_attributes(_win32_path(path), value):
             raise ctypes.WinError(ctypes.get_last_error())
 
     def _set_standard_attributes(self, path: Path, desired: int) -> None:
         current = self._get_attributes(path)
-        self._set_attributes(path, (current & ~_STANDARD_ATTRIBUTE_MASK) | desired)
+        self._set_attributes(
+            path, (current & ~_PRESERVED_ATTRIBUTE_MASK) | desired
+        )
 
     def _set_creation_time(self, path: Path, created_ns: int) -> None:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        create_file = kernel32.CreateFileW
-        create_file.argtypes = [
-            wintypes.LPCWSTR,
-            wintypes.DWORD,
-            wintypes.DWORD,
-            wintypes.LPVOID,
-            wintypes.DWORD,
-            wintypes.DWORD,
-            wintypes.HANDLE,
-        ]
-        create_file.restype = wintypes.HANDLE
-        handle = create_file(
-            str(path),
-            0x0100,
-            0x1 | 0x2 | 0x4,
+        assert _WINDOWS is not None
+        handle = _WINDOWS.create_file(
+            _win32_path(path),
+            _FILE_WRITE_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
             None,
-            3,
-            0x02000000 if path.is_dir() else 0x00000080,
+            _OPEN_EXISTING,
+            _FILE_FLAG_BACKUP_SEMANTICS if path.is_dir() else _FILE_ATTRIBUTE_NORMAL,
             None,
         )
-        invalid = wintypes.HANDLE(-1).value
-        if handle == invalid:
+        if handle == _INVALID_HANDLE_VALUE:
             raise ctypes.WinError(ctypes.get_last_error())
-        intervals = created_ns // 100 + 116444736000000000
+        intervals = _windows_ticks(created_ns)
         filetime = wintypes.FILETIME(intervals & 0xFFFFFFFF, intervals >> 32)
         try:
-            set_file_time = kernel32.SetFileTime
-            set_file_time.argtypes = [
-                wintypes.HANDLE,
-                ctypes.POINTER(wintypes.FILETIME),
-                ctypes.POINTER(wintypes.FILETIME),
-                ctypes.POINTER(wintypes.FILETIME),
-            ]
-            set_file_time.restype = wintypes.BOOL
-            if not set_file_time(handle, ctypes.byref(filetime), None, None):
+            if not _WINDOWS.set_file_time(
+                handle, ctypes.byref(filetime), None, None
+            ):
                 raise ctypes.WinError(ctypes.get_last_error())
         finally:
-            close = kernel32.CloseHandle
-            close.argtypes = [wintypes.HANDLE]
-            close.restype = wintypes.BOOL
-            close(handle)
+            _WINDOWS.close_handle(handle)
 
     def _volume_serial(self, path: Path) -> str:
         if os.name != "nt":
             return f"{path.stat(follow_symlinks=False).st_dev:x}"
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        assert _WINDOWS is not None
         volume_path = ctypes.create_unicode_buffer(32768)
-        if not kernel32.GetVolumePathNameW(
-            str(path), volume_path, len(volume_path)
+        if not _WINDOWS.get_volume_path(
+            _win32_path(path), volume_path, len(volume_path)
         ):
             raise ctypes.WinError(ctypes.get_last_error())
         serial = wintypes.DWORD()
-        if not kernel32.GetVolumeInformationW(
+        if not _WINDOWS.get_volume_information(
             volume_path.value,
             None,
             0,
@@ -621,6 +1356,32 @@ class NativeFileSystem:
         if value is None and os.name == "nt":
             value = getattr(info, "st_ctime_ns", None)
         return None if value is None else int(value)
+
+
+def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:
+    view = memoryview(chunk)
+    while view:
+        written = target.write(view)
+        if written is None or written <= 0:
+            raise OSError(f"{owner} made no forward write progress")
+        view = view[written:]
+
+
+def _win32_path(path: Path) -> str:
+    raw = str(path)
+    if raw.startswith("\\\\?\\"):
+        return raw
+    if raw.startswith("\\\\"):
+        return "\\\\?\\UNC\\" + raw[2:]
+    return "\\\\?\\" + raw
+
+
+def _windows_ticks(unix_ns: int) -> int:
+    return unix_ns // 100 + _WINDOWS_EPOCH_TICKS
+
+
+def _unix_ns(windows_ticks: int) -> int:
+    return (windows_ticks - _WINDOWS_EPOCH_TICKS) * 100
 
 
 def _find_winerror(error: Exception) -> int | None:
@@ -647,6 +1408,7 @@ class _PreparedCopy:
     temp: Path
     digest: CopyDigest
     intended: FileStat
+    finalized: FileStat
 
 
 @dataclass(slots=True)
@@ -945,7 +1707,7 @@ def execute(
             state.recording = RecordingStatus.DEGRADED
         raise
 
-    operations = tuple(
+    items = tuple(
         state.outcomes.get(operation.op_id)
         or ItemOutcome(
             item_id=str(operation.op_id),
@@ -970,7 +1732,7 @@ def execute(
         audit=RecordingStatus.OK,
         disposition=Disposition.RAN,
         canceled=False,
-        operations=operations,
+        items=items,
         bytes_done=min(progress.bytes_done, progress.bytes_total),
         bytes_total=progress.bytes_total,
     )
@@ -1087,37 +1849,37 @@ def _prepare_copy(
         ) from error
     state.inflight_temp = temp
     try:
-        with fs.open_source(source) as reader, fs.create_temp(temp) as writer:
+        reviewed_size = operation.source_expected.size
+        chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
+        with fs.open_source(source) as reader, fs.create_temp(
+            temp, allocation_size=_allocation_size(reviewed_size)
+        ) as writer:
             digest = policies.copy_backend.copy(
                 reader,
                 writer,
-                chunk_size=policies.chunk_size,
+                chunk_size=chunk_size,
                 checkpoint=ctx.checkpoint,
                 on_chunk=progress.copied,
             )
-            fs.flush_file(writer)
         intended = operation.intended or operation.source_expected
-        if policies.copy_backend is not None and digest.size != operation.source_expected.size:
+        if digest.size != reviewed_size:
             raise OperationFailure(
                 ExecutionReason.SOURCE_DRIFT,
                 "source byte count changed during copy",
             )
-        if xset.plan.preservation.preserve_acl:
-            try:
-                fs.copy_security(source, temp)
-            except Exception as error:
-                raise OperationFailure(
-                    ExecutionReason.ACL_COPY_FAILED,
-                    "security descriptor copy failed before publish",
-                    cause=error,
-                ) from error
-        fs.apply_metadata(
-            temp,
-            intended,
-            preserve_created=xset.plan.preservation.preserve_created,
-            apply_readonly=False,
-        )
-        fs.flush_path(temp)
+        try:
+            finalized = fs.finalize_temp(
+                temp,
+                intended,
+                preserve_created=xset.plan.preservation.preserve_created,
+                acl_source=source if xset.plan.preservation.preserve_acl else None,
+            )
+        except _SecurityCopyFailure as error:
+            raise OperationFailure(
+                ExecutionReason.ACL_COPY_FAILED,
+                "security descriptor copy failed before publish",
+                cause=error.__cause__ if isinstance(error.__cause__, Exception) else error,
+            ) from error
         ctx.checkpoint()
         _guard_present(
             fs,
@@ -1128,9 +1890,26 @@ def _prepare_copy(
             drift=ExecutionReason.SOURCE_DRIFT,
         )
         _guard_expected_target(fs, target_root, operation)
-        return _PreparedCopy(source, target, temp, digest, intended)
+        return _PreparedCopy(source, target, temp, digest, intended, finalized)
     except BaseException:
         raise
+
+
+def _published_copy_stat(
+    prepared: _PreparedCopy,
+    xset: ExecutionSet,
+    fs: ExecutorFileSystem,
+) -> FileStat:
+    observed = fs.ensure_published_metadata(
+        prepared.target,
+        prepared.finalized,
+        prepared.intended,
+        preserve_created=xset.plan.preservation.preserve_created,
+        apply_readonly=True,
+    )
+    return _profiled_stat(
+        observed, xset.plan.target_profile.stable_file_identity
+    )
 
 
 def _copy(
@@ -1165,17 +1944,8 @@ def _copy(
             cause=error,
         ) from error
     state.inflight_temp = None
-    fs.apply_metadata(
-        prepared.target,
-        prepared.intended,
-        preserve_created=xset.plan.preservation.preserve_created,
-        apply_readonly=True,
-    )
+    published = _published_copy_stat(prepared, xset, fs)
     detail = _durability_detail(fs, prepared.target.parent)
-    published = _profiled_stat(
-        _require_stat_path(fs, prepared.target),
-        xset.plan.target_profile.stable_file_identity,
-    )
     attestation = _attestation(prepared.digest, published, policies.clock)
     _record(state, detail, lambda: recorder.record_copied(operation.op_id, attestation))
     return _Settled(Outcome.SUCCEEDED, detail=detail)
@@ -1341,19 +2111,19 @@ def _update(
                         apply_readonly=True,
                     )
 
-    if continuation.trash is not None:
-        fs.apply_metadata(
+    if (
+        continuation.trash is not None
+        and continuation.backup_stat is not None
+        and continuation.detail.get("backup") == "hardlink"
+    ):
+        fs.ensure_published_metadata(
             continuation.trash,
+            continuation.backup_stat,
             operation.target_expected,
             preserve_created=xset.plan.preservation.preserve_created,
             apply_readonly=True,
         )
-    fs.apply_metadata(
-        prepared.target,
-        prepared.intended,
-        preserve_created=xset.plan.preservation.preserve_created,
-        apply_readonly=True,
-    )
+    published_stat = _published_copy_stat(prepared, xset, fs)
     continuation.detail.update(
         _durability_detail(
             fs,
@@ -1364,10 +2134,6 @@ def _update(
                 else (continuation.trash.parent,)
             ),
         )
-    )
-    published_stat = _profiled_stat(
-        _require_stat_path(fs, prepared.target),
-        xset.plan.target_profile.stable_file_identity,
     )
     attestation = _attestation(prepared.digest, published_stat, policies.clock)
     _record(
@@ -1523,11 +2289,12 @@ def _move_update(
                 cause=error,
             ) from error
         state.inflight_temp = None
+        published_stat = _published_copy_stat(prepared, xset, fs)
         continuation = _MoveUpdateContinuation(
             prepared=prepared,
             old_relative_path=old_rel,
             old_expected=old_expected,
-            published_stat=_require_stat_path(fs, prepared.target),
+            published_stat=published_stat,
         )
         state.retry_continuations[operation.op_id] = continuation
     elif isinstance(existing, _MoveUpdateContinuation):
@@ -1536,25 +2303,16 @@ def _move_update(
     else:
         raise RuntimeError("executor continuation kind does not match move-update")
 
-    published_actual = _require_stat_path(fs, prepared.target)
-    if not _same_file_version(published_actual, continuation.published_stat):
-        raise OperationFailure(
-            ExecutionReason.TARGET_DRIFT,
-            "published move-update target drifted before completion",
-        )
-    fs.apply_metadata(
-        prepared.target,
-        prepared.intended,
-        preserve_created=xset.plan.preservation.preserve_created,
-        apply_readonly=True,
-    )
+    if existing is not None:
+        published_actual = _require_stat_path(fs, prepared.target)
+        if not _same_file_version(published_actual, continuation.published_stat):
+            raise OperationFailure(
+                ExecutionReason.TARGET_DRIFT,
+                "published move-update target drifted before completion",
+            )
     if continuation.attestation is None:
-        published = _profiled_stat(
-            _require_stat_path(fs, prepared.target),
-            xset.plan.target_profile.stable_file_identity,
-        )
         continuation.attestation = _attestation(
-            prepared.digest, published, policies.clock
+            prepared.digest, continuation.published_stat, policies.clock
         )
     if continuation.trash is None:
         continuation.trash = fs.trash_destination(
@@ -2099,9 +2857,17 @@ def _normalized_live_stat(actual: FileStat, expected: FileStat) -> FileStat:
 def _attestation(
     digest: CopyDigest, subject: FileStat, clock: Clock
 ) -> Attestation:
+    if subject.size != digest.size:
+        raise OperationFailure(
+            ExecutionReason.PUBLISHED_SIZE_MISMATCH,
+            (
+                "published target size does not match copied content: "
+                f"{subject.size} != {digest.size}"
+            ),
+        )
     return Attestation(
         content=ContentEvidence(
-            algorithm="sha256",
+            algorithm="xxh3_128",
             digest=digest.digest,
             size=digest.size,
             provenance=Provenance.COPY_ATTESTED,
@@ -2147,10 +2913,7 @@ def _durability_detail(
         if directory in seen:
             continue
         seen.add(directory)
-        try:
-            flushed = fs.flush_directory(directory)
-        except Exception:
-            flushed = False
+        flushed = fs.flush_directory(directory)
         if not flushed:
             warnings.append(f"parent directory flush unsupported: {directory}")
     return {} if not warnings else {"durability_warnings": tuple(warnings)}

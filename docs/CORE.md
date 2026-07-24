@@ -1,9 +1,9 @@
 # Core Module
 
 Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
-and recording contracts are implemented. M1 Stage 1 removes the retired
-worker-count/live-settings semantics and adds the shared streaming-hasher
-protocol; the XXH3-128 content producer switch remains Stage 2.
+and recording contracts are implemented. M1 Stages 2-3 add the fixed XXH3-128
+content contract, nominal heterogeneous result vocabulary, schema-v3 event
+codec, and the continuation state consumed by standalone integrity workflows.
 
 ## Purpose
 
@@ -142,11 +142,12 @@ blocking. The runner then constructs and releases the one immutable `Terminal`
 to ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
-The version-2 M0 envelope codec round-trips `StateChanged`, `PhaseChanged`, `Progress`,
-`ItemOutcome`, `Gap`, and `Terminal` and rejects unknown schema/body versions.
-Integrity-specific event serialization remains part of its M1 integration; the
-live event plane already transports verifier-defined bodies structurally and
-treats every non-`Progress` body as reliable.
+The version-3 envelope codec round-trips `StateChanged`, `PhaseChanged`,
+`Progress`, nominal `ItemOutcome` and `IntegrityOutcome` values, `Gap`, and
+`Terminal`, and rejects unknown schema/body versions. Every reliable result
+item carries an explicit `item_type` and `phase`; `run_session` accumulates only
+the nominal `ResultItem` base in emission order, including prior items retained
+across pause/resume. Structural `hasattr(item_id/path)` guessing is forbidden.
 
 ## Path And Identity Rules
 
@@ -196,26 +197,29 @@ All domain timestamps come from one injected `Clock`, are timezone-aware UTC,
 and are normalized once before persistence or event emission. Presentation
 converts to local time.
 
-`StreamingHasher` and `HasherFactory` define the parameterless, standard-
-library-only dependency boundary shared by future content producers. Stage 1
-does not create or select a concrete third-party implementation in core.
+`StreamingHasher` and `HasherFactory` define the parameterless,
+standard-library-only dependency boundary shared by both content producers.
+Core never imports the concrete implementation; workflow composition supplies
+the exact same `xxhash.xxh3_128` constructor to executor and verifier.
 
-The currently executing M0 pipeline still gives `ContentEvidence` a SHA-256
-digest, size, provenance, and observation time. Stage 2 changes
-`ContentEvidence`, `CopyDigest`, executor, verifier, persistence, and fixtures
-together to the one 16-byte `xxh3_128` contract; mixed content algorithms are
-not an allowed intermediate state. `Attestation` joins content evidence to the
-exact subject `FileStat`. For copy and update, the subject is the published
-target re-statted after publication; the source's post-read stat is separate
-drift-guard evidence. No consumer may treat copy-stream evidence as readback
-verification.
+`ContentEvidence` and `CopyDigest` accept only raw 16-byte `xxh3_128` content
+digests. Mixed algorithms are invalid, hasher collaborator failures raise the
+typed core `HasherContractError`, and `Attestation` requires content size to
+equal its exact subject `FileStat` size. For copy and update, the subject is the
+published target re-statted after publication; the source's post-read stat is
+separate drift-guard evidence. No consumer may treat copy-stream evidence as
+readback verification. SHA-256 remains intentionally limited to plan,
+selection, custody, history, settings, and idempotency identity hashes.
 
 `OperationResult.status` reports filesystem truth only. Ledger persistence and
 history persistence are independent `recording` and `audit`
 `RecordingStatus.OK|DEGRADED` axes; no axis rewrites another. Typed
 `Disposition.RAN|UNRUN` distinguishes a canceled discarded queue entry and a
 refusal from sessions that actually began domain work without parsing strings
-or inferring from an empty operation list.
+or inferring from an empty result-item list. `OperationResult.items` accepts
+only nominal `ResultItem` instances and preserves the one heterogeneous event
+order; operation and integrity consumers use explicit tags rather than parallel
+domain lists.
 
 ## Expectations Of Other Modules
 

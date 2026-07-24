@@ -624,11 +624,15 @@ them. Retrofitting identity is the worst migration there is.
 M1 is one deliberate pre-release schema boundary, not an incremental migration:
 the ledger advances to v2 for canonical XXH3-128 content evidence and history
 advances to v3 for nominal phase-tagged result items plus reserved compound
-phase summaries. Ledger v1 and history v1/v2 are refused with one actionable
-reset posture, and development setup deletes/recreates both databases together.
-The existing narrow history v1→v2 migrator must not stamp a v3 database.
-Settings files survive this reset. A general migration framework remains later
-work.
+phase summaries. The versions are qualified by immutable final-contract markers:
+ledger `m1-ledger-xxh3-128-mapping-filters-v1` and history
+`m1-history-generic-items-phases-v1`. A nonempty database is checked read-only
+for its numeric version and then exact marker before any writer or schema script
+is opened. Older versions and missing/mismatched markers are refused with one
+actionable reset posture, and development setup deletes/recreates both databases
+together. The existing narrow history v1→v2 migrator must not stamp a v3
+database. Settings files survive this reset. A general migration framework
+remains later work.
 - **Schema-version stamp** on both databases; the migration module is separate
   from the sync path but the stamp is present from row zero.
 
@@ -1050,22 +1054,23 @@ items emitted before unwind); the integrity-outcome vocabulary (verified,
 baselined, mismatched, modified, missing, unsupported, canceled, error);
 attestation provenance tagging.
 
-**Flesh — operation module implemented early during M0 construction; integrated
-in M1.** Baseline creation; location verification against the
-size/mtime/identity/hash unit; selected and post-execution verification;
-cache-honest reads; safe conditional recording; accept/re-baseline of a modified
-file; item-status continuation — verify/baseline sessions pause and resume over
-their remaining selection exactly like execution (same continuation pattern,
-same preflight-on-resume posture). The callable module, real Windows unbuffered
-reader, and conditional ledger primitive are present before M1, but inventory
-refresh, integrity workflow/history detail, dispatcher registration, and
-interfaces remain the M1 product gate.
+**Flesh — operation module and standalone M1 integration implemented.**
+Baseline creation; location verification against the
+size/mtime/identity/hash unit; selected verification; cache-honest reads; safe
+conditional recording; accept/re-baseline of a modified file; and item-status
+continuation. Standalone verify/baseline/rebaseline sessions refresh inventory,
+re-resolve volume/root state on initial start and every resume/queued wakeup,
+and pause/resume over the exact originally admitted selection. Their ordered
+integrity items reach history, and all three kinds are registered with the
+dispatcher. Interface commands remain the Stage 5 product gate.
 
 M1 replaces content SHA-256 in baseline, verify, rebaseline, and copy together
 with canonical XXH3-128; no interval exists where the two consumers write
-different evidence formats. Ledger-bound selections and transient post-copy
-candidates share one guarded open/stat/hash/classification body. The latter are
-constructed by the workflow from `PublishedCopyEvidence` and remain
+different evidence formats. The verifier's guarded
+open/stat/hash/classification body is ledger-neutral so Stage 4 ledger-bound
+selections and transient post-copy candidates can share it without changing
+byte classification. The latter will be constructed by the workflow from
+`PublishedCopyEvidence` and remain
 classifiable when the copy-ledger transaction failed; only a candidate with
 durable matching row evidence may conditionally advance ledger verification
 state. Immediate
@@ -1140,10 +1145,11 @@ enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 `history` command. The observer is cheap precisely because it is only an event
 subscriber; nothing calls it.
 Conditional verify/baseline/rebaseline recording landed early with the isolated
-verifier during M0 construction. **Flesh — M1.** History integrity summaries
-and retained issue detail; generic `ResultItem` persistence; reserved compound
-`PhaseResult` storage used by linked verification; integrity workflow
-composition; and the coordinated ledger-v2/history-v3 reset.
+verifier during M0 construction. **Flesh — implemented through M1 Stage 3.**
+History stores ordered generic `ResultItem` detail for standalone integrity,
+including retained issue fields; the coordinated ledger-v2/history-v3 reset
+reserves compound `PhaseResult` storage but Stage 3 writes no phase rows.
+Compound phase summaries and linked-verification history remain Stage 4.
 Semantic-settings commits hold a named cross-process mutex only across
 read-current → modify-owned-keys → temp-write → atomic-replace, so concurrent
 GUI/CLI writers cannot lose one another's updates.
@@ -1359,11 +1365,14 @@ sessions and exposes the resulting typed history reads.
 
 **Flesh — implemented (M0).** Paired sync (both phases), automatic safe-subset
 selection, local composition, CLI terminal review/commit, and history browsing.
-**Flesh — M1.** Role-free one-location inventory; standalone
-inventory/baseline/verify/rebaseline sessions; integrity preflight on start and
-resume; in-session post-execution verification; nominal mixed result/history
-items and phase summaries; a shared facade and expanded CLI; and the desktop
-shell. **Flesh — deferred.** Queue-driven durable second sessions;
+**Flesh — implemented through M1 Stage 3.** Role-free one-location inventory;
+standalone inventory/baseline/verify/rebaseline sessions; integrity preflight
+on start, resume, and queued wakeup; mapping-scoped authoritative filters;
+exact-candidate continuation; nominal result/history items; and production
+dispatcher registration. **Flesh — later M1 stages.** In-session
+post-execution verification and compound phase summaries (Stage 4), a shared
+facade and expanded CLI (Stage 5), and the desktop shell (Stage 6).
+**Flesh — deferred.** Queue-driven durable second sessions;
 replay-from-history; DB maintenance/retention session; undo/repair (each
 generated as an ordinary plan through the same pipeline — the
 *Pipeline-Only Mutation* law); `run_ingest` — scan → enrich
@@ -1507,8 +1516,8 @@ desktop surfaces, and other interfaces behind the same facade.
   `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
   isolated verifier operation may land in parallel during M0 construction, but
   does not broaden this shipping gate without its inventory/workflow surface.
-- **M1 — integrity product and executor refactor.** Build in this dependency
-  order:
+- **M1 — integrity product and executor refactor.** Stages 1–3 are implemented;
+  continue in this dependency order:
   1. contracts and semantics — canonical XXH3-128 evidence, nominal result
      items/phase summaries, four truth axes, execute→verify continuation,
      two-database reset boundary, split settings ownership, and facade/bridge

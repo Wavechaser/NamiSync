@@ -1,9 +1,10 @@
 # History Module
 
 Status: minimal independent sync history storage, observer integration, and CLI
-browsing are implemented. M1 Stage 1 activates history v3's generic item and
-phase-summary storage; integrity producers/views, retention, task grouping,
-replay, discard audit, and export remain later work.
+browsing are implemented. M1 history v3 now round-trips the generic ordered
+result-item stream for both operation and standalone-integrity producers.
+Phase-summary storage is reserved but remains unwritten until Stage 4;
+retention, task grouping, replay, discard audit, and export remain later work.
 
 ## Purpose
 
@@ -12,7 +13,7 @@ SQLite database. It records what NamiSync attempted and reported without
 participating in filesystem or ledger transactions. No history failure may roll
 back real file work or ledger truth.
 
-## Implemented M0 Slice
+## Implemented M0 And M1 Stage 3 Slice
 
 `HistoryStore` owns a separate WAL database and returns a `HistoryObserver`
 matching the dispatcher's composition-root protocol: `on_event(envelope)`,
@@ -22,12 +23,13 @@ never imports dispatcher.
 
 The observer accepts reliable preterminal envelopes, idempotently detects exact
 duplicate sequence delivery, rejects conflicting or reordered duplicates, and
-persists one actual-time sync envelope, typed summary axes, and ordered
-`ItemOutcome` detail during finalization. Each current row is stored in the v3
-generic stream as `item_type=operation` and `phase=execute`; the existing typed
-repository continues exposing operation snapshots. Stage 1 creates but does not
-write `history_phases`, because phase-summary/result producers land with their
-own Stage 3/4 consumers. Run-token replay with an identical payload is a no-op;
+persists one actual-time envelope, typed summary axes, and ordered nominal
+`ResultItem` detail during finalization. Operation rows retain
+`item_type=operation`/`phase=execute`; integrity rows retain their integrity
+fields and `baseline|verify|rebaseline` phase. The typed repository returns one
+ordered heterogeneous item stream and rejects a stored column/payload
+disagreement. No Stage 1/3 producer writes `history_phases`; compound phase
+summaries begin only in Stage 4. Run-token replay with an identical payload is a no-op;
 a different payload raises `TokenConflictError`. A failed history transaction
 propagates to the dispatcher acknowledgement without mutating the provisional
 filesystem or ledger result.
@@ -45,10 +47,10 @@ safe-subset collateral exclusions remain `DEFERRED` with typed reasons such as
 stores each path/reason and a run-level blocked count. Quarantine and withholding
 do not add separate top-level outcome categories.
 
-`HistoryRepository` returns immutable typed run and operation snapshots through
+`HistoryRepository` returns immutable typed run and generic item snapshots through
 a read-only connection. The M0 CLI reaches these reads through the workflow
 composition root; the database module itself owns no interface policy. No M0
-method implements retention or integrity detail. Recent-run rendering
+method implements retention. Recent-run rendering
 derives blocked/deferred exception counts from those typed item rows, while
 detailed rendering lists each path and reason.
 
@@ -90,13 +92,14 @@ integrity errors, not silently ignored.
 - No-op/refused/canceled attempts retain an envelope and truthful zero-work
   detail where applicable.
 
-Current sync behavior stores envelopes, summaries, and ordered operation items
-sufficient for CLI history. The history schema is version 3. Startup refuses
-history v1/v2 without mutation and directs the user to recreate both local
-databases during this temporary pre-migrator boundary. Version 3 reserves
+Current behavior stores envelopes, summaries, and ordered operation/integrity
+items sufficient for typed history views. The history schema is version 3 with
+the exact `contract_id=m1-history-generic-items-phases-v1` marker. Startup
+refuses history v1/v2 and transitional/mismatched v3 files without mutation and
+directs the user to recreate both local databases together. Version 3 reserves
 generic phase summaries and one ordered phase/item-type-tagged heterogeneous
-result-item stream; integrity detail and compound phase producers remain
-Stage 3/4 work.
+result-item stream. Standalone integrity writes item detail but deliberately
+writes zero phase-summary rows; compound phase producers remain Stage 4 work.
 
 ## Failure Semantics
 
@@ -168,13 +171,13 @@ history or asks history to infer disposition from zero bytes or strings.
 
 ## Acceptance Criteria
 
-Tests cover sync axis/detail round-trip through the generic v3 storage, ordered
+Tests cover sync and integrity axis/detail round-trip through the generic v3 storage, ordered
 outcomes, blocked/no-op/refused attempts, exact duplicate delivery, conflicting
 duplicate diagnosis, idempotent run finalization, read-only browsing,
-old-schema refusal, and failure isolation. Buffer pressure, acknowledgement
-timeout, and single-terminal settlement are dispatcher tests. Integrity
-renderers, retention, replay, discard audit, and export remain future acceptance
-gates.
+old-schema refusal, unknown reliable-body rejection, and failure isolation.
+Buffer pressure, acknowledgement timeout, and single-terminal settlement are
+dispatcher tests. Retention, replay, discard audit, and export remain future
+acceptance gates.
 
 - Every terminal path listed above produces exactly one idempotent envelope with
   actual start/end ordering and activity kind.

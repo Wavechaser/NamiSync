@@ -1,8 +1,9 @@
 # M1 Plan
 
-Status: planning decisions revised and reconciled 2026-07-24. Stage 1
-(contracts and semantics) landed on 2026-07-24; Stages 2-6 remain
-unimplemented. This is both the milestone plan and the decision log for the choices made
+Status: planning decisions revised and reconciled 2026-07-24. Stages 1–3
+(contracts/semantics, executor/hash refactor, and inventory/standalone
+integrity) landed on 2026-07-24; Stages 4–6 remain unimplemented. This is both
+the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
 their code stages land. This file remains the detailed record of *why* and of
@@ -277,6 +278,17 @@ every older ledger or history version with one actionable reset message, and
 deletes/recreates both databases as one development boundary. No ledger rows,
 content evidence, history rows, or run detail cross the boundary. Settings
 files are not databases and survive it.
+
+The final integrated contract is frozen by decision
+`M1-SCHEMA-CONTRACT-20260724-02`: metadata key `contract_id`, ledger value
+`m1-ledger-xxh3-128-mapping-filters-v1`, and history value
+`m1-history-generic-items-phases-v1`. For a nonempty database, startup checks
+the supported numeric version and then this exact opaque marker through a
+read-only connection before opening any writer or running the schema script.
+Missing/mismatched markers—including transitional Stage 1 v2/v3 files—take the
+same reset-both refusal. Fresh initialization writes both exact markers; normal
+reopen is a no-op. There is no backfill, migration, or second numeric version
+bump.
 
 The former `_migrate_history()` shortcut had to be removed before the history
 constant was raised: it wrote the current
@@ -678,12 +690,12 @@ the compatible `xxhash>=3.8.1,<4` runtime dependency is declared; and the
 WebView2 security spike proves forced Edge Chromium, native navigation guards,
 exact-origin dispatch, and structured pull/RPC.
 
-The standard-library-only `StreamingHasher`/`HasherFactory` contract is now in
-core. The actual `ContentEvidence`/`CopyDigest`, executor, verifier, repository,
-and fixture switch to 16-byte `xxh3_128` remains one atomic Stage 2 Track 2
-change, as DR-HASH-01/02 require. Likewise, nominal integrity result/event code
-still waits for its Stage 3 producer and compound continuation/result code
-waits for Stage 4; only their final history storage shape was reserved here.
+The standard-library-only `StreamingHasher`/`HasherFactory` contract landed in
+core in this stage. At the Stage 1 checkpoint, the actual
+`ContentEvidence`/`CopyDigest`, executor, verifier, repository, and fixture
+switch to 16-byte `xxh3_128` remained the atomic Stage 2 Track 2 change required
+by DR-HASH-01/02. Nominal integrity result/event code similarly waited for its
+Stage 3 producer; compound continuation/result code still waits for Stage 4.
 
 - Freeze the execute → verify state machine, candidate set, four independent
   truth axes, pause/cancel/failure behavior, process-close limitation, and
@@ -710,6 +722,17 @@ waits for Stage 4; only their final history storage shape was reserved here.
   rejection in `dispatch`, and structured pull/RPC without `evaluate_js`.
 
 ### Stage 2 — Executor and Hash Refactor
+
+**Implemented 2026-07-24.** Track 1 uses the fixed adaptive chunk bands, one
+bounded three-stage pipeline for every normal copy, conditional preallocation,
+Windows sequential-source hints, and the specified finalization reductions.
+Track 2 atomically switched copy and verification evidence to raw 16-byte
+XXH3-128, injected the same exact composition-owned factory into both
+consumers, retained different executor/verifier opener strategies, reconstructed
+stored algorithms without relabeling, and joined the final marked
+ledger-v2/history-v3 reset boundary. No file-level concurrency or alternate
+content algorithm was added. Final measured tables and acceptance status remain
+recorded in `HASH_REFACTOR.md`.
 
 0. **Precondition — validate the fixed chunk bands and measure allocation.**
    `HASH_REFACTOR.md` DR-HASH-07 fixes the M1 copy policy at 256 KiB below
@@ -738,6 +761,20 @@ No file-level concurrency, serial/pipelined engine split, batching, publish
 pipeline, or direct IO is introduced.
 
 ### Stage 3 — Inventory and Standalone Integrity
+
+**Implemented 2026-07-24.** The delivered slice includes the five distinct
+resolution states; first-location host→volume→role-free-location registration;
+full and selected reconciliation with producer-correct completeness;
+mapping-scoped authoritative filter snapshots plus hash-tagged exclusion
+projections; typed immutable repository snapshots; acknowledge/restore and
+staleness reads; nominal ordered result/history items; and standalone inventory,
+baseline, verify, and rebaseline composition. Integrity re-resolves on initial
+start, every resume, and queued wakeup; pause/resume retains the exact admitted
+row ids while refreshes may inventory newly appeared rows. The production
+dispatcher registers all six current workflow kinds with their correct pause
+capabilities, but parser choices remain exactly `sync` and `history`. Stage 3
+writes no `history_phases` rows and introduces none of Stage 4's transient or
+compound types.
 
 - Inventory workflow: five-state volume resolution, first-location
   registration, scoped scan-and-record using the existing scanner,
@@ -853,8 +890,19 @@ and final classification wait for Stages 3 and 4.
 
 Each stage's work should land with the same standard the M0 module docs use:
 a named failure-injection or regression test per behavior, not just "tested."
-Specific ones worth calling out because they don't exist yet and are easy to
-skip:
+The following are milestone gates because they are easy to skip:
+
+**Implementation checkpoint (2026-07-24).** Stage 2 satisfies the Track 2
+composition gates through C1–C11 in `HASH_REFACTOR.md`, including a single
+production-composition proof of exact factory identity plus distinct
+`O_SEQUENTIAL` executor and Windows-unbuffered verifier openers, and a direct
+plus optimized-`python -O` attestation-size invariant. Stage 3 has executable
+coverage for XV-8 through XV-17 to the extent those gates apply before Stage 4:
+nominal item validation/order, integrity history, view precedence, scanner and
+five-state inventory behavior, resume/wakeup clone refusal, shared factory
+composition, final-schema markers/reservations, and zero standalone phase rows.
+The compound-only halves of XV-8/XV-17 and all execute→verify gates remain
+Stage 4 work.
 
 - The XXH3-128 replacement and copy pipeline satisfy every collaborator,
   vector, acknowledgement, failure, and cancellation test listed in
@@ -862,9 +910,14 @@ skip:
 - "Pipeline every size" is validated end to end, not only by microbench. The
   standard synthetic distribution (1,000×4 KiB, 512×128 KiB, 64×4 MiB,
   4×128 MiB, 1×4 GiB) runs cross-volume, and the small-file band's end-to-end
-  throughput and operations/second are recorded and do not regress against the
-  pre-refactor serial executor beyond the accepted worker-startup cost stated
-  in `HASH_REFACTOR.md` §2.4. A green correctness-only pipeline test does not
+  results are 412.182 ops/s to `G:` NAND, 337.106 ops/s to `E:` Optane, and
+  50.177 ops/s to `J:` HDD. In the controlled three-engine comparison those
+  are respectively 83.1%, 92.1%, and 37.6% faster than the retired serial
+  SHA-256 executor, so the accepted isolated worker-startup cost does not
+  become an end-to-end small-file regression. All 15 current-tip corpus rows,
+  fixed finalization time, stage starvation, payload high-water, serial
+  comparisons, and the allocation sweep are recorded in
+  `HASH_REFACTOR.md` §2.8. A green correctness-only pipeline test does not
   satisfy this bullet: the measurement is a named gate with recorded numbers,
   and a regression past the accepted margin blocks the stage
   (`HASH_REFACTOR.md` §2.7(7), DR-HASH-07).

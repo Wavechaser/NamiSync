@@ -1,7 +1,9 @@
 # Command-Line Interface
 
-Status: M0 reviewed `sync` and `history` implemented. Integrity commands arrive
-with M1; queue release and machine-readable output remain deferred.
+Status: M0 reviewed `sync` and `history` implemented. M1 Stage 3 inventory and
+integrity workflows are production-registered but intentionally have no parser
+commands until Stage 5; queue release and machine-readable output remain
+deferred.
 
 ## Entry Points
 
@@ -33,24 +35,28 @@ outside the managed roots; defaults are the local
 `%LOCALAPPDATA%\NamiSync\ledger.db` and
 `%LOCALAPPDATA%\NamiSync\history.db`.
 
-During the temporary M1 pre-migrator boundary, opening ledger v1 or history
-v1/v2 fails before schema mutation with an instruction to close NamiSync and
-manually delete both local database files, then rerun the command. Startup does
-not delete either database automatically. This is development-state recovery,
-not a migration or preservation promise.
+At the final M1 pre-migrator boundary, opening an older-version database or a
+transitional ledger-v2/history-v3 database without the exact final contract
+marker fails before schema mutation with an instruction to close NamiSync and
+manually delete **both** local database files, then rerun the command. A
+mismatched marker is refused identically. Startup does not delete, migrate, or
+backfill either database automatically. This is development-state recovery, not
+a migration or preservation promise.
 
 For noninteractive use, mandatory review cannot be waived by a casual `--yes`.
 The command surface may expose a separate queue-release flag that executes only
 already committed sets. A commitment binds plan fingerprint plus exact selection
 digest; no flag combination plans and executes in one unreviewed invocation.
 
-### M1
+### M1 Stage 5 (planned; not current parser choices)
 
 - `inventory LOCATION`: refresh and print role-free inventory/mapping guidance.
 - `baseline LOCATION [scope]`: inventory as needed, create missing baselines,
   and report typed counts/issues.
 - `verify LOCATION [scope]`: refresh appropriately, verify, and return an
   integrity-issue exit status when needed.
+- `rebaseline LOCATION [scope]`: explicitly accept current evidence for
+  modified selected rows.
 
 Integrity commands accept both `--database` and `--history-database`; tests use
 temporary values for both. A selected location is never inferred by falling

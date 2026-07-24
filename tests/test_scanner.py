@@ -103,7 +103,7 @@ def test_offline_root_is_not_a_complete_empty_snapshot(tmp_path: Path) -> None:
     assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
 
 
-def test_selected_refresh_performs_no_full_walk_and_never_claims_completeness(
+def test_selected_refresh_is_complete_for_scope_without_a_full_walk(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     for name in ("one.txt", "two.txt", "third.txt"):
@@ -115,12 +115,42 @@ def test_selected_refresh_performs_no_full_walk_and_never_claims_completeness(
         Root(str(tmp_path), "source"),
         IgnoreSet(),
         _ctx(),
-        ScanScope.selected(("one.txt", "two.txt")),
+        ScanScope.selected(("one.txt", "two.txt", "missing.txt")),
+    )
+
+    assert result.complete
+    assert {record.rel_path for record in result.files} == {"one.txt", "two.txt"}
+    assert "third.txt" not in {record.rel_path for record in result.files}
+    assert any(
+        warning.code is ScanWarningCode.DISAPPEARED
+        and warning.rel_path == "missing.txt"
+        for warning in result.warnings
+    )
+
+
+def test_selected_refresh_access_failure_is_incomplete(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    denied = tmp_path / "denied.txt"
+    denied.write_bytes(b"content")
+    scanner = WalkingScanner()
+    original = scanner._backend.lstat
+
+    def lstat(path: str):
+        if Path(path).name == denied.name:
+            raise PermissionError("denied")
+        return original(path)
+
+    monkeypatch.setattr(scanner._backend, "lstat", lstat)
+    result = scanner.scan(
+        Root(str(tmp_path), "source"),
+        IgnoreSet(),
+        _ctx(),
+        ScanScope.selected((denied.name,)),
     )
 
     assert not result.complete
-    assert {record.rel_path for record in result.files} == {"one.txt", "two.txt"}
-    assert "third.txt" not in {record.rel_path for record in result.files}
+    assert result.unsupported[0].reason is UnsupportedReason.ACCESS_DENIED
 
 
 def test_cancellation_is_checked_between_enumerated_entries(tmp_path: Path) -> None:

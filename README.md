@@ -3,13 +3,19 @@ A safety-first, one-way file mirroring app for Windows. NamiSync performs source
 
 ## Development status
 
-The integrity operation module is implemented and directly testable: it
-supports baseline, verify, explicit rebaseline, pause/cancel continuation, and
-cache-honest Windows unbuffered reads. The end-user integrity workflow remains
-an M1 integration task because inventory refresh, persisted integrity history,
-dispatcher registration, and interface composition are separate layers.
-M1 also replaces bulk content evidence with fixed XXH3-128 and pipelines each
-normal copy's read/write/hash stages under one combined 32 MiB byte budget.
+The role-free inventory and standalone integrity workflows are implemented and
+production-composed. Inventory distinguishes resolved, offline, ambiguous,
+missing-root, and unavailable-root states; persists mapping-scoped filter
+intent without rewriting physical presence; and supports acknowledge, restore,
+and stale/missing reads. Baseline, verify, and explicit rebaseline refresh
+inventory, re-resolve volume identity on start/resume/queued wakeup, preserve an
+exact admitted candidate set across pause/resume, and write ordered integrity
+detail to history. All four workflow kinds are registered with the production
+dispatcher, but no inventory/integrity CLI or UI command is exposed before M1
+Stage 5.
+
+M1 Stage 2 replaced bulk content evidence with fixed XXH3-128 and pipelines
+each normal copy's read/write/hash stages under one combined 32 MiB byte budget.
 Copy chunks are fixed at 256 KiB below 8 MiB, 1 MiB below 32 MiB, and 4 MiB
 thereafter. The same refactor adds conditional temp preallocation, sequential
 cache hints, hoisted Windows bindings, one pre-publish temp flush, and
@@ -18,7 +24,8 @@ batching, direct copy IO, and cross-file publish overlap remain deferred until
 new measurements justify them. Internal plan, custody, history, and database
 identity hashes remain SHA-256.
 
-M1's optional post-execution verification is one execute→verify state machine
+M1 Stage 4's planned optional post-execution verification is one
+execute→verify state machine
 inside the same session and volume custody. Successful copy/update/move-update
 publishes hand transient attestations directly to readback even if ledger
 recording degraded; filesystem, integrity, recording, and audit remain
@@ -41,32 +48,35 @@ update/no-op work continues; the unexposed opt-in casing policy uses a zero-byte
 rename when content already matches. Preflight separates scoped read-only
 observation from exhaustive typed judgment.
 
-The M1 contract foundation is now implemented. `worker_count` and execution's
-false live-settings drift check are gone, so admitted runs consume only their
-reviewed immutable policy snapshot. Schema-versioned semantic defaults live in
-database-owned `settings.json` with named-mutex-serialized partial commits;
+The M1 contract and hash foundations are now implemented. `worker_count` and
+execution's false live-settings drift check are gone, so admitted runs consume
+only their reviewed immutable policy snapshot. Schema-versioned semantic
+defaults live in database-owned `settings.json` with named-mutex-serialized
+partial commits;
 cosmetic recents/window/column/sort state lives separately in interface-owned
 `ui-state.json`. The measured `xxhash` 3.x runtime is now a declared project
-dependency, while the content producers remain unchanged until their atomic
-Stage 2 switch. A security spike proves the future pywebview host can force
+dependency, and executor and verifier consume one exact composition-owned
+`xxh3_128` factory with raw 16-byte evidence. A security spike proves the
+future pywebview host can force
 Edge Chromium, install native WebView2 navigation/new-window guards, recheck
 the packaged origin on its single versioned `dispatch`, and return application
 data structurally without executing JavaScript text. The desktop host itself
 still waits for M1 Stage 6.
 
-The M0 persistence implementation remains the operational base: a serialized run-bound recorder
-is the only main-ledger writer; versioned WAL schemas retain role-free inventory,
-mapping correspondence, runs, and distinct observed/attested evidence; typed
-repositories are read-only; and an independent history observer stores sync
-envelopes, summaries, and ordered operations, including blocked/deferred safe-
-subset exclusions. The active schema boundary is now ledger v2/history v3:
-history reserves generic phase-tagged item and phase-summary storage, while the
-existing sync observer writes operation/execute tags and no phase rows yet.
-Ledger v1 and history v1/v2 are refused without mutation and require manual
-deletion/reset of the local database files. The actual XXH3-128 producer switch
-still lands atomically for executor and verifier in Stage 2, after which local
-development databases must be recreated. General migrations, backup, and
-cross-process-coordinated retention remain later phases.
+The M0 persistence implementation remains the operational base: a serialized
+run-bound recorder is the only main-ledger writer; versioned WAL schemas retain
+role-free inventory, mapping-scoped filter snapshots/projections, mapping
+correspondence, runs, and distinct observed/attested evidence; typed
+repositories are read-only; and an independent history observer stores ordered
+sync and integrity items. The active schema boundary is ledger v2/history v3
+plus immutable final-M1 contract markers. History reserves generic
+phase-tagged items and compound phase-summary storage, while Stage 3 standalone
+integrity writes no phase rows. Any older, transitional, missing-marker, or
+mismatched-marker database is refused before mutation. Close NamiSync, delete
+or otherwise reset **both** local database files together, and rerun to create
+the complete matching schemas; startup never migrates or backfills this
+boundary. General migrations, backup, and cross-process-coordinated retention
+remain later phases.
 
 The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
 scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
@@ -160,6 +170,18 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Implemented M1 Stage 3 role-free inventory and standalone integrity:
+  five-state volume/root resolution, first-location registration, scoped
+  completeness, mapping-scoped filters, stale/missing acknowledge and restore,
+  exact-candidate pause/resume, baseline/verify/rebaseline composition,
+  production dispatcher registration, and ordered generic integrity history
+  without exposing premature CLI/UI commands.
+- Implemented M1 Stage 2's adaptive single-file copy pipeline and atomic
+  XXH3-128 evidence switch across executor, verifier, repositories, fixtures,
+  and the coordinated ledger-v2/history-v3 contract-marker reset boundary.
+  The required five-corpus pass completed from NAND to separate NAND, Optane,
+  and HDD targets; the controlled comparison showed 37.6%–92.1% higher
+  small-file operations/s than the retired serial SHA-256 path.
 - Landed M1 Stage 1 contracts and semantics: removed `worker_count` and
   execution-time settings drift refusal, added the shared streaming-hasher
   protocol and compatible `xxhash` dependency, activated ledger v2/history v3

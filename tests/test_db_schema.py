@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+import namisync.db.history as history_module
+import namisync.db.repositories as repositories_module
 from namisync.db.connections import (
     DatabaseLocationError,
     connect_history_reader,
@@ -12,8 +14,12 @@ from namisync.db.connections import (
     connect_ledger_writer,
     validate_database_path,
 )
+from namisync.db.history import HistoryRepository
+from namisync.db.repositories import LedgerRepository
 from namisync.db.schema import (
+    HISTORY_CONTRACT_ID,
     HISTORY_SCHEMA_VERSION,
+    LEDGER_CONTRACT_ID,
     LEDGER_SCHEMA_VERSION,
     SchemaResetRequired,
     initialize_history,
@@ -69,6 +75,8 @@ def test_fresh_ledger_contains_schema_freeze_bones(tmp_path: Path) -> None:
             "locations",
             "mappings",
             "inventory",
+            "mapping_filters",
+            "mapping_exclusions",
             "mapping_correspondence",
             "runs",
             "operations",
@@ -95,7 +103,6 @@ def test_fresh_ledger_contains_schema_freeze_bones(tmp_path: Path) -> None:
             "last_verified_at",
             "missing_since",
             "acknowledged_at",
-            "excluded_at",
             "reappeared_at",
             "unsupported_reason",
         } <= inventory_columns
@@ -257,6 +264,8 @@ def test_coordinated_reset_recreates_final_m1_schema_shapes(tmp_path: Path) -> N
     history = tmp_path / "history.db"
     _seed_schema_version(ledger, 1)
     _seed_schema_version(history, 2)
+    ledger.with_name(ledger.name + "-journal").write_bytes(b"stale-ledger")
+    history.with_name(history.name + "-journal").write_bytes(b"stale-history")
 
     assert reset_databases(ledger, history) == (ledger.resolve(), history.resolve())
 
@@ -273,6 +282,18 @@ def test_coordinated_reset_recreates_final_m1_schema_shapes(tmp_path: Path) -> N
                 "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
             ).fetchone()[0]
         )
+        ledger_contract = ledger_reader.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'contract_id'"
+        ).fetchone()[0]
+        history_contract = history_reader.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'contract_id'"
+        ).fetchone()[0]
+        ledger_tables = {
+            row[0]
+            for row in ledger_reader.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
         history_tables = {
             row[0]
             for row in history_reader.execute(
@@ -294,6 +315,19 @@ def test_coordinated_reset_recreates_final_m1_schema_shapes(tmp_path: Path) -> N
 
     assert ledger_version == LEDGER_SCHEMA_VERSION == 2
     assert history_version == HISTORY_SCHEMA_VERSION == 3
+    assert (
+        ledger_contract
+        == LEDGER_CONTRACT_ID
+        == "m1-ledger-xxh3-128-mapping-filters-v1"
+    )
+    assert (
+        history_contract
+        == HISTORY_CONTRACT_ID
+        == "m1-history-generic-items-phases-v1"
+    )
+    assert not ledger.with_name(ledger.name + "-journal").exists()
+    assert not history.with_name(history.name + "-journal").exists()
+    assert {"mapping_filters", "mapping_exclusions"} <= ledger_tables
     assert {"history_items", "history_phases"} <= history_tables
     assert {"item_type", "phase", "item_id", "result", "detail_json"} <= item_columns
     assert {
@@ -308,3 +342,223 @@ def test_coordinated_reset_recreates_final_m1_schema_shapes(tmp_path: Path) -> N
         "detail_json",
     } <= phase_columns
     assert phase_count == 0
+
+
+@pytest.mark.parametrize(
+    ("initializer", "version", "name"),
+    [
+        (initialize_ledger, LEDGER_SCHEMA_VERSION, "ledger"),
+        (initialize_history, HISTORY_SCHEMA_VERSION, "history"),
+    ],
+)
+def test_transitional_current_version_without_contract_is_refused_read_only(
+    tmp_path: Path, initializer, version: int, name: str
+) -> None:
+    path = tmp_path / f"{name}-transitional.db"
+    _seed_schema_version(path, version)
+
+    with pytest.raises(SchemaResetRequired, match="reset both database files together"):
+        initializer(path)
+
+    connection = sqlite3.connect(path)
+    try:
+        metadata = dict(connection.execute("SELECT key, value FROM schema_metadata"))
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+    finally:
+        connection.close()
+    assert metadata == {"schema_version": str(version)}
+    assert tables == {"schema_metadata", "legacy_marker"}
+    assert journal_mode == "delete"
+    assert not path.with_name(path.name + "-wal").exists()
+    assert not path.with_name(path.name + "-shm").exists()
+
+
+@pytest.mark.parametrize(
+    ("initializer", "version", "name"),
+    [
+        (initialize_ledger, LEDGER_SCHEMA_VERSION, "ledger"),
+        (initialize_history, HISTORY_SCHEMA_VERSION, "history"),
+    ],
+)
+def test_mismatched_contract_is_refused_without_backfill(
+    tmp_path: Path, initializer, version: int, name: str
+) -> None:
+    path = tmp_path / f"{name}-mismatch.db"
+    _seed_schema_version(path, version)
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "INSERT INTO schema_metadata(key, value) VALUES ('contract_id', 'wrong')"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(SchemaResetRequired, match="schema contract wrong"):
+        initializer(path)
+
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'contract_id'"
+        ).fetchone()[0] == "wrong"
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
+    finally:
+        connection.close()
+
+
+def test_reopening_complete_contract_is_schema_noop(tmp_path: Path) -> None:
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    reset_databases(ledger, history)
+
+    before: list[tuple[int, tuple[tuple[object, ...], ...]]] = []
+    for path in (ledger, history):
+        connection = sqlite3.connect(path)
+        try:
+            before.append(
+                (
+                    int(connection.execute("PRAGMA schema_version").fetchone()[0]),
+                    tuple(
+                        connection.execute(
+                            """SELECT type, name, sql FROM sqlite_master
+                                WHERE name NOT LIKE 'sqlite_%'
+                                ORDER BY type, name"""
+                        )
+                    ),
+                )
+            )
+        finally:
+            connection.close()
+
+    initialize_ledger(ledger)
+    initialize_history(history)
+
+    after: list[tuple[int, tuple[tuple[object, ...], ...]]] = []
+    for path in (ledger, history):
+        connection = sqlite3.connect(path)
+        try:
+            after.append(
+                (
+                    int(connection.execute("PRAGMA schema_version").fetchone()[0]),
+                    tuple(
+                        connection.execute(
+                            """SELECT type, name, sql FROM sqlite_master
+                                WHERE name NOT LIKE 'sqlite_%'
+                                ORDER BY type, name"""
+                        )
+                    ),
+                )
+            )
+        finally:
+            connection.close()
+    assert after == before
+
+
+def _sqlite_artifact_snapshot(path: Path) -> dict[str, bytes | None]:
+    return {
+        suffix: (
+            candidate.read_bytes() if candidate.exists() else None
+        )
+        for suffix in ("", "-wal", "-shm", "-journal")
+        for candidate in (path.with_name(path.name + suffix),)
+    }
+
+
+@pytest.mark.parametrize(
+    ("repository_type", "version", "name"),
+    [
+        (LedgerRepository, LEDGER_SCHEMA_VERSION, "ledger"),
+        (HistoryRepository, HISTORY_SCHEMA_VERSION, "history"),
+    ],
+)
+@pytest.mark.parametrize(
+    "shape",
+    ["old", "markerless", "mismatched", "unversioned", "empty"],
+)
+def test_read_repositories_refuse_incompatible_contracts_without_mutation(
+    tmp_path: Path,
+    repository_type,
+    version: int,
+    name: str,
+    shape: str,
+) -> None:
+    path = tmp_path / f"{name}-{shape}.db"
+    if shape == "empty":
+        sqlite3.connect(path).close()
+    elif shape == "unversioned":
+        connection = sqlite3.connect(path)
+        try:
+            connection.execute("CREATE TABLE legacy_marker (value TEXT)")
+            connection.execute(
+                "INSERT INTO legacy_marker(value) VALUES ('preserve')"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+    else:
+        _seed_schema_version(
+            path,
+            version - 1 if shape == "old" else version,
+        )
+        if shape == "mismatched":
+            connection = sqlite3.connect(path)
+            try:
+                connection.execute(
+                    """INSERT INTO schema_metadata(key, value)
+                       VALUES ('contract_id', 'wrong')"""
+                )
+                connection.commit()
+            finally:
+                connection.close()
+    before = _sqlite_artifact_snapshot(path)
+
+    with pytest.raises(
+        SchemaResetRequired, match="reset both database files together"
+    ):
+        repository_type(path)
+
+    assert _sqlite_artifact_snapshot(path) == before
+
+
+@pytest.mark.parametrize(
+    ("repository_type", "module", "connect_name"),
+    [
+        (LedgerRepository, repositories_module, "connect_ledger_reader"),
+        (HistoryRepository, history_module, "connect_history_reader"),
+    ],
+)
+def test_read_repositories_close_reader_when_contract_validation_refuses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    repository_type,
+    module,
+    connect_name: str,
+) -> None:
+    path = tmp_path / f"{repository_type.__name__}.db"
+    sqlite3.connect(path).close()
+    connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+
+    class TrackedReader:
+        closed = False
+
+        def execute(self, statement: str, parameters=()):
+            return connection.execute(statement, parameters)
+
+        def close(self) -> None:
+            self.closed = True
+            connection.close()
+
+    reader = TrackedReader()
+    monkeypatch.setattr(module, connect_name, lambda *args, **kwargs: reader)
+
+    with pytest.raises(SchemaResetRequired):
+        repository_type(path)
+
+    assert reader.closed

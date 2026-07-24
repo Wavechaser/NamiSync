@@ -1,12 +1,10 @@
 # Verifier Module
 
-Status: verifier operation module implemented during M0 construction; end-user
-integrity workflow remains M1 because inventory selection, workflow/dispatcher
-composition, history detail, and interfaces are separate dependencies.
-
-The implemented slice is directly callable and testable through injected
-reader, recorder, clock, event, and checkpoint contracts. It does not claim
-that the location-centric integrity workflow is already surfaced to users.
+Status: the verifier operation module and M1 Stage 3 location-centric
+inventory/baseline/verify/rebaseline workflows are implemented. The production
+dispatcher registry carries all four headless kinds and history v3 retains
+their ordered integrity detail. Starting those activities from CLI/UI remains
+deliberately unexposed until the interface stage.
 
 ## Purpose
 
@@ -50,7 +48,7 @@ degrades recording without rewriting a truthful content verdict.
 3. Stat before reading and compare size/mtime/identity with retained baseline.
 4. If absent, emit `missing`; if unsupported, emit `unsupported`; if stat
    changed, emit `modified` without calling it bitrot.
-5. Read through the cache-honest strategy while hashing SHA-256 and reporting
+5. Read through the cache-honest strategy while hashing XXH3-128 and reporting
    monotonic progress throttled by an injected monotonic clock.
 6. Stat the same open subject/handle after reading; drift yields `modified` or
    `error` and no write.
@@ -88,15 +86,21 @@ through the actual unbuffered strategy.
 
 Baseline writes only rows with no established hash and only if the row id,
 present state, size, mtime, and identity still match. Encountering a null hash
-during verify is `baselined`, never `verified`.
+during verify is `baselined`, never `verified`; because no comparison occurred,
+its `phase=verify` result receives the `verification-incomplete` headline even
+though an explicit baseline/rebaseline activity may complete successfully.
 
 Re-baseline is an explicit user-reviewed acceptance of current modified content.
 It uses the same fresh stat/hash/conditional write path, supplies the prior
 attestation to the recorder for conflict detection/audit retention, and never
 runs automatically after mismatch. A reappeared row receiving accepted
 matching/new evidence clears `reappeared_at` atomically with that write.
+Baseline/rebaseline replacement evidence never advances verification freshness
+and clears a prior `last_verified_at`; only a true comparison match in verify
+advances that timestamp. Copy/update/move-update evidence follows the same
+freshness invalidation rule.
 
-## Selected And Linked Verification
+## Selected And Post-Execution Verification
 
 Selection lookup uses `rel_path_key`, never raw separators/case. Selected
 verification refreshes only selected paths and does not pay for or infer missing
@@ -104,14 +108,16 @@ state across a full location. Post-execution verification contains only eligible
 successfully executed operations; no-op or failed operations are not marked
 verified merely because they appeared in the plan.
 
-The linked selection is built ledger-first: the workflow reads back the
-inventory rows execution just recorded (through read-only repositories, keyed by
-the eligible executed operations' canonical target paths) rather than receiving
-row identities from the executor, which stays domain-blind and surfaces only
-op-level outcomes. A pure move preserves the moved row's existing hash and
-attestation, so verifying a moved file verifies against carried-forward evidence
-rather than re-baselining; a moved file that never had a hash baselines on first
-verify.
+Standalone selections come from freshly refreshed role-free inventory. A
+paused standalone session serializes the exact original candidate row ids plus
+completed ids/bytes: resume inventories current physical state but cannot
+silently add a newly appeared row or drop an admitted pending row.
+
+Stage 4 post-execution verification will not rebuild its immediate candidates
+from ledger rows. The verifier's guarded open/stat/hash/classification body is
+already private and ledger-neutral; the workflow will feed it transient
+published copy evidence even when the copy-ledger write degraded. Conditional
+ledger advancement remains a separate wrapper concern.
 
 Manual verification is location-scoped and independent of any current plan or
 mapping. It must not require both source and target roots.
@@ -170,12 +176,18 @@ Implemented and directly verified in this module:
 - the real Windows unbuffered reader and disclosed unsupported path;
 - sibling-free imports (`namisync.modules.verifier` imports `core` only).
 
-Still owned by the M1 composition around this module:
+Implemented by the Stage 3 composition around this module:
 
 - automatic inventory creation and full/scoped refresh;
-- constructing post-execution selections from successful eligible operations;
-- integrity workflow/history-detail persistence and run finalization;
-- dispatcher custody registration and interface presentation.
+- exact-candidate pause continuation and fresh volume/root preflight;
+- standalone integrity history-detail persistence and run finalization;
+- dispatcher custody registration for inventory, baseline, verify, and
+  rebaseline.
+
+Still owned by later M1 stages:
+
+- constructing post-execution candidates from successful eligible publishes;
+- the CLI/desktop commands and presentation that start integrity work.
 
 The shared SQLite ledger already implements the injected conditional
 `record_integrity` command, including atomic evidence/reappearance updates and
