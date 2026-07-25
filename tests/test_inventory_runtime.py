@@ -48,7 +48,7 @@ from namisync.dispatcher import (
     PreparedSession,
     WorkflowRegistration,
 )
-from namisync.interfaces.cli import _workflow_registry
+from namisync.interfaces.service import _workflow_registry
 from namisync.workflows.inventory import (
     IntegrityRequest,
     InventoryRequest,

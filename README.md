@@ -80,12 +80,16 @@ remain later phases.
 
 The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
 scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
-and independent history without crossing package boundaries. The CLI exposes
+and independent history without crossing package boundaries. A shared
+process-local interface service now owns runtime/dispatcher lifetime, the
+six-kind production registry, blocking sink-based session observation, plan
+access, and typed result projection. The CLI exposes
 the two-session `sync` review/commit/execute flow and read-only `history`
 browsing through both `nami-sync` and `python -m namisync`. Blocked items no
 longer refuse independent work: review commits a quarantined safe subset,
 incomplete scans allow guarded additive/no-op work while withholding moves and
-deletions, and history itemizes every blocked/deferred exception.
+deletions, and history itemizes every blocked/deferred exception. The
+inventory/integrity parser commands remain gated on Stage 4.
 
 ## Development setup
 
@@ -170,6 +174,11 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Extracted the shared Stage 5 interface service and retargeted existing CLI
+  behavior onto it: one process owns runtime/dispatcher lifecycle, the exact
+  six-kind registry, primitive session views, gap-aware blocking observation,
+  and process-local plan access. Explicit unsubscribe now removes closed event
+  streams from their hub immediately.
 - Implemented M1 Stage 3 role-free inventory and standalone integrity:
   five-state volume/root resolution, first-location registration, scoped
   completeness, mapping-scoped filters, stale/missing acknowledge and restore,

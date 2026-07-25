@@ -97,6 +97,13 @@ whose bounded queue overruns is ejected and first receives
 `Gap(first_missed_seq)`. Late subscribers receive current state plus a bounded
 tail/detectable gap—not a false promise of full replay.
 
+An ordinary `EventStream.close()` is an immediate unsubscribe as well as a
+reader wakeup. The stream invokes its hub-removal callback once, outside the
+stream condition, so explicit interface unsubscribe does not leave closed
+subscriber objects retained until a later emit or session shutdown. Hub
+shutdown clears its subscriber set under the hub lock and closes the detached
+streams afterward; ejected streams remain removed by the emitting path.
+
 History attaches at admission before workflow events. Subscriber exceptions and
 timeouts are isolated and surfaced through `OperationResult.audit`; they do not
 rewrite filesystem or ledger truth. Dispatcher must not substitute an unbounded

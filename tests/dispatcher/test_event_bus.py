@@ -70,6 +70,9 @@ def test_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
     assert isinstance(envelope.body, Gap)
     assert envelope.body.first_missed_seq == 1
     assert stream.ejected
+    assert hub._subscribers == []
+    stream.close()
+    assert hub._subscribers == []
     assert hub.close(0.5)
 
 
@@ -84,6 +87,19 @@ def test_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
     assert isinstance(stream.next(0.1).body, Gap)
     assert stream.next(0.1).body == PhaseChanged("two")
     assert stream.next(0.1).body == PhaseChanged("three")
+    assert hub.close(0.5)
+
+
+def test_explicit_stream_close_unsubscribes_immediately_and_idempotently() -> None:
+    hub = make_hub()
+
+    for _ in range(20):
+        stream = hub.subscribe()
+        assert len(hub._subscribers) == 1
+        stream.close()
+        stream.close()
+        assert hub._subscribers == []
+
     assert hub.close(0.5)
 
 

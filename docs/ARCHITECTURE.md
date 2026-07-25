@@ -1430,6 +1430,16 @@ service but not one another; the service reaches database-owned settings
 through its injected workflow/runtime dependency and never imports `db`
 directly.
 
+**Stage 5 extraction checkpoint (2026-07-25).** The process-local service now
+owns the six-kind registry, runtime/dispatcher lifetime, sync sequencing,
+history access, controls, primitive view projection, and a sink-only blocking
+`SessionObserver`. The existing CLI is retargeted without changing its current
+`sync`/`history` command behavior. Observer shutdown closes streams before
+joins, dispatcher shutdown precedes runtime close, and runtime plan access uses
+the named process-local methods without a storage abstraction. The four new CLI
+commands and Stage 4-aware final classification remain gated on the compound
+workflow landing.
+
 `ResultCategory` chooses one headline without hiding secondary axes:
 `failed > partial > refused > mismatch > canceled >
 verification-incomplete > recording/audit degradation > all-noop > success`.

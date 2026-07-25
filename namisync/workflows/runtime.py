@@ -182,7 +182,7 @@ class LocalWorkflowRuntime:
             executor_policies=self._executor_policies,
             executor_fs=self._executor_fs,
             open_recording=self._open_recording,
-            save_plan=self._save_plan,
+            save_plan=self.save_plan,
             save_execution_details=self._save_execution_details,
         )
         inventory_scan = inventory_scanner or self._scanner.scan
@@ -346,10 +346,7 @@ class LocalWorkflowRuntime:
         )
 
     def get_plan_review(self, request_id: str) -> PlanReview:
-        with self._lock:
-            artifact = self._plans.get(request_id)
-        if artifact is None:
-            raise KeyError(request_id)
+        artifact = self.get_plan(request_id)
         plan_value = artifact.plan
         decision = derive_execution_selection(plan_value)
         exclusions = {item.op_id: item for item in decision.exclusions}
@@ -413,10 +410,7 @@ class LocalWorkflowRuntime:
         run_id: str | None = None,
         committed_at: datetime | None = None,
     ) -> ExecutionRequest:
-        with self._lock:
-            artifact = self._plans.get(request_id)
-        if artifact is None:
-            raise KeyError(request_id)
+        artifact = self.get_plan(request_id)
         if not artifact.verdict.ok:
             raise ValueError("a refused plan cannot be committed")
         selection = derive_execution_selection(artifact.plan).selection
@@ -608,9 +602,20 @@ class LocalWorkflowRuntime:
             raise RuntimeError("execution start time was not established")
         return _LedgerRunRecording(self, xset, started_at)
 
-    def _save_plan(self, artifact: PlanArtifact) -> None:
+    def save_plan(self, artifact: PlanArtifact) -> None:
         with self._lock:
             self._plans[artifact.request.request_id] = artifact
+
+    def get_plan(self, request_id: str) -> PlanArtifact:
+        with self._lock:
+            artifact = self._plans.get(request_id)
+        if artifact is None:
+            raise KeyError(request_id)
+        return artifact
+
+    def drop_plan(self, request_id: str) -> None:
+        with self._lock:
+            self._plans.pop(request_id, None)
 
     def _save_execution_details(self, details: ExecutionDetails) -> None:
         with self._lock:

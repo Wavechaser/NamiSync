@@ -29,6 +29,7 @@ from namisync.interfaces.cli import (
     main,
 )
 from namisync.workflows.models import PlanOperationView
+from namisync.workflows.views import session_record_view
 
 from _db_fixtures import FakeClock, NOW
 
@@ -79,10 +80,21 @@ def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
         Outcome.DEFERRED,
         reason="incomplete-scan",
     )
-    record = SimpleNamespace(
-        result=OperationResult(
+    record = session_record_view(
+        SessionRecord(
+            SessionId("partial"),
+            "sync-execution",
             SessionState.COMPLETED,
-            items=(blocked, deferred),
+            (),
+            b"payload",
+            True,
+            0,
+            NOW,
+            ended_at=NOW,
+            result=OperationResult(
+                SessionState.COMPLETED,
+                items=(blocked, deferred),
+            ),
         )
     )
     details = SimpleNamespace(commitment_error=None, refusals=())

@@ -1,15 +1,19 @@
 # Command-Line Interface
 
-Status: M0 reviewed `sync` and `history` implemented. M1 Stage 3 inventory and
-integrity workflows are production-registered but intentionally have no parser
-commands until Stage 5; queue release and machine-readable output remain
-deferred.
+Status: M0 reviewed `sync` and `history` are implemented through the shared
+interface service. M1 Stage 3 inventory and integrity workflows are
+production-registered but intentionally have no parser commands until the
+Stage 4-dependent half of Stage 5 lands; queue release and machine-readable
+output remain deferred.
 
 ## Entry Points
 
 `nami-sync` and `python -m namisync` execute the same `main()` and read real
 `sys.argv[1:]` when no explicit test argument is supplied. Tests exercise both
 real process entry points. No command is reachable only through injected argv.
+The CLI delegates process composition, session observation, and typed result
+classification to `interfaces/service.py`; it does not construct a dispatcher
+or workflow runtime.
 
 Until a desktop exists, no subcommand prints usage and exits nonzero; nothing
 runs implicitly. Once the desktop is delivered, `nami-sync`, `nami-sync-gui`,

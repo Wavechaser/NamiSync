@@ -94,3 +94,11 @@ type = "forbidden"
 source_modules = ["namisync.interfaces"]
 forbidden_modules = ["namisync.core", "namisync.modules", "namisync.db"]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Interface adapters depend on the shared service"
+type = "layers"
+layers = [
+    "namisync.interfaces.cli | namisync.interfaces.web",
+    "namisync.interfaces.service",
+]

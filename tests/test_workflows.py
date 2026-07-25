@@ -374,7 +374,8 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
         tmp_path / "ledger.db", tmp_path / "history.db"
     )
     try:
-        runtime._save_plan(artifact)
+        runtime.save_plan(artifact)
+        assert runtime.get_plan(request.request_id) is artifact
 
         review = runtime.get_plan_review(request.request_id)
         execution = runtime.commit_plan(
@@ -382,6 +383,10 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
             run_id="6" * 32,
             committed_at=NOW,
         )
+        runtime.drop_plan(request.request_id)
+        runtime.drop_plan(request.request_id)
+        with pytest.raises(KeyError):
+            runtime.commit_plan(request.request_id)
     finally:
         runtime.close()
 

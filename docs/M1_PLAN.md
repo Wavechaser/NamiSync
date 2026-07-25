@@ -2,7 +2,10 @@
 
 Status: planning decisions revised and reconciled 2026-07-24. Stages 1–3
 (contracts/semantics, executor/hash refactor, and inventory/standalone
-integrity) landed on 2026-07-24; Stages 4–6 remain unimplemented. This is both
+integrity) landed on 2026-07-24. The behavior-preserving Stage 5 facade
+extraction is implemented in parallel with Stage 4; the new CLI commands and
+final compound-result classification still wait for Stage 4, and Stage 6
+remains unimplemented. This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as

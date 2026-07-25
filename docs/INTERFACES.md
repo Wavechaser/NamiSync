@@ -1,11 +1,13 @@
 # Interfaces Layer
 
-Status: M0 CLI is implemented. M1 Stage 1 adds isolated cosmetic UI-state
+Status: M0 CLI behavior is implemented through the shared process-local
+`interfaces/service.py` facade. M1 Stage 1 adds isolated cosmetic UI-state
 storage and a tested WebView2 security spike. Stage 3 registers inventory,
-baseline, verify, and rebaseline with the interface-owned production dispatcher
-registry but deliberately adds no parser commands. The shared facade/CLI
-expansion remains Stage 5, the desktop host remains Stage 6, and the API remains
-latent.
+baseline, verify, and rebaseline with the service-owned production dispatcher
+registry but deliberately adds no parser commands. Stage 5's behavior-preserving
+facade extraction is implemented; its Stage 4-dependent command expansion and
+final compound classification remain pending. The desktop host remains Stage 6,
+and the API remains latent.
 
 ## Purpose
 
@@ -19,12 +21,13 @@ CLI and desktop must produce the same workflow request for the same intent and
 interpret the same typed result consistently. API, when added, follows the same
 rule.
 
-## M0 CLI Adapter
+## Service-Backed CLI Adapter
 
-`interfaces/cli.py` is a thin dispatcher-backed adapter. It exposes reviewed
+`interfaces/cli.py` is a thin service-backed adapter. It exposes reviewed
 `sync` and read-only `history`, renders typed plan/refusal/result axes, requests
 cooperative cancellation on Ctrl+C, and never imports core, modules, or the
-database layer. Human confirmation occurs only after the plan session is
+database layer. It does not construct a dispatcher, registry, workflow request,
+or runtime directly. Human confirmation occurs only after the plan session is
 terminal and closed. Both real entry points consume `sys.argv[1:]`; before the
 desktop exists, no subcommand prints usage and exits nonzero.
 
@@ -37,11 +40,36 @@ view's prior target path as their displayed origin, so recase, move, and
 move-update approvals show the actual old-to-new target spelling.
 
 The implemented options and numeric exits are recorded in
-[COMMANDLINE.md](COMMANDLINE.md). The production composition root registers
+[COMMANDLINE.md](COMMANDLINE.md). The service composition root registers
 plan, execution, inventory, baseline, verify, and rebaseline with their exact
 pause capabilities; parser choices remain only `sync` and `history`. Queue
 control, machine output, integrity commands, and the desktop action layer remain
 deferred.
+
+## M1 Shared Service
+
+`interfaces/service.py` owns one process-local `LocalWorkflowRuntime`, the
+domain-blind dispatcher, the exact six-kind registration table, sync
+plan/review/commit sequencing, history access, controls, and primitive workflow
+views. Runtime plan storage remains the existing process-local dictionary behind
+named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
+does not survive process exit.
+
+`SessionObserver.observe(session_id, sink)` performs a synchronous
+get-before-subscribe check, returns an already-terminal view without opening a
+stream, and otherwise forwards only primitive session event/record views to the
+sink. Its worker blocks on `EventStream.next()` without polling, recovers an
+ejected stream from the first undelivered sequence, and never exposes the raw
+stream. Unsubscribe closes every stream before joining its worker. Service
+shutdown closes all observer streams and joins all observer threads before
+dispatcher shutdown, then closes the workflow runtime last so audit finalization
+cannot reach a closed history store.
+
+`cli` and `web` occupy one import-linter layer above `service`: neither adapter
+may import the other, and the service may import neither adapter. The
+`interfaces` package initializer preserves its public `main` entry point through
+a lazy wrapper, so importing the package or future web host does not import the
+CLI adapter until that function is actually invoked.
 
 ## M1 Stage 1 Desktop Foundations
 
@@ -73,7 +101,7 @@ DOM rendering.
   validation remains in workflow/preflight.
 - Submit through dispatcher/registry rather than starting ad hoc workers that
   call modules directly.
-- Read current session records and subscribe from a sequence number.
+- Read current session records and observe through the service's sink API.
 - Treat progress as a replaceable snapshot. Handle bounded state/item/terminal
   delivery, including `Gap` plus resubscription for an ejected/late ordinary
   subscriber; history has timeout-bounded admission delivery and exposes failure
@@ -160,6 +188,8 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
 - Audit-behind is independent of ledger-behind; queued discard renders from
   `CANCELED+UNRUN`, not byte count or free-form reason.
 - Event reconnect handles current state/tail/gap without duplicate row outcomes.
+- Explicit unsubscribe, window close, and service shutdown close blocked event
+  streams before joining observer threads.
 - Changing plan selection after review invalidates commitment; neither UI nor
   CLI can submit the stale commitment.
 - Action source-of-truth tests cover menu/button/context presentation equality.

@@ -3,31 +3,18 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections import Counter
 from pathlib import Path
 from typing import TextIO
-from uuid import uuid4
 
-from namisync.dispatcher import (
-    Dispatcher,
-    PreparedSession,
-    WorkflowRegistration,
-)
-from namisync.workflows import (
-    BASELINE_KIND,
-    EXECUTION_KIND,
-    INVENTORY_KIND,
-    PLAN_KIND,
-    REBASELINE_KIND,
-    VERIFY_KIND,
-    LocalWorkflowRuntime,
-    PlanRequest,
+from namisync.interfaces.service import (
+    NamiSyncService,
+    SessionEventView,
+    SessionRecordView,
+    SyncPathInputError,
     default_database_paths,
-    sync_options,
 )
-from namisync.workflows.views import operation_result_view, session_event_view
 
 
 EXIT_SUCCESS = 0
@@ -107,13 +94,6 @@ def _run_sync(
     stdout: TextIO,
     stderr: TextIO,
 ) -> int:
-    try:
-        source, target = _validated_paths(namespace.source, namespace.target)
-    except (OSError, ValueError) as error:
-        print(f"Input error: {_safe(error)}", file=stderr)
-        print("Choose two existing, distinct, non-nested directories and retry.", file=stderr)
-        return EXIT_USAGE
-
     default_ledger, default_history = default_database_paths()
     ledger = Path(namespace.database).resolve() if namespace.database else default_ledger
     history = (
@@ -122,18 +102,25 @@ def _run_sync(
         else default_history
     )
 
-    runtime = LocalWorkflowRuntime(ledger, history)
-    dispatcher = _dispatcher(runtime)
+    service = NamiSyncService(ledger, history)
     try:
-        request = PlanRequest(
-            request_id=uuid4().hex,
-            source_path=str(source),
-            target_path=str(target),
-            options=sync_options(namespace.deletion_policy),
-        )
+        plan_session = None
         try:
-            plan_session = dispatcher.submit(PLAN_KIND, request)
-            plan_record = _wait_for_result(dispatcher, plan_session, stdout, stderr)
+            plan_session = service.start_plan(
+                namespace.source,
+                namespace.target,
+                deletion_policy=namespace.deletion_policy,
+            )
+            plan_record = _wait_for_result(
+                service, plan_session.session_id, stdout, stderr
+            )
+        except SyncPathInputError as error:
+            print(f"Input error: {_safe(error)}", file=stderr)
+            print(
+                "Choose two existing, distinct, non-nested directories and retry.",
+                file=stderr,
+            )
+            return EXIT_USAGE
         except (OSError, ValueError) as error:
             print(f"Planning input error: {_safe(error)}", file=stderr)
             print(
@@ -145,14 +132,17 @@ def _run_sync(
             print(f"Planning could not start: {_safe(error)}", file=stderr)
             return EXIT_FAILED
         finally:
-            if "plan_session" in locals():
-                _close_terminal(dispatcher, plan_session)
+            if plan_session is not None:
+                _close_terminal(service, plan_session.session_id)
 
-        if plan_record.result is None or plan_record.result.status.value != "completed":
+        if (
+            plan_record.result is None
+            or plan_record.result.filesystem != "completed"
+        ):
             _render_terminal_error("Planning", plan_record, stderr)
             return _exit_for_record(plan_record)
 
-        review = runtime.get_plan_review(request.request_id)
+        review = service.get_plan_review(plan_session.request_id)
         _render_plan(review, stdout)
         if not review.can_commit:
             print(
@@ -168,29 +158,28 @@ def _run_sync(
             print("Plan left uncommitted; no files or ledger configuration changed.", file=stdout)
             return EXIT_SUCCESS
 
-        execution_request = runtime.commit_plan(request.request_id)
+        execution_session = None
         try:
-            execution_session = dispatcher.submit(EXECUTION_KIND, execution_request)
+            execution_session = service.start_execution(plan_session.request_id)
             execution_record = _wait_for_result(
-                dispatcher, execution_session, stdout, stderr
+                service, execution_session.session_id, stdout, stderr
             )
         except Exception as error:
             print(f"Execution could not start: {_safe(error)}", file=stderr)
             return EXIT_FAILED
         finally:
-            if "execution_session" in locals():
-                _close_terminal(dispatcher, execution_session)
+            if execution_session is not None:
+                _close_terminal(service, execution_session.session_id)
 
         _render_execution(
             execution_record,
-            runtime.get_execution_details(str(execution_request.execution_set.run_id)),
+            service.get_execution_details(execution_session.run_id),
             stdout,
             stderr,
         )
         return _exit_for_record(execution_record)
     finally:
-        dispatcher.shutdown(timeout=10.0)
-        runtime.close()
+        service.close()
 
 
 def _run_history(
@@ -202,18 +191,18 @@ def _run_history(
         if namespace.history_database
         else default_history
     )
-    runtime = LocalWorkflowRuntime(default_ledger, history)
+    service = NamiSyncService(default_ledger, history)
     try:
         if namespace.run:
             try:
-                run = runtime.get_history(namespace.run)
+                run = service.get_history(namespace.run)
             except KeyError:
                 print(f"No retained history run named {_safe(namespace.run)}.", file=stderr)
                 return EXIT_USAGE
             _render_history_run(run, stdout)
             return EXIT_SUCCESS
 
-        runs = runtime.list_history(namespace.limit)
+        runs = service.list_history(namespace.limit)
         if not runs:
             print("No retained history runs.", file=stdout)
             return EXIT_SUCCESS
@@ -247,114 +236,48 @@ def _run_history(
         print(f"History could not be read: {_safe(error)}", file=stderr)
         return EXIT_FAILED
     finally:
-        runtime.close()
-
-
-def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:
-    return Dispatcher(
-        _workflow_registry(runtime),
-        clock=runtime.clock,
-        audit_observer_factory=runtime.audit_observer,
-    )
-
-
-def _workflow_registry(
-    runtime: LocalWorkflowRuntime,
-) -> dict[str, WorkflowRegistration]:
-    def registration(
-        prepare,
-        open_invocation,
-        *,
-        supports_pause: bool = False,
-    ) -> WorkflowRegistration:
-        def prepare_session(request: object) -> PreparedSession:
-            prepared = prepare(request)
-            return PreparedSession.from_resource_keys(
-                prepared.payload, prepared.resources
-            )
-
-        return WorkflowRegistration(
-            prepare_session,
-            open_invocation,
-            supports_pause=supports_pause,
-        )
-
-    return {
-        PLAN_KIND: registration(runtime.prepare_plan, runtime.open_plan),
-        EXECUTION_KIND: registration(
-            runtime.prepare_execution,
-            runtime.open_execution,
-            supports_pause=True,
-        ),
-        INVENTORY_KIND: registration(
-            runtime.prepare_inventory,
-            runtime.open_inventory,
-        ),
-        BASELINE_KIND: registration(
-            runtime.prepare_baseline,
-            runtime.open_baseline,
-            supports_pause=True,
-        ),
-        VERIFY_KIND: registration(
-            runtime.prepare_verify,
-            runtime.open_verify,
-            supports_pause=True,
-        ),
-        REBASELINE_KIND: registration(
-            runtime.prepare_rebaseline,
-            runtime.open_rebaseline,
-            supports_pause=True,
-        ),
-    }
+        service.close()
 
 
 def _wait_for_result(
-    dispatcher: Dispatcher,
-    session_id,
+    service: NamiSyncService,
+    session_id: str,
     stdout: TextIO,
     stderr: TextIO,
-):
-    stream = dispatcher.subscribe(session_id)
-    last_seq: int | None = None
+) -> SessionRecordView:
     cancel_requested = False
+
+    def receive(update: SessionEventView | SessionRecordView) -> None:
+        if isinstance(update, SessionRecordView):
+            return
+        event = update
+        if event.body_type == "Progress":
+            current = event.body.get("current_path")
+            if current:
+                print(
+                    f"Progress: {event.body['items_done']} items, "
+                    f"{event.body['bytes_done']} bytes; "
+                    f"{_safe(current)}",
+                    file=stdout,
+                )
+    current = service.observe(session_id, receive)
+    if current.result is not None:
+        return current
     try:
         while True:
-            record = dispatcher.get(session_id)
-            if record.result is not None:
-                return record
             try:
-                envelope = stream.next(timeout=0.1)
-            except TimeoutError:
-                continue
-            except StopIteration:
-                stream = dispatcher.subscribe(
-                    session_id, None if last_seq is None else last_seq + 1
-                )
-                continue
-            last_seq = envelope.seq
-            event = session_event_view(envelope)
-            if event.body_type == "Progress":
-                current = event.body.get("current_path")
-                if current:
+                return service.wait(session_id)
+            except KeyboardInterrupt:
+                if not cancel_requested:
+                    result = service.cancel(session_id)
+                    cancel_requested = result.accepted
                     print(
-                        f"Progress: {event.body['items_done']} items, "
-                        f"{event.body['bytes_done']} bytes; "
-                        f"{_safe(current)}",
-                        file=stdout,
+                        "Cancellation requested; waiting for cleanup and "
+                        "custody release.",
+                        file=stderr,
                     )
-            if stream.ejected:
-                stream = dispatcher.subscribe(session_id, last_seq + 1)
-    except KeyboardInterrupt:
-        if not cancel_requested:
-            result = dispatcher.cancel(session_id)
-            cancel_requested = result.accepted
-            print(
-                "Cancellation requested; waiting for cleanup and custody release.",
-                file=stderr,
-            )
-        return _wait_for_result(dispatcher, session_id, stdout, stderr)
     finally:
-        stream.close()
+        service.unsubscribe(session_id)
 
 
 def _render_plan(review, output: TextIO) -> None:
@@ -420,20 +343,21 @@ def _render_plan(review, output: TextIO) -> None:
         print(f"Refusal: {refusal.code}{path}{detail}", file=output)
 
 
-def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
+def _render_execution(
+    record: SessionRecordView, details, output: TextIO, errors: TextIO
+) -> None:
     result = record.result
     if result is None:
         print("Execution ended without a typed result.", file=errors)
         return
     print(
-        f"Execution: filesystem={result.status.value}; ledger={result.recording.value}; "
-        f"audit={result.audit.value}; disposition={result.disposition.value}; "
+        f"Execution: filesystem={result.filesystem}; ledger={result.recording}; "
+        f"audit={result.audit}; disposition={result.disposition}; "
         f"bytes={result.bytes_done}/{result.bytes_total}",
         file=output,
     )
-    view = operation_result_view(result)
     outcomes = Counter(
-        item.result for item in view.items if item.item_type == "operation"
+        item.result for item in result.items if item.item_type == "operation"
     )
     if outcomes["blocked"] or outcomes["deferred"]:
         print(
@@ -442,7 +366,7 @@ def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
             "Review the itemized exclusions and re-plan after resolving them.",
             file=output,
         )
-    for item in view.items:
+    for item in result.items:
         if item.item_type != "operation":
             continue
         reason = "" if item.reason is None else f" ({_safe(item.reason)})"
@@ -457,13 +381,10 @@ def _render_execution(record, details, output: TextIO, errors: TextIO) -> None:
         detail = "" if not refusal.detail else f": {_safe(refusal.detail)}"
         print(f"Refused: {refusal.code}{path}{detail}", file=errors)
     if result.error is not None:
-        print(
-            f"{result.error.type_name}: {_safe(result.error.message)}",
-            file=errors,
-        )
-    if result.recording.value == "degraded":
+        print(_safe(result.error), file=errors)
+    if result.recording == "degraded":
         print("Filesystem work settled, but the ledger is behind; re-scan to converge it.", file=errors)
-    if result.audit.value == "degraded":
+    if result.audit == "degraded":
         print("Filesystem work settled, but history could not confirm durable audit storage.", file=errors)
 
 
@@ -496,64 +417,37 @@ def _render_history_run(run, output: TextIO) -> None:
         print(f"Error: {_safe(run.error)}", file=output)
 
 
-def _render_terminal_error(label: str, record, errors: TextIO) -> None:
+def _render_terminal_error(
+    label: str, record: SessionRecordView, errors: TextIO
+) -> None:
     result = record.result
     if result is None:
         print(f"{label} ended without a typed result.", file=errors)
     elif result.error is None:
-        print(f"{label} ended with {result.status.value}.", file=errors)
+        print(f"{label} ended with {result.filesystem}.", file=errors)
     else:
-        print(
-            f"{label} failed: {result.error.type_name}: {_safe(result.error.message)}",
-            file=errors,
-        )
+        print(f"{label} failed: {_safe(result.error)}", file=errors)
 
 
-def _exit_for_record(record) -> int:
+def _exit_for_record(record: SessionRecordView) -> int:
     result = record.result
     if result is None:
         return EXIT_FAILED
-    status = result.status.value
-    if status == "refused":
-        return EXIT_REFUSED
-    if status == "canceled":
-        return EXIT_CANCELED
-    if status != "completed":
-        return EXIT_FAILED
-    if result.recording.value == "degraded" or result.audit.value == "degraded":
-        return EXIT_DEGRADED
-    view = operation_result_view(result)
-    if any(
-        item.item_type == "operation"
-        and item.result in {"blocked", "deferred"}
-        for item in view.items
-    ):
-        return EXIT_PARTIAL
-    return EXIT_SUCCESS
+    return {
+        "success": EXIT_SUCCESS,
+        "all-noop": EXIT_SUCCESS,
+        "refused": EXIT_REFUSED,
+        "failed": EXIT_FAILED,
+        "canceled": EXIT_CANCELED,
+        "partial": EXIT_PARTIAL,
+        "degraded": EXIT_DEGRADED,
+    }.get(result.headline, EXIT_FAILED)
 
 
-def _validated_paths(source: str, target: str) -> tuple[Path, Path]:
-    source_path = Path(source).resolve(strict=True)
-    target_path = Path(target).resolve(strict=True)
-    if not source_path.is_dir():
-        raise NotADirectoryError(f"source is not a directory: {source_path}")
-    if not target_path.is_dir():
-        raise NotADirectoryError(f"target is not a directory: {target_path}")
-    source_key = os.path.normcase(str(source_path))
-    target_key = os.path.normcase(str(target_path))
+def _close_terminal(service: NamiSyncService, session_id: str) -> None:
     try:
-        common = os.path.normcase(os.path.commonpath((source_key, target_key)))
-    except ValueError:
-        common = ""
-    if common in {source_key, target_key}:
-        raise ValueError("source and target overlap")
-    return source_path, target_path
-
-
-def _close_terminal(dispatcher: Dispatcher, session_id) -> None:
-    try:
-        if dispatcher.get(session_id).result is not None:
-            dispatcher.close(session_id)
+        if service.get_session(session_id).result is not None:
+            service.close_session(session_id)
     except Exception:
         pass
 

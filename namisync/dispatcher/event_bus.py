@@ -39,6 +39,7 @@ class EventStream:
         capacity: int,
         current_state: SessionState,
         initial: tuple[Envelope, ...] = (),
+        on_close: Callable[[EventStream], None] | None = None,
     ) -> None:
         if capacity < 1:
             raise ValueError("subscriber capacity must be positive")
@@ -49,6 +50,7 @@ class EventStream:
         self._condition = Condition()
         self._closed = False
         self._ejected = False
+        self._on_close = on_close
 
     @property
     def ejected(self) -> bool:
@@ -90,6 +92,7 @@ class EventStream:
                 )
                 self._ejected = True
                 self._closed = True
+                self._on_close = None
                 self._condition.notify_all()
                 return
             self._items.append(envelope)
@@ -110,9 +113,16 @@ class EventStream:
             return self._items.popleft()
 
     def close(self) -> None:
+        callback = None
         with self._condition:
+            if self._closed:
+                return
             self._closed = True
+            callback = self._on_close
+            self._on_close = None
             self._condition.notify_all()
+        if callback is not None:
+            callback(self)
 
     def __iter__(self):
         return self
@@ -330,9 +340,18 @@ class EventHub:
                 self._subscriber_capacity,
                 self._state,
                 tuple(initial),
+                self._unsubscribe,
             )
             self._subscribers.append(stream)
             return stream
+
+    def _unsubscribe(self, stream: EventStream) -> None:
+        with self._lock:
+            self._subscribers = [
+                candidate
+                for candidate in self._subscribers
+                if candidate is not stream
+            ]
 
     def finalize_audit(self, result: OperationResult) -> RecordingStatus:
         return self._audit.finalize(result, self._audit_timeout)
