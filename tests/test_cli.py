@@ -9,8 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from namisync.core.events import Envelope, ItemOutcome, SCHEMA_VERSION
-from namisync.core.evidence import Outcome
+from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.session import (
+    Disposition,
     OperationResult,
     SessionId,
     SessionRecord,
@@ -18,6 +19,8 @@ from namisync.core.session import (
 )
 from namisync.db.history import HistoryContext, HistoryStore
 from namisync.interfaces.cli import (
+    EXIT_CANCELED,
+    EXIT_DEGRADED,
     EXIT_PARTIAL,
     EXIT_REFUSED,
     EXIT_SUCCESS,
@@ -46,6 +49,42 @@ def _arguments(source: Path, target: Path, ledger: Path, history: Path) -> list[
     ]
 
 
+def _record_for_result(result: OperationResult):
+    return session_record_view(
+        SessionRecord(
+            SessionId("classification"),
+            "sync-execution",
+            result.status,
+            (),
+            b"payload",
+            True,
+            0,
+            NOW,
+            ended_at=NOW,
+            result=result,
+        )
+    )
+
+
+def _exception_items() -> tuple[ItemOutcome, ItemOutcome]:
+    return (
+        ItemOutcome(
+            "blocked",
+            "noop",
+            "junction",
+            Outcome.BLOCKED,
+            reason="unsupported",
+        ),
+        ItemOutcome(
+            "withheld",
+            "trash",
+            "old.bin",
+            Outcome.DEFERRED,
+            reason="incomplete-scan",
+        ),
+    )
+
+
 def test_no_subcommand_prints_usage_and_returns_nonzero() -> None:
     stdout = io.StringIO()
     stderr = io.StringIO()
@@ -66,20 +105,7 @@ def test_integrity_workflows_have_no_cli_start_commands_yet() -> None:
 
 
 def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
-    blocked = ItemOutcome(
-        "blocked",
-        "noop",
-        "junction",
-        Outcome.BLOCKED,
-        reason="unsupported",
-    )
-    deferred = ItemOutcome(
-        "withheld",
-        "trash",
-        "old.bin",
-        Outcome.DEFERRED,
-        reason="incomplete-scan",
-    )
+    blocked, deferred = _exception_items()
     record = session_record_view(
         SessionRecord(
             SessionId("partial"),
@@ -105,6 +131,42 @@ def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
 
     assert _exit_for_record(record) == EXIT_PARTIAL
     assert "completed with exceptions: blocked=1; deferred=1" in stdout.getvalue()
+
+
+def test_refused_exit_precedes_exclusion_items_during_facade_extraction() -> None:
+    record = _record_for_result(
+        OperationResult(
+            SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            items=_exception_items(),
+        )
+    )
+
+    assert _exit_for_record(record) == EXIT_REFUSED
+
+
+def test_canceled_exit_precedes_exclusion_items_during_facade_extraction() -> None:
+    record = _record_for_result(
+        OperationResult(
+            SessionState.CANCELED,
+            canceled=True,
+            items=_exception_items(),
+        )
+    )
+
+    assert _exit_for_record(record) == EXIT_CANCELED
+
+
+def test_degraded_exit_precedes_partial_during_facade_extraction() -> None:
+    record = _record_for_result(
+        OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+            items=_exception_items(),
+        )
+    )
+
+    assert _exit_for_record(record) == EXIT_DEGRADED
 
 
 def test_plan_review_renders_prior_target_for_rename_operations() -> None:

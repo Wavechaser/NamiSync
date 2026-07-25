@@ -433,15 +433,21 @@ def _exit_for_record(record: SessionRecordView) -> int:
     result = record.result
     if result is None:
         return EXIT_FAILED
-    return {
-        "success": EXIT_SUCCESS,
-        "all-noop": EXIT_SUCCESS,
-        "refused": EXIT_REFUSED,
-        "failed": EXIT_FAILED,
-        "canceled": EXIT_CANCELED,
-        "partial": EXIT_PARTIAL,
-        "degraded": EXIT_DEGRADED,
-    }.get(result.headline, EXIT_FAILED)
+    if result.filesystem == "refused":
+        return EXIT_REFUSED
+    if result.filesystem == "canceled":
+        return EXIT_CANCELED
+    if result.filesystem != "completed":
+        return EXIT_FAILED
+    if result.recording == "degraded" or result.audit == "degraded":
+        return EXIT_DEGRADED
+    if any(
+        item.item_type == "operation"
+        and item.result in {"blocked", "deferred"}
+        for item in result.items
+    ):
+        return EXIT_PARTIAL
+    return EXIT_SUCCESS
 
 
 def _close_terminal(service: NamiSyncService, session_id: str) -> None:
