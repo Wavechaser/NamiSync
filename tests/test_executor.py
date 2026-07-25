@@ -21,7 +21,13 @@ from xxhash import xxh3_128
 import namisync.modules.executor as executor_module
 from namisync.core.evidence import Outcome, Provenance, RecordingStatus
 from namisync.core.events import ItemOutcome, Progress, Terminal
-from namisync.core.execution import CopyDigest, ExecutionSet, RunId, validated_run_id
+from namisync.core.execution import (
+    CopyDigest,
+    ExecutionSet,
+    RecordedCopyIdentity,
+    RunId,
+    validated_run_id,
+)
 from namisync.core.models import CapabilityProfile, EntryKind, FileStat, IgnoreSet, Root
 from namisync.core.planning import (
     Assignment,
@@ -70,11 +76,22 @@ class FakeRecorder:
         if self.fail == "flush":
             raise RuntimeError("injected flush failure")
 
-    def record_copied(self, op, attestation) -> None:
-        self._record("copied", op, attestation)
+    @staticmethod
+    def _copy_identity(op: OpId) -> RecordedCopyIdentity:
+        return RecordedCopyIdentity(
+            row_id=f"row-{op}",
+            location_id="target-location",
+            scope_token=f"scope-{op}",
+            rel_path_key=f"PATH-{op}".upper(),
+        )
 
-    def record_updated(self, op, attestation) -> None:
+    def record_copied(self, op, attestation) -> RecordedCopyIdentity:
+        self._record("copied", op, attestation)
+        return self._copy_identity(op)
+
+    def record_updated(self, op, attestation) -> RecordedCopyIdentity:
         self._record("updated", op, attestation)
+        return self._copy_identity(op)
 
     def record_moved(self, op, target) -> None:
         self._record("moved", op, target)
@@ -82,8 +99,9 @@ class FakeRecorder:
     def record_recased(self, op, target) -> None:
         self._record("recased", op, target)
 
-    def record_move_updated(self, op, attestation) -> None:
+    def record_move_updated(self, op, attestation) -> RecordedCopyIdentity:
         self._record("move_updated", op, attestation)
+        return self._copy_identity(op)
 
     def record_mkdir(self, op, target) -> None:
         self._record("mkdir", op, target)
@@ -250,7 +268,8 @@ def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) 
         intended=source_stat,
     )
 
-    result, events, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+    xset = _xset(_plan(source, target, (operation,)))
+    result, events, recorder = _run(xset, fs=fs)
 
     assert result.status is SessionState.COMPLETED
     assert result.bytes_total == len(b"complete-content")
@@ -258,6 +277,11 @@ def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) 
     assert not list(target.glob("*.synctmp-*"))
     name, _, attestation = recorder.calls[0]
     assert name == "copied"
+    assert set(xset.published_evidence) == {operation.op_id}
+    published = xset.published_evidence[operation.op_id]
+    assert published.attestation is attestation
+    assert published.recorded_identity == recorder._copy_identity(operation.op_id)
+    assert published.copy_recorded
     assert attestation.content.algorithm == "xxh3_128"
     assert attestation.content.digest == xxh3_128(b"complete-content").digest()
     assert attestation.content.provenance is Provenance.COPY_ATTESTED
@@ -311,6 +335,123 @@ def test_copy_digest_accepts_only_raw_xxh3_128_width() -> None:
     assert CopyDigest(b"x" * 16, 0).digest == b"x" * 16
     with pytest.raises(ValueError, match="XXH3-128"):
         CopyDigest(b"x" * 32, 0)
+
+
+def test_recorded_copy_identity_requires_a_canonical_relative_path_key() -> None:
+    identity = FakeRecorder._copy_identity(OpId("1" * 32))
+
+    with pytest.raises(ValueError, match="must be canonical"):
+        replace(identity, rel_path_key="mixed\\Case.bin")
+
+
+def test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_kinds(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    for name, content in (
+        ("copy.bin", b"copy"),
+        ("update.bin", b"update-new"),
+        ("moved.bin", b"move-new"),
+        ("noop.bin", b"same"),
+    ):
+        (source / name).write_bytes(content)
+    (target / "update.bin").write_bytes(b"update-old")
+    (target / "old-moved.bin").write_bytes(b"move-old")
+    (target / "noop.bin").write_bytes(b"same")
+    fs = NativeFileSystem()
+    source_stats = {
+        name: fs.stat(source, name)
+        for name in ("copy.bin", "update.bin", "moved.bin", "noop.bin")
+    }
+    target_update = fs.stat(target, "update.bin")
+    target_old_move = fs.stat(target, "old-moved.bin")
+    target_noop = fs.stat(target, "noop.bin")
+    assert all(value is not None for value in source_stats.values())
+    assert target_update is not None
+    assert target_old_move is not None
+    assert target_noop is not None
+    operations = (
+        _operation(
+            1,
+            OperationKind.COPY,
+            source_rel_path="copy.bin",
+            target_rel_path="copy.bin",
+            source_expected=source_stats["copy.bin"],
+            target_expected=None,
+            intended=source_stats["copy.bin"],
+        ),
+        _operation(
+            2,
+            OperationKind.UPDATE,
+            source_rel_path="update.bin",
+            target_rel_path="update.bin",
+            source_expected=source_stats["update.bin"],
+            target_expected=target_update,
+            intended=source_stats["update.bin"],
+        ),
+        _operation(
+            3,
+            OperationKind.MOVE_UPDATE,
+            source_rel_path="moved.bin",
+            target_rel_path="moved.bin",
+            source_expected=source_stats["moved.bin"],
+            target_expected=None,
+            intended=source_stats["moved.bin"],
+            prior_target_rel_path="old-moved.bin",
+            prior_target_expected=target_old_move,
+        ),
+        _operation(
+            4,
+            OperationKind.NOOP,
+            source_rel_path="noop.bin",
+            target_rel_path="noop.bin",
+            source_expected=source_stats["noop.bin"],
+            target_expected=target_noop,
+            intended=target_noop,
+        ),
+    )
+    xset = _xset(_plan(source, target, operations))
+    byte_ids = {
+        operation.op_id
+        for operation in operations
+        if operation.kind
+        in {
+            OperationKind.COPY,
+            OperationKind.UPDATE,
+            OperationKind.MOVE_UPDATE,
+        }
+    }
+    emitted: list[ItemOutcome] = []
+
+    def emit(body: object) -> None:
+        if not isinstance(body, ItemOutcome):
+            return
+        emitted.append(body)
+        op_id = OpId(body.item_id)
+        assert xset.status[op_id] is body.outcome
+        if op_id in byte_ids:
+            assert body.outcome is Outcome.SUCCEEDED
+            assert op_id in xset.published_evidence
+        else:
+            assert op_id not in xset.published_evidence
+
+    result = execute(
+        xset,
+        RunContext(emit, lambda: None),
+        FakeRecorder(),
+        _policies(),
+        fs,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert {OpId(item.item_id) for item in emitted} == set(xset.selection)
+    assert set(xset.published_evidence) == byte_ids
+    assert all(
+        evidence.copy_recorded
+        and evidence.attestation.content.provenance
+        is Provenance.COPY_ATTESTED
+        for evidence in xset.published_evidence.values()
+    )
 
 
 def test_preallocation_policy_uses_the_measured_private_crossover() -> None:
@@ -1542,6 +1683,7 @@ def test_published_copy_metadata_survives_process_exit_after_record(
                 with marker.open("wb", buffering=0) as stream:
                     stream.write(attestation.content.digest.hex().encode("ascii"))
                     os.fsync(stream.fileno())
+                return super().record_copied(op, attestation)
 
         def emit(event):
             if isinstance(event, ns["ItemOutcome"]) and event.outcome is ns["Outcome"].SUCCEEDED:
@@ -1891,13 +2033,13 @@ def test_published_size_guard_fails_all_byte_producing_operations_before_record(
         prior_target_expected=prior_expected,
     )
 
-    result, events, recorder = _run(
-        _xset(_plan(source, target, (operation,))), fs=fs
-    )
+    xset = _xset(_plan(source, target, (operation,)))
+    result, events, recorder = _run(xset, fs=fs)
 
     assert result.status is SessionState.FAILED
     assert (target / published_name).stat().st_size == source_stat.size + 1
     assert recorder.calls == []
+    assert xset.published_evidence == {}
     item = next(event for event in events if isinstance(event, ItemOutcome))
     assert item.reason == "published-size-mismatch"
     if kind is OperationKind.MOVE_UPDATE:
@@ -2015,15 +2157,16 @@ def test_update_preserves_displaced_version_before_replace(
         intended=source_stat,
     )
 
-    result, _, recorder = _run(
-        _xset(_plan(source, target, (operation,), hardlinks=hardlinks)), fs=fs
-    )
+    xset = _xset(_plan(source, target, (operation,), hardlinks=hardlinks))
+    result, _, recorder = _run(xset, fs=fs)
 
     assert result.status is SessionState.COMPLETED
     assert (target / "file.bin").read_bytes() == b"new-version"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
     assert recorder.calls[0][0] == "updated"
     assert result.bytes_total == len(b"new-version")
+    assert set(xset.published_evidence) == {operation.op_id}
+    assert xset.published_evidence[operation.op_id].copy_recorded
 
 
 class CountingCopyBackend:
@@ -2299,7 +2442,7 @@ class RepairAwareRecorder(FakeRecorder):
         self.fs = fs
         self.trash = trash
 
-    def record_updated(self, op, attestation) -> None:
+    def record_updated(self, op, attestation) -> RecordedCopyIdentity:
         trash_repairs = [
             (flushes, stat)
             for path, flushes, stat in self.fs.repairs
@@ -2308,7 +2451,7 @@ class RepairAwareRecorder(FakeRecorder):
         assert trash_repairs
         assert trash_repairs[-1][0] == 1
         assert trash_repairs[-1][1].metadata.attributes & 1
-        super().record_updated(op, attestation)
+        return super().record_updated(op, attestation)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires NTFS hardlinks and readonly")
@@ -2947,6 +3090,180 @@ def test_copy_control_unwinds_within_one_chunk_and_cleans_temp(
         assert operation.op_id not in xset.status
 
 
+def test_pause_retains_settled_copy_evidence_for_in_memory_resume(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations = []
+    for number, name in enumerate(("first.bin", "second.bin"), start=1):
+        (source / name).write_bytes(name.encode("ascii"))
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                number,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+    first, second = operations
+    xset = _xset(_plan(source, target, tuple(operations)))
+    first_settled = Event()
+    events: list[object] = []
+
+    def emit(event: object) -> None:
+        events.append(event)
+        if (
+            isinstance(event, ItemOutcome)
+            and event.item_id == str(first.op_id)
+            and event.outcome is Outcome.SUCCEEDED
+        ):
+            first_settled.set()
+
+    def checkpoint() -> None:
+        if first_settled.is_set():
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(emit, checkpoint),
+            FakeRecorder(),
+            _policies(),
+            fs,
+        )
+
+    assert xset.status == {first.op_id: Outcome.SUCCEEDED}
+    assert set(xset.published_evidence) == {first.op_id}
+    first_evidence = xset.published_evidence[first.op_id]
+    assert first_evidence.copy_recorded
+
+    result, _, _ = _run(xset, fs=fs)
+
+    assert result.status is SessionState.COMPLETED
+    assert xset.status == {
+        first.op_id: Outcome.SUCCEEDED,
+        second.op_id: Outcome.SUCCEEDED,
+    }
+    assert set(xset.published_evidence) == {first.op_id, second.op_id}
+    assert xset.published_evidence[first.op_id] is first_evidence
+    assert xset.published_evidence[second.op_id].copy_recorded
+
+
+def test_noncopy_recording_degradation_survives_pause_and_resume(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    (source / "same.bin").write_bytes(b"same")
+    (target / "same.bin").write_bytes(b"same")
+    (source / "copy.bin").write_bytes(b"copy")
+    source_same = fs.stat(source, "same.bin")
+    target_same = fs.stat(target, "same.bin")
+    copy_stat = fs.stat(source, "copy.bin")
+    assert source_same is not None
+    assert target_same is not None
+    assert copy_stat is not None
+    noop = _operation(
+        1,
+        OperationKind.NOOP,
+        source_rel_path="same.bin",
+        target_rel_path="same.bin",
+        source_expected=source_same,
+        target_expected=target_same,
+        intended=source_same,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    copied = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="copy.bin",
+        target_rel_path="copy.bin",
+        source_expected=copy_stat,
+        target_expected=None,
+        intended=copy_stat,
+    )
+    xset = _xset(_plan(source, target, (noop, copied)))
+    noop_settled = Event()
+
+    def emit(event: object) -> None:
+        if isinstance(event, ItemOutcome) and event.item_id == str(noop.op_id):
+            noop_settled.set()
+
+    def checkpoint() -> None:
+        if noop_settled.is_set():
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(emit, checkpoint),
+            FakeRecorder(fail="noop"),
+            _policies(),
+            fs,
+        )
+
+    assert xset.status == {noop.op_id: Outcome.SKIPPED}
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence == {}
+
+    result, _, _ = _run(xset, fs=fs)
+
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence[copied.op_id].copy_recorded
+
+
+def test_pause_flush_degradation_is_retained_for_resume(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"content")
+    fs = ReadObservedFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+
+    def checkpoint() -> None:
+        if fs.read_observed.is_set():
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(lambda _event: None, checkpoint),
+            FakeRecorder(fail="flush"),
+            _policies(),
+            fs,
+        )
+
+    assert xset.status == {}
+    assert xset.published_evidence == {}
+    assert xset.recording is RecordingStatus.DEGRADED
+
+    result, _, _ = _run(xset, fs=fs)
+
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence[operation.op_id].copy_recorded
+
+
 class InterruptingBackend(NativeCopyBackend):
     def copy(self, _source, target, **_kwargs):
         target.write(b"partial")
@@ -3350,8 +3667,9 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
         intended=source_stat,
     )
 
+    xset = _xset(_plan(source, target, (operation,)))
     result, events, _ = _run(
-        _xset(_plan(source, target, (operation,))),
+        xset,
         fs=fs,
         recorder=FakeRecorder(fail="copied"),
     )
@@ -3362,6 +3680,104 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
     item = next(event for event in events if isinstance(event, ItemOutcome))
     assert item.outcome is Outcome.SUCCEEDED
     assert item.detail["recording"] == "degraded"
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert set(xset.published_evidence) == {operation.op_id}
+    published = xset.published_evidence[operation.op_id]
+    assert not published.copy_recorded
+    assert published.recorded_identity is None
+
+
+class MissingCopyIdentityRecorder(FakeRecorder):
+    def record_copied(self, op, attestation) -> None:
+        self._record("copied", op, attestation)
+
+
+def test_copy_recorder_none_return_is_degraded_not_recorded(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"copied")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, _ = _run(
+        xset,
+        fs=fs,
+        recorder=MissingCopyIdentityRecorder(),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.DEGRADED
+    published = xset.published_evidence[operation.op_id]
+    assert not published.copy_recorded
+    assert published.recorded_identity is None
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert "did not return a recorded copy identity" in item.detail["recording_error"]
+
+
+class FailFirstCopyRecorder(FakeRecorder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.copy_attempts = 0
+
+    def record_copied(self, op, attestation) -> RecordedCopyIdentity:
+        self.copy_attempts += 1
+        if self.copy_attempts == 1:
+            raise RuntimeError("injected first copy record failure")
+        return super().record_copied(op, attestation)
+
+
+def test_recording_truth_is_per_copy_while_aggregate_degradation_is_sticky(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations = []
+    for number, name in enumerate(("first.bin", "second.bin"), start=1):
+        (source / name).write_bytes(name.encode("ascii"))
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                number,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+    xset = _xset(_plan(source, target, tuple(operations)))
+
+    result, _, recorder = _run(
+        xset,
+        fs=fs,
+        recorder=FailFirstCopyRecorder(),
+    )
+
+    first, second = operations
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert set(xset.published_evidence) == {
+        first.op_id,
+        second.op_id,
+    }
+    assert not xset.published_evidence[first.op_id].copy_recorded
+    assert xset.published_evidence[second.op_id].copy_recorded
+    assert recorder.copy_attempts == 2
 
 
 def test_trash_collision_preserves_live_item(tmp_path: Path) -> None:
@@ -3570,13 +3986,16 @@ def test_composite_move_update_publishes_new_then_trashes_old(tmp_path: Path) ->
         prior_target_expected=old_stat,
     )
 
-    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+    xset = _xset(_plan(source, target, (operation,)))
+    result, _, recorder = _run(xset, fs=fs)
 
     assert result.status is SessionState.COMPLETED
     assert (target / "renamed.bin").read_bytes() == b"changed"
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
     assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert set(xset.published_evidence) == {operation.op_id}
+    assert xset.published_evidence[operation.op_id].copy_recorded
 
 
 class MoveUpdateStageFaultStream:
@@ -3697,11 +4116,11 @@ class MoveUpdateStageFaultRecorder(FakeRecorder):
         self.fault = fault
         self.move_update_attempts = 0
 
-    def record_move_updated(self, op, attestation) -> None:
+    def record_move_updated(self, op, attestation) -> RecordedCopyIdentity:
         self.move_update_attempts += 1
         if self.stage == "record":
             self.fault("record")
-        super().record_move_updated(op, attestation)
+        return super().record_move_updated(op, attestation)
 
 
 @pytest.mark.parametrize(

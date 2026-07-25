@@ -120,10 +120,44 @@ class Disposition(StrEnum):
     UNRUN = "unrun"
 
 
+class PhaseStatus(StrEnum):
+    """Terminal truth for one entered phase of a compound workflow."""
+
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELED = "canceled"
+    INCOMPLETE = "incomplete"
+
+
 @dataclass(frozen=True, slots=True)
 class FailureDetail:
     type_name: str
     message: str
+
+
+@dataclass(frozen=True, slots=True)
+class PhaseResult:
+    """Phase-local counters and failures that must never be summed."""
+
+    phase: str
+    status: PhaseStatus
+    items_done: int
+    items_total: int | None
+    bytes_done: int
+    bytes_total: int | None
+    error: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.phase:
+            raise ValueError("phase result name must be non-empty")
+        if self.items_done < 0 or self.bytes_done < 0:
+            raise ValueError("phase result counters cannot be negative")
+        if self.items_total is not None:
+            if self.items_total < self.items_done:
+                raise ValueError("phase items_done cannot exceed items_total")
+        if self.bytes_total is not None:
+            if self.bytes_total < self.bytes_done:
+                raise ValueError("phase bytes_done cannot exceed bytes_total")
 
 
 class ResultItem:
@@ -146,6 +180,7 @@ class OperationResult:
     disposition: Disposition = Disposition.RAN
     canceled: bool = False
     items: tuple[ResultItem, ...] = ()
+    phases: tuple[PhaseResult, ...] = ()
     bytes_done: int = 0
     bytes_total: int = 0
     error: FailureDetail | None = None
@@ -157,14 +192,66 @@ class OperationResult:
             raise TypeError("operation result items must be a tuple")
         if any(not isinstance(item, ResultItem) for item in self.items):
             raise TypeError("operation result items must implement ResultItem")
+        if not isinstance(self.phases, tuple):
+            raise TypeError("operation result phases must be a tuple")
+        if any(not isinstance(phase, PhaseResult) for phase in self.phases):
+            raise TypeError("operation result phases must contain PhaseResult values")
+        phase_names = [phase.phase for phase in self.phases]
+        if len(phase_names) != len(set(phase_names)):
+            raise ValueError("operation result phases must be unique")
         if self.bytes_done < 0 or self.bytes_total < 0:
             raise ValueError("result byte counts cannot be negative")
         if self.bytes_done > self.bytes_total:
             raise ValueError("bytes_done cannot exceed bytes_total")
-        if self.canceled != (self.status is SessionState.CANCELED):
-            raise ValueError("canceled must agree with the terminal status")
+        if self.status is SessionState.CANCELED and not self.canceled:
+            raise ValueError("canceled filesystem status requires canceled=True")
+        if self.canceled and self.status is SessionState.REFUSED:
+            raise ValueError("a refused result cannot also be canceled")
+        execute = next(
+            (phase for phase in self.phases if phase.phase == "execute"),
+            None,
+        )
+        verify = next(
+            (phase for phase in self.phases if phase.phase == "verify"),
+            None,
+        )
+        if (
+            self.status is SessionState.CANCELED
+            and execute is not None
+            and execute.status is PhaseStatus.COMPLETED
+        ):
+            raise ValueError(
+                "execute cancellation cannot carry a completed execute phase"
+            )
+        if self.canceled and self.status in {
+            SessionState.COMPLETED,
+            SessionState.FAILED,
+        }:
+            if self.disposition is not Disposition.RAN:
+                raise ValueError(
+                    "compound cancellation must have run disposition"
+                )
+            expected_execute = (
+                PhaseStatus.COMPLETED
+                if self.status is SessionState.COMPLETED
+                else PhaseStatus.FAILED
+            )
+            if execute is None or execute.status is not expected_execute:
+                raise ValueError(
+                    "compound cancellation must preserve matching execute truth"
+                )
+            if verify is None or verify.status is not PhaseStatus.CANCELED:
+                raise ValueError(
+                    "compound cancellation must carry a canceled verify phase"
+                )
         if self.status is SessionState.REFUSED and self.disposition is not Disposition.UNRUN:
             raise ValueError("refused sessions must have unrun disposition")
+
+
+def result_terminal_state(result: OperationResult) -> SessionState:
+    """Project axis-separated result truth onto dispatcher lifecycle state."""
+
+    return SessionState.CANCELED if result.canceled else result.status
 
 
 @dataclass(frozen=True, order=True, slots=True)
@@ -216,8 +303,13 @@ class SessionRecord:
         _require_utc(self.ended_at, "ended_at")
         if is_terminal(self.state) != (self.ended_at is not None):
             raise ValueError("terminal state and ended_at must agree")
-        if self.result is not None and self.result.status is not self.state:
-            raise ValueError("record result status must agree with session state")
+        if (
+            self.result is not None
+            and result_terminal_state(self.result) is not self.state
+        ):
+            raise ValueError(
+                "record result terminal projection must agree with session state"
+            )
 
 
 class SessionStore(Protocol):
@@ -300,7 +392,7 @@ def run_session(
             bytes_done=bytes_done,
             bytes_total=bytes_total,
         )
-    except BaseException as error:
+    except Exception as error:
         bytes_done = latest_progress.bytes_done if latest_progress else 0
         bytes_total = (
             latest_progress.bytes_total
@@ -316,10 +408,10 @@ def run_session(
             error=FailureDetail(type(error).__name__, str(error)),
         )
 
-    settle(result.status, result)
+    settle(result_terminal_state(result), result)
     try:
         audit = finalize_audit(result)
-    except BaseException:
+    except Exception:
         audit = RecordingStatus.DEGRADED
     final_result = replace(result, audit=audit)
     publish_result(final_result)

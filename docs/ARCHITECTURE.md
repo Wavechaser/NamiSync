@@ -404,19 +404,29 @@ class Commitment:               # the durable preauthorization (commit-to-execut
     committed_at: datetime
 
 @dataclass(frozen=True)
-class PublishedCopyEvidence:    # core/execution.py
-    attestation: "Attestation"  # core/evidence.py; defined in §2.6
-    copy_recorded: bool
+class RecordedCopyIdentity:     # complete identity from one copy transaction
+    row_id: str
+    location_id: str
+    scope_token: str
+    rel_path_key: str
+
+@dataclass(frozen=True)
+class PublishedCopyEvidence:        # core/execution.py
+    attestation: "Attestation"      # core/evidence.py; defined in §2.6
+    recorded_identity: RecordedCopyIdentity | None
+    # copy_recorded is the derived ``recorded_identity is not None`` property
 
 @dataclass
 class ExecutionSet:           # plan + selection + mutable per-op status
     plan: Plan
     selection: Selection        # dependency-closed subset
+    run_id: RunId
     commitment: Commitment | None   # execution REFUSES a None or mismatched one
     status: dict[OpId, Outcome] # doubles as the pause/resume continuation:
                                 # everything unreached is the remaining work
     published_evidence: dict[OpId, PublishedCopyEvidence]
                                 # exactly one per settled COPY/UPDATE/MOVE_UPDATE
+    recording: RecordingStatus  # frozen execution-phase recording truth
 
 class Subject(NamedTuple):      # never a bare string key — both roots share
     root: RootId                # the same rel paths on almost every operation
@@ -498,21 +508,27 @@ class Disposition(StrEnum):
 @dataclass(frozen=True)
 class OperationResult:
     status: SessionState        # terminal member — FILESYSTEM truth only
-    integrity: IntegritySummary # typed aggregate of per-item integrity truth;
-                                # independent from filesystem status
     recording: RecordingStatus  # ledger truth — never folded into status
     audit: RecordingStatus      # history truth — same axis rules (§2.3)
     disposition: Disposition    # CANCELED + UNRUN = discarded before start
     canceled: bool
     items: tuple[ResultItem, ...]       # ordered execution + integrity items
     phases: tuple[PhaseResult, ...]     # phase-local truth and byte totals
+    bytes_done: int
+    bytes_total: int
+    error: FailureDetail | None
 ```
+
+Integrity and headline are single derived projections over the nominal
+items/phases and the other persisted axes; they are not competing mutable
+fields on `OperationResult`. Live and retained views both use
+`operation_result_view` for that classification.
 
 `PublishedCopyEvidence` is execution continuation state and therefore lives
 beside `ExecutionSet` in `core/execution.py`. `PostCopyCandidate` is the
 cross-boundary verifier-input contract and lives in `core/integrity.py`; its
-final Stage 4 fields bind a published target to expected content evidence and
-may carry a durable row identity only when recording already returned one.
+fields bind a published target to expected content evidence and may carry a
+complete durable row identity only when recording already returned one.
 It does not embed or import `PublishedCopyEvidence`: the workflow copies the
 verifier-facing values while translating between the two contracts.
 Constructing either type never requires a ledger query.
@@ -530,7 +546,7 @@ and other small non-content hashes remain SHA-256.
 class Recorder(Protocol):
     """The ONLY path that writes the main ledger. Calls may fail loudly.
     One serialized writer backs all in-process sessions."""
-    def record_copied(self, op: OpId, at: Attestation) -> None: ...
+    def record_copied(self, op: OpId, at: Attestation) -> RecordedCopyIdentity: ...
     def record_moved(self, op: OpId, ...) -> None: ...
     def record_verified(self, row: RowId, at: Attestation) -> None: ...
     def record_baselined(self, row: RowId, at: Attestation) -> None: ...
@@ -1067,9 +1083,9 @@ dispatcher. Interface commands remain the Stage 5 product gate.
 M1 replaces content SHA-256 in baseline, verify, rebaseline, and copy together
 with canonical XXH3-128; no interval exists where the two consumers write
 different evidence formats. The verifier's guarded
-open/stat/hash/classification body is ledger-neutral so Stage 4 ledger-bound
-selections and transient post-copy candidates can share it without changing
-byte classification. The latter will be constructed by the workflow from
+open/stat/hash/classification body is ledger-neutral so standalone ledger-bound
+selections and transient post-copy candidates share it without changing
+byte classification. The latter are constructed by the workflow from
 `PublishedCopyEvidence` and remain
 classifiable when the copy-ledger transaction failed; only a candidate with
 durable matching row evidence may conditionally advance ledger verification
@@ -1117,7 +1133,8 @@ serialized retrying writer, run-bound sync recorder, batched inventory
 reconciliation, conditional baseline/verify/rebaseline writes, typed ledger
 repositories, and minimal sync history observer/repository are implemented.
 The sync observer stores blocked/deferred operation items through history v3's
-generic item table and intentionally writes no phase-summary rows yet. Ledger
+generic item table; compound Stage 4 runs also write the reserved phase-summary
+rows, while standalone producers write none. Ledger
 v1 and history v1/v2 are refused without mutation; the temporary pre-migrator
 recovery is manual deletion of both local databases or the explicit
 development reset helper, never automatic startup deletion. `settings.py`
@@ -1149,7 +1166,8 @@ verifier during M0 construction. **Flesh — implemented through M1 Stage 3.**
 History stores ordered generic `ResultItem` detail for standalone integrity,
 including retained issue fields; the coordinated ledger-v2/history-v3 reset
 reserves compound `PhaseResult` storage but Stage 3 writes no phase rows.
-Compound phase summaries and linked-verification history remain Stage 4.
+Stage 4 consumes that unchanged storage for compound phase summaries and
+linked-verification history.
 Semantic-settings commits hold a named cross-process mutex only across
 read-current → modify-owned-keys → temp-write → atomic-replace, so concurrent
 GUI/CLI writers cannot lose one another's updates.
@@ -1236,8 +1254,9 @@ bounded live/replay buffers); local-pipe CLI-as-client.
   workflows (import-lint enforced).
 - Two sessions on disjoint volume sets run concurrently; two contending for one
   volume serialize.
-- Every session reaches a terminal and releases every lock on every path,
-  including exceptions and teardown (custody conformance).
+- Every ordinary `Exception`/cooperative-control path reaches one terminal and
+  releases every lock; `BaseException` escapes unnormalized while teardown
+  still releases custody.
 - The stored per-workflow blob is never deserialized by the dispatcher.
 - **M2:** after a simulated process kill, reconciliation marks the orphan
   `INTERRUPTED` and routes it through preflight-then-continue. M0 instead proves
@@ -1266,14 +1285,17 @@ def run_integrity(req, ctx, deps) -> IntegrityRunResult: ...
 class ExecuteContinuation:
     phase: Literal["execute"]
     execution_set: ExecutionSet
+    verify_after_execute: bool
 
 @dataclass(frozen=True)
 class VerifyContinuation:
     phase: Literal["verify"]
     execution_set: ExecutionSet
-    candidates: tuple[PostCopyCandidate, ...]       # verify phase only
-    completed_verification_ids: frozenset[str]     # verify phase only
-    verified_bytes: int                            # verify phase only
+    candidates: PostCopySelection       # frozen candidates + completed ids/bytes
+    filesystem_status: SessionState     # settled execute filesystem truth
+    recording: RecordingStatus          # compound-current recording truth
+    execute_phase: PhaseResult
+    missing_evidence_ids: tuple[str, ...]
 
 ExecutionContinuation = ExecuteContinuation | VerifyContinuation
 ```
@@ -1286,6 +1308,12 @@ envelopes opaquely. The workflow is the sole translator from executor-produced
 `PublishedCopyEvidence` to verifier-consumed `PostCopyCandidate`, so executor
 and verifier remain sibling modules with no direct dependency; the integrity
 contract does not import the execution contract.
+
+At execute→verify handoff, candidate ids and `missing_evidence_ids` are
+disjoint, retain plan order, and together equal exactly the successfully
+settled COPY/UPDATE/MOVE_UPDATE ids. `ExecutionSet.recording` remains frozen
+execution truth; the continuation's separate `recording` value is
+compound-current and may degrade later but cannot improve a degraded execution.
 
 **A sync is two sessions, not one.** This is how mandatory dry-run review
 coexists with *sessions never block on a human*: review happens **between**
@@ -1353,7 +1381,7 @@ observe → preflight → execute [→ verify], or location resolve/register →
 → inventory → standalone integrity); the explicit execute/verify continuation;
 no signals, no callbacks-for-control; every dependency arrives via `deps`.
 
-**Implementation status (2026-07-20).** M0 paired sync now runs both dispatcher
+**Implementation status (2026-07-25).** M0 paired sync runs both dispatcher
 sessions through schema-versioned opaque payloads. Planning reads prior
 correspondence without creating configuration, derives and reviews the maximal
 safe dependency-closed subset, and preflights that selection. Execution verifies
@@ -1369,9 +1397,12 @@ selection, local composition, CLI terminal review/commit, and history browsing.
 standalone inventory/baseline/verify/rebaseline sessions; integrity preflight
 on start, resume, and queued wakeup; mapping-scoped authoritative filters;
 exact-candidate continuation; nominal result/history items; and production
-dispatcher registration. **Flesh — later M1 stages.** In-session
-post-execution verification and compound phase summaries (Stage 4), a shared
-facade and expanded CLI (Stage 5), and the desktop shell (Stage 6).
+dispatcher registration. **Flesh — implemented through M1 Stage 4.** Optional
+in-session post-execution verification, explicit execute/verify continuation,
+one finish-once run window, compound phase summaries/history/views, and
+independent filesystem/integrity/recording/audit/canceled truth. **Flesh —
+later M1 stages.** Expanded CLI/final classification (Stage 5) and the desktop
+shell (Stage 6).
 **Flesh — deferred.** Queue-driven durable second sessions;
 replay-from-history; DB maintenance/retention session; undo/repair (each
 generated as an ordinary plan through the same pipeline — the
@@ -1388,7 +1419,12 @@ generated as an ordinary plan through the same pipeline — the
   recently `run_plan` ran — it is the sole pre-mutation preflight; the
   executor's own defense is per-operation precondition re-checking, never a
   preflight import.
-- A refused preflight short-circuits to a `REFUSED` terminal with no mutation.
+- A refused fresh/unstarted execution preflight short-circuits to `REFUSED`
+  with no mutation. A started execute-resume refusal instead becomes
+  `FAILED+RAN` with a failed execute phase and settled counters. A
+  verify-resume refusal preserves the settled filesystem status and adds an
+  incomplete verify phase. Both finish the existing logical run rather than
+  reporting terminal `REFUSED`.
 - A direct blocker cannot refuse independent safe work. Corresponding paths and
   dependencies remain quarantined, and incomplete scans cannot authorize any
   destructive or identity-move operation.
@@ -1436,9 +1472,10 @@ history access, controls, primitive view projection, and a sink-only blocking
 `SessionObserver`. The existing CLI is retargeted without changing its current
 `sync`/`history` command behavior. Observer shutdown closes streams before
 joins, dispatcher shutdown precedes runtime close, and runtime plan access uses
-the named process-local methods without a storage abstraction. The four new CLI
-commands and Stage 4-aware final classification remain gated on the compound
-workflow landing.
+the named process-local methods without a storage abstraction. The compound
+workflow is now available through the opt-in `verify_after_execute` flag. The
+four new CLI commands and final classification matrix remain Stage 5 Track B
+work.
 
 `ResultCategory` chooses one headline without hiding secondary axes:
 `failed > partial > refused > mismatch > canceled >
@@ -1526,7 +1563,7 @@ desktop surfaces, and other interfaces behind the same facade.
   `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
   isolated verifier operation may land in parallel during M0 construction, but
   does not broaden this shipping gate without its inventory/workflow surface.
-- **M1 — integrity product and executor refactor.** Stages 1–3 are implemented;
+- **M1 — integrity product and executor refactor.** Stages 1–4 are implemented;
   continue in this dependency order:
   1. contracts and semantics — canonical XXH3-128 evidence, nominal result
      items/phase summaries, four truth axes, execute→verify continuation,

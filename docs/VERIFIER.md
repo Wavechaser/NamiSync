@@ -1,10 +1,12 @@
 # Verifier Module
 
 Status: the verifier operation module and M1 Stage 3 location-centric
-inventory/baseline/verify/rebaseline workflows are implemented. The production
-dispatcher registry carries all four headless kinds and history v3 retains
-their ordered integrity detail. Starting those activities from CLI/UI remains
-deliberately unexposed until the interface stage.
+inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
+also feeds the same ledger-neutral classifier transient post-copy candidates
+for optional in-session readback. The production dispatcher registry carries
+all four headless kinds and history v3 retains standalone and compound detail.
+Starting standalone activities from CLI/UI remains deliberately unexposed until
+the interface command stage.
 
 ## Purpose
 
@@ -23,6 +25,7 @@ paired source/target mapping.
 baseline(selection, ctx, recorder, reader=None) -> IntegrityRunResult
 verify(selection, ctx, recorder, reader=None) -> IntegrityRunResult
 rebaseline(selection, ctx, recorder, reader=None) -> IntegrityRunResult
+verify_post_copy(selection, ctx, recorder, reader=None) -> IntegrityRunResult
 ```
 
 Selections contain immutable inventory row id, location/root, canonical path
@@ -113,11 +116,13 @@ paused standalone session serializes the exact original candidate row ids plus
 completed ids/bytes: resume inventories current physical state but cannot
 silently add a newly appeared row or drop an admitted pending row.
 
-Stage 4 post-execution verification will not rebuild its immediate candidates
-from ledger rows. The verifier's guarded open/stat/hash/classification body is
-already private and ledger-neutral; the workflow will feed it transient
-published copy evidence even when the copy-ledger write degraded. Conditional
-ledger advancement remains a separate wrapper concern.
+Post-execution verification does not rebuild its immediate candidates from
+ledger rows. The verifier's guarded open/stat/hash/classification body is
+private and ledger-neutral; workflow feeds it transient published copy evidence
+even when the copy-ledger write degraded. An optional complete recorded identity
+only gates conditional advancement. Rowless candidates still open/stat/hash and
+classify bytes; their integrity result stays truthful while recording remains
+degraded. The verifier never fabricates row or location ids.
 
 Manual verification is location-scoped and independent of any current plan or
 mapping. It must not require both source and target roots.
@@ -184,9 +189,15 @@ Implemented by the Stage 3 composition around this module:
 - dispatcher custody registration for inventory, baseline, verify, and
   rebaseline.
 
+Implemented by the Stage 4 compound composition:
+
+- post-copy candidates from successful eligible publishes only;
+- matching readback despite copy-record failure, with no invented ledger ids;
+- conditional stale recording as verified plus recording degradation;
+- exact pause completion ids/bytes and no repeated outcomes on resume.
+
 Still owned by later M1 stages:
 
-- constructing post-execution candidates from successful eligible publishes;
 - the CLI/desktop commands and presentation that start integrity work.
 
 The shared SQLite ledger already implements the injected conditional

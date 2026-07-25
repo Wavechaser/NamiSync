@@ -38,7 +38,9 @@ from namisync.core.execution import (
     ExecutorFileSystem,
     FailureDecision,
     FailurePolicy,
+    PublishedCopyEvidence,
     Recorder,
+    RecordedCopyIdentity,
     Retry,
     RunId,
     Stop,
@@ -1477,6 +1479,7 @@ class _Settled:
     outcome: Outcome
     reason: ExecutionReason | None = None
     detail: dict[str, object] = field(default_factory=dict)
+    published_evidence: PublishedCopyEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1512,8 +1515,8 @@ class _MoveUpdateContinuation:
 
 @dataclass(slots=True)
 class _ExecutionState:
+    execution_set: ExecutionSet
     outcomes: dict[OpId, ItemOutcome]
-    recording: RecordingStatus = RecordingStatus.OK
     inflight_temp: Path | None = None
     pending_directories: list[PlanOperation] = field(default_factory=list)
     ready_directories: set[OpId] = field(default_factory=set)
@@ -1522,6 +1525,14 @@ class _ExecutionState:
         OpId, _UpdateContinuation | _MoveUpdateContinuation
     ] = field(default_factory=dict)
     filesystem_failed: bool = False
+
+    @property
+    def recording(self) -> RecordingStatus:
+        return self.execution_set.recording
+
+    @recording.setter
+    def recording(self, value: RecordingStatus) -> None:
+        self.execution_set.recording = value
 
 
 class _ProgressTracker:
@@ -1623,6 +1634,7 @@ def execute(
     source_root = Path(xset.plan.source_root.path)
     target_root = Path(xset.plan.target_root.path)
     state = _ExecutionState(
+        execution_set=xset,
         outcomes={},
         restore_directories={
             operation.op_id
@@ -2025,8 +2037,19 @@ def _copy(
     published = _published_copy_stat(prepared, xset, fs)
     detail = _durability_detail(fs, prepared.target.parent)
     attestation = _attestation(prepared.digest, published, policies.clock)
-    _record(state, detail, lambda: recorder.record_copied(operation.op_id, attestation))
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    recorded_identity = _record(
+        state,
+        detail,
+        lambda: recorder.record_copied(operation.op_id, attestation),
+        identity_required=True,
+    )
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=detail,
+        published_evidence=PublishedCopyEvidence(
+            attestation, recorded_identity
+        ),
+    )
 
 
 def _update(
@@ -2214,12 +2237,19 @@ def _update(
         )
     )
     attestation = _attestation(prepared.digest, published_stat, policies.clock)
-    _record(
+    recorded_identity = _record(
         state,
         continuation.detail,
         lambda: recorder.record_updated(operation.op_id, attestation),
+        identity_required=True,
     )
-    return _Settled(Outcome.SUCCEEDED, detail=continuation.detail)
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=continuation.detail,
+        published_evidence=PublishedCopyEvidence(
+            attestation, recorded_identity
+        ),
+    )
 
 
 def _move(
@@ -2433,14 +2463,21 @@ def _move_update(
             ) from error
     detail = _durability_detail(fs, prepared.target.parent, old.parent, trash.parent)
     assert continuation.attestation is not None
-    _record(
+    recorded_identity = _record(
         state,
         detail,
         lambda: recorder.record_move_updated(
             operation.op_id, continuation.attestation
         ),
+        identity_required=True,
     )
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=detail,
+        published_evidence=PublishedCopyEvidence(
+            continuation.attestation, recorded_identity
+        ),
+    )
 
 
 def _trash(
@@ -2722,6 +2759,24 @@ def _settle(
 ) -> None:
     if operation.op_id in xset.status:
         return
+    byte_producing = operation.kind in {
+        OperationKind.COPY,
+        OperationKind.UPDATE,
+        OperationKind.MOVE_UPDATE,
+    }
+    evidence_required = (
+        settled.outcome is Outcome.SUCCEEDED and byte_producing
+    )
+    if evidence_required and settled.published_evidence is None:
+        raise RuntimeError(
+            "successful byte-producing operation lacks published evidence"
+        )
+    if not evidence_required and settled.published_evidence is not None:
+        raise RuntimeError(
+            "published evidence belongs to an ineligible operation outcome"
+        )
+    if operation.op_id in xset.published_evidence:
+        raise RuntimeError("published evidence already exists for operation")
     event = ItemOutcome(
         item_id=str(operation.op_id),
         kind=operation.kind.value,
@@ -2730,6 +2785,8 @@ def _settle(
         reason=None if settled.reason is None else settled.reason.value,
         detail=settled.detail,
     )
+    if settled.published_evidence is not None:
+        xset.published_evidence[operation.op_id] = settled.published_evidence
     xset.status[operation.op_id] = settled.outcome
     state.outcomes[operation.op_id] = event
     ctx.emit(event)
@@ -2958,14 +3015,22 @@ def _attestation(
 def _record(
     state: _ExecutionState,
     detail: dict[str, object],
-    command: Callable[[], None],
-) -> None:
+    command: Callable[[], object],
+    *,
+    identity_required: bool = False,
+) -> RecordedCopyIdentity | None:
     try:
-        command()
+        result = command()
+        if identity_required and not isinstance(result, RecordedCopyIdentity):
+            raise TypeError(
+                "copy recorder did not return a recorded copy identity"
+            )
     except Exception as error:
         state.recording = RecordingStatus.DEGRADED
         detail["recording"] = RecordingStatus.DEGRADED.value
         detail["recording_error"] = f"{type(error).__name__}: {error}"
+        return None
+    return result if isinstance(result, RecordedCopyIdentity) else None
 
 
 def _flush_before_destructive(

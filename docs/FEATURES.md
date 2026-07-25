@@ -1,11 +1,12 @@
 # Features
 
-Implementation note (2026-07-24): M1 Stages 1-3 have landed their contract,
+Implementation note (2026-07-25): M1 Stages 1-4 have landed their contract,
 schema/settings/security prerequisites, pipelined XXH3-128 executor/verifier
 switch, role-free inventory, standalone integrity workflows, generic history
-items, and production dispatcher registrations. Post-execution compound
-verification, CLI/UI start surfaces, and the desktop host remain assigned to
-later M1 stages even where their settled behavior below is already stated.
+items, production dispatcher registrations, and optional post-execution
+compound verification. New CLI/UI start surfaces and the desktop host remain
+assigned to later M1 stages even where their settled behavior below is already
+stated.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -86,7 +87,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Single Queue Owner**. Multiple NamiSync processes may run at once; cross-process volume locks arbitrate disk access between them, and a file lock on the persisted queue ensures exactly one process at a time owns queued-session admission.
 - **Resource Custody**. The dispatcher acquires each session's required volume locks on start and releases them on every terminal transition or pause-drain, so lock lifetime has exactly one owner.
 - **Control Plane**. Pause, resume, and cancel are dispatcher operations that flip a flag a running session's checkpoint resolves against; the dispatcher enforces the legal state-transition table so illegal requests fail cleanly instead of corrupting session state. Pause is a per-kind capability declared at workflow registration: only session kinds with a continuation state (sync execution; verification's item-list sessions) accept it, while short continuation-less sessions refuse pause cleanly and stay cancelable.
-- **Resume Outcomes**. Resuming a paused or interrupted session always preflights first and either continues or is refused with reasons if the remaining plan is no longer valid; the user replans and re-attempts rather than the system attempting a silent partial continuation.
+- **Resume Outcomes**. Resuming a paused or interrupted session always preflights first. Fresh/unstarted work may be refused with reasons, but a started execute resume that has already mutated settles `FAILED+RAN` with its partial counters, and a verify resume preserves settled filesystem truth while reporting an incomplete verify phase; neither is mislabeled as a fresh refusal.
 - **Resume Never Preempts**. A resumed session re-enters admission at the back of its volumes' queue: if another session took over the contended volume while it was paused, the resumed session runs when that session finishes or is itself paused or canceled. Jumping the queue would mean either force-pausing the running session or running two sessions on one volume — the first is confusing, the second is forbidden.
 - **Persisted Session Table**. The dispatcher persists its own session table — lifecycle state and an opaque per-workflow payload — independent of the ledger and history; this is the one exception to never writing a database, and the dispatcher never interprets the payload it stores.
 - **Startup Reconciliation**. On launch, the dispatcher reloads its session table; anything left running by a process that is no longer alive is marked interrupted, queued sessions become pending again, and interrupted sessions flow into the same preflight-then-continue path as any other resume.
@@ -211,7 +212,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Cache-Honest Reads**. Verification reads bypass the page cache, or are deliberately deferred after a fresh write, so a match attests the medium rather than a buffer NamiSync itself just filled.
 - **Integrity Outcomes**. Verification distinguishes verified, baselined, mismatched, modified, missing, unsupported, canceled, and error results.
 - **Selected Verification**. Present inventory files selected in the UI can be verified without verifying the entire location.
-- **Post-Execution Verification**. A sync can continue directly into an optional verification phase while retaining the same session and volume custody. Every successfully published copy, update, or move-update carries transient published evidence into readback even if its ledger write failed; no-op, metadata-only move, directory, trash, and delete work is ineligible. Readback mismatch or incompleteness changes the integrity axis, never the already-settled filesystem result.
+- **Post-Execution Verification**. A sync can continue directly into an optional verification phase while retaining the same session and volume custody. Every successfully published copy, update, or move-update carries transient published evidence into readback even if its ledger write failed; no-op, metadata-only move, directory, trash, and delete work is ineligible. Readback mismatch or incompleteness changes the integrity axis, never the already-settled filesystem result. Same-process pause retains an explicit execute/verify continuation; process close offers no resume. Cancellation starts no new verification work, preserves already-settled filesystem truth, and attempts terminal finish once without ever double-finishing; a finish failure degrades recording.
 - **Safe Conditional Recording**. Hash and verification results are persisted only when the file state remains consistent with the observation being recorded.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
 - **Standalone Integrity Implemented**. Baseline, verify, and explicit rebaseline now compose cache-honest Windows reads with fresh inventory selection, conditional ledger recording, exact-candidate pause continuation, subject-scoped generic history, and volume-custodied dispatcher registrations. CLI/UI controls remain deliberately unexposed.
@@ -248,7 +249,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. Recents, window geometry, columns, and sorting live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
 - **M1 Evidence Reset Boundary**. Ledger v2/history v3 require immutable final-contract markers. Old versions and transitional v2/v3 files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
-- **M1 Generic History Reservation**. History v3 stores explicitly tagged operation/execute and standalone integrity items, while reserving phase summaries for Stage 4 without writing placeholder phase rows.
+- **M1 Generic History Reservation**. History v3 stores explicitly tagged operation/execute and standalone integrity items and the phase-summary shape consumed by Stage 4. Compound sync now writes exact execute/verify phase rows without a version/marker change; standalone producers keep writing zero phase rows.
 - **M0 Ledger Implemented**. The active ledger/history schemas freeze identity and evidence fields, enforce mapping-correspondence location integrity, separate observed from attested stats, expose read-only typed inventory/mapping/run repositories, and refuse configured database paths inside managed roots.
 
 - **Hardlink Groups**. Schema room is reserved for grouping paths that share one file identity, so hard-link-aware correspondence and, later, hard-link preservation on copy remain additive rather than a rework.
@@ -275,7 +276,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **History Idempotency**. Repeating a recorded run token does not create a duplicate history entry.
 - **History Retention**. Summary and detail retention will preserve the run envelope while pruning eligible old detail, but it is deferred beyond M1 until a maintenance session can coordinate cross-process custody with every audit writer. M1 exposes no retention setting, command, or GUI action.
 - **History Browsing**. Retained runs and their details can be inspected in the desktop History dialog or through the CLI.
-- **M1 Generic History Implemented**. The independent store consumes the dispatcher's reliable preterminal observer protocol and persists idempotent sync/inventory/integrity envelopes, axis-separated summaries, and ordered operation/integrity details. Subject-only activities render their location instead of `None -> None`; Stage 3 writes zero phase rows.
+- **M1 Generic History Implemented**. The independent store consumes the dispatcher's reliable preterminal observer protocol and persists idempotent sync/inventory/integrity envelopes, axis-separated summaries, ordered operation/integrity details, and compound phase summaries. Subject-only activities render their location instead of `None -> None`; standalone Stage 3 producers write zero phase rows. Retained views expose filesystem, integrity, recording, audit, disposition, cancellation, and the same derived headline as live results.
 
 - **Task-Grouped History**. GUI activities will be grouped under durable task records while CLI and service activities remain valid without a task parent.
 - **Task Annotations**. Users will be able to add a trimmed plain-text task annotation of up to 256 characters.

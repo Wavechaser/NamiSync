@@ -22,9 +22,9 @@ from namisync.core.models import (
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.recording import InventoryCommand
-from namisync.db.connections import connect_ledger_reader
+from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
 from namisync.db.recorder import StaleRecordingError, _payload_hash
-from namisync.db.writer import TokenConflictError
+from namisync.db.writer import RecordingError, TokenConflictError
 
 from _db_fixtures import (
     NOW,
@@ -148,8 +148,8 @@ def test_copy_records_only_attested_target_evidence_and_is_idempotent(tmp_path: 
     setup = setup_recorder(tmp_path / "ledger.db", plan((copy,)))
     evidence = attestation(published)
     try:
-        setup.run.record_copied(copy.op_id, evidence)
-        setup.run.record_copied(copy.op_id, evidence)
+        identity = setup.run.record_copied(copy.op_id, evidence)
+        replayed_identity = setup.run.record_copied(copy.op_id, evidence)
 
         connection = connect_ledger_reader(setup.recorder.path)
         try:
@@ -163,6 +163,114 @@ def test_copy_records_only_attested_target_evidence_and_is_idempotent(tmp_path: 
             assert target["attested_file_identity_volume_serial"] == "target-serial"
             assert target["last_verified_at"] is None
             assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
+            assert identity.row_id == str(target["id"])
+        finally:
+            connection.close()
+        assert replayed_identity == identity
+        assert identity.location_id == str(setup.target_location_id)
+        assert identity.scope_token == setup.run_token
+        assert identity.rel_path_key == normalize_relative_path(
+            copy.target_rel_path
+        )
+    finally:
+        setup.recorder.close()
+
+
+def test_copy_identity_is_not_returned_when_its_transaction_rolls_back(
+    tmp_path: Path,
+) -> None:
+    source = file_stat(identity_index=1)
+    published = file_stat(identity_index=2, volume_serial="target-serial")
+    copy = operation(
+        OperationKind.COPY,
+        source=source,
+        target=None,
+        intended=published,
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan((copy,)))
+    writer = connect_ledger_writer(setup.recorder.path)
+    try:
+        writer.execute(
+            """CREATE TRIGGER force_operation_failure
+               BEFORE INSERT ON operations
+               BEGIN
+                   SELECT RAISE(ABORT, 'forced operation failure');
+               END"""
+        )
+        writer.commit()
+    finally:
+        writer.close()
+
+    try:
+        with pytest.raises(RecordingError, match="forced operation failure"):
+            setup.run.record_copied(copy.op_id, attestation(published))
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            assert connection.execute(
+                "SELECT count(*) FROM operations"
+            ).fetchone()[0] == 0
+            assert connection.execute(
+                "SELECT count(*) FROM inventory"
+            ).fetchone()[0] == 0
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
+def test_sync_run_recorder_conditionally_records_linked_readback(
+    tmp_path: Path,
+) -> None:
+    source = file_stat(identity_index=1)
+    published = file_stat(identity_index=2, volume_serial="target-serial")
+    copy = operation(
+        OperationKind.COPY,
+        source=source,
+        target=None,
+        intended=published,
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan((copy,)))
+    copy_evidence = attestation(published)
+    try:
+        identity = setup.run.record_copied(copy.op_id, copy_evidence)
+        readback = attestation(
+            published,
+            provenance=Provenance.READBACK_ATTESTED,
+        )
+        command = IntegrityRecordCommand(
+            mode=IntegrityMode.VERIFY,
+            item_id=str(copy.op_id),
+            row_id=identity.row_id,
+            location_id=identity.location_id,
+            rel_path_key=identity.rel_path_key,
+            scope_token=identity.scope_token,
+            expected_state=InventoryState.PRESENT,
+            expected_stat=published,
+            expected_baseline=copy_evidence,
+            attestation=readback,
+            advances_last_verified=True,
+            clear_reappeared=False,
+        )
+
+        assert (
+            setup.run.record_integrity(command)
+            is RecordDisposition.APPLIED
+        )
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            row = connection.execute(
+                """SELECT last_verified_at, hash_provenance
+                     FROM inventory
+                    WHERE id = ?""",
+                (int(identity.row_id),),
+            ).fetchone()
+            assert row["last_verified_at"] is not None
+            assert (
+                row["hash_provenance"]
+                == Provenance.READBACK_ATTESTED.value
+            )
         finally:
             connection.close()
     finally:

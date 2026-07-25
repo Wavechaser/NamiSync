@@ -1,7 +1,9 @@
 # Dispatcher Module
 
-Status: M0 implemented and acceptance-tested. M2 durable queue ownership,
-SQLite session persistence, and startup reconciliation remain deferred.
+Status: M0 implemented and acceptance-tested. M1 Stage 4 adds a generic
+registration-owned canceled-settlement seam for already-started opaque work;
+the dispatcher remains domain-blind. M2 durable queue ownership, SQLite session
+persistence, and startup reconciliation remain deferred.
 
 ## Purpose
 
@@ -32,6 +34,16 @@ with `run(ctx)` and `snapshot()` methods. The dispatcher calls those methods but
 never decodes, reflects over, or otherwise interprets the payload. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
+
+One optional registration callback,
+`settle_canceled(payload, disposition) -> OperationResult`, handles cancellation
+of work that already has a start time but will not re-enter its normal
+invocation (paused work and resume→pending cancellation races). Dispatcher
+passes the opaque payload and generic disposition only, validates that the
+returned result projects to lifecycle `CANCELED`, then follows the ordinary
+audit/Terminal/custody path. Registrations without the callback retain the
+generic canceled result. A callback failure is an explicit adapter failure and
+terminals `FAILED`; it is never masked as clean cancellation.
 
 `close()` is distinct from cancellation: it removes only an already-terminal
 live record and closes its subscribers. `shutdown()` stops admission, requests
@@ -146,9 +158,11 @@ history observer before its live record is dropped; dispatcher never imports or
 calls history directly.
 
 The terminal is `CANCELED` with `Disposition.UNRUN`; ordinary cancellation after
-work is `CANCELED+RAN`, and preflight refusal is `REFUSED+UNRUN`. Dispatcher
-forwards these core values without learning domain meaning or inferring from an
-empty operation list.
+work is `CANCELED+RAN`, and preflight refusal is `REFUSED+UNRUN`. A compound
+workflow may preserve filesystem `COMPLETED|FAILED` with `canceled=true`;
+`result_terminal_state()` is the only lifecycle projection and still settles
+the record as `CANCELED`. Dispatcher forwards these core values without
+learning domain meaning or inferring from an empty operation list.
 
 ## Teardown
 
@@ -205,6 +219,10 @@ duplicate terminal paths from being reinvented by each interface.
 - Fault injection at admission, lock acquisition, workflow start, every event,
   pause, cancel, terminal, store write, subscriber failure, and teardown releases
   exactly acquired resources and emits one terminal from the core runner.
+- Cancellation during PAUSING snapshot drain, PAUSED, and resume→PENDING invokes
+  an opted-in settlement callback at most once; malformed settlement fails
+  loudly, repeated cancel is rejected, and same-resource followers prove
+  custody release.
 - Paused session holds no volume lock/open workflow stack and resume starts with
   fresh preflight at the back of the volume queue.
 - Progress flood remains bounded/coalesced; history delivery backpressures only
@@ -223,8 +241,8 @@ duplicate terminal paths from being reinvented by each interface.
   `CANCELED+UNRUN` before `drop()` and never requires a dispatcher-to-history
   import or string parsing.
 
-M0 verification covers the non-M2 criteria with named regression/fault tests:
-52 focused core/dispatcher tests exercise the transition/control matrices,
+Current verification covers the non-M2 criteria with named regression/fault tests:
+focused core/dispatcher tests exercise the transition/control matrices,
 concurrency, pause/resume/cancel, pre-pause outcome retention, opacity, bounded
 events/audit, store/lock/adapter/observer faults, teardown deadlines, and a real
 subprocess holder-kill mutex recovery. The full shared suite and import-linter

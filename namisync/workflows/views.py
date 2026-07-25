@@ -17,7 +17,13 @@ from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityResult,
 )
-from namisync.core.session import OperationResult, ResultItem, SessionRecord
+from namisync.core.session import (
+    OperationResult,
+    PhaseResult,
+    PhaseStatus,
+    ResultItem,
+    SessionRecord,
+)
 from namisync.db.repositories import InventorySnapshot
 
 
@@ -50,8 +56,8 @@ class IntegrityOutcomeView:
     item_type: str
     phase: str
     item_id: str
-    row_id: str
-    location_id: str
+    row_id: str | None
+    location_id: str | None
     kind: str
     path: str
     result: str
@@ -66,6 +72,17 @@ ResultItemView = OperationItemView | IntegrityOutcomeView
 
 
 @dataclass(frozen=True, slots=True)
+class PhaseResultView:
+    phase: str
+    status: str
+    items_done: int
+    items_total: int | None
+    bytes_done: int
+    bytes_total: int | None
+    error: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class OperationResultView:
     headline: str
     filesystem: str
@@ -75,6 +92,7 @@ class OperationResultView:
     disposition: str
     canceled: bool
     items: tuple[ResultItemView, ...]
+    phases: tuple[PhaseResultView, ...]
     bytes_done: int
     bytes_total: int
     error: str | None
@@ -141,8 +159,14 @@ def result_item_view(item: ResultItem) -> ResultItemView:
             item_type=str(data["item_type"]),
             phase=str(data["phase"]),
             item_id=str(data["item_id"]),
-            row_id=str(data["row_id"]),
-            location_id=str(data["location_id"]),
+            row_id=(
+                None if data["row_id"] is None else str(data["row_id"])
+            ),
+            location_id=(
+                None
+                if data["location_id"] is None
+                else str(data["location_id"])
+            ),
             kind=str(data["kind"]),
             path=str(data["path"]),
             result=str(data["result"]),
@@ -165,7 +189,7 @@ def result_item_view(item: ResultItem) -> ResultItemView:
 
 def operation_result_view(result: OperationResult) -> OperationResultView:
     items = tuple(result_item_view(item) for item in result.items)
-    integrity = _integrity_axis(result.items)
+    integrity = _integrity_axis(result.items, result.phases)
     return OperationResultView(
         headline=_headline(result, integrity).value,
         filesystem=result.status.value,
@@ -175,6 +199,7 @@ def operation_result_view(result: OperationResult) -> OperationResultView:
         disposition=result.disposition.value,
         canceled=result.canceled,
         items=items,
+        phases=tuple(phase_result_view(phase) for phase in result.phases),
         bytes_done=result.bytes_done,
         bytes_total=result.bytes_total,
         error=(
@@ -182,6 +207,18 @@ def operation_result_view(result: OperationResult) -> OperationResultView:
             if result.error is None
             else f"{result.error.type_name}: {result.error.message}"
         ),
+    )
+
+
+def phase_result_view(phase: PhaseResult) -> PhaseResultView:
+    return PhaseResultView(
+        phase=phase.phase,
+        status=phase.status.value,
+        items_done=phase.items_done,
+        items_total=phase.items_total,
+        bytes_done=phase.bytes_done,
+        bytes_total=phase.bytes_total,
+        error=phase.error,
     )
 
 
@@ -249,14 +286,27 @@ def inventory_row_view(row: InventorySnapshot) -> InventoryRowView:
     )
 
 
-def _integrity_axis(items: tuple[ResultItem, ...]) -> str:
+def _integrity_axis(
+    items: tuple[ResultItem, ...],
+    phases: tuple[PhaseResult, ...],
+) -> str:
     results = [
         item.result for item in items if isinstance(item, IntegrityOutcome)
     ]
-    if not results:
-        return "not-run"
+    verify_phase = next(
+        (phase for phase in phases if phase.phase == IntegrityMode.VERIFY.value),
+        None,
+    )
     if IntegrityResult.MISMATCHED in results:
         return "mismatch"
+    if verify_phase is not None and verify_phase.status in {
+        PhaseStatus.FAILED,
+        PhaseStatus.CANCELED,
+        PhaseStatus.INCOMPLETE,
+    }:
+        return "incomplete"
+    if not results:
+        return "not-run"
     if any(
         value
         in {

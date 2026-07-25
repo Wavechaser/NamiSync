@@ -298,8 +298,16 @@ class NamiSyncService:
     def get_plan_review(self, request_id: str):
         return self._runtime.get_plan_review(request_id)
 
-    def start_execution(self, request_id: str) -> ExecutionSession:
-        request = self._runtime.commit_plan(request_id)
+    def start_execution(
+        self,
+        request_id: str,
+        *,
+        verify_after_execute: bool = False,
+    ) -> ExecutionSession:
+        request = self._runtime.commit_plan(
+            request_id,
+            verify_after_execute=verify_after_execute,
+        )
         session_id = self._dispatcher.submit(EXECUTION_KIND, request)
         return ExecutionSession(
             str(request.execution_set.run_id),
@@ -424,6 +432,7 @@ def _workflow_registry(
             runtime.prepare_execution,
             runtime.open_execution,
             supports_pause=True,
+            settle_canceled=runtime.settle_canceled_execution,
         ),
         INVENTORY_KIND: registration(
             runtime.prepare_inventory,

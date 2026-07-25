@@ -37,6 +37,8 @@ from namisync.core.integrity import (
     IntegritySelection,
     IntegritySelectionItem,
     InventoryState,
+    PostCopyCandidate,
+    PostCopySelection,
     ReadStrategy,
     RecordDisposition,
     UnsupportedVerification,
@@ -130,6 +132,69 @@ def rebaseline(
     return _run(selection, ctx, recorder, reader, IntegrityMode.REBASELINE)
 
 
+def verify_post_copy(
+    selection: PostCopySelection,
+    ctx: VerifierContext,
+    recorder: IntegrityRecorder,
+    reader: VerificationReader | None = None,
+) -> IntegrityRunResult:
+    """Read back transient published targets without requiring ledger rows."""
+
+    actual_reader = reader if reader is not None else WindowsUnbufferedReader()
+    emitted: list[IntegrityOutcome] = []
+    reporter = _ProgressReporter(
+        selection,
+        ctx,
+        items_total=len(selection.candidates),
+        pending_sizes=tuple(
+            candidate.expected_stat.size for candidate in selection.pending
+        ),
+    )
+
+    try:
+        for candidate in selection.pending:
+            ctx.run.checkpoint()
+            processed = _process_post_copy_candidate(
+                candidate, ctx, recorder, actual_reader, reporter
+            )
+            _emit_and_complete_post_copy(
+                selection, ctx, reporter, processed, emitted
+            )
+    except PauseRequested:
+        raise
+    except Canceled:
+        for candidate in selection.pending:
+            processed = _ProcessedItem(
+                _post_copy_outcome(
+                    candidate,
+                    IntegrityResult.CANCELED,
+                    IntegrityReason.CANCELED,
+                    recording=(
+                        RecordingStatus.OK
+                        if candidate.recorded_identity is not None
+                        else RecordingStatus.DEGRADED
+                    ),
+                )
+            )
+            _emit_and_complete_post_copy(
+                selection,
+                ctx,
+                reporter,
+                processed,
+                emitted,
+                emit_progress=False,
+            )
+        reporter.emit(current_path=None, force=True)
+        raise
+
+    recording = (
+        RecordingStatus.DEGRADED
+        if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)
+        else RecordingStatus.OK
+    )
+    return IntegrityRunResult(tuple(emitted), recording)
+
+
 @dataclass(frozen=True)
 class _ProcessedItem:
     outcome: IntegrityOutcome
@@ -149,16 +214,19 @@ class _SubjectClassification:
 
 
 class _ProgressReporter:
-    def __init__(self, selection: IntegritySelection, ctx: VerifierContext) -> None:
+    def __init__(
+        self,
+        selection: IntegritySelection | PostCopySelection,
+        ctx: VerifierContext,
+        *,
+        items_total: int,
+        pending_sizes: tuple[int, ...],
+    ) -> None:
         self._selection = selection
         self._ctx = ctx
+        self._items_total = items_total
         self._last_emitted_at: float | None = None
-        self._bytes_total = selection.processed_bytes + sum(
-            item.expected_stat.size
-            for item in selection.pending
-            if item.expected_state is InventoryState.PRESENT
-            and item.expected_stat is not None
-        )
+        self._bytes_total = selection.processed_bytes + sum(pending_sizes)
         self.emit(current_path=None, force=True)
 
     def bytes_processed(self, size: int, current_path: str) -> None:
@@ -180,7 +248,7 @@ class _ProgressReporter:
         self._ctx.run.emit(
             Progress(
                 items_done=self._selection.completed_count,
-                items_total=len(self._selection.items),
+                items_total=self._items_total,
                 bytes_done=self._selection.processed_bytes,
                 bytes_total=self._bytes_total,
                 current_path=current_path,
@@ -198,7 +266,17 @@ def _run(
 ) -> IntegrityRunResult:
     actual_reader = reader if reader is not None else WindowsUnbufferedReader()
     emitted: list[IntegrityOutcome] = []
-    reporter = _ProgressReporter(selection, ctx)
+    reporter = _ProgressReporter(
+        selection,
+        ctx,
+        items_total=len(selection.items),
+        pending_sizes=tuple(
+            item.expected_stat.size
+            for item in selection.pending
+            if item.expected_state is InventoryState.PRESENT
+            and item.expected_stat is not None
+        ),
+    )
 
     try:
         for item in selection.pending:
@@ -253,6 +331,119 @@ def _emit_and_complete(
     emitted.append(processed.outcome)
     if emit_progress:
         reporter.item_completed(processed.outcome.path)
+
+
+def _emit_and_complete_post_copy(
+    selection: PostCopySelection,
+    ctx: VerifierContext,
+    reporter: _ProgressReporter,
+    processed: _ProcessedItem,
+    emitted: list[IntegrityOutcome],
+    *,
+    emit_progress: bool = True,
+) -> None:
+    # Preserve the same reliable-event-before-continuation ordering as
+    # standalone integrity selections.
+    ctx.run.emit(processed.outcome)
+    selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
+    emitted.append(processed.outcome)
+    if emit_progress:
+        reporter.item_completed(processed.outcome.path)
+
+
+def _process_post_copy_candidate(
+    candidate: PostCopyCandidate,
+    ctx: VerifierContext,
+    recorder: IntegrityRecorder,
+    reader: VerificationReader,
+    reporter: _ProgressReporter,
+) -> _ProcessedItem:
+    try:
+        validated_path = validate_relative_path(candidate.display_path)
+    except (OSError, ValueError) as exc:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                IntegrityResult.ERROR,
+                IntegrityReason.PATH_INVALID,
+                _error_detail(exc),
+                recording=(
+                    RecordingStatus.OK
+                    if candidate.recorded_identity is not None
+                    else RecordingStatus.DEGRADED
+                ),
+            )
+        )
+
+    classification = _classify_subject(
+        root=candidate.root,
+        relative_path=validated_path,
+        expected_stat=candidate.expected_stat,
+        baseline=candidate.copy_attestation,
+        mode=IntegrityMode.VERIFY,
+        ctx=ctx,
+        reader=reader,
+        on_bytes=lambda size: reporter.bytes_processed(
+            size, candidate.display_path
+        ),
+        success_provenance=Provenance.READBACK_ATTESTED,
+    )
+    identity = candidate.recorded_identity
+    if classification.attestation is None:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                classification.result,
+                classification.reason,
+                classification.detail,
+                read_strategy=classification.read_strategy,
+                recording=(
+                    RecordingStatus.OK
+                    if identity is not None
+                    else RecordingStatus.DEGRADED
+                ),
+            ),
+            classification.bytes_read,
+        )
+
+    strategy = classification.read_strategy
+    if strategy is None:
+        raise RuntimeError("successful post-copy classification lacks a read strategy")
+    if identity is None:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                classification.result,
+                IntegrityReason.RECORDING_ERROR,
+                "copy evidence was not durably recorded",
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+            ),
+            classification.bytes_read,
+        )
+
+    command = IntegrityRecordCommand(
+        mode=IntegrityMode.VERIFY,
+        item_id=candidate.item_id,
+        row_id=identity.row_id,
+        location_id=identity.location_id,
+        rel_path_key=identity.rel_path_key,
+        scope_token=identity.scope_token,
+        expected_state=InventoryState.PRESENT,
+        expected_stat=candidate.expected_stat,
+        expected_baseline=candidate.copy_attestation,
+        attestation=classification.attestation,
+        advances_last_verified=True,
+        clear_reappeared=False,
+    )
+    return _record_post_copy_outcome(
+        candidate,
+        classification.result,
+        strategy,
+        command,
+        recorder,
+        classification.bytes_read,
+    )
 
 
 def _process_item(
@@ -325,6 +516,7 @@ def _process_item(
         on_bytes=lambda size: reporter.bytes_processed(
             size, item.display_path
         ),
+        success_provenance=Provenance.VERIFY_ATTESTED,
     )
     if classification.attestation is None:
         return _ProcessedItem(
@@ -387,6 +579,7 @@ def _classify_subject(
     ctx: VerifierContext,
     reader: VerificationReader,
     on_bytes: Callable[[int], None],
+    success_provenance: Provenance = Provenance.VERIFY_ATTESTED,
 ) -> _SubjectClassification:
     """Guard, hash, and classify bytes without ledger row identity or writes."""
 
@@ -458,7 +651,7 @@ def _classify_subject(
                 algorithm="xxh3_128",
                 digest=actual_digest,
                 size=bytes_read,
-                provenance=Provenance.VERIFY_ATTESTED,
+                provenance=success_provenance,
                 observed_at=observed_at,
             )
             subject = (
@@ -492,7 +685,7 @@ def _classify_subject(
             reason=IntegrityReason.UNSUPPORTED_READ,
             detail=_error_detail(exc),
         )
-    except Exception as exc:
+    except OSError as exc:
         return _SubjectClassification(
             result=IntegrityResult.ERROR,
             reason=IntegrityReason.READ_ERROR,
@@ -563,6 +756,67 @@ def _record_outcome(
     )
 
 
+def _record_post_copy_outcome(
+    candidate: PostCopyCandidate,
+    result: IntegrityResult,
+    strategy: ReadStrategy,
+    command: IntegrityRecordCommand,
+    recorder: IntegrityRecorder,
+    bytes_read: int,
+) -> _ProcessedItem:
+    identity = candidate.recorded_identity
+    if identity is None:  # guarded by the caller; defensive only
+        raise RuntimeError("post-copy recording requires a durable identity")
+    try:
+        disposition = recorder.record_integrity(command)
+    except Exception as exc:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                result,
+                IntegrityReason.RECORDING_ERROR,
+                _error_detail(exc),
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+            ),
+            bytes_read,
+        )
+
+    if disposition is RecordDisposition.STALE:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                result,
+                IntegrityReason.RECORDING_STALE,
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+                record_disposition=disposition,
+            ),
+            bytes_read,
+        )
+    if disposition is RecordDisposition.CONFLICT:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                result,
+                IntegrityReason.RECORDING_CONFLICT,
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+                record_disposition=disposition,
+            ),
+            bytes_read,
+        )
+    return _ProcessedItem(
+        _post_copy_outcome(
+            candidate,
+            result,
+            read_strategy=strategy,
+            record_disposition=disposition,
+        ),
+        bytes_read,
+    )
+
+
 def _outcome(
     item: IntegritySelectionItem,
     mode: IntegrityMode,
@@ -580,6 +834,32 @@ def _outcome(
         location_id=item.location_id,
         path=item.display_path,
         phase=mode.value,
+        result=result,
+        reason=reason,
+        detail=detail,
+        read_strategy=read_strategy,
+        recording=recording,
+        record_disposition=record_disposition,
+    )
+
+
+def _post_copy_outcome(
+    candidate: PostCopyCandidate,
+    result: IntegrityResult,
+    reason: IntegrityReason | None = None,
+    detail: str | None = None,
+    *,
+    read_strategy: ReadStrategy | None = None,
+    recording: RecordingStatus = RecordingStatus.OK,
+    record_disposition: RecordDisposition | None = None,
+) -> IntegrityOutcome:
+    identity = candidate.recorded_identity
+    return IntegrityOutcome(
+        item_id=candidate.item_id,
+        row_id=None if identity is None else identity.row_id,
+        location_id=None if identity is None else identity.location_id,
+        path=candidate.display_path,
+        phase=IntegrityMode.VERIFY.value,
         result=result,
         reason=reason,
         detail=detail,

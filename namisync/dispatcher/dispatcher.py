@@ -24,6 +24,7 @@ from namisync.core.session import (
     SessionStore,
     is_terminal,
     require_transition,
+    result_terminal_state,
     run_session,
 )
 from namisync.dispatcher.contracts import (
@@ -445,26 +446,16 @@ class Dispatcher:
                 registration = self._registry[record.kind]
                 control = self._controls[session_id]
             if record.state is SessionState.CANCELING:
-                self._run_core(
-                    session_id,
-                    registration,
-                    invocation=None,
-                    disposition=self._disposition(record),
-                    failure=None,
-                )
+                self._run_canceled(session_id, registration, record)
                 return
             try:
                 lease = self._lock_provider.acquire(
                     record.resources, control.cancel_requested
                 )
             except Canceled:
-                self._run_core(
-                    session_id,
-                    registration,
-                    invocation=None,
-                    disposition=self._disposition(record),
-                    failure=None,
-                )
+                with self._condition:
+                    current = self._records[session_id]
+                self._run_canceled(session_id, registration, current)
                 return
             except BaseException as error:
                 self._run_core(
@@ -479,13 +470,7 @@ class Dispatcher:
                 self._leases[session_id] = lease
                 current = self._records[session_id]
             if current.state is SessionState.CANCELING:
-                self._run_core(
-                    session_id,
-                    registration,
-                    invocation=None,
-                    disposition=self._disposition(current),
-                    failure=None,
-                )
+                self._run_canceled(session_id, registration, current)
                 return
             try:
                 invocation = registration.open(current.payload)
@@ -509,16 +494,50 @@ class Dispatcher:
                     hub = None
             if updated is not None and hub is not None:
                 hub.emit(StateChanged(updated.state))
+            if updated is None:
+                self._run_canceled(session_id, registration, current)
+                return
             self._run_core(
                 session_id,
                 registration,
-                invocation=invocation if updated is not None else None,
-                disposition=(Disposition.RAN if updated is not None else self._disposition(current)),
+                invocation=invocation,
+                disposition=Disposition.RAN,
                 failure=None,
             )
         finally:
             self._release_custody(session_id)
             self._worker_done(session_id)
+
+    def _run_canceled(
+        self,
+        session_id: SessionId,
+        registration: WorkflowRegistration,
+        record: SessionRecord,
+    ) -> None:
+        disposition = self._disposition(record)
+        canceled_result = None
+        failure = None
+        if record.started_at is not None and registration.settle_canceled is not None:
+            try:
+                canceled_result = registration.settle_canceled(
+                    record.payload,
+                    disposition,
+                )
+                if result_terminal_state(canceled_result) is not SessionState.CANCELED:
+                    raise ValueError(
+                        "canceled settlement must project to CANCELED"
+                    )
+            except Exception as error:
+                canceled_result = None
+                failure = error
+        self._run_core(
+            session_id,
+            registration,
+            invocation=None,
+            disposition=disposition,
+            failure=failure,
+            canceled_result=canceled_result,
+        )
 
     def _run_core(
         self,
@@ -528,15 +547,18 @@ class Dispatcher:
         invocation: WorkflowInvocation | None,
         disposition: Disposition,
         failure: BaseException | None,
+        canceled_result: OperationResult | None = None,
     ) -> None:
         with self._condition:
             control = self._controls[session_id]
             hub = self._hubs[session_id]
 
         def work(context):
-            context.checkpoint()
+            if canceled_result is not None:
+                return canceled_result
             if failure is not None:
                 raise failure
+            context.checkpoint()
             if invocation is None:
                 raise Canceled()
             try:

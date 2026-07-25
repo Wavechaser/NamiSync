@@ -352,3 +352,44 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     assert log == ["observer", "dispatcher", "runtime"]
     assert first is second
     assert first.complete
+
+
+def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> None:
+    calls: list[tuple[str, bool]] = []
+
+    class Runtime:
+        def commit_plan(
+            self,
+            request_id: str,
+            *,
+            verify_after_execute: bool = False,
+        ):
+            calls.append((request_id, verify_after_execute))
+            return SimpleNamespace(
+                execution_set=SimpleNamespace(run_id=f"run-{request_id}")
+            )
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object):
+            assert kind == "sync-execution"
+            return f"session-{len(calls)}"
+
+    service = object.__new__(NamiSyncService)
+    service._runtime = Runtime()
+    service._dispatcher = Dispatcher()
+
+    default = service.start_execution("default")
+    verified = service.start_execution(
+        "verified",
+        verify_after_execute=True,
+    )
+
+    assert calls == [("default", False), ("verified", True)]
+    assert (default.run_id, default.session_id) == (
+        "run-default",
+        "session-1",
+    )
+    assert (verified.run_id, verified.session_id) == (
+        "run-verified",
+        "session-2",
+    )

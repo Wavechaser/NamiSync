@@ -38,7 +38,13 @@ from namisync.core.recording import (
     SyncRunCommand,
     VolumeCommand,
 )
-from namisync.core.session import SessionRecord, SessionState
+from namisync.core.session import (
+    Disposition,
+    FailureDetail,
+    OperationResult,
+    SessionRecord,
+    SessionState,
+)
 from namisync.db.connections import validate_database_path
 from namisync.db.history import (
     HistoryContext,
@@ -58,7 +64,7 @@ from namisync.modules.executor import (
 from namisync.modules.planner import plan
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 from namisync.modules.scanner import NativeScannerBackend, WalkingScanner
-from namisync.modules.verifier import baseline, rebaseline, verify
+from namisync.modules.verifier import baseline, rebaseline, verify, verify_post_copy
 
 from .inventory import (
     IntegrityDependencies,
@@ -84,6 +90,7 @@ from .inventory import (
     run_inventory,
 )
 from .models import (
+    ExecuteContinuation,
     ExecutionDetails,
     ExecutionRequest,
     HistoryRunView,
@@ -99,9 +106,15 @@ from .payloads import (
     encode_execution_request,
     encode_plan_request,
 )
-from .sync import SyncDependencies, refusal_views, run_execution, run_plan
+from .sync import (
+    SyncDependencies,
+    refusal_views,
+    run_execution,
+    run_plan,
+    settle_canceled_execution as settle_canceled_sync_execution,
+)
 from .selection import derive_execution_selection
-from .views import result_item_view
+from .views import operation_result_view, phase_result_view, result_item_view
 
 
 PLAN_KIND = "sync-plan"
@@ -181,6 +194,12 @@ class LocalWorkflowRuntime:
             executor=execute,
             executor_policies=self._executor_policies,
             executor_fs=self._executor_fs,
+            verifier=verify_post_copy,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=self.clock,
+                hasher_factory=self._hasher_factory,
+            ),
             open_recording=self._open_recording,
             save_plan=self.save_plan,
             save_execution_details=self._save_execution_details,
@@ -252,12 +271,37 @@ class LocalWorkflowRuntime:
     def open_execution(self, payload: bytes) -> _ExecutionInvocation:
         self._require_open()
         request = decode_execution_request(payload)
+        resumed = request.started_at is not None
         started_at = request.started_at or self.clock.now()
         _require_utc(started_at, "execution start")
-        request = ExecutionRequest(request.execution_set, started_at)
+        request = ExecutionRequest(request.continuation, started_at)
         with self._lock:
             self._execution_started[str(request.execution_set.run_id)] = started_at
-        return _ExecutionInvocation(request, self._deps)
+        return _ExecutionInvocation(request, self._deps, resumed=resumed)
+
+    def settle_canceled_execution(
+        self,
+        payload: bytes,
+        disposition: Disposition,
+    ) -> OperationResult:
+        """Settle a started execution cancellation from its exact continuation."""
+
+        self._require_open()
+        request = decode_execution_request(payload)
+        if request.started_at is None:
+            raise ValueError(
+                "started execution cancellation lacks its original start time"
+            )
+        _require_utc(request.started_at, "execution start")
+        with self._lock:
+            self._execution_started[
+                str(request.execution_set.run_id)
+            ] = request.started_at
+        return settle_canceled_sync_execution(
+            request.continuation,
+            disposition,
+            self._deps,
+        )
 
     def prepare_inventory(self, request: object) -> WorkflowPreparation:
         self._require_open()
@@ -409,6 +453,7 @@ class LocalWorkflowRuntime:
         *,
         run_id: str | None = None,
         committed_at: datetime | None = None,
+        verify_after_execute: bool = False,
     ) -> ExecutionRequest:
         artifact = self.get_plan(request_id)
         if not artifact.verdict.ok:
@@ -423,11 +468,14 @@ class LocalWorkflowRuntime:
         )
         token = run_id or uuid4().hex
         return ExecutionRequest(
-            ExecutionSet(
-                artifact.plan,
-                selection,
-                token,
-                commitment=commitment,
+            ExecuteContinuation(
+                ExecutionSet(
+                    artifact.plan,
+                    selection,
+                    token,
+                    commitment=commitment,
+                ),
+                verify_after_execute=verify_after_execute,
             )
         )
 
@@ -674,15 +722,40 @@ class _PlanInvocation:
 
 
 class _ExecutionInvocation:
-    def __init__(self, request: ExecutionRequest, deps: SyncDependencies) -> None:
+    def __init__(
+        self,
+        request: ExecutionRequest,
+        deps: SyncDependencies,
+        *,
+        resumed: bool,
+    ) -> None:
         self._request = request
+        self._continuation = request.continuation
         self._deps = deps
+        self._resumed = resumed
 
     def run(self, context) -> object:
-        return run_execution(self._request.execution_set, context, self._deps)
+        return run_execution(
+            self._continuation,
+            context,
+            self._deps,
+            continuation_sink=self._capture_continuation,
+            resumed=self._resumed,
+        )
 
     def snapshot(self) -> bytes:
-        return encode_execution_request(self._request)
+        return encode_execution_request(
+            ExecutionRequest(
+                self._continuation,
+                self._request.started_at,
+            )
+        )
+
+    def _capture_continuation(
+        self,
+        continuation,
+    ) -> None:
+        self._continuation = continuation
 
 
 class _InventoryInvocation:
@@ -857,6 +930,27 @@ class _LedgerRunRecording:
 
 
 def _history_view(value) -> HistoryRunView:
+    items = tuple(snapshot.item for snapshot in value.items)
+    phases = tuple(snapshot.phase for snapshot in value.phases)
+    error = (
+        None
+        if value.error_type is None
+        else FailureDetail(value.error_type, value.error_message or "")
+    )
+    result_view = operation_result_view(
+        OperationResult(
+            status=value.filesystem_status,
+            recording=value.recording,
+            audit=value.audit,
+            disposition=Disposition(value.disposition),
+            canceled=value.canceled,
+            items=items,
+            phases=phases,
+            bytes_done=value.bytes_done,
+            bytes_total=value.bytes_total,
+            error=error,
+        )
+    )
     return HistoryRunView(
         run_token=value.run_token,
         activity_kind=value.activity_kind,
@@ -870,9 +964,13 @@ def _history_view(value) -> HistoryRunView:
         recording_status=value.recording.value,
         audit_status=value.audit.value,
         disposition=value.disposition,
+        canceled=value.canceled,
+        integrity_status=result_view.integrity,
+        headline=result_view.headline,
         bytes_done=value.bytes_done,
         bytes_total=value.bytes_total,
-        items=tuple(result_item_view(snapshot.item) for snapshot in value.items),
+        items=tuple(result_item_view(item) for item in items),
+        phases=tuple(phase_result_view(phase) for phase in phases),
         error=None
         if value.error_type is None
         else f"{value.error_type}: {value.error_message or ''}".rstrip(),

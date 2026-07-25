@@ -2,10 +2,10 @@
 
 Status: planning decisions revised and reconciled 2026-07-24. Stages 1–3
 (contracts/semantics, executor/hash refactor, and inventory/standalone
-integrity) landed on 2026-07-24. The behavior-preserving Stage 5 facade
-extraction is implemented in parallel with Stage 4; the new CLI commands and
-final compound-result classification still wait for Stage 4, and Stage 6
-remains unimplemented. This is both
+integrity) landed on 2026-07-24; Stage 4 post-execution integration and the
+behavior-preserving Stage 5 facade extraction landed on 2026-07-25. Stage 5's
+new CLI commands and final compound-result classification remain the next
+consumer work, and Stage 6 remains unimplemented. This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
@@ -492,7 +492,7 @@ The state transitions are fixed before implementation:
 execute
   pause  -> snapshot execute status + published evidence
   cancel -> terminal canceled; do not start new readback work
-  settle -> verify when at least one successful byte-producing candidate exists
+  settle -> when requested, verify candidates or report missing-evidence failures
 
 verify
   pause    -> snapshot candidates + completion state
@@ -686,7 +686,8 @@ or direct UI SQL.
 
 **Implemented 2026-07-24.** The code-bearing Stage 1 prerequisites are live:
 `worker_count` and the false live-settings drift path are removed; opaque
-workflow payloads are v2; ledger v2/history v3 refuse old schemas and reserve
+workflow payloads first became v2 here and were globally advanced to strict v3
+by Stage 4's discriminated execute/verify continuation; ledger v2/history v3 refuse old schemas and reserve
 generic item/phase storage; the explicit development reset recreates both
 databases; semantic settings and cosmetic UI state have their split owners;
 the compatible `xxhash>=3.8.1,<4` runtime dependency is declared; and the
@@ -698,7 +699,8 @@ core in this stage. At the Stage 1 checkpoint, the actual
 `ContentEvidence`/`CopyDigest`, executor, verifier, repository, and fixture
 switch to 16-byte `xxh3_128` remained the atomic Stage 2 Track 2 change required
 by DR-HASH-01/02. Nominal integrity result/event code similarly waited for its
-Stage 3 producer; compound continuation/result code still waits for Stage 4.
+Stage 3 producer; compound continuation/result code subsequently landed with
+its Stage 4 consumer.
 
 - Freeze the execute → verify state machine, candidate set, four independent
   truth axes, pause/cancel/failure behavior, process-close limitation, and
@@ -801,6 +803,28 @@ the inventory selection producer.
 
 ### Stage 4 — Post-Execution Integration
 
+**Implemented 2026-07-25.** An opt-in execution request now carries
+`verify_after_execute=True` through the runtime/service boundary while the
+default remains the M0 execute-only path. COPY, UPDATE, and MOVE_UPDATE publish
+exact post-copy attestations and an atomic recorded-row identity when available;
+the workflow translates those values into ledger-neutral `PostCopyCandidate`
+inputs and verifies even when copy recording degraded. Strict workflow payload
+v3 encodes an explicit execute or verify continuation, exact evidence,
+candidates, completion bytes, timestamps, and phase truth; v1/v2 are rejected.
+Pause may close and idempotently reopen the same run token, but the process-local
+session store offers no restart resume.
+
+Execution and readback use one logical run window and one terminal settlement.
+Filesystem, integrity, ledger recording, history audit, and cancellation remain
+independent; verify exceptions/refusals become an incomplete verify phase
+without rewriting settled filesystem truth. Started execute resumes that fail
+fresh preflight finish the existing run as `FAILED+RAN`, never as a fresh
+`REFUSED+UNRUN`. The dispatcher remains domain-blind: only the execution
+registration opts into a workflow-owned canceled-settlement callback for work
+that had already started. Compound history writes ordered mixed items and phase
+rows under the existing history-v3 marker; standalone producers still write
+zero phase rows.
+
 Land DR-M1-12/13 as one vertical integration gate:
 
 - core-owned `PublishedCopyEvidence` in `core/execution.py`, stored by
@@ -824,6 +848,38 @@ Land DR-M1-12/13 as one vertical integration gate:
 No compound-only abstraction merges earlier without its consumer except the
 final history-v3 storage reservation required to keep one destructive schema
 boundary.
+
+**Literal Stage 4 cross-module test map.**
+
+- **XV-1:** `test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_kinds`
+  and `test_xv_1_missing_published_evidence_is_named_verification_incomplete`.
+- **XV-2:** `test_xv_2_copy_record_failure_still_builds_rowless_candidate`.
+- **XV-3:** `test_xv_3_verify_pause_reopens_same_unfinished_run`.
+- **XV-4:** `test_xv_4_verify_pause_resumes_remaining_without_duplicates` and
+  `test_dispatcher_paused_verify_cancel_uses_runtime_compound_settlement`, with
+  `test_real_resumed_verify_preflight_refusal_finishes_existing_run` proving a
+  resumed refusal settles that same run.
+- **XV-5:** `test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all`,
+  `test_execution_payload_is_a_lossless_round_trip`,
+  `test_verify_continuation_is_a_lossless_round_trip`,
+  `test_dispatcher_paused_execute_cancel_finishes_same_run_without_verify`,
+  and `test_in_memory_store_is_honest_about_absent_restart_state`.
+- **XV-6:** `test_xv_6_readback_keeps_copy_success_for_mismatch_and_stat_drift`
+  and `test_xv_6_stale_conditional_recording_degrades_only_recording`, with
+  `test_partial_execution_still_verifies_every_successful_publish` covering
+  later execution failure.
+- **XV-7:** `test_xv_7_execute_verify_keeps_phase_bytes_separate`, with
+  `test_verify_setup_and_result_errors_finish_once_with_visible_phase` proving
+  ordinary pre-item errors remain phase-visible and finish once,
+  `test_verify_base_exception_escapes_and_does_not_finish` proving
+  `BaseException` escapes without result/finish normalization, and
+  `test_resumed_execute_preflight_refusal_finishes_existing_partial_run`
+  proving a mutated resume never becomes fresh `REFUSED+UNRUN`.
+- **XV-8:** `test_xv_8_xv_17_history_v3_round_trips_compound_items_and_phases`,
+  `test_xv_8_retained_compound_history_projects_phases_after_reopen`, and
+  `test_xv_8_retained_history_classification_matches_live_result`.
+- **XV-17:** `test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes`
+  plus the combined XV-8/XV-17 history test above.
 
 ### Stage 5 — Facade and CLI
 
@@ -895,7 +951,7 @@ Each stage's work should land with the same standard the M0 module docs use:
 a named failure-injection or regression test per behavior, not just "tested."
 The following are milestone gates because they are easy to skip:
 
-**Implementation checkpoint (2026-07-24).** Stage 2 satisfies the Track 2
+**Implementation checkpoints (2026-07-24/25).** Stage 2 satisfies the Track 2
 composition gates through C1–C11 in `HASH_REFACTOR.md`, including a single
 production-composition proof of exact factory identity plus distinct
 `O_SEQUENTIAL` executor and Windows-unbuffered verifier openers, and a direct
@@ -904,8 +960,12 @@ coverage for XV-8 through XV-17 to the extent those gates apply before Stage 4:
 nominal item validation/order, integrity history, view precedence, scanner and
 five-state inventory behavior, resume/wakeup clone refusal, shared factory
 composition, final-schema markers/reservations, and zero standalone phase rows.
-The compound-only halves of XV-8/XV-17 and all execute→verify gates remain
-Stage 4 work.
+Stage 4 subsequently closes XV-1 through XV-8 and the compound half of XV-17
+with the literal map in its deliverable section. Its tests include real
+execute-pause and verify-pause recorder reopen, rowless recording failure,
+target drift versus stable-stat mismatch, conditional-record stale, partial
+execution, cancellation in both phases, pre-item verify exceptions, and
+resumed-preflight refusal against the same unfinished run.
 
 - The XXH3-128 replacement and copy pipeline satisfy every collaborator,
   vector, acknowledgement, failure, and cancellation test listed in

@@ -13,13 +13,31 @@ a failing build rather than a field-report mystery.
 from __future__ import annotations
 
 from dataclasses import fields, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
+from pathlib import Path
 
 import pytest
 
-from namisync.core.evidence import Outcome
-from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
+from namisync.core.evidence import (
+    Attestation,
+    ContentEvidence,
+    Outcome,
+    Provenance,
+    RecordingStatus,
+)
+from namisync.core.execution import (
+    Commitment,
+    ExecutionSet,
+    PublishedCopyEvidence,
+    RecordedCopyIdentity,
+    validated_run_id,
+)
+from namisync.core.integrity import (
+    PostCopyCandidate,
+    PostCopyRecordIdentity,
+    PostCopySelection,
+)
 from namisync.core.models import (
     CapabilityProfile,
     EntryKind,
@@ -48,7 +66,13 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path
-from namisync.workflows.models import ExecutionRequest, PlanRequest
+from namisync.core.session import PhaseResult, PhaseStatus, SessionState
+from namisync.workflows.models import (
+    ExecuteContinuation,
+    ExecutionRequest,
+    PlanRequest,
+    VerifyContinuation,
+)
 from namisync.workflows.payloads import (
     decode_plan_request,
     decode_execution_request,
@@ -82,7 +106,7 @@ def test_plan_request_requires_fingerprinted_source_casing_policy() -> None:
     del value["options"]["propagate_source_casing"]
     missing_policy = json.dumps(value, separators=(",", ":")).encode("utf-8")
 
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="missing"):
         decode_plan_request(missing_policy)
 
 
@@ -100,16 +124,39 @@ def test_worker_count_is_absent_from_contracts_and_payloads() -> None:
     assert b"worker_count" not in execution_payload
 
 
-def test_workflow_payload_v1_is_refused_after_contract_change() -> None:
+@pytest.mark.parametrize("schema_version", [1, 2])
+def test_old_workflow_payload_is_refused_after_contract_change(
+    schema_version: int,
+) -> None:
     value = json.loads(
         encode_plan_request(
             PlanRequest("request", r"C:\source", r"D:\target")
         ).decode("utf-8")
     )
-    value["schema_version"] = 1
+    value["schema_version"] = schema_version
 
     with pytest.raises(ValueError, match="unsupported workflow payload schema"):
         decode_plan_request(json.dumps(value).encode("utf-8"))
+
+
+def test_plan_and_execution_payloads_explicitly_use_schema_v3() -> None:
+    plan_value = json.loads(
+        encode_plan_request(
+            PlanRequest("request", r"C:\source", r"D:\target")
+        )
+    )
+    execution_value = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+
+    assert plan_value["schema_version"] == 3
+    assert execution_value["schema_version"] == 3
+
+    execution_value["schema_version"] = 2
+    with pytest.raises(ValueError, match="unsupported workflow payload schema"):
+        decode_execution_request(
+            json.dumps(execution_value).encode("utf-8")
+        )
 
 
 def test_plan_request_encoding_escapes_unpaired_surrogates_defensively() -> None:
@@ -343,18 +390,184 @@ def _rich_plan() -> Plan:
     return replace(placeholder, fingerprint=plan_fingerprint(placeholder))
 
 
+def _copy_attestation(
+    operation: PlanOperation,
+    digest_byte: int,
+) -> Attestation:
+    assert operation.intended is not None
+    return Attestation(
+        ContentEvidence(
+            algorithm="xxh3_128",
+            digest=bytes([digest_byte]) * 16,
+            size=operation.content_bytes,
+            provenance=Provenance.COPY_ATTESTED,
+            observed_at=NOW,
+        ),
+        operation.intended,
+    )
+
+
+def _copy_identity(
+    operation: PlanOperation,
+    run_id: str,
+) -> RecordedCopyIdentity:
+    return RecordedCopyIdentity(
+        row_id=f"row-{operation.op_id}",
+        location_id="location-9",
+        scope_token=run_id,
+        rel_path_key=normalize_relative_path(operation.target_rel_path),
+    )
+
+
 def _rich_execution_request() -> ExecutionRequest:
     plan = _rich_plan()
     selection = frozenset(operation.op_id for operation in plan.operations)
+    run_id = "a" * 32
+    copy = plan.operations[1]
+    copy_attestation = _copy_attestation(copy, 2)
     xset = ExecutionSet(
         plan=plan,
         selection=selection,
-        run_id=validated_run_id("a" * 32),
+        run_id=validated_run_id(run_id),
         # a partial continuation, as a paused/resumed set would carry
-        status={_op_id(1): Outcome.SUCCEEDED, _op_id(10): Outcome.FAILED},
+        status={
+            _op_id(1): Outcome.SUCCEEDED,
+            copy.op_id: Outcome.SUCCEEDED,
+            _op_id(10): Outcome.FAILED,
+        },
         commitment=Commitment(plan.fingerprint, selection_digest(selection), NOW),
+        published_evidence={
+            copy.op_id: PublishedCopyEvidence(
+                copy_attestation,
+                _copy_identity(copy, run_id),
+            )
+        },
+        recording=RecordingStatus.DEGRADED,
     )
-    return ExecutionRequest(xset, NOW)
+    return ExecutionRequest(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        NOW,
+    )
+
+
+def _rich_verify_request() -> ExecutionRequest:
+    plan = _rich_plan()
+    selection = frozenset(operation.op_id for operation in plan.operations)
+    run_id = "b" * 32
+    copy = plan.operations[1]
+    update = plan.operations[2]
+    move_update = plan.operations[4]
+    copy_attestation = _copy_attestation(copy, 2)
+    move_update_attestation = _copy_attestation(move_update, 5)
+    copy_identity = _copy_identity(copy, run_id)
+    xset = ExecutionSet(
+        plan=plan,
+        selection=selection,
+        run_id=validated_run_id(run_id),
+        status={
+            _op_id(1): Outcome.SUCCEEDED,
+            copy.op_id: Outcome.SUCCEEDED,
+            update.op_id: Outcome.SUCCEEDED,
+            move_update.op_id: Outcome.SUCCEEDED,
+            _op_id(10): Outcome.FAILED,
+        },
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+        published_evidence={
+            copy.op_id: PublishedCopyEvidence(
+                copy_attestation,
+                copy_identity,
+            ),
+            move_update.op_id: PublishedCopyEvidence(
+                move_update_attestation,
+                None,
+            ),
+        },
+        recording=RecordingStatus.DEGRADED,
+    )
+    candidates = PostCopySelection(
+        candidates=(
+            PostCopyCandidate(
+                item_id=str(copy.op_id),
+                root=Path(plan.target_root.path),
+                display_path=copy.target_rel_path,
+                expected_stat=copy_attestation.subject,
+                copy_attestation=copy_attestation,
+                recorded_identity=PostCopyRecordIdentity(
+                    row_id=copy_identity.row_id,
+                    location_id=copy_identity.location_id,
+                    scope_token=copy_identity.scope_token,
+                    rel_path_key=copy_identity.rel_path_key,
+                ),
+            ),
+            PostCopyCandidate(
+                item_id=str(move_update.op_id),
+                root=Path(plan.target_root.path),
+                display_path=move_update.target_rel_path,
+                expected_stat=move_update_attestation.subject,
+                copy_attestation=move_update_attestation,
+                recorded_identity=None,
+            ),
+        ),
+        _completed_bytes={str(copy.op_id): copy.content_bytes},
+        _processed_bytes=copy.content_bytes,
+    )
+    return ExecutionRequest(
+        VerifyContinuation(
+            execution_set=xset,
+            candidates=candidates,
+            filesystem_status=SessionState.FAILED,
+            recording=RecordingStatus.DEGRADED,
+            execute_phase=PhaseResult(
+                phase="execute",
+                status=PhaseStatus.FAILED,
+                items_done=5,
+                items_total=len(selection),
+                bytes_done=61,
+                bytes_total=61,
+                error="one selected operation failed",
+            ),
+            missing_evidence_ids=(str(update.op_id),),
+        ),
+        NOW,
+    )
+
+
+def test_execution_request_preserves_the_old_execution_set_keyword() -> None:
+    xset = _rich_execution_request().execution_set
+
+    request = ExecutionRequest(execution_set=xset, started_at=NOW)
+
+    assert isinstance(request.continuation, ExecuteContinuation)
+    assert request.execution_set is xset
+    assert request.started_at == NOW
+
+
+@pytest.mark.parametrize(
+    "started_at",
+    [
+        datetime(2026, 7, 19, 12, 30),
+        datetime(
+            2026,
+            7,
+            19,
+            12,
+            30,
+            tzinfo=timezone(timedelta(hours=1)),
+        ),
+    ],
+)
+def test_execution_request_rejects_non_utc_start_times(
+    started_at: datetime,
+) -> None:
+    with pytest.raises(ValueError, match="timezone-aware|UTC"):
+        ExecutionRequest(
+            _rich_execution_request().execution_set,
+            started_at,
+        )
 
 
 def test_execution_payload_is_a_lossless_round_trip() -> None:
@@ -362,12 +575,245 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
 
     decoded = decode_execution_request(encode_execution_request(original))
 
+    assert isinstance(decoded.continuation, ExecuteContinuation)
+    assert decoded.continuation.verify_after_execute
     assert decoded.started_at == original.started_at
     assert decoded.execution_set.plan == original.execution_set.plan
     assert decoded.execution_set.selection == original.execution_set.selection
     assert decoded.execution_set.status == original.execution_set.status
     assert decoded.execution_set.commitment == original.execution_set.commitment
+    assert (
+        decoded.execution_set.published_evidence
+        == original.execution_set.published_evidence
+    )
+    assert decoded.execution_set.recording is RecordingStatus.DEGRADED
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
+
+
+def test_verify_continuation_is_a_lossless_round_trip() -> None:
+    original = _rich_verify_request()
+
+    encoded = encode_execution_request(original)
+    decoded = decode_execution_request(encoded)
+
+    assert isinstance(decoded.continuation, VerifyContinuation)
+    assert decoded.started_at == original.started_at
+    assert decoded.continuation == original.continuation
+    assert decoded.continuation.candidates.completed_bytes == {
+        str(_op_id(2)): 11
+    }
+    assert decoded.continuation.candidates.processed_bytes == 11
+    assert encode_execution_request(decoded) == encoded
+
+
+def test_execute_and_verify_payloads_have_exact_phase_branches() -> None:
+    execute = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    verify = json.loads(encode_execution_request(_rich_verify_request()))
+
+    assert set(execute) == {
+        "schema_version",
+        "kind",
+        "phase",
+        "execution_set",
+        "started_at",
+        "verify_after_execute",
+    }
+    assert set(verify) == {
+        "schema_version",
+        "kind",
+        "phase",
+        "execution_set",
+        "started_at",
+        "candidates",
+        "filesystem_status",
+        "recording",
+        "execute_phase",
+        "missing_evidence_ids",
+    }
+
+
+def test_execution_payload_rejects_missing_unknown_and_contradictory_phase_fields() -> None:
+    execute = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    del execute["phase"]
+    with pytest.raises(ValueError, match="phase discriminator"):
+        decode_execution_request(json.dumps(execute).encode("utf-8"))
+
+    execute = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    execute["phase"] = "other"
+    with pytest.raises(ValueError, match="unsupported execution continuation phase"):
+        decode_execution_request(json.dumps(execute).encode("utf-8"))
+
+    execute = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    execute["candidates"] = {}
+    with pytest.raises(ValueError, match="unexpected"):
+        decode_execution_request(json.dumps(execute).encode("utf-8"))
+
+    verify = json.loads(encode_execution_request(_rich_verify_request()))
+    del verify["execute_phase"]
+    with pytest.raises(ValueError, match="missing"):
+        decode_execution_request(json.dumps(verify).encode("utf-8"))
+
+
+@pytest.mark.parametrize(
+    "identity_kind",
+    ["published", "candidate"],
+)
+def test_execution_payload_rejects_partial_recording_identities(
+    identity_kind: str,
+) -> None:
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    copy_id = str(_op_id(2))
+    if identity_kind == "published":
+        identity = value["execution_set"]["published_evidence"][copy_id][
+            "recorded_identity"
+        ]
+    else:
+        identity = value["candidates"]["candidates"][0][
+            "recorded_identity"
+        ]
+    del identity["scope_token"]
+
+    with pytest.raises(ValueError, match="missing"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_verify_continuation_rejects_contradictory_truth_axes() -> None:
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["recording"] = RecordingStatus.OK.value
+    with pytest.raises(ValueError, match="cannot recover degraded"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["filesystem_status"] = SessionState.COMPLETED.value
+    with pytest.raises(ValueError, match="disagrees"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["filesystem_status"] = SessionState.CANCELED.value
+    value["execute_phase"]["status"] = PhaseStatus.CANCELED.value
+    with pytest.raises(ValueError, match="terminal"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_verify_continuation_rejects_unknown_completion_and_candidate_drift() -> None:
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["candidates"]["completed_bytes"][0]["item_id"] = str(_op_id(3))
+    with pytest.raises(ValueError, match="unknown item id"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["missing_evidence_ids"] = []
+    with pytest.raises(ValueError, match="equal successful publishes"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["missing_evidence_ids"].append(str(_op_id(2)))
+    with pytest.raises(ValueError, match="disjoint"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["candidates"]["candidates"].reverse()
+    with pytest.raises(ValueError, match="retain plan order"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_set_rejects_published_evidence_on_non_byte_operation() -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    evidence = value["execution_set"]["published_evidence"].pop(
+        str(_op_id(2))
+    )
+    value["execution_set"]["published_evidence"][str(_op_id(1))] = evidence
+
+    with pytest.raises(ValueError, match="non-byte-producing"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_set_rejects_identityless_evidence_while_recording_is_ok() -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    copy_id = str(_op_id(2))
+    value["execution_set"]["recording"] = RecordingStatus.OK.value
+    value["execution_set"]["published_evidence"][copy_id][
+        "recorded_identity"
+    ] = None
+
+    with pytest.raises(
+        ValueError,
+        match="identityless published evidence requires degraded recording",
+    ):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_set_accepts_identityless_evidence_after_recording_degrades() -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    copy_id = str(_op_id(2))
+    value["execution_set"]["published_evidence"][copy_id][
+        "recorded_identity"
+    ] = None
+
+    decoded = decode_execution_request(json.dumps(value).encode("utf-8"))
+
+    assert decoded.execution_set.recording is RecordingStatus.DEGRADED
+    assert (
+        decoded.execution_set.published_evidence[
+            _op_id(2)
+        ].recorded_identity
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "message"),
+    [
+        (
+            "scope_token",
+            "c" * 32,
+            "scope token does not match the execution run",
+        ),
+        (
+            "rel_path_key",
+            "OTHER.BIN",
+            "relative path key does not match its operation",
+        ),
+    ],
+)
+def test_execution_set_rejects_recorded_identity_drift_from_run_or_operation(
+    field: str,
+    replacement: str,
+    message: str,
+) -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    copy_id = str(_op_id(2))
+    identity = value["execution_set"]["published_evidence"][copy_id][
+        "recorded_identity"
+    ]
+    identity[field] = replacement
+
+    with pytest.raises(ValueError, match=message):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_set_rejects_recorded_identities_from_multiple_locations() -> None:
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    move_update_id = str(_op_id(5))
+    value["execution_set"]["published_evidence"][move_update_id][
+        "recorded_identity"
+    ] = {
+        "row_id": f"row-{move_update_id}",
+        "location_id": "location-other",
+        "scope_token": "b" * 32,
+        "rel_path_key": normalize_relative_path("moved-changed.bin"),
+    }
+
+    with pytest.raises(ValueError, match="share one target location"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
 def test_execution_payload_escapes_unpaired_surrogates_defensively() -> None:

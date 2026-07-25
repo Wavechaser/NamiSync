@@ -5,8 +5,9 @@ Status: M0 CLI behavior is implemented through the shared process-local
 storage and a tested WebView2 security spike. Stage 3 registers inventory,
 baseline, verify, and rebaseline with the service-owned production dispatcher
 registry but deliberately adds no parser commands. Stage 5's behavior-preserving
-facade extraction is implemented; its Stage 4-dependent command expansion and
-final compound classification remain pending. The desktop host remains Stage 6,
+facade extraction is implemented, and Stage 4 supplies its compound execution
+and retained-history projections. Stage 5's command expansion and final
+four-axis classification remain pending. The desktop host remains Stage 6,
 and the API remains latent.
 
 ## Purpose
@@ -54,6 +55,15 @@ plan/review/commit sequencing, history access, controls, and primitive workflow
 views. Runtime plan storage remains the existing process-local dictionary behind
 named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
 does not survive process exit.
+
+`start_execution(request_id, *, verify_after_execute=False)` preserves the M0
+default and opts into the Stage 4 execute→verify workflow only when requested.
+Only the execution registration supplies
+`settle_canceled=runtime.settle_canceled_execution`; the service does not decode
+continuations or decide cancellation policy. Retained `HistoryRunView` exposes
+primitive filesystem/integrity/recording/audit axes, disposition, cancellation,
+headline, ordered items, and ordered phases, using the same workflow
+classification source as live result views.
 
 `SessionObserver.observe(session_id, sink)` performs a synchronous
 get-before-subscribe check, returns an already-terminal view without opening a

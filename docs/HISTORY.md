@@ -1,10 +1,11 @@
 # History Module
 
-Status: minimal independent sync history storage, observer integration, and CLI
+Status: independent sync history storage, observer integration, and CLI
 browsing are implemented. M1 history v3 now round-trips the generic ordered
-result-item stream for both operation and standalone-integrity producers.
-Phase-summary storage is reserved but remains unwritten until Stage 4;
-retention, task grouping, replay, discard audit, and export remain later work.
+result-item stream for operation, standalone-integrity, and compound
+execute→verify producers. Compound phase summaries are live without a schema
+bump; retention, task grouping, replay, discard audit, and export remain later
+work.
 
 ## Purpose
 
@@ -13,7 +14,7 @@ SQLite database. It records what NamiSync attempted and reported without
 participating in filesystem or ledger transactions. No history failure may roll
 back real file work or ledger truth.
 
-## Implemented M0 And M1 Stage 3 Slice
+## Implemented M0 And M1 Stage 3/4 Slice
 
 `HistoryStore` owns a separate WAL database and returns a `HistoryObserver`
 matching the dispatcher's composition-root protocol: `on_event(envelope)`,
@@ -29,7 +30,7 @@ persists one actual-time envelope, typed summary axes, and ordered nominal
 fields and `baseline|verify|rebaseline` phase. The typed repository returns one
 ordered heterogeneous item stream and rejects a stored column/payload
 disagreement. No Stage 1/3 producer writes `history_phases`; compound phase
-summaries begin only in Stage 4. Run-token replay with an identical payload is a no-op;
+summaries write one ordered row per entered phase in Stage 4. Run-token replay with an identical payload is a no-op;
 a different payload raises `TokenConflictError`. A failed history transaction
 propagates to the dispatcher acknowledgement without mutating the provisional
 filesystem or ledger result.
@@ -99,7 +100,17 @@ refuses history v1/v2 and transitional/mismatched v3 files without mutation and
 directs the user to recreate both local databases together. Version 3 reserves
 generic phase summaries and one ordered phase/item-type-tagged heterogeneous
 result-item stream. Standalone integrity writes item detail but deliberately
-writes zero phase-summary rows; compound phase producers remain Stage 4 work.
+writes zero phase-summary rows; compound sync writes its exact execute/verify
+`PhaseResult` rows against that already-reserved shape. Ledger/history schema
+versions and frozen markers do not change.
+
+Workflow history views unwrap the repository's ordered item/phase snapshots and
+reconstruct the typed persisted result axes. `HistoryRunView` exposes
+`filesystem_status`, `integrity_status`, `recording_status`, `audit_status`,
+`disposition`, `canceled`, and the derived `headline`. Headline/integrity use the
+same classifier as a live `OperationResultView`; interfaces never infer
+cancellation or verification state from phase shapes. Retained canceled,
+mismatch, and partial+degraded cases are tested for live/reopened parity.
 
 ## Failure Semantics
 
@@ -142,8 +153,10 @@ new plan. Export to CSV/JSON is read-only, stable-schema/versioned, and escapes
 spreadsheet formula injection where relevant.
 
 A queued session discarded before running is retained as
-`CANCELED+Disposition.UNRUN`; a cancellation after work is `CANCELED+RAN` and a
-preflight refusal is `REFUSED+UNRUN`. Dispatcher accomplishes this through
+`CANCELED+Disposition.UNRUN`; execute cancellation after work is
+`CANCELED+RAN`, while verify cancellation can retain filesystem
+`COMPLETED|FAILED` plus `canceled=true` and lifecycle `CANCELED`. A preflight
+refusal before mutation is `REFUSED+UNRUN`. Dispatcher accomplishes this through
 generic terminal events and waits for observer delivery (or loud audit
 degradation) before dropping the live session record; it never imports/calls
 history or asks history to infer disposition from zero bytes or strings.

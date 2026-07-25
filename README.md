@@ -24,13 +24,16 @@ batching, direct copy IO, and cross-file publish overlap remain deferred until
 new measurements justify them. Internal plan, custody, history, and database
 identity hashes remain SHA-256.
 
-M1 Stage 4's planned optional post-execution verification is one
+M1 Stage 4's optional post-execution verification is implemented as one
 execute→verify state machine
 inside the same session and volume custody. Successful copy/update/move-update
 publishes hand transient attestations directly to readback even if ledger
 recording degraded; filesystem, integrity, recording, and audit remain
 independent result axes. Same-process pause preserves explicit phase and
 published-evidence continuation, while application-restart recovery remains M2.
+The service exposes this through
+`start_execution(..., verify_after_execute=True)`; the existing CLI retains its
+M0 default until the remaining Stage 5 command/classification work lands.
 
 The M0 dispatcher is also implemented: generic sessions run concurrently when
 their resource sets are disjoint, serialize when they overlap, use real
@@ -69,9 +72,10 @@ role-free inventory, mapping-scoped filter snapshots/projections, mapping
 correspondence, runs, and distinct observed/attested evidence; typed
 repositories are read-only; and an independent history observer stores ordered
 sync and integrity items. The active schema boundary is ledger v2/history v3
-plus immutable final-M1 contract markers. History reserves generic
-phase-tagged items and compound phase-summary storage, while Stage 3 standalone
-integrity writes no phase rows. Any older, transitional, missing-marker, or
+plus immutable final-M1 contract markers. History stores generic phase-tagged
+items and Stage 4 compound execute/verify summaries in the already-reserved
+shape, while standalone integrity writes no phase rows. Any older,
+transitional, missing-marker, or
 mismatched-marker database is refused before mutation. Close NamiSync, delete
 or otherwise reset **both** local database files together, and rerun to create
 the complete matching schemas; startup never migrates or backfills this
@@ -89,7 +93,7 @@ browsing through both `nami-sync` and `python -m namisync`. Blocked items no
 longer refuse independent work: review commits a quarantined safe subset,
 incomplete scans allow guarded additive/no-op work while withholding moves and
 deletions, and history itemizes every blocked/deferred exception. The
-inventory/integrity parser commands remain gated on Stage 4.
+inventory/integrity parser commands remain Stage 5 Track B work.
 
 ## Development setup
 
@@ -174,6 +178,13 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Implemented M1 Stage 4's opt-in execute→verify workflow: exact atomic
+  published-copy evidence, rowless readback after ledger failure, strict
+  phase-discriminated workflow payload v3, same-run pause/resume and
+  cancellation settlement, independent compound phase/results, and retained
+  mixed-item/phase history without a database schema bump. Adversarial
+  fault-injection now proves every post-entry terminal finishes the logical
+  ledger run at most once while `BaseException` remains unnormalized.
 - Extracted the shared Stage 5 interface service and retargeted existing CLI
   behavior onto it: one process owns runtime/dispatcher lifecycle, the exact
   six-kind registry, primitive session views, gap-aware blocking observation,

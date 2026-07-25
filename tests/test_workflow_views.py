@@ -13,6 +13,8 @@ from namisync.core.integrity import (
 from namisync.core.session import (
     Disposition,
     OperationResult,
+    PhaseResult,
+    PhaseStatus,
     SessionState,
 )
 from namisync.workflows.views import operation_result_view
@@ -40,6 +42,31 @@ def _integrity(
         ),
         phase=phase,
     )
+
+
+def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
+    item = IntegrityOutcome(
+        item_id="rowless",
+        row_id=None,
+        location_id=None,
+        path="file.txt",
+        result=IntegrityResult.VERIFIED,
+        reason=IntegrityReason.RECORDING_ERROR,
+        recording=RecordingStatus.DEGRADED,
+    )
+
+    view = operation_result_view(
+        OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+            items=(item,),
+        )
+    )
+
+    assert view.items[0].row_id is None
+    assert view.items[0].location_id is None
+    assert view.integrity == "verified"
+    assert view.recording == "degraded"
 
 
 @pytest.mark.parametrize(
@@ -201,3 +228,89 @@ def test_result_view_keeps_order_tags_and_independent_truth_axes() -> None:
     assert view.recording == "degraded"
     assert view.audit == "degraded"
     assert view.headline == "mismatch"
+
+
+def test_compound_headline_boundaries_and_phase_wide_incomplete_truth() -> None:
+    execute = PhaseResult(
+        "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+    )
+    canceled_verify = PhaseResult(
+        "verify", PhaseStatus.CANCELED, 1, 2, 7, 14
+    )
+    mismatch = operation_result_view(
+        OperationResult(
+            SessionState.COMPLETED,
+            canceled=True,
+            items=(_integrity(IntegrityResult.MISMATCHED),),
+            phases=(execute, canceled_verify),
+            bytes_done=7,
+            bytes_total=7,
+        )
+    )
+    canceled = operation_result_view(
+        OperationResult(
+            SessionState.COMPLETED,
+            canceled=True,
+            items=(_integrity(IntegrityResult.CANCELED),),
+            phases=(execute, canceled_verify),
+            bytes_done=7,
+            bytes_total=7,
+        )
+    )
+    incomplete = operation_result_view(
+        OperationResult(
+            SessionState.COMPLETED,
+            phases=(
+                execute,
+                PhaseResult(
+                    "verify",
+                    PhaseStatus.INCOMPLETE,
+                    0,
+                    1,
+                    0,
+                    7,
+                    "RuntimeError: verifier failed before item 1",
+                ),
+            ),
+            bytes_done=7,
+            bytes_total=7,
+        )
+    )
+
+    assert mismatch.headline == "mismatch"
+    assert canceled.headline == "canceled"
+    assert incomplete.headline == "verification-incomplete"
+    assert incomplete.integrity == "incomplete"
+    assert incomplete.phases[1].error == (
+        "RuntimeError: verifier failed before item 1"
+    )
+
+
+def test_partial_precedes_mismatch_without_hiding_secondary_axes() -> None:
+    view = operation_result_view(
+        OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+            audit=RecordingStatus.DEGRADED,
+            items=(
+                _operation(Outcome.BLOCKED),
+                _integrity(IntegrityResult.MISMATCHED),
+            ),
+            phases=(
+                PhaseResult(
+                    "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+                ),
+                PhaseResult(
+                    "verify", PhaseStatus.COMPLETED, 1, 1, 7, 7
+                ),
+            ),
+            bytes_done=7,
+            bytes_total=7,
+        )
+    )
+
+    assert view.headline == "partial"
+    assert view.filesystem == "completed"
+    assert view.integrity == "mismatch"
+    assert view.recording == "degraded"
+    assert view.audit == "degraded"

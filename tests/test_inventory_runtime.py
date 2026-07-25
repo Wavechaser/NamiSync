@@ -58,6 +58,7 @@ from namisync.workflows.inventory import (
 )
 from namisync.workflows.runtime import (
     BASELINE_KIND,
+    EXECUTION_KIND,
     INVENTORY_KIND,
     REBASELINE_KIND,
     VERIFY_KIND,
@@ -265,6 +266,20 @@ def test_runtime_registers_inventory_and_all_integrity_modes_with_one_factory(
             registrations[kind].supports_pause
             for kind in (BASELINE_KIND, VERIFY_KIND, REBASELINE_KIND)
         )
+        assert (
+            registrations[EXECUTION_KIND].settle_canceled
+            == runtime.settle_canceled_execution
+        )
+        assert all(
+            registrations[kind].settle_canceled is None
+            for kind in (
+                "sync-plan",
+                INVENTORY_KIND,
+                BASELINE_KIND,
+                VERIFY_KIND,
+                REBASELINE_KIND,
+            )
+        )
         dispatcher = Dispatcher(
             registrations,
             lock_provider=InProcessResourceLockProvider(),
@@ -464,6 +479,7 @@ def test_standalone_verify_round_trips_integrity_history_without_phase_rows(
             (item.item_type, item.phase, item.path, item.result)
             for item in history.items
         ] == [("integrity", "verify", "a.txt", "verified")]
+        assert history.phases == ()
 
         connection = sqlite3.connect(runtime.history_path)
         try:

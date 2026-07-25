@@ -1,11 +1,12 @@
 # Workflows Module
 
-Status: M0 reviewed sync/history plus M1 Stages 1-3 are implemented. The local
+Status: M0 reviewed sync/history plus M1 Stages 1-4 are implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
-continuation payloads, and generic history views. Post-execution verification,
-CLI/desktop start surfaces, queue durability, maintenance/retention, replay,
-undo/repair, and ingest remain later work.
+strict execute/verify continuation payloads, optional post-execution
+verification, compound history/views, and generic history reads. New
+integrity CLI/desktop start surfaces, queue durability, maintenance/retention,
+replay, undo/repair, and ingest remain later work.
 
 ## Purpose
 
@@ -18,7 +19,7 @@ control.
 
 Every runtime dependency arrives through one composition-root `deps` object:
 clock, scanner/change source, repositories, planner/policies,
-observer/preflight, executor, recorder, and later verifier/importer. Planning
+observer/preflight, executor, verifier, recorder, and later importer. Planning
 adapters may snapshot semantic defaults when constructing a request; admitted
 execution does not receive or reread a settings provider.
 
@@ -56,9 +57,14 @@ execution does not receive or reread a settings provider.
    ordered `operation`/`execute` items with independent filesystem, recording,
    and audit truth.
 
-Stage 4 extends this exact session after step 6 with transient published
-evidence, in-custody readback, phase-local progress, and compound result axes.
-Those post-execution types and transitions are not present in Stage 3.
+7. When explicitly requested, translate every successful byte-producing
+   publish into a transient post-copy candidate, verify it under the same
+   custody/run token, and retain rowless candidates when copy recording failed.
+8. Return one ordered operation+integrity item stream and independent execute/
+   verify phase summaries. Finish the one logical ledger run exactly once; a
+   pause leaves it unfinished for same-process resume.
+
+The default execution path still ends after step 6, preserving M0 behavior.
 
 Human review occurs between sessions with nothing running. Commitment is the
 durable preauthorization and has no time expiry, but it binds exactly one plan
@@ -86,10 +92,12 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
-Stage 1 advances the opaque plan/execution codec to version 2 and removes
+Stage 1 advanced the opaque plan/execution codec to version 2 and removed
 `worker_count` from `SyncOptions`, `Plan`, fingerprints, and both payloads
-without adding a replacement execution setting. Version-1 workflow payloads
-are refused instead of being guessed into the changed contract.
+without adding a replacement execution setting. Stage 4 advances the global
+codec to strict version 3 because execute decoding now has phase-specific
+required fields. Version-1/2 payloads are refused instead of being guessed into
+the changed contract.
 
 The payload round-trips the fingerprinted
 `SyncOptions.propagate_source_casing` seam as a required field. A payload that
@@ -124,19 +132,20 @@ inventory/integrity half without changing that M0 execution boundary.
 
 Stage 4 linked verification deliberately does not build its immediate candidate set
 from inventory rows. The execution continuation retains each successfully
-published operation's post-publish attestation and copy-recording disposition,
-then turns those values into transient verifier candidates. This survives an
-in-process pause because the evidence is encoded beside execution status;
-neither the continuation nor process-local plans survive closing/restarting the
-M1 application. Later standalone integrity sessions use durable ledger evidence.
+published operation's post-publish attestation plus its complete recorded
+identity, or no identity when recording degraded, then turns those values into
+transient verifier candidates. This survives an in-process pause because the
+evidence is encoded beside execution status; neither the continuation nor
+process-local plans survive closing/restarting the M1 application. Later
+standalone integrity sessions use durable ledger evidence.
 
-The planned Stage 4 compound transition rules remain explicit:
+The implemented compound transition rules are explicit:
 
 ```text
 execute
   pause  -> snapshot operation status + published evidence
   cancel -> terminal canceled; do not start new readback work
-  settle -> enter verify only when requested and candidates exist
+  settle -> when requested, enter verify for candidates or missing-evidence failures
 
 verify
   pause     -> snapshot candidates + completed ids/bytes
@@ -145,6 +154,15 @@ verify
   exception -> retain filesystem truth; incomplete verify PhaseResult
   complete  -> settle one compound terminal result
 ```
+
+Fresh preflight still runs on every resume. If an already-started execute
+continuation is refused or faults there, workflow reopens the same run only to
+finish it as `FAILED+RAN`, with settled execute counters preserved; it never
+claims a fresh `REFUSED+UNRUN`. A verify-resume preflight refusal preserves the
+settled execute filesystem status and adds a zero-work incomplete verify phase.
+All terminal paths after recorder entry share one finish-once boundary.
+`PauseRequested`, `KeyboardInterrupt`, `SystemExit`, and other
+`BaseException` subclasses are not normalized into a workflow failure.
 
 ## Integrity Workflow
 
@@ -194,10 +212,10 @@ acknowledgement, and only then releases the immutable Terminal.
 
 Execution and integrity outcomes implement one nominal `ResultItem` contract
 with explicit `item_type` and `phase` tags. Standalone Stage 3 sessions write
-their ordered integrity items but no `history_phases` rows. Stage 4 adds generic
+their ordered integrity items but no `history_phases` rows. Compound sessions add generic
 `PhaseResult` summaries so a compound phase-wide failure before its first item
-is not mistaken for empty success; transfer and readback byte counts will
-remain separate rather than being summed.
+is not mistaken for empty success; transfer and readback byte counts remain
+separate rather than being summed.
 
 Result views keep the specific integrity axis visible. A hash mismatch receives
 the higher `mismatch` headline; missing, modified/stale, unsupported, canceled,
@@ -209,17 +227,26 @@ an explicit baseline/rebaseline phase. The global precedence in
 `ARCHITECTURE.md` still governs when filesystem, cancellation, recording, or
 audit truth is also present.
 
-Stage 4 paused compound execution continues from an explicit discriminated
+Paused compound execution continues from an explicit discriminated
 continuation after fresh preflight. `phase=execute` carries execution status
-and published evidence; `phase=verify` also carries transient candidates plus
-completed verification ids/bytes. Resume never infers phase from prior events
-or re-emits a completed reliable result. The compound run's recorder may close
-at pause-drain and reopen the same token idempotently on resume; it finalizes
-the logical sync only once after both entered phases settle. Paused standalone
+and published evidence; `phase=verify` carries `PostCopySelection`'s transient
+candidates plus completed ids/bytes, settled filesystem status, the execute
+phase, compound-current recording, and ordered missing-evidence ids. Frozen
+`ExecutionSet.recording` remains execution truth; compound-current recording
+may degrade later but cannot recover `DEGRADED` to `OK`. Resume never infers
+phase from prior events or re-emits a completed reliable result. The compound
+run's recorder may close at pause-drain and reopen the same token idempotently
+on resume; it attempts finalization once after both entered phases settle, and
+a finish failure degrades recording. Paused standalone
 baseline/verify/rebaseline already use their exact candidate and item-status
 continuation plus fresh remaining-selection guard. Unsupported pause requests
 for inventory/plan/import are typed control rejections with no lifecycle
 mutation.
+
+The continuation is process-local custody state, not a durable recovery
+format. `InMemorySessionStore.load_all()` deliberately returns no sessions;
+closing the process offers no execute/verify resume even though the strict v3
+codec itself can round-trip an in-process snapshot.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An

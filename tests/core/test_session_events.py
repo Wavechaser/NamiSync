@@ -43,12 +43,17 @@ from namisync.core.session import (
     IllegalTransition,
     OperationResult,
     PauseRequested,
+    PhaseResult,
+    PhaseStatus,
     SessionId,
+    SessionRecord,
     SessionState,
     is_terminal,
     require_transition,
+    result_terminal_state,
     run_session,
 )
+from namisync.dispatcher.store import InMemorySessionStore
 
 
 def test_transition_table_accepts_exactly_the_declared_edges() -> None:
@@ -203,6 +208,242 @@ def test_runner_pause_has_no_terminal_and_settles_paused() -> None:
     assert outcome.paused
     assert outcome.result is None
     assert settled == [(SessionState.PAUSED, None)]
+    assert not any(isinstance(body, Terminal) for body in emitted)
+
+
+def test_compound_cancel_preserves_filesystem_truth_and_projects_lifecycle() -> None:
+    phases = (
+        PhaseResult(
+            "execute",
+            PhaseStatus.COMPLETED,
+            items_done=1,
+            items_total=1,
+            bytes_done=7,
+            bytes_total=7,
+        ),
+        PhaseResult(
+            "verify",
+            PhaseStatus.CANCELED,
+            items_done=0,
+            items_total=1,
+            bytes_done=0,
+            bytes_total=7,
+        ),
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        canceled=True,
+        phases=phases,
+        bytes_done=7,
+        bytes_total=7,
+    )
+    settled: list[SessionState] = []
+
+    outcome = run_session(
+        lambda context: result,
+        emit=lambda body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, value: settled.append(state),
+        finalize_audit=lambda value: RecordingStatus.OK,
+        publish_result=lambda value: None,
+    )
+
+    assert outcome.result == result
+    assert outcome.result.status is SessionState.COMPLETED
+    assert result_terminal_state(outcome.result) is SessionState.CANCELED
+    assert settled == [SessionState.CANCELED]
+    record = SessionRecord(
+        SessionId("compound-cancel"),
+        "sync-execution",
+        SessionState.CANCELED,
+        (),
+        b"payload",
+        True,
+        1,
+        datetime(2026, 7, 18, tzinfo=timezone.utc),
+        started_at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        ended_at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        result=outcome.result,
+    )
+    assert record.result is not None
+    assert record.result.status is SessionState.COMPLETED
+
+
+def test_compound_cancel_rejects_inconsistent_execute_or_verify_phase() -> None:
+    execute = PhaseResult(
+        "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+    )
+    verify = PhaseResult(
+        "verify", PhaseStatus.INCOMPLETE, 0, 1, 0, 7
+    )
+    with pytest.raises(ValueError, match="canceled verify phase"):
+        OperationResult(
+            SessionState.COMPLETED,
+            canceled=True,
+            phases=(execute, verify),
+        )
+    with pytest.raises(ValueError, match="matching execute truth"):
+        OperationResult(
+            SessionState.FAILED,
+            canceled=True,
+            phases=(
+                execute,
+                PhaseResult(
+                    "verify", PhaseStatus.CANCELED, 0, 1, 0, 7
+                ),
+            ),
+        )
+
+
+def test_cancellation_matrix_rejects_contradictory_terminal_truth() -> None:
+    completed_execute = PhaseResult(
+        "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+    )
+    canceled_verify = PhaseResult(
+        "verify", PhaseStatus.CANCELED, 0, 1, 0, 7
+    )
+
+    with pytest.raises(ValueError, match="requires canceled=True"):
+        OperationResult(SessionState.CANCELED)
+    with pytest.raises(ValueError, match="completed execute phase"):
+        OperationResult(
+            SessionState.CANCELED,
+            canceled=True,
+            phases=(completed_execute,),
+        )
+    with pytest.raises(ValueError, match="run disposition"):
+        OperationResult(
+            SessionState.COMPLETED,
+            disposition=Disposition.UNRUN,
+            canceled=True,
+            phases=(completed_execute, canceled_verify),
+        )
+    with pytest.raises(ValueError, match="cannot also be canceled"):
+        OperationResult(
+            SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            canceled=True,
+        )
+
+
+def test_execute_and_unrun_cancellation_preserve_their_disposition() -> None:
+    unrun = OperationResult(
+        SessionState.CANCELED,
+        disposition=Disposition.UNRUN,
+        canceled=True,
+    )
+    ran = OperationResult(
+        SessionState.CANCELED,
+        disposition=Disposition.RAN,
+        canceled=True,
+        phases=(
+            PhaseResult("execute", PhaseStatus.CANCELED, 0, 1, 0, 7),
+        ),
+    )
+
+    assert unrun.disposition is Disposition.UNRUN
+    assert ran.disposition is Disposition.RAN
+    assert result_terminal_state(unrun) is SessionState.CANCELED
+    assert result_terminal_state(ran) is SessionState.CANCELED
+
+
+@pytest.mark.parametrize(
+    ("filesystem_status", "execute_status"),
+    [
+        (SessionState.COMPLETED, PhaseStatus.COMPLETED),
+        (SessionState.FAILED, PhaseStatus.FAILED),
+    ],
+)
+def test_verify_cancellation_round_trips_terminal_event_and_session_record(
+    filesystem_status: SessionState,
+    execute_status: PhaseStatus,
+) -> None:
+    result = OperationResult(
+        filesystem_status,
+        disposition=Disposition.RAN,
+        canceled=True,
+        phases=(
+            PhaseResult("execute", execute_status, 1, 1, 7, 7),
+            PhaseResult("verify", PhaseStatus.CANCELED, 0, 1, 0, 7),
+        ),
+        bytes_done=7,
+        bytes_total=7,
+    )
+    envelope = Envelope(
+        session_id=SessionId("d" * 32),
+        seq=3,
+        at=datetime(2026, 7, 25, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=Terminal(result),
+    )
+
+    decoded = envelope_from_dict(envelope_to_dict(envelope))
+
+    assert isinstance(decoded.body, Terminal)
+    assert decoded.body.result == result
+    record = SessionRecord(
+        SessionId("verify-canceled"),
+        "sync-execution",
+        SessionState.CANCELED,
+        (),
+        b"payload",
+        True,
+        1,
+        datetime(2026, 7, 25, tzinfo=timezone.utc),
+        started_at=datetime(2026, 7, 25, tzinfo=timezone.utc),
+        ended_at=datetime(2026, 7, 25, tzinfo=timezone.utc),
+        result=decoded.body.result,
+    )
+    assert record.result is not None
+    assert record.result.status is filesystem_status
+    assert record.result.canceled
+    assert result_terminal_state(record.result) is SessionState.CANCELED
+    store = InMemorySessionStore()
+    store.put(record)
+    restored = store.snapshot()[0]
+    assert restored == record
+    assert restored.result is not None
+    assert restored.result.status is filesystem_status
+    assert restored.result.canceled
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(3)])
+def test_runner_does_not_normalize_base_exceptions(error: BaseException) -> None:
+    emitted: list[object] = []
+    settled: list[SessionState] = []
+
+    with pytest.raises(type(error)):
+        run_session(
+            lambda context: (_ for _ in ()).throw(error),
+            emit=emitted.append,
+            checkpoint=lambda: None,
+            settle=lambda state, result: settled.append(state),
+            finalize_audit=lambda result: RecordingStatus.OK,
+            publish_result=lambda result: None,
+        )
+
+    assert settled == []
+    assert not any(isinstance(body, Terminal) for body in emitted)
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(3)])
+def test_runner_does_not_normalize_audit_base_exceptions(
+    error: BaseException,
+) -> None:
+    emitted: list[object] = []
+    published: list[OperationResult] = []
+
+    with pytest.raises(type(error)):
+        run_session(
+            lambda context: OperationResult(SessionState.COMPLETED),
+            emit=emitted.append,
+            checkpoint=lambda: None,
+            settle=lambda state, result: None,
+            finalize_audit=lambda result: (_ for _ in ()).throw(error),
+            publish_result=published.append,
+        )
+
+    assert published == []
     assert not any(isinstance(body, Terminal) for body in emitted)
 
 
@@ -363,11 +604,19 @@ def _event_bodies() -> tuple[object, ...]:
         detail={"number": 1},
     )
     result = OperationResult(
-        status=SessionState.CANCELED,
+        status=SessionState.COMPLETED,
         audit=RecordingStatus.DEGRADED,
-        disposition=Disposition.UNRUN,
+        disposition=Disposition.RAN,
         canceled=True,
         items=(item,),
+        phases=(
+            PhaseResult(
+                "execute", PhaseStatus.COMPLETED, 1, 1, 0, 0
+            ),
+            PhaseResult(
+                "verify", PhaseStatus.CANCELED, 0, 1, 0, 1
+            ),
+        ),
     )
     return (
         StateChanged(SessionState.RUNNING),
@@ -433,6 +682,32 @@ def test_integrity_event_codec_preserves_mode_phase(phase: str) -> None:
     )
 
     assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
+
+
+def test_integrity_event_codec_preserves_absent_post_copy_ledger_identity() -> None:
+    item = IntegrityOutcome(
+        item_id="rowless-copy",
+        row_id=None,
+        location_id=None,
+        path="file.bin",
+        result=IntegrityResult.VERIFIED,
+        reason=IntegrityReason.RECORDING_ERROR,
+        recording=RecordingStatus.DEGRADED,
+    )
+    envelope = Envelope(
+        session_id=SessionId("c" * 32),
+        seq=1,
+        at=datetime(2026, 7, 25, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=item,
+    )
+
+    decoded = envelope_from_dict(envelope_to_dict(envelope))
+
+    assert decoded == envelope
+    assert isinstance(decoded.body, IntegrityOutcome)
+    assert decoded.body.row_id is None
+    assert decoded.body.location_id is None
 
 
 def test_event_deserialization_rejects_unknown_schema() -> None:

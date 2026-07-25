@@ -16,8 +16,9 @@ from pathlib import Path
 from time import monotonic
 from typing import Callable, ClassVar, Iterator, Mapping, Protocol
 
-from .evidence import Attestation, HasherFactory, RecordingStatus
+from .evidence import Attestation, HasherFactory, Provenance, RecordingStatus
 from .models import FileStat
+from .pathing import normalize_relative_path, validate_relative_path
 from .session import ResultItem, RunContext
 
 
@@ -78,6 +79,120 @@ class RecordDisposition(StrEnum):
     NOOP = "noop"
     STALE = "stale"
     CONFLICT = "conflict"
+
+
+@dataclass(frozen=True, slots=True)
+class PostCopyRecordIdentity:
+    """Independent verifier-facing identity for one durable copy record."""
+
+    row_id: str
+    location_id: str
+    scope_token: str
+    rel_path_key: str
+
+    def __post_init__(self) -> None:
+        values = (
+            self.row_id,
+            self.location_id,
+            self.scope_token,
+            self.rel_path_key,
+        )
+        if not all(isinstance(value, str) and value for value in values):
+            raise ValueError(
+                "post-copy record identity fields must be non-empty strings"
+            )
+        if self.rel_path_key != normalize_relative_path(self.rel_path_key):
+            raise ValueError("post-copy record path must be canonical")
+
+
+@dataclass(frozen=True, slots=True)
+class PostCopyCandidate:
+    """Transient published target classified without requiring a ledger row."""
+
+    item_id: str
+    root: Path
+    display_path: str
+    expected_stat: FileStat
+    copy_attestation: Attestation
+    recorded_identity: PostCopyRecordIdentity | None
+
+    def __post_init__(self) -> None:
+        if not self.item_id or not self.display_path:
+            raise ValueError("post-copy candidate identity and path are required")
+        validated_path = validate_relative_path(self.display_path)
+        if self.copy_attestation.content.provenance is not Provenance.COPY_ATTESTED:
+            raise ValueError("post-copy candidates require copy-attested evidence")
+        if self.copy_attestation.subject != self.expected_stat:
+            raise ValueError(
+                "post-copy attestation must match the expected published stat"
+            )
+        if self.expected_stat.kind.value != "file":
+            raise ValueError("post-copy candidates must name regular files")
+        if self.recorded_identity is not None:
+            if not isinstance(self.recorded_identity, PostCopyRecordIdentity):
+                raise TypeError("post-copy recorded identity has the wrong type")
+            if (
+                self.recorded_identity.rel_path_key
+                != normalize_relative_path(validated_path)
+            ):
+                raise ValueError(
+                    "post-copy recorded identity does not match its display path"
+                )
+
+
+@dataclass
+class PostCopySelection:
+    """Transient candidates plus mutable, lossless pause continuation state."""
+
+    candidates: tuple[PostCopyCandidate, ...]
+    _completed_bytes: dict[str, int] = field(default_factory=dict, repr=False)
+    _processed_bytes: int = field(default=0, repr=False)
+
+    def __post_init__(self) -> None:
+        item_ids = [candidate.item_id for candidate in self.candidates]
+        if len(item_ids) != len(set(item_ids)):
+            raise ValueError("post-copy candidate ids must be unique")
+        known_ids = set(item_ids)
+        if not set(self._completed_bytes).issubset(known_ids):
+            raise ValueError("post-copy continuation contains an unknown item id")
+        if any(value < 0 for value in self._completed_bytes.values()):
+            raise ValueError("completed post-copy byte counts cannot be negative")
+        if self._processed_bytes < sum(self._completed_bytes.values()):
+            raise ValueError("post-copy processed bytes cannot trail completed bytes")
+
+    @property
+    def pending(self) -> tuple[PostCopyCandidate, ...]:
+        return tuple(
+            candidate
+            for candidate in self.candidates
+            if candidate.item_id not in self._completed_bytes
+        )
+
+    @property
+    def completed_count(self) -> int:
+        return len(self._completed_bytes)
+
+    @property
+    def processed_bytes(self) -> int:
+        return self._processed_bytes
+
+    @property
+    def completed_bytes(self) -> Mapping[str, int]:
+        return dict(self._completed_bytes)
+
+    def note_bytes_processed(self, size: int) -> None:
+        if size < 0:
+            raise ValueError("post-copy processed byte increment cannot be negative")
+        self._processed_bytes += size
+
+    def mark_completed(self, item_id: str, bytes_read: int) -> None:
+        if item_id in self._completed_bytes:
+            raise ValueError(f"post-copy item already completed: {item_id}")
+        if bytes_read < 0:
+            raise ValueError("completed post-copy byte count cannot be negative")
+        if not any(candidate.item_id == item_id for candidate in self.candidates):
+            raise ValueError(f"unknown post-copy item: {item_id}")
+        self._completed_bytes[item_id] = bytes_read
 
 
 @dataclass(frozen=True)
@@ -183,8 +298,8 @@ class IntegrityOutcome(ResultItem):
     item_type: ClassVar[str] = "integrity"
 
     item_id: str
-    row_id: str
-    location_id: str
+    row_id: str | None
+    location_id: str | None
     path: str
     result: IntegrityResult
     reason: IntegrityReason | None = None
@@ -195,8 +310,14 @@ class IntegrityOutcome(ResultItem):
     phase: str = IntegrityMode.VERIFY.value
 
     def __post_init__(self) -> None:
-        if not self.item_id or not self.row_id or not self.location_id:
-            raise ValueError("integrity outcome identifiers must be non-empty")
+        if not self.item_id:
+            raise ValueError("integrity outcome item id must be non-empty")
+        if (self.row_id is None) != (self.location_id is None):
+            raise ValueError(
+                "integrity outcome row and location ids must both be present or absent"
+            )
+        if self.row_id is not None and (not self.row_id or not self.location_id):
+            raise ValueError("integrity outcome ledger ids must be non-empty")
         if not self.path:
             raise ValueError("integrity outcome path must be non-empty")
         if self.phase not in {mode.value for mode in IntegrityMode}:

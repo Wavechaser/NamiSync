@@ -17,6 +17,8 @@ from namisync.core.integrity import (
 from namisync.core.session import (
     Disposition,
     OperationResult,
+    PhaseResult,
+    PhaseStatus,
     SessionId,
     SessionRecord,
     SessionState,
@@ -28,7 +30,10 @@ from namisync.db.history import (
     HistoryStore,
 )
 from namisync.db.connections import connect_history_reader
+from namisync.db.schema import HISTORY_CONTRACT_ID, HISTORY_SCHEMA_VERSION
 from namisync.db.writer import RecordingError, TokenConflictError
+from namisync.workflows.runtime import LocalWorkflowRuntime
+from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW
 
@@ -266,6 +271,191 @@ def test_history_round_trips_integrity_item_and_rejects_unknown_body(
         "hash-mismatch",
     )
     assert phase_count == 0
+
+
+def test_xv_8_xv_17_history_v3_round_trips_compound_items_and_phases(
+    tmp_path: Path,
+) -> None:
+    record = _record("session-compound")
+    context = HistoryContext("run-compound", "host-1", activity_kind="sync")
+    operation = ItemOutcome(
+        "shared-id",
+        "copy",
+        "asset.bin",
+        Outcome.SUCCEEDED,
+    )
+    integrity = IntegrityOutcome(
+        item_id="shared-id",
+        row_id=None,
+        location_id=None,
+        path="asset.bin",
+        result=IntegrityResult.CANCELED,
+        reason=IntegrityReason.CANCELED,
+    )
+    phases = (
+        PhaseResult(
+            "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+        ),
+        PhaseResult(
+            "verify", PhaseStatus.CANCELED, 1, 1, 0, 7
+        ),
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        canceled=True,
+        items=(operation, integrity),
+        phases=phases,
+        bytes_done=7,
+        bytes_total=7,
+    )
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        observer.on_event(_envelope(record, 1, operation))
+        observer.on_event(_envelope(record, 2, integrity))
+        observer.finalize(result)
+        with HistoryRepository(store.path) as repository:
+            snapshot = repository.get("run-compound")
+        connection = connect_history_reader(store.path)
+        try:
+            metadata = dict(
+                connection.execute(
+                    "SELECT key, value FROM schema_metadata"
+                ).fetchall()
+            )
+            stored_phases = connection.execute(
+                """SELECT phase, status, bytes_done, bytes_total
+                     FROM history_phases ORDER BY phase_order"""
+            ).fetchall()
+        finally:
+            connection.close()
+
+    assert snapshot.filesystem_status is SessionState.COMPLETED
+    assert snapshot.canceled is True
+    assert [item.item.item_type for item in snapshot.items] == [
+        "operation",
+        "integrity",
+    ]
+    assert tuple(item.phase for item in snapshot.phases) == phases
+    assert [tuple(row) for row in stored_phases] == [
+        ("execute", "completed", 7, 7),
+        ("verify", "canceled", 0, 7),
+    ]
+    assert metadata["schema_version"] == str(HISTORY_SCHEMA_VERSION)
+    assert metadata["contract_id"] == HISTORY_CONTRACT_ID
+
+
+def test_xv_8_retained_history_classification_matches_live_result(
+    tmp_path: Path,
+) -> None:
+    succeeded = ItemOutcome(
+        "copy-ok",
+        "copy",
+        "ok.bin",
+        Outcome.SUCCEEDED,
+    )
+    blocked = ItemOutcome(
+        "copy-blocked",
+        "copy",
+        "blocked.bin",
+        Outcome.BLOCKED,
+    )
+    verified = IntegrityOutcome(
+        item_id="copy-ok",
+        row_id="row-ok",
+        location_id="location-target",
+        path="ok.bin",
+        result=IntegrityResult.VERIFIED,
+    )
+    mismatched = replace(
+        verified,
+        result=IntegrityResult.MISMATCHED,
+        reason=IntegrityReason.HASH_MISMATCH,
+    )
+    execute_one = PhaseResult(
+        "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+    )
+    execute_two = PhaseResult(
+        "execute", PhaseStatus.COMPLETED, 2, 2, 7, 14
+    )
+    verify_complete = PhaseResult(
+        "verify", PhaseStatus.COMPLETED, 1, 1, 7, 7
+    )
+    verify_canceled = PhaseResult(
+        "verify",
+        PhaseStatus.CANCELED,
+        0,
+        1,
+        0,
+        7,
+        "verification canceled",
+    )
+    results = {
+        "retained-canceled": OperationResult(
+            SessionState.COMPLETED,
+            canceled=True,
+            items=(succeeded,),
+            phases=(execute_one, verify_canceled),
+            bytes_done=7,
+            bytes_total=7,
+        ),
+        "retained-mismatch": OperationResult(
+            SessionState.COMPLETED,
+            items=(succeeded, mismatched),
+            phases=(execute_one, verify_complete),
+            bytes_done=7,
+            bytes_total=7,
+        ),
+        "retained-partial-degraded": OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+            items=(succeeded, blocked, verified),
+            phases=(execute_two, verify_complete),
+            bytes_done=7,
+            bytes_total=14,
+        ),
+    }
+    history_path = tmp_path / "history.db"
+    with HistoryStore(history_path, clock=FakeClock()) as store:
+        for index, (run_token, result) in enumerate(results.items(), start=1):
+            record = _record(f"session-retained-{index}")
+            observer = store.observer(
+                record,
+                HistoryContext(run_token, "host-1", activity_kind="sync"),
+            )
+            for sequence, item in enumerate(result.items, start=1):
+                observer.on_event(_envelope(record, sequence, item))
+            observer.finalize(result)
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", history_path)
+    try:
+        retained = {
+            run_token: runtime.get_history(run_token)
+            for run_token in results
+        }
+        listed = {
+            view.run_token: view for view in runtime.list_history()
+        }
+    finally:
+        runtime.close()
+
+    assert set(listed) == set(results)
+    for run_token, result in results.items():
+        live = operation_result_view(result)
+        reopened = retained[run_token]
+        assert listed[run_token] == reopened
+        assert reopened.filesystem_status == live.filesystem
+        assert reopened.integrity_status == live.integrity
+        assert reopened.recording_status == live.recording
+        assert reopened.audit_status == live.audit
+        assert reopened.canceled is live.canceled
+        assert reopened.headline == live.headline
+        assert reopened.items == live.items
+        assert reopened.phases == live.phases
+
+    assert retained["retained-canceled"].headline == "canceled"
+    assert retained["retained-mismatch"].headline == "mismatch"
+    assert retained["retained-partial-degraded"].headline == "partial"
 
 
 def test_conflicting_duplicate_event_sequence_is_rejected_before_storage(

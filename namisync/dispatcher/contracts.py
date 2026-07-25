@@ -8,6 +8,7 @@ from typing import Callable, Mapping, Protocol
 
 from namisync.core.events import Envelope
 from namisync.core.session import (
+    Disposition,
     OperationResult,
     ResourceId,
     RunContext,
@@ -61,6 +62,7 @@ class WorkflowRegistration:
     prepare: Callable[[object], PreparedSession]
     open: Callable[[bytes], WorkflowInvocation]
     supports_pause: bool = False
+    settle_canceled: Callable[[bytes, Disposition], OperationResult] | None = None
 
 
 Registry = Mapping[str, WorkflowRegistration]

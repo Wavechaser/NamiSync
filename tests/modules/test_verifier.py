@@ -33,6 +33,9 @@ from namisync.core.integrity import (
     IntegritySelection,
     IntegritySelectionItem,
     InventoryState,
+    PostCopyCandidate,
+    PostCopyRecordIdentity,
+    PostCopySelection,
     ReadStrategy,
     RecordDisposition,
     UnsupportedVerification,
@@ -53,6 +56,7 @@ from namisync.modules.verifier import (
     baseline,
     rebaseline,
     verify,
+    verify_post_copy,
 )
 
 
@@ -182,6 +186,38 @@ def _item(
         baseline=baseline_evidence,
         scope_token="scope-1",
         reappeared_at=_NOW if reappeared else None,
+    )
+
+
+def _post_copy_candidate(
+    root: Path,
+    *,
+    number: int = 1,
+    path: str | None = None,
+    expected_stat: FileStat | None = None,
+    recorded: bool = True,
+) -> PostCopyCandidate:
+    display_path = path or f"Folder\\copied-{number}.bin"
+    stat = expected_stat or _stat()
+    identity = (
+        PostCopyRecordIdentity(
+            row_id=f"row-{number}",
+            location_id="location-1",
+            scope_token="scope-1",
+            rel_path_key=normalize_relative_path(display_path),
+        )
+        if recorded
+        else None
+    )
+    return PostCopyCandidate(
+        item_id=f"copy-{number}",
+        root=root,
+        display_path=display_path,
+        expected_stat=stat,
+        copy_attestation=_attestation(
+            b"abc", stat, Provenance.COPY_ATTESTED
+        ),
+        recorded_identity=identity,
     )
 
 
@@ -400,6 +436,177 @@ def test_copy_evidence_advances_verification_only_after_independent_read(
     assert command.expected_baseline.content.provenance is Provenance.COPY_ATTESTED
     assert command.attestation.content.provenance is Provenance.VERIFY_ATTESTED
     assert command.advances_last_verified is True
+
+
+def test_post_copy_readback_classifies_without_a_ledger_identity(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path, recorded=False)
+    selection = PostCopySelection((candidate,))
+    recorder = _Recorder()
+
+    result = verify_post_copy(
+        selection,
+        _context([]),
+        recorder,
+        _FakeReader(
+            {
+                candidate.display_path: _StreamSpec(
+                    candidate.expected_stat, (b"abc",)
+                )
+            }
+        ),
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.result is IntegrityResult.VERIFIED
+    assert outcome.row_id is None
+    assert outcome.location_id is None
+    assert outcome.recording is RecordingStatus.DEGRADED
+    assert outcome.reason is IntegrityReason.RECORDING_ERROR
+    assert result.recording is RecordingStatus.DEGRADED
+    assert selection.completed_bytes == {candidate.item_id: 3}
+    assert recorder.commands == []
+
+
+def test_post_copy_match_uses_readback_provenance_and_degrades_stale_recording(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path)
+    recorder = _Recorder(RecordDisposition.STALE)
+
+    result = verify_post_copy(
+        PostCopySelection((candidate,)),
+        _context([]),
+        recorder,
+        _FakeReader(
+            {
+                candidate.display_path: _StreamSpec(
+                    candidate.expected_stat, (b"abc",)
+                )
+            }
+        ),
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.result is IntegrityResult.VERIFIED
+    assert outcome.reason is IntegrityReason.RECORDING_STALE
+    assert outcome.recording is RecordingStatus.DEGRADED
+    assert outcome.record_disposition is RecordDisposition.STALE
+    command = recorder.commands[0]
+    assert command.expected_baseline is candidate.copy_attestation
+    assert (
+        command.attestation.content.provenance
+        is Provenance.READBACK_ATTESTED
+    )
+    assert command.row_id == candidate.recorded_identity.row_id  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    ("live_stat", "content", "expected_result", "expected_reason"),
+    [
+        (
+            _stat(mtime_ns=101),
+            b"abd",
+            IntegrityResult.MODIFIED,
+            IntegrityReason.STAT_CHANGED,
+        ),
+        (
+            _stat(),
+            b"abd",
+            IntegrityResult.MISMATCHED,
+            IntegrityReason.HASH_MISMATCH,
+        ),
+    ],
+)
+def test_post_copy_stat_drift_precedes_stable_digest_mismatch(
+    tmp_path: Path,
+    live_stat: FileStat,
+    content: bytes,
+    expected_result: IntegrityResult,
+    expected_reason: IntegrityReason,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path)
+    recorder = _Recorder()
+
+    result = verify_post_copy(
+        PostCopySelection((candidate,)),
+        _context([]),
+        recorder,
+        _FakeReader(
+            {
+                candidate.display_path: _StreamSpec(
+                    live_stat, (content,), live_stat
+                )
+            }
+        ),
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.result is expected_result
+    assert outcome.reason is expected_reason
+    assert recorder.commands == []
+
+
+def test_post_copy_unexpected_reader_exception_escapes_without_an_outcome(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path)
+    selection = PostCopySelection((candidate,))
+    events: list[object] = []
+
+    with pytest.raises(RuntimeError, match="reader bug"):
+        verify_post_copy(
+            selection,
+            _context(events),
+            _Recorder(),
+            _FakeReader({candidate.display_path: RuntimeError("reader bug")}),
+        )
+
+    assert _integrity_events(events) == []
+    assert selection.completed_count == 0
+
+
+def test_post_copy_pause_resume_preserves_completed_candidates_without_duplicates(
+    tmp_path: Path,
+) -> None:
+    candidates = tuple(
+        _post_copy_candidate(tmp_path, number=number, recorded=False)
+        for number in range(1, 4)
+    )
+    selection = PostCopySelection(candidates)
+    events: list[object] = []
+    recorder = _Recorder()
+    reader = _FakeReader(
+        {
+            candidate.display_path: _StreamSpec(
+                candidate.expected_stat, (b"abc",)
+            )
+            for candidate in candidates
+        }
+    )
+
+    def pause_after_one() -> None:
+        if len(_integrity_events(events)) >= 1:
+            raise PauseRequested
+
+    with pytest.raises(PauseRequested):
+        verify_post_copy(
+            selection, _context(events, pause_after_one), recorder, reader
+        )
+
+    assert selection.completed_count == 1
+    assert len(_integrity_events(events)) == 1
+
+    resumed = verify_post_copy(selection, _context(events), recorder, reader)
+
+    outcomes = _integrity_events(events)
+    assert len(outcomes) == len(candidates)
+    assert len({outcome.item_id for outcome in outcomes}) == len(candidates)
+    assert len(resumed.outcomes) == 2
+    assert selection.completed_count == len(candidates)
+    assert selection.processed_bytes == 9
+    assert recorder.commands == []
 
 
 def test_untrusted_filesystem_identity_is_not_promoted_from_reader_handle(

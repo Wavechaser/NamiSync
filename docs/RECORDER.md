@@ -1,8 +1,9 @@
 # Recorder Module
 
 Status: M0 sync recording, ledger setup, inventory reconciliation, and the
-shared conditional integrity write are implemented. Maintenance recording
-remains later work.
+shared conditional integrity write are implemented. M1 Stage 4 adds atomic
+copy-identity returns and one logical recorder window across optional linked
+verification. Maintenance recording remains later work.
 
 ## Purpose
 
@@ -31,6 +32,13 @@ interface. Every successful call is already durable, and `flush()` is therefore
 a boundary-compatible no-op rather than a missing seam. One re-entrant lock
 serializes threads; WAL, SQLite busy timeout, and bounded retry handle another
 process. Exhausted contention raises `RecordingBusyError`.
+
+COPY/UPDATE/MOVE_UPDATE recording returns a complete
+`RecordedCopyIdentity(row_id, location_id, scope_token, rel_path_key)` from the
+same transaction that stores the copy evidence. Replaying the identical
+operation token reconstructs the same tuple; conflicting token reuse fails.
+There is no partial/fake identity. If that transaction fails after bytes
+publish, executor retains rowless evidence and degrades the recording axis.
 
 All sync operation kinds record only after the executor reports matching
 filesystem success. Copy/update evidence is bound to the published target stat,
@@ -94,6 +102,15 @@ Before executor performs a destructive operation, recorder flushes all prior
 earned evidence. Pause-drain and session terminal force flush. M0 may implement
 each command transactionally with a no-op batching abstraction, but the real
 protocol and flush points exist from day one.
+
+For an opt-in compound run, `LedgerRecorder`/`SyncRunRecorder` remains the one
+outer writer and logical run window from execute through verify. Pause may
+close the connection and reopen the same unfinished token idempotently; it does
+not finish the run. Verification reuses that same run-bound recorder for
+conditional integrity writes. Complete, mismatch, modified, cancel,
+preflight-incomplete, ordinary `Exception`, and finish-failure paths attempt one
+terminal finish; a finish error degrades recording without rewriting filesystem
+or integrity truth.
 
 ## Conditional Evidence Primitive
 

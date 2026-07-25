@@ -1,9 +1,10 @@
 # Core Module
 
 Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
-and recording contracts are implemented. M1 Stages 2-3 add the fixed XXH3-128
+and recording contracts are implemented. M1 Stages 2-4 add the fixed XXH3-128
 content contract, nominal heterogeneous result vocabulary, schema-v3 event
-codec, and the continuation state consumed by standalone integrity workflows.
+codec, published-copy/post-copy evidence, compound phase results, and the
+continuation state consumed by standalone and linked integrity workflows.
 
 ## Purpose
 
@@ -66,6 +67,17 @@ semantics.
 Executor continuation and collaborator contracts are implemented in
 `core/execution.py`: the mutable `ExecutionSet`, fixed-format `RunId`, typed
 failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
+Every successful selected COPY/UPDATE/MOVE_UPDATE has exactly one
+`PublishedCopyEvidence`: its copy-stream attestation plus either a complete
+`RecordedCopyIdentity` returned by the same ledger transaction or no identity
+with frozen `recording=DEGRADED`. Recorded scope/path/location values are
+validated against the execution run and reviewed target; partial or invented
+identity is unrepresentable.
+
+`core/integrity.py` owns `PostCopyCandidate` and its mutable
+`PostCopySelection`. Candidates copy verifier-facing values from published
+evidence without embedding the execution type or requiring a ledger row.
+Completion ids and processed bytes are validated continuation state.
 
 `core/recording.py` now owns the immutable host, volume, location, mapping, sync
 run, finish, and inventory commands used at the ledger boundary. Per-operation
@@ -101,9 +113,10 @@ terminal.
 
 `Canceled` and `PauseRequested` remain payload-free. The runner consumes them
 and aggregates already emitted RELIABLE item outcomes into the session result;
-unexpected exceptions are likewise consumed after typed detail is attached to
-the one terminal/log path, so no exception can escape to create a second
-terminal. Operation modules emit outcomes as work settles rather than holding a
+ordinary unexpected `Exception` values are likewise consumed after typed detail
+is attached to the one terminal/log path. `KeyboardInterrupt`, `SystemExit`,
+and other `BaseException` subclasses deliberately escape without being
+normalized into a workflow result. Operation modules emit outcomes as work settles rather than holding a
 private result list until return. Before `Canceled` leaves an item-processing
 module, its unwind finalizer emits `CANCELED` for the in-flight and every
 unreached selected item. The same finalizer emits nothing for unreached work on
@@ -219,7 +232,13 @@ refusal from sessions that actually began domain work without parsing strings
 or inferring from an empty result-item list. `OperationResult.items` accepts
 only nominal `ResultItem` instances and preserves the one heterogeneous event
 order; operation and integrity consumers use explicit tags rather than parallel
-domain lists.
+domain lists. Compound results add one `PhaseResult` per entered phase with
+phase-local counters that are never summed. Cancellation is a separate fact:
+verify cancellation may retain filesystem `COMPLETED` or `FAILED`, while
+`result_terminal_state()` is the sole projection to dispatcher lifecycle
+`CANCELED`. These combinations require `Disposition.RAN`, matching execute
+truth, and a canceled verify phase; execute cancellation cannot claim a
+completed execute phase.
 
 ## Expectations Of Other Modules
 
@@ -262,9 +281,10 @@ logic; no scanner role or inventory representation is added.
 
 - Exhaustive tests prove every legal session edge and reject every other edge
   without changing state.
-- Every session path—success, refusal, cancellation, exception, and later
-  interruption—produces exactly one terminal from the core runner; pause
-  produces none until that same session resumes and terminates.
+- Every success, refusal, cancellation, ordinary `Exception`, and later
+  interruption path produces exactly one terminal from the core runner;
+  `BaseException` escapes unnormalized, and pause produces no terminal until
+  that same session resumes and terminates.
 - Concurrent event emission yields gap-free monotonically increasing sequence
   numbers per session and no sequence sharing across sessions.
 - Event serialization round-trips every body and rejects unsupported schema

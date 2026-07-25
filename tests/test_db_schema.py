@@ -259,7 +259,9 @@ def test_ledger_v1_is_refused_without_mutation(tmp_path: Path) -> None:
         check.close()
 
 
-def test_coordinated_reset_recreates_final_m1_schema_shapes(tmp_path: Path) -> None:
+def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
+    tmp_path: Path,
+) -> None:
     ledger = tmp_path / "ledger.db"
     history = tmp_path / "history.db"
     _seed_schema_version(ledger, 1)

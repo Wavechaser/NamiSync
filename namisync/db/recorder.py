@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Protocol
 
 from namisync.core.evidence import Attestation, Provenance
+from namisync.core.execution import RecordedCopyIdentity
 from namisync.core.integrity import (
     IntegrityRecordCommand,
     InventoryState,
@@ -1065,11 +1066,37 @@ class SyncRunRecorder:
             raise TokenConflictError("finish command belongs to another run")
         return self._owner.finish_run(command)
 
-    def record_copied(self, op: OpId, attestation: Attestation) -> None:
-        self._record(op, OperationKind.COPY, {"attestation": attestation}, lambda connection, plan_op, at: self._record_copy_like(connection, plan_op, attestation, at))
+    def record_copied(
+        self, op: OpId, attestation: Attestation
+    ) -> RecordedCopyIdentity:
+        identity = self._record(
+            op,
+            OperationKind.COPY,
+            {"attestation": attestation},
+            lambda connection, plan_op, at: self._record_copy_like(
+                connection, plan_op, attestation, at
+            ),
+            return_copy_identity=True,
+        )
+        if identity is None:  # guarded by _record; defensive only
+            raise RecordingError("copy recording did not return a durable identity")
+        return identity
 
-    def record_updated(self, op: OpId, attestation: Attestation) -> None:
-        self._record(op, OperationKind.UPDATE, {"attestation": attestation}, lambda connection, plan_op, at: self._record_copy_like(connection, plan_op, attestation, at))
+    def record_updated(
+        self, op: OpId, attestation: Attestation
+    ) -> RecordedCopyIdentity:
+        identity = self._record(
+            op,
+            OperationKind.UPDATE,
+            {"attestation": attestation},
+            lambda connection, plan_op, at: self._record_copy_like(
+                connection, plan_op, attestation, at
+            ),
+            return_copy_identity=True,
+        )
+        if identity is None:  # guarded by _record; defensive only
+            raise RecordingError("update recording did not return a durable identity")
+        return identity
 
     def record_moved(self, op: OpId, target: FileStat) -> None:
         self._record(op, OperationKind.MOVE, {"target": target}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
@@ -1077,8 +1104,30 @@ class SyncRunRecorder:
     def record_recased(self, op: OpId, target: FileStat) -> None:
         self._record(op, OperationKind.RECASE, {"target": target}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
 
-    def record_move_updated(self, op: OpId, attestation: Attestation) -> None:
-        self._record(op, OperationKind.MOVE_UPDATE, {"attestation": attestation}, lambda connection, plan_op, at: self._record_move(connection, plan_op, attestation.subject, at, attestation))
+    def record_move_updated(
+        self, op: OpId, attestation: Attestation
+    ) -> RecordedCopyIdentity:
+        identity = self._record(
+            op,
+            OperationKind.MOVE_UPDATE,
+            {"attestation": attestation},
+            lambda connection, plan_op, at: self._record_move(
+                connection, plan_op, attestation.subject, at, attestation
+            ),
+            return_copy_identity=True,
+        )
+        if identity is None:  # guarded by _record; defensive only
+            raise RecordingError(
+                "move-update recording did not return a durable identity"
+            )
+        return identity
+
+    def record_integrity(
+        self, command: IntegrityRecordCommand
+    ) -> RecordDisposition:
+        """Use the same serialized writer for linked post-copy verification."""
+
+        return self._owner.record_integrity(command)
 
     def record_mkdir(self, op: OpId, target: FileStat) -> None:
         def apply(connection: sqlite3.Connection, plan_op: PlanOperation, at: str) -> None:
@@ -1110,9 +1159,11 @@ class SyncRunRecorder:
         op_id: OpId,
         expected_kind: OperationKind,
         evidence: object,
-        apply: Callable[[sqlite3.Connection, PlanOperation, str], None],
+        apply: Callable[[sqlite3.Connection, PlanOperation, str], int | None],
         trash_relative_path: str | None = None,
-    ) -> None:
+        *,
+        return_copy_identity: bool = False,
+    ) -> RecordedCopyIdentity | None:
         if op_id not in self._command.selection:
             raise StaleRecordingError("operation is not part of the reviewed selection")
         operation = self._operations.get(op_id)
@@ -1127,7 +1178,9 @@ class SyncRunRecorder:
             }
         )
 
-        def transaction(connection: sqlite3.Connection) -> None:
+        def transaction(
+            connection: sqlite3.Connection,
+        ) -> RecordedCopyIdentity | None:
             prior = connection.execute(
                 "SELECT payload_hash FROM operations WHERE run_id = ? AND op_token = ?",
                 (self._run_row_id, str(op_id)),
@@ -1135,10 +1188,14 @@ class SyncRunRecorder:
             if prior is not None:
                 if bytes(prior["payload_hash"]) != payload_hash:
                     raise TokenConflictError("operation token was reused with different evidence")
-                return
+                return (
+                    self._recorded_copy_identity(connection, operation)
+                    if return_copy_identity
+                    else None
+                )
             now = self._owner._clock.now()
             at = encode_utc(now)
-            apply(connection, operation, at)
+            row_id = apply(connection, operation, at)
             connection.execute(
                 """INSERT INTO operations(
                        run_id, op_token, kind, source_rel_path, target_rel_path,
@@ -1157,8 +1214,54 @@ class SyncRunRecorder:
                     payload_hash,
                 ),
             )
+            if not return_copy_identity:
+                return None
+            if row_id is None:
+                raise RecordingError(
+                    "copy-producing transaction did not identify its target row"
+                )
+            return self._recorded_copy_identity(
+                connection, operation, row_id=row_id
+            )
 
-        self._owner._writer.transact(transaction)
+        return self._owner._writer.transact(transaction)
+
+    def _recorded_copy_identity(
+        self,
+        connection: sqlite3.Connection,
+        operation: PlanOperation,
+        *,
+        row_id: int | None = None,
+    ) -> RecordedCopyIdentity:
+        key = normalize_relative_path(operation.target_rel_path)
+        if row_id is None:
+            row = connection.execute(
+                """SELECT id, scope_token, rel_path_key
+                     FROM inventory
+                    WHERE location_id = ? AND rel_path_key = ?""",
+                (self._command.target_location_id, key),
+            ).fetchone()
+        else:
+            row = connection.execute(
+                """SELECT id, scope_token, rel_path_key
+                     FROM inventory
+                    WHERE id = ? AND location_id = ? AND rel_path_key = ?""",
+                (row_id, self._command.target_location_id, key),
+            ).fetchone()
+        if (
+            row is None
+            or row["scope_token"] != self._command.run_token
+            or row["rel_path_key"] != key
+        ):
+            raise StaleRecordingError(
+                "recorded copy target identity is no longer available"
+            )
+        return RecordedCopyIdentity(
+            row_id=str(row["id"]),
+            location_id=str(self._command.target_location_id),
+            scope_token=str(row["scope_token"]),
+            rel_path_key=str(row["rel_path_key"]),
+        )
 
     def _record_copy_like(
         self,
@@ -1166,7 +1269,7 @@ class SyncRunRecorder:
         operation: PlanOperation,
         attestation: Attestation,
         at: str,
-    ) -> None:
+    ) -> int:
         if (
             operation.source_rel_path is None
             or operation.source_expected is None
@@ -1205,6 +1308,7 @@ class SyncRunRecorder:
             attestation.subject,
             at,
         )
+        return target_id
 
     def _record_move(
         self,
@@ -1213,7 +1317,7 @@ class SyncRunRecorder:
         target: FileStat,
         at: str,
         attestation: Attestation | None,
-    ) -> None:
+    ) -> int:
         if operation.source_rel_path is None or operation.source_expected is None:
             raise StaleRecordingError("move lacks source evidence")
         if not self._matches_intended(operation, target):
@@ -1233,6 +1337,7 @@ class SyncRunRecorder:
                 raise StaleRecordingError("move-update attestation is inconsistent")
             self._store_attestation(connection, target_id, attestation)
         self._record_correspondence(connection, operation, source_id, target_id, operation.source_expected, target, at)
+        return target_id
 
     def _move_target_row(
         self,

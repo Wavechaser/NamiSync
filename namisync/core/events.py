@@ -169,6 +169,8 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
         Disposition,
         FailureDetail,
         OperationResult,
+        PhaseResult,
+        PhaseStatus,
         SessionId,
         SessionState,
     )
@@ -209,6 +211,9 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
         items_raw = result_raw.get("items", ())
         if not isinstance(items_raw, list):
             raise TypeError("terminal items must be a list")
+        phases_raw = result_raw["phases"]
+        if not isinstance(phases_raw, list):
+            raise TypeError("terminal phases must be a list")
         body = Terminal(
             OperationResult(
                 status=SessionState(str(result_raw["status"])),
@@ -217,6 +222,24 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
                 disposition=Disposition(str(result_raw["disposition"])),
                 canceled=bool(result_raw["canceled"]),
                 items=tuple(result_item_from_dict(item) for item in items_raw),
+                phases=tuple(
+                    PhaseResult(
+                        phase=str(_mapping_value(phase, "phase")),
+                        status=PhaseStatus(
+                            str(_mapping_value(phase, "status"))
+                        ),
+                        items_done=int(_mapping_value(phase, "items_done")),
+                        items_total=_optional_int(
+                            _mapping_value(phase, "items_total")
+                        ),
+                        bytes_done=int(_mapping_value(phase, "bytes_done")),
+                        bytes_total=_optional_int(
+                            _mapping_value(phase, "bytes_total")
+                        ),
+                        error=_optional_str(_mapping_value(phase, "error")),
+                    )
+                    for phase in phases_raw
+                ),
                 bytes_done=int(result_raw["bytes_done"]),
                 bytes_total=int(result_raw["bytes_total"]),
                 error=error,
@@ -296,8 +319,8 @@ def result_item_from_dict(data: Mapping[str, object]) -> ResultItem:
             raise ValueError("integrity result item has an invalid phase")
         return IntegrityOutcome(
             item_id=str(data["item_id"]),
-            row_id=str(data["row_id"]),
-            location_id=str(data["location_id"]),
+            row_id=_optional_str(data["row_id"]),
+            location_id=_optional_str(data["location_id"]),
             path=str(data["path"]),
             result=IntegrityResult(str(data["result"])),
             reason=(
@@ -330,6 +353,18 @@ def _result_to_dict(result: "OperationResult") -> dict[str, object]:
         "disposition": result.disposition.value,
         "canceled": result.canceled,
         "items": [result_item_to_dict(item) for item in result.items],
+        "phases": [
+            {
+                "phase": phase.phase,
+                "status": phase.status.value,
+                "items_done": phase.items_done,
+                "items_total": phase.items_total,
+                "bytes_done": phase.bytes_done,
+                "bytes_total": phase.bytes_total,
+                "error": phase.error,
+            }
+            for phase in result.phases
+        ],
         "bytes_done": result.bytes_done,
         "bytes_total": result.bytes_total,
         "error": (
@@ -346,6 +381,12 @@ def _optional_int(value: object) -> int | None:
 
 def _optional_str(value: object) -> str | None:
     return None if value is None else str(value)
+
+
+def _mapping_value(value: object, key: str) -> object:
+    if not isinstance(value, Mapping):
+        raise TypeError("terminal phase must be a mapping")
+    return value[key]
 
 
 from typing import TYPE_CHECKING

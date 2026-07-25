@@ -46,8 +46,10 @@ snapshots. Reads expose projection disagreement but never repair state.
 
 History version 3 retains the run envelope/summary and replaces operation-only
 detail with generic `history_items` tagged by item type and phase. Sync and
-standalone integrity write ordered generic items. `history_phases` is reserved
-for later compound phase-summary producers; Stage 1/3 writes no phase rows.
+standalone integrity write ordered generic items. Stage 4 compound sync writes
+ordered execute/verify summaries to the already-reserved `history_phases`;
+Stage 1/3 standalone producers still write no phase rows. This required no
+version, marker, migration, reset, or table change.
 
 The final M1 schemas carry immutable whole-contract metadata:
 ledger `contract_id=m1-ledger-xxh3-128-mapping-filters-v1` and history
@@ -94,6 +96,13 @@ The initial schema reserves the expensive identity/evidence bones:
 - physical presence, acknowledgement, reappearance, and unsupported state,
   independent of mapping-scoped exclusion policy;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
+
+Successful byte-producing operation transactions return the persisted target
+inventory row identity, target location, run scope token, and canonical path
+key as one tuple. Idempotent replay returns the identical tuple. Compound
+execute→verify reuses one run token/window and the same run-bound recorder for
+conditional integrity writes; pause closes/reopens the connection without
+ending the row, and terminal settlement fills `ended_at` once.
 
 Drive letters are current mount/display data, never persisted identity. Label
 drift is noted without rebind; a matching serial with a changed filesystem type
@@ -219,9 +228,14 @@ rather than current implementation claims.
   instrumentation benchmarks.
 - History integrity detail, sync operations, and subject-only activities all
   round-trip through typed repository reads.
-- History run envelopes round-trip filesystem status, independent
-  recording/audit axes, and `Disposition` without deriving them from detail
-  count or text.
+- History run envelopes round-trip filesystem status, recording/audit axes,
+  cancellation, `Disposition`, ordered mixed items, and compound phases
+  without deriving them from detail count or text. Integrity and headline are
+  reconstructed from those typed persisted values through the same classifier
+  as live results; they are not additional database columns.
+- A compound write succeeds against unchanged history v3 and standalone
+  producers leave `history_phases` empty; the coordinated reset remains the
+  sole M1 schema boundary.
 - Ledger v1, history v1/v2, and current-number transitional schemas lacking the
   exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.

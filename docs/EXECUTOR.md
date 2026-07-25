@@ -1,10 +1,11 @@
 # Executor Module
 
-Status: M1 Stage 2 implemented. The native executor covers every reviewed
+Status: M1 Stages 2 and 4 implemented. The native executor covers every reviewed
 operation kind on local Windows filesystems. Normal copies use one bounded
 reader/hasher/writer pipeline at a time, fixed adaptive chunks, XXH3-128
 evidence, measured conditional preallocation, and single-handle native
-finalization. External writers remain outside NamiSync's volume-lock contract;
+finalization. Successful byte-producing operations now publish exact
+continuation evidence for optional in-session readback. External writers remain outside NamiSync's volume-lock contract;
 the residual update race is documented below rather than presented as closed.
 
 ## Purpose
@@ -109,8 +110,15 @@ documentation rather than becoming a false compare-and-swap guarantee.
 11. Require the published target size to equal the hashed byte count and
     construct `Attestation(ContentEvidence("xxh3_128", ...), target_stat)` so
     target identity is never confused with source identity.
-12. Call recorder. A recorder failure preserves the filesystem outcome and
-    degrades `RecordingStatus` instead of relabeling the copy as failed.
+12. Call recorder. A successful COPY/UPDATE/MOVE_UPDATE transaction returns the
+    actual target inventory row/location/scope/path identity; idempotent replay
+    returns that same tuple. A recorder failure preserves the filesystem
+    outcome, leaves the published evidence rowless, and degrades
+    `RecordingStatus` instead of relabeling the copy as failed.
+13. Store exactly one `PublishedCopyEvidence` and the succeeded operation status
+    in `ExecutionSet` before emitting the reliable `ItemOutcome`. Only
+    COPY/UPDATE/MOVE_UPDATE produce this evidence; failed, no-op, metadata-only,
+    and unreached operations never do.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
 Once per successfully preflighted execution, recovery enumerates only direct
@@ -242,6 +250,13 @@ ordinary exact-name recovery, preserves completed `ExecutionSet` statuses,
 forces pause-drain recording, and re-raises without terminal; dispatcher then
 releases custody. Resume queues at the back, freshly re-observes/preflights in
 workflow, and continues only unreached work.
+
+Published evidence is executor continuation state, not a second inventory
+selection. It round-trips exact post-publish stat/content/provenance plus the
+copy-recording result across a same-process execute pause. If status reaches
+`SUCCEEDED` without evidence, the compound workflow reports a named
+verification-incomplete invariant failure rather than silently omitting
+readback.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoint
 between attempts. A simple operation restarts after exact-temp cleanup; an

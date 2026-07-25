@@ -10,9 +10,10 @@ from pathlib import Path
 import re
 from typing import BinaryIO, NewType, Protocol, TypeAlias
 
-from .evidence import Attestation, Outcome
-from .models import FileStat
-from .planning import OpId, Plan, PlanFingerprint, PlanOperation
+from .evidence import Attestation, Outcome, Provenance, RecordingStatus
+from .models import EntryKind, FileStat
+from .pathing import normalize_relative_path
+from .planning import OpId, OperationKind, Plan, PlanFingerprint, PlanOperation
 
 
 RunId = NewType("RunId", str)
@@ -47,6 +48,56 @@ class Commitment:
             raise ValueError("commitment timestamp must be UTC")
 
 
+@dataclass(frozen=True, slots=True)
+class RecordedCopyIdentity:
+    """Durable ledger identity returned by one successful copy transaction."""
+
+    row_id: str
+    location_id: str
+    scope_token: str
+    rel_path_key: str
+
+    def __post_init__(self) -> None:
+        values = (
+            self.row_id,
+            self.location_id,
+            self.scope_token,
+            self.rel_path_key,
+        )
+        if not all(isinstance(value, str) for value in values):
+            raise TypeError("recorded copy identity fields must be strings")
+        if not all(values):
+            raise ValueError("recorded copy identity fields must be non-empty strings")
+        if normalize_relative_path(self.rel_path_key) != self.rel_path_key:
+            raise ValueError("recorded copy relative path key must be canonical")
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedCopyEvidence:
+    """Post-publish evidence plus optional durable ledger identity."""
+
+    attestation: Attestation
+    recorded_identity: RecordedCopyIdentity | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.attestation, Attestation):
+            raise TypeError("published copy evidence requires an attestation")
+        if self.attestation.content.provenance is not Provenance.COPY_ATTESTED:
+            raise ValueError("published copy evidence must be copy-attested")
+        if self.attestation.subject.kind is not EntryKind.FILE:
+            raise ValueError("published copy evidence must attest a regular file")
+        if self.recorded_identity is not None and not isinstance(
+            self.recorded_identity, RecordedCopyIdentity
+        ):
+            raise TypeError("recorded copy identity has the wrong type")
+
+    @property
+    def copy_recorded(self) -> bool:
+        """Whether the copy transaction returned a complete durable identity."""
+
+        return self.recorded_identity is not None
+
+
 @dataclass(slots=True)
 class ExecutionSet:
     """A selected plan plus mutable continuation state for pause/resume."""
@@ -56,10 +107,17 @@ class ExecutionSet:
     run_id: RunId
     status: dict[OpId, Outcome] = field(default_factory=dict)
     commitment: Commitment | None = None
+    published_evidence: dict[OpId, PublishedCopyEvidence] = field(
+        default_factory=dict
+    )
+    recording: RecordingStatus = RecordingStatus.OK
 
     def __post_init__(self) -> None:
         validated_run_id(str(self.run_id))
-        known = {operation.op_id for operation in self.plan.operations}
+        operations = {
+            operation.op_id: operation for operation in self.plan.operations
+        }
+        known = set(operations)
         unknown = self.selection - known
         if unknown:
             raise ValueError(f"selection contains unknown operation ids: {sorted(unknown)!r}")
@@ -68,6 +126,60 @@ class ExecutionSet:
             raise ValueError(
                 f"status contains unselected operation ids: {sorted(invalid_status)!r}"
             )
+        invalid_evidence = self.published_evidence.keys() - self.selection
+        if invalid_evidence:
+            raise ValueError(
+                "published evidence contains unselected operation ids: "
+                f"{sorted(invalid_evidence)!r}"
+            )
+        if not isinstance(self.recording, RecordingStatus):
+            raise TypeError("execution recording status has the wrong type")
+        byte_kinds = {
+            OperationKind.COPY,
+            OperationKind.UPDATE,
+            OperationKind.MOVE_UPDATE,
+        }
+        recorded_location_id: str | None = None
+        for op_id, evidence in self.published_evidence.items():
+            if not isinstance(evidence, PublishedCopyEvidence):
+                raise TypeError("published evidence values have the wrong type")
+            operation = operations[op_id]
+            if operation.kind not in byte_kinds:
+                raise ValueError(
+                    "published evidence belongs to a non-byte-producing operation"
+                )
+            if self.status.get(op_id) is not Outcome.SUCCEEDED:
+                raise ValueError(
+                    "published evidence requires a successful operation status"
+                )
+            if evidence.attestation.content.size != operation.content_bytes:
+                raise ValueError(
+                    "published evidence size does not match reviewed content bytes"
+                )
+            identity = evidence.recorded_identity
+            if identity is None:
+                if self.recording is RecordingStatus.OK:
+                    raise ValueError(
+                        "identityless published evidence requires degraded recording"
+                    )
+                continue
+            if identity.scope_token != str(self.run_id):
+                raise ValueError(
+                    "recorded copy scope token does not match the execution run"
+                )
+            expected_path_key = normalize_relative_path(
+                operation.target_rel_path
+            )
+            if identity.rel_path_key != expected_path_key:
+                raise ValueError(
+                    "recorded copy relative path key does not match its operation"
+                )
+            if recorded_location_id is None:
+                recorded_location_id = identity.location_id
+            elif identity.location_id != recorded_location_id:
+                raise ValueError(
+                    "recorded copy identities do not share one target location"
+                )
 
     def remaining(self) -> tuple[PlanOperation, ...]:
         """Return selected operations without a final status, in plan order."""
@@ -171,15 +283,21 @@ class Recorder(Protocol):
 
     def flush(self) -> None: ...
 
-    def record_copied(self, op: OpId, attestation: Attestation) -> None: ...
+    def record_copied(
+        self, op: OpId, attestation: Attestation
+    ) -> RecordedCopyIdentity: ...
 
-    def record_updated(self, op: OpId, attestation: Attestation) -> None: ...
+    def record_updated(
+        self, op: OpId, attestation: Attestation
+    ) -> RecordedCopyIdentity: ...
 
     def record_moved(self, op: OpId, target: FileStat) -> None: ...
 
     def record_recased(self, op: OpId, target: FileStat) -> None: ...
 
-    def record_move_updated(self, op: OpId, attestation: Attestation) -> None: ...
+    def record_move_updated(
+        self, op: OpId, attestation: Attestation
+    ) -> RecordedCopyIdentity: ...
 
     def record_mkdir(self, op: OpId, target: FileStat) -> None: ...
 

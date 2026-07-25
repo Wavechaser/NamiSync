@@ -26,6 +26,8 @@ from namisync.core.events import (
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.session import (
     OperationResult,
+    PhaseResult,
+    PhaseStatus,
     ResultItem,
     SessionRecord,
     SessionState,
@@ -73,6 +75,12 @@ class HistoryItemSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class HistoryPhaseSnapshot:
+    phase_order: int
+    phase: PhaseResult
+
+
+@dataclass(frozen=True, slots=True)
 class HistoryRunSnapshot:
     run_token: str
     session_id: str
@@ -92,6 +100,7 @@ class HistoryRunSnapshot:
     bytes_done: int
     bytes_total: int
     items: tuple[HistoryItemSnapshot, ...]
+    phases: tuple[HistoryPhaseSnapshot, ...]
     error_type: str | None
     error_message: str | None
 
@@ -335,6 +344,27 @@ class HistoryObserver:
                     for order, (seq, item) in enumerate(self._items)
                 ),
             )
+            connection.executemany(
+                """INSERT INTO history_phases(
+                       run_id, phase_order, phase, status, items_done,
+                       items_total, bytes_done, bytes_total, error, detail_json
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    (
+                        run_id,
+                        order,
+                        phase.phase,
+                        phase.status.value,
+                        phase.items_done,
+                        phase.items_total,
+                        phase.bytes_done,
+                        phase.bytes_total,
+                        phase.error,
+                        _json_text(_phase_to_dict(phase)),
+                    )
+                    for order, phase in enumerate(result.phases)
+                ),
+            )
 
         self._store._writer.transact(apply)
         self._final_payload_hash = payload_hash
@@ -395,6 +425,18 @@ class HistoryRepository:
                 (row["id"],),
             )
         )
+        phases = tuple(
+            HistoryPhaseSnapshot(
+                phase_order=int(phase["phase_order"]),
+                phase=_history_phase(phase),
+            )
+            for phase in self._connection.execute(
+                """SELECT * FROM history_phases
+                    WHERE run_id = ?
+                    ORDER BY phase_order""",
+                (row["id"],),
+            )
+        )
         return HistoryRunSnapshot(
             run_token=row["run_token"],
             session_id=row["session_id"],
@@ -414,6 +456,7 @@ class HistoryRepository:
             bytes_done=int(row["bytes_done"]),
             bytes_total=int(row["bytes_total"]),
             items=items,
+            phases=phases,
             error_type=row["error_type"],
             error_message=row["error_message"],
         )
@@ -467,3 +510,50 @@ def _history_item(row: sqlite3.Row) -> ResultItem:
     if actual != expected:
         raise HistoryIntegrityError("history item columns disagree with payload")
     return item
+
+
+def _phase_to_dict(phase: PhaseResult) -> dict[str, object]:
+    return {
+        "phase": phase.phase,
+        "status": phase.status.value,
+        "items_done": phase.items_done,
+        "items_total": phase.items_total,
+        "bytes_done": phase.bytes_done,
+        "bytes_total": phase.bytes_total,
+        "error": phase.error,
+    }
+
+
+def _history_phase(row: sqlite3.Row) -> PhaseResult:
+    raw = json.loads(row["detail_json"])
+    if not isinstance(raw, Mapping):
+        raise HistoryIntegrityError("history phase payload must be an object")
+    phase = PhaseResult(
+        phase=str(raw["phase"]),
+        status=PhaseStatus(str(raw["status"])),
+        items_done=int(raw["items_done"]),
+        items_total=(
+            None if raw["items_total"] is None else int(raw["items_total"])
+        ),
+        bytes_done=int(raw["bytes_done"]),
+        bytes_total=(
+            None if raw["bytes_total"] is None else int(raw["bytes_total"])
+        ),
+        error=None if raw["error"] is None else str(raw["error"]),
+    )
+    expected = {
+        "phase": row["phase"],
+        "status": row["status"],
+        "items_done": int(row["items_done"]),
+        "items_total": (
+            None if row["items_total"] is None else int(row["items_total"])
+        ),
+        "bytes_done": int(row["bytes_done"]),
+        "bytes_total": (
+            None if row["bytes_total"] is None else int(row["bytes_total"])
+        ),
+        "error": row["error"],
+    }
+    if _phase_to_dict(phase) != expected:
+        raise HistoryIntegrityError("history phase columns disagree with payload")
+    return phase

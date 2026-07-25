@@ -64,6 +64,30 @@ to a global chronological list.
 
 ## WORKFLOW AND CLI
 
+### M1 post-execution integration
+
+- SEVERE - FIXED (2026-07-25). Compound ledger-run settlement. Exceptions
+  during execute-result projection, continuation publication, verify phase
+  entry/context creation, or verifier-result aggregation could escape after the
+  recorder opened, leaving the logical ledger run unfinished; a resumed
+  execute preflight refusal could also be mislabeled as fresh
+  `REFUSED+UNRUN`. Cause: only the executor/verifier call itself was guarded and
+  runtime discarded whether `started_at` came from a resumed payload; fixed
+  with an explicit resumed bit, phase-aware exception results, and one guarded
+  finish-once path for every post-entry terminal.
+- MODERATE - FIXED (2026-07-25). Retained compound history projection. Reading
+  a retained phase passed its `HistoryPhaseSnapshot` wrapper to the phase view
+  and raised `AttributeError`; even without phases, the view omitted persisted
+  cancellation and derived integrity/headline truth. Cause: the runtime
+  projected repository wrappers as domain values and exposed an incomplete run
+  view; fixed by unwrapping ordered snapshots, reconstructing the typed result,
+  and routing retained classification through the same live result classifier.
+- MODERATE - FIXED (2026-07-25). Canceled-settlement adapter failure. A malformed
+  registration callback could be converted into a clean canceled terminal.
+  Cause: dispatcher checked the already-requested cancel checkpoint before
+  raising the captured adapter failure; fixed by giving the detected failure
+  precedence and pinning PAUSING-drain/callback-failure races.
+
 ### M0 integration
 
 - MODERATE - FIXED (2026-07-21). Rename plan presentation. Recase rows rendered

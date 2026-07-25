@@ -12,6 +12,8 @@ from namisync.core.evidence import Outcome
 from namisync.core.session import (
     Disposition,
     OperationResult,
+    PhaseResult,
+    PhaseStatus,
     ResourceId,
     SessionState,
 )
@@ -59,7 +61,13 @@ class Invocation:
         return self.snapshot_bytes
 
 
-def registration(run_for_payload, *, supports_pause=False, resources=()):
+def registration(
+    run_for_payload,
+    *,
+    supports_pause=False,
+    resources=(),
+    settle_canceled=None,
+):
     def prepare(request):
         payload = request if isinstance(request, bytes) else str(request).encode()
         return PreparedSession(payload, frozenset(resources))
@@ -68,6 +76,7 @@ def registration(run_for_payload, *, supports_pause=False, resources=()):
         prepare=prepare,
         open=lambda payload: Invocation(run_for_payload(payload)),
         supports_pause=supports_pause,
+        settle_canceled=settle_canceled,
     )
 
 
@@ -308,6 +317,320 @@ def test_pause_resume_cancel_terminal_retains_pre_pause_item_outcome() -> None:
     assert dispatcher.shutdown().complete
 
 
+def test_cancel_paused_uses_registration_owned_axis_preserving_settlement() -> None:
+    entered = Event()
+    opened: list[bytes] = []
+    settled: list[tuple[bytes, Disposition]] = []
+
+    def run_for(payload):
+        opened.append(payload)
+
+        def pauseable(context):
+            context.emit(
+                ItemOutcome("earned", "copy", "file.bin", Outcome.SUCCEEDED)
+            )
+            entered.set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+
+        return pauseable
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.COMPLETED,
+            disposition=disposition,
+            canceled=True,
+            phases=(
+                PhaseResult(
+                    "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+                ),
+                PhaseResult(
+                    "verify", PhaseStatus.CANCELED, 0, 1, 0, 7
+                ),
+            ),
+            bytes_done=7,
+            bytes_total=7,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "compound": registration(
+                run_for,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        }
+    )
+    session_id = dispatcher.submit("compound", b"initial")
+    stream = dispatcher.subscribe(session_id)
+    assert entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
+    assert paused.payload == b"continued"
+    assert dispatcher.cancel(session_id).accepted
+    record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+    assert settled == [(b"continued", Disposition.RAN)]
+    assert opened == [b"initial"]
+    assert record.result is not None
+    assert record.result.status is SessionState.COMPLETED
+    assert record.result.canceled is True
+    assert [item.item_id for item in record.result.items] == ["earned"]
+    assert [phase.status for phase in record.result.phases] == [
+        PhaseStatus.COMPLETED,
+        PhaseStatus.CANCELED,
+    ]
+    terminals = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except (TimeoutError, StopIteration):
+            break
+        if isinstance(envelope.body, Terminal):
+            terminals.append(envelope.body)
+    assert len(terminals) == 1
+    assert terminals[0].result == record.result
+    assert dispatcher.shutdown().complete
+
+
+def test_cancel_during_pausing_snapshot_drain_settles_once_and_releases_custody() -> None:
+    entered = Event()
+    snapshot_entered = Event()
+    release_snapshot = Event()
+    follower_entered = Event()
+    settled: list[tuple[bytes, Disposition]] = []
+    resource = ResourceId("volume", "pausing-drain")
+
+    class BlockingSnapshot(Invocation):
+        def snapshot(self) -> bytes:
+            snapshot_entered.set()
+            assert release_snapshot.wait(2)
+            return b"continued"
+
+    def pauseable(context):
+        context.emit(
+            ItemOutcome("earned", "copy", "file.bin", Outcome.SUCCEEDED)
+        )
+        entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.CANCELED,
+            disposition=disposition,
+            canceled=True,
+        )
+
+    def follower(context):
+        follower_entered.set()
+        return OperationResult(SessionState.COMPLETED)
+
+    dispatcher = Dispatcher(
+        {
+            "compound": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    b"initial", frozenset({resource})
+                ),
+                open=lambda payload: BlockingSnapshot(pauseable),
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            ),
+            "follower": registration(
+                lambda payload: follower,
+                resources=(resource,),
+            ),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    session_id = dispatcher.submit("compound", object())
+    stream = dispatcher.subscribe(session_id)
+    assert entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    assert snapshot_entered.wait(2)
+    assert dispatcher.get(session_id).state is SessionState.PAUSING
+
+    cancel = dispatcher.cancel(session_id)
+    assert cancel.accepted
+    assert cancel.before is SessionState.PAUSING
+    assert cancel.after is SessionState.PAUSING
+    assert dispatcher.get(session_id).state is SessionState.PAUSING
+    release_snapshot.set()
+
+    record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+    assert settled == [(b"continued", Disposition.RAN)]
+    assert record.started_at is not None
+    assert record.payload == b"continued"
+    assert record.result is not None
+    assert [item.item_id for item in record.result.items] == ["earned"]
+    assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
+    assert settled == [(b"continued", Disposition.RAN)]
+
+    follower_id = dispatcher.submit("follower", b"next")
+    assert follower_entered.wait(2)
+    wait_for(dispatcher, follower_id, SessionState.COMPLETED)
+
+    terminals = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except (TimeoutError, StopIteration):
+            break
+        if isinstance(envelope.body, Terminal):
+            terminals.append(envelope.body)
+    assert len(terminals) == 1
+    assert terminals[0].result == record.result
+    shutdown = dispatcher.shutdown()
+    assert shutdown.complete
+    assert shutdown.custody_released
+
+
+def test_malformed_canceled_settlement_fails_loudly_once() -> None:
+    entered = Event()
+    settled: list[tuple[bytes, Disposition]] = []
+
+    def pauseable(context):
+        entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    def malformed_settlement(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(SessionState.COMPLETED)
+
+    dispatcher = Dispatcher(
+        {
+            "compound": registration(
+                lambda payload: pauseable,
+                supports_pause=True,
+                settle_canceled=malformed_settlement,
+            )
+        }
+    )
+    session_id = dispatcher.submit("compound", b"initial")
+    stream = dispatcher.subscribe(session_id)
+    assert entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+    assert dispatcher.cancel(session_id).accepted
+    record = wait_for(dispatcher, session_id, SessionState.FAILED)
+
+    assert settled == [(b"continued", Disposition.RAN)]
+    assert record.result is not None
+    assert record.result.canceled is False
+    assert record.result.error is not None
+    assert record.result.error.type_name == "ValueError"
+    assert (
+        record.result.error.message
+        == "canceled settlement must project to CANCELED"
+    )
+    assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
+    assert settled == [(b"continued", Disposition.RAN)]
+
+    terminals = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except (TimeoutError, StopIteration):
+            break
+        if isinstance(envelope.body, Terminal):
+            terminals.append(envelope.body)
+    assert len(terminals) == 1
+    assert terminals[0].result == record.result
+    shutdown = dispatcher.shutdown()
+    assert shutdown.complete
+    assert shutdown.custody_released
+
+
+def test_cancel_resumed_pending_uses_started_settlement_once() -> None:
+    first_entered = Event()
+    blocker_entered = Event()
+    release_blocker = Event()
+    settled: list[tuple[bytes, Disposition]] = []
+    resource = ResourceId("volume", "shared")
+
+    def compound_for(payload):
+        def run(context):
+            if payload == b"initial":
+                first_entered.set()
+                while True:
+                    context.checkpoint()
+                    sleep(0.005)
+            pytest.fail("resumed invocation ran before pending cancellation")
+
+        return run
+
+    def blocker_for(payload):
+        del payload
+
+        def run(context):
+            blocker_entered.set()
+            assert release_blocker.wait(2)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.COMPLETED,
+            disposition=disposition,
+            canceled=True,
+            phases=(
+                PhaseResult(
+                    "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
+                ),
+                PhaseResult(
+                    "verify", PhaseStatus.CANCELED, 0, 1, 0, 7
+                ),
+            ),
+            bytes_done=7,
+            bytes_total=7,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "compound": registration(
+                compound_for,
+                supports_pause=True,
+                resources=(resource,),
+                settle_canceled=settle_canceled,
+            ),
+            "blocker": registration(
+                blocker_for,
+                resources=(resource,),
+            ),
+        },
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    session_id = dispatcher.submit("compound", b"initial")
+    assert first_entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+
+    blocker = dispatcher.submit("blocker", b"blocker")
+    assert blocker_entered.wait(2)
+    assert dispatcher.resume(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PENDING)
+    assert dispatcher.cancel(session_id).accepted
+    record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+    assert settled == [(b"continued", Disposition.RAN)]
+    assert record.result is not None
+    assert record.result.status is SessionState.COMPLETED
+    assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
+    assert settled == [(b"continued", Disposition.RAN)]
+
+    release_blocker.set()
+    wait_for(dispatcher, blocker, SessionState.COMPLETED)
+    assert dispatcher.shutdown().complete
+
+
 def test_cancel_running_session_emits_one_terminal_and_releases_custody() -> None:
     entered = Event()
 
@@ -360,8 +683,22 @@ def test_queued_cancel_is_unrun_and_terminal_record_survives_until_close() -> No
         return completed
 
     resource = ResourceId("volume", "shared")
+    canceled_settlements: list[bytes] = []
     dispatcher = Dispatcher(
-        {"hold": registration(run_for, resources=(resource,))},
+        {
+            "hold": registration(
+                run_for,
+                resources=(resource,),
+                settle_canceled=lambda payload, disposition: (
+                    canceled_settlements.append(payload)
+                    or OperationResult(
+                        SessionState.CANCELED,
+                        disposition=disposition,
+                        canceled=True,
+                    )
+                ),
+            )
+        },
         lock_provider=InProcessResourceLockProvider(),
     )
     first = dispatcher.submit("hold", b"first")
@@ -371,6 +708,7 @@ def test_queued_cancel_is_unrun_and_terminal_record_survives_until_close() -> No
     record = wait_for(dispatcher, second, SessionState.CANCELED)
     assert record.result is not None
     assert record.result.disposition is Disposition.UNRUN
+    assert canceled_settlements == []
     with pytest.raises(SessionNotTerminal):
         dispatcher.close(first)
     dispatcher.close(second)
