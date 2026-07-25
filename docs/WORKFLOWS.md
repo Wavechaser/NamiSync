@@ -1,12 +1,13 @@
 # Workflows Module
 
-Status: M0 reviewed sync/history plus M1 Stages 1-4 are implemented. The local
+Status: M0 reviewed sync/history plus M1 Stages 1-5 are implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
 strict execute/verify continuation payloads, optional post-execution
-verification, compound history/views, and generic history reads. New
-integrity CLI/desktop start surfaces, queue durability, maintenance/retention,
-replay, undo/repair, and ingest remain later work.
+verification, compound history/views, generic history reads, semantic-settings
+snapshot/patch translation, and the shared facade used by the location CLI
+commands. Desktop actions, queue durability, maintenance/retention, replay,
+undo/repair, and ingest remain later work.
 
 ## Purpose
 
@@ -31,7 +32,9 @@ execution does not receive or reread a settings provider.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
 3. Scan both roots with the same role-free observation contract.
-4. Read immutable prior correspondence and semantic settings snapshot.
+4. Read immutable prior correspondence and one complete semantic-settings
+   snapshot. If the request supplies a deletion-policy override, replace only
+   that field in the snapshot.
 5. Apply filters/policies and plan.
 6. Derive the deterministic safe selection: retain additive/no-op work, mark
    direct blockers `BLOCKED`, quarantine overlapping/dependent work as
@@ -102,9 +105,11 @@ the changed contract.
 The payload round-trips the fingerprinted
 `SyncOptions.propagate_source_casing` seam as a required field. A payload that
 omits a fingerprint input is rejected instead of decoding to false and
-re-encoding into a different payload. M0 exposes no config, CLI, or GUI control
-for it; when a future interface does, review and commitment will already bind
-the choice rather than letting execution reinterpret filename spelling.
+re-encoding into a different payload. Stage 5 exposes the complete semantic
+snapshot through primitive service read/partial-commit views, but adds no
+settings CLI command. Whatever interface commits the source-casing choice,
+review and commitment bind it rather than letting execution reinterpret
+filename spelling.
 The interface-facing `PlanOperationView` retains `prior_target_path` separately
 from source and planned target paths. Review adapters use it as the displayed
 origin for recase, move, and move-update rows, so the target-side rename is not
@@ -184,8 +189,19 @@ retains the exact admitted candidate ids plus completed ids/bytes; resume
 freshly inventories and guards those remaining rows without adding a newly
 appeared row. Inventory and plan register pause unsupported and remain
 cooperatively cancelable. The production interface registry contains all six
-current workflow kinds, while the CLI parser intentionally still exposes only
-`sync` and `history`.
+current workflow kinds, and the CLI reaches each through the shared service.
+
+Candidate filtering happens only while freezing a new integrity selection.
+Baseline admits eligible non-directory rows with no attestation; rebaseline
+admits eligible rows that already have an attestation; verify retains both,
+including null-attestation rows that must establish evidence and report
+verification-incomplete. When a continuation already carries
+`selection_item_ids`, resume reconstructs that exact ordered set without
+reapplying mode filters. Completed ids/bytes and the original admitted order
+therefore survive even if evidence changes after admission. A repeat full
+baseline still performs
+its required fresh inventory recording, but hashes and writes no integrity
+attestation when every eligible row already has evidence.
 
 ## Other Workflows
 
@@ -223,9 +239,11 @@ or error items mean verification did not complete cleanly and cannot be
 presented as success. A null-baseline item discovered during `phase=verify`
 also receives `verification-incomplete` because it established a baseline
 without performing a comparison; the same `baselined` result is successful in
-an explicit baseline/rebaseline phase. The global precedence in
-`ARCHITECTURE.md` still governs when filesystem, cancellation, recording, or
-audit truth is also present.
+an explicit baseline/rebaseline phase. One workflow-owned classifier applies
+the exact precedence `failed > partial > refused > mismatch > canceled >
+verification-incomplete > recording/audit degradation > all-noop > success`.
+Live and reopened history views reuse it, while every lower-priority axis
+remains independently renderable.
 
 Paused compound execution continues from an explicit discriminated
 continuation after fresh preflight. `phase=execute` carries execution status
@@ -294,6 +312,9 @@ import from handling refusal differently than baseline/verify.
   domain operation implementation, raw SQL, or UI import.
 - Plan session persists no mapping/settings/user-data mutation and releases all
   custody before review.
+- Planning reads semantic defaults exactly once; an explicit deletion override
+  retains every other stored option, and later settings changes cannot alter
+  the reviewed/committed execution.
 - Execution always uses the exact reviewed plan/selection, fresh observation,
   and preflight; drift refuses without mutation.
 - A blocked item cannot refuse independent safe work merely by existing in the
@@ -308,6 +329,9 @@ import from handling refusal differently than baseline/verify.
   commitment without human review.
 - Baseline/verify with no prior inventory automatically inventories then hashes;
   selected verify refreshes only selected canonical paths.
+- Fresh baseline selects only rows lacking evidence, fresh rebaseline selects
+  only rows with evidence, and resume preserves the exact frozen selection
+  without reapplying either mode filter.
 - Location integrity requires only the selected location and never silently
   falls back to another root.
 - Refusal, all-noop, partial failure, cancel, recorder failure, observer failure,

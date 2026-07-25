@@ -5,8 +5,9 @@ inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
 all four headless kinds and history v3 retains standalone and compound detail.
-Starting standalone activities from CLI/UI remains deliberately unexposed until
-the interface command stage.
+Stage 5 exposes standalone activities through the shared-service CLI with
+explicit location/scope binding and guarded selected rebaseline; desktop
+actions remain Stage 6.
 
 ## Purpose
 
@@ -103,6 +104,14 @@ and clears a prior `last_verified_at`; only a true comparison match in verify
 advances that timestamp. Copy/update/move-update evidence follows the same
 freshness invalidation rule.
 
+Workflow freezes a mode-aware initial selection before calling this module.
+Baseline admits only eligible non-directory rows without an attestation;
+rebaseline admits only rows with one; verify admits both. The filters are not
+reapplied when a paused continuation already has exact candidate ids, so an
+evidence change cannot remove admitted pending work. Repeating a full baseline
+still refreshes and records inventory, but when every row already has evidence
+it runs with zero verifier hashes and zero integrity-attestation writes.
+
 ## Selected And Post-Execution Verification
 
 Selection lookup uses `rel_path_key`, never raw separators/case. Selected
@@ -196,9 +205,14 @@ Implemented by the Stage 4 compound composition:
 - conditional stale recording as verified plus recording degradation;
 - exact pause completion ids/bytes and no repeated outcomes on resume.
 
-Still owned by later M1 stages:
+Implemented by the Stage 5 interface:
 
-- the CLI/desktop commands and presentation that start integrity work.
+- explicit root or retained-location starts with exact repeatable selected
+  paths and ambiguity mount choice;
+- typed counts, per-item outcomes, phase summaries, and independent result axes;
+- required selected scope plus explicit current-evidence intent for rebaseline.
+
+Desktop actions remain a later M1 stage.
 
 The shared SQLite ledger already implements the injected conditional
 `record_integrity` command, including atomic evidence/reappearance updates and
@@ -225,6 +239,9 @@ imports inside the verifier.
   `mismatched` across a full classification matrix.
 - Null-hash verify is `baselined`, stores verify provenance, and does not claim a
   prior verification match.
+- Repeat baseline hashes/writes only missing evidence; rebaseline excludes
+  missing-evidence rows; verify continues to baseline them and reports
+  verification-incomplete.
 - Copy-stream-only evidence never sets or renders `last_verified_at`.
 - Missing, unsupported, canceled, and read/error paths each emit one item result
   and no unsafe write.

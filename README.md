@@ -10,9 +10,10 @@ intent without rewriting physical presence; and supports acknowledge, restore,
 and stale/missing reads. Baseline, verify, and explicit rebaseline refresh
 inventory, re-resolve volume identity on start/resume/queued wakeup, preserve an
 exact admitted candidate set across pause/resume, and write ordered integrity
-detail to history. All four workflow kinds are registered with the production
-dispatcher, but no inventory/integrity CLI or UI command is exposed before M1
-Stage 5.
+detail to history. The shared service and CLI expose all four workflow kinds
+with explicit root/id binding, exact selected scopes, five-state resolution,
+both database overrides, and guarded rebaseline intent. Desktop actions remain
+M1 Stage 6.
 
 M1 Stage 2 replaced bulk content evidence with fixed XXH3-128 and pipelines
 each normal copy's read/write/hash stages under one combined 32 MiB byte budget.
@@ -32,8 +33,8 @@ recording degraded; filesystem, integrity, recording, and audit remain
 independent result axes. Same-process pause preserves explicit phase and
 published-evidence continuation, while application-restart recovery remains M2.
 The service exposes this through
-`start_execution(..., verify_after_execute=True)`; the existing CLI retains its
-M0 default until the remaining Stage 5 command/classification work lands.
+`start_execution(..., verify_after_execute=True)`; the CLI opts in with
+`sync --verify-after-copy`.
 
 The M0 dispatcher is also implemented: generic sessions run concurrently when
 their resource sets are disjoint, serialize when they overlap, use real
@@ -47,15 +48,18 @@ explicit completeness; planning is pure, correspondence-aware, dependency
 ordered, and byte-stable; hostile filesystem names become escaped incomplete-
 scan evidence instead of aborting review. Exact-case and NFC/NFD filename-form
 mismatches remain visible as non-blocking advisories while their ordinary
-update/no-op work continues; the unexposed opt-in casing policy uses a zero-byte
-rename when content already matches. Preflight separates scoped read-only
-observation from exhaustive typed judgment.
+update/no-op work continues; the opt-in casing policy is available through the
+semantic-settings facade (not a settings CLI) and uses a zero-byte rename when
+content already matches. Preflight separates scoped read-only observation from
+exhaustive typed judgment.
 
 The M1 contract and hash foundations are now implemented. `worker_count` and
 execution's false live-settings drift check are gone, so admitted runs consume
 only their reviewed immutable policy snapshot. Schema-versioned semantic
 defaults live in database-owned `settings.json` with named-mutex-serialized
-partial commits;
+partial commits. Runtime defaults it beside the selected ledger, the shared
+service exposes primitive full-snapshot/all-optional-patch views, and planning
+captures one immutable snapshot before admission;
 cosmetic recents/window/column/sort state lives separately in interface-owned
 `ui-state.json`. The measured `xxhash` 3.x runtime is now a declared project
 dependency, and executor and verifier consume one exact composition-owned
@@ -87,13 +91,16 @@ scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
 and independent history without crossing package boundaries. A shared
 process-local interface service now owns runtime/dispatcher lifetime, the
 six-kind production registry, blocking sink-based session observation, plan
-access, and typed result projection. The CLI exposes
-the two-session `sync` review/commit/execute flow and read-only `history`
-browsing through both `nami-sync` and `python -m namisync`. Blocked items no
+access, semantic-settings translation, explicit location starts, and typed
+axis-preserving result projection. The CLI exposes the two-session `sync`
+review/commit/execute flow, read-only `history`, and
+`inventory`/`baseline`/`verify`/`rebaseline` through both `nami-sync` and
+`python -m namisync`. Blocked items no
 longer refuse independent work: review commits a quarantined safe subset,
 incomplete scans allow guarded additive/no-op work while withholding moves and
-deletions, and history itemizes every blocked/deferred exception. The
-inventory/integrity parser commands remain Stage 5 Track B work.
+deletions, and history itemizes every blocked/deferred exception. The workflow
+headline drives deterministic codes 0 and 2-9 while filesystem, integrity,
+recording, audit, disposition, and cancellation remain visible.
 
 ## Development setup
 
@@ -122,6 +129,16 @@ Review and, only after typing the exact confirmation, execute a one-way sync:
 
 ```powershell
 nami-sync sync C:\Source D:\Target
+nami-sync sync C:\Source D:\Target --verify-after-copy
+```
+
+Refresh or check one explicit location:
+
+```powershell
+nami-sync inventory E:\Archive
+nami-sync baseline --location-id 12
+nami-sync verify E:\Archive --path Photos\keeper.jpg
+nami-sync rebaseline E:\Archive --path Photos\keeper.jpg --accept-current-evidence
 ```
 
 Browse retained history or one run in detail:
@@ -132,11 +149,18 @@ nami-sync history RUN_TOKEN
 ```
 
 `trash` is the default deletion policy; `additive` is also public, while
-`mirror` remains hidden. Ledger and history default to separate files under
-`%LOCALAPPDATA%\NamiSync`; `sync` accepts `--database` and
-`--history-database` overrides for isolated runs. There is no `--yes` bypass.
-Completed safe-subset runs with blocked or deferred items return exit code `6`
-and print `completed with exceptions`; clean full/no-op runs return `0`.
+`mirror` remains hidden. Omitting `--deletion-policy` uses the semantic snapshot
+in the ledger's sibling `settings.json`; an explicit value overrides only that
+plan. Ledger and history default to separate files under
+`%LOCALAPPDATA%\NamiSync`; sync and location commands accept isolated
+`--database` and `--history-database` paths. Location commands require exactly
+one root or `--location-id`, repeatable `--path` values are exact
+root-relative selections, and clone ambiguity requires explicit `--mount`.
+There is no `--yes` bypass.
+
+Clean full/no-op runs return `0`; input/refusal/failure/cancel/partial/degraded/
+mismatch/verification-incomplete use codes `2` through `9`. A higher-priority
+headline chooses the code without hiding lower-priority result axes.
 
 ## Documentation
 
@@ -178,6 +202,12 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
 
 ### Unreleased
 
+- Completed M1 Stage 5's facade and CLI: added explicit
+  inventory/baseline/verify/rebaseline commands, guarded selected rebaseline,
+  optional post-copy verification, five-state location guidance, primitive
+  semantic-settings snapshots/patches, mode-aware fresh integrity selection,
+  frozen resume scope, typed phase/item rendering, and deterministic
+  axis-preserving exit codes 0 and 2-9.
 - Implemented M1 Stage 4's opt-in execute→verify workflow: exact atomic
   published-copy evidence, rowless readback after ledger failure, strict
   phase-discriminated workflow payload v3, same-run pause/resume and
@@ -218,8 +248,8 @@ and print `completed with exceptions`; clean full/no-op runs return `0`.
   typed incomplete-scan evidence, surrogates cannot reach canonical encoding,
   and unique case-only or NFC/NFD filename-form differences are explicit
   non-blocking advisories. Target spelling is preserved by default; a
-  fingerprinted, currently unexposed option can propagate source basename
-  casing with a zero-byte, no-trash rename when content already matches.
+  fingerprinted semantic setting can propagate source basename casing with a
+  zero-byte, no-trash rename when content already matches.
 - Made every fingerprinted plan-request option mandatory on decode and extended
   malformed-surrogate-safe JSON encoding to ledger idempotency hashes, history
   hashes/detail, and opaque workflow payloads while preserving valid Unicode.

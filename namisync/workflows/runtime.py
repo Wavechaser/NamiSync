@@ -24,8 +24,12 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import ScanResult, VolumeEvidence, VolumeId
 from namisync.core.planning import (
+    DeletionPolicy,
+    FilterSet,
     MappingSnapshot,
     Plan,
+    PreservationPolicy,
+    SyncOptions,
     calculate_required_bytes,
     selection_digest,
 )
@@ -54,6 +58,11 @@ from namisync.db.history import (
 )
 from namisync.db.recorder import LedgerRecorder, SyncRunRecorder
 from namisync.db.repositories import InventorySnapshot, LedgerRepository
+from namisync.db.settings import (
+    SemanticSettings,
+    SemanticSettingsPatch,
+    SemanticSettingsStore,
+)
 from namisync.modules.executor import (
     ExecutorPolicies,
     NativeCopyBackend,
@@ -114,7 +123,14 @@ from .sync import (
     settle_canceled_execution as settle_canceled_sync_execution,
 )
 from .selection import derive_execution_selection
-from .views import operation_result_view, phase_result_view, result_item_view
+from .views import (
+    PreservationSettingsView,
+    SemanticSettingsPatchView,
+    SemanticSettingsView,
+    operation_result_view,
+    phase_result_view,
+    result_item_view,
+)
 
 
 PLAN_KIND = "sync-plan"
@@ -146,6 +162,7 @@ class LocalWorkflowRuntime:
         ledger_path: str | Path,
         history_path: str | Path,
         *,
+        settings_path: str | Path | None = None,
         clock=None,
         host_key: str | None = None,
         host_name: str | None = None,
@@ -156,6 +173,16 @@ class LocalWorkflowRuntime:
     ) -> None:
         self.ledger_path = Path(ledger_path).resolve()
         self.history_path = Path(history_path).resolve()
+        self.settings_path = (
+            self.ledger_path.parent / "settings.json"
+            if settings_path is None
+            else Path(settings_path).resolve()
+        )
+        if self.settings_path in {self.ledger_path, self.history_path}:
+            raise ValueError(
+                "semantic settings must use a path distinct from both databases"
+            )
+        self._settings_store = SemanticSettingsStore(self.settings_path)
         self.clock = clock or SystemClock()
         detected_host = platform.node().strip() or "unknown-host"
         self.host_key = host_key or detected_host
@@ -237,6 +264,46 @@ class LocalWorkflowRuntime:
                 else dict(integrity_runners)
             ),
         )
+
+    def create_plan_request(
+        self,
+        request_id: str,
+        source_path: str,
+        target_path: str,
+        *,
+        deletion_policy: str | None = None,
+    ) -> PlanRequest:
+        """Capture one immutable semantic-settings snapshot for planning."""
+
+        self._require_open()
+        settings = self._settings_store.read()
+        if deletion_policy is not None:
+            settings = replace(
+                settings,
+                deletion_policy=DeletionPolicy(deletion_policy),
+            )
+        return PlanRequest(
+            request_id=request_id,
+            source_path=source_path,
+            target_path=target_path,
+            options=settings.to_sync_options(),
+        )
+
+    def read_semantic_settings(self) -> SemanticSettingsView:
+        self._require_open()
+        return _semantic_settings_view(self._settings_store.read())
+
+    def commit_semantic_settings(
+        self,
+        patch: SemanticSettingsPatchView,
+    ) -> SemanticSettingsView:
+        self._require_open()
+        if not isinstance(patch, SemanticSettingsPatchView):
+            raise TypeError(
+                "semantic settings commit requires SemanticSettingsPatchView"
+            )
+        updated = self._settings_store.commit(_semantic_settings_patch(patch))
+        return _semantic_settings_view(updated)
 
     def prepare_plan(self, request: object) -> WorkflowPreparation:
         self._require_open()
@@ -409,6 +476,9 @@ class LocalWorkflowRuntime:
             target_volume=_volume_text(plan_value.target_volume_id),
             deletion_policy=plan_value.deletion_policy.value,
             trash_on_update=plan_value.trash_on_update,
+            semantic_settings=_sync_options_view(
+                artifact.request.options
+            ),
             fingerprint=str(plan_value.fingerprint),
             selection_digest_hex=selection_digest(decision.selection).hex(),
             required_bytes=calculate_required_bytes(
@@ -500,6 +570,11 @@ class LocalWorkflowRuntime:
                 location_id,
                 None if not selected_paths else selected_paths,
             )
+
+    def mapping_ids_for_location(self, location_id: int) -> tuple[int, ...]:
+        self._require_open()
+        with LedgerRepository(self.ledger_path) as repository:
+            return repository.mapping_ids_for_location(location_id)
 
     def list_stale_inventory(
         self, location_id: int, verified_before: datetime
@@ -689,6 +764,15 @@ class LocalWorkflowRuntime:
         managed_roots = tuple(Path(root) for root in roots)
         validate_database_path(self.ledger_path, managed_roots=managed_roots)
         validate_database_path(self.history_path, managed_roots=managed_roots)
+        try:
+            validate_database_path(
+                self.settings_path,
+                managed_roots=managed_roots,
+            )
+        except ValueError as error:
+            raise ValueError(
+                "semantic settings must be outside managed roots"
+            ) from error
 
     def _ensure_history_store(self, managed_roots: tuple[str, ...]) -> HistoryStore:
         self._validate_database_roots(managed_roots)
@@ -974,6 +1058,53 @@ def _history_view(value) -> HistoryRunView:
         error=None
         if value.error_type is None
         else f"{value.error_type}: {value.error_message or ''}".rstrip(),
+    )
+
+
+def _semantic_settings_view(
+    value: SemanticSettings,
+) -> SemanticSettingsView:
+    return _sync_options_view(value.to_sync_options())
+
+
+def _sync_options_view(value: SyncOptions) -> SemanticSettingsView:
+    return SemanticSettingsView(
+        filters=value.filters.patterns,
+        deletion_policy=value.deletion_policy.value,
+        trash_on_update=value.trash_on_update,
+        preservation=PreservationSettingsView(
+            preserve_ads=value.preservation.preserve_ads,
+            preserve_created=value.preservation.preserve_created,
+            preserve_acl=value.preservation.preserve_acl,
+        ),
+        propagate_source_casing=value.propagate_source_casing,
+    )
+
+
+def _semantic_settings_patch(
+    value: SemanticSettingsPatchView,
+) -> SemanticSettingsPatch:
+    preservation = value.preservation
+    return SemanticSettingsPatch(
+        filters=(
+            None if value.filters is None else FilterSet(value.filters)
+        ),
+        deletion_policy=(
+            None
+            if value.deletion_policy is None
+            else DeletionPolicy(value.deletion_policy)
+        ),
+        trash_on_update=value.trash_on_update,
+        preservation=(
+            None
+            if preservation is None
+            else PreservationPolicy(
+                preserve_ads=preservation.preserve_ads,
+                preserve_created=preservation.preserve_created,
+                preserve_acl=preservation.preserve_acl,
+            )
+        ),
+        propagate_source_casing=value.propagate_source_casing,
     )
 
 

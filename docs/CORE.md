@@ -52,10 +52,11 @@ plan serialization and capacity, and root-qualified observation/refusal
 shapes. OS walking and observation remain in operation modules; core stays
 standard-library-only and behavior-free.
 
-`SyncOptions.propagate_source_casing` is a latent, fingerprinted planning
-policy. It defaults to false and survives workflow payload round trips so a
-future configuration or GUI control can expose it without changing the plan
-shape. `OperationReason.CASE_MISMATCH` and
+`SyncOptions.propagate_source_casing` is a fingerprinted planning policy. It
+defaults to false, is available through the primitive semantic-settings
+facade, and survives workflow payload round trips without changing the plan
+shape; M1 has no dedicated settings CLI or GUI control.
+`OperationReason.CASE_MISMATCH` and
 `UNICODE_NORMALIZATION_MISMATCH` are non-blocking review advisories; collision
 states remain separate typed blockers. The old `BlockedReason.CASE_MISMATCH`
 value remains decodable for compatibility with prior serialized plans, but the
@@ -259,7 +260,8 @@ declared shape-only and has no implementation until its first consumer; this
 provisions the seam without speculative runtime behavior.
 
 ADS is deliberately lighter than a cross-module protocol: `supports_ads` and
-the unexposed `preserve_ads` flag reserve the decision, while scan records,
+the semantic-settings `preserve_ads` flag (with no dedicated CLI/UI control)
+reserve the decision, while scan records,
 plans, schemas, and M0 acceptance tests contain no stream manifest. When the
 feature is implemented, enumeration and validation belong to executor-time copy
 logic; no scanner role or inventory representation is added.

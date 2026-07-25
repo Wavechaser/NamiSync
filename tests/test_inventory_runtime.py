@@ -11,13 +11,20 @@ import pytest
 from xxhash import xxh3_128
 
 import namisync.modules.executor as executor_module
-from namisync.core.evidence import RecordingStatus
+from namisync.core.evidence import (
+    Attestation,
+    ContentEvidence,
+    Provenance,
+    RecordingStatus,
+)
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
+    IntegrityRecordCommand,
     IntegrityResult,
     IntegrityRunResult,
     IntegritySelection,
+    InventoryState,
     ReadStrategy,
     RecordDisposition,
 )
@@ -36,6 +43,7 @@ from namisync.core.models import (
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.recording import HostCommand, LocationCommand, VolumeCommand
 from namisync.core.session import (
+    Disposition,
     OperationResult,
     ResourceId,
     RunContext,
@@ -51,10 +59,12 @@ from namisync.dispatcher import (
 from namisync.interfaces.service import _workflow_registry
 from namisync.workflows.inventory import (
     IntegrityRequest,
+    IntegrityWorkflowRequest,
     InventoryRequest,
     MountedVolume,
     VolumeResolutionState,
     decode_integrity_request,
+    encode_integrity_request,
 )
 from namisync.workflows.runtime import (
     BASELINE_KIND,
@@ -64,6 +74,7 @@ from namisync.workflows.runtime import (
     VERIFY_KIND,
     LocalWorkflowRuntime,
 )
+from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW
 
@@ -165,6 +176,100 @@ def _outcome(item, mode: IntegrityMode) -> IntegrityOutcome:
         phase=mode.value,
         result=IntegrityResult.VERIFIED,
     )
+
+
+def _refresh_inventory(
+    runtime: LocalWorkflowRuntime,
+    location_id: int,
+    request_id: str,
+) -> None:
+    prepared = runtime.prepare_inventory(
+        InventoryRequest(request_id, location_id=location_id)
+    )
+    result = runtime.open_inventory(prepared.payload).run(
+        RunContext(lambda _event: None, lambda: None)
+    )
+    assert result.status is SessionState.COMPLETED
+
+
+def _record_baseline(
+    runtime: LocalWorkflowRuntime,
+    location_id: int,
+    path: str,
+) -> str:
+    row = next(
+        row for row in runtime.list_inventory(location_id) if row.rel_path == path
+    )
+    assert row.observed is not None
+    evidence = Attestation(
+        ContentEvidence(
+            "xxh3_128",
+            b"\x01" * 16,
+            row.observed.size,
+            Provenance.READBACK_ATTESTED,
+            NOW,
+        ),
+        row.observed,
+    )
+    with LedgerRecorder(runtime.ledger_path, clock=FakeClock()) as recorder:
+        disposition = recorder.record_integrity(
+            IntegrityRecordCommand(
+                IntegrityMode.BASELINE,
+                f"seed-baseline:{row.row_id}",
+                row.row_id,
+                str(row.location_id),
+                row.rel_path_key,
+                row.scope_token,
+                InventoryState(row.presence.value),
+                row.observed,
+                None,
+                evidence,
+                False,
+                False,
+            )
+        )
+    assert disposition is RecordDisposition.APPLIED
+    return f"{row.location_id}:{row.row_id}"
+
+
+def _run_integrity_mode(
+    runtime: LocalWorkflowRuntime,
+    location_id: int,
+    mode: IntegrityMode,
+    request_id: str,
+):
+    request = IntegrityRequest(request_id, mode, location_id=location_id)
+    if mode is IntegrityMode.BASELINE:
+        prepared = runtime.prepare_baseline(request)
+        invocation = runtime.open_baseline(prepared.payload)
+    elif mode is IntegrityMode.REBASELINE:
+        prepared = runtime.prepare_rebaseline(request)
+        invocation = runtime.open_rebaseline(prepared.payload)
+    else:
+        prepared = runtime.prepare_verify(request)
+        invocation = runtime.open_verify(prepared.payload)
+    return invocation.run(RunContext(lambda _event: None, lambda: None))
+
+
+def _mixed_integrity_runtime(
+    tmp_path: Path,
+    runners,
+) -> tuple[LocalWorkflowRuntime, int, _Scanner]:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(
+        mount,
+        (_file("a.txt", 1), _file("b.txt", 2)),
+    )
+    runtime, location_id = _runtime(
+        tmp_path,
+        _Resolver(mount),
+        scanner,
+        runners,
+    )
+    _refresh_inventory(runtime, location_id, "seed-inventory")
+    _record_baseline(runtime, location_id, "a.txt")
+    return runtime, location_id, scanner
 
 
 def _settle_all(
@@ -312,9 +417,9 @@ def test_runtime_registers_inventory_and_all_integrity_modes_with_one_factory(
                     dispatcher, session_id, SessionState.COMPLETED
                 )
                 assert record.result is not None
-                assert [item.phase for item in record.result.items] == [
-                    mode.value
-                ]
+                assert [item.phase for item in record.result.items] == (
+                    [] if mode is IntegrityMode.REBASELINE else [mode.value]
+                )
         finally:
             assert dispatcher.shutdown().complete
 
@@ -426,6 +531,219 @@ def test_native_runtime_baseline_then_verify_uses_production_composition(
             runtime._hasher_factory,
         ]
         assert all(factory is backend._hasher_factory for factory in verifier_factories)
+    finally:
+        runtime.close()
+
+
+def test_repeat_full_baseline_refreshes_inventory_but_runs_no_verifier_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(
+        tmp_path,
+        _Resolver(mount),
+        scanner,
+        None,
+    )
+    context = RunContext(lambda _event: None, lambda: None)
+    try:
+        _refresh_inventory(runtime, location_id, "seed-inventory")
+        _record_baseline(runtime, location_id, "a.txt")
+        hash_calls = 0
+        record_calls = 0
+
+        def unexpected_hasher():
+            nonlocal hash_calls
+            hash_calls += 1
+            raise AssertionError("repeat baseline must not hash established rows")
+
+        original_record_integrity = LedgerRecorder.record_integrity
+
+        def count_record_integrity(self, command):
+            nonlocal record_calls
+            record_calls += 1
+            return original_record_integrity(self, command)
+
+        runtime._hasher_factory = unexpected_hasher
+        monkeypatch.setattr(
+            LedgerRecorder,
+            "record_integrity",
+            count_record_integrity,
+        )
+        prepared = runtime.prepare_baseline(
+            IntegrityRequest(
+                "repeat-baseline",
+                IntegrityMode.BASELINE,
+                location_id=location_id,
+            )
+        )
+        result = runtime.open_baseline(prepared.payload).run(context)
+
+        assert result.status is SessionState.COMPLETED
+        assert result.disposition is Disposition.RAN
+        assert result.items == ()
+        assert result.bytes_done == result.bytes_total == 0
+        view = operation_result_view(result)
+        assert (view.headline, view.integrity) == ("success", "not-run")
+        assert hash_calls == 0
+        assert record_calls == 0
+        assert len(scanner.calls) == 2
+        assert runtime.list_inventory(location_id)[0].scope_token == (
+            "repeat-baseline:refresh:0"
+        )
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        pytest.param(
+            IntegrityMode.BASELINE,
+            ("b.txt",),
+            id="baseline-missing-only",
+        ),
+        pytest.param(
+            IntegrityMode.REBASELINE,
+            ("a.txt",),
+            id="rebaseline-existing-only",
+        ),
+    ],
+)
+def test_fresh_integrity_selection_filters_rows_by_mode(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    expected: tuple[str, ...],
+) -> None:
+    selections: list[tuple[str, ...]] = []
+
+    def runner(selection, context, recorder):
+        del context, recorder
+        selections.append(tuple(item.display_path for item in selection.items))
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {mode: runner},
+    )
+    try:
+        result = _run_integrity_mode(
+            runtime,
+            location_id,
+            mode,
+            f"mixed-{mode.value}",
+        )
+
+        assert result.status is SessionState.COMPLETED
+        assert selections == [expected]
+    finally:
+        runtime.close()
+
+
+def test_verify_admits_missing_evidence_and_reports_baselined_incomplete(
+    tmp_path: Path,
+) -> None:
+    def runner(selection, context, recorder):
+        del recorder
+        outcomes: list[IntegrityOutcome] = []
+        for item in selection.pending:
+            result = (
+                IntegrityResult.VERIFIED
+                if item.baseline is not None
+                else IntegrityResult.BASELINED
+            )
+            outcome = IntegrityOutcome(
+                item_id=item.item_id,
+                row_id=item.row_id,
+                location_id=item.location_id,
+                path=item.display_path,
+                phase=IntegrityMode.VERIFY.value,
+                result=result,
+            )
+            selection.mark_completed(item.item_id, 0)
+            context.run.emit(outcome)
+            outcomes.append(outcome)
+        return IntegrityRunResult(tuple(outcomes), RecordingStatus.OK)
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {IntegrityMode.VERIFY: runner},
+    )
+    try:
+        result = _run_integrity_mode(
+            runtime,
+            location_id,
+            IntegrityMode.VERIFY,
+            "mixed-verify",
+        )
+
+        assert [
+            (item.path, item.result)
+            for item in result.items
+        ] == [
+            ("a.txt", IntegrityResult.VERIFIED),
+            ("b.txt", IntegrityResult.BASELINED),
+        ]
+        view = operation_result_view(result)
+        assert view.integrity == "baselined"
+        assert view.headline == "verification-incomplete"
+    finally:
+        runtime.close()
+
+
+def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
+    tmp_path: Path,
+) -> None:
+    selections: list[tuple[tuple[str, ...], dict[str, int], int]] = []
+
+    def runner(selection, context, recorder):
+        del context, recorder
+        selections.append(
+            (
+                tuple(item.item_id for item in selection.items),
+                dict(selection.completed_bytes),
+                selection.processed_bytes,
+            )
+        )
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {IntegrityMode.BASELINE: runner},
+    )
+    try:
+        rows = {
+            row.rel_path: f"{row.location_id}:{row.row_id}"
+            for row in runtime.list_inventory(location_id)
+        }
+        _record_baseline(runtime, location_id, "b.txt")
+        frozen = (rows["b.txt"], rows["a.txt"])
+        prepared = runtime.prepare_baseline(
+            IntegrityRequest(
+                "binding",
+                IntegrityMode.BASELINE,
+                location_id=location_id,
+            )
+        )
+        request = IntegrityWorkflowRequest(
+            request_id="resume-baseline",
+            binding=decode_integrity_request(prepared.payload).binding,
+            mode=IntegrityMode.BASELINE,
+            selection_item_ids=frozen,
+            completed_bytes=((frozen[0], 7),),
+            processed_bytes=7,
+            refresh_generation=1,
+        )
+
+        result = runtime.open_baseline(encode_integrity_request(request)).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+
+        assert result.status is SessionState.COMPLETED
+        assert selections == [(frozen, {frozen[0]: 7}, 7)]
     finally:
         runtime.close()
 

@@ -4,8 +4,9 @@ Status: the M1 role-free inventory workflow, scoped reconciliation,
 acknowledgement/restore, mapping-scoped filter persistence, typed queries, and
 standalone integrity selection are implemented. Inventory is not a new
 sideways-calling operation module: scanner observes, workflows coordinate, and
-database repositories/recorder retain state. CLI/UI commands remain deliberately
-unexposed until the later interface stage.
+database repositories/recorder retain state. The Stage 5 CLI exposes explicit
+location inventory and integrity starts through the shared service; desktop
+actions remain Stage 6.
 
 ## Purpose
 
@@ -49,11 +50,14 @@ extended-length conversion and directory access to the long-path-safe scanner
 boundary.
 
 The production dispatcher registry contains inventory (pause unsupported) and
-baseline/verify/rebaseline (pause supported), although no CLI/UI start command
-is exposed yet. Integrity continuation stores the exact admitted inventory row
-ids plus completed ids/bytes. A resume always refreshes physical inventory but
-hashes only the original candidate set, so a newly appeared row is retained
-without being swept into an already admitted session.
+baseline/verify/rebaseline (pause supported), and the CLI reaches all four only
+through the shared service. A fresh baseline selection admits eligible
+non-directory rows without evidence; a fresh rebaseline selection admits only
+rows with evidence; verify retains both. Integrity continuation stores the
+exact admitted inventory row ids plus completed ids/bytes. A resume always
+refreshes physical inventory but reconstructs the original ordered candidate
+set without reapplying those mode filters, so evidence drift cannot drop
+pending work and a newly appeared row cannot enter an admitted session.
 
 ## State Model
 
@@ -124,6 +128,13 @@ rebind, a matching serial with changed filesystem type requires explicit rebind,
 and simultaneous duplicate identities require explicit user choice. Rebinding
 to a different location/volume is an explicit sampled verification workflow.
 
+The CLI selects exactly one positional root or `--location-id`; it never treats
+a numeric root as an id or infers a location from a mapping. Repeatable
+`--path` supplies an exact root-relative scope. If cloned volume identities
+produce multiple mounted candidates, the refusal lists them and requires an
+explicit `--mount` retry. Offline, missing-root, and unavailable-root states
+perform no missing reconciliation and give state-specific recovery guidance.
+
 ## Expectations Of Other Modules
 
 - Scanner supplies observations and completeness/scope, but writes nothing.
@@ -188,4 +199,8 @@ summary and policy; missing acknowledgement is not pruning.
 - Offline, ambiguous, missing-root, and unavailable-root outcomes perform no
   scan and mark no retained row missing; only `resolved` reconciles.
 - Inventory queries expose zero/one/many mappings without guessing.
+- Interface starts require one explicit root/id and an explicit listed mount
+  for clone ambiguity; both database overrides remain composition inputs.
+- Fresh mode filtering and frozen-resume selection preserve original admitted
+  order, completed ids/bytes, and the original row set.
 - UI filtering and Plan invalidation cannot clear or mutate inventory state.

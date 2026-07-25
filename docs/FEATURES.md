@@ -1,12 +1,11 @@
 # Features
 
-Implementation note (2026-07-25): M1 Stages 1-4 have landed their contract,
+Implementation note (2026-07-25): M1 Stages 1-5 have landed their contract,
 schema/settings/security prerequisites, pipelined XXH3-128 executor/verifier
 switch, role-free inventory, standalone integrity workflows, generic history
 items, production dispatcher registrations, and optional post-execution
-compound verification. New CLI/UI start surfaces and the desktop host remain
-assigned to later M1 stages even where their settled behavior below is already
-stated.
+compound verification. The CLI/facade start surfaces are implemented; only
+the headed desktop host and UI remain assigned to M1 Stage 6.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -131,7 +130,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Metadata-Based Diffing**. Matching size, modification time within filesystem granularity, and standard attributes produces a no-op; changed size, time, or attributes produces an update. Content-aware comparison remains later work.
 - **Copy and Update Planning**. Source-only files become copies and changed matched files become updates.
 - **Filename-Spelling Advisories**. One source and target file with the same Windows key but different exact casing retains its normal update/no-op result and carries a non-blocking `case_mismatch` advisory. A one-to-one same-parent pair whose basenames differ only by NFC/NFD representation likewise carries `unicode_normalization_mismatch`. Neither advisory hides changed content, blocks execution, or silently rewrites spelling.
-- **Conditional Source Casing Propagation**. Target spelling is preserved by default. A fingerprinted `propagate_source_casing` policy seam emits a zero-byte, no-trash `recase` rename for metadata-equal files and lets an already-required content update publish at the source basename spelling. It defaults off, has no config/CLI/GUI surface yet, does not recase parent directories, and uses a non-replacing rename so a distinct case-sensitive destination is never overwritten.
+- **Conditional Source Casing Propagation**. Target spelling is preserved by default. A fingerprinted `propagate_source_casing` policy seam emits a zero-byte, no-trash `recase` rename for metadata-equal files and lets an already-required content update publish at the source basename spelling. It defaults off, is available through the primitive semantic-settings facade but has no dedicated CLI/GUI control, does not recase parent directories, and uses a non-replacing rename so a distinct case-sensitive destination is never overwritten.
 - **Move Detection**. Unambiguous source filesystem-identity changes can become target-side moves; an identity observed at more than one scanned path is excluded from consideration.
 - **Composite Move-Update**. A detected move whose content also changed is planned as one composite operation whose evidence records only at full completion, so a crash partway can never leave old content at the new path while the ledger claims consistency.
 - **Directory Operations**. Every directory the plan will create — empty, or the parent chain of planned copies — is an explicit reviewed `mkdir` operation carrying its source directory's metadata; the executor never creates a directory implicitly. Removable target-only empty directories become policy-controlled operations.
@@ -211,11 +210,12 @@ below describe settled behavior, not current M0 runtime claims.
 - **Location Verification**. Verification rereads present files against retained size, modification time, and XXH3-128 evidence.
 - **Cache-Honest Reads**. Verification reads bypass the page cache, or are deliberately deferred after a fresh write, so a match attests the medium rather than a buffer NamiSync itself just filled.
 - **Integrity Outcomes**. Verification distinguishes verified, baselined, mismatched, modified, missing, unsupported, canceled, and error results.
-- **Selected Verification**. Present inventory files selected in the UI can be verified without verifying the entire location.
+- **Selected Verification**. Exact present inventory paths selected by an interface can be verified without verifying the entire location.
 - **Post-Execution Verification**. A sync can continue directly into an optional verification phase while retaining the same session and volume custody. Every successfully published copy, update, or move-update carries transient published evidence into readback even if its ledger write failed; no-op, metadata-only move, directory, trash, and delete work is ineligible. Readback mismatch or incompleteness changes the integrity axis, never the already-settled filesystem result. Same-process pause retains an explicit execute/verify continuation; process close offers no resume. Cancellation starts no new verification work, preserves already-settled filesystem truth, and attempts terminal finish once without ever double-finishing; a finish failure degrades recording.
 - **Safe Conditional Recording**. Hash and verification results are persisted only when the file state remains consistent with the observation being recorded.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
-- **Standalone Integrity Implemented**. Baseline, verify, and explicit rebaseline now compose cache-honest Windows reads with fresh inventory selection, conditional ledger recording, exact-candidate pause continuation, subject-scoped generic history, and volume-custodied dispatcher registrations. CLI/UI controls remain deliberately unexposed.
+- **Standalone Integrity Implemented**. Baseline, verify, and explicit rebaseline now compose cache-honest Windows reads with fresh inventory selection, conditional ledger recording, exact-candidate pause continuation, subject-scoped generic history, and volume-custodied dispatcher registrations. The Stage 5 CLI reaches them through the shared facade; desktop controls remain Stage 6.
+- **Mode-Aware Integrity Admission**. A fresh baseline admits only eligible files without evidence, a fresh rebaseline only files with evidence, and verify admits both. Resume retains the frozen ordered candidate ids instead of reapplying mode filters after evidence changes.
 
 - **Conditional Parallel Verification**. Verification remains single-stream after the XXH3-128 content-hash replacement unless post-replacement measurements demonstrate an IO-utilization problem that file-level workers solve.
 - **Automatic Background Integrity**. Background hashing and verification remain unrealized.
@@ -246,7 +246,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Mapping-Scoped State**. Shared physical locations can participate in multiple mappings while retaining independent source identity and correspondence state.
 - **Run Idempotency**. Executor run tokens uniquely correlate and protect repeated ledger recording.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
-- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. Recents, window geometry, columns, and sorting live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
+- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` beside the selected ledger under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. The service exposes only primitive full-snapshot/all-optional-patch views, while recents, window geometry, columns, and sorting live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
 - **M1 Evidence Reset Boundary**. Ledger v2/history v3 require immutable final-contract markers. Old versions and transitional v2/v3 files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
 - **M1 Generic History Reservation**. History v3 stores explicitly tagged operation/execute and standalone integrity items and the phase-summary shape consumed by Stage 4. Compound sync now writes exact execute/verify phase rows without a version/marker change; standalone producers keep writing zero phase rows.
@@ -287,20 +287,23 @@ below describe settled behavior, not current M0 runtime claims.
 
 ## COMMANDLINE
 
-The production registry can dispatch Stage 3 activities, but the current parser
-still exposes only `sync` and `history`; the integrity commands below remain
-planned interface work.
+The parser and production registry expose reviewed sync/history plus all four
+Stage 5 location activities through the shared service.
 
-- **Sync Command**. `nami-sync sync` runs the plan session, prints the reviewable plan, and asks for explicit terminal confirmation; confirming commits the plan and immediately runs the execution session, declining leaves it uncommitted. A separate flag executes already-committed queued plans for scripted use; no flag combination plans and executes without a review.
-- **Inventory Command**. `nami-sync inventory` scans one location and prints its retained inventory and mapping guidance.
-- **Baseline Command**. `nami-sync baseline` creates missing baselines and reports integrity counts and issues.
-- **Verify Command**. `nami-sync verify` verifies one location and returns a failing exit code when integrity issues are found.
-- **Rebaseline Command**. `nami-sync rebaseline` explicitly accepts current evidence for reviewed modified rows.
+- **Sync Command**. `nami-sync sync` runs the plan session, prints the reviewable plan, and asks for explicit terminal confirmation; confirming commits the plan and immediately runs the execution session, declining leaves it uncommitted. `--verify-after-copy` retains the same session/custody for readback. No flag combination plans and executes without a review.
+- **Inventory Command**. `nami-sync inventory` scans one explicitly selected root or retained location and prints its inventory plus zero/one/many mapping guidance.
+- **Baseline Command**. `nami-sync baseline` creates only missing baselines and reports typed integrity counts and issues.
+- **Verify Command**. `nami-sync verify` verifies one explicit location and returns exit 8 for mismatch or 9 when verification is incomplete.
+- **Rebaseline Command**. `nami-sync rebaseline` requires selected exact paths plus explicit current-evidence acceptance before replacing existing evidence.
 - **History Command**. `nami-sync history` lists recent audit runs or prints one retained entry with detail.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
+- **Location Binding**. Location commands require exactly one positional root or named location id; repeatable exact paths define scope, and clone ambiguity requires a listed mount rather than inferred fallback.
+- **Typed Exit Classification**. The workflow headline precedence is failed, partial, refused, mismatch, canceled, verification-incomplete, recording/audit degradation, all-noop, then success. CLI codes 0 and 2-9 map those categories without hiding secondary axes or parsing diagnostic text.
 - **No-Subcommand Behavior**. Until a desktop implementation exists, running `nami-sync` or `python -m namisync` with no subcommand prints usage and exits nonzero; nothing ever runs implicitly.
-- **Concurrent Read-Only Commands**. Read-only CLI commands such as history and status run alongside a GUI session or other CLI invocations; mutating commands are subject to the same volume and queue arbitration as any other session.
+- **Concurrent Read-Only Commands**. The read-only history command runs alongside a GUI session or other CLI invocations; mutating commands are subject to the same volume and queue arbitration as any other session.
 - **M0 Workflow And CLI Implemented**. `nami-sync sync` and `python -m namisync sync` now execute the real two-session scanner → planner → safe-selection/preflight → explicit commitment → fresh-preflight → executor/recorder pipeline through dispatcher custody. Review and execution distinguish runnable, blocked, and deferred work; completed safe subsets exit with the dedicated partial status while `nami-sync history` retains itemized exclusions. Real entry points, no-op correspondence/history, stale-plan refusal, declined-review non-mutation, database isolation, and import boundaries have integration coverage.
+
+- **M1 Facade And CLI Implemented**. One process-local service owns the exact registry, runtime/dispatcher lifecycle, sink-only observation, primitive settings/inventory/result views, and both database overrides. The CLI adds all four location commands, optional execute-to-verify, actionable five-state binding, guarded selected rebaseline, typed phase/item rendering, and deterministic exit codes.
 
 - **GUI Entry Points**. Once the desktop application exists, running `nami-sync`, `nami-sync-gui`, or `python -m namisync` with no subcommand will launch it.
 

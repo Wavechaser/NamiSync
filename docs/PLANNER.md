@@ -37,13 +37,14 @@ Planner and preflight both call `calculate_required_bytes()`; neither stores or
 guesses target free space.
 
 `options` contains deletion and preservation policies, the symmetric mapping
-filter snapshot, the selected `DestinationPolicy`, and the latent
+filter snapshot, the selected `DestinationPolicy`, and the fingerprinted
 `propagate_source_casing` policy plus any already-extracted enrichment metadata.
-The casing policy defaults to false and is not exposed by a config file, CLI, or
-GUI yet. `MappingSnapshot` contains prior accepted pairs/no-ops, retained missing
-rows, and ambiguity/hardlink disqualifiers keyed by canonical path. Observed
-target free space is deliberately absent: review and execution call `observe()`
-and judge the same pure required-byte formula against current space.
+The casing policy defaults to false and is exposed through the primitive
+semantic-settings facade, while M1 intentionally has no settings CLI or GUI.
+`MappingSnapshot` contains prior accepted pairs/no-ops, retained missing rows,
+and ambiguity/hardlink disqualifiers keyed by canonical path. Observed target
+free space is deliberately absent: review and execution call `observe()` and
+judge the same pure required-byte formula against current space.
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
@@ -101,7 +102,7 @@ continues to emit complete deterministic intent and does not hide those items.
   exact spelling retain the normal metadata result: changed content plans an
   update and matching metadata plans a no-op. The typed `case_mismatch` reason
   is a non-blocking review advisory. By default the operation preserves the
-  target's observed spelling. The latent `propagate_source_casing=True` policy
+  target's observed spelling. The captured `propagate_source_casing=True` policy
   instead emits a zero-byte `recase` operation when metadata already matches,
   carrying both observed and requested spellings for a same-volume rename. If
   content metadata changed, the required update also publishes at the requested
@@ -167,10 +168,11 @@ in the plan. Ingest origin evidence uses feature-owned namespaced annotations
 (`ingest.origin.*`) so a later implementation does not require new generic
 schema. No policy receives filesystem or executor control.
 
-The unexposed `preserve_ads` policy is latent. When it is implemented, planner's
-only ADS responsibility is a mapping-level warning when the target capability
-cannot carry streams; enumeration, byte transfer, and validation remain
-executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
+The semantic-settings `preserve_ads` policy has no dedicated CLI/UI control and
+its transfer behavior remains latent. When it is implemented, planner's only
+ADS responsibility is a mapping-level warning when the target capability cannot
+carry streams; enumeration, byte transfer, and validation remain executor-time
+work. M1 has no ADS-enabled mapping or per-operation ADS state.
 
 ## Expectations Of Other Modules
 

@@ -3,9 +3,8 @@
 Status: planning decisions revised and reconciled 2026-07-24. Stages 1–3
 (contracts/semantics, executor/hash refactor, and inventory/standalone
 integrity) landed on 2026-07-24; Stage 4 post-execution integration and the
-behavior-preserving Stage 5 facade extraction landed on 2026-07-25. Stage 5's
-new CLI commands and final compound-result classification remain the next
-consumer work, and Stage 6 remains unimplemented. This is both
+two-part Stage 5 facade/CLI work landed on 2026-07-25. Stage 6 remains
+unimplemented. This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
@@ -906,6 +905,20 @@ Pure facade extraction that preserves M0 behavior may begin after Stage 1's
 result/view contracts settle, in parallel with late Stage 3 work. New commands
 and final classification wait for Stages 3 and 4.
 
+**Implementation checkpoint (2026-07-25).** Stage 5 landed in two deliberate
+steps. The first extracted the shared process-local facade without changing
+the original sync/history CLI behavior. The second added the four explicit
+location commands, semantic-settings snapshot access, mode-aware fresh
+baseline/rebaseline admission, compound typed rendering, final headline
+precedence, and exits 8 (mismatch) and 9 (verification incomplete). Exact root
+paths and `--location-id` remain distinct inputs; unresolved five-state
+bindings fail before admission, while wake-up re-resolution refusals retain
+the same actionable candidates. Plan review exposes the full frozen semantic
+snapshot, and strictly validated public patches cannot corrupt settings. All
+interface consumers remain behind the
+service and primitive workflow views; no durable session store, database
+schema change, or Stage 6 surface was added.
+
 ### Stage 6 — Web Desktop Shell
 
 - pywebview host; `nami-sync-gui` entry point plus no-subcommand launch.
@@ -1127,10 +1140,13 @@ ledger query and silently drop every candidate whose copy-ledger write was
 - **XV-10 — Headline precedence keeps all four axes visible.** Construct a
   result that is simultaneously partial + mismatch + recording-degraded +
   audit-degraded; assert headline == `partial` and all three secondary axes
-  remain individually renderable; drive the *adjacent* precedence pairs
-  (mismatch vs canceled, canceled vs verification-incomplete) and assert the
-  headline flips at each boundary. *Not satisfied by* testing only far-apart
-  pairs and never asserting the secondary axes survive the view model.
+  remain individually renderable; drive every *adjacent* precedence boundary:
+  failed > partial, partial > refused, refused > mismatch, mismatch > canceled,
+  canceled > verification-incomplete, verification-incomplete > degraded, and
+  degraded > all-noop. Remove the higher condition in each pair and assert the
+  headline flips to the lower; separately pin the mutually exclusive
+  all-noop-to-success fallback. *Not satisfied by* testing only far-apart pairs
+  or never asserting the secondary axes survive the view model.
 
 #### Settings snapshot and fingerprint
 

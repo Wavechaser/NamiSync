@@ -2,17 +2,28 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import stat
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+import namisync.interfaces.cli as cli_module
 from namisync.core.events import Envelope, ItemOutcome, SCHEMA_VERSION
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.integrity import (
+    IntegrityOutcome,
+    IntegrityReason,
+    IntegrityResult,
+)
 from namisync.core.session import (
     Disposition,
     OperationResult,
+    PhaseResult,
+    PhaseStatus,
     SessionId,
     SessionRecord,
     SessionState,
@@ -21,15 +32,30 @@ from namisync.db.history import HistoryContext, HistoryStore
 from namisync.interfaces.cli import (
     EXIT_CANCELED,
     EXIT_DEGRADED,
+    EXIT_FAILED,
+    EXIT_MISMATCH,
     EXIT_PARTIAL,
     EXIT_REFUSED,
     EXIT_SUCCESS,
     EXIT_USAGE,
+    EXIT_VERIFICATION_INCOMPLETE,
     _exit_for_record,
+    _location_selection,
     _render_execution,
+    _render_inventory,
+    _render_integrity,
     _render_plan,
+    _render_result_warnings,
+    _render_resolution_error,
     build_parser,
     main,
+)
+from namisync.interfaces.service import (
+    LocationResolutionError,
+    LocationResolutionView,
+    NamiSyncService,
+    PreservationSettingsView,
+    SemanticSettingsPatchView,
 )
 from namisync.workflows.models import PlanOperationView
 from namisync.workflows.views import session_record_view
@@ -95,13 +121,224 @@ def test_no_subcommand_prints_usage_and_returns_nonzero() -> None:
     assert "usage:" in stderr.getvalue()
 
 
-def test_integrity_workflows_have_no_cli_start_commands_yet() -> None:
+def test_stage5_commands_are_explicit_parser_choices() -> None:
     parser = build_parser()
     choices = next(
         action.choices for action in parser._actions if action.dest == "command"
     )
 
-    assert set(choices) == {"sync", "history"}
+    assert set(choices) == {
+        "sync",
+        "history",
+        "inventory",
+        "baseline",
+        "verify",
+        "rebaseline",
+    }
+
+
+def test_location_parser_never_guesses_numeric_root_as_location_id() -> None:
+    parser = build_parser()
+
+    by_root = parser.parse_args(
+        ["verify", "123", "--path", "a.bin", "--path", "b.bin"]
+    )
+    by_id = parser.parse_args(["verify", "--location-id", "123"])
+
+    assert by_root.location == "123"
+    assert by_root.location_id is None
+    assert by_root.selected_paths == ["a.bin", "b.bin"]
+    assert _location_selection(by_root) == ("123", None)
+    assert by_id.location is None
+    assert by_id.location_id == 123
+    assert _location_selection(by_id) == (None, 123)
+
+
+def test_location_command_requires_exactly_one_root_or_location_id(
+    tmp_path: Path,
+) -> None:
+    for arguments in (
+        ["verify"],
+        ["verify", str(tmp_path), "--location-id", "7"],
+    ):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+
+        result = main(arguments, stdout=stdout, stderr=stderr)
+
+        assert result == EXIT_USAGE
+        assert "Provide exactly one ROOT or --location-id ID" in stderr.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected_guidance"),
+    (
+        (
+            lambda root, ledger, settings: [
+                "sync",
+                str(root / "source"),
+                str(root / "target"),
+                "--database",
+                str(ledger),
+                "--history-database",
+                str(settings),
+            ],
+            "distinct local ledger, history, and settings paths",
+        ),
+        (
+            lambda root, ledger, settings: [
+                "inventory",
+                str(root),
+                "--database",
+                str(ledger),
+                "--history-database",
+                str(settings),
+            ],
+            "distinct local ledger, history, and settings paths",
+        ),
+    ),
+)
+def test_command_reports_service_configuration_error_without_traceback(
+    tmp_path: Path,
+    arguments,
+    expected_guidance: str,
+) -> None:
+    (tmp_path / "source").mkdir()
+    (tmp_path / "target").mkdir()
+    ledger = tmp_path / "ledger.db"
+    settings = tmp_path / "settings.json"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        arguments(tmp_path, ledger, settings),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_USAGE
+    assert "Configuration error:" in stderr.getvalue()
+    assert expected_guidance in stderr.getvalue()
+    assert "Traceback" not in stderr.getvalue()
+
+
+def test_history_reports_settings_alias_as_configuration_error(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger.db"
+    settings = tmp_path / "settings.json"
+    monkeypatch.setattr(
+        cli_module,
+        "default_database_paths",
+        lambda: (ledger, tmp_path / "history.db"),
+    )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        ["history", "--history-database", str(settings)],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_USAGE
+    assert "Configuration error:" in stderr.getvalue()
+    assert "sibling settings.json" in stderr.getvalue()
+    assert "Traceback" not in stderr.getvalue()
+
+
+def test_rebaseline_requires_selected_paths_and_explicit_intent() -> None:
+    parser = build_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["rebaseline", r"F:\library"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["rebaseline", r"F:\library", "--path", "a.bin"]
+        )
+    parsed = parser.parse_args(
+        [
+            "rebaseline",
+            r"F:\library",
+            "--path",
+            "a.bin",
+            "--accept-current-evidence",
+        ]
+    )
+
+    assert parsed.selected_paths == ["a.bin"]
+    assert parsed.accept_current_evidence is True
+
+
+@pytest.mark.parametrize(
+    ("state", "guidance"),
+    [
+        ("offline", "Connect the recorded volume"),
+        ("ambiguous", "rerun with --mount MOUNT"),
+        ("root_missing", "Restore the configured folder"),
+        ("root_unavailable", "Fix permissions or device I/O"),
+    ],
+)
+def test_location_resolution_output_is_actionable(
+    state: str,
+    guidance: str,
+) -> None:
+    output = io.StringIO()
+    error = LocationResolutionError(
+        LocationResolutionView(
+            state=state,
+            root_path=None,
+            location_id=7,
+            selected_mount=None,
+            candidates=("F:\\", "G:\\"),
+            detail="resolution detail",
+        )
+    )
+
+    _render_resolution_error(error, output)
+
+    assert f"Location is {state}: resolution detail." in output.getvalue()
+    assert guidance in output.getvalue()
+    if state == "ambiguous":
+        assert "F:\\" in output.getvalue()
+        assert "G:\\" in output.getvalue()
+
+
+def test_queued_resolution_refusal_keeps_action_and_candidates() -> None:
+    details = SimpleNamespace(
+        request_id="queued",
+        state="ambiguous",
+        root_path=None,
+        location_id=7,
+        selected_mount=None,
+        candidates=("F:\\", "G:\\"),
+        detail="duplicate identity appeared while queued",
+        selected_paths=(),
+        observed_count=0,
+        missing_count=0,
+        complete=False,
+    )
+    output = io.StringIO()
+    errors = io.StringIO()
+
+    _render_integrity(
+        "verify",
+        _record_for_result(
+            OperationResult(
+                SessionState.REFUSED,
+                disposition=Disposition.UNRUN,
+            )
+        ),
+        details,
+        output,
+        errors,
+    )
+
+    assert "state=ambiguous" in output.getvalue()
+    assert "rerun with --mount MOUNT" in output.getvalue()
+    assert "F:\\" in output.getvalue()
+    assert "G:\\" in output.getvalue()
 
 
 def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
@@ -133,7 +370,39 @@ def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
     assert "completed with exceptions: blocked=1; deferred=1" in stdout.getvalue()
 
 
-def test_refused_exit_precedes_exclusion_items_during_facade_extraction() -> None:
+def test_execution_rendering_preserves_interleaved_typed_item_order() -> None:
+    record = _record_for_result(
+        OperationResult(
+            SessionState.COMPLETED,
+            items=(
+                IntegrityOutcome(
+                    "integrity-first",
+                    "row",
+                    "location",
+                    "first.bin",
+                    IntegrityResult.VERIFIED,
+                ),
+                ItemOutcome(
+                    "operation-second",
+                    "copy",
+                    "second.bin",
+                    Outcome.SUCCEEDED,
+                ),
+            ),
+        )
+    )
+    details = SimpleNamespace(commitment_error=None, refusals=())
+    output = io.StringIO()
+
+    _render_execution(record, details, output, io.StringIO())
+
+    rendered = output.getvalue()
+    assert rendered.index("verify/integrity first.bin") < rendered.index(
+        "copy        second.bin"
+    )
+
+
+def test_final_partial_exit_precedes_refusal() -> None:
     record = _record_for_result(
         OperationResult(
             SessionState.REFUSED,
@@ -142,10 +411,10 @@ def test_refused_exit_precedes_exclusion_items_during_facade_extraction() -> Non
         )
     )
 
-    assert _exit_for_record(record) == EXIT_REFUSED
+    assert _exit_for_record(record) == EXIT_PARTIAL
 
 
-def test_canceled_exit_precedes_exclusion_items_during_facade_extraction() -> None:
+def test_final_partial_exit_precedes_cancellation() -> None:
     record = _record_for_result(
         OperationResult(
             SessionState.CANCELED,
@@ -154,10 +423,10 @@ def test_canceled_exit_precedes_exclusion_items_during_facade_extraction() -> No
         )
     )
 
-    assert _exit_for_record(record) == EXIT_CANCELED
+    assert _exit_for_record(record) == EXIT_PARTIAL
 
 
-def test_degraded_exit_precedes_partial_during_facade_extraction() -> None:
+def test_final_partial_exit_precedes_degradation() -> None:
     record = _record_for_result(
         OperationResult(
             SessionState.COMPLETED,
@@ -166,7 +435,204 @@ def test_degraded_exit_precedes_partial_during_facade_extraction() -> None:
         )
     )
 
-    assert _exit_for_record(record) == EXIT_DEGRADED
+    assert _exit_for_record(record) == EXIT_PARTIAL
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        (OperationResult(SessionState.COMPLETED), EXIT_SUCCESS),
+        (
+            OperationResult(
+                SessionState.COMPLETED,
+                items=(
+                    ItemOutcome(
+                        "noop",
+                        "noop",
+                        "file.bin",
+                        Outcome.SKIPPED,
+                    ),
+                ),
+            ),
+            EXIT_SUCCESS,
+        ),
+        (
+            OperationResult(
+                SessionState.REFUSED,
+                disposition=Disposition.UNRUN,
+            ),
+            EXIT_REFUSED,
+        ),
+        (OperationResult(SessionState.FAILED), EXIT_FAILED),
+        (
+            OperationResult(SessionState.CANCELED, canceled=True),
+            EXIT_CANCELED,
+        ),
+        (
+            OperationResult(
+                SessionState.COMPLETED,
+                recording=RecordingStatus.DEGRADED,
+            ),
+            EXIT_DEGRADED,
+        ),
+        (
+            OperationResult(
+                SessionState.COMPLETED,
+                audit=RecordingStatus.DEGRADED,
+            ),
+            EXIT_DEGRADED,
+        ),
+        (
+            OperationResult(
+                SessionState.COMPLETED,
+                items=(
+                    IntegrityOutcome(
+                        "integrity",
+                        "row",
+                        "location",
+                        "file.bin",
+                        IntegrityResult.MISMATCHED,
+                        IntegrityReason.HASH_MISMATCH,
+                    ),
+                ),
+            ),
+            EXIT_MISMATCH,
+        ),
+        (
+            OperationResult(
+                SessionState.COMPLETED,
+                phases=(
+                    PhaseResult(
+                        "verify",
+                        PhaseStatus.INCOMPLETE,
+                        0,
+                        1,
+                        0,
+                        1,
+                    ),
+                ),
+            ),
+            EXIT_VERIFICATION_INCOMPLETE,
+        ),
+    ],
+)
+def test_final_headlines_map_to_documented_exit_codes(
+    result: OperationResult,
+    expected: int,
+) -> None:
+    assert _exit_for_record(_record_for_result(result)) == expected
+
+
+@pytest.mark.parametrize(
+    ("headline", "expected"),
+    [
+        ("success", EXIT_SUCCESS),
+        ("all-noop", EXIT_SUCCESS),
+        ("refused", EXIT_REFUSED),
+        ("failed", EXIT_FAILED),
+        ("canceled", EXIT_CANCELED),
+        ("partial", EXIT_PARTIAL),
+        ("degraded", EXIT_DEGRADED),
+        ("mismatch", EXIT_MISMATCH),
+        ("verification-incomplete", EXIT_VERIFICATION_INCOMPLETE),
+    ],
+)
+def test_exit_adapter_uses_only_the_typed_classified_headline(
+    monkeypatch: pytest.MonkeyPatch,
+    headline: str,
+    expected: int,
+) -> None:
+    record = _record_for_result(OperationResult(SessionState.COMPLETED))
+    monkeypatch.setattr(
+        cli_module,
+        "classify_result",
+        lambda _result: SimpleNamespace(headline=headline),
+    )
+
+    assert _exit_for_record(record) == expected
+
+
+@pytest.mark.parametrize(
+    ("mapping_ids", "expected"),
+    [
+        ((), "Mappings: none"),
+        (("12",), "Mapping: 12"),
+        (
+            ("12", "34"),
+            "Mappings: 12, 34; choose explicit paired roots",
+        ),
+    ],
+)
+def test_inventory_mapping_guidance_preserves_zero_one_many_roles(
+    mapping_ids: tuple[str, ...],
+    expected: str,
+) -> None:
+    class Service:
+        def list_inventory(self, location_id, selected_paths):
+            assert (location_id, selected_paths) == (7, ())
+            return ()
+
+        def mapping_ids_for_location(self, location_id):
+            assert location_id == 7
+            return mapping_ids
+
+    details = SimpleNamespace(
+        request_id="inventory",
+        state="resolved",
+        root_path=r"F:\library",
+        location_id=7,
+        selected_mount="F:\\",
+        candidates=("F:\\",),
+        detail=None,
+        selected_paths=(),
+        observed_count=0,
+        missing_count=0,
+        complete=True,
+    )
+    output = io.StringIO()
+    errors = io.StringIO()
+
+    _render_inventory(
+        Service(),
+        _record_for_result(OperationResult(SessionState.COMPLETED)),
+        details,
+        (),
+        output,
+        errors,
+    )
+
+    assert expected in output.getvalue()
+    assert errors.getvalue() == ""
+
+
+def test_recording_and_audit_warnings_remain_independent() -> None:
+    result = _record_for_result(
+        OperationResult(
+            SessionState.COMPLETED,
+            audit=RecordingStatus.DEGRADED,
+        )
+    ).result
+    assert result is not None
+    errors = io.StringIO()
+
+    _render_result_warnings(result, errors)
+
+    assert "History recording is degraded" in errors.getvalue()
+    assert "Ledger recording is degraded" not in errors.getvalue()
+
+    recording_result = _record_for_result(
+        OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+        )
+    ).result
+    assert recording_result is not None
+    recording_errors = io.StringIO()
+
+    _render_result_warnings(recording_result, recording_errors)
+
+    assert "rerun this command or activity" in recording_errors.getvalue()
+    assert "History recording is degraded" not in recording_errors.getvalue()
 
 
 def test_plan_review_renders_prior_target_for_rename_operations() -> None:
@@ -197,6 +663,15 @@ def test_plan_review_renders_prior_target_for_rename_operations() -> None:
         target_volume="target-volume",
         deletion_policy="trash",
         trash_on_update=True,
+        semantic_settings=SimpleNamespace(
+            filters=(),
+            preservation=SimpleNamespace(
+                preserve_ads=False,
+                preserve_created=False,
+                preserve_acl=False,
+            ),
+            propagate_source_casing=False,
+        ),
         required_bytes=12,
         free_bytes=100,
         reclaimable_temp_bytes=0,
@@ -288,8 +763,80 @@ def test_declined_plan_mutates_neither_files_nor_databases(tmp_path: Path) -> No
     assert not (target / "payload.txt").exists()
     assert not ledger.exists()
     assert not history.exists()
+    assert "Policy: trash; trash-on-update=enabled" in stdout.getvalue()
     assert "Plan left uncommitted" in stdout.getvalue()
     assert stderr.getvalue() == ""
+
+
+def test_cli_uses_semantic_settings_beside_explicit_ledger(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.txt").write_text("review only", encoding="utf-8")
+    ledger = tmp_path / "isolated" / "ledger.db"
+    history = tmp_path / "isolated" / "history.db"
+    with NamiSyncService(ledger, history) as service:
+        service.commit_semantic_settings(
+            SemanticSettingsPatchView(
+                filters=("*.tmp",),
+                deletion_policy="additive",
+                trash_on_update=False,
+                preservation=PreservationSettingsView(
+                    preserve_ads=False,
+                    preserve_created=True,
+                    preserve_acl=False,
+                ),
+                propagate_source_casing=True,
+            )
+        )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS, (stdout.getvalue(), stderr.getvalue())
+    assert "Policy: additive; trash-on-update=disabled" in stdout.getvalue()
+    assert "Filters: *.tmp" in stdout.getvalue()
+    assert (
+        "Preservation: ads=disabled; created=enabled; acl=disabled; "
+        "source-casing=enabled"
+    ) in stdout.getvalue()
+    assert (ledger.parent / "settings.json").exists()
+    assert not ledger.exists()
+    assert not history.exists()
+
+    override_output = io.StringIO()
+    override_errors = io.StringIO()
+    overridden = main(
+        [
+            *_arguments(source, target, ledger, history),
+            "--deletion-policy",
+            "trash",
+        ],
+        stdin=io.StringIO("\n"),
+        stdout=override_output,
+        stderr=override_errors,
+    )
+
+    assert overridden == EXIT_SUCCESS
+    assert "Policy: trash; trash-on-update=disabled" in override_output.getvalue()
+    assert "Filters: *.tmp" in override_output.getvalue()
+    assert "source-casing=enabled" in override_output.getvalue()
+    assert override_errors.getvalue() == ""
+    with NamiSyncService(ledger, history) as service:
+        stored = service.read_semantic_settings()
+    assert stored.filters == ("*.tmp",)
+    assert stored.deletion_policy == "additive"
+    assert not stored.trash_on_update
+    assert stored.propagate_source_casing
 
 
 def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None:
@@ -330,6 +877,209 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     assert "completed" in history_output.getvalue()
     assert str(source) in history_output.getvalue()
     assert history_errors.getvalue() == ""
+
+
+def test_cli_verify_after_copy_renders_compound_typed_result(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"verify after publish")
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        [
+            *_arguments(source, target, ledger, history),
+            "--verify-after-copy",
+        ],
+        stdin=io.StringIO("execute\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    rendered = stdout.getvalue()
+    assert result == EXIT_SUCCESS, (rendered, stderr.getvalue())
+    assert "Phase execute: status=completed" in rendered
+    assert "Phase verify: status=completed" in rendered
+    assert "integrity=verified" in rendered
+    assert "verify/integrity" in rendered
+    assert stderr.getvalue() == ""
+
+
+def test_cli_runs_inventory_and_integrity_lifecycle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    default_data = tmp_path / "default-app-data"
+    monkeypatch.setenv("LOCALAPPDATA", str(default_data))
+    root = tmp_path / "library"
+    root.mkdir()
+    payload = root / "payload.bin"
+    payload.write_bytes(b"before!")
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+
+    inventory_output = io.StringIO()
+    inventory_errors = io.StringIO()
+    inventory = main(
+        [
+            "inventory",
+            str(root),
+            "--database",
+            str(ledger),
+            "--history-database",
+            str(history),
+        ],
+        stdout=inventory_output,
+        stderr=inventory_errors,
+    )
+    location_match = re.search(r"\bid=(\d+)\b", inventory_output.getvalue())
+
+    assert inventory == EXIT_SUCCESS, (
+        inventory_output.getvalue(),
+        inventory_errors.getvalue(),
+    )
+    assert location_match is not None
+    assert "state=resolved" in inventory_output.getvalue()
+    assert "Rows: 1" in inventory_output.getvalue()
+    assert "Mappings: none" in inventory_output.getvalue()
+    assert inventory_errors.getvalue() == ""
+    assert ledger.exists()
+    assert history.exists()
+    location_id = location_match.group(1)
+
+    common = [
+        "--location-id",
+        location_id,
+        "--database",
+        str(ledger),
+        "--history-database",
+        str(history),
+    ]
+    baseline_output = io.StringIO()
+    baseline_errors = io.StringIO()
+    baseline = main(
+        ["baseline", *common],
+        stdout=baseline_output,
+        stderr=baseline_errors,
+    )
+
+    assert baseline == EXIT_SUCCESS, (
+        baseline_output.getvalue(),
+        baseline_errors.getvalue(),
+    )
+    assert "baselined=1" in baseline_output.getvalue()
+    assert baseline_errors.getvalue() == ""
+
+    added = root / "added.bin"
+    added.write_bytes(b"new file")
+    incomplete_output = io.StringIO()
+    incomplete_errors = io.StringIO()
+    incomplete = main(
+        ["verify", *common],
+        stdout=incomplete_output,
+        stderr=incomplete_errors,
+    )
+
+    assert incomplete == EXIT_VERIFICATION_INCOMPLETE, (
+        incomplete_output.getvalue(),
+        incomplete_errors.getvalue(),
+    )
+    assert "baselined=1" in incomplete_output.getvalue()
+    assert "Verification is incomplete" in incomplete_errors.getvalue()
+
+    converged = main(
+        ["verify", *common],
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+    )
+    assert converged == EXIT_SUCCESS
+
+    original = payload.stat()
+    payload.write_bytes(b"AFTER!!")
+    os.utime(
+        payload,
+        ns=(original.st_atime_ns, original.st_mtime_ns),
+    )
+    mismatch_output = io.StringIO()
+    mismatch_errors = io.StringIO()
+    mismatch = main(
+        ["verify", *common],
+        stdout=mismatch_output,
+        stderr=mismatch_errors,
+    )
+
+    assert mismatch == EXIT_MISMATCH, (
+        mismatch_output.getvalue(),
+        mismatch_errors.getvalue(),
+    )
+    assert "mismatched=1" in mismatch_output.getvalue()
+    assert "Integrity mismatch" in mismatch_errors.getvalue()
+
+    rebaseline_output = io.StringIO()
+    rebaseline_errors = io.StringIO()
+    accepted = main(
+        [
+            "rebaseline",
+            *common,
+            "--path",
+            "payload.bin",
+            "--accept-current-evidence",
+        ],
+        stdout=rebaseline_output,
+        stderr=rebaseline_errors,
+    )
+
+    assert accepted == EXIT_SUCCESS, (
+        rebaseline_output.getvalue(),
+        rebaseline_errors.getvalue(),
+    )
+    assert "baselined=1" in rebaseline_output.getvalue()
+    assert rebaseline_errors.getvalue() == ""
+    final = main(
+        ["verify", *common],
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+    )
+    assert final == EXIT_SUCCESS
+    assert not (default_data / "NamiSync" / "ledger.db").exists()
+    assert not (default_data / "NamiSync" / "history.db").exists()
+
+    history_output = io.StringIO()
+    history_errors = io.StringIO()
+    listed = main(
+        ["history", "--history-database", str(history)],
+        stdout=history_output,
+        stderr=history_errors,
+    )
+    baseline_line = next(
+        line
+        for line in history_output.getvalue().splitlines()
+        if "  baseline  " in line
+    )
+    baseline_token = baseline_line.split(maxsplit=1)[0]
+    detail_output = io.StringIO()
+    detailed = main(
+        [
+            "history",
+            baseline_token,
+            "--history-database",
+            str(history),
+        ],
+        stdout=detail_output,
+        stderr=io.StringIO(),
+    )
+
+    assert listed == EXIT_SUCCESS
+    assert history_errors.getvalue() == ""
+    assert detailed == EXIT_SUCCESS
+    assert "Activity: baseline" in detail_output.getvalue()
+    assert "baseline/integrity/" in detail_output.getvalue()
 
 
 def test_case_only_name_advisory_does_not_suppress_changed_content(
@@ -627,3 +1377,82 @@ def test_real_process_entry_points_run_sync_and_history(tmp_path: Path) -> None:
         assert (target / "payload.txt").read_text(encoding="utf-8") == "real argv"
         assert browsed.returncode == EXIT_SUCCESS, (browsed.stdout, browsed.stderr)
         assert "completed" in browsed.stdout
+
+
+def test_real_process_entry_points_run_location_commands(
+    tmp_path: Path,
+) -> None:
+    console = Path(sys.executable).with_name("nami-sync.exe")
+    entry_points = (
+        [sys.executable, "-m", "namisync"],
+        [str(console)],
+    )
+    for index, prefix in enumerate(entry_points):
+        case = tmp_path / str(index)
+        root = case / "library"
+        root.mkdir(parents=True)
+        payload = root / "payload.txt"
+        payload.write_text("initial", encoding="utf-8")
+        ledger = case / "ledger.db"
+        history = case / "history.db"
+        databases = [
+            "--database",
+            str(ledger),
+            "--history-database",
+            str(history),
+        ]
+
+        inventory = subprocess.run(
+            [*prefix, "inventory", str(root), *databases],
+            cwd=Path(__file__).parents[1],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        baseline = subprocess.run(
+            [*prefix, "baseline", str(root), *databases],
+            cwd=Path(__file__).parents[1],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        payload.write_text("changed", encoding="utf-8")
+        rebaseline = subprocess.run(
+            [
+                *prefix,
+                "rebaseline",
+                str(root),
+                "--path",
+                "payload.txt",
+                "--accept-current-evidence",
+                *databases,
+            ],
+            cwd=Path(__file__).parents[1],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        verify = subprocess.run(
+            [*prefix, "verify", str(root), *databases],
+            cwd=Path(__file__).parents[1],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        assert inventory.returncode == EXIT_SUCCESS, (
+            inventory.stdout,
+            inventory.stderr,
+        )
+        assert baseline.returncode == EXIT_SUCCESS, (
+            baseline.stdout,
+            baseline.stderr,
+        )
+        assert rebaseline.returncode == EXIT_SUCCESS, (
+            rebaseline.stdout,
+            rebaseline.stderr,
+        )
+        assert verify.returncode == EXIT_SUCCESS, (
+            verify.stdout,
+            verify.stderr,
+        )

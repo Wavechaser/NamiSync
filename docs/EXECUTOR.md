@@ -373,7 +373,8 @@ chunk bands remain private constants, not settings.
 - Opt-in ACL copy failure fails before publish and leaves the prior live target
   untouched. A real restrictive-DACL test proves the held finalization handle
   still sets basic information and flushes after a fresh metadata reopen is
-  denied. ADS has no acceptance case because the policy is not exposed.
+  denied. ADS preservation is available through the semantic-settings facade,
+  but has no separate real-filesystem acceptance case in this suite.
 - Target appearance/change after preflight but before mutation is detected by
   the final guard when it occurs before that guard. Faults injected between
   guard and touch prove only the condition owned by the mutation primitive:

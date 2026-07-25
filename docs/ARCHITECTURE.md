@@ -777,7 +777,8 @@ payload-stable `propagate_source_casing` seam emits an explicit zero-byte
 `recase` operation for metadata-equal files; changed files still use their
 required update at the requested spelling. Recasing is a same-key,
 non-replacing rename that preserves content, identity, metadata, and trash
-state. It is off and unexposed by default and does not recase parent
+state. It is off by default, is available through the primitive semantic
+settings facade but has no settings CLI/UI, and does not recase parent
 directories. One-to-one same-parent file pairs whose basenames
 are canonically equivalent under NFC carry a separate non-blocking Unicode
 normalization advisory; the planner preserves observed spelling, performs no
@@ -1078,7 +1079,8 @@ continuation. Standalone verify/baseline/rebaseline sessions refresh inventory,
 re-resolve volume/root state on initial start and every resume/queued wakeup,
 and pause/resume over the exact originally admitted selection. Their ordered
 integrity items reach history, and all three kinds are registered with the
-dispatcher. Interface commands remain the Stage 5 product gate.
+dispatcher. Stage 5 exposes the explicit location commands through the shared
+facade; desktop actions remain Stage 6.
 
 M1 replaces content SHA-256 in baseline, verify, rebaseline, and copy together
 with canonical XXH3-128; no interval exists where the two consumers write
@@ -1125,7 +1127,9 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 its own database. `schema.py` owns both schemas and the version stamps.
 `settings.py` owns schema-versioned semantic defaults in `settings.json`;
 planning receives a snapshot through injected runtime composition, while
-admitted execution never rereads it.
+admitted execution never rereads it. Runtime defaults this file beside the
+selected ledger and translates it to primitive service views; interfaces never
+import database settings types.
 
 **Implementation status (2026-07-24).** Ledger v2 and history v3 are active.
 Their safe writer/read-only connection factories, canonical UTC codec,
@@ -1170,7 +1174,15 @@ Stage 4 consumes that unchanged storage for compound phase summaries and
 linked-verification history.
 Semantic-settings commits hold a named cross-process mutex only across
 read-current → modify-owned-keys → temp-write → atomic-replace, so concurrent
-GUI/CLI writers cannot lose one another's updates.
+GUI/CLI writers cannot lose one another's updates. The Stage 5 facade reads the
+full snapshot and commits an all-optional patch; omitted fields survive because
+the store rereads under that mutex. Planning captures the resulting complete
+snapshot once, and a request-level deletion override replaces no other semantic
+field.
+The review model carries that complete frozen semantic snapshot. Public
+snapshot/patch views enforce exact booleans, tuple-of-string filters, supported
+deletion values, and the nested preservation type before any atomic settings
+write; settings may neither alias a database nor live inside a managed root.
 **Flesh — deferred.** History retention waits for a maintenance session with
 cross-process history-writer custody; no M1 retention setting, facade action, or
 direct UI SQL exists. Also deferred: general migration module; legacy import;
@@ -1375,6 +1387,11 @@ Everything downstream falls out of this split:
   invocation and exposes narrow execution/integrity views rather than competing
   writers. It finishes the logical run once at compound terminal settlement; a
   pause may close and idempotently reopen the same run token on resume.
+- **Standalone integrity freezes mode-aware scope.** A fresh baseline filters to
+  eligible rows without evidence, a fresh rebaseline filters to rows with
+  evidence, and verify keeps both. Once candidate ids exist, resume preserves
+  that ordered admitted set and completed counters without reapplying filters
+  after evidence changes.
 
 **Bones.** The two-session split; top-to-bottom sequencing (scan → plan →
 observe → preflight → execute [→ verify], or location resolve/register → scan
@@ -1401,7 +1418,10 @@ dispatcher registration. **Flesh — implemented through M1 Stage 4.** Optional
 in-session post-execution verification, explicit execute/verify continuation,
 one finish-once run window, compound phase summaries/history/views, and
 independent filesystem/integrity/recording/audit/canceled truth. **Flesh —
-later M1 stages.** Expanded CLI/final classification (Stage 5) and the desktop
+implemented through M1 Stage 5.** Primitive semantic-settings snapshot/patch
+translation, mode-aware fresh baseline/rebaseline admission, frozen resume
+selection, explicit location facade starts, the four location CLI commands,
+and final headline/exit classification. **Flesh — later M1.** The desktop
 shell (Stage 6).
 **Flesh — deferred.** Queue-driven durable second sessions;
 replay-from-history; DB maintenance/retention session; undo/repair (each
@@ -1456,32 +1476,41 @@ translate user intent into `submit`.
 `history`; runnable/blocked/deferred review and partial-completion exit 6; real
 entry-point wiring; no-subcommand prints usage and exits nonzero until the
 desktop exists.
-**Flesh — M1.** `interfaces/service.py` becomes the shared facade/composition
+**Flesh — M1.** `interfaces/service.py` is the shared facade/composition
 surface for both adapters, with typed commands/views, session observation,
 result classification across all four axes, and process-local
 `save_plan`/`get_plan`/`drop_plan` methods (no speculative `PlanStore`). The CLI
-is retargeted without changing equivalent M0 behavior, then gains inventory,
+preserves equivalent M0 behavior and adds inventory,
 baseline, verify, and rebaseline. CLI and desktop adapters may import the
 service but not one another; the service reaches database-owned settings
 through its injected workflow/runtime dependency and never imports `db`
 directly.
 
-**Stage 5 extraction checkpoint (2026-07-25).** The process-local service now
+**Stage 5 implemented (2026-07-25).** The process-local service
 owns the six-kind registry, runtime/dispatcher lifetime, sync sequencing,
 history access, controls, primitive view projection, and a sink-only blocking
-`SessionObserver`. The existing CLI is retargeted without changing its current
-`sync`/`history` command behavior. Observer shutdown closes streams before
+`SessionObserver`. The CLI is retargeted without changing its existing
+`sync`/`history` behavior and exposes all four location commands through
+keyword-only facade starts. Each start binds one explicit root or retained
+location id plus optional exact selected paths and ambiguity-resolving mount
+before dispatcher admission. Observer shutdown closes streams before
 joins, dispatcher shutdown precedes runtime close, and runtime plan access uses
 the named process-local methods without a storage abstraction. The compound
-workflow is now available through the opt-in `verify_after_execute` flag. The
-four new CLI commands and final classification matrix remain Stage 5 Track B
-work.
+workflow is available through the opt-in `verify_after_execute` flag.
+
+Runtime owns semantic-settings persistence and defaults it to `settings.json`
+beside the selected ledger. Service read/commit methods expose only primitive
+full-snapshot/all-optional-patch workflow views. Planning reads one snapshot;
+`deletion_policy=None` uses it unchanged, while an explicit override replaces
+only that policy. The captured plan remains immutable if settings later change.
 
 `ResultCategory` chooses one headline without hiding secondary axes:
 `failed > partial > refused > mismatch > canceled >
 verification-incomplete > recording/audit degradation > all-noop > success`.
 Filesystem, integrity, recording, and audit details remain individually
-renderable regardless of the headline.
+renderable regardless of the headline. CLI exits map success/all-noop to 0,
+usage to 2, refused to 3, failed to 4, canceled to 5, partial to 6, degradation
+to 7, mismatch to 8, and verification-incomplete to 9.
 
 The M1 desktop is a pywebview host forced to Edge Chromium/WebView2. It exposes
 one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
@@ -1508,6 +1537,13 @@ desktop surfaces, and other interfaces behind the same facade.
   SEVERE dead-CLI bug — smoke-test the real default path).
 - Read-only CLI commands run concurrently with a GUI session; mutating commands
   obey the same volume/queue arbitration as any session.
+- Location CLI starts require one explicit root/id and preserve both database
+  overrides through service/runtime composition; no interface imports SQL or
+  mapping policy to infer a location.
+- Primitive settings patches preserve omitted fields, and a plan's captured
+  semantic snapshot is unchanged by later commits.
+- Adjacent headline-precedence pairs, compound secondary axes, and zero-byte
+  `RAN` versus `UNRUN` cases determine exits from typed views only.
 - Runtime guards raise real exceptions, not bare `assert` (which vanished under
   `python -O` in the PoC).
 - Any presentation-triggering logic is separable from an event loop, so tests
@@ -1563,8 +1599,8 @@ desktop surfaces, and other interfaces behind the same facade.
   `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
   isolated verifier operation may land in parallel during M0 construction, but
   does not broaden this shipping gate without its inventory/workflow surface.
-- **M1 — integrity product and executor refactor.** Stages 1–4 are implemented;
-  continue in this dependency order:
+- **M1 — integrity product and executor refactor.** Stages 1–5 are implemented;
+  Stage 6 remains. The settled dependency order is:
   1. contracts and semantics — canonical XXH3-128 evidence, nominal result
      items/phase summaries, four truth axes, execute→verify continuation,
      two-database reset boundary, split settings ownership, and facade/bridge
@@ -1578,11 +1614,11 @@ desktop surfaces, and other interfaces behind the same facade.
   5. shared facade and CLI expansion; and
   6. the pywebview/WebView2 desktop shell against settled facade views.
 
-  After the contracts are fixed, HASH Track 1 may proceed beside inventory
-  production and standalone result/event work. Standalone hashing waits for
-  HASH Track 2; post-execution integration waits for standalone integrity;
-  new CLI commands wait for their workflows; GUI data binding waits for the
-  facade and compound contracts. History retention is not part of M1.
+  Implementation honored the dependency chain: standalone hashing followed
+  HASH Track 2, post-execution integration followed standalone integrity, and
+  the CLI commands followed their workflows. GUI data binding still waits for
+  the now-settled facade and compound contracts. History retention is not part
+  of M1.
 - **M2 — durability & scope.** `SqliteSessionStore` behind the existing
   protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
   producer); single queue-owner lock; durable queue and plans; event

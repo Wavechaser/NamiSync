@@ -70,7 +70,17 @@ Windows named mutex, rereads the latest document while holding it, applies only
 the supplied patch fields, and atomically replaces the UTF-8 JSON file. This
 prevents two processes editing unrelated settings from reverting one another.
 The store accepts user-facing `trash` and `additive`; hidden `mirror` is not a
-persistable preference.
+persistable preference. Runtime composition defaults the path to
+`settings.json` beside the selected ledger, so an explicit ledger override
+also isolates its semantic defaults. The shared service exposes primitive
+snapshot/patch views and never imports this package or leaks
+`SemanticSettingsStore`, `SemanticSettings`, core enums, or `SyncOptions`.
+Missing settings mean the schema defaults; malformed or wrong-schema settings
+refuse planning before dispatcher submission.
+Runtime refuses a settings path that aliases either database or lies inside a
+managed root. Primitive view validation rejects non-boolean scalar values,
+non-tuple/non-string filters, hidden deletion values, and wrong preservation
+objects before the store can replace an existing or missing file.
 
 ## Main Ledger Shape
 
@@ -243,6 +253,9 @@ rather than current implementation claims.
   normal startup never deletes either database.
 - Concurrent semantic-settings patches preserve unrelated fields because the
   read-modify-replace cycle is serialized across processes.
+- Runtime/service settings reads expose the complete semantic snapshot, an
+  all-optional patch preserves untouched keys, and an explicit ledger path
+  resolves its sibling settings file unless `settings_path` is supplied.
 - Retention uses a writable connection, canonical time comparison, preserves
   summaries when pruning detail, and is idempotent.
 - Concurrent recorder/repository/history access does not lose committed evidence

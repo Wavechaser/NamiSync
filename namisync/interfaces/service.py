@@ -24,14 +24,21 @@ from namisync.workflows import (
     PLAN_KIND,
     REBASELINE_KIND,
     VERIFY_KIND,
+    InventoryRequest,
     LocalWorkflowRuntime,
-    PlanRequest,
+    VolumeResolutionRequired,
     default_database_paths,
-    sync_options,
+    integrity_request,
 )
 from namisync.workflows.views import (
+    InventoryRowView,
+    OperationResultView,
+    PreservationSettingsView,
+    SemanticSettingsPatchView,
+    SemanticSettingsView,
     SessionEventView,
     SessionRecordView,
+    inventory_row_view,
     session_event_view,
     session_record_view,
 )
@@ -55,6 +62,60 @@ class PlanSession:
 class ExecutionSession:
     run_id: str
     session_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocationSession:
+    request_id: str
+    session_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class LocationResolutionView:
+    state: str
+    root_path: str | None
+    location_id: int | None
+    selected_mount: str | None
+    candidates: tuple[str, ...]
+    detail: str | None
+
+
+class LocationResolutionError(ValueError):
+    """An explicit location could not be safely bound before admission."""
+
+    def __init__(self, resolution: LocationResolutionView) -> None:
+        super().__init__(
+            resolution.state
+            if resolution.detail is None
+            else f"{resolution.state}: {resolution.detail}"
+        )
+        self.resolution = resolution
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryDetailsView:
+    request_id: str
+    state: str
+    root_path: str | None
+    location_id: int | None
+    selected_mount: str | None
+    candidates: tuple[str, ...]
+    detail: str | None
+    selected_paths: tuple[str, ...]
+    observed_count: int
+    missing_count: int
+    complete: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ResultCategory:
+    headline: str
+    filesystem: str
+    integrity: str
+    recording: str
+    audit: str
+    disposition: str
+    canceled: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,8 +328,14 @@ class NamiSyncService:
         self,
         ledger_path: str | Path,
         history_path: str | Path,
+        *,
+        settings_path: str | Path | None = None,
     ) -> None:
-        self._runtime = LocalWorkflowRuntime(ledger_path, history_path)
+        self._runtime = LocalWorkflowRuntime(
+            ledger_path,
+            history_path,
+            settings_path=settings_path,
+        )
         self._dispatcher = _dispatcher(self._runtime)
         self._observer = SessionObserver(self._dispatcher)
         self._lock = Lock()
@@ -280,20 +347,29 @@ class NamiSyncService:
         source: str,
         target: str,
         *,
-        deletion_policy: str = "trash",
+        deletion_policy: str | None = None,
     ) -> PlanSession:
         try:
             source_path, target_path = _validated_paths(source, target)
         except (OSError, ValueError) as error:
             raise SyncPathInputError(str(error)) from error
-        request = PlanRequest(
-            request_id=uuid4().hex,
-            source_path=str(source_path),
-            target_path=str(target_path),
-            options=sync_options(deletion_policy),
+        request = self._runtime.create_plan_request(
+            uuid4().hex,
+            str(source_path),
+            str(target_path),
+            deletion_policy=deletion_policy,
         )
         session_id = self._dispatcher.submit(PLAN_KIND, request)
         return PlanSession(request.request_id, str(session_id))
+
+    def read_semantic_settings(self) -> SemanticSettingsView:
+        return self._runtime.read_semantic_settings()
+
+    def commit_semantic_settings(
+        self,
+        patch: SemanticSettingsPatchView,
+    ) -> SemanticSettingsView:
+        return self._runtime.commit_semantic_settings(patch)
 
     def get_plan_review(self, request_id: str):
         return self._runtime.get_plan_review(request_id)
@@ -312,6 +388,74 @@ class NamiSyncService:
         return ExecutionSession(
             str(request.execution_set.run_id),
             str(session_id),
+        )
+
+    def start_inventory(
+        self,
+        *,
+        root_path: str | None = None,
+        location_id: int | None = None,
+        selected_paths: tuple[str, ...] = (),
+        selected_mount: str | None = None,
+    ) -> LocationSession:
+        request_id = uuid4().hex
+        request = InventoryRequest(
+            request_id=request_id,
+            root_path=root_path,
+            location_id=location_id,
+            selected_paths=selected_paths,
+            selected_mount=selected_mount,
+        )
+        return self._start_location(INVENTORY_KIND, request_id, request)
+
+    def start_baseline(
+        self,
+        *,
+        root_path: str | None = None,
+        location_id: int | None = None,
+        selected_paths: tuple[str, ...] = (),
+        selected_mount: str | None = None,
+    ) -> LocationSession:
+        return self._start_integrity(
+            BASELINE_KIND,
+            root_path=root_path,
+            location_id=location_id,
+            selected_paths=selected_paths,
+            selected_mount=selected_mount,
+        )
+
+    def start_verify(
+        self,
+        *,
+        root_path: str | None = None,
+        location_id: int | None = None,
+        selected_paths: tuple[str, ...] = (),
+        selected_mount: str | None = None,
+    ) -> LocationSession:
+        return self._start_integrity(
+            VERIFY_KIND,
+            root_path=root_path,
+            location_id=location_id,
+            selected_paths=selected_paths,
+            selected_mount=selected_mount,
+        )
+
+    def start_rebaseline(
+        self,
+        *,
+        root_path: str | None = None,
+        location_id: int | None = None,
+        selected_paths: tuple[str, ...] = (),
+        selected_mount: str | None = None,
+    ) -> LocationSession:
+        if not selected_paths:
+            raise ValueError("rebaseline requires an explicit selected scope")
+        return self._start_integrity(
+            REBASELINE_KIND,
+            root_path=root_path,
+            location_id=location_id,
+            selected_paths=selected_paths,
+            selected_mount=selected_mount,
         )
 
     def save_plan(self, artifact: object) -> None:
@@ -354,6 +498,48 @@ class NamiSyncService:
     def get_execution_details(self, run_id: str):
         return self._runtime.get_execution_details(run_id)
 
+    def get_inventory_details(self, request_id: str) -> InventoryDetailsView:
+        details = self._runtime.get_inventory_details(request_id)
+        resolution = _location_resolution_view(details.resolution)
+        return InventoryDetailsView(
+            request_id=details.request_id,
+            state=resolution.state,
+            root_path=resolution.root_path,
+            location_id=(
+                resolution.location_id
+                if details.location_id is None
+                else details.location_id
+            ),
+            selected_mount=resolution.selected_mount,
+            candidates=resolution.candidates,
+            detail=resolution.detail,
+            selected_paths=details.selected_paths,
+            observed_count=details.observed_count,
+            missing_count=details.missing_count,
+            complete=details.complete,
+        )
+
+    def list_inventory(
+        self,
+        location_id: int,
+        selected_paths: tuple[str, ...] = (),
+    ) -> tuple[InventoryRowView, ...]:
+        return tuple(
+            inventory_row_view(row)
+            for row in self._runtime.list_inventory(
+                location_id,
+                selected_paths,
+            )
+        )
+
+    def mapping_ids_for_location(self, location_id: int) -> tuple[str, ...]:
+        return tuple(
+            str(mapping_id)
+            for mapping_id in self._runtime.mapping_ids_for_location(
+                location_id
+            )
+        )
+
     def list_history(self, limit: int = 50):
         return self._runtime.list_history(limit)
 
@@ -388,6 +574,40 @@ class NamiSyncService:
 
     def __exit__(self, exc_type, exc, traceback) -> None:
         self.close()
+
+    def _start_integrity(
+        self,
+        kind: str,
+        *,
+        root_path: str | None,
+        location_id: int | None,
+        selected_paths: tuple[str, ...],
+        selected_mount: str | None,
+    ) -> LocationSession:
+        request_id = uuid4().hex
+        request = integrity_request(
+            kind,
+            request_id,
+            root_path=root_path,
+            location_id=location_id,
+            selected_paths=selected_paths,
+            selected_mount=selected_mount,
+        )
+        return self._start_location(kind, request_id, request)
+
+    def _start_location(
+        self,
+        kind: str,
+        request_id: str,
+        request: object,
+    ) -> LocationSession:
+        try:
+            session_id = self._dispatcher.submit(kind, request)
+        except VolumeResolutionRequired as error:
+            raise LocationResolutionError(
+                _location_resolution_view(error.resolution)
+            ) from error
+        return LocationSession(request_id, str(session_id))
 
 
 def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:
@@ -467,6 +687,38 @@ def _control_view(result) -> ControlView:
     )
 
 
+def classify_result(result: OperationResultView) -> ResultCategory:
+    """Expose the workflow-owned headline with every independent result axis."""
+
+    return ResultCategory(
+        headline=result.headline,
+        filesystem=result.filesystem,
+        integrity=result.integrity,
+        recording=result.recording,
+        audit=result.audit,
+        disposition=result.disposition,
+        canceled=result.canceled,
+    )
+
+
+def _location_resolution_view(resolution) -> LocationResolutionView:
+    binding = resolution.binding
+    selected_mount = binding.selected_mount
+    if selected_mount == "<unmounted>" or (
+        resolution.state.value == "ambiguous"
+        and not binding.explicit_ambiguity_choice
+    ):
+        selected_mount = None
+    return LocationResolutionView(
+        state=resolution.state.value,
+        root_path=resolution.root_path,
+        location_id=binding.location_id,
+        selected_mount=selected_mount,
+        candidates=tuple(resolution.candidates),
+        detail=resolution.detail,
+    )
+
+
 def _validated_paths(source: str, target: str) -> tuple[Path, Path]:
     source_path = Path(source).resolve(strict=True)
     target_path = Path(target).resolve(strict=True)
@@ -488,8 +740,17 @@ def _validated_paths(source: str, target: str) -> tuple[Path, Path]:
 __all__ = [
     "ControlView",
     "ExecutionSession",
+    "InventoryDetailsView",
+    "InventoryRowView",
+    "LocationResolutionError",
+    "LocationResolutionView",
+    "LocationSession",
     "NamiSyncService",
     "PlanSession",
+    "PreservationSettingsView",
+    "ResultCategory",
+    "SemanticSettingsPatchView",
+    "SemanticSettingsView",
     "SessionEventView",
     "SessionObserver",
     "SessionRecordView",
@@ -497,5 +758,6 @@ __all__ = [
     "SessionUpdate",
     "ShutdownView",
     "SyncPathInputError",
+    "classify_result",
     "default_database_paths",
 ]

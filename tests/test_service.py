@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import ast
 import io
+import json
 from collections import deque
+from dataclasses import asdict
+from pathlib import Path
 from types import SimpleNamespace
 from threading import Event, Lock
 
 import pytest
 
+import namisync.interfaces.cli as cli_module
 from namisync.core.events import (
     Envelope,
     Gap,
@@ -14,6 +19,7 @@ from namisync.core.events import (
     SCHEMA_VERSION,
     Terminal,
 )
+from namisync.core.models import VolumeId
 from namisync.core.session import (
     OperationResult,
     SessionId,
@@ -23,11 +29,27 @@ from namisync.core.session import (
 from namisync.dispatcher import SessionNotFound
 from namisync.interfaces import main as package_main
 from namisync.interfaces.service import (
+    InventoryDetailsView,
+    InventoryRowView,
+    LocationResolutionError,
+    LocationResolutionView,
     NamiSyncService,
+    PreservationSettingsView,
+    ResultCategory,
+    SemanticSettingsView,
     SessionEventView,
     SessionObserver,
     SessionRecordView,
 )
+from namisync.workflows import InventoryRequest
+from namisync.workflows.inventory import (
+    IntegrityRequest,
+    LocationBinding,
+    VolumeResolution,
+    VolumeResolutionRequired,
+    VolumeResolutionState,
+)
+from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import NOW
 
@@ -149,6 +171,92 @@ def test_interfaces_package_preserves_lazy_main_entry_point() -> None:
 
     assert result == 2
     assert "usage:" in stderr.getvalue()
+
+
+def test_interface_views_are_recursive_json_primitives_without_duck_typing() -> None:
+    result = operation_result_view(OperationResult(SessionState.COMPLETED))
+    views = (
+        SessionEventView(
+            session_id="session",
+            sequence=1,
+            at=NOW.isoformat(),
+            body_type="PhaseChanged",
+            body={"phase": "inventory"},
+        ),
+        SessionRecordView(
+            session_id="session",
+            kind="inventory",
+            state="completed",
+            supports_pause=False,
+            created_at=NOW.isoformat(),
+            started_at=NOW.isoformat(),
+            ended_at=NOW.isoformat(),
+            result=result,
+        ),
+        InventoryRowView(
+            row_id="row",
+            location_id="7",
+            path="file.bin",
+            path_key="file.bin",
+            entry_kind="file",
+            presence="present",
+            size=7,
+            mtime_ns=1,
+            has_baseline=True,
+            last_observed_at=NOW.isoformat(),
+            last_verified_at=NOW.isoformat(),
+            missing_since=None,
+            acknowledged_at=None,
+            reappeared_at=None,
+            unsupported_reason=None,
+        ),
+        SemanticSettingsView(
+            filters=("*.tmp",),
+            deletion_policy="trash",
+            trash_on_update=True,
+            preservation=PreservationSettingsView(False, False, False),
+            propagate_source_casing=False,
+        ),
+        LocationResolutionView(
+            state="resolved",
+            root_path=r"F:\library",
+            location_id=7,
+            selected_mount="F:\\",
+            candidates=("F:\\",),
+            detail=None,
+        ),
+        InventoryDetailsView(
+            request_id="inventory",
+            state="resolved",
+            root_path=r"F:\library",
+            location_id=7,
+            selected_mount="F:\\",
+            candidates=("F:\\",),
+            detail=None,
+            selected_paths=("file.bin",),
+            observed_count=1,
+            missing_count=0,
+            complete=True,
+        ),
+        ResultCategory(
+            headline="success",
+            filesystem="completed",
+            integrity="not-run",
+            recording="ok",
+            audit="ok",
+            disposition="ran",
+            canceled=False,
+        ),
+    )
+
+    json.dumps([asdict(view) for view in views])
+    tree = ast.parse(Path(cli_module.__file__).read_text(encoding="utf-8"))
+    assert not any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "hasattr"
+        for node in ast.walk(tree)
+    )
 
 
 def test_finish_between_get_and_subscribe_returns_terminal_record() -> None:
@@ -318,6 +426,32 @@ def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
     observer.close()
 
 
+def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
+    stream = _SequenceStream(
+        _envelope("self-unsubscribe", 1, PhaseChanged("inventory"))
+    )
+
+    class Dispatcher:
+        def get(self, session_id: str) -> SessionRecord:
+            return _record(session_id)
+
+        def subscribe(self, session_id: str, from_seq=None):
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    returned = Event()
+
+    def receive(_update) -> None:
+        observer.unsubscribe("self-unsubscribe")
+        returned.set()
+
+    observer.observe("self-unsubscribe", receive)
+
+    assert returned.wait(0.5)
+    assert stream.closed
+    observer.close()
+
+
 def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     log: list[str] = []
 
@@ -393,3 +527,162 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
         "run-verified",
         "session-2",
     )
+
+
+def test_location_commands_submit_exact_typed_workflow_requests() -> None:
+    submitted: list[tuple[str, object]] = []
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object) -> str:
+            submitted.append((kind, request))
+            return f"session-{kind}"
+
+    service = object.__new__(NamiSyncService)
+    service._dispatcher = Dispatcher()
+
+    inventory = service.start_inventory(
+        root_path=r"F:\library",
+        selected_paths=("a.bin",),
+    )
+    baseline = service.start_baseline(location_id=7)
+    verify = service.start_verify(
+        location_id=7,
+        selected_mount="F:\\",
+    )
+    rebaseline = service.start_rebaseline(
+        location_id=7,
+        selected_paths=("a.bin",),
+    )
+
+    assert [kind for kind, _ in submitted] == [
+        "inventory",
+        "baseline",
+        "verify",
+        "rebaseline",
+    ]
+    assert isinstance(submitted[0][1], InventoryRequest)
+    assert submitted[0][1].root_path == r"F:\library"
+    assert submitted[0][1].selected_paths == ("a.bin",)
+    assert all(
+        isinstance(request, IntegrityRequest)
+        for _, request in submitted[1:]
+    )
+    assert [
+        request.mode.value for _, request in submitted[1:]
+    ] == ["baseline", "verify", "rebaseline"]
+    assert inventory.session_id == "session-inventory"
+    assert baseline.session_id == "session-baseline"
+    assert verify.session_id == "session-verify"
+    assert rebaseline.session_id == "session-rebaseline"
+
+
+def test_rebaseline_refuses_an_unselected_scope_before_submission() -> None:
+    class Dispatcher:
+        def submit(self, kind: str, request: object) -> str:
+            raise AssertionError("unselected rebaseline must not be submitted")
+
+    service = object.__new__(NamiSyncService)
+    service._dispatcher = Dispatcher()
+
+    with pytest.raises(ValueError, match="explicit selected scope"):
+        service.start_rebaseline(location_id=7)
+
+
+@pytest.mark.parametrize(
+    ("state", "selected_mount", "candidates", "root_path"),
+    [
+        (VolumeResolutionState.OFFLINE, "<unmounted>", (), None),
+        (
+            VolumeResolutionState.AMBIGUOUS,
+            "F:\\",
+            ("F:\\", "G:\\"),
+            None,
+        ),
+        (
+            VolumeResolutionState.ROOT_MISSING,
+            "F:\\",
+            ("F:\\",),
+            r"F:\library",
+        ),
+        (
+            VolumeResolutionState.ROOT_UNAVAILABLE,
+            "F:\\",
+            ("F:\\",),
+            r"F:\library",
+        ),
+    ],
+)
+def test_location_resolution_is_primitive_and_precedes_admission(
+    state: VolumeResolutionState,
+    selected_mount: str,
+    candidates: tuple[str, ...],
+    root_path: str | None,
+) -> None:
+    expected_mounts = candidates or (selected_mount,)
+    binding = LocationBinding(
+        VolumeId("serial", "NTFS"),
+        "library",
+        selected_mount,
+        expected_mounts,
+        False,
+        7,
+    )
+    resolution = VolumeResolution(
+        state,
+        binding,
+        root_path=root_path,
+        candidates=candidates,
+        detail="resolution detail",
+    )
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object) -> str:
+            raise VolumeResolutionRequired(resolution)
+
+    service = object.__new__(NamiSyncService)
+    service._dispatcher = Dispatcher()
+
+    with pytest.raises(LocationResolutionError) as raised:
+        service.start_verify(location_id=7)
+
+    view = raised.value.resolution
+    assert view.state == state.value
+    assert view.root_path == root_path
+    assert view.location_id == 7
+    assert view.selected_mount == (
+        None
+        if selected_mount == "<unmounted>"
+        or state is VolumeResolutionState.AMBIGUOUS
+        else selected_mount
+    )
+    assert view.candidates == candidates
+    assert view.detail == "resolution detail"
+
+
+def test_ambiguous_resolution_preserves_only_a_real_explicit_choice() -> None:
+    binding = LocationBinding(
+        VolumeId("serial", "NTFS"),
+        "library",
+        "F:\\",
+        ("F:\\", "G:\\"),
+        True,
+        7,
+    )
+    resolution = VolumeResolution(
+        VolumeResolutionState.AMBIGUOUS,
+        binding,
+        candidates=("F:\\", "G:\\"),
+        detail="mounted candidates changed",
+    )
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object) -> str:
+            raise VolumeResolutionRequired(resolution)
+
+    service = object.__new__(NamiSyncService)
+    service._dispatcher = Dispatcher()
+
+    with pytest.raises(LocationResolutionError) as raised:
+        service.start_verify(location_id=7)
+
+    assert raised.value.resolution.selected_mount == "F:\\"

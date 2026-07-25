@@ -174,9 +174,10 @@ to a global chronological list.
   gate, and planning compared only Windows case keys without a conservative
   canonical-equivalence advisory pass; fixed by retaining normal update/no-op
   semantics under typed non-blocking reasons, preserving target spelling by
-  default, adding a fingerprinted but currently unexposed source-basename
-  recasing option, and pairing only unique same-parent NFC-equivalent files that
-  are not already exact matches.
+  default, adding a fingerprinted source-basename recasing option (available
+  through the semantic-settings facade, with no dedicated CLI/UI control), and
+  pairing only unique same-parent NFC-equivalent files that are not already
+  exact matches.
 - MODERATE - FIXED (2026-07-20). Case-sensitive name reconciliation. A pair
   such as `KEEP.txt` and `keep.txt` was reported as a metadata no-op forever,
   hiding unconverged target casing. Cause: Windows-key grouping discarded target

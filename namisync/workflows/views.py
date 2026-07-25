@@ -138,6 +138,89 @@ class InventoryRowView:
     unsupported_reason: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class PreservationSettingsView:
+    preserve_ads: bool
+    preserve_created: bool
+    preserve_acl: bool
+
+    def __post_init__(self) -> None:
+        _require_exact_bool(self.preserve_ads, "preserve_ads")
+        _require_exact_bool(self.preserve_created, "preserve_created")
+        _require_exact_bool(self.preserve_acl, "preserve_acl")
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticSettingsView:
+    filters: tuple[str, ...]
+    deletion_policy: str
+    trash_on_update: bool
+    preservation: PreservationSettingsView
+    propagate_source_casing: bool
+
+    def __post_init__(self) -> None:
+        _require_filter_tuple(self.filters)
+        _require_deletion_policy(self.deletion_policy)
+        _require_exact_bool(self.trash_on_update, "trash_on_update")
+        if not isinstance(self.preservation, PreservationSettingsView):
+            raise TypeError(
+                "preservation must be PreservationSettingsView"
+            )
+        _require_exact_bool(
+            self.propagate_source_casing,
+            "propagate_source_casing",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticSettingsPatchView:
+    filters: tuple[str, ...] | None = None
+    deletion_policy: str | None = None
+    trash_on_update: bool | None = None
+    preservation: PreservationSettingsView | None = None
+    propagate_source_casing: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.filters is not None:
+            _require_filter_tuple(self.filters)
+        if self.deletion_policy is not None:
+            _require_deletion_policy(self.deletion_policy)
+        if self.trash_on_update is not None:
+            _require_exact_bool(self.trash_on_update, "trash_on_update")
+        if (
+            self.preservation is not None
+            and not isinstance(
+                self.preservation,
+                PreservationSettingsView,
+            )
+        ):
+            raise TypeError(
+                "preservation must be PreservationSettingsView or None"
+            )
+        if self.propagate_source_casing is not None:
+            _require_exact_bool(
+                self.propagate_source_casing,
+                "propagate_source_casing",
+            )
+
+
+def _require_exact_bool(value: object, field_name: str) -> None:
+    if type(value) is not bool:
+        raise TypeError(f"{field_name} must be a bool")
+
+
+def _require_filter_tuple(value: object) -> None:
+    if not isinstance(value, tuple) or not all(
+        isinstance(pattern, str) for pattern in value
+    ):
+        raise TypeError("filters must be a tuple of strings")
+
+
+def _require_deletion_policy(value: object) -> None:
+    if not isinstance(value, str) or value not in {"trash", "additive"}:
+        raise ValueError("deletion_policy must be trash or additive")
+
+
 def result_item_view(item: ResultItem) -> ResultItemView:
     data = result_item_to_dict(item)
     if isinstance(item, ItemOutcome):

@@ -1,14 +1,11 @@
 # Interfaces Layer
 
-Status: M0 CLI behavior is implemented through the shared process-local
-`interfaces/service.py` facade. M1 Stage 1 adds isolated cosmetic UI-state
-storage and a tested WebView2 security spike. Stage 3 registers inventory,
-baseline, verify, and rebaseline with the service-owned production dispatcher
-registry but deliberately adds no parser commands. Stage 5's behavior-preserving
-facade extraction is implemented, and Stage 4 supplies its compound execution
-and retained-history projections. Stage 5's command expansion and final
-four-axis classification remain pending. The desktop host remains Stage 6,
-and the API remains latent.
+Status: M1 Stage 5's process-local `interfaces/service.py` facade, reviewed
+sync/history adapter, explicit inventory/baseline/verify/rebaseline commands,
+semantic-settings seam, and final axis-preserving result classification are
+implemented. M1 Stage 1's isolated cosmetic UI-state storage and tested
+WebView2 security spike remain the desktop foundation; the desktop host remains
+Stage 6, and the API remains latent.
 
 ## Purpose
 
@@ -25,12 +22,14 @@ rule.
 ## Service-Backed CLI Adapter
 
 `interfaces/cli.py` is a thin service-backed adapter. It exposes reviewed
-`sync` and read-only `history`, renders typed plan/refusal/result axes, requests
-cooperative cancellation on Ctrl+C, and never imports core, modules, or the
-database layer. It does not construct a dispatcher, registry, workflow request,
-or runtime directly. Human confirmation occurs only after the plan session is
-terminal and closed. Both real entry points consume `sys.argv[1:]`; before the
-desktop exists, no subcommand prints usage and exits nonzero.
+`sync`, read-only `history`, and explicit
+`inventory`/`baseline`/`verify`/`rebaseline`; renders typed
+plan/refusal/result/inventory views; requests cooperative cancellation on
+Ctrl+C; and never imports core, modules, or the database layer. It does not
+construct a dispatcher, registry, workflow request, or runtime directly. Human
+confirmation occurs only after the plan session is terminal and closed. Both
+real entry points consume `sys.argv[1:]`; before the desktop exists, no
+subcommand prints usage and exits nonzero.
 
 Plan review identifies the exact runnable selection plus blocked and deferred
 items. A filesystem-completed safe subset is rendered as `completed with
@@ -43,9 +42,11 @@ move-update approvals show the actual old-to-new target spelling.
 The implemented options and numeric exits are recorded in
 [COMMANDLINE.md](COMMANDLINE.md). The service composition root registers
 plan, execution, inventory, baseline, verify, and rebaseline with their exact
-pause capabilities; parser choices remain only `sync` and `history`. Queue
-control, machine output, integrity commands, and the desktop action layer remain
-deferred.
+pause capabilities. Each location command supplies exactly one root or retained
+location id plus an optional exact selected scope and ambiguity-resolving mount;
+no adapter infers location from a mapping or another argument. Rebaseline also
+requires an explicit selected scope and acceptance intent. Queue control,
+machine output, and the desktop action layer remain deferred.
 
 ## M1 Shared Service
 
@@ -64,6 +65,61 @@ continuations or decide cancellation policy. Retained `HistoryRunView` exposes
 primitive filesystem/integrity/recording/audit axes, disposition, cancellation,
 headline, ordered items, and ordered phases, using the same workflow
 classification source as live result views.
+
+The current public start/settings surface is:
+
+```python
+NamiSyncService(ledger_path, history_path, *, settings_path=None)
+start_plan(source, target, *, deletion_policy=None) -> PlanSession
+start_execution(request_id, *, verify_after_execute=False) -> ExecutionSession
+start_inventory(*, root_path=None, location_id=None,
+                selected_paths=(), selected_mount=None) -> LocationSession
+start_baseline(*, root_path=None, location_id=None,
+               selected_paths=(), selected_mount=None) -> LocationSession
+start_verify(*, root_path=None, location_id=None,
+             selected_paths=(), selected_mount=None) -> LocationSession
+start_rebaseline(*, root_path=None, location_id=None,
+                 selected_paths=(), selected_mount=None) -> LocationSession
+read_semantic_settings() -> SemanticSettingsView
+commit_semantic_settings(patch: SemanticSettingsPatchView) -> SemanticSettingsView
+```
+
+Location starts bind the five-state resolution synchronously before dispatcher
+admission and return a primitive `LocationSession`. An unresolved binding raises
+`LocationResolutionError` with a `LocationResolutionView`; the adapter renders
+offline, ambiguous, missing-root, and unavailable-root guidance without
+starting work. `LocationResolutionView` carries primitive state, root/id,
+selected mount, candidates, and detail.
+`InventoryDetailsView` adds request/scope, observed/missing counts, and
+completeness; `InventoryRowView` carries primitive path/presence/evidence
+fields. `list_inventory()` and `mapping_ids_for_location()` expose role-free
+refresh and zero/one/many mapping guidance without leaking repositories or
+domain objects.
+If a queued or resumed activity becomes unresolved at wake-up, its retained
+`InventoryDetailsView` carries the same state/candidates and the CLI renders the
+same corrective guidance. A provisional ambiguous binding exposes no selected
+mount; only an actual prior explicit choice is reported as selected.
+
+The runtime owns `SemanticSettingsStore`; the service accepts optional
+keyword-only `settings_path` but imports no database package. Its default is
+`settings.json` beside the selected ledger. `read_semantic_settings()` and
+`commit_semantic_settings(SemanticSettingsPatchView)` expose only primitive
+workflow views: filters, deletion policy, trash-on-update, preservation
+booleans, and source-casing propagation. A partial patch preserves omitted
+fields. Public view construction requires exact booleans, tuple-of-string
+filters, a supported deletion value, and the correct preservation view, so an
+invalid patch cannot poison the atomic settings file.
+`start_plan(..., deletion_policy=None)` captures the complete stored
+snapshot once; an explicit deletion override changes only that plan, and
+review exposes the complete frozen snapshot while commit/execution never reread
+settings.
+
+`classify_result(OperationResultView)` returns a primitive `ResultCategory`
+containing the workflow-owned headline and the independent filesystem,
+integrity, recording, audit, disposition, and cancellation values. The CLI
+uses only that headline for its numeric exit and continues rendering every
+secondary axis. It never rebuilds domain lists by attribute shape or parses a
+diagnostic string.
 
 `SessionObserver.observe(session_id, sink)` performs a synchronous
 get-before-subscribe check, returns an already-terminal view without opening a
@@ -117,7 +173,7 @@ DOM rendering.
   subscriber; history has timeout-bounded admission delivery and exposes failure
   through the audit axis rather than pretending the stream was complete.
 - Present refusal, cancellation, partial failure, recording-behind, history
-  failure, and integrity mismatch as distinct states.
+  failure, integrity mismatch, and verification-incomplete as distinct states.
 - Keep plan, inventory, and history presentation models orthogonal.
 - Commit only after the plan session terminates, binding plan fingerprint and
   exact selection digest. Never expose an “execute anyway” path around
@@ -189,6 +245,12 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
   core/modules/db directly under the agreed composition-root arrangement.
 - Equivalent CLI/desktop requests produce equivalent workflow payloads and
   result classification.
+- Location commands bind exactly one explicit root or retained id before
+  submission; ambiguity requires a listed mount, and no mapping role is
+  inferred.
+- Semantic settings read/partial-commit views contain primitives only; planning
+  captures one immutable full snapshot and a deletion override changes no other
+  field.
 - No interface mutation path bypasses dispatcher, mandatory review, preflight,
   executor, or recorder.
 - Invalid/unusable paths show a specific next action rather than silently
@@ -207,7 +269,9 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
 - Thread/result callbacks execute on the required presentation thread and raise
   explicit runtime errors on violation even under `python -O`.
 - Database override tests write neither ledger nor history to real user paths.
-- Read-only history/status remains usable during an active mutating session.
+- A ledger override selects its sibling `settings.json`; malformed settings
+  refuse planning before dispatcher submission.
+- Read-only history remains usable during an active mutating session.
 - The security spike forces Edge Chromium, attaches both native navigation
   guards, rejects a dispatch after hostile navigation, and exposes only the
   versioned allowlisted structured endpoint.

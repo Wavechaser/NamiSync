@@ -14,7 +14,11 @@ from namisync.core.models import ScanResult
 from namisync.core.planning import OperationKind, Plan, SyncOptions
 from namisync.core.preflight import Verdict
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
-from namisync.workflows.views import PhaseResultView, ResultItemView
+from namisync.workflows.views import (
+    PhaseResultView,
+    ResultItemView,
+    SemanticSettingsView,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -261,6 +265,7 @@ class PlanReview:
     target_volume: str
     deletion_policy: str
     trash_on_update: bool
+    semantic_settings: SemanticSettingsView
     fingerprint: str
     selection_digest_hex: str
     required_bytes: int

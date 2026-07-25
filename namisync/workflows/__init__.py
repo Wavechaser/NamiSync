@@ -1,5 +1,6 @@
 """Workflow coordination and local M0 composition for NamiSync."""
 
+from namisync.core.integrity import IntegrityMode
 from namisync.core.planning import DeletionPolicy, SyncOptions
 from namisync.workflows.inventory import (
     IntegrityRequest,
@@ -35,6 +36,27 @@ def sync_options(deletion_policy: str) -> SyncOptions:
     return SyncOptions(deletion_policy=DeletionPolicy(deletion_policy))
 
 
+def integrity_request(
+    mode: str,
+    request_id: str,
+    *,
+    root_path: str | None = None,
+    location_id: int | None = None,
+    selected_paths: tuple[str, ...] = (),
+    selected_mount: str | None = None,
+) -> IntegrityRequest:
+    """Translate a primitive interface request into a typed integrity request."""
+
+    return IntegrityRequest(
+        request_id=request_id,
+        mode=IntegrityMode(mode),
+        root_path=root_path,
+        location_id=location_id,
+        selected_paths=selected_paths,
+        selected_mount=selected_mount,
+    )
+
+
 __all__ = [
     "BASELINE_KIND",
     "EXECUTION_KIND",
@@ -56,6 +78,7 @@ __all__ = [
     "VolumeResolutionRequired",
     "VolumeResolutionState",
     "default_database_paths",
+    "integrity_request",
     "run_execution",
     "run_plan",
     "sync_options",

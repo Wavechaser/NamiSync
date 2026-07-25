@@ -194,6 +194,7 @@ class InventoryDetails:
     observed_count: int = 0
     missing_count: int = 0
     complete: bool = False
+    selected_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -464,7 +465,13 @@ def run_inventory(
 ) -> OperationResult:
     resolution = resolve_binding(request.binding, deps.resolver)
     if resolution.state != VolumeResolutionState.RESOLVED:
-        deps.save_details(InventoryDetails(request.request_id, resolution))
+        deps.save_details(
+            InventoryDetails(
+                request.request_id,
+                resolution,
+                selected_paths=request.selected_paths,
+            )
+        )
         return _refused_resolution(resolution)
     if resolution.root_path is None or resolution.evidence is None:
         raise RuntimeError("resolved inventory root lacks volume evidence")
@@ -500,6 +507,7 @@ def run_inventory(
             recorded.observed_count,
             recorded.missing_count,
             scan.complete,
+            request.selected_paths,
         )
     )
     return OperationResult(SessionState.COMPLETED)
@@ -514,7 +522,13 @@ def run_integrity(
 ) -> OperationResult:
     resolution = resolve_binding(request.binding, deps.resolver)
     if resolution.state != VolumeResolutionState.RESOLVED:
-        deps.save_details(InventoryDetails(request.request_id, resolution))
+        deps.save_details(
+            InventoryDetails(
+                request.request_id,
+                resolution,
+                selected_paths=request.selected_paths,
+            )
+        )
         return _refused_resolution(resolution)
     if resolution.root_path is None:
         raise RuntimeError("resolved integrity root lacks a path")
@@ -550,6 +564,7 @@ def run_integrity(
                 recorded.observed_count,
                 recorded.missing_count,
                 scan.complete,
+                request.selected_paths,
             )
         )
         if request.selected_paths and not scan.complete:
@@ -564,6 +579,7 @@ def run_integrity(
             rows = _integrity_rows(
                 repository,
                 location_id,
+                request.mode,
                 request.selected_paths,
                 request.stale_before,
                 request.selection_item_ids,
@@ -860,6 +876,7 @@ def _register_and_scan(
 def _integrity_rows(
     repository: LedgerRepository,
     location_id: int,
+    mode: IntegrityMode,
     selected_paths: tuple[str, ...],
     stale_before: datetime | None,
     selection_item_ids: tuple[str, ...],
@@ -879,7 +896,7 @@ def _integrity_rows(
             )
         return tuple(rows[item_id] for item_id in selection_item_ids)
     if selected_paths:
-        return tuple(
+        candidates = tuple(
             row
             for row in repository.get_inventory(location_id, selected_paths)
             if (
@@ -888,12 +905,12 @@ def _integrity_rows(
                 or f"{row.location_id}:{row.row_id}" in completed_item_ids
             )
         )
-    if stale_before is not None:
+    elif stale_before is not None:
         stale_ids = {
             f"{row.location_id}:{row.row_id}"
             for row in repository.get_stale_inventory(location_id, stale_before)
         }
-        return tuple(
+        candidates = tuple(
             row
             for row in repository.get_inventory(location_id)
             if (
@@ -901,15 +918,21 @@ def _integrity_rows(
                 or f"{row.location_id}:{row.row_id}" in completed_item_ids
             )
         )
-    return tuple(
-        row
-        for row in repository.get_inventory(location_id)
-        if (
-            row.entry_kind is None
-            or row.entry_kind.value != "directory"
-            or f"{row.location_id}:{row.row_id}" in completed_item_ids
+    else:
+        candidates = tuple(
+            row
+            for row in repository.get_inventory(location_id)
+            if (
+                row.entry_kind is None
+                or row.entry_kind.value != "directory"
+                or f"{row.location_id}:{row.row_id}" in completed_item_ids
+            )
         )
-    )
+    if mode is IntegrityMode.BASELINE:
+        return tuple(row for row in candidates if row.attestation is None)
+    if mode is IntegrityMode.REBASELINE:
+        return tuple(row for row in candidates if row.attestation is not None)
+    return candidates
 
 
 def _integrity_selection(

@@ -1,10 +1,11 @@
 # Command-Line Interface
 
-Status: M0 reviewed `sync` and `history` are implemented through the shared
-interface service. M1 Stage 3 inventory and integrity workflows are
-production-registered but intentionally have no parser commands until the
-Stage 4-dependent half of Stage 5 lands; queue release and machine-readable
-output remain deferred.
+Status: reviewed `sync`, retained `history`, and M1 location-centric
+`inventory`/`baseline`/`verify`/`rebaseline` are implemented through the shared
+interface service. Optional execute-to-verify, final typed result
+classification, explicit location binding, and isolated ledger/history
+overrides are active. Queue release and machine-readable output remain
+deferred.
 
 ## Entry Points
 
@@ -32,12 +33,20 @@ Recent-run listings include blocked/deferred exception counts so a filesystem-
 completed safe subset is not mistaken for a clean full sync; run detail shows
 each path and reason.
 
-`sync` accepts `--deletion-policy trash|additive`, `--database PATH`, and
-`--history-database PATH`. `history` accepts `--limit N` and
-`--history-database PATH`. For `sync`, both database files must be distinct and
-outside the managed roots; defaults are the local
+`sync` accepts a one-plan `--deletion-policy trash|additive` override,
+`--verify-after-copy`, `--database PATH`, and `--history-database PATH`.
+Omitting deletion policy uses the complete saved semantic snapshot; an
+explicit override replaces only that plan's deletion policy and does not
+change its filters, trash-on-update, preservation, or casing settings.
+`--verify-after-copy` keeps successfully published copy/update/move-update
+files under the same session and volume custody for immediate readback.
+`history` accepts `--limit N` and `--history-database PATH`. For `sync`, both
+database files must be distinct and outside the managed roots; defaults are
+the local
 `%LOCALAPPDATA%\NamiSync\ledger.db` and
 `%LOCALAPPDATA%\NamiSync\history.db`.
+Semantic defaults live in `settings.json` beside the selected ledger, so an
+explicit `--database` also selects an isolated sibling settings file.
 
 At the final M1 pre-migrator boundary, opening an older-version database or a
 transitional ledger-v2/history-v3 database without the exact final contract
@@ -52,19 +61,35 @@ The command surface may expose a separate queue-release flag that executes only
 already committed sets. A commitment binds plan fingerprint plus exact selection
 digest; no flag combination plans and executes in one unreviewed invocation.
 
-### M1 Stage 5 (planned; not current parser choices)
+### M1 Location And Integrity Commands
 
-- `inventory LOCATION`: refresh and print role-free inventory/mapping guidance.
-- `baseline LOCATION [scope]`: inventory as needed, create missing baselines,
-  and report typed counts/issues.
-- `verify LOCATION [scope]`: refresh appropriately, verify, and return an
-  integrity-issue exit status when needed.
-- `rebaseline LOCATION [scope]`: explicitly accept current evidence for
-  modified selected rows.
+All four commands require exactly one location selector: positional `ROOT` or
+`--location-id ID`. A numeric positional value remains a path; only the named
+option denotes a retained location id. They accept repeatable
+`--path RELATIVE_PATH` values as an exact root-relative selected scope,
+`--mount MOUNT` to resolve one candidate from an ambiguous cloned-volume
+identity, and both `--database PATH` and `--history-database PATH`.
 
-Integrity commands accept both `--database` and `--history-database`; tests use
-temporary values for both. A selected location is never inferred by falling
-back to another argument.
+- `inventory [ROOT | --location-id ID]`: refresh and print role-free inventory
+  plus zero/one/many mapping guidance.
+- `baseline [ROOT | --location-id ID]`: refresh inventory and create evidence
+  only for eligible non-directory rows that do not already have an
+  attestation.
+- `verify [ROOT | --location-id ID]`: refresh and compare eligible rows with
+  retained evidence. A row without evidence is baselined but receives the
+  verification-incomplete exit because no comparison occurred.
+- `rebaseline [ROOT | --location-id ID] --path RELATIVE_PATH
+  --accept-current-evidence`: accept current evidence only for explicitly
+  selected eligible rows that already have an attestation. At least one
+  `--path` and the intent flag are mandatory.
+
+Omitting `--path` means full-location scope for inventory, baseline, and verify.
+Paths are exact values, not globs. Location resolution distinguishes resolved,
+offline, ambiguous, missing-root, and unavailable-root states before dispatcher
+admission. Offline/missing/unavailable refusals explain the corrective action
+and perform no missing reconciliation; ambiguity prints candidates for an
+explicit `--mount` retry. A selected location is never inferred from another
+argument or a mapping role.
 
 ## Review Rendering
 
@@ -72,6 +97,9 @@ Print roots/volume evidence, policy, filter/policy snapshot, operation counts an
 content bytes, runnable/blocked/deferred selection counts, per-item exclusion
 reasons, required/free capacity for the selected subset, trash behavior,
 computed ingest destinations when applicable, and a stable plan fingerprint.
+The semantic snapshot is the one frozen into this plan: filters,
+trash-on-update, all preservation booleans, and source-casing propagation remain
+reviewable even if saved defaults change later.
 Rename-shaped operations render the observed prior target path on the left and
 the planned target path on the right. This makes a case-only `recase` visible as
 `keep.txt -> KEEP.txt` and also exposes the actual old-to-new path for `move`
@@ -97,9 +125,16 @@ Implemented exit categories:
 | `4` | planning/execution/runtime failure |
 | `5` | cooperative cancellation |
 | `6` | selected safe work completed, but blocked or deferred items remain |
-| `7` | filesystem success with degraded ledger or audit durability |
+| `7` | degraded ledger or audit durability |
+| `8` | integrity mismatch |
+| `9` | verification incomplete (including modified, missing, unsupported, error, or newly baselined during verify) |
 
-Integrity-issue exits are assigned with the M1 integrity commands.
+One workflow-owned headline determines the numeric exit with this exact
+precedence:
+`failed > partial > refused > mismatch > canceled >
+verification-incomplete > recording/audit degradation > all-noop > success`.
+The filesystem, integrity, recording, audit, disposition, and cancellation
+values remain printed even when a higher-priority headline supplies the exit.
 
 `OperationResult.recording` and `.audit` independently carry
 `RecordingStatus.OK|DEGRADED`, so CLI can identify which store is behind without
@@ -107,14 +142,16 @@ parsing diagnostics. `Disposition` distinguishes refused/discarded unrun work
 from an activity that ran but transferred zero bytes.
 
 Exit status derives from typed result, not log text or byte count.
+Ledger degradation tells the user to fix ledger path/access and rerun the
+activity; an inventory-only rescan is not presented as evidence repair.
 
 ## Concurrency And Control
 
 Mutating commands submit to dispatcher and obey cross-process physical-volume
-custody. Read-only history/status can run with GUI or other sessions. Interactive
+custody. Read-only history can run with GUI or other sessions. Interactive
 Ctrl+C requests cooperative cancel, continues rendering terminal cleanup, and
-exits only after custody/result state is known. A second interrupt may follow an
-explicit hard-abort policy but never reports clean cancellation prematurely.
+exits only after custody/result state is known. A second interrupt may follow
+an explicit hard-abort policy but never reports clean cancellation prematurely.
 
 ## Safety
 
@@ -150,19 +187,24 @@ transport replacement behind the same command adapter in M2.
 - Activity-kind rendering prevents subject workflows showing `None → None`.
 - Refusal/partial/no-op exit categories prevent zero-operation false success.
 - Shared workflow sequencing automatically inventories before baseline/verify.
+- Explicit root/id and mount choices prevent a location command from borrowing
+  identity or role from another argument.
+- Required selected scope plus `--accept-current-evidence` prevents accidental
+  full-location rebaseline.
 
 ## Acceptance Criteria
 
 - Subprocess tests invoke `nami-sync` and `python -m namisync` with real argv for
   every command and compare dispatch/results.
-- M0 exposes reviewed `sync` and `history`; default behavior is defined for both
-  pre-desktop and desktop installations.
+- The parser exposes reviewed `sync`, retained `history`, and all four
+  location/integrity commands; default behavior is defined for both pre-desktop
+  and desktop installations.
 - Plan command/session mutates no files/ledger configuration and releases locks
   before commitment input.
 - Execution cannot proceed without a matching plan-and-selection commitment and
   always freshly preflights; queue release accepts already committed sets only.
 - Refusal, no-op, safe-subset partial completion, partial failure, cancel,
-  mismatch, and ledger-behind return
+  mismatch, verification-incomplete, and ledger/audit degradation return
   distinct documented exit categories and truthful output.
 - Ledger-behind and audit-behind output/exit detail are independently testable;
   `CANCELED+UNRUN` renders queued discard rather than in-run cancellation.
@@ -174,6 +216,9 @@ transport replacement behind the same command adapter in M2.
   dispatcher volume policy.
 - Location-only commands require exactly the selected usable location and never
   require/fallback to a paired root.
+- Rebaseline requires explicit selected paths and current-evidence intent;
+  baseline and rebaseline filter only the first admitted candidate set, while
+  a resumed activity retains its frozen selection.
 - History prints sync operations and integrity detail by activity kind,
   including pruned-detail explanation.
 - Invalid path, permission, volume ambiguity, stale plan, and capacity refusal
