@@ -1,127 +1,51 @@
 # NamiSync
-A safety-first, one-way file mirroring app for Windows. NamiSync performs source to target syncs, database-based maintenance, and integrity tracking features. 
 
-## Development status
+NamiSync is a safety-first, one-way file mirroring application for Windows 11
+x64. It scans a source and target, presents a deterministic dry-run plan, and
+only changes files after explicit human review and exact confirmation. It keeps
+inventory and XXH3-128 integrity evidence, records completed work in a local
+ledger, and retains independent activity history.
 
-The role-free inventory and standalone integrity workflows are implemented and
-production-composed. Inventory distinguishes resolved, offline, ambiguous,
-missing-root, and unavailable-root states; persists mapping-scoped filter
-intent without rewriting physical presence; and supports acknowledge, restore,
-and stale/missing reads. Baseline, verify, and explicit rebaseline refresh
-inventory, re-resolve volume identity on start/resume/queued wakeup, preserve an
-exact admitted candidate set across pause/resume, and write ordered integrity
-detail to history. The shared service and CLI expose all four workflow kinds
-with explicit root/id binding, exact selected scopes, five-state resolution,
-both database overrides, and guarded rebaseline intent. Desktop actions remain
-M1 Stage 6.
+The product is designed to be cautious rather than clever: it never silently
+guesses a destructive action, rechecks reviewed intent before touching files,
+publishes copied files atomically on the target volume where supported, and
+keeps filesystem, integrity, ledger-recording, and history-audit outcomes as
+separate facts.
 
-M1 Stage 2 replaced bulk content evidence with fixed XXH3-128 and pipelines
-each normal copy's read/write/hash stages under one combined 32 MiB byte budget.
-Copy chunks are fixed at 256 KiB below 8 MiB, 1 MiB below 32 MiB, and 4 MiB
-thereafter. The same refactor adds conditional temp preallocation, sequential
-cache hints, hoisted Windows bindings, one pre-publish temp flush, and
-conditional metadata repair. File-level execution/verification workers,
-batching, direct copy IO, and cross-file publish overlap remain deferred until
-new measurements justify them. Internal plan, custody, history, and database
-identity hashes remain SHA-256.
+## Current state
 
-M1 Stage 4's optional post-execution verification is implemented as one
-execute→verify state machine
-inside the same session and volume custody. Successful copy/update/move-update
-publishes hand transient attestations directly to readback even if ledger
-recording degraded; filesystem, integrity, recording, and audit remain
-independent result axes. Same-process pause preserves explicit phase and
-published-evidence continuation, while application-restart recovery remains M2.
-The service exposes this through
-`start_execution(..., verify_after_execute=True)`; the CLI opts in with
-`sync --verify-after-copy`.
+M1 Stages 1–5 are implemented. The headless sync, inventory, integrity,
+history, dispatcher, and service/CLI surfaces are usable; M1 Stage 6, the
+headed local WebView2 desktop, is next. The desktop's service facade and bridge
+security foundation already exist, but no GUI host has shipped.
 
-The M0 dispatcher is also implemented: generic sessions run concurrently when
-their resource sets are disjoint, serialize when they overlap, use real
-cross-process Windows mutex custody, support cooperative pause/resume/cancel,
-and expose bounded replay plus timeout-guarded audit delivery. Its session table
-is intentionally process-local until the M2 SQLite queue/reconciliation phase.
+M1 state is process-local: queued sessions and unexecuted plans do not survive
+an application restart. The active database boundary is ledger v2 plus history
+v3. Older, missing, transitional, or mismatched databases are refused; close
+NamiSync and reset both local database files together before creating a fresh
+matching pair.
 
-The M0 scanner, planner, and preflight modules are implemented as a headless
-pipeline surface. Scans retain deterministic typed filesystem evidence and
-explicit completeness; planning is pure, correspondence-aware, dependency
-ordered, and byte-stable; hostile filesystem names become escaped incomplete-
-scan evidence instead of aborting review. Exact-case and NFC/NFD filename-form
-mismatches remain visible as non-blocking advisories while their ordinary
-update/no-op work continues; the opt-in casing policy is available through the
-semantic-settings facade (not a settings CLI) and uses a zero-byte rename when
-content already matches. Preflight separates scoped read-only observation from
-exhaustive typed judgment.
+## Setup and dependencies
 
-The M1 contract and hash foundations are now implemented. `worker_count` and
-execution's false live-settings drift check are gone, so admitted runs consume
-only their reviewed immutable policy snapshot. Schema-versioned semantic
-defaults live in database-owned `settings.json` with named-mutex-serialized
-partial commits. Runtime defaults it beside the selected ledger, the shared
-service exposes primitive full-snapshot/all-optional-patch views, and planning
-captures one immutable snapshot before admission;
-cosmetic recents/window/column/sort state lives separately in interface-owned
-`ui-state.json`. The measured `xxhash` 3.x runtime is now a declared project
-dependency, and executor and verifier consume one exact composition-owned
-`xxh3_128` factory with raw 16-byte evidence. A security spike proves the
-future pywebview host can force
-Edge Chromium, install native WebView2 navigation/new-window guards, recheck
-the packaged origin on its single versioned `dispatch`, and return application
-data structurally without executing JavaScript text. The desktop host itself
-still waits for M1 Stage 6.
+NamiSync requires Windows 11 x64 and Python 3.13 or later. Runtime dependency:
+`xxhash` 3.x. Development dependencies are `pytest` and `import-linter`.
 
-The M0 persistence implementation remains the operational base: a serialized
-run-bound recorder is the only main-ledger writer; versioned WAL schemas retain
-role-free inventory, mapping-scoped filter snapshots/projections, mapping
-correspondence, runs, and distinct observed/attested evidence; typed
-repositories are read-only; and an independent history observer stores ordered
-sync and integrity items. The active schema boundary is ledger v2/history v3
-plus immutable final-M1 contract markers. History stores generic phase-tagged
-items and Stage 4 compound execute/verify summaries in the already-reserved
-shape, while standalone integrity writes no phase rows. Any older,
-transitional, missing-marker, or
-mismatched-marker database is refused before mutation. Close NamiSync, delete
-or otherwise reset **both** local database files together, and rerun to create
-the complete matching schemas; startup never migrates or backfills this
-boundary. General migrations, backup, and cross-process-coordinated retention
-remain later phases.
-
-The M0 reviewed-sync slice is runnable end to end. The workflow layer joins
-scanner, planner, repeated preflight, executor, ledger recorder, dispatcher,
-and independent history without crossing package boundaries. A shared
-process-local interface service now owns runtime/dispatcher lifetime, the
-six-kind production registry, blocking sink-based session observation, plan
-access, semantic-settings translation, explicit location starts, and typed
-axis-preserving result projection. The CLI exposes the two-session `sync`
-review/commit/execute flow, read-only `history`, and
-`inventory`/`baseline`/`verify`/`rebaseline` through both `nami-sync` and
-`python -m namisync`. Blocked items no
-longer refuse independent work: review commits a quarantined safe subset,
-incomplete scans allow guarded additive/no-op work while withholding moves and
-deletions, and history itemizes every blocked/deferred exception. The workflow
-headline drives deterministic codes 0 and 2-9 while filesystem, integrity,
-recording, audit, disposition, and cancellation remain visible.
-
-## Development setup
-
-NamiSync requires Python 3.13 or later. Create and activate a virtual
-environment, then install the development dependencies:
+Create a virtual environment, then install the editable development package:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-Run the test suite with:
+Run the tests and check the import boundaries:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
-```
-
-Check the architectural import boundaries with:
-
-```powershell
 .\.venv\Scripts\lint-imports.exe
 ```
+
+M1's future desktop additionally requires Microsoft Edge WebView2 Runtime; the
+Stage 6 host will fail with an install action rather than falling back to an
+older browser engine.
 
 ## Command line
 
@@ -148,143 +72,75 @@ nami-sync history
 nami-sync history RUN_TOKEN
 ```
 
-`trash` is the default deletion policy; `additive` is also public, while
-`mirror` remains hidden. Omitting `--deletion-policy` uses the semantic snapshot
-in the ledger's sibling `settings.json`; an explicit value overrides only that
-plan. Ledger and history default to separate files under
-`%LOCALAPPDATA%\NamiSync`; sync and location commands accept isolated
-`--database` and `--history-database` paths. Location commands require exactly
-one root or `--location-id`, repeatable `--path` values are exact
-root-relative selections, and clone ambiguity requires explicit `--mount`.
-There is no `--yes` bypass.
+`trash` is the default deletion policy; `additive` is public, while `mirror`
+remains guarded and hidden. There is no `--yes` bypass. Location commands
+require exactly one root or `--location-id`; repeatable `--path` values are
+exact root-relative selections and clone ambiguity requires `--mount`.
+
+Ledger and history default to separate files under `%LOCALAPPDATA%\NamiSync`.
+Sync and location commands accept isolated `--database` and
+`--history-database` paths. The sibling `settings.json` supplies semantic
+defaults; an explicit deletion-policy option overrides that plan only.
 
 Clean full/no-op runs return `0`; input/refusal/failure/cancel/partial/degraded/
-mismatch/verification-incomplete use codes `2` through `9`. A higher-priority
-headline chooses the code without hiding lower-priority result axes.
+mismatch/verification-incomplete use codes `2` through `9`. The selected code
+never hides the other result axes in rendered output.
+
+## What is deliberately not promised yet
+
+- No headed desktop host, durable plan/session queue, or restart-resume.
+- No cross-process desktop task visibility, background integrity, concurrent
+  file execution, general database migration, backup, or history retention.
+- No automatic execution or bypass of reviewed-plan confirmation.
 
 ## Documentation
 
-- [`BUGS.md`](docs/BUGS.md): current substantive defect log and fix status.
-- [`FEATURES.md`](docs/FEATURES.md): settled and latent product behavior.
-- [`ARCHITECTURE.md`](docs/ARCHITECTURE.md): system structure, contracts, and
-  milestone order.
-- [`DESIGN_REVIEW.md`](docs/DESIGN_REVIEW.md): resolved decision ledger from
-  hardening the architecture and module contracts.
-- [`M1_PLAN.md`](docs/M1_PLAN.md): detailed M1 decision record, dependency
-  sequence, integration gates, and adversarial acceptance tests.
-- [`HASH_REFACTOR.md`](docs/HASH_REFACTOR.md): measured single-file pipeline,
-  fixed adaptive chunk policy, Windows finalization refactor, and canonical
-  XXH3-128 content-evidence plan for M1.
-- [`CORE.md`](docs/CORE.md): shared types, session/event contracts, path safety,
-  identity, time, and evidence.
-- [`SCANNER.md`](docs/SCANNER.md): filesystem observation and completeness.
-- [`PLANNER.md`](docs/PLANNER.md): deterministic intent and dependency planning.
-- [`PREFLIGHT.md`](docs/PREFLIGHT.md): scoped observation and pure execution
-  judgment.
-- [`EXECUTOR.md`](docs/EXECUTOR.md): guarded filesystem mutation and recovery.
-- [`INVENTORY.md`](docs/INVENTORY.md): role-free retained location evidence.
-- [`VERIFIER.md`](docs/VERIFIER.md): baseline, verification, and rebaseline.
-- [`INGEST.md`](docs/INGEST.md): latent metadata-sorted media ingest workflow.
-- [`RECORDER.md`](docs/RECORDER.md): sole main-ledger write path.
-- [`DATABASE.md`](docs/DATABASE.md): schemas, repositories, migrations, and data
-  protection.
-- [`HISTORY.md`](docs/HISTORY.md): independent activity history observer/store.
-- [`DISPATCHER.md`](docs/DISPATCHER.md): generic sessions, custody, control, and
-  event delivery.
-- [`WORKFLOWS.md`](docs/WORKFLOWS.md): cross-module sequencing.
-- [`INTERFACES.md`](docs/INTERFACES.md): shared adapter rules.
-- [`COMMANDLINE.md`](docs/COMMANDLINE.md): CLI commands, review, output, and exit
-  behavior.
-- [`DESKTOP_UI.md`](docs/DESKTOP_UI.md): headed Windows interaction contract.
-- [`HANDOFF.md`](docs/HANDOFF.md): latest session state and verification only.
+- [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
+- [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
+- [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.
+- [Command line](docs/COMMANDLINE.md) — commands, review, output, and exits.
+- [Executor](docs/EXECUTOR.md) — guarded filesystem mutation, pipeline, and recovery.
+- [Inventory](docs/INVENTORY.md), [Verifier](docs/VERIFIER.md), and
+  [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
+- [Database](docs/DATABASE.md), [Recorder](docs/RECORDER.md), and
+  [History](docs/HISTORY.md) — local persistence and audit behavior.
+- [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
+  [Handoff](docs/HANDOFF.md) — latest work, status and issues, and session context.
 
 ## Changelog
 
-### Unreleased
+### M1
 
-- Completed M1 Stage 5's facade and CLI: added explicit
-  inventory/baseline/verify/rebaseline commands, guarded selected rebaseline,
-  optional post-copy verification, five-state location guidance, primitive
-  semantic-settings snapshots/patches, mode-aware fresh integrity selection,
-  frozen resume scope, typed phase/item rendering, and deterministic
-  axis-preserving exit codes 0 and 2-9.
-- Implemented M1 Stage 4's opt-in execute→verify workflow: exact atomic
-  published-copy evidence, rowless readback after ledger failure, strict
-  phase-discriminated workflow payload v3, same-run pause/resume and
-  cancellation settlement, independent compound phase/results, and retained
-  mixed-item/phase history without a database schema bump. Adversarial
-  fault-injection now proves every post-entry terminal finishes the logical
-  ledger run at most once while `BaseException` remains unnormalized.
-- Extracted the shared Stage 5 interface service and retargeted existing CLI
-  behavior onto it: one process owns runtime/dispatcher lifecycle, the exact
-  six-kind registry, primitive session views, gap-aware blocking observation,
-  and process-local plan access. Explicit unsubscribe now removes closed event
-  streams from their hub immediately.
-- Implemented M1 Stage 3 role-free inventory and standalone integrity:
-  five-state volume/root resolution, first-location registration, scoped
-  completeness, mapping-scoped filters, stale/missing acknowledge and restore,
-  exact-candidate pause/resume, baseline/verify/rebaseline composition,
-  production dispatcher registration, and ordered generic integrity history
-  without exposing premature CLI/UI commands.
-- Implemented M1 Stage 2's adaptive single-file copy pipeline and atomic
-  XXH3-128 evidence switch across executor, verifier, repositories, fixtures,
-  and the coordinated ledger-v2/history-v3 contract-marker reset boundary.
-  The required five-corpus pass completed from NAND to separate NAND, Optane,
-  and HDD targets; the controlled comparison showed 37.6%–92.1% higher
-  small-file operations/s than the retired serial SHA-256 path.
-- Landed M1 Stage 1 contracts and semantics: removed `worker_count` and
-  execution-time settings drift refusal, added the shared streaming-hasher
-  protocol and compatible `xxhash` dependency, activated ledger v2/history v3
-  with explicit reset-only stale schema handling and reserved generic history
-  storage, split semantic/UI state persistence, and proved the hostile-
-  navigation structured WebView2 bridge boundary.
-- Made rename review truthful: recase, move, and move-update rows now show the
-  observed prior target path changing to the planned target path, including
-  visible case-only changes such as `keep.txt -> KEEP.txt`.
-- Fixed crashed-copy temp recovery: successful executions now sweep exact
-  prior-run temps once from preflight's touched target parents before copying,
-  while preserving current-run temps, lookalikes, untouched paths, and trash.
-- Hardened filename handling without suppressing sync work: invalid names become
-  typed incomplete-scan evidence, surrogates cannot reach canonical encoding,
-  and unique case-only or NFC/NFD filename-form differences are explicit
-  non-blocking advisories. Target spelling is preserved by default; a
-  fingerprinted semantic setting can propagate source basename casing with a
-  zero-byte, no-trash rename when content already matches.
-- Made every fingerprinted plan-request option mandatory on decode and extended
-  malformed-surrogate-safe JSON encoding to ledger idempotency hashes, history
-  hashes/detail, and opaque workflow payloads while preserving valid Unicode.
-- Added safe partial sync: blocked work is itemized and quarantined, incomplete
-  scans are additive-only, independent work and no-op correspondence refreshes
-  continue, and CLI/history report blocked or deferred items with a distinct
-  partial exit.
-- Hardened Windows execution: same-run empty-directory cleanup accepts only
-  child-induced metadata churn, parent-directory flushing requests the required
-  write access, and retried multi-step operations resume from durable sub-steps.
-- Fixed planner no-ops for standard-attribute changes, so readonly, hidden, and
-  system drift now produces an update.
-- Hardened plan admission and Windows scan identity: plan fingerprints are
-  recomputed before commitment validation, unsafe database locations are refused
-  before confirmation, preflight results render reliably, and NTFS identity has
-  an exact-path fallback.
-- Implemented the M0 workflow/composition and CLI slice: versioned dispatcher
-  payloads, two-session plan/commit/execute, fresh execution preflight, volume
-  custody, ledger recording, independent history browsing, real process entry
-  points, and isolated database overrides.
-- Implemented the guarded M0 Windows executor for every planned operation kind,
-  including atomic copy/update publication, trash-on-update recovery, exact temp
-  ownership, typed continuation, bounded retries, progress, and copy evidence.
-- Implemented the integrity verifier operation with baseline, verification,
-  explicit rebaseline, conditional evidence commands, lossless pause/cancel
-  continuation, and cache-honest Windows unbuffered reads.
-- Implemented the M0 domain-blind dispatcher, shared session runner/event
-  contracts, bounded audit-aware subscriptions, and abandoned-holder-safe
-  Windows resource custody.
-- Implemented M0 scanner, deterministic planner, and scoped preflight modules
-  with shared Windows path/evidence contracts, exact artifact handling,
-  correspondence-qualified moves, explicit directory dependencies, shared
-  capacity accounting, and typed stale-plan refusal coverage.
-- Implemented the M0 recorder/database foundation with frozen ledger/history
-  schemas, a run-bound serialized sole writer, idempotent sync evidence,
-  scalable inventory and conditional integrity transactions, read-only typed
-  repositories, bounded cross-process retry, and minimal independent sync
-  history.
+- Delivered Stages 1–5 of the integrity product and executor refactor; the
+  WebView2 desktop shell remains M1 Stage 6.
+  - **Executor:** switched content evidence to XXH3-128 and added the bounded
+    reader/hasher/writer pipeline, adaptive chunks, conditional preallocation,
+    and leaner Windows publish/finalization paths.
+  - **Workflows:** added role-free inventory, standalone baseline/verify/
+    rebaseline, and optional in-session execute-to-verify readback.
+  - **Interfaces:** added the shared service facade, explicit location CLI
+    commands, semantic-settings views, typed result classification, and the
+    WebView2 bridge-security foundation.
+  - **Persistence:** established the reset-only ledger v2/history v3 boundary
+    and separated semantic settings from cosmetic UI state.
+
+### M0 Hardening
+
+- Hardened the reviewed-sync baseline against filesystem drift and unsafe edge
+  cases without weakening its explicit-plan safety model.
+  - **Planning and scanning:** hardened fingerprints, database placement,
+    hostile filenames, incomplete scans, and case/Unicode filename handling.
+  - **Execution:** added exact prior-run temp recovery and hardened Windows
+    updates, directory cleanup, metadata preservation, and retry behavior.
+  - **Reporting:** made blocked/deferred safe subsets and partial outcomes
+    explicit in review, history, and CLI exit classification.
+
+### M0
+
+- Shipped the headless reviewed-sync product and its reusable layered runtime.
+  - **Core sync:** added scanning, deterministic planning, fresh preflight, and
+    guarded Windows copy/update/delete execution with atomic publication.
+  - **Runtime:** added dispatcher volume custody, cooperative controls, typed
+    events/results, local ledger recording, and independent activity history.
+  - **Access:** added workflow composition and the `nami-sync` CLI for reviewed
+    sync and history browsing.

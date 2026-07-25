@@ -1,205 +1,183 @@
 # Desktop UI
 
-Status: draft interaction contract. Current architecture schedules the desktop
-for M3+, while the repository goal treats it as active product scope. Toolkit is
-not selected; Qt-specific PoC regressions below apply if Qt is chosen again.
+Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5 provide the
+desktop's service, view, settings, session-observation, and bridge-security
+seams; no headed desktop host or frontend has shipped yet.
 
 ## Purpose
 
-The Windows desktop presents tasks, mandatory plan review, live session state,
-inventory/integrity evidence, and history. It is a thin adapter over dispatcher
-and workflows. It never computes plans, decides sync safety, writes SQLite,
-directly mutates files, or invents a second domain session lifecycle.
+NamiSync's Windows desktop is a local, headed adapter for reviewing and
+controlling safe one-way mirroring, location inventory and integrity work, and
+retained history. It makes the workflow's existing facts comprehensible; it
+does not decide sync policy, calculate plans, write SQLite, mutate files, or
+own a second session lifecycle.
 
-## Task Model And Rail
+The Stage 6 target is a `pywebview` host forced to Edge Chromium/WebView2 with
+packaged web assets. The earlier PySide6 proof-of-concept is historical input,
+not the implementation target or test contract. `ui_mockup/mockup.html` is the
+starting frontend artifact to revise into the packaged UI.
 
-The newest-first scrollable rail contains stable-height task cards with activity
-state, source/subject and target where applicable, completion date, close action,
-and mini progress. The session table is live-state authority; durable task
-grouping later links to history without making CLI/service activities require a
-task parent.
+## Scope and delivery boundary
 
-Closing a terminal task explicitly drops its live `SessionStore` record; durable
-history remains. Closing a queued-unrun task first waits for its discarded audit
-event to be delivered or visibly reports audit degradation. Closing a busy task
-offers pause only for a kind whose registration supports it and otherwise asks
-for phase-specific cancellation; it waits for actual session/thread completion.
-It never destroys a live worker because a UI `busy` flag changed early.
+Stage 6 delivers:
 
-## Single-Page Task Shell
+- a `nami-sync-gui` desktop entry point and a no-subcommand desktop launch;
+- one single-instance desktop shell, task rail, work area, plan review,
+  inventory view, and history dialog;
+- desktop actions for reviewed sync, inventory, baseline, verify, rebaseline,
+  semantic settings, and pause/resume/cancel where the registered activity
+  supports them; and
+- the WebView2 bridge, static-asset packaging, security controls, and frontend
+  tests needed to make those views safe to use with hostile filesystem names.
 
-One page contains editable recent-folder controls, options, status, progress,
-Plan/Inventory toggle, tree, filters, and log/detail access. Up to five source
-and target recents are maintained separately. Invalid/unusable input is shown
-inline with an actionable fix, not represented only by disabled buttons.
+It does not add durable plan or session storage, cross-process task visibility,
+general migration, history retention, unattended execution, a settings CLI,
+or a new workflow API. Session and saved-plan state are process-local in M1:
+closing the desktop loses unexecuted plans and restart-resume is not promised.
 
-Changing plan-only options invalidates plan but preserves inventory and current
-view. Changing a location invalidates only state tied to that location and does
-not force the Plan view unconditionally.
+## Adapter boundary
 
-## Plan Review And Execution
+The desktop imports only `NamiSyncService` and its primitive workflow views.
+It must not import `core`, `modules`, `db`, CLI internals, or construct a
+dispatcher, runtime, workflow request, repository, or recorder.
 
-Plan session completes before review. The Plan tree is directory-nested and
-shows operation kind, dependencies, reason, source/destination, bytes, hashes or
-evidence, conflict/block state, and status. Rolled-up counts/sizes reflect the
-active All/Changes/Moves/Conflicts filter.
+The service already provides the desktop's command surface:
 
-A folder rename is presentation grouping over its per-file moves, full mkdir
-chain, and cleanup dependencies. Expanding it reveals real executable operation
-ids/outcomes; grouping never becomes a hidden directory-level mutation.
+```python
+start_plan(source, target, *, deletion_policy=None) -> PlanSession
+start_execution(request_id, *, verify_after_execute=False) -> ExecutionSession
+start_inventory(...), start_baseline(...), start_verify(...), start_rebaseline(...)
+read_semantic_settings() -> SemanticSettingsView
+commit_semantic_settings(patch) -> SemanticSettingsView
+```
 
-Blocked operations do not disable unrelated dependency-closed work globally.
-Any future partial selection recomputes dependencies/capacity and shows deferred
-outcomes. Verify-after-execution is disclosed in scope/operation presentation.
-Commit binds the reviewed plan fingerprint and exact dependency-closed selection
-digest, then starts a new execution session and fresh preflight. Editing the
-selection invalidates the commitment. Refusal is visibly different from
-success.
+`SessionObserver.observe(session_id, sink)` supplies primitive current-state
+and event/record views. The desktop owns the bounded presentation queue fed by
+that sink; it does not expose raw dispatcher streams to JavaScript. It must
+unsubscribe on task close and close every observation before service shutdown.
+`classify_result()` supplies the single headline and independent filesystem,
+integrity, recording, audit, disposition, and cancellation axes. The frontend
+renders those facts; it never reimplements headline precedence or parses
+diagnostic text.
 
-No automatic/unattended UI execution bypasses commitment. Cancel/pause text
-explains the current phase, in-flight temp behavior, retained completed work,
-and lock release/resume consequences. Resume returns to the back of the volume
-queue and never interrupts currently running work.
+Location commands bind one explicit root or retained location id before
+admission. `LocationResolutionError` already carries the five visible states
+(`resolved`, `offline`, `ambiguous`, `root_missing`, `root_unavailable`), exact
+candidate mounts, and corrective detail. The UI must request a user-selected
+mount for ambiguity rather than inferring one from a mapping or prior task.
 
-## Inventory And Integrity
+Semantic settings and UI state are deliberately separate. Semantic settings
+are read and partially committed through the facade, then captured immutably
+by planning. `ui_state.py` owns only cosmetic recents, geometry, columns, and
+sorting in `ui-state.json`; it must not become another semantic-settings or
+session store.
 
-Inventory tree is distinct retained state with All/Verified/Baseline/
-Unbaselined/Missing/Reappeared/Acknowledged filters and live counts. Mismatch is
-visually prominent and persistent, distinct from ordinary modification.
+## Bridge and renderer security
 
-Inventory actions share one action definition across menus/buttons/context:
-inventory refresh, selected verify, baseline, rebaseline,
-acknowledge/restore missing, and copy path. Scope labels include active-filter
-and visible present-row count. Right-click first selects the valid index under
-the pointer; blank space acts on nothing.
+The host exposes exactly one JavaScript-facing method:
 
-Baseline/verify automatically inventory when needed. Selected verify uses scoped
-refresh. Refreshed inventory is shown at the scan-to-hash handoff; per-file typed
-outcomes update rows live. Linked verify marks only successfully executed
-eligible files and affected bytes, never the whole directory or manual-plan
-noops.
+```text
+dispatch(command_json)
+```
 
-## Live State And Feedback
+It remains versioned, JSON-schema-shaped, size-bounded, and command-allowlisted
+through `BridgeDispatcher`. Commands and responses use opaque ids and primitive
+structured data, never raw filesystem paths as authority. The frontend starts
+every request and receives structured return values; host-initiated
+`evaluate_js`, `run_js`, and `Window.state` are forbidden application-data
+channels.
 
-Progress snapshots are throttled and update overall/per-file bars, path, counts,
-phase, and immediate placeholder throughput/ETA text. Later rolling metrics,
-graph, follow mode, and live integrity follow consume events without changing
-domain behavior. A user scroll cancels auto-follow until explicitly restored.
+Live state uses one bounded, coalescing `next_events` pull/drain request. The
+host preserves reliable item and terminal ordering, allows replaceable progress
+snapshots to collapse, and makes a gap or disconnected task visible instead of
+inventing history. A JavaScript call must never block indefinitely waiting for
+an event, and the frontend must keep at most one outstanding event drain per
+task.
 
-Partial failure groups by cause/path and suggests action. Completion while
-unfocused may notify with accurate outcome and mismatch callout. Empty states
-explain the next domain action. Search/filter never mutates underlying plan or
-inventory.
+The host must force `gui="edgechromium"` and fail with an install action if the
+Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
+acceptable. Once the native control exists, it attaches the tested
+`NavigationStarting` and `NewWindowRequested` guards to `CoreWebView2`:
+navigation outside the exact packaged asset origin is canceled and every popup
+is handled/canceled. `dispatch` independently rechecks the current top-level
+origin on every call. The packaged static-asset server is not an API or event
+channel.
 
-## History
+The frontend uses a restrictive CSP and DOM APIs such as `textContent` for all
+filesystem-derived data. It must never use `innerHTML`, build executable script
+from returned data, or interpolate a filename into an attribute, URL, command,
+or bridge request. Hostile-name fixtures are required end-to-end.
 
-History dialog lists activity-aware envelopes/details and retention controls.
-Subject-only activities never show source→target placeholders. Restoring setup
-requires fresh planning. Pruned replay/detail is disclosed. History retention
-applies on a writable store through workflow, not direct UI SQL.
+## Interaction contract
 
-## Threading And Worker Lifecycle
+The task rail is a presentation grouping over live service sessions and
+retained history, not a new durable task model. It shows activity kind, source
+and target when applicable, current phase, progress, and a truthful terminal
+headline. Subject-only activities do not fabricate a source-to-target label.
+Closing a terminal task drops only its live presentation state; retained
+history remains. Closing queued or busy work asks for the service-supported
+control, waits for actual terminal observation, and never treats a transient
+progress flag as completion.
 
-Dispatcher remains domain lifecycle owner. Toolkit adapters marshal event/result
-callbacks to the GUI thread through declared receiver objects. A finishing old
-worker cannot release a newer one; object deletion waits for actual thread
-finish. Shutdown connects completion observation before testing running state and
-uses event-aware waiting rather than blocking the UI thread needed for terminal
-delivery.
+Sync remains a two-session interaction: plan first, review its immutable
+fingerprint-bound intent, choose a dependency-closed selection, type the exact
+confirmation, then start execution with fresh preflight. Editing selection or
+plan-affecting options requires a new commitment. There is no execute-anyway,
+auto-commit, or unattended path. `verify_after_execute` is an explicit option;
+when selected, the one execution session may return ordered operation and
+integrity items plus ordered phase summaries.
 
-Thread-affinity guards raise `RuntimeError` under all optimization modes. Tests
-exercise selection/action/model logic without entering modal menus. If Qt is
-used, proxy-style ownership, stylesheet subcontrols, and deferred deletion are
-tested against Windows to prevent the PoC crashes.
+Plan review shows executable operation ids, dependencies, reasons, source and
+destination, bytes, evidence, conflicts, blocks, and deferred outcomes. A
+folder or rename grouping is presentation only and never turns into a hidden
+directory mutation. The UI distinguishes refusal, all-noop, partial, canceled,
+failed, mismatch, verification-incomplete, and recording/audit degradation
+from the typed result axes rather than color or byte totals alone.
 
-## GUI Instance And CLI Coexistence
+Inventory is retained state distinct from plan state. Its location scope,
+completeness, observed/missing counts, presence, and evidence come from
+`InventoryDetailsView` and `InventoryRowView`. Refresh, baseline, verify, and
+rebaseline reuse one action definition across buttons and context menus.
+Selected paths are exact root-relative scope; rebaseline always asks for its
+explicit acceptance intent. A context action first establishes a valid target
+row, and blank space targets nothing.
 
-One desktop instance owns the desktop task shell and explains what the existing
-instance is doing. This lock does not block read-only CLI or safe disjoint-volume
-mutating CLI sessions; all mutations arbitrate through dispatcher volume locks.
+History uses retained activity-aware envelopes and details. It exposes all four
+truth axes and ordered items/phases, including compound execute-to-verify runs.
+Restoring a prior run means starting a fresh plan; history is not a replay or
+resume surface.
 
-## Theme And Layout
+## Presentation and responsiveness
 
-The shell is dark-only with accessible status/operation colors, alternating
-rows, and styled progress. Color is never the sole outcome signal. Card/header
-geometry remains stable as text appears; long paths elide with accessible full
-text. Native controls retain visible affordances—styling a combo border must not
-erase its arrow.
+Progress is replaceable telemetry. The UI updates current path, copied bytes,
+item counts, and phase without assuming a throughput estimator exists. Executor
+pipeline diagnostics are opt-in developer data, not the rolling transfer rate
+or ETA promised to users. Filter/search state never changes the underlying
+plan or inventory selection; changing a location or plan option invalidates
+only the state that semantically depends on it.
 
-## Expectations Of Other Modules
+Use accessible text and non-color outcome cues, stable layouts, and full-path
+accessibility text for elided paths. Empty, unavailable, ambiguous, blocked,
+and failure states must say what the user can do next. Dark/light presentation
+details may evolve, but contrast and no-color-only signaling are requirements.
 
-- Dispatcher is the live session/task/control source and owns custody.
-- Workflow adapters expose reviewed sync, inventory, integrity, import, history,
-  and maintenance requests; UI never calls operation modules.
-- Planner/preflight results provide immutable review/refusal models.
-- Inventory/history readers provide typed view models with explicit scope and
-  retention state.
-- Core event/reason schemas remain presentation-neutral; UI maps them to text,
-  color, accessibility, and suggested actions without changing semantics.
-- Toolkit worker adapters marshal only interface work and cannot become a second
-  recorder, scheduler, or session state machine.
+## Acceptance criteria
 
-## Latent Features
-
-Drag/drop, rolling metrics, graphing, follow mode, notifications, guided empty
-states, search, failure grouping, and mapping management consume existing typed
-state/events/actions. They add presentation state only. Task grouping and
-annotations use history/annotation contracts; they never make GUI task ids a
-requirement for CLI or service sessions.
-
-## PoC Regression Requirements
-
-The acceptance suite must retain coverage for: plan-wide blocked gating; stale
-worker release/GC; close-before-thread-finish; overwritten status hints; missing
-combo arrows; stacked-page excess height; progress floods; uncancelable import;
-verify without inventory; stale plan rows; wrong paired-root gating; partial
-failure rendering; proxy-style double-free; rotated/overlapping tabs and zero
-height New button; manual-noop false verification; stale size/headline;
-right-click wrong row/blank space; missed execution→verify handoff; card-height
-jitter; bogus Exit shortcut; delayed throughput line; GUI-thread violations;
-shutdown races/deadlock/crash; `assert` guard loss; subject-history rendering;
-refusal shown as success; wrong-location fallback; modal menu test hang;
-duplicated actions; ambiguous selected scope; plan/inventory invalidation;
-forced view switch; baseline/verify without inventory; stale verification list;
-missing summary count; full refresh for selected verify; whole-directory false
-verification; silent invalid paths; and hidden verify-after-execution scope.
-
-## Acceptance Criteria
-
-- End-to-end plan review ends session/releases locks, displays complete intent,
-  and execution starts only as a separately committed freshly guarded session.
-- Task cards remain stable height and retain real status beneath temporary
-  contention hints; stale worker completion cannot affect current task.
-- Closing/shutdown during every phase cancels/drains without thread destruction,
-  deadlock, timeout race, leaked custody, or event loss.
-- All model/widget mutation callbacks run on GUI thread; injected off-thread call
-  raises under normal and `python -O` runs.
-- Progress stress stays responsive under fast-disk chunk rates and shows
-  immediate phase/placeholder metrics before rate stabilizes.
-- Plan filter counts/sizes and blocked/dependency enablement match planner
-  selection; unrelated work is not globally disabled.
-- Plan and Inventory state/view survive only the invalidations that semantically
-  affect them.
-- Every inventory action targets the pointer/explicit selection, discloses exact
-  filtered scope, and no blank-space context action can target stale selection.
-- Baseline/verify with empty inventory chains refresh automatically; selected
-  verify avoids full scan; handoff displays current rows before hashing.
-- Manual and linked verification update only actual scoped rows; mismatch,
-  modified, missing, unsupported, canceled, and error are distinct.
-- Refusal, all-noop, partial failure, canceled, recording-behind, and history
-  degradation have truthful distinct headlines and accessibility text.
-- A discarded queue item renders from `CANCELED+UNRUN`; a cancellation after
-  work renders from `CANCELED+RAN`, regardless of operation count.
-- Closing a terminal task drops only live session state; queued discard is
-  audit-delivered first and neither action deletes durable history.
-- Menu/button/context actions share label, shortcut, enablement, scope, and
-  dispatch behavior from one source.
-- History renders each activity kind and retained detail; retention actually
-  persists through workflow.
-- Offscreen tests never invoke a modal menu loop; presentation logic is isolated.
-- Toolkit-specific style tests preserve combo arrows, tab/card geometry, New
-  control visibility, and object ownership without crashes.
-- Second desktop launch is refused with useful status while read-only/disjoint
-  CLI behavior remains available under dispatcher policy.
-- Dark theme meets contrast/non-color signaling requirements and long/empty text
-  causes no layout jitter.
+- A desktop request produces the same facade call, primitive views, result
+  classification, and mandatory sync review as the CLI.
+- The app starts only with Edge Chromium/WebView2, blocks external navigation
+  and popups, rejects off-origin dispatch, and transports no application data
+  through executable JavaScript text.
+- A bounded coalescing event drain preserves reliable item/terminal ordering,
+  makes gaps visible, and closes all observations cleanly on task close and
+  app shutdown.
+- Hostile filenames remain structured data and render as text, never HTML or
+  executable content.
+- Plan, inventory, settings, and history consume facade views only and remain
+  semantically separate; UI cosmetics never change a plan's captured settings.
+- Busy, paused, canceled, refused, partial, degraded, mismatch, and compound
+  verification outcomes are truthful and distinguishable without parsing
+  strings or inferring status from bytes.
+- Tests cover exact confirmation, location ambiguity, opaque-id authority,
+  duplicate/out-of-order bridge responses, event-gap recovery, context target
+  selection, process-local restart limits, and one-instance behavior.

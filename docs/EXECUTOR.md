@@ -277,6 +277,44 @@ delete, and no-op contribute items but zero transfer bytes. Failed work is not
 credited as completed content. Emission is throttled/coalesced outside the copy
 chunk size so fast disks cannot flood UI queues.
 
+## Copy Pipeline Diagnostics
+
+`NativeCopyBackend` can collect a diagnostic snapshot for performance tests and
+investigation without changing copy behavior:
+
+```python
+backend = NativeCopyBackend(
+    hasher_factory=hasher_factory,
+    collect_metrics=True,
+)
+digest = backend.copy(...)
+metrics = backend.last_metrics
+```
+
+Collection is disabled by default. With `collect_metrics=False`, `last_metrics`
+is `None` and the pipeline does not sample its diagnostic clock. Each valid copy
+invocation clears the prior snapshot; when collection is enabled, cleanup
+publishes one immutable `CopyPipelineMetrics` snapshot even if the started
+pipeline is canceled or fails.
+
+The snapshot contains:
+
+- `reader_blocked_seconds`: time the coordinator waited for byte-budget
+  capacity or a bounded pipeline queue to accept the next item;
+- `writer_starved_seconds`: time the writer waited for an item from its input
+  queue;
+- `payload_high_water`: the greatest reserved payload byte count during that
+  copy; and
+- `reserved_bytes`: the reservation remaining after worker cleanup. A completed
+  or aborted copy must return this to zero; a nonzero value is a pipeline
+  accounting defect.
+
+These metrics describe pipeline backpressure, not user-facing throughput, ETA,
+or durable run telemetry. They are neither emitted as progress events nor
+recorded in the ledger/history, and no interface should derive transfer status
+or scheduling policy from them. The 32 MiB combined payload budget and the
+fixed adaptive chunk bands remain executor-private constants.
+
 ## Expectations Of Other Modules
 
 - Core supplies operation/evidence/result types, path guards, checkpoint, and
