@@ -13,7 +13,6 @@ from namisync.core.models import (
     EntryKind,
     FileIdentity,
     FileRecord,
-    IgnoreSet,
     MetadataSnapshot,
     Root,
     ScanResult,
@@ -100,7 +99,6 @@ def _scan(
         (_dir(""), *directories),
         unsupported,
         (),
-        IgnoreSet(),
         ScanScope.full(),
         complete,
     )

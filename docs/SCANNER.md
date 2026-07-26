@@ -40,10 +40,10 @@ make the scoped result incomplete.
 
 The result contains the resolved root, `VolumeId` plus corroborating
 `VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every walked
-directory as `DirRecord`, typed `UnsupportedRecord` values, warnings, ignore
-snapshot, and `complete`. Unsupported records live in their own collection so
-planner and inventory consumers must handle them explicitly; warning text is
-not their state.
+directory as `DirRecord`, typed `UnsupportedRecord` values, warnings, and
+`complete`. Unsupported records live in their own collection so planner and
+inventory consumers must handle them explicitly; warning text is not their
+state.
 
 Results are sorted by normalized relative key with a deterministic tie-breaker.
 The scanner returns partial observations instead of raising for ordinary access
@@ -78,18 +78,16 @@ canonically equivalent source/target pair without changing either name.
     text escapes hostile code units rather than inserting them into path-bearing
     records, serialized plans, or terminal output.
 
-Application-owned ignores use exact qualified names or exact generated-name
-grammar. `.synctrash` is excluded as an owned root; a user filename merely
-containing `.synctmp-`, ending in `.db`, or resembling a checksum sidecar is not
-excluded unless it is the exact configured artifact.
+Built-in ignores use exact names or exact generated-name grammar. `.synctrash`
+is excluded as an owned root; a user filename merely containing `.synctmp-`,
+ending in `.db`, or resembling a checksum sidecar is not excluded.
 
 ## Completeness And Scope
 
-A full scan is complete only modulo its recorded location ignores. Mapping
-filters do not affect completeness; workflows apply them symmetrically after
-both scans. An unreadable or unrepresentable entry, case collision, uncertain
-reparse traversal, or root identity change makes the scan reviewable but
-non-executable where absence could drive mutation.
+A full scan is complete only modulo its supplied scan ignores. An unreadable or
+unrepresentable entry, case collision, uncertain reparse traversal, or root
+identity change makes the scan reviewable but non-executable where absence
+could drive mutation.
 
 Selected inventory refresh is a separate scoped observation mode. It may update
 named paths and a complete scoped result may classify a conclusively absent
@@ -118,7 +116,7 @@ simultaneous duplicate keys require explicit user choice.
 ## Expectations Of Other Modules
 
 - Core supplies path, identity, warning, capability, and result types.
-- Workflow supplies the exact ignore snapshot and session/error handling.
+- Workflow supplies the scan ignore policy and session/error handling.
 - Planner preserves incomplete-scan evidence and warnings in the full reviewed
   plan. Workflow permits only the evidence-positive additive/noop subset and
   withholds destructive/identity work; scanner itself decides neither.
@@ -137,8 +135,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 
 ## PoC Hardening
 
-- Exact ignore matching covers the PoC user-`.db` data-loss bug and missing
-  history database sidecars.
+- Exact built-in matching avoids the PoC user-`.db` data-loss bug; live database
+  placement guards keep NamiSync databases outside managed roots.
 - Per-entry error capture prevents permission errors from aborting the walk.
 - Contract-invalid NTFS/SMB names produce typed escaped evidence instead of
   aborting enumeration or contaminating safe relative-path contracts.
@@ -160,8 +158,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Placeholder tripwire tests prove no content handle is opened and no hydration
   occurs.
 - Exact-ignore regression tests retain `customer.db`, `my.synctmp-notes.txt`,
-  and sidecar-like user files while excluding configured ledger/history/WAL/SHM,
-  exact temp grammar, and `.synctrash` artifacts.
+  and sidecar-like user files while excluding `desktop.ini`, `Thumbs.db`, exact
+  temp grammar, and `.synctrash` artifacts.
 - Cancellation is observed within one directory/file enumeration step. Scanner
   registration refuses pause cleanly because scan has no continuation.
 - Case-collision and multi-link/duplicate-identity cases are reported without

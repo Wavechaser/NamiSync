@@ -28,7 +28,6 @@ from namisync.core.integrity import (
 from namisync.core.models import (
     CapabilityProfile,
     FileRecord,
-    IgnoreSet,
     Root,
     ScanResult,
     ScanScope,
@@ -65,7 +64,6 @@ def _scan(
         directories=(),
         unsupported=(),
         warnings=(),
-        ignore_snapshot=IgnoreSet(),
         scope=ScanScope.full(),
         complete=True,
     )

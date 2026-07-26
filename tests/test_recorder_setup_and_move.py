@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from namisync.core.models import FileRecord, IgnoreSet, ScanResult, ScanScope, VolumeEvidence, VolumeId
+from namisync.core.models import FileRecord, ScanResult, ScanScope, VolumeEvidence, VolumeId
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason, selection_digest
 from namisync.core.recording import (
@@ -49,7 +49,6 @@ def _target_scan(sync_plan, records: tuple[FileRecord, ...]) -> ScanResult:
         (),
         (),
         (),
-        IgnoreSet(),
         ScanScope.full(),
         True,
     )

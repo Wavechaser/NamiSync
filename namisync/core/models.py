@@ -241,30 +241,17 @@ def owned_temp_run_id(name: str) -> str | None:
 
 @dataclass(frozen=True)
 class IgnoreSet:
-    """Exact application-owned paths plus exact generated artifact grammar."""
+    """Built-in exact names and generated artifact grammar."""
 
-    exact_path_keys: frozenset[str] = field(default_factory=frozenset)
     exact_names: frozenset[str] = field(
         default_factory=lambda: frozenset({"DESKTOP.INI", "THUMBS.DB"})
     )
     exclude_owned_temps: bool = True
     exclude_sync_trash: bool = True
 
-    @classmethod
-    def for_owned_paths(cls, paths: tuple[str, ...] | list[str]) -> IgnoreSet:
-        keys: set[str] = set()
-        for path in paths:
-            canonical = validate_relative_path(path)
-            keys.add(normalize_relative_path(canonical))
-            keys.add(normalize_relative_path(canonical + "-wal"))
-            keys.add(normalize_relative_path(canonical + "-shm"))
-        return cls(frozenset(keys))
-
     def excludes(self, rel_path: str, *, is_directory: bool) -> bool:
         canonical = validate_relative_path(rel_path)
         key = normalize_relative_path(canonical)
-        if key in self.exact_path_keys:
-            return True
         if normalize_relative_path(PureWindowsPath(canonical).name) in self.exact_names:
             return True
         if self.exclude_sync_trash and (key == ".SYNCTRASH" or key.startswith(".SYNCTRASH\\")):
@@ -287,7 +274,6 @@ class ScanResult:
     directories: tuple[DirRecord, ...]
     unsupported: tuple[UnsupportedRecord, ...]
     warnings: tuple[ScanWarning, ...]
-    ignore_snapshot: IgnoreSet
     scope: ScanScope
     complete: bool
 

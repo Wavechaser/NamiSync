@@ -139,7 +139,6 @@ class _Scanner:
             (),
             (),
             (),
-            ignores,
             scope,
             self.complete,
         )

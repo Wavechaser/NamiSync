@@ -231,7 +231,9 @@ class WalkingScanner:
         try:
             resolved = self._backend.resolve_root(root.path)
         except (OSError, PermissionError) as error:
-            return self._offline_result(root, ignores, requested_scope, error, ScanWarningCode.ROOT_UNAVAILABLE)
+            return self._offline_result(
+                root, requested_scope, error, ScanWarningCode.ROOT_UNAVAILABLE
+            )
 
         resolved_root = Root(resolved, root.root_id)
         try:
@@ -239,7 +241,6 @@ class WalkingScanner:
         except (OSError, PermissionError) as error:
             return self._offline_result(
                 resolved_root,
-                ignores,
                 requested_scope,
                 error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
@@ -287,7 +288,6 @@ class WalkingScanner:
             directories=tuple(sorted(directories, key=lambda item: (item.rel_path_key, item.rel_path))),
             unsupported=tuple(sorted(unsupported, key=lambda item: (item.rel_path_key, item.rel_path))),
             warnings=tuple(sorted(warnings, key=self._warning_sort_key)),
-            ignore_snapshot=ignores,
             scope=requested_scope,
             complete=complete,
         )
@@ -583,7 +583,6 @@ class WalkingScanner:
     @staticmethod
     def _offline_result(
         root: Root,
-        ignores: IgnoreSet,
         scope: ScanScope,
         error: OSError,
         code: ScanWarningCode,
@@ -597,7 +596,6 @@ class WalkingScanner:
             directories=(),
             unsupported=(),
             warnings=(ScanWarning(code, None, str(error)),),
-            ignore_snapshot=ignores,
             scope=scope,
             complete=False,
         )

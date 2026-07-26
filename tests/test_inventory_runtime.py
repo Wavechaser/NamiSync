@@ -145,7 +145,6 @@ class _Scanner:
             (),
             (),
             (),
-            ignores,
             scope,
             True,
         )

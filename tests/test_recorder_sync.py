@@ -14,7 +14,6 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import (
     FileRecord,
-    IgnoreSet,
     ScanResult,
     ScanScope,
     VolumeEvidence,
@@ -46,7 +45,6 @@ def _target_scan(sync_plan, records: tuple[FileRecord, ...]) -> ScanResult:
         (),
         (),
         (),
-        IgnoreSet(),
         ScanScope.full(),
         True,
     )

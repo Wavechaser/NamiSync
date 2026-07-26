@@ -59,13 +59,13 @@ def test_canonical_json_preserves_valid_unicode_and_safely_escapes_lone_surrogat
     assert encoded != canonical_json_bytes({"path": r"bad_\udcff.txt"})
 
 
-def test_ignore_set_matches_only_owned_exact_shapes() -> None:
-    ignores = IgnoreSet.for_owned_paths([r".namisync\ledger.db", r".namisync\history.db"])
-    assert ignores.excludes(r".namisync\ledger.db", is_directory=False)
-    assert ignores.excludes(r".namisync\ledger.db-wal", is_directory=False)
-    assert ignores.excludes(r".namisync\history.db-shm", is_directory=False)
+def test_ignore_set_matches_only_built_in_shapes() -> None:
+    ignores = IgnoreSet()
+    assert ignores.excludes("desktop.ini", is_directory=False)
+    assert ignores.excludes("THUMBS.DB", is_directory=False)
     assert ignores.excludes(".synctrash", is_directory=True)
     assert ignores.excludes("movie.bin.synctmp-" + "a" * 32 + "-" + "b" * 32, is_directory=False)
+    assert not ignores.excludes(r".namisync\ledger.db", is_directory=False)
     assert not ignores.excludes("customer.db", is_directory=False)
     assert not ignores.excludes("my.synctmp-notes.txt", is_directory=False)
     assert not ignores.excludes("customer.sha256", is_directory=False)

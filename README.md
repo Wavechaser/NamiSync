@@ -130,7 +130,8 @@ never hides the other result axes in rendered output.
 - Hardened the reviewed-sync baseline against filesystem drift and unsafe edge
   cases without weakening its explicit-plan safety model.
   - **Planning and scanning:** hardened fingerprints, database placement,
-    hostile filenames, incomplete scans, and case/Unicode filename handling.
+    built-in artifact ignores, hostile filenames, incomplete scans, and
+    case/Unicode filename handling.
   - **Execution:** added exact prior-run temp recovery and hardened Windows
     updates, directory cleanup, metadata preservation, and retry behavior.
   - **Reporting:** made blocked/deferred safe subsets and partial outcomes

@@ -66,18 +66,15 @@ def test_native_walk_recovers_identity_when_directory_entry_omits_it(
         assert result.files[0].file_identity is not None
 
 
-def test_scanner_never_opens_file_content_and_exact_ignores_preserve_user_files(
+def test_scanner_never_opens_file_content_and_built_in_ignores_preserve_user_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    owned = tmp_path / ".namisync"
-    owned.mkdir()
     for relative in (
         "customer.db",
         "my.synctmp-notes.txt",
         "customer.sha256",
-        r".namisync\ledger.db",
-        r".namisync\ledger.db-wal",
-        r".namisync\history.db-shm",
+        "desktop.ini",
+        "THUMBS.DB",
         "asset.bin.synctmp-" + "a" * 32 + "-" + "b" * 32,
     ):
         path = tmp_path.joinpath(*relative.split("\\"))
@@ -85,10 +82,9 @@ def test_scanner_never_opens_file_content_and_exact_ignores_preserve_user_files(
     trash = tmp_path / ".synctrash"
     trash.mkdir()
     (trash / "hidden.txt").write_bytes(b"hidden")
-    ignores = IgnoreSet.for_owned_paths([r".namisync\ledger.db", r".namisync\history.db"])
 
     monkeypatch.setattr(builtins, "open", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("content opened")))
-    result = WalkingScanner().scan(Root(str(tmp_path), "source"), ignores, _ctx())
+    result = WalkingScanner().scan(Root(str(tmp_path), "source"), IgnoreSet(), _ctx())
 
     retained = {record.rel_path for record in result.files}
     assert retained == {"customer.db", "my.synctmp-notes.txt", "customer.sha256"}
