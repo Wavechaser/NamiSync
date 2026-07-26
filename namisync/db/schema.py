@@ -18,7 +18,7 @@ from .connections import (
 
 LEDGER_SCHEMA_VERSION = 2
 HISTORY_SCHEMA_VERSION = 3
-LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128-mapping-filters-v1"
+LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128"
 HISTORY_CONTRACT_ID = "m1-history-generic-items-phases-v1"
 
 
@@ -145,54 +145,6 @@ CREATE INDEX IF NOT EXISTS inventory_location_presence_idx
 ON inventory(location_id, presence, rel_path_key);
 CREATE INDEX IF NOT EXISTS inventory_identity_idx
 ON inventory(location_id, file_identity_volume_serial, file_identity_file_index);
-
-CREATE TABLE IF NOT EXISTS mapping_filters (
-    mapping_id INTEGER PRIMARY KEY REFERENCES mappings(id) ON DELETE CASCADE,
-    patterns_json TEXT NOT NULL,
-    snapshot_hash BLOB NOT NULL,
-    updated_at TEXT NOT NULL
-) STRICT;
-
-CREATE TABLE IF NOT EXISTS mapping_exclusions (
-    mapping_id INTEGER NOT NULL REFERENCES mappings(id) ON DELETE CASCADE,
-    inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
-    snapshot_hash BLOB NOT NULL,
-    excluded_at TEXT NOT NULL,
-    PRIMARY KEY(mapping_id, inventory_id)
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS mapping_exclusions_inventory_idx
-ON mapping_exclusions(inventory_id, mapping_id);
-
-CREATE TRIGGER IF NOT EXISTS mapping_exclusion_location_insert
-BEFORE INSERT ON mapping_exclusions
-WHEN NOT EXISTS (
-    SELECT 1
-      FROM mappings AS mapping
-      JOIN inventory AS row ON row.id = NEW.inventory_id
-     WHERE mapping.id = NEW.mapping_id
-       AND row.location_id IN (
-           mapping.source_location_id, mapping.target_location_id
-       )
-)
-BEGIN
-    SELECT RAISE(ABORT, 'mapping exclusion location mismatch');
-END;
-
-CREATE TRIGGER IF NOT EXISTS mapping_exclusion_location_update
-BEFORE UPDATE ON mapping_exclusions
-WHEN NOT EXISTS (
-    SELECT 1
-      FROM mappings AS mapping
-      JOIN inventory AS row ON row.id = NEW.inventory_id
-     WHERE mapping.id = NEW.mapping_id
-       AND row.location_id IN (
-           mapping.source_location_id, mapping.target_location_id
-       )
-)
-BEGIN
-    SELECT RAISE(ABORT, 'mapping exclusion location mismatch');
-END;
 
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,

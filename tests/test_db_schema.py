@@ -75,8 +75,6 @@ def test_fresh_ledger_contains_schema_freeze_bones(tmp_path: Path) -> None:
             "locations",
             "mappings",
             "inventory",
-            "mapping_filters",
-            "mapping_exclusions",
             "mapping_correspondence",
             "runs",
             "operations",
@@ -320,7 +318,7 @@ def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
-        == "m1-ledger-xxh3-128-mapping-filters-v1"
+        == "m1-ledger-xxh3-128"
     )
     assert (
         history_contract
@@ -329,7 +327,6 @@ def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
     )
     assert not ledger.with_name(ledger.name + "-journal").exists()
     assert not history.with_name(history.name + "-journal").exists()
-    assert {"mapping_filters", "mapping_exclusions"} <= ledger_tables
     assert {"history_items", "history_phases"} <= history_tables
     assert {"item_type", "phase", "item_id", "result", "detail_json"} <= item_columns
     assert {

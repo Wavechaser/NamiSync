@@ -1,8 +1,8 @@
 # Inventory Domain
 
 Status: the M1 role-free inventory workflow, scoped reconciliation,
-acknowledgement/restore, mapping-scoped filter persistence, typed queries, and
-standalone integrity selection are implemented. Inventory is not a new
+acknowledgement/restore, typed queries, and standalone integrity selection are
+implemented. Inventory is not a new
 sideways-calling operation module: scanner observes, workflows coordinate, and
 database repositories/recorder retain state. The Stage 5 CLI exposes explicit
 location inventory and integrity starts through the shared service; desktop
@@ -20,9 +20,8 @@ view state, mapping role, UI filters, or a partial scan.
 The ledger schema stores current observation fields separately from attested
 hash subject fields, including nullable identity/hardlink-group room, presence,
 unsupported reason, missing/acknowledgement/reappearance timestamps, host
-provenance, and scope token. Mapping exclusion projection timestamps live in
-their separate mapping-scoped table. Ordinary scans update only current
-observation fields and cannot rewrite an established attestation.
+provenance, and scope token. Ordinary scans update only current observation
+fields and cannot rewrite an established attestation.
 
 `LedgerRecorder.record_inventory()` batches present, directory, and unsupported
 observations. A complete online full scan uses a temporary key table to mark
@@ -72,13 +71,9 @@ reviewed preservation. Every walked directory has a `DirRecord`, and typed
 unsupported state is never reconstructed from warning text. ADS is not
 inventory state: the deferred feature enumerates streams only in the executor.
 
-Mapping correspondence and filtering are separate and mapping-scoped. A shared
-location keeps one physical inventory while each mapping retains independent
-source/target relationship and filter evidence. `mapping_filters` is the
-authoritative current `FilterSet`; planner-facing reads evaluate it
-deterministically for every row. `mapping_exclusions(mapping_id, inventory_id)`
-is only a snapshot-hash-tagged cache/audit projection. A stale projection is
-reported through typed snapshot state and never overrules the current filter.
+Mapping correspondence is separate from role-free inventory. A shared location
+keeps one physical inventory while each mapping retains independent accepted
+source/target relationship evidence.
 
 Hashed rows preserve the stat unit that the hash attests. A later ordinary scan
 must not overwrite those baseline stats merely to reflect current modified
@@ -106,18 +101,11 @@ records.
   is authoritative for that exact path.
 - Unrequested rows retain state; no location-wide missing sweep runs.
 
-### Offline and filtered states
+### Offline and visibility states
 
-An unmounted volume is offline, not a location full of missing files. Mapping
-filters mark rows excluded from that mapping view while preserving physical
-inventory evidence. Acknowledging missing hides it from the default view but
-does not delete evidence; restore reverses only acknowledgement.
-
-Complete filter replacement evaluates every current row in both mapping
-locations. The recorder rechecks that exact identity coverage inside the same
-writer transaction before replacing the filter and both projections, closing
-the inventory-row race. A role-free refresh never updates mapping policy; new
-or untouched rows are classified dynamically until a later projection refresh.
+An unmounted volume is offline, not a location full of missing files.
+Acknowledging missing hides it from the default view but does not delete
+evidence; restore reverses only acknowledgement.
 
 ## Location And Mapping Guidance
 
@@ -175,7 +163,7 @@ summary and policy; missing acknowledgement is not pruning.
 - A first complete scan creates one role-free location and deterministic rows
   without creating a mapping.
 - Complete scans retain every walked directory and one canonical role-free
-  observation shape regardless of mapping policy.
+  observation shape regardless of mapping associations.
 - Complete rescan marks only truly unseen in-scope rows missing and preserves
   their hash/stat evidence.
 - Incomplete scan and offline volume mark no unseen row missing.
@@ -183,11 +171,6 @@ summary and policy; missing acknowledgement is not pruning.
 - Returning missing rows become reappeared; matching verify or explicit
   baseline clears reappearance atomically.
 - Acknowledgement/restore changes visibility state without deleting evidence.
-- Mapping filters preserve physical rows and cannot turn exclusions into target
-  deletion candidates.
-- Two mappings sharing one physical location may exclude the same row
-  differently; a new row and an inverse filter change take effect immediately
-  without stale projection policy.
 - Hashed baseline stats are not overwritten by ordinary observation of modified
   content; verifier classifies it `modified`.
 - A location with >33k files reconciles without SQL variable overflow and with

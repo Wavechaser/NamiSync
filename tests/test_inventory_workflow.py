@@ -32,7 +32,6 @@ from namisync.core.pathing import (
     normalize_relative_path,
     to_extended_length_path,
 )
-from namisync.core.planning import FilterSet
 from namisync.core.recording import InventoryCommand
 from namisync.core.session import (
     Disposition,
@@ -60,7 +59,6 @@ from namisync.workflows.inventory import (
     decode_inventory_request,
     encode_integrity_request,
     encode_inventory_request,
-    replace_mapping_filter,
     resolve_binding,
     run_integrity,
     run_inventory,
@@ -552,80 +550,6 @@ def test_integrity_resume_uses_a_new_inventory_refresh_receipt(tmp_path: Path) -
 
     assert resumed.status is SessionState.COMPLETED
     assert len(scanner.calls) == 3
-
-
-def test_filter_replacement_workflow_projects_both_mapping_locations(
-    tmp_path: Path,
-) -> None:
-    sync_plan = plan(())
-    clock = FakeClock()
-    setup = setup_recorder(tmp_path / "ledger.db", sync_plan, clock=clock)
-    try:
-        for location_id, root, volume_id, profile, serial in (
-            (
-                setup.source_location_id,
-                sync_plan.source_root,
-                sync_plan.source_volume_id,
-                sync_plan.source_profile,
-                sync_plan.source_volume_id.serial,
-            ),
-            (
-                setup.target_location_id,
-                sync_plan.target_root,
-                sync_plan.target_volume_id,
-                sync_plan.target_profile,
-                sync_plan.target_volume_id.serial,
-            ),
-        ):
-            row = FileRecord(
-                "excluded.tmp",
-                normalize_relative_path("excluded.tmp"),
-                7,
-                11,
-                FileIdentity(serial, location_id),
-                1,
-                MetadataSnapshot(0, 3),
-            )
-            setup.recorder.record_inventory(
-                InventoryCommand(
-                    location_id,
-                    setup.host_id,
-                    ScanResult(
-                        root,
-                        volume_id,
-                        VolumeEvidence(device_id=root.path),
-                        profile,
-                        (row,),
-                        (),
-                        (),
-                        (),
-                        IgnoreSet(),
-                        ScanScope.full(),
-                        True,
-                    ),
-                    f"filter-inventory-{location_id}",
-                    clock.now(),
-                )
-            )
-        replace_mapping_filter(
-            "filter-replacement",
-            setup.mapping_id,
-            FilterSet(("*.tmp",)),
-            ledger_path=setup.recorder.path,
-            clock=clock,
-        )
-        with LedgerRepository(setup.recorder.path) as repository:
-            snapshot = repository.get_mapping_inventory(setup.mapping_id)
-
-        assert snapshot.filter_snapshot == FilterSet(("*.tmp",))
-        assert snapshot.source_location_id == setup.source_location_id
-        assert snapshot.target_location_id == setup.target_location_id
-        assert snapshot.planner_source_rows == ()
-        assert snapshot.planner_target_rows == ()
-        assert all(row.projection_current for row in snapshot.source_rows)
-        assert all(row.projection_current for row in snapshot.target_rows)
-    finally:
-        setup.recorder.close()
 
 
 def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:

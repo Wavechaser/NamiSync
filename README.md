@@ -105,7 +105,7 @@ never hides the other result axes in rendered output.
 - [Database](docs/DATABASE.md), [Recorder](docs/RECORDER.md), and
   [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
-  [Handoff](docs/HANDOFF.md) — latest work, status and issues, and session context.
+  [Handoff](docs/HANDOFF.md) — present and future scope, known issues, and session context.
 
 ## Changelog
 
@@ -122,7 +122,8 @@ never hides the other result axes in rendered output.
     commands, semantic-settings views, typed result classification, and the
     WebView2 bridge-security foundation.
   - **Persistence:** established the reset-only ledger v2/history v3 boundary
-    and separated semantic settings from cosmetic UI state.
+    under the `m1-ledger-xxh3-128` ledger contract and separated semantic
+    settings from cosmetic UI state.
 
 ### M0 Hardening
 

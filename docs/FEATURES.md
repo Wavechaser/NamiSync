@@ -116,9 +116,7 @@ below describe settled behavior, not current M0 runtime claims.
 ## FILTERS
 
 - **Location Ignores**. A location can carry ignore patterns evaluated during the scan walk itself, so ignored subtrees are never read; a complete scan is complete modulo its own ignores, and the missing-marking sweep respects that boundary.
-- **Mapping Filters**. A mapping can carry filter patterns applied symmetrically to both scanned sides before diffing, so an excluded file never appears as a one-sided change; filters never affect scan completeness, only what the planner is allowed to see.
-- **Filtered Rows Stay Evidence**. A tracked row that becomes excluded is marked excluded, not missing or deleted; its prior evidence is retained and it leaves the default view the same way an acknowledged-missing row does.
-- **Filter Snapshot in Plans**. A plan records and fingerprints the filter set it was built under. Later global-default changes affect only future plans; editing a task-local bound filter during review invalidates that plan and requires fresh planning and commitment.
+- **Filter Snapshot in Plans**. Live planning applies filter patterns symmetrically to both scanned sides before diffing, then records and fingerprints that filter set in the plan. Later global-default changes affect only future plans; editing a task-local bound filter during review invalidates that plan and requires fresh planning and commitment.
 
 - **Filter Rule Editor**. The desktop UI will offer a rule editor with a live preview of what a filter set would exclude.
 
@@ -200,7 +198,6 @@ below describe settled behavior, not current M0 runtime claims.
 - **Selected Inventory Refresh**. Selected paths can be refreshed without walking the entire location or inferring unselected absences.
 - **Evidence Staleness**. Inventory can filter and summarize rows by hash and verification age, and select every row older than a chosen cutoff for re-verification, turning last-seen, hash-observed, and last-verified timestamps into a visible freshness signal instead of silent bookkeeping.
 - **Five-State Volume Resolution**. Every inventory/integrity start, resume, and queued wakeup distinguishes resolved, offline, ambiguous clone, missing root, and unavailable root before scan/hash work; only resolved state can reconcile.
-- **Mapping-Scoped Filters**. One physical location inventory can serve multiple mappings whose authoritative filter snapshots differ. Exclusion projections are audit/cache state only; planner eligibility evaluates the current mapping filter and excluded target rows cannot become deletion candidates.
 
 - **Shared Network Inventory**. Inventory merging across hosts and network locations remains unrealized.
 

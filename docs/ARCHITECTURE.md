@@ -641,7 +641,7 @@ M1 is one deliberate pre-release schema boundary, not an incremental migration:
 the ledger advances to v2 for canonical XXH3-128 content evidence and history
 advances to v3 for nominal phase-tagged result items plus reserved compound
 phase summaries. The versions are qualified by immutable final-contract markers:
-ledger `m1-ledger-xxh3-128-mapping-filters-v1` and history
+ledger `m1-ledger-xxh3-128` and history
 `m1-history-generic-items-phases-v1`. A nonempty database is checked read-only
 for its numeric version and then exact marker before any writer or schema script
 is opened. Older versions and missing/mismatched markers are refused with one
@@ -1412,8 +1412,8 @@ sessions and exposes the resulting typed history reads.
 selection, local composition, CLI terminal review/commit, and history browsing.
 **Flesh — implemented through M1 Stage 3.** Role-free one-location inventory;
 standalone inventory/baseline/verify/rebaseline sessions; integrity preflight
-on start, resume, and queued wakeup; mapping-scoped authoritative filters;
-exact-candidate continuation; nominal result/history items; and production
+on start, resume, and queued wakeup; exact-candidate continuation; nominal
+result/history items; and production
 dispatcher registration. **Flesh — implemented through M1 Stage 4.** Optional
 in-session post-execution verification, explicit execute/verify continuation,
 one finish-once run window, compound phase summaries/history/views, and

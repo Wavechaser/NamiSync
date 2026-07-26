@@ -1,38 +1,36 @@
 # NamiSync Session Handoff
 
-Date: 2026-07-25
+Date: 2026-07-27
 
 ## Session Outcome
 
-Completed the documentation sweep before M1 Stage 6. No production code,
-dependencies, database schemas, workflow contracts, or tests changed.
+Aligned filtering with the live reviewed-plan architecture and simplified the
+ledger-v2 inventory contract.
 
-- Rewrote `DESKTOP_UI.md` as the Stage 6 pywebview/WebView2 delivery contract.
-  It now identifies the service facade, primitive views, session observation,
-  UI-state/settings split, bridge security boundary, event-drain rules, and
-  process-local limits that the desktop must respect.
-- Reorganized `README.md` around the product, setup, CLI, explicit M1 limits,
-  focused documentation links, and a component-level milestone changelog.
-- Documented `NativeCopyBackend(collect_metrics=True)` and its
-  `CopyPipelineMetrics` snapshot in `EXECUTOR.md`, including its diagnostic-only
-  scope and the fact that it is not user-facing progress telemetry.
+- Path filters remain immutable planning input applied symmetrically to fresh
+  source and target scans, then frozen into the plan fingerprint.
+- Retained inventory remains role-free physical and integrity evidence.
+- Mapping state retains source/target correspondence used by move detection,
+  without a second inventory-backed policy path.
+- The ledger stays at schema version 2 with the renewed exact contract marker
+  `m1-ledger-xxh3-128`. Existing databases carrying another marker must be
+  reset explicitly under the existing pre-release policy.
+- Code, schema, tests, and documentation now describe this single ownership
+  model consistently.
 
 ## Verification
 
-- `git diff --check` passed.
-- Reviewed `M1_PLAN.md`, `ARCHITECTURE.md`, `INTERFACES.md`, `service.py`, and
-  `security_spike.py` to confirm the desktop document matches implemented M1
-  Stage 5 seams and the unimplemented Stage 6 boundary.
-- Reviewed `NativeCopyBackend` and its pipeline metrics tests to confirm the
-  diagnostics lifecycle, fields, disabled default, and zero-reservation
-  invariant in `EXECUTOR.md`.
+- Targeted schema, inventory, recorder, planner, settings, and workflow tests
+  pass.
+- The full pytest suite and import-boundary checks pass.
+- Repository search finds no second inventory-backed path-policy implementation
+  or obsolete contract marker.
+- `git diff --check` passes.
 
 ## Immediate Next Context
 
-M1 Stage 6 is ready to implement as a local pywebview host forced to Edge
-Chromium/WebView2. It must consume only `NamiSyncService` and primitive views,
-keep reviewed sync as a separate plan/commit/execute flow, and use the existing
-single `dispatch(command_json)` bridge posture: exact packaged origin, native
-navigation/popup guards, opaque ids, structured pull/RPC, and one bounded
-coalescing event drain. Do not advertise durable plan/session recovery or add a
-desktop path around mandatory review.
+M1 Stage 6 can build live plan filtering and reviewed operation selection on the
+existing service/runtime seam. Inventory previews may evaluate display criteria
+or a temporary plan filter over repository rows without persisting view state.
+Named recurring mappings need only durable relationship identity until a
+complete saved-task configuration is deliberately designed.

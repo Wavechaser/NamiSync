@@ -83,8 +83,8 @@ continues to emit complete deterministic intent and does not hide those items.
 
 - Compare through `DestinationPolicy.assign()`, including the M0 identity
   assignment; never directly assume source path equals target path.
-- Apply mapping filters symmetrically before diffing. Location ignores have
-  already bounded scan completeness.
+- Apply the plan's filter snapshot symmetrically before diffing. Location
+  ignores have already bounded scan completeness.
 - Compare mtimes within the coarser capability granularity.
 - Matching size, mtime within the coarser granularity, and standard attributes
   is an M0 metadata no-op. An attributes-only change plans an update even when

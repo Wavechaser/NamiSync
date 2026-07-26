@@ -33,15 +33,12 @@ from namisync.core.pathing import (
     to_extended_length_path,
     validate_relative_path,
 )
-from namisync.core.planning import FilterSet
 from namisync.core.recording import (
     HostCommand,
     InventoryCommand,
     InventoryVisibilityAction,
     InventoryVisibilityCommand,
     LocationCommand,
-    MappingFilterCommand,
-    MappingFilterEvaluation,
     VolumeCommand,
 )
 from namisync.core.session import (
@@ -604,40 +601,6 @@ def run_integrity(
         bytes_done=selection.processed_bytes,
         bytes_total=max(bytes_total, selection.processed_bytes),
     )
-
-
-def replace_mapping_filter(
-    command_id: str,
-    mapping_id: int,
-    filter_snapshot: FilterSet,
-    *,
-    ledger_path: Path,
-    clock: Clock,
-) -> None:
-    """Atomically replace authoritative mapping policy and its full projection."""
-
-    with LedgerRepository(ledger_path) as repository:
-        snapshot = repository.get_mapping_inventory(mapping_id)
-    evaluations = tuple(
-        MappingFilterEvaluation(
-            row.inventory.location_id,
-            row.inventory.row_id,
-            row.inventory.rel_path_key,
-            filter_snapshot.excludes(row.inventory.rel_path),
-        )
-        for row in (*snapshot.source_rows, *snapshot.target_rows)
-    )
-    with LedgerRecorder(ledger_path, clock=clock) as recorder:
-        recorder.record_mapping_filter(
-            MappingFilterCommand(
-                command_id,
-                mapping_id,
-                filter_snapshot,
-                evaluations,
-                (snapshot.source_location_id, snapshot.target_location_id),
-                clock.now(),
-            )
-        )
 
 
 def change_inventory_visibility(

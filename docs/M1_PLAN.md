@@ -71,7 +71,7 @@ not permission to merge a consumer before its prerequisite:
   merges its vocabulary with its first producer and does not finish
   baseline/verify wiring until HASH Track 2 is available.
 - The inventory producer work — volume/root resolution, first-location
-  registration, scoped completeness, and exclusion persistence — may run
+  registration, scoped completeness, and reconciliation — may run
   beside the HASH executor work after its core contracts are fixed. Standalone
   verification wiring still waits for HASH Track 2.
 - Facade extraction that preserves existing M0 behavior may run beside late
@@ -283,7 +283,7 @@ files are not databases and survive it.
 
 The final integrated contract is frozen by decision
 `M1-SCHEMA-CONTRACT-20260724-02`: metadata key `contract_id`, ledger value
-`m1-ledger-xxh3-128-mapping-filters-v1`, and history value
+`m1-ledger-xxh3-128`, and history value
 `m1-history-generic-items-phases-v1`. For a nonempty database, startup checks
 the supported numeric version and then this exact opaque marker through a
 read-only connection before opening any writer or running the schema script.
@@ -768,25 +768,22 @@ pipeline, or direct IO is introduced.
 
 **Implemented 2026-07-24.** The delivered slice includes the five distinct
 resolution states; first-location host→volume→role-free-location registration;
-full and selected reconciliation with producer-correct completeness;
-mapping-scoped authoritative filter snapshots plus hash-tagged exclusion
-projections; typed immutable repository snapshots; acknowledge/restore and
-staleness reads; nominal ordered result/history items; and standalone inventory,
-baseline, verify, and rebaseline composition. Integrity re-resolves on initial
-start, every resume, and queued wakeup; pause/resume retains the exact admitted
-row ids while refreshes may inventory newly appeared rows. The production
-dispatcher registers all six current workflow kinds with their correct pause
-capabilities, but parser choices remain exactly `sync` and `history`. Stage 3
-writes no `history_phases` rows and introduces none of Stage 4's transient or
-compound types.
+full and selected reconciliation with producer-correct completeness; typed
+immutable repository snapshots; acknowledge/restore and staleness reads;
+nominal ordered result/history items; and standalone inventory, baseline,
+verify, and rebaseline composition. Integrity re-resolves on initial start,
+every resume, and queued wakeup; pause/resume retains the exact admitted row ids
+while refreshes may inventory newly appeared rows. The production dispatcher
+registers all six current workflow kinds with their correct pause capabilities,
+but parser choices remain exactly `sync` and `history`. Stage 3 writes no
+`history_phases` rows and introduces none of Stage 4's transient or compound
+types.
 
 - Inventory workflow: five-state volume resolution, first-location
   registration, scoped scan-and-record using the existing scanner,
   acknowledge/restore, and staleness queries (DR-M1-11).
 - Fix scoped completeness so selected refreshes can reconcile
   (`scanner.py:252` vs `recorder.py:573`).
-- Persist mapping-filter/exclusion state: excluded rows are never marked
-  missing/deleted and cannot become target deletion candidates.
 - Land the nominal result/event/history/view vocabulary from Stage 1 together
   with its first producer. `IntegrityOutcome` enters `EventBody`; history and
   views preserve `item_type`, `phase`, item order, and integrity detail.
@@ -1422,8 +1419,6 @@ The plan should explicitly include:
 
 - the implemented verifier's explicit `rebaseline` operation and its CLI/UI
   entry point;
-- mapping-filter/exclusion persistence, which the inventory contract assigns
-  to M1; and
 - role-free location creation for the first inventory scan.
 
 #### 8. Result classification needs an integrity axis

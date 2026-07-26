@@ -1,7 +1,7 @@
 # Database Module
 
 Status: schema bones, safe connection factories, the M0 ledger/repositories,
-inventory/filter reconciliation, generic result history, and M1's
+inventory reconciliation, generic result history, and M1's
 ledger-v2/history-v3 coordinated reset boundary and semantic settings store are
 implemented. General migrations, retention, backup/protection workflows, and
 richer history consumers remain later work.
@@ -24,10 +24,9 @@ state is interface-owned and never shares this file.
 `schema.py` creates a version-2 ledger and version-3 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
-correspondence and filter projections, run/operation tokens, generic
-annotations, and nullable hardlink group room. Database triggers reject
-correspondence or filter projections whose rows do not belong to the mapping's
-source and target locations.
+correspondence, run/operation tokens, generic annotations, and nullable hardlink
+group room. Database triggers reject correspondence whose rows do not belong to
+the mapping's source and target locations.
 
 `connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
 read repositories open SQLite in `mode=ro` and enable `query_only`. Before
@@ -38,11 +37,8 @@ sidecars byte-for-byte unchanged. Live paths can be validated against managed
 roots before creation. `timestamps.py` is the single fixed-width aware-UTC
 representation used by both schemas.
 
-`repositories.py` returns immutable inventory, mapping-filter, run, and
-`MappingSnapshot` values. Canonical path selections are queried in bounded
-400-key chunks. A mapping-filter view is assembled in one explicit read
-transaction so policy, projection, and inventory cannot come from mixed SQLite
-snapshots. Reads expose projection disagreement but never repair state.
+`repositories.py` returns immutable inventory, run, and `MappingSnapshot`
+values. Canonical path selections are queried in bounded 400-key chunks.
 
 History version 3 retains the run envelope/summary and replaces operation-only
 detail with generic `history_items` tagged by item type and phase. Sync and
@@ -52,7 +48,7 @@ Stage 1/3 standalone producers still write no phase rows. This required no
 version, marker, migration, reset, or table change.
 
 The final M1 schemas carry immutable whole-contract metadata:
-ledger `contract_id=m1-ledger-xxh3-128-mapping-filters-v1` and history
+ledger `contract_id=m1-ledger-xxh3-128` and history
 `contract_id=m1-history-generic-items-phases-v1` (decision
 `M1-SCHEMA-CONTRACT-20260724-02`). Opening ledger v1, history v1/v2, or a
 transitional ledger-v2/history-v3 database with a missing/mismatched marker
@@ -95,16 +91,13 @@ The initial schema reserves the expensive identity/evidence bones:
 - optional file identity and nullable hardlink-group room;
 - mappings linking distinct source/target locations with soft `deleted_at`;
 - mapping-scoped correspondence constrained to rows in the mapping's locations;
-- authoritative mapping filter snapshots plus snapshot-hash-tagged
-  `(mapping_id, inventory_id)` exclusion projections constrained to either
-  mapping location;
 - run/op idempotency tokens and actual UTC run window;
 - digest algorithm/value, `ContentEvidence`, attested subject stat, provenance,
   observed/hash/verified times kept semantically distinct;
 - metadata snapshot fields for attributes and creation time; ADS has no scan,
   inventory, or schema representation;
 - physical presence, acknowledgement, reappearance, and unsupported state,
-  independent of mapping-scoped exclusion policy;
+  independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
 Successful byte-producing operation transactions return the persisted target

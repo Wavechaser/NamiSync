@@ -428,7 +428,7 @@ actionable reset path.
 
 Decision `M1-SCHEMA-CONTRACT-20260724-02` also qualifies those final numeric
 versions with immutable `contract_id` values:
-`m1-ledger-xxh3-128-mapping-filters-v1` and
+`m1-ledger-xxh3-128` and
 `m1-history-generic-items-phases-v1`. A nonempty database is checked read-only
 for version and then exact marker before any writer or schema script runs.
 Missing or mismatched markers—including transitional databases already labeled
