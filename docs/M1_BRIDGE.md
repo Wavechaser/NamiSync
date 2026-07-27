@@ -290,9 +290,19 @@ cosmetic is not an argument for running in the browser.
 
 Three client-side computations are sanctioned under this rule, named
 explicitly so the rule is not later cited to block them: rendering tri-state
-checkboxes from server-supplied outcomes, resolving the autoscroll anchor
-from a server-supplied ancestor chain (DR-BR-14), and applying view filters
-to already-materialized rows.
+checkboxes from server-supplied outcomes, resolving the autoscroll anchor from
+a server-supplied ancestor chain (DR-BR-14), and rendering filter chips from
+server-supplied counts.
+
+An earlier draft sanctioned a fourth — applying view filters to
+already-materialized rows — which was wrong for the reason DR-BR-18 gives
+about search, and for a sharper one. **Filtering a window and windowing a
+filter are different operations.** The client holds a slice of the *unfiltered*
+sequence, so filtering it yields an arbitrary subset of an arbitrary slice:
+"deletions only" would show the deletions in the current viewport rather than
+the plan's deletions, and scrolling would reveal more of them. Filters are
+server-side view parameters (DR-BR-15). What the client renders is the chips,
+never the decision about what passes.
 
 ### DR-BR-09 — Node trees are built in `workflows`, not `interfaces`
 
@@ -351,6 +361,11 @@ existing tests are the proof, unchanged.
 
 Structural folder nodes have no operation and still need addressing for
 collapse state and folder-scoped selection.
+
+*Staged across both stages.* Location-scoped identity lands in Stage 5.5,
+because DR-BR-06's id-based location commands cannot validate ownership
+without it. Plan-scoped identity and the plan memo land with the plan tree in
+Stage 6 slice 4. Same rule, two arrival times.
 
 **Resolution:** node ids are deterministic over
 **`(tree kind, scope identity, canonical path key)`** — not over the path
@@ -495,10 +510,41 @@ dry run — and lazy expansion makes the default state cost one round trip per
 folder.
 
 **Resolution:** the server flattens the tree into an ordered visible sequence
-given a set of collapsed nodes and a search query, and the client requests
-`[offset, limit]` windows of it. One command shape serves the plan tree, the
-inventory tree, and history items, and scroll position maps directly to an
-index.
+given the active **view parameters** — collapsed nodes, search query, and
+filters — and the client requests `[offset, limit]` windows of it. One command
+shape serves the plan tree, the inventory tree, and history items, and scroll
+position maps directly to an index.
+
+**One canonical tree per session, one active parameter set.** Filtering,
+searching, and collapsing never produce additional trees. A session has exactly
+one canonical tree and one active set of view parameters; every paging request
+applies those parameters to that tree and slices the resulting visible
+sequence. Changing a filter **replaces the current visible sequence**; it does
+not fork a second structure to cache, invalidate, or drift against the first.
+This is what keeps the memo in DR-BR-11 and the projection in DR-BR-16.1
+single objects rather than a family keyed by parameter combination.
+
+**Filters apply symmetrically to both trees.** Sync and Integrity use the same
+flatten signature, so the Integrity side gets identical behavior rather than a
+parallel implementation with its own semantics.
+
+**A folder renders only if it has a visible descendant, or is itself a
+match.** Without this, every filter leaves a skeleton of empty directories —
+"deletions only" would render the whole directory structure with almost nothing
+in it. The second clause carries real weight on the plan side, where a folder
+can be an operation in its own right (`MKDIR`, cleanup `DELETE`), and it also
+disposes of the move-ghost case correctly: a ghost hidden by a filter takes its
+synthesized ancestor chain with it, since those nodes exist only to host it
+(DR-BR-13). Where a ghost was *not* emitted because the old location still held
+real operations, that folder is visible on its own merits and is unaffected.
+
+**Rollups on a folder row describe the folder, not the filtered view.** A
+number whose meaning changes with filter state is a bug factory, and selection
+already commits to unfiltered semantics (DR-BR-17): a folder checkbox covers
+every operation beneath it regardless of what is rendered. Rollups follow that
+same rule, and the filter chips carry the counts that describe the current
+view. A move annotation is provenance rather than a count and reads the same
+under any filter.
 
 Expansion and search ride on the request rather than living server-side, so
 **the view parameters** leak no lifecycle. That is a narrower claim than an
@@ -581,10 +627,8 @@ or it leaks memory and serves torn reads.
 - **Identity.** A projection is keyed by `(task id, location id)`. Opening a
   location in a task creates one; the same location open in two tasks is two
   projections, because their invalidation timing is independent.
-- **Cleanup.** Released when the view changes location, when the task closes
-  (alongside `drop_plan`), and at service shutdown. Background views release
-  theirs and rebuild on return, so only active views hold memory — trading a
-  memory ceiling for latency on tab switching, which is the better failure.
+- **Cleanup.** Released definitively when the view changes location, when the
+  task closes (alongside `drop_plan`), and at service shutdown.
 - **Swap, never mutate.** Rebuilds construct a new immutable projection and
   swap the reference under the task lock. A window request already holding a
   reference finishes against consistent structure instead of watching rows
@@ -596,17 +640,51 @@ or it leaks memory and serves torn reads.
   generation token rejected in DR-BR-20** — it identifies an in-process cached
   object, requires no schema change, and cannot silently miss a change because
   the process performing the invalidation is the one bumping it.
-- **Total bound.** A cap on the number of cached projections, not only on each
-  one's size. Least-recently-used views release first. Without it, many open
-  tasks multiply an already large per-projection cost.
-- **Invalidation is causal, and copy-on-write where possible.** A completed
-  acknowledge or restore changes one known row. The service constructs a
-  replacement projection from the prior immutable structure, replaces the
-  affected row and rollups, increments the projection revision, and swaps the
-  reference under the task lock. It never mutates a projection a window
-  request may still hold. This avoids rerunning the slim query and rebuilding
-  the entire tree for a single-row action. Only an observed session terminal,
-  which may have changed many rows, forces a full rebuild.
+- **Background views retain, up to an LRU cap.** An earlier draft said
+  background views release and rebuild on return, *and* that an LRU cap bounds
+  the total. Those cannot both hold: if every background view releases, the
+  live count never exceeds the visible views and the cap is unreachable —
+  documented as a memory safeguard while protecting nothing. Background views
+  therefore retain, and the cap evicts beyond it, least-recently-used first.
+  Switching among the two or three views someone is actually alternating
+  between stays instant; a view untouched long enough rebuilds.
+
+  The cap is a **count**, not a size-aware budget — predictable, no eviction
+  heuristics. Size it generously (4–6): the WebView2 process tree dwarfs a few
+  slim projections, so being stingy here optimizes the wrong thing. Projection
+  size does scale with location size, so the scale gate records per-projection
+  memory and the number is revised against that rather than re-guessed.
+
+  Plan-tree memos (DR-BR-11) do **not** share this cap. They are keyed per
+  request id, hold structure over a frozen artifact, are typically far smaller,
+  and die with the task — a large location must not be able to evict one.
+- **Invalidation is causal, and patches in place by copy-on-write.** A
+  completed acknowledge or restore changes exactly one known row, and
+  acknowledgment participates in no rollup (DR-BR-20), so no ancestor is
+  affected. The service **shallow-copies** the node array — a copy of
+  references, sharing every unchanged node object and the position indexes
+  untouched, since nothing reorders — replaces that node, increments the
+  projection revision, and swaps the reference under the task lock.
+
+  Shallow is the operative word. Reconstructing every node object would be
+  hundreds of thousands of allocations for a one-field edit; it would skip the
+  query and the tree build while giving back most of the saving, and it would
+  present as an unexplained stall during exactly the triage workflow the
+  inventory view exists for. Rollups, where a future change does touch them,
+  are adjusted by delta along the ancestor chain — never recomputed over a
+  subtree, which is O(n) again regardless of copy depth.
+
+  A projection is never mutated while a window request may still hold it. Only
+  an observed session terminal, which may have changed many rows, forces a full
+  rebuild.
+- **Eviction is indistinguishable from invalidation, client-side.** A returning
+  view rebuilds and mints a new projection revision, so a stale client revision
+  is refused down the path invalidation already uses — no second mechanism.
+  Eviction also cannot race an in-flight window request: projections are
+  immutable and swapped by reference, so a request already holding one
+  completes correctly even after the cache entry is dropped, and the client's
+  *next* request takes the stale-revision refusal. The cap therefore needs no
+  defensive locking of its own.
 
 #### DR-BR-16.2 — History is paged at the database, not after it
 
@@ -619,26 +697,38 @@ bridge payload and nothing else: not the query, not memory, not decoding.
 **Resolution:**
 
 - A **summary query** first selects the requested `history_runs` rows and uses
-  their persisted operation counts. One grouped database aggregate over the
-  selected runs' typed `history_items` columns supplies the integrity facts
-  needed for truthful integrity and headline classification. It never selects
-  or decodes `detail_json`, constructs per-item Python objects, or loops over
+  their persisted operation counts, which are operation-only —
+  `Counter(item.outcome … if isinstance(item, ItemOutcome))` where it is
+  written.
+  One grouped aggregate over `history_items` then supplies the integrity facts
+  that headline and integrity classification still need. It never selects or
+  decodes `detail_json`, constructs per-item Python objects, or loops over
   `get()`.
+
+  Because the operation half is already persisted, that aggregate is restricted
+  to `item_type = 'IntegrityOutcome'`, grouped by run, phase, and result —
+  precisely what `_integrity_axis` and the verify-phase-baseline check
+  consume. The existing `UNIQUE(run_id, item_type, item_id)` constraint gives an
+  index led by `(run_id, item_type)`, so this is a **seek, not a scan**, and for
+  a pure sync run with no integrity items it is an empty range.
 - A **paged detail query** for one run's items, ordered by the immutable
   `item_order` column the schema already stores — so windows are stable and
   offsets mean something.
 - **Phases load whole.** Phase count is bounded by the phases a session can
   enter, so paging them would add machinery for no benefit.
-- The list's Python work and payload are bounded by the run limit, but its
-  aggregate database work remains proportional to the total items in those
-  runs. History timing therefore joins the scale gate, measured on runs with
-  large item counts rather than only a large run count.
+- The list's Python work and payload are bounded by the run limit, and its
+  database work is proportional to the **integrity** items in those runs — not
+  to their total items. History timing still joins the scale gate, measured on
+  runs with large item counts rather than only a large run count.
 
-Persisting terminal integrity summary facts in `history_runs` is the named
-alternative if that gate fails. It would make list work proportional only to
-the run limit, but it changes the frozen history schema and recording contract.
-M1 queries the normalized evidence first rather than paying that persistence
-cost without measurements.
+Persisting terminal integrity summary facts on `history_runs` is the named
+alternative if that gate fails, but it should stay the fallback. It would make
+list work proportional only to the run limit, and it costs three things: a
+change to a history schema frozen under a contract marker, a matching change to
+the recording contract, and a second source of truth that can disagree with the
+items it summarizes — structurally the same defect as the mapping-filter
+projection this project already removed. Given the indexed seek above, the gate
+is unlikely to demand it.
 
 ### DR-BR-17 — Selection is server-side state; the DOM is disposable
 
@@ -734,6 +824,34 @@ cross-process limit is documented alongside the task rail's existing one.
 **Never auto-scan.** A refresh is a real filesystem session, and periodic
 rescanning would be the scheduled maintenance DR-M1-20 defers. Staleness is
 reported through `list_stale_inventory`, not silently repaired.
+
+**Acknowledgment hides, and is not counted.** The purpose of acknowledging a
+missing row is to make "missing" go away, so an acknowledged row leaves the
+default view rather than sitting in it wearing a badge. Acknowledgment
+participates in **no folder rollup** — which is what reduces the projection
+patch in DR-BR-16.1 to a single node with no ancestor walk.
+
+Four consequences follow:
+
+- **Hidden by default is still a filter.** "Hide acknowledged" is simply the
+  inventory tree's default view parameter, applied server-side through
+  DR-BR-15 like any other. It is the one filter that starts on.
+- **Counts stay honest.** Because the default view is a filtered view, the
+  acknowledged chip carries its own count. The hidden population is always
+  visible even when its rows are not, and the missing chip reports only what
+  remains missing and unacknowledged.
+- **Acknowledging reflows the list.** The row leaves the visible sequence and
+  everything below shifts, so acknowledge refetches its window rather than
+  repainting a row in place — a different path from every other row update.
+- **Restore is reached through the filter.** The workflow is filter to
+  acknowledged, then restore there. This contradicts `ui_mockup/mockup.html`,
+  whose context menu enables "Restore acknowledged" on an acknowledged row in
+  the default listing; under this rule such a row is never in the default
+  listing, and the mockup's menu logic needs revising with the rest of it.
+
+The resulting loop is the intended one: 300 missing, acknowledge ten, they
+vanish, the missing chip falls to 290 and the acknowledged chip rises to ten —
+missing goes away without pretending the file came back.
 
 ---
 
@@ -895,6 +1013,12 @@ exactly where risk concentrates. Coverage includes a hostile-named directory
 move, since grouping does segment arithmetic on canonical keys while
 rendering escaped display paths and the two must stay consistent.
 
+Because node identity now arrives in Stage 5.5 (DR-BR-11), that stage carries
+its own hostile-name case: **inventory** node ids minted from hostile paths,
+round-tripped through `deselect`-style resolution and foreign-location
+refusal. The directory-move case above belongs to slice 4 and does not cover
+it.
+
 ---
 
 ## 9. Deferred, Rejected, and Open
@@ -912,7 +1036,11 @@ freezing selection straight to `committed`, which strands a task when
 dispatcher admission fails (DR-BR-03); a typed confirmation phrase in the
 desktop (DR-BR-03); and CLI acknowledge/restore/staleness commands as the
 Stage 5.5 verification route, which needed a larger interface design than the
-lift they were meant to prove (§10).
+lift they were meant to prove (§10); client-side view filtering, which filters
+a window rather than windowing a filter (DR-BR-08); releasing every background
+inventory projection, which made the LRU cap unreachable (DR-BR-16.1);
+deep-copying a projection to patch one row (DR-BR-16.1); and a `cli → web`
+import for no-subcommand launch, replaced by a launcher module (§10).
 
 **Deferred:** filter-exclusion visibility in plan review (DR-BR-07);
 `get_plan_review` rebuilding every view object per call, which the memoized
@@ -940,12 +1068,34 @@ WebView2 runtime with an actionable error rather than falling back to MSHTML.
 Moving the host to an optional extra remains possible later, but is not an M1
 distribution mode.
 
+**No-subcommand launch needs a launcher module.** The console script is
+`namisync.interfaces.cli:main`, and DR-M1-01 forbids the edge this would
+create: "`cli` and `web` do not import each other; both import `service`;
+`service` imports neither," encoded as an import-linter layers contract with
+`cli` and `web` as independent siblings. Dispatching to the desktop from
+`cli.main` is exactly that forbidden import, and it would surface as a linter
+failure during slice 1 rather than as a design choice.
+
+`nami-sync` therefore points at a small launcher that is **neither adapter**:
+it inspects argv and dispatches to the CLI or the web host, with the contract
+extended to permit `launcher → {cli, web}` while `cli ↮ web` stands. That
+also makes the headless claim true by construction: the launcher decides
+before either side is imported, so an explicit CLI subcommand never pays
+pywebview's import cost. Lazy imports inside `cli.main` would achieve the
+same runtime effect while still violating the contract.
+
 ### Stage 5.5
 
 DR-BR-01 through DR-BR-07 plus the minimum node-identity substrate required by
-DR-BR-06 move here: DR-BR-09's shared workflow tree builder, DR-BR-10's path
-helper promotion, DR-BR-11's location-scoped deterministic ids, and the slim
-inventory structure lookup needed to resolve them. This is **verified through
+DR-BR-06 move here: **the hierarchy core** of DR-BR-09's shared tree builder —
+ancestor synthesis, deterministic ids, ordering, subtree membership, rollups —
+DR-BR-10's path helper promotion, DR-BR-11's location-scoped deterministic ids,
+and the slim inventory structure lookup needed to resolve them.
+
+The builder's plan-presentation layers stay in Stage 6 slice 4: move grouping,
+ghost annotation, and nested-move suppression (DR-BR-13) are plan tree
+concerns, and Stage 5.5 needs none of them to resolve an inventory node id.
+This is **verified through
 facade-level tests rather than new CLI surface**: user selection, the revision
 protocol and three-state commitment, empty-selection refusal, destructive-risk
 computation, replan discard, deterministic node rebuilding, foreign-location
