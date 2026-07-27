@@ -122,23 +122,38 @@ queued preview, committing a selection other than the one on screen.
   anything happened. Revision answers "did state change"; digest binds the
   actual selected set and is what `commit_plan` validates.
 
-**Commitment is one atomic step that also freezes.** `start_execution`
-captures the current revision and, **under the selection lock**, validates it,
-constructs and freezes the execution set, transitions the selection from
-`reviewing` to `committed`, and only then releases. Doing this in one step
-closes both races at once: a queued preview cannot land between intent and
-commitment, and a mutation queued behind the commit cannot apply afterward and
-leave the UI rendering a selection the immutable execution set does not
-contain.
+**Commitment has three states, because admission can fail.** Freezing straight
+to `committed` strands the selection: `start_execution` calls `commit_plan`
+and *then* `Dispatcher.submit`, so a submit failure leaves no session while the
+selection stays frozen and Execute stays dead. The task becomes unusable with
+nothing to retry.
 
-Mutations against a committed selection are refused with a **distinct**
-response, not a revision conflict. A conflict tells the client to re-read and
-retry; "committed" means retrying is wrong. The client settles silently into
-the frozen selection with its controls disabled — a late click made before the
-freeze changed nothing and warrants no error.
+The transition is `reviewing → committing → committed`:
 
-A selection returns to `reviewing` only through a new plan, which under
-DR-BR-04 discards it entirely.
+1. Under the selection lock, validate the expected revision and snapshot the
+   effective selection.
+2. Mark `committing`, release the lock, and submit.
+3. On success, mark `committed`.
+4. **On failure, return to `reviewing`** and leave Execute available. Nothing
+   ran, so nothing is bound.
+
+A concurrent Execute observing `committing` must not create a second session —
+it is a duplicate of work already in flight, not a new request. A double-click
+therefore produces exactly one session.
+
+Mutations against a `committing` or `committed` selection are refused with a
+**distinct** response, not a revision conflict. A conflict tells the client to
+re-read and retry; committed means retrying is wrong. The client settles
+silently into the frozen selection with its controls disabled — a late click
+made before the freeze changed nothing and warrants no error.
+
+A `committed` selection returns to `reviewing` only through a new plan, which
+under DR-BR-04 discards it entirely.
+
+**The client supplies a revision, never a digest.** JavaScript needs the
+revision for stale-view detection and nothing more. The service derives the
+selected set and its digest authoritatively when constructing the commitment,
+so the binding cannot be shaped by anything the client sends.
 
 **No typed confirmation phrase in the GUI.** The CLI's typed `execute` is a
 terminal convention and stays there. The safety invariant is the mandatory
@@ -154,15 +169,50 @@ chips; restating it on the button would be a third redundant readout, not a
 safeguard.
 
 **Confirmation is reserved for the genuinely irreversible.** In M1 the facade
-cannot reach one: `_require_deletion_policy` admits only `trash` and
+almost cannot reach one: `_require_deletion_policy` admits only `trash` and
 `additive`, so `mirror` is unreachable, removals go to `.SYNCTRASH` with no
-retention sweep to purge them, and execution can be paused or canceled. The
-one exception is `trash_on_update=False`, where an `UPDATE` overwrites prior
-target content with no recoverable copy. A modal appears **only** for a plan
-carrying that combination — naming how many files are overwritten
-irrecoverably — and later for a destructive purge or `mirror` should either
-ship. Friction scales with irreversibility rather than being a flat toll, so
-the dialog carries weight on the rare occasion it appears.
+retention sweep to purge them, and execution can be paused or canceled.
+
+The single exception is `UPDATE` while `trash_on_update` is disabled, where
+the prior target content is overwritten with no recoverable copy
+([executor.py:2095](../namisync/modules/executor.py) guards the trash step on
+that flag). **`MOVE_UPDATE` does not count**: `_move_update` publishes to the
+new path and trashes the old one unconditionally, with no `trash_on_update`
+guard, so its prior content is always recoverable.
+
+**Risk is computed from the effective selection, server-side.** A modal for a
+"plan carrying" such an update would be wrong — if the user deselected every
+irreversible update, nothing irreversible remains and no confirmation is
+warranted. `preview_selection` therefore returns authoritative primitive
+fields alongside the outcome changes:
+
+- `requires_destructive_confirmation`
+- `irreversible_update_count`
+
+The frontend renders those facts. It must never inspect operation kinds and
+policy flags to reach its own conclusion — that would be authority in the
+browser, and it would drift the moment a new irreversible case is added.
+
+**The modal reintroduces a revision interval, so it must validate one.** For
+an ordinary selection Execute calls `start_execution(request_id,
+expected_revision)` directly and no interval exists. When confirmation is
+required:
+
+1. Execute opens the modal for revision `R`.
+2. Confirm calls `start_execution` with `R` plus the destructive
+   acknowledgement.
+3. The service recomputes the effective selection and its risk under the
+   selection lock.
+4. If the selection moved while the modal was open, execution is refused as
+   stale and the modal closes back to review.
+
+The debounce and single-outstanding-mutation rules make that race unlikely
+rather than impossible, and an unlikely hole that silently executes an
+unconfirmed irreversible write is still worth closing.
+
+Later, a destructive purge or `mirror` joins the same mechanism rather than
+adding a second one. Friction scales with irreversibility rather than being a
+flat toll, so the dialog carries weight on the rare occasion it appears.
 
 ### DR-BR-04 — Deselection does not survive a replan
 
@@ -451,11 +501,14 @@ inventory tree, and history items, and scroll position maps directly to an
 index.
 
 Expansion and search ride on the request rather than living server-side, so
-there is no per-view lifecycle to leak. The default is expanded, so collapsing
-is a deliberate act on a handful of folders, and the existing 64 KB inbound
-cap is the backstop. **Responses need a server-enforced `limit` ceiling** —
-the current cap is inbound only, and a truncation must be an explicit refusal
-rather than a short list that reads as a complete tree.
+**the view parameters** leak no lifecycle. That is a narrower claim than an
+earlier draft made: DR-BR-16's cached inventory projection is genuine
+server-side per-view state, and its lifecycle is specified there rather than
+denied here. The default is expanded, so collapsing is a deliberate act on a
+handful of folders, and the existing 64 KB inbound cap is the backstop.
+**Responses need a server-enforced `limit` ceiling** — the current cap is
+inbound only, and a truncation must be an explicit refusal rather than a short
+list that reads as a complete tree.
 
 Fixed row height is a design constraint, not an aesthetic preference:
 variable heights require measurement passes that make window math fragile.
@@ -495,20 +548,21 @@ slim query.**
 - **Inventory tree:** the repository gains a **slim structure query** —
   explicit columns, not `SELECT *`, and no full `InventorySnapshot`
   construction — returning every row in the location. The tree builder holds
-  that projection per open view and invalidates it on exactly the causal
-  events DR-BR-20 already names: view open, observed session terminal for that
-  location, and a completed acknowledge or restore. A **detail query** then
-  fetches full snapshots for the visible window's row ids only, so the
-  expensive per-row work is bounded by the viewport while the structure work
-  is bounded by the view's lifetime.
-- **Named scale gate.** Synthetic plans and inventories at defined sizes, with
-  recorded window-response times, recorded projection build and memory cost,
-  and recorded `preview_selection` times at realistic dependency depth. This is
-  not the executor's measured-throughput standard; it is a stated ceiling with
-  numbers behind it. If a size cannot be served responsively, **the supported
-  M1 ceiling is documented rather than left as an unknown cliff.** The
-  in-memory projection makes location size a memory question as well as a time
-  question, and the gate must record both.
+  that projection per open view. A **detail query** then fetches full
+  snapshots for the visible window's row ids only, so the expensive per-row
+  work is bounded by the viewport while the structure work is bounded by the
+  view's lifetime. Its lifecycle is DR-BR-16.1.
+- **History:** see DR-BR-16.2. Its data path currently loads everything, and
+  slicing afterward would bound only the bridge payload.
+- **Named scale gate.** Synthetic plans, inventories, and history at defined
+  sizes, with recorded window-response times, recorded projection build and
+  memory cost, and recorded `preview_selection` times at realistic dependency
+  depth. History is measured on a run with a large item count, not only a
+  large run count. This is not the executor's measured-throughput standard; it
+  is a stated ceiling with numbers behind it. If a size cannot be served
+  responsively, **the supported M1 ceiling is documented rather than left as
+  an unknown cliff.** The in-memory projection makes location size a memory
+  question as well as a time question, and the gate must record both.
 
 Flattening under a given collapsed set and search remains the per-request
 cost for both trees. If the gate shows it matters, the named fallback is
@@ -518,6 +572,73 @@ search on every window. Not built before the numbers justify it.
 
 The `derive_execution_selection` fixpoint remains O(operations × dependency
 depth) per preview and is measured by the same gate.
+
+#### DR-BR-16.1 — The inventory projection's lifecycle
+
+A cached projection is server-side per-view state and needs its rules stated,
+or it leaks memory and serves torn reads.
+
+- **Identity.** A projection is keyed by `(task id, location id)`. Opening a
+  location in a task creates one; the same location open in two tasks is two
+  projections, because their invalidation timing is independent.
+- **Cleanup.** Released when the view changes location, when the task closes
+  (alongside `drop_plan`), and at service shutdown. Background views release
+  theirs and rebuild on return, so only active views hold memory — trading a
+  memory ceiling for latency on tab switching, which is the better failure.
+- **Swap, never mutate.** Rebuilds construct a new immutable projection and
+  swap the reference under the task lock. A window request already holding a
+  reference finishes against consistent structure instead of watching rows
+  move beneath it.
+- **Projection revision.** Each projection carries a monotonic process-local
+  revision returned with every window response. A page request carrying a
+  stale revision is refused and the client restarts, so old structure can
+  never be combined with newly fetched details. **This is not the database
+  generation token rejected in DR-BR-20** — it identifies an in-process cached
+  object, requires no schema change, and cannot silently miss a change because
+  the process performing the invalidation is the one bumping it.
+- **Total bound.** A cap on the number of cached projections, not only on each
+  one's size. Least-recently-used views release first. Without it, many open
+  tasks multiply an already large per-projection cost.
+- **Invalidation is causal, and copy-on-write where possible.** A completed
+  acknowledge or restore changes one known row. The service constructs a
+  replacement projection from the prior immutable structure, replaces the
+  affected row and rollups, increments the projection revision, and swaps the
+  reference under the task lock. It never mutates a projection a window
+  request may still hold. This avoids rerunning the slim query and rebuilding
+  the entire tree for a single-row action. Only an observed session terminal,
+  which may have changed many rows, forces a full rebuild.
+
+#### DR-BR-16.2 — History is paged at the database, not after it
+
+The common window shape promises paged history, but the data path defeats it.
+`HistoryRepository.get()` loads and decodes **every** retained item for a run,
+and `list_recent()` calls that full method once per listed run — so rendering
+a 50-run list decodes every item of all 50. Slicing afterward bounds the
+bridge payload and nothing else: not the query, not memory, not decoding.
+
+**Resolution:**
+
+- A **summary query** first selects the requested `history_runs` rows and uses
+  their persisted operation counts. One grouped database aggregate over the
+  selected runs' typed `history_items` columns supplies the integrity facts
+  needed for truthful integrity and headline classification. It never selects
+  or decodes `detail_json`, constructs per-item Python objects, or loops over
+  `get()`.
+- A **paged detail query** for one run's items, ordered by the immutable
+  `item_order` column the schema already stores — so windows are stable and
+  offsets mean something.
+- **Phases load whole.** Phase count is bounded by the phases a session can
+  enter, so paging them would add machinery for no benefit.
+- The list's Python work and payload are bounded by the run limit, but its
+  aggregate database work remains proportional to the total items in those
+  runs. History timing therefore joins the scale gate, measured on runs with
+  large item counts rather than only a large run count.
+
+Persisting terminal integrity summary facts in `history_runs` is the named
+alternative if that gate fails. It would make list work proportional only to
+the run limit, but it changes the frozen history schema and recording contract.
+M1 queries the normalized evidence first rather than paying that persistence
+cost without measurements.
 
 ### DR-BR-17 — Selection is server-side state; the DOM is disposable
 
@@ -786,49 +907,81 @@ search implementation (DR-BR-18); merging safety exclusions with user
 deselection (DR-BR-01); discarding late selection responses by request id in
 favor of revision conflict (DR-BR-03); path-only node ids in favor of
 scope-qualified ids (DR-BR-11); row-level SQL `LIMIT`/`OFFSET` for the
-inventory tree, which cannot express visible-tree semantics (DR-BR-16).
+inventory tree, which cannot express visible-tree semantics (DR-BR-16);
+freezing selection straight to `committed`, which strands a task when
+dispatcher admission fails (DR-BR-03); a typed confirmation phrase in the
+desktop (DR-BR-03); and CLI acknowledge/restore/staleness commands as the
+Stage 5.5 verification route, which needed a larger interface design than the
+lift they were meant to prove (§10).
 
 **Deferred:** filter-exclusion visibility in plan review (DR-BR-07);
 `get_plan_review` rebuilding every view object per call, which the memoized
 tree and direct `preview_selection` path route around rather than fix.
 
-**Open, to settle during implementation:**
-
-1. Whether a ghost row survives a view filter that excludes moves.
-2. Whether pywebview is a hard dependency or an extra, and what a
-   no-subcommand `nami-sync` does without it.
+**Open, to settle during implementation:** whether a ghost row survives a view
+filter that excludes moves.
 
 ---
 
 ## 10. Delivery
 
+### Packaging
+
+`pywebview` is a normal runtime dependency, not an optional extra. NamiSync is
+a headed Windows product, so a standard installation includes the desktop host
+and no-subcommand `nami-sync` launches it. Explicit CLI subcommands remain
+headless at runtime: they do not import or initialize `pywebview`, and GUI
+imports stay quarantined under `interfaces/web`.
+
+This packaging decision does not accept a renderer fallback. Slice 0 pins the
+supported pywebview version range after proving Python 3.13 compatibility and
+the required bridge behavior. Slice 1 refuses a missing or incompatible
+WebView2 runtime with an actionable error rather than falling back to MSHTML.
+Moving the host to an optional extra remains possible later, but is not an M1
+distribution mode.
+
 ### Stage 5.5
 
-DR-BR-01 through DR-BR-07 plus the DR-BR-10 promotion. Its verification
-splits deliberately, because not every piece has a natural CLI shape:
+DR-BR-01 through DR-BR-07 plus the minimum node-identity substrate required by
+DR-BR-06 move here: DR-BR-09's shared workflow tree builder, DR-BR-10's path
+helper promotion, DR-BR-11's location-scoped deterministic ids, and the slim
+inventory structure lookup needed to resolve them. This is **verified through
+facade-level tests rather than new CLI surface**: user selection, the revision
+protocol and three-state commitment, empty-selection refusal, destructive-risk
+computation, replan discard, deterministic node rebuilding, foreign-location
+id refusal, and node/row id location commands, all proven against
+`NamiSyncService` directly.
 
-- **CLI deliverables:** acknowledge and restore commands over the lifted
-  runtime methods, and a stale-inventory listing. These are genuinely useful
-  headless and exercise DR-BR-05 end to end.
-- **Facade-level tests:** user selection, the revision protocol, empty-selection
-  refusal, replan discard, and id-based location commands. A CLI selection
-  syntax would be speculative interface design for a surface the CLI has no
-  demand for; these are proven against `NamiSyncService` directly.
+Stage 5.5 establishes identity and server-side resolution, not desktop
+presentation or per-view caching. Stage 6 consumes the same tree/index
+structure for flattening, paging, selection controls, and DR-BR-16's cached
+inventory projection rather than introducing a second node-id implementation.
 
-The earlier claim that all of Stage 5.5 is "provable through the CLI" was
-wrong — the CLI commits the automatic selection directly and has no selection
-surface at all.
+Two earlier claims were wrong and are corrected here. All of Stage 5.5 is not
+"provable through the CLI" — the CLI commits the automatic selection directly
+and has no selection surface at all. And the proposed CLI acknowledge, restore,
+and stale-inventory commands were named without a command contract: both
+mutations need a location and a row id, but the CLI's inventory listing prints
+only presence and path, so the required identifier is undiscoverable from its
+own output. Specifying them properly means command names, arguments, an
+identifier the listing actually exposes, idempotency ids, and cutoff semantics
+for staleness — a larger change than the lift it was meant to verify.
+
+Dropping the CLI additions is therefore the smaller Stage 5.5. A CLI surface
+for acknowledge, restore, and staleness can be designed on its own merits
+later, driven by headless demand rather than by a need to test a facade
+passthrough.
 
 ### Stage 6
 
 | # | Slice | Gate |
 | --- | --- | --- |
-| 0 | pywebview reality spike | `CoreWebView2` reachability, pythonnet handler syntax, asset-server origin at runtime, off-thread `current_url` |
-| 1 | Promote the spike into `bridge.py` / `host.py`; packaged assets; entry point; forced Edge Chromium; single instance | Window opens on real WebView2, guards attached, off-origin dispatch rejected, second launch activates the first |
+| 0 | pywebview reality spike | Supported version range on Python 3.13; `CoreWebView2` reachability, pythonnet handler syntax, asset-server origin at runtime, off-thread `current_url` |
+| 1 | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; entry point; forced Edge Chromium; single instance | Window opens on real WebView2, guards attached, missing/incompatible WebView2 is refused, off-origin dispatch rejected, second launch activates the first |
 | 2 | Command allowlist, JSON encoding, opaque-id and folder-picker slots | Every view type round-trips; DR-BR-25's DOM test and broadened scan both pass |
 | 3 | Event drain with coalescing, bounded wait, gap visibility, server-side drain guard | XV-18 plus concurrent-drain ordering |
-| 4 | Node tree, paging, selection, autoscroll; vertical sync slice end to end | A desktop sync produces the same facade calls and classification as the CLI; DR-BR-16's scale gate recorded |
-| 5 | Inventory tree and integrity views, five resolution states, context actions, slim structure query plus per-window detail query | XV-14 states render distinctly; id-based scoped verify works end to end |
+| 4 | Plan-tree presentation, paging, selection, autoscroll; vertical sync slice end to end | A desktop sync consumes the Stage 5.5 node ids and produces the same facade calls and classification as the CLI; plan portions of DR-BR-16's scale gate recorded |
+| 5 | Cached inventory projection and integrity views, five resolution states, context actions, per-window detail query | XV-14 states render distinctly; id-based scoped verify works end to end; inventory portions of DR-BR-16's scale gate recorded |
 | 6 | History, settings, `ui-state.json`, task close sequence, clean shutdown | Four truth axes visible without string parsing; closing a busy task cancels and waits |
 | 7 | Documentation: rewrite `DESKTOP_UI.md` acceptance to as-built, README, re-status `ui_mockup/` | — |
 
