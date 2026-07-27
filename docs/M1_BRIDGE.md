@@ -33,13 +33,13 @@ incrementally.
 
 ## Map of this document
 
-Twenty-six numbered decisions have accumulated across ten sections. The two
-lists below are pure navigation — nothing in §1–§10 below is reordered or
-reworded. The first is the document's own top-level sections; the second
-re-sorts every `DR-BR-##` by the module or layer it actually binds, which
-frequently cuts across those sections (DR-BR-17 is filed under §4 but is a
-selection decision; DR-BR-26 is filed under §8 but is a node-tree decision).
-Each entry is one sentence: what the decision does, and what it connects to.
+Twenty-six primary decisions plus two numbered DR-BR-16 subdecisions have
+accumulated across ten sections. The two lists below are navigation only. The
+first follows the document's own top-level sections; the second re-sorts every
+`DR-BR-##` by the module or layer it actually binds, which frequently cuts
+across those sections (DR-BR-17 is filed under §4 but is a selection decision;
+DR-BR-26 is filed under §8 but is a node-tree decision). Each entry is one
+sentence: what the decision does, and what it connects to.
 
 ### Contents
 
@@ -64,9 +64,10 @@ commitment.** Who owns the checked/unchecked state of a plan, and what
   — user deselection is a second exclusion set alongside the planner's safety
   exclusions, never merged into one dictionary, so a reselect can't silently
   readmit a blocked operation. Its canonical provenance crosses the execution
-  payload so `SKIPPED` user choices cannot be reconstructed as `DEFERRED` or
-  mistaken for genuine `NOOP`; this advances the strict workflow payload to v4
-  and feeds DR-BR-02 and DR-BR-03 directly.
+  payload under the named `user-deselected` reason so `SKIPPED` user choices
+  cannot be reconstructed as `DEFERRED` or mistaken for genuine `NOOP`; this
+  advances the strict workflow payload to v4 and feeds DR-BR-02 and DR-BR-03
+  directly.
 - **[DR-BR-02](#dr-br-02--reselection-closes-upward-over-the-user-set-only)**
   — reselecting an operation removes its dependencies from the *user*-deselected
   set only, never from DR-BR-01's safety exclusions, so a checkbox can't
@@ -97,8 +98,9 @@ commitment.** Who owns the checked/unchecked state of a plan, and what
   drive scoped refresh/baseline/verify/rebaseline without ever sending a path;
   row ids mean one exact row while folder-node ids mean the complete recursive
   subtree, DR-BR-11's location scope validates ownership, and completed subtree
-  refreshes infer missing rows only inside that subtree through inventory
-  workflow payload v2.
+  refreshes use a genuine third reconciliation branch with indexed literal
+  ranges; kind-aware decoding advances only the inventory workflow payload to
+  v2.
 
 **`modules/scanner.py` — scanner contract.** Already-landed, kept for context.
 
@@ -249,6 +251,12 @@ rather than retained as fake user provenance.
 Operations force-excluded *because* a dependency was deselected keep
 `DEFERRED` and drive the `partial` headline — the user chose the parent, not
 the children, and collapsing that distinction would misreport the run.
+`ExclusionReason` gains the stable member
+`USER_DESELECTED = "user-deselected"` for the direct choice; reusing
+`BLOCKED_DEPENDENCY` would erase exactly the provenance this decision exists
+to preserve. Dependency fallout retains `BLOCKED_DEPENDENCY`. Exclusion reason
+values remain disjoint from executor reason values so persisted history can
+identify excluded rows without parsing detail text.
 
 **That distinction must survive the second-session boundary.** The final
 selected-id set cannot reconstruct whether an omitted operation was a direct
@@ -399,9 +407,13 @@ The plan's scale is already legible from the status box and the filter counter
 chips; restating it on the button would be a third redundant readout, not a
 safeguard.
 
-**Confirmation is reserved for the genuinely irreversible.** In M1 the facade
-almost cannot reach one: `_require_deletion_policy` admits only `trash` and
-`additive`, so `mirror` is unreachable, removals go to `.SYNCTRASH` with no
+**Confirmation is reserved for the genuinely irreversible.** In M1 the public
+request path almost cannot reach one: the `workflows/views.py`
+`_require_deletion_policy` validator admits only `trash` and `additive`,
+`db/settings.py` refuses persisted semantic defaults that enable `mirror`, and
+even a directly constructed `SyncOptions` requires
+`internal_mirror_authorized` in `core/planning.py`. Consequently `mirror` is
+unreachable through the M1 facade surface, removals go to `.SYNCTRASH` with no
 retention sweep to purge them, and execution can be paused or canceled.
 
 The single exception is `UPDATE` while `trash_on_update` is disabled, where
@@ -482,7 +494,9 @@ drive a scoped refresh, baseline, verify, or rebaseline at all.
 node or row ids. The service validates that every id belongs to the named
 location. An id belonging to another location is a refusal, not a silent
 filter. Multiple ids are unioned and deduplicated before a workflow request is
-constructed.
+constructed. The id-based form refuses an empty id collection before scope
+construction; it must not reinterpret "nothing selected" as the path form's
+deliberate full-location request.
 
 **Row and folder ids deliberately have different scope.** A row id resolves to
 that one exact inventory subject. A folder-node id resolves to the folder and
@@ -503,18 +517,83 @@ descendants in one ordinary inventory session.
 
 The scope contract is explicit rather than inferred from a directory path:
 `ScanScopeKind` gains `SUBTREES` alongside `FULL` and exact `PATHS`. Overlapping
-subtree roots canonicalize to the minimal non-overlapping roots. A successful
-subtree scan is complete for those roots, not for the whole location. The
-inventory recorder marks a previously present row missing only when its key is
-at or below one of those completed roots and it was absent from the scan; rows
-outside the roots are untouched. Any incomplete subtree scan conservatively
-withholds missing inference, matching the existing selected-scan rule.
+subtree roots canonicalize by path-segment ancestry to the minimal
+non-overlapping roots, never by raw string prefix. Exact paths at or below one
+of those roots are redundant and are removed; exact paths outside them remain
+exact, including an exact directory-row id that must not become recursive.
+Selecting the location's empty relative root canonicalizes the entire mixed
+scope to `FULL`: it covers the whole location, and treating `""` as an ordinary
+delimiter range would miss every top-level entry. A successful subtree scan is
+complete for its remaining roots and exact paths, not for the whole location.
+
+`SUBTREES` is also the mixed scoped form. If an id-based refresh contains both
+row ids and folder-node ids, `ScanScope` carries `selected_paths` and
+`subtree_roots` together under `SUBTREES`; it does not discard either half,
+promote exact directory rows to recursive roots, create a fourth scope kind,
+or split one user action into multiple sessions. Its constructor invariants
+are exact: `FULL` carries neither field; `PATHS` carries nonempty
+`selected_paths` and no roots; `SUBTREES` carries at least one
+`subtree_root` and may also carry exact paths. Canonicalization chooses `FULL`
+when both scoped fields are empty. Only the existing explicit full-request form
+or selection of the location's root node may reach that state.
+
+This is a third reconciliation shape, not a new value that may fall through
+the existing two-way discriminator. `ScanResult.is_full_scan` remains true
+only for `FULL`; after checking `scan.complete`, `db/recorder.py` branches
+explicitly on all three scope kinds:
+
+- `FULL` uses the current all-location observed-key anti-join;
+- exact `PATHS` retains its exact-key missing inference; and
+- `SUBTREES` uses the same observed-key anti-join, bounded independently to
+  the union of any remaining exact paths plus each completed root and its
+  descendants.
+
+The subtree branch reconciles rows whose prior presence is either `present` or
+`unsupported`, matching full-scan reconciliation. It marks one missing only
+when the row was absent from the completed scan and its canonical key is
+either the root itself or in this wildcard-free descendant range:
+
+```sql
+rel_path_key >= :root || '\'
+AND rel_path_key < :root || ']'
+```
+
+The equality case `rel_path_key = :root` is tested separately. `]` (0x5D) is
+the immediate binary successor of the canonical separator `\` (0x5C), so this
+range selects exactly keys beginning with `root || '\'` under SQLite's default
+binary collation. `LIKE` is forbidden here: `%` and `_` are legal hostile-name
+characters and would turn a literal subtree root into a wildcard pattern.
+Rows outside the roots are untouched. Any incomplete subtree scan
+conservatively withholds all missing inference, matching the existing
+selected-scan rule.
+
+Completeness distinguishes absence from uncertainty. If a subtree root no
+longer exists, that root is a successful empty observation and its previously
+indexed root/descendant rows may become missing. Access denial, enumeration
+failure, an unhydrated directory placeholder, or a directory reparse point
+means the scanner could not observe the claimed recursive scope; it makes the
+whole multi-root `ScanResult` incomplete and therefore marks nothing missing
+under any requested root. Per-root completeness would require a richer result
+contract and is not introduced implicitly here.
+
+The existing
+`inventory_location_presence_idx(location_id, presence, rel_path_key)` serves
+the location/presence equalities plus each root range directly. A focused
+`EXPLAIN QUERY PLAN` assertion verifies indexed range search for a
+representative subtree rather than leaving the bounded-cost claim as an
+assumption.
 
 `InventoryRequest`/`InventoryWorkflowRequest` carry subtree roots separately
-from exact selected paths. The inventory workflow payload advances from v1 to
-v2 for that new field and rejects v1; the integrity payload remains v1 because
-folder integrity actions are expanded into its existing exact subjects before
-admission.
+from exact selected paths, including both fields for a mixed id selection. The
+inventory workflow payload advances from v1 to v2 for that new field and
+rejects v1; the integrity payload remains v1 because folder integrity actions
+are expanded into its existing exact subjects before admission. The two
+decoders currently share `_payload`, whose hardcoded v1 guard would make that
+divergence impossible. Its signature becomes
+`_payload(payload, expected_kind, expected_version)`;
+`decode_inventory_request` passes v2 and `decode_integrity_request` passes v1.
+Tests prove inventory v2 round-trips while inventory v1 is rejected, and that
+integrity v1 remains accepted.
 
 The path form remains for the CLI, which legitimately has paths and retains its
 current exact-path meaning. Recursive CLI scope is not inferred or added as a
@@ -593,10 +672,10 @@ project avoids.
 | --- | --- |
 | `core/pathing.py` | relative-key `parent` / `depth` / `is_descendant`, common-suffix stripping |
 | `core/execution.py` | immutable selected ids plus canonical user-deselection provenance in `ExecutionSet` |
-| `core/models.py` | distinct exact-path and recursive-subtree scan scopes |
+| `core/models.py` | FULL/PATHS/SUBTREES scan scopes; SUBTREES may retain exact paths outside its recursive roots |
 | `modules/planner.py` | unchanged behavior; loses its three private path helpers |
-| `modules/scanner.py` | unchanged exact selected-path scan plus explicit recursive subtree scan scope |
-| `db/recorder.py` | completed subtree refresh marks missing only within its selected roots |
+| `modules/scanner.py` | unchanged exact selected-path scan plus explicit recursive/mixed subtree scan scope |
+| `db/recorder.py` | explicit FULL/PATHS/SUBTREES reconciliation; completed subtree refresh uses indexed literal ranges and marks missing only within its exact-path/root union |
 | `workflows/selection.py` | safety exclusions, user deselection, downward cascade, upward closure |
 | `workflows/node_tree.py` | ancestor synthesis, node ids, subtree op sets, rollups; plan move grouping and inventory projection |
 | `workflows/views.py` | `PlanNodeView`, `InventoryNodeView`, preview projection |
@@ -752,6 +831,12 @@ than inventing a parallel one. Both emission sites already hold the value:
 the executor's reporter knows its current operation, and the verifier's knows
 its current subject row.
 
+The fields are optional **as a pair**: legacy producers omit both; an
+identified progress event supplies a nonempty `item_id` plus `item_type` equal
+to `operation` or `integrity`. `Progress.__post_init__` rejects a one-sided
+pair or an unknown type, so the bridge never guesses which node-id namespace
+an opaque id belongs to.
+
 **This is a versioned wire change and must be treated as one.** An earlier
 draft argued that because `HistoryObserver.on_event` refuses `Progress` and
 nothing persists it, no schema concern arose. That reasoning was wrong:
@@ -763,10 +848,13 @@ the serialized body regardless of where it travels.
 **Resolution:** land it as an **additive change within the current version**,
 which requires three things rather than none. The new fields carry defaults so
 existing producers remain valid without modification. `envelope_from_dict`
-tolerates a body lacking them and yields the defaults. And explicit
-compatibility tests assert both directions — a pre-change payload
+tolerates a body lacking them and yields the defaults: unlike the existing
+required Progress fields, the two new fields are decoded with
+`raw.get("item_id")` and `raw.get("item_type")`, not strict subscripts. And
+explicit compatibility tests assert both directions — a pre-change payload
 deserializes, and a post-change envelope serializes with the fields present —
-because an additive claim is only true if something proves it.
+because an additive claim is only true if something proves it. A third test
+rejects a one-sided identity pair.
 
 Absent those tests the change requires a version bump instead. What is not
 acceptable is changing the body while asserting the version is unaffected
@@ -987,12 +1075,26 @@ bridge payload and nothing else: not the query, not memory, not decoding.
   them apart.
 
   One grouped aggregate over the typed `history_items` columns therefore
-  supplies two narrow additions: operation `kind`/`reason` facts sufficient to
-  determine whether the non-user-deselected selected set was nonempty and
-  entirely `NOOP`, plus the integrity phase/result facts consumed by
-  `_integrity_axis` and the verify-phase-baseline check. It never selects or
-  decodes `detail_json`, constructs per-item Python objects, or loops over
-  `get()`.
+  supplies two narrow additions. First, grouped operation
+  `(kind, result, reason, count)` facts let the workflow classifier reconstruct
+  the effective selection by excluding rows carrying one of the stable
+  `ExclusionReason` values:
+  `blocked-correspondence`, `blocked-dependency`, `incomplete-scan`, or
+  DR-BR-01's named `user-deselected`. The resulting selected set must be
+  nonempty and every selected `kind` must be `noop`; the aggregate never
+  equates `result = 'skipped'` with selection. That predicate is consumed at
+  the existing headline precedence point, after failure and partial facts, so
+  a failed selected `NOOP` cannot acquire an `all-noop` headline merely because
+  its kind matches. Second, integrity phase/result facts supply
+  `_integrity_axis` and the verify-phase-baseline check. The query never
+  selects or decodes `detail_json`, constructs per-item Python objects, or
+  loops over `get()`.
+
+  The repository returns those grouped primitive facts; it does not import
+  `workflows.selection.ExclusionReason` or assign a headline. `db → workflows`
+  would violate the import law. Interpretation remains in `workflows`, which
+  already owns selection and presentation classification, so the stable reason
+  vocabulary has one semantic owner rather than being reimplemented in SQL.
 
   The existing `UNIQUE(run_id, item_type, item_id)` constraint gives an index
   led by `(run_id, item_type)`, so each item-type range is a seek rather than a
@@ -1437,11 +1539,20 @@ Contract tests additionally prove:
   rather than from `Outcome.SKIPPED` alone;
 - the CLI's omitted revision is accepted only for untouched default selection;
 - a nested folder refresh discovers a descendant absent from the prior
-  inventory, marks a disappeared descendant missing, and leaves an absent row
-  outside the subtree untouched; folder-scoped baseline/verify/rebaseline
-  freeze every indexed descendant even when a view filter hides some of them,
-  inventory workflow payload v2 round-trips the subtree roots and rejects v1,
-  and a foreign-location node id is refused.
+  inventory, marks disappeared `present` and `unsupported` descendants
+  missing, and leaves absent rows outside the subtree untouched; incomplete
+  subtree scans infer no missing rows, a genuinely absent root is complete and
+  marks its indexed subtree missing, `%`/`_`/`]` hostile roots remain literal,
+  overlapping roots canonicalize by segment ancestry, and selecting the
+  location root takes the full-scan branch; a mixed row/folder refresh retains
+  the exact row outside the subtree without recursively expanding an exact
+  directory row; folder-scoped
+  baseline/verify/rebaseline freeze every indexed descendant even when a view
+  filter hides some of them, inventory workflow payload v2 round-trips the
+  subtree roots and rejects v1 through the shared kind-aware validator while
+  integrity v1 remains accepted, the representative subtree reconciliation
+  query proves an indexed range search, and empty-id and foreign-location
+  requests are refused.
 
 Stage 5.5 establishes identity and server-side resolution, not desktop
 presentation or per-view caching. Stage 6 consumes the same tree/index
@@ -1471,7 +1582,7 @@ passthrough.
 | 1 | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; entry point; forced Edge Chromium; single instance | Window opens on real WebView2, guards attached, missing/incompatible WebView2 is refused, off-origin dispatch rejected, second launch activates the first |
 | 2 | Command allowlist, JSON encoding, opaque-id and folder-picker slots | Every view type round-trips; DR-BR-25's hostile corpus crosses the real bridge as escaped data, origin is rechecked, and the broadened static sink scan passes |
 | 3 | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | XV-18 plus concurrent-drain ordering; a reliable flood beyond bridge capacity reaches the existing visible `Gap`/resubscribe path, terminal truth is recovered, and shutdown wakes blocked drains and producers |
-| 4 | Plan-tree presentation, paging, selection, indexed autoscroll; vertical sync slice end to end | A desktop sync consumes the Stage 5.5 node ids and produces the same facade calls and classification as the CLI; an off-window progress item resolves to the correct visible index under collapse/filter/search; the production plan DOM passes DR-BR-25; plan portions of DR-BR-16's scale gate recorded |
+| 4 | Plan-tree presentation, paging, selection, indexed autoscroll; vertical sync slice end to end | A desktop sync consumes the Stage 5.5 node ids and produces the same facade calls and classification as the CLI; additive Progress compatibility and identity-pair validation pass; an off-window progress item resolves to the correct visible index under collapse/filter/search; the production plan DOM passes DR-BR-25; plan portions of DR-BR-16's scale gate recorded |
 | 5 | Cached inventory projection and integrity views, five resolution states, recursive folder context actions, per-window detail query | XV-14 states render distinctly; row-id exact scope and folder-id recursive scope work end to end; the inventory DOM extension passes DR-BR-25; inventory portions of DR-BR-16's scale gate recorded |
 | 6 | History, settings, `ui-state.json`, task close sequence, clean shutdown | Four truth axes and the corrected retained `all-noop` classification are visible without string parsing; closing a busy task cancels and waits; history portions of DR-BR-16's large-operation-count scale gate are recorded |
 | 7 | Documentation: rewrite `DESKTOP_UI.md` acceptance to as-built, README, re-status `ui_mockup/` | — |
