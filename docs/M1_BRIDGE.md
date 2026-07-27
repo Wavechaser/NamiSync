@@ -1,7 +1,9 @@
 # M1 Bridge and Presentation Contract
 
 Status: design and decision log for M1 Stage 5.5 (facade completion) and
-Stage 6 (web desktop shell). No code in this document is implemented. It
+Stage 6 (web desktop shell). Every decision here is unimplemented except
+DR-BR-07, which records already-landed scanner work and is retained because
+the reasoning behind that removal governs the presentation gap it leaves. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
 computes where, how large plans and inventories reach the client, how
 selection binds, and what the bridge may carry.
@@ -15,17 +17,24 @@ numbered `DR-BR-##` to avoid colliding with either existing series.
 `DESKTOP_UI.md` remains the user-facing delivery contract; this file is the
 mechanism behind it.
 
+**Propagation is deliberately deferred.** This document is still under active
+revision, and scattering half-settled decisions across the active documents
+would mean re-editing them on every pass. Nothing here propagates until it is
+ready. `DESKTOP_UI.md` in particular **requires revision once it does** — its
+interaction contract and acceptance criteria both still specify a typed
+confirmation phrase, which DR-BR-03 removes for the desktop. Other active
+documents are reviewed for drift at the same time, in one pass rather than
+incrementally.
+
 ---
 
 ## 1. Stage 5.5 — Facade Completion
 
-Stage 6 was blocked on four gaps in the service surface. They are grouped
-here as one stage rather than folded into Stage 6 because every one of them
-is provable from the CLI before a second interface exists — the same
-"prove it on the existing interface first" posture DR-M1-02 used for the
-facade extraction itself.
+Stage 6 was blocked on gaps in the service surface. They are grouped as one
+stage rather than folded into Stage 6 because each is verifiable before a
+second interface exists.
 
-### DR-BR-01 — User selection enters the facade
+### DR-BR-01 — User selection enters the facade as a separate set
 
 `commit_plan` derives its selection from safety alone
 (`derive_execution_selection(artifact.plan)`), and no user-chosen subset
@@ -34,46 +43,143 @@ selection," and the commitment model already anticipated one: DR-M1-05's
 third binding is the selection digest, distinct from the plan and policy
 fingerprints.
 
-**Resolution: add user deselection to the existing derivation.**
-`derive_execution_selection` already runs a transitive exclusion fixpoint
-seeded from blocked, quarantined, and incomplete-scan operations. User
-deselection seeds the same dictionary and reuses the same cascade. One
-function serves both preview and commitment authority, so a client-side
-prediction cannot diverge from what actually binds.
+**Resolution: user deselection is a second, independent input to the same
+derivation — not a seed into the same dictionary.**
+
+`derive_execution_selection` computes **safety exclusions** (blocked,
+quarantined correspondence, incomplete scan, and their transitive dependents)
+from the plan alone. The signature becomes
+`derive_execution_selection(plan, *, user_deselected=frozenset())`, and the
+two exclusion sources stay separately identifiable throughout. Merging them
+into one dictionary would let DR-BR-02's upward reselection clear a
+*blocked* or *quarantined* exclusion, silently readmitting an operation the
+planner refused. **Safety exclusions are immutable and unreachable by any
+user action.**
+
+The final selection is the plan's operations minus the union of both sets,
+with the dependency fixpoint run over the union so a dependent of either kind
+is excluded correctly.
 
 **Outcome semantics.** A user-deselected operation reports `SKIPPED`.
 Operations force-excluded *because* a dependency was deselected keep
 `DEFERRED` and drive the `partial` headline — the user chose the parent, not
 the children, and collapsing that distinction would misreport the run.
 
-### DR-BR-02 — Reselection closes upward
+**An empty selection is refused, not executed.** If every executable
+operation is user-deselected, the result would be all-`SKIPPED`, which the
+existing classifier reports as `all-noop` — conflating "the target is already
+synchronized" with "you deselected everything." `commit_plan` refuses an
+empty effective selection with a distinct, actionable error before admission.
+The refusal is a backstop: the UI disables Execute the moment the effective
+selection empties, with a stated reason, so the error is unreachable through
+ordinary interaction.
 
-The existing fixpoint propagates exclusion **downward only**. Deselecting
-folder `a\b` removes `MKDIR(a\b)` and every copy beneath it; reselecting
+**Safety-excluded rows render disabled, not merely unchecked.** Because
+reselection cannot reach a safety exclusion, a checkbox on a blocked or
+quarantined row would be inert — the user clicks and nothing happens, which is
+the same failure DR-BR-02 exists to prevent. Those rows present a disabled
+control alongside the reason, so the distinction between "you turned this off"
+and "the planner refused this" is visible before the click, not after.
+
+### DR-BR-02 — Reselection closes upward, over the user set only
+
+The exclusion fixpoint propagates **downward only**. Deselecting folder `a\b`
+removes `MKDIR(a\b)` and every copy beneath it; reselecting
 `a\b\important.txt` alone leaves that copy depending on a still-deselected
 `MKDIR`, so the fixpoint immediately re-excludes it as `blocked-dependency`.
 The user would watch a checkbox go grey the instant they clicked it.
 
 **Resolution:** reselecting an operation also removes its transitive
-`dependencies` from the deselected set. This lives beside the downward
-cascade in `workflows/selection.py`, never in the client.
+`dependencies` **from the user-deselected set**. It can never remove a safety
+exclusion (DR-BR-01), so reselecting a child whose parent is genuinely
+blocked leaves the child excluded, correctly and visibly.
 
-### DR-BR-03 — Deselection does not survive a replan
+### DR-BR-03 — Selection is revisioned, and commitment freezes it
+
+Selection is server-side state mutated by concurrent bridge handlers
+(DR-BR-17). A lock alone is insufficient: two toggle batches can acquire it in
+an order different from the user's clicks, and an execution request can race a
+queued preview, committing a selection other than the one on screen.
+
+**Resolution: optimistic concurrency with an explicit revision.**
+
+- Selection state is owned by the **service**, keyed by plan request id, not
+  by the web adapter. Ownership below the bridge is what lets execution
+  validate atomically.
+- Every mutation supplies the **expected revision**. On match, the server
+  applies it and returns the new revision plus the current selection digest.
+  On mismatch it applies nothing and returns an explicit **conflict** with the
+  current revision, and the client re-reads. Responses are never silently
+  discarded — a late response either applied or reported conflict, so the
+  client and server cannot diverge.
+- This replaces an earlier "at most one outstanding, discard stale by request
+  id" rule, which contradicted itself: discarding a response whose mutation
+  already applied would desynchronize the client. At most one mutation is
+  outstanding, queued batches merge, and every response is processed.
+- The revision increments on every **applied** mutation whether or not the
+  effective set moved, because a no-op batch or a deselect-then-reselect cycle
+  reproduces an identical digest and digest comparison cannot detect that
+  anything happened. Revision answers "did state change"; digest binds the
+  actual selected set and is what `commit_plan` validates.
+
+**Commitment is one atomic step that also freezes.** `start_execution`
+captures the current revision and, **under the selection lock**, validates it,
+constructs and freezes the execution set, transitions the selection from
+`reviewing` to `committed`, and only then releases. Doing this in one step
+closes both races at once: a queued preview cannot land between intent and
+commitment, and a mutation queued behind the commit cannot apply afterward and
+leave the UI rendering a selection the immutable execution set does not
+contain.
+
+Mutations against a committed selection are refused with a **distinct**
+response, not a revision conflict. A conflict tells the client to re-read and
+retry; "committed" means retrying is wrong. The client settles silently into
+the frozen selection with its controls disabled — a late click made before the
+freeze changed nothing and warrants no error.
+
+A selection returns to `reviewing` only through a new plan, which under
+DR-BR-04 discards it entirely.
+
+**No typed confirmation phrase in the GUI.** The CLI's typed `execute` is a
+terminal convention and stays there. The safety invariant is the mandatory
+two-step — plan and review, then separately commit — not the ritual by which
+an interface elicits the second step. A GUI's speedbump is the plan review
+itself, and adding a modal after it trains users to dismiss modals, which is
+worse than none. Removing the phrase also collapses this decision: the Execute
+click *is* the moment of intent, so the revision anchors to it directly and
+there is no interval to protect between typing and committing.
+
+The plan's scale is already legible from the status box and the filter counter
+chips; restating it on the button would be a third redundant readout, not a
+safeguard.
+
+**Confirmation is reserved for the genuinely irreversible.** In M1 the facade
+cannot reach one: `_require_deletion_policy` admits only `trash` and
+`additive`, so `mirror` is unreachable, removals go to `.SYNCTRASH` with no
+retention sweep to purge them, and execution can be paused or canceled. The
+one exception is `trash_on_update=False`, where an `UPDATE` overwrites prior
+target content with no recoverable copy. A modal appears **only** for a plan
+carrying that combination — naming how many files are overwritten
+irrecoverably — and later for a destructive purge or `mirror` should either
+ship. Friction scales with irreversibility rather than being a flat toll, so
+the dialog carries weight on the rare occasion it appears.
+
+### DR-BR-04 — Deselection does not survive a replan
 
 Operation ids are deterministic over intent
 (`deterministic_operation_id(kind, source, target, prior_target, reason)`),
 so a replan of an unchanged tree reproduces identical ids and a stale
-deselected set would silently still apply. That is a trap, not a feature: the
-new plan may contain operations no human reviewed, and carrying the old set
-forward would let a checkbox state that was never applied to *this* plan
-participate in `selection_digest`.
+deselected set would silently still apply. That is a trap: the new plan may
+contain operations no human reviewed, and carrying the old set forward would
+let a checkbox state never applied to *this* plan participate in
+`selection_digest`.
 
 **Resolution:** any preflight rescan discrepancy invalidates the plan and
-forces re-review; any mutative refresh of a plan discards its selection. The
-UI states that the selection was reset because the plan changed. Required
-coverage asserts the discard rather than trusting it.
+forces re-review; any mutative refresh of a plan discards its selection and
+resets the revision. The UI states that the selection was reset because the
+plan changed. Required coverage asserts the discard rather than trusting it.
 
-### DR-BR-04 — Four runtime methods reach the facade
+### DR-BR-05 — Four runtime methods reach the facade
 
 `acknowledge_inventory`, `restore_inventory`, `list_unacknowledged_missing`,
 and `list_stale_inventory` stop at `LocalWorkflowRuntime`. The inventory
@@ -85,7 +191,20 @@ Everything else on the runtime is already lifted or is dispatcher wiring
 (`prepare_*`, `open_*`, `audit_observer`) that correctly stays below the
 facade.
 
-### DR-BR-05 — Scanner ignore contract narrowed
+### DR-BR-06 — Location commands accept opaque ids
+
+The facade's location commands accept `selected_paths`, but DR-M1-16 forbids
+JavaScript from sending paths. As specified, the inventory view could not
+drive a scoped refresh, baseline, verify, or rebaseline at all.
+
+**Resolution:** each location command gains an id-based form accepting opaque
+node or row ids. The service validates that every id belongs to the named
+location, resolves them to exact root-relative paths server-side, and calls
+the existing path-based workflow API internally. The path form remains for
+the CLI, which legitimately has paths. An id belonging to another location is
+a refusal, not a silent filter.
+
+### DR-BR-07 — Scanner ignore contract narrowed
 
 `IgnoreSet.for_owned_paths()`, `IgnoreSet.exact_path_keys`, and
 `ScanResult.ignore_snapshot` are removed (landed in `84a7c53`). Once nothing
@@ -105,12 +224,12 @@ discussion, not with Stage 6.
 
 ## 2. Compute Ownership
 
-### DR-BR-06 — "The UI never computes" means authority
+### DR-BR-08 — "The UI never computes" means authority
 
 The original rule was driven by two goals: the backend must run full
 functionality headlessly, and the browser must never hold decision power.
-Neither goal forbids the client from computing things that affect only its
-own presentation.
+Neither forbids the client from computing things that affect only its own
+presentation.
 
 **Resolution — cosmetic versus authoritative describes what a computation
 affects, not where it runs.** The client never computes selection semantics,
@@ -122,10 +241,10 @@ cosmetic is not an argument for running in the browser.
 Three client-side computations are sanctioned under this rule, named
 explicitly so the rule is not later cited to block them: rendering tri-state
 checkboxes from server-supplied outcomes, resolving the autoscroll anchor
-from a server-supplied ancestor chain (DR-BR-13), and applying view filters
+from a server-supplied ancestor chain (DR-BR-14), and applying view filters
 to already-materialized rows.
 
-### DR-BR-07 — The node tree is built in `workflows`, not `interfaces`
+### DR-BR-09 — Node trees are built in `workflows`, not `interfaces`
 
 The import law forbids `interfaces → core`, so the web layer cannot call
 `normalize_relative_path` and cannot safely group paths — grouping on display
@@ -137,26 +256,29 @@ interfaces would not reconstruct domain structure by inspecting shape.
 Reconstructing a *hierarchy* from path strings in the adapter is that same
 anti-pattern one level up.
 
-**Resolution:** a new `workflows/plan_tree.py` produces an ordered,
-primitives-only node list. `interfaces/web` consumes it and never parses a
-path.
+**Resolution:** one new `workflows/node_tree.py` holds the shared hierarchy
+builder — ancestor synthesis, deterministic node ids, ordering, and subtree
+rollups — over any collection of path-keyed rows. Plan-specific move grouping
+(DR-BR-12) and the inventory projection are thin layers on it. Two trees, one
+implementation; a second near-duplicate module is exactly the drift this
+project avoids.
 
 | Layer | Compute |
 | --- | --- |
 | `core/pathing.py` | relative-key `parent` / `depth` / `is_descendant`, common-suffix stripping |
 | `modules/planner.py` | unchanged behavior; loses its three private path helpers |
-| `workflows/selection.py` | deselection seeding, downward cascade, upward closure |
-| `workflows/plan_tree.py` | ancestor synthesis, node ids, move grouping, ghosts, subtree op sets, rollups |
-| `workflows/views.py` | `PlanNodeView`, preview projection |
-| `workflows/runtime.py` | `preview_selection`, `commit_plan(deselected)` |
-| `interfaces/service.py` | the four lifts, selection and tree passthroughs |
+| `workflows/selection.py` | safety exclusions, user deselection, downward cascade, upward closure |
+| `workflows/node_tree.py` | ancestor synthesis, node ids, subtree op sets, rollups; plan move grouping and inventory projection |
+| `workflows/views.py` | `PlanNodeView`, `InventoryNodeView`, preview projection |
+| `workflows/runtime.py` | `preview_selection`, `commit_plan(user_deselected, revision, digest)` |
+| `interfaces/service.py` | selection state and revision, the four lifts, id-based location commands, tree passthroughs |
 | `interfaces/web` | bridge, host, command allowlist, task state and locks, event queue, JSON encoding, collapse flattening, search matching, windowing, autoscroll anchor |
 
 `interfaces/web` remains the largest new surface by volume, but after this
 split it holds no domain-shaped computation — transport and presentation
 mechanics only.
 
-### DR-BR-08 — Path helpers promote to `core/pathing.py`
+### DR-BR-10 — Path helpers promote to `core/pathing.py`
 
 `_parent`, `_depth`, and `_is_descendant` are private to `planner.py` and are
 needed identically by the tree builder. Duplicating them is exactly the drift
@@ -175,31 +297,44 @@ existing tests are the proof, unchanged.
 
 ## 3. The Node Tree
 
-### DR-BR-09 — Node identity is deterministic, not tabled
+### DR-BR-11 — Node identity is deterministic, and the plan tree is memoized
 
 Structural folder nodes have no operation and still need addressing for
-collapse state and folder-scoped selection. An earlier design minted ids into
-a per-request table; that table would have been built concurrently by
-separate bridge threads, with the loser's already-issued ids becoming
-unresolvable.
+collapse state and folder-scoped selection.
 
-**Resolution:** node ids are deterministic over the canonical path key,
-mirroring `deterministic_operation_id`. The tree regenerates identically from
-the frozen plan artifact on every call, so there is nothing to memoize and
-nothing to race. This removes one of three lock sites outright.
+**Resolution:** node ids are deterministic over
+**`(tree kind, scope identity, canonical path key)`** — not over the path
+alone. Scope identity is the plan request id for plan nodes and the location
+id for inventory nodes.
+
+The scope component is not decoration. DR-BR-06 promises that a location
+command refuses an id belonging to another location, and a path-only id makes
+that check impossible: two locations both containing a `docs` folder would
+produce the same id, so the service could neither reject the foreign id nor
+detect that it had resolved into the wrong tree. Scoping the id is what makes
+ownership validation mean anything.
+
+Determinism still buys two things: a concurrent rebuild produces
+byte-identical ids so there is no race to lose, and the built tree may be
+**memoized per scope** without an invalidation protocol. For plans that memo
+is exact — the artifact is immutable and `save_plan` keys by a freshly minted
+request id — and it is dropped by `drop_plan`. The memo holds *structure
+only*; selection outcomes overlay per request, since those change with every
+preview. Inventory scope is not immutable and is handled by DR-BR-16.
 
 They remain opaque in the sense DR-M1-16 requires: the client cannot
-construct one from a path, and the server resolves it through a tree it
-rebuilt itself.
+construct one from a path, and the server resolves it through a tree it owns.
 
 **Synthetic ids never become operation ids.** Folder nodes come in three
 flavors — a real `MKDIR`, a real directory-cleanup `DELETE`, or pure
 structure. Only the third is synthetic, and giving it an `operation_id` to
 make the tree uniform would reach the recorder, history item identity, and
-the selection digest simultaneously. Nothing below `interfaces` ever sees a
-node id; selection resolves to real operation ids before binding.
+the selection digest simultaneously. Node ids are minted by
+`workflows/node_tree.py` and travel no further down: they never enter `core`,
+the domain modules, persistence, or execution. Selection resolves them to real
+operation ids before anything binds.
 
-### DR-BR-10 — Folder selection is path-scoped, and the tree owns the scope
+### DR-BR-12 — Folder selection is path-scoped, and the tree owns the scope
 
 A folder node frequently has no operation at all: the planner skips `MKDIR`
 when the target directory already exists, so copying into an established tree
@@ -220,11 +355,11 @@ this path" is coherent across both, but the resulting tri-state must be
 **rendered from what the server returned**, never predicted from sibling
 checkbox states — the cascade runs opposite ways in the two subtrees.
 
-### DR-BR-11 — Decomposed moves render as a paired annotation
+### DR-BR-13 — Decomposed moves render as a paired annotation
 
 A folder rename decomposes into one move per file. Left flat, the rows sprawl
-across the destination tree indistinguishable from unrelated new content,
-and a reviewer must read every source path to notice they share a prefix. At
+across the destination tree indistinguishable from unrelated new content, and
+a reviewer must read every source path to notice they share a prefix. At
 realistic scale it is unreviewable, and it buries genuinely new content
 sitting alongside it.
 
@@ -236,12 +371,12 @@ the old location points to it, and the two highlight together.
   folder may receive both moved files and genuinely new copies in the same
   run; making the group its own unit would let the collapsed row report only
   the moves and silently omit the rest. Its checkbox is the ordinary
-  path-scope deselection from DR-BR-10 — no second selection currency.
+  path-scope deselection from DR-BR-12 — no second selection currency.
 - **The ghost is an annotation on the old location.** When the old location
-  still holds real operations (a partial move where some files stayed and were
-  trashed), the existing node is annotated and no ghost is emitted. The
-  dimmed row is simply what renders when the old location would otherwise have
-  no node. One mechanism, two renderings.
+  still holds real operations (a partial move where some files stayed and
+  were trashed), the existing node is annotated and no ghost is emitted. The
+  dimmed row is what renders when the old location would otherwise have no
+  node. One mechanism, two renderings.
 - **Ancestor synthesis takes the union** of operation target paths and prior
   target paths, since a ghost position may have no other reason to exist.
 - **Nested moves suppress the inner ghost.** If a move's old path falls under
@@ -251,18 +386,57 @@ the old location points to it, and the two highlight together.
   inferred from path arithmetic over move operations, and enough unrelated
   files moving between two directories would be labeled falsely. The kind
   column keeps `MOVE` / `MOVE_UPDATE`, and the annotation reads literally —
-  "moved from `<old path>`" — which is true whatever the cause.
+  "moved from `<old path>`" — true whatever the cause.
 - **No minimum-size threshold and no sub-window.** A two-file move gets the
-  same treatment as a two-thousand-file move; consistency costs nothing here,
-  since collapsed it occupies the same rows sprawl would. Group children need
-  no separate paging because expanding simply inserts rows into the flattened
-  sequence (DR-BR-12), which the existing window already serves.
+  same treatment as a two-thousand-file move; collapsed it occupies the same
+  rows sprawl would. Group children need no separate paging because expanding
+  inserts rows into the flattened sequence (DR-BR-15), which the existing
+  window already serves.
 
 ---
 
 ## 4. Paging and Live State
 
-### DR-BR-12 — Flattened windows over a stateless visible sequence
+### DR-BR-14 — Progress carries item identity, never a display path
+
+Follow mode anchors on the current operation, but `Progress` carries only
+`items_done`, `items_total`, `bytes_done`, `bytes_total`, and `current_path`.
+Mapping a running operation to a node would require joining on a display
+path — forbidden, ambiguous under escaping, and wrong.
+
+**Resolution:** `Progress` gains optional `item_id` and `item_type`,
+mirroring the nominal `ResultItem` vocabulary DR-M1-10 established rather
+than inventing a parallel one. Both emission sites already hold the value:
+the executor's reporter knows its current operation, and the verifier's knows
+its current subject row.
+
+**This is a versioned wire change and must be treated as one.** An earlier
+draft argued that because `HistoryObserver.on_event` refuses `Progress` and
+nothing persists it, no schema concern arose. That reasoning was wrong:
+persistence is not the criterion. `Envelope` carries an explicit
+`schema_version` that `__post_init__` and `envelope_from_dict` both reject on
+mismatch, and both serialization directions are tested. Adding fields changes
+the serialized body regardless of where it travels.
+
+**Resolution:** land it as an **additive change within the current version**,
+which requires three things rather than none. The new fields carry defaults so
+existing producers remain valid without modification. `envelope_from_dict`
+tolerates a body lacking them and yields the defaults. And explicit
+compatibility tests assert both directions — a pre-change payload
+deserializes, and a post-change envelope serializes with the fields present —
+because an additive claim is only true if something proves it.
+
+Absent those tests the change requires a version bump instead. What is not
+acceptable is changing the body while asserting the version is unaffected
+because nothing writes it to disk.
+
+The remaining footprint is genuinely small: a dataclass field pair, two
+emission sites that already hold the value, and the serializer pair.
+
+The bridge enriches `item_id` into an ancestor node-id chain. **Never join on
+`current_path`**, which remains display-only telemetry.
+
+### DR-BR-15 — Flattened windows over a stateless visible sequence
 
 DR-M1-18 fixed that bridge data is paged pull/RPC but not the shape. Per-node
 lazy expansion was considered and rejected: a review UI wants everything
@@ -283,37 +457,72 @@ cap is the backstop. **Responses need a server-enforced `limit` ceiling** —
 the current cap is inbound only, and a truncation must be an explicit refusal
 rather than a short list that reads as a complete tree.
 
-The plan artifact is immutable and `save_plan` keys by a freshly minted
-request id, so plan windows are consistent by construction and need no
-versioning. Inventory is not immutable; see DR-BR-16.
-
 Fixed row height is a design constraint, not an aesthetic preference:
 variable heights require measurement passes that make window math fragile.
 
-### DR-BR-13 — Autoscroll anchors on the nearest visible ancestor-or-self
+### DR-BR-16 — Paging bounds payload, and must also bound work
 
-One rule removes every special case. If the current operation is visible, it
-is the target; if it sits inside a collapsed folder, that folder is the target
-and shows an active indicator; expanding moves the target inward; execution
-moving on moves it forward. Filtering is absorbed identically, since "visible"
-means after collapse and after filtering.
+Windowing solves response size. It does not, by itself, solve
+responsiveness: a naive implementation rebuilds the tree from the whole plan,
+flattens it entirely, and then slices — doing whole-collection work for every
+viewport scroll. Inventory is worse, since `get_inventory` loads an entire
+location per call with no `LIMIT`/`OFFSET`.
 
-The server cannot compute the visible index without knowing the collapsed
-set, which under DR-BR-12 it only sees during a paging call. **Resolution:**
-progress carries the current operation's ancestor node-id chain, and the
-client picks the deepest entry it currently renders. That is presentation,
-not authority, and it preserves stateless paging.
+**Row-level SQL paging is rejected.** An earlier draft moved `LIMIT`/`OFFSET`
+into the repository query. It does not compose with this tree design, for
+three independent reasons:
 
-Follow mode is on by default and any user scroll that moves the target out of
-view turns it off. It re-enables only on explicit action — a persistent pill
-showing the distance to the current operation, one click to resume. Silently
-re-grabbing the viewport when a row drifts back into view is the standard
-log-viewer annoyance and is deliberately not done.
+1. Ancestor synthesis needs the whole collection to know which folders exist,
+   and subtree rollups need every descendant. A page of rows cannot produce
+   either.
+2. Paging happens *after* collapse and search produce a visible hierarchical
+   sequence, so the offset a client asks for is an index into the visible
+   tree, not into a row ordering.
+3. The visible tree order is not `(rel_path_key, id)` order. Lexicographic
+   path-key sorting is not depth-first pre-order, because the separator `\`
+   (0x5C) sorts *after* characters that are legal in filenames — `a-x` sorts
+   before `a\b`, while the tree places `a\b` inside `a` and `a-x` after it.
+   The two orders genuinely differ.
 
-### DR-BR-14 — Selection is server-side state; the DOM is disposable
+A folder node id also cannot be resolved to its subtree without the location
+index rebuilt anyway.
+
+**Resolution: one coherent model — a cached per-view projection, built from a
+slim query.**
+
+- **Plan tree:** memoized per request id (DR-BR-11), exact because the
+  artifact is immutable.
+- **Inventory tree:** the repository gains a **slim structure query** —
+  explicit columns, not `SELECT *`, and no full `InventorySnapshot`
+  construction — returning every row in the location. The tree builder holds
+  that projection per open view and invalidates it on exactly the causal
+  events DR-BR-20 already names: view open, observed session terminal for that
+  location, and a completed acknowledge or restore. A **detail query** then
+  fetches full snapshots for the visible window's row ids only, so the
+  expensive per-row work is bounded by the viewport while the structure work
+  is bounded by the view's lifetime.
+- **Named scale gate.** Synthetic plans and inventories at defined sizes, with
+  recorded window-response times, recorded projection build and memory cost,
+  and recorded `preview_selection` times at realistic dependency depth. This is
+  not the executor's measured-throughput standard; it is a stated ceiling with
+  numbers behind it. If a size cannot be served responsively, **the supported
+  M1 ceiling is documented rather than left as an unknown cliff.** The
+  in-memory projection makes location size a memory question as well as a time
+  question, and the gate must record both.
+
+Flattening under a given collapsed set and search remains the per-request
+cost for both trees. If the gate shows it matters, the named fallback is
+caching the flattened sequence keyed by collapsed-set hash plus query —
+scroll-only paging then hits that cache, since users do not change collapse or
+search on every window. Not built before the numbers justify it.
+
+The `derive_execution_selection` fixpoint remains O(operations × dependency
+depth) per preview and is measured by the same gate.
+
+### DR-BR-17 — Selection is server-side state; the DOM is disposable
 
 Virtualization destroys and recycles rows, so selection must not live in them.
-The deselected set is keyed by operation id and every window response carries
+Selection is owned by the service (DR-BR-03) and every window response carries
 each row's current outcome, so scrolling away and back re-reads authority.
 
 This is the same problem as view filtering, and the same rule covers both:
@@ -324,17 +533,16 @@ chip is lit, with no way for the user to tell.
 
 Interaction is debounced: a click puts the row into an honest *pending* state
 rather than an optimistic result, toggles accumulate for roughly 120–150 ms,
-and the batch resolves as one derivation. Batching matters more than the
-delay, since range selection and folder toggles generate many toggles per
-gesture. At most one preview is outstanding; later batches queue, and a
-response arriving after a newer request is discarded by request id.
+and the batch resolves as one revisioned mutation (DR-BR-03). Batching matters
+more than the delay, since range selection and folder toggles generate many
+toggles per gesture.
 
 `preview_selection` calls `derive_execution_selection` directly and **never**
 `get_plan_review` — rebuilding every operation view, both scans' warnings, and
 all refusals to answer "which checkboxes changed" is the wrong shape
 regardless of how fast it runs.
 
-### DR-BR-15 — Search executes on the backend
+### DR-BR-18 — Search executes on the backend
 
 With virtualized paging the client holds a viewport, not the plan. Client-side
 search would match only materialized rows and get worse as plans grow — broken
@@ -344,16 +552,36 @@ Sending a query is not a DR-M1-16 violation. That rule bans JS supplying
 **paths** because a path can become filesystem authority; a query never
 becomes authority, it selects rows the backend already holds. Structurally it
 is a view parameter exactly like the collapsed set, so it composes with
-DR-BR-12 rather than needing a parallel code path — and as a backend
-parameter it stays available to a headless consumer, which a frontend
-implementation would not be.
+DR-BR-15 rather than needing a parallel code path — and as a backend parameter
+it stays available to a headless consumer, which a frontend implementation
+would not be.
 
 Three constraints: substring matching only (a user-supplied regex is a
 denial-of-service surface for no benefit), matching against the **casefolded
 display form** rather than the canonical key (the user types what is on
 screen), and the existing inbound size cap.
 
-### DR-BR-16 — No inventory snapshot token
+### DR-BR-19 — Autoscroll anchors on the nearest visible ancestor-or-self
+
+One rule removes every special case. If the current operation is visible, it
+is the target; if it sits inside a collapsed folder, that folder is the target
+and shows an active indicator; expanding moves the target inward; execution
+moving on moves it forward. Filtering is absorbed identically, since "visible"
+means after collapse and after filtering.
+
+The server cannot compute the visible index without knowing the collapsed set,
+which under DR-BR-15 it only sees during a paging call. **Resolution:**
+progress carries the ancestor node-id chain derived from `item_id`
+(DR-BR-14), and the client picks the deepest entry it currently renders. That
+is presentation, not authority, and it preserves stateless paging.
+
+Follow mode is on by default and any user scroll that moves the target out of
+view turns it off. It re-enables only on explicit action — a persistent pill
+showing the distance to the current operation, one click to resume. Silently
+re-grabbing the viewport when a row drifts back into view is the standard
+log-viewer annoyance and is deliberately not done.
+
+### DR-BR-20 — No inventory snapshot token
 
 A generation token was designed to stop a paging client from stitching two
 inventory generations together, then rejected. Recorded with its reasons so it
@@ -379,8 +607,8 @@ location, and after an acknowledge or restore. Rendered rows key on `row_id`,
 so an externally torn page degrades to a missing or duplicated row that the
 next re-read corrects. Severity is low regardless: nothing in this view acts
 on display position — acknowledge and restore are row-id keyed, and
-verify-selected is path-keyed and resolved server-side. The cross-process
-limit is documented alongside the task rail's existing one.
+verify-selected resolves ids to paths server-side (DR-BR-06). The
+cross-process limit is documented alongside the task rail's existing one.
 
 **Never auto-scan.** A refresh is a real filesystem session, and periodic
 rescanning would be the scheduled maintenance DR-M1-20 defers. Staleness is
@@ -388,22 +616,97 @@ reported through `list_stale_inventory`, not silently repaired.
 
 ---
 
-## 5. Concurrency
+## 5. Task and Process Lifecycle
 
-### DR-BR-17 — Bridge handlers are concurrent and must be synchronized
+### DR-BR-21 — A task is client state; sessions come and go beneath it
+
+A task card outlives its sessions. It holds a plan request id, zero or one
+current session id, and retained results per pane. **A task with a reviewed
+but unexecuted plan has no live session at all**, so the rail cannot be
+derived purely from `list_sessions()` — session-derived fields refresh from
+it, but task identity is the adapter's.
+
+**Plan sessions close as soon as their terminal result is delivered.** The
+plan *artifact* lives in the runtime keyed by request id and is what
+`get_plan_review` reads; the session record is only the delivery vehicle, and
+leaving it open would show a permanent dead entry per task. `drop_plan`
+happens at task close, not at plan-session close.
+
+For a compound execute-then-verify run, the two phases are one session
+producing one result with ordered `PhaseResultView`s. The rail summarizes the
+latest phase; the Sync pane reads `phase="execute"` and the Integrity pane
+reads `phase="verify"`. Phase counters are never summed (XV-7).
+
+### DR-BR-22 — Closing a busy task cancels, waits, then closes
+
+`Dispatcher.close` raises `SessionNotTerminal` for a live session, and
+`NamiSyncService.close_session` calls it unguarded. Closing a running task is
+therefore a sequence, not a call.
+
+**Resolution:** the adapter owns the sequence, and the facade keeps its
+precondition documented rather than growing a control policy.
+
+0. **Ask first.** Closing a queued or running task requires explicit
+   confirmation naming what is being stopped. A misclick — or a cat — must
+   not destroy a long-running transfer, and cancellation is not free:
+   the executor stops mid-plan and the user replans from the filesystem's new
+   state. Closing an already-terminal card is unconfirmed, since nothing is
+   lost. The confirmation is GUI-owned; the CLI does not need it, being
+   already resistant to accidental input, but nothing prevents it adopting the
+   same prompt.
+
+   This is not in tension with DR-BR-03 removing the execute confirmation.
+   Starting execution begins recoverable work the user can pause or cancel;
+   closing a running task destroys work already in progress, and no later
+   control undoes it. The prompt appears where the action is irreversible,
+   which is the same rule in both places.
+1. Request the service-supported control (cancel).
+2. The card enters a visible **closing** state and remains on the rail.
+3. **On the terminal record — not the terminal event** — unsubscribe, close
+   the session, and drop the plan.
+
+Step 3's distinction is a real race, not pedantry. `SessionObserver` delivers
+the `Terminal` event to the sink and only *afterward* calls
+`dispatcher.get()` to build the terminal `SessionRecordView`. A client that
+drains the event and immediately calls `close_session` removes the dispatcher
+record out from under that lookup, and the observer thread takes
+`SessionNotFound`. Cleanup therefore triggers on receiving a
+`SessionRecordView` whose `result` is not `None`, which the observer emits
+once the record is safely read.
+
+If the control is refused or unsupported, the card stays open and says why.
+A transient progress flag is never treated as completion. Application
+shutdown with a closing card still tears down through DR-BR-24's ordering.
+
+### DR-BR-23 — Single instance activates the existing window
+
+**Resolution:** a named mutex guards the process. A second launch does not
+open a window; it attempts to activate the running instance's window through
+Win32 and exits successfully. The codebase already uses `ctypes` Win32
+bindings in the executor and verifier, so this needs no new dependency and no
+IPC channel. If activation fails, the second instance prints a clear message
+and exits successfully. Exiting silently, or reporting an error for what is
+ordinary user behavior, are both rejected.
+
+---
+
+## 6. Concurrency
+
+### DR-BR-24 — Bridge handlers are concurrent and must be synchronized
 
 DR-M1-15 established that pywebview's exposed functions run on separate
 threads. `BridgeDispatcher` correctly has no locking, because the spike's
 handlers were pure. Every piece of state Stage 6 adds is not, and the runtime
 is protected only for what it already owns (`_plans` is lock-guarded).
 
-- **Deselected set** — read-modify-write, so concurrent toggles lose updates.
+- **Selection** — owned by the service and revisioned (DR-BR-03). The
+  revision is what makes ordering deterministic; a lock alone is not enough.
 - **Event queue and drain tracker** — DR-M1-18's ordering guarantee rests on
-  "at most one outstanding drain per task," which is stated as a *client*
-  obligation. Two concurrent drains each pop a partial batch and events arrive
-  out of order. **An ordering guarantee enforced only by client discipline is
-  not a guarantee**; the server holds a per-task drain guard and the second
-  concurrent drain waits or is refused explicitly.
+  "at most one outstanding drain per task," stated as a *client* obligation.
+  Two concurrent drains each pop a partial batch and events arrive out of
+  order. **An ordering guarantee enforced only by client discipline is not a
+  guarantee**; the server holds a per-task drain guard and a second concurrent
+  drain waits or is refused explicitly.
 - **Subscription registry** — `SessionObserver.observe` raises when a session
   is already observed, so concurrent task opens must be guarded rather than
   treated as impossible.
@@ -411,17 +714,16 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   drain, close observations, then close the service. Wrong order hangs exit,
   the same failure XV-18 catches one layer down.
 
-**Shape:** one `TaskState` per task holding queue, deselection, and
-subscription, with a single lock. **Never hold a task lock across I/O.**
-`preview_selection` is safe to hold — pure CPU over a frozen plan — but
-anything starting a session releases first. DR-BR-09 removes the node table
-that would otherwise have been a third lock site.
+**Shape:** one `TaskState` per task holding queue, subscription, and view
+state, with a single lock. **Never hold a task lock across I/O.** DR-BR-11's
+deterministic ids remove what would otherwise have been a node-table lock
+site, since a concurrent rebuild produces identical output.
 
 ---
 
-## 6. Inherited Bridge Posture
+## 7. Inherited Bridge Posture
 
-Unchanged from `M1_PLAN.md` and restated here only so this document is
+Unchanged from `M1_PLAN.md` and restated only so this document is
 self-contained: exactly one exposed `dispatch(command_json)`, versioned and
 schema-validated and allowlisted (DR-M1-15/17); forced Edge Chromium with an
 actionable failure and no MSHTML fallback; native `NavigationStarting` and
@@ -437,72 +739,99 @@ returns `{id, display}`; the client only ever sends the id back.
 
 ---
 
-## 7. Deferred, Rejected, and Open
+## 8. Verification
 
-**Rejected with reasons recorded:** the inventory snapshot token (DR-BR-16);
-per-node lazy expansion in favor of flattened windows (DR-BR-12); a
-minimum-size threshold and per-group sub-windows for move groups (DR-BR-11);
-synthetic operation ids for structural folders (DR-BR-09); a client-side
-search implementation (DR-BR-15).
+### DR-BR-25 — Hostile-name rendering is proven in a real browser
 
-**Deferred:** filter-exclusion visibility in plan review (DR-BR-05); repository
-`LIMIT`/`OFFSET` for inventory, which currently loads a whole location per
-call; the `derive_execution_selection` fixpoint cost, which scales with plan
-size times dependency depth; `get_plan_review` rebuilding every view object per
-call. These are noted cost points, not measurement gates — the
-recorded-numbers standard in `M1_PLAN.md` §5 governs the executor refactor,
-not this surface.
+An earlier draft substituted a source scan for a DOM test and conceded it did
+not prove filesystem text becomes a text node. That does not satisfy
+`DESKTOP_UI.md`'s acceptance requirement that hostile filenames render as
+text, and it is weakest exactly where the risk is highest: the starting
+mockup renders through `innerHTML` throughout, so the property being asserted
+is the one most likely to regress.
+
+**Resolution: both layers, and the DOM test is required.**
+
+- **One WebView2 integration test** drives the real host with the scanner's
+  hostile-name corpus and asserts the rendered nodes are text nodes carrying
+  the exact escaped display form — not markup, not attributes, not script.
+  It runs in slice 2 and stays in the suite.
+- **A broadened static scan** over packaged assets, because scanning only for
+  `innerHTML`, `eval`, and `Function(` misses most markup sinks. It also
+  rejects `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`,
+  `DOMParser`, `Range.createContextualFragment`, dynamic `setAttribute` names,
+  and assignment of returned data into `href`, `src`, or any `on*` attribute.
+
+Bridge round-trip tests over the same corpus remain, covering the ids-in /
+escaped-text-out and origin-recheck clauses of XV-19.
+
+### DR-BR-26 — The node tree is a pure function
+
+Plan review plus collapsed set plus deselected set to an ordered node list,
+tested directly in pytest with no bridge involved. It is the largest new
+component and must not be entangled with transport, or it becomes untestable
+exactly where risk concentrates. Coverage includes a hostile-named directory
+move, since grouping does segment arithmetic on canonical keys while
+rendering escaped display paths and the two must stay consistent.
+
+---
+
+## 9. Deferred, Rejected, and Open
+
+**Rejected with reasons recorded:** the inventory snapshot token (DR-BR-20);
+per-node lazy expansion in favor of flattened windows (DR-BR-15); a
+minimum-size threshold and per-group sub-windows for move groups (DR-BR-13);
+synthetic operation ids for structural folders (DR-BR-11); a client-side
+search implementation (DR-BR-18); merging safety exclusions with user
+deselection (DR-BR-01); discarding late selection responses by request id in
+favor of revision conflict (DR-BR-03); path-only node ids in favor of
+scope-qualified ids (DR-BR-11); row-level SQL `LIMIT`/`OFFSET` for the
+inventory tree, which cannot express visible-tree semantics (DR-BR-16).
+
+**Deferred:** filter-exclusion visibility in plan review (DR-BR-07);
+`get_plan_review` rebuilding every view object per call, which the memoized
+tree and direct `preview_selection` path route around rather than fix.
 
 **Open, to settle during implementation:**
 
-1. Where the deselected set lives — recommended `interfaces/web` keyed by
-   request id, passed to `commit_plan` only at the end, keeping the workflow
-   API stateless.
-2. Whether changing selection invalidates an already-typed confirmation
-   phrase — recommended yes.
-3. The task-close protocol on a live session. `close_session` calls
-   `Dispatcher.close`, which raises `SessionNotTerminal`; cancel → observe
-   terminal → close needs a defined owner.
-4. Plan-session lifecycle. A task opens a plan session and later an execution
-   session, and nothing closes the first; the derived rail will show both.
-5. Whether ghost rows survive view filters.
-6. Single-instance behavior on second launch — focus the existing window, or
-   exit with a message.
-7. Whether pywebview is a hard dependency or an extra, and what a
+1. Whether a ghost row survives a view filter that excludes moves.
+2. Whether pywebview is a hard dependency or an extra, and what a
    no-subcommand `nami-sync` does without it.
 
 ---
 
-## 8. Delivery
+## 10. Delivery
 
-Stage 5.5 is DR-BR-01 through DR-BR-05 plus the DR-BR-08 promotion, all
-provable through the CLI. Stage 6 follows in eight slices:
+### Stage 5.5
+
+DR-BR-01 through DR-BR-07 plus the DR-BR-10 promotion. Its verification
+splits deliberately, because not every piece has a natural CLI shape:
+
+- **CLI deliverables:** acknowledge and restore commands over the lifted
+  runtime methods, and a stale-inventory listing. These are genuinely useful
+  headless and exercise DR-BR-05 end to end.
+- **Facade-level tests:** user selection, the revision protocol, empty-selection
+  refusal, replan discard, and id-based location commands. A CLI selection
+  syntax would be speculative interface design for a surface the CLI has no
+  demand for; these are proven against `NamiSyncService` directly.
+
+The earlier claim that all of Stage 5.5 is "provable through the CLI" was
+wrong — the CLI commits the automatic selection directly and has no selection
+surface at all.
+
+### Stage 6
 
 | # | Slice | Gate |
 | --- | --- | --- |
 | 0 | pywebview reality spike | `CoreWebView2` reachability, pythonnet handler syntax, asset-server origin at runtime, off-thread `current_url` |
-| 1 | Promote the spike into `bridge.py` / `host.py`; packaged assets; entry point; forced Edge Chromium | Window opens on real WebView2, guards attached, off-origin dispatch rejected |
-| 2 | Command allowlist, JSON encoding, opaque-id and folder-picker slots | Every view type round-trips; hostile-name corpus survives a real dispatch |
+| 1 | Promote the spike into `bridge.py` / `host.py`; packaged assets; entry point; forced Edge Chromium; single instance | Window opens on real WebView2, guards attached, off-origin dispatch rejected, second launch activates the first |
+| 2 | Command allowlist, JSON encoding, opaque-id and folder-picker slots | Every view type round-trips; DR-BR-25's DOM test and broadened scan both pass |
 | 3 | Event drain with coalescing, bounded wait, gap visibility, server-side drain guard | XV-18 plus concurrent-drain ordering |
-| 4 | Node tree, paging, selection, autoscroll; vertical sync slice end to end | A desktop sync produces the same facade calls and classification as the CLI |
-| 5 | Inventory and integrity views, five resolution states, context actions | XV-14 states render distinctly and actionably |
-| 6 | History, settings, `ui-state.json`, single-instance mutex, clean shutdown | Four truth axes visible without string parsing |
+| 4 | Node tree, paging, selection, autoscroll; vertical sync slice end to end | A desktop sync produces the same facade calls and classification as the CLI; DR-BR-16's scale gate recorded |
+| 5 | Inventory tree and integrity views, five resolution states, context actions, slim structure query plus per-window detail query | XV-14 states render distinctly; id-based scoped verify works end to end |
+| 6 | History, settings, `ui-state.json`, task close sequence, clean shutdown | Four truth axes visible without string parsing; closing a busy task cancels and waits |
 | 7 | Documentation: rewrite `DESKTOP_UI.md` acceptance to as-built, README, re-status `ui_mockup/` | — |
 
 Slice 0 shares nothing with Stage 5.5 and may run in parallel. It should run
 **before** the Stage 6 sections here are treated as settled — four decisions
-now rest on assumptions no code has verified against a real runtime.
-
-**Testing posture.** Frontend verification is Python-side: bridge round-trips
-over the scanner's hostile-name corpus, plus a static scan of packaged assets
-asserting no `innerHTML`, `eval`, `Function(`, or `evaluate_js`. This covers
-XV-19's ids-in / escaped-text-out and origin-recheck clauses. **It does not
-prove a text node was created** — that limitation is recorded rather than
-glossed, and closing it would require a DOM test runner this project does not
-otherwise need.
-
-The node tree is a **pure function** — plan review plus collapsed set plus
-deselected set to an ordered node list — and is tested directly in pytest with
-no bridge involved, including a hostile-named directory move, since grouping
-does segment arithmetic on canonical keys while rendering escaped display
-paths and the two must stay consistent.
+rest on assumptions no code has verified against a real runtime.
