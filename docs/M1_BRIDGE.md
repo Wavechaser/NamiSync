@@ -99,8 +99,12 @@ commitment.** Who owns the checked/unchecked state of a plan, and what
   row ids mean one exact row while folder-node ids mean the complete recursive
   subtree, DR-BR-11's location scope validates ownership, and completed subtree
   refreshes use a genuine third reconciliation branch with indexed literal
-  ranges; kind-aware decoding advances only the inventory workflow payload to
-  v2.
+  ranges. The recursive scan shares the full-walk helper and inherits every one
+  of its incompleteness causes rather than the exact-path scan's ignore rule;
+  folder actions are named separately from row actions instead of predicting a
+  count they cannot honestly compute; and kind-aware decoding advances only the
+  inventory payload to v2, with integrity continuation restructuring deferred
+  behind a named pause-latency benchmark.
 
 **`modules/scanner.py` — scanner contract.** Already-landed, kept for context.
 
@@ -508,9 +512,39 @@ silently omitting part of the subtree.
 
 Integrity actions (`baseline`, `verify`, `rebaseline`) freeze the folder's
 currently indexed descendant rows into exact row ids/paths before admission;
-their existing exact-subject workflow semantics remain unchanged. **Refresh is
-different:** expanding only current inventory rows would miss files newly
-created beneath the folder. The scanner therefore gains an explicit recursive
+their existing exact-subject workflow semantics remain unchanged.
+
+**The action names its scope; it does not predict its count.** A folder
+integrity action can admit far more work than a row action, and integrity
+workflows carry no plan, no review, and no commitment to make that legible the
+way DR-BR-03's plan review does for sync. The temptation is a count in the menu
+item, and it is **rejected as unimplementable honestly**: the descendant rollup
+is not the subject set that will run. `baseline` selects eligible unbaselined
+subjects, `rebaseline` selects eligible baselined ones, `verify` has its own
+candidate set, and directories are normally excluded from all three. A rollup
+number would therefore be wrong for every mode, and wrong in the direction that
+overstates — the worst kind of reassurance. Computing three mode-specific counts
+before admission would duplicate each mode's eligibility rules outside the
+workflow that owns them, which is the browser-authority failure DR-BR-08 forbids
+one layer down.
+
+**What is rejected is a *predicted* count, not a reported one.** Once a mode has
+selected its subjects, the count is a fact the workflow owns, and progress and
+results report it per action as they do for any other session. The rejection is
+narrow and specific: no number is asserted *before* admission, from a rollup
+that does not model eligibility. Slice 6 renders what each action actually
+selected; the menu promises nothing.
+
+**Menu wording carries the distinction instead.** Row actions and folder actions
+are separate, plainly named commands — "Verify selected items" versus "Verify
+folders" — so the scope of the gesture is legible from the label without
+asserting a quantity the facade cannot yet know. Verification is pausable and
+cancelable and writes nothing irreversible, so under DR-BR-03's own rule it
+takes no dialog either: a user who asks for too much stops it, which is the
+ordinary control rather than a failure.
+
+**Refresh is different:** expanding only current inventory rows would miss files
+newly created beneath the folder. The scanner therefore gains an explicit recursive
 subtree scan scope, distinct from today's exact selected-path scope. A folder
 refresh passes that subtree root and discovers the folder's current and new
 descendants in one ordinary inventory session.
@@ -564,17 +598,107 @@ range selects exactly keys beginning with `root || '\'` under SQLite's default
 binary collation. `LIKE` is forbidden here: `%` and `_` are legal hostile-name
 characters and would turn a literal subtree root into a wildcard pattern.
 Rows outside the roots are untouched. Any incomplete subtree scan
-conservatively withholds all missing inference, matching the existing
-selected-scan rule.
+conservatively withholds all missing inference.
+
+**The subtree walk is the full scan bounded to a root, not the exact-path scan
+generalized.** That framing decides completeness, and the two existing scan
+paths do not agree on what breaks it. `_scan_selected` marks the whole scan
+incomplete when a requested path is ignored, because an explicitly named path
+the scanner refuses to report on leaves the requested key set unresolved.
+`_scan_full` skips an ignored entry and preserves completeness, because there
+the ignore contract is an ordinary part of the sweep. A recursive walk meets
+that contract constantly — `THUMBS.DB` and `DESKTOP.INI` appear in ordinary
+picture and settings folders, and the owned-temp grammar appears wherever a
+prior run wrote. Inheriting the exact-path rule would make nearly every real
+subtree refresh incomplete and withhold all missing inference, leaving the
+feature green on a synthetic fixture tree while doing nothing on an actual
+volume.
+
+**Resolution: the recursive implementation shares the full-walk helper and
+inherits every one of its incompleteness causes**, rather than restating a list
+that would drift the first time the scanner grows a case. Only the exact paths
+named alongside the roots keep exact-path semantics. The recursive scope is
+incomplete wherever `_scan_full` is already incomplete — which today includes
+root unavailability, enumeration failure, unrepresentable paths, type-probe and
+stat failures, unknown entry types, case-colliding keys, an unhydrated
+**directory** placeholder, a **directory** reparse point, and a repeated
+directory identity. Those last three are worth naming as examples because they
+are the ones a scoped implementation is most likely to get wrong, **not because
+the list is exhaustive**: sharing the helper is the contract, and any cause the
+full walk later adds applies to subtree scope automatically.
+
+**Sharing the helper means parameterizing it**, because its root handling is
+written for the location root and silently assumes three things an arbitrary
+subtree root does not satisfy. Each assumption is correct today only because
+`root` is always the resolved location root, which is exactly why the sharing
+contract must state them:
+
+- It takes a starting **`(absolute path, relative prefix)` pair** rather than an
+  absolute path alone. The helper currently hardcodes the root record and its
+  traversal prefix to `""`, so a walk rooted at `Photos` would emit a root
+  record claiming to be the location root and record descendants under keys like
+  `IMG.JPG` instead of `PHOTOS\IMG.JPG` — wrong canonical keys written into
+  inventory, reconciled against the wrong rows.
+- It **probes the root's entry kind** instead of asserting
+  `EntryKind.DIRECTORY`, so the former-folder-now-a-file case above is recorded
+  as the file it is rather than as a directory record that contradicts the disk.
+- It **distinguishes `FileNotFoundError` from other root-lstat failures**, the
+  way `_scan_selected` already does for exact paths. Absence is the conclusive
+  empty observation described above; denial or IO error is `ROOT_UNAVAILABLE`
+  and incomplete. Catching them together — the current behavior — would make the
+  absent-root case unreachable and quietly contradict this decision.
+
+`ROOT_UNAVAILABLE` also carries the failing root's relative path rather than
+`None`, since a multi-root scan must say *which* root it could not open; that
+value is what the scope-warning surfacing below has to render. One `visited`
+identity set spans every root in a scan: the roots are canonicalized
+non-overlapping, so a repeated identity across two of them is a genuine junction
+cycle rather than legitimate reuse.
+
+The directory qualifier on placeholder and reparse is load-bearing rather than
+descriptive: a *file* placeholder or file reparse point is a conclusive
+unsupported observation and leaves completeness intact, because nothing was
+being enumerated through it. For those two conditions this is a deliberate
+divergence from `_scan_selected`, which records them as conclusive even for a
+directory. Recorded explicitly because an implementer reading the exact-path
+branch as the model will otherwise carry the wrong behavior across.
 
 Completeness distinguishes absence from uncertainty. If a subtree root no
 longer exists, that root is a successful empty observation and its previously
-indexed root/descendant rows may become missing. Access denial, enumeration
-failure, an unhydrated directory placeholder, or a directory reparse point
-means the scanner could not observe the claimed recursive scope; it makes the
-whole multi-root `ScanResult` incomplete and therefore marks nothing missing
-under any requested root. Per-root completeness would require a richer result
-contract and is not introduced implicitly here.
+indexed root/descendant rows may become missing. **A former folder root that is
+now an ordinary file is equally conclusive:** the scanner observed the path,
+records it as the file it now is, and its former descendants may become missing,
+because nothing about that observation is uncertain. Any inherited
+incompleteness cause, by contrast, means the scanner could not observe the
+claimed recursive scope; it makes the whole multi-root `ScanResult` incomplete
+and therefore marks nothing missing under any requested root. Per-root
+completeness would require a richer result contract and is not introduced
+implicitly here.
+
+**An incomplete refresh must say so.** "Refreshed, nothing disappeared" and
+"refreshed, but I could not see enough to tell you" are different facts that
+currently render identically — the missing chip simply does not move.
+Withholding the inference is correct; reporting an unqualified clean refresh
+afterwards is not, and it is the same invisible-exclusion gap DR-BR-07 records
+for filters, asked the other way round: "why wasn't this deleted file marked
+missing?"
+
+**This needs plumbing, and an earlier draft wrongly said it did not.** The
+scanner produces the evidence as typed `ScanWarning`s, but nothing carries it
+upward: `run_inventory` reads `scan.complete` and discards `scan.warnings`
+entirely, `InventoryDetails` has no warning field, and `InventoryDetailsView`
+consequently cannot have one either. A user is told *that* a refresh was
+incomplete only through a chip that failed to move, and never *why*. The chain
+is four small steps: the workflow retains the warnings already in scope at the
+`InventoryDetails` construction site, `InventoryDetails` carries them, a
+primitives-only warning view converts code/path/detail under DR-M1-07's rule,
+and the facade delivers them beside `complete`. Small, but new — and therefore
+owed to a stage rather than assumed.
+
+**Delivery splits along the interface boundary.** Stage 5.5 proves the warning
+details reach the facade, which is a workflow/service obligation provable
+without a second interface. Stage 6 slice 5 proves the inventory UI visibly
+distinguishes an incomplete refresh from a clean one and renders its reason.
 
 The existing
 `inventory_location_presence_idx(location_id, presence, rel_path_key)` serves
@@ -586,14 +710,56 @@ assumption.
 `InventoryRequest`/`InventoryWorkflowRequest` carry subtree roots separately
 from exact selected paths, including both fields for a mixed id selection. The
 inventory workflow payload advances from v1 to v2 for that new field and
-rejects v1; the integrity payload remains v1 because folder integrity actions
-are expanded into its existing exact subjects before admission. The two
-decoders currently share `_payload`, whose hardcoded v1 guard would make that
-divergence impossible. Its signature becomes
+rejects v1.
+
+The integrity payload **remains v1**, because folder integrity actions are
+expanded into its existing exact subjects before admission and no field changes
+shape. The two decoders currently share `_payload`, whose hardcoded v1 guard
+expresses no per-kind version at all, so that divergence is impossible as
+written. Its signature becomes
 `_payload(payload, expected_kind, expected_version)`;
-`decode_inventory_request` passes v2 and `decode_integrity_request` passes v1.
-Tests prove inventory v2 round-trips while inventory v1 is rejected, and that
-integrity v1 remains accepted.
+`decode_inventory_request` passes 2 and `decode_integrity_request` passes 1.
+Tests prove inventory v2 round-trips while inventory v1 is rejected, integrity
+v1 remains accepted, and a body of the wrong kind is rejected at either version.
+
+**Restructuring the integrity continuation is noted and deferred, not adopted.**
+Folder expansion makes `selected_paths`/`selection_item_ids` large, and
+`_IntegrityInvocation.snapshot` re-encodes the whole request on every pause
+alongside `completed_bytes`, which grows toward the subject count as items
+settle — so the largest jobs plausibly pay the most to pause, which is where a
+user most wants to. A drafted fix split the body into an immutable `subjects`
+half and a mutable `progress` half so pause rebuilt only progress. It is
+withdrawn for M1 on four grounds:
+
+- **The proposed immutable half was not immutable.** `refresh_generation` is
+  incremented by `snapshot()` on every pause, and `selection_item_ids` is
+  recomputed there from the live selection. Both would have to sit in the
+  mutable half, which removes much of what the split was meant to freeze.
+- **Nesting does not bound the work.** `completed_bytes` still grows toward
+  O(subject count), and reassembling the single `bytes` payload the dispatcher
+  requires still copies the immutable section on every pause.
+- **The cache has no specified owner or framing.** Each resumed invocation would
+  have to recreate or recover the retained fragment, and the document named
+  neither the owner nor the serialization boundary.
+- **The cost is reasoned, not measured**, and a strict payload version change is
+  the wrong thing to spend on a hypothesis.
+
+M1 therefore retains inventory v2 / integrity v1 and the kind-aware validator
+until a benchmark demonstrates a pause-latency problem. **The measurement is
+named:** representative 10k, 100k, and large-folder continuations, each sampled
+at late-run `completed_bytes` rather than at admission, since that is when the
+mutable half is largest. If it fails the gate, the continuation is designed
+around the measured cost rather than around this draft — which may well not be a
+nesting change at all.
+
+Should the split be kept anyway for structural clarity, three corrections are
+binding: `refresh_generation` moves into `progress`, fragment ownership is
+`_IntegrityInvocation`'s, and full-payload copying is acknowledged as remaining.
+Its acceptance test is **semantic and result equivalence** between a paused and
+an unpaused run over the same subjects — identical items, outcomes, phase
+truth, and terminal classification. "Resumes byte-identically" is not a
+well-defined criterion, since a resumed run legitimately differs in
+`refresh_generation`, timestamps, and scope token.
 
 The path form remains for the CLI, which legitimately has paths and retains its
 current exact-path meaning. Recursive CLI scope is not inferred or added as a
@@ -1462,11 +1628,20 @@ deep-copying a projection to patch one row (DR-BR-16.1); and a `cli → web`
 import for no-subcommand launch, replaced by a launcher module (§10);
 reconstructing user-selection reasons from the final selected-id set
 (DR-BR-01); exact-path semantics for a folder-node location command
+(DR-BR-06); generalizing the exact-path scan for recursive scope, whose
+ignore rule would make almost every real subtree refresh incomplete
+(DR-BR-06); restating the full scan's incompleteness causes as a closed list
+rather than sharing its helper (DR-BR-06); a descendant count on folder
+integrity menu items, which no rollup can honestly supply because each mode
+selects its own eligible subjects (DR-BR-06); a confirmation dialog for
+folder-scoped integrity actions, which are pausable and cancelable
 (DR-BR-06); a client-only autoscroll anchor that cannot locate an
 unmaterialized row (DR-BR-19); and a second bridge-specific reliable-loss
 policy instead of the dispatcher's existing visible `Gap` path (DR-BR-24).
 
-**Deferred:** filter-exclusion visibility in plan review (DR-BR-07);
+**Deferred:** integrity continuation restructuring, held behind a named
+pause-latency benchmark over late-run `completed_bytes` rather than adopted on a
+reasoned cost (DR-BR-06); filter-exclusion visibility in plan review (DR-BR-07);
 `get_plan_review` rebuilding every view object per call, which the memoized
 tree and direct `preview_selection` path route around rather than fix; and
 persisted selected-kind/integrity summary columns on `history_runs`, which
@@ -1518,7 +1693,8 @@ DR-BR-06 move here: **the hierarchy core** of DR-BR-09's shared tree builder —
 ancestor synthesis, deterministic ids, ordering, subtree membership, rollups —
 DR-BR-10's path helper promotion, DR-BR-11's location-scoped deterministic ids,
 the slim inventory structure lookup needed to resolve them, the recursive
-selected-subtree scan/recorder scope, and the `ExecutionSet`/payload extension
+selected-subtree scan/recorder scope, the scan-warning field and view that carry
+scope incompleteness up to the facade, and the `ExecutionSet`/payload extension
 that retains canonical user-deselection provenance.
 
 The builder's plan-presentation layers stay in Stage 6 slice 4: move grouping,
@@ -1546,13 +1722,31 @@ Contract tests additionally prove:
   overlapping roots canonicalize by segment ancestry, and selecting the
   location root takes the full-scan branch; a mixed row/folder refresh retains
   the exact row outside the subtree without recursively expanding an exact
-  directory row; folder-scoped
-  baseline/verify/rebaseline freeze every indexed descendant even when a view
-  filter hides some of them, inventory workflow payload v2 round-trips the
-  subtree roots and rejects v1 through the shared kind-aware validator while
-  integrity v1 remains accepted, the representative subtree reconciliation
-  query proves an indexed range search, and empty-id and foreign-location
-  requests are refused.
+  directory row; folder-scoped baseline/verify/rebaseline resolve over the
+  folder's complete indexed subtree regardless of which descendants a view
+  filter hides, with each mode's existing eligibility rules then selecting its
+  own subjects; the representative subtree reconciliation query proves an
+  indexed range search; and empty-id and foreign-location requests are refused;
+- a subtree containing ignored entries — `THUMBS.DB`, `DESKTOP.INI`, an owned
+  temp — stays complete and still reconciles; a former folder root that is now a
+  file is recorded as that file and its former descendants become missing; a
+  *file* placeholder or file reparse point leaves completeness intact; a
+  **directory** placeholder, directory reparse point, and repeated directory
+  identity each make the scan incomplete and mark nothing missing; the recursive
+  path is asserted to share the full-walk helper so a newly added full-scan
+  incompleteness cause propagates without a doc edit; and an incomplete subtree
+  refresh delivers its typed scope warnings through `InventoryDetails` to
+  `InventoryDetailsView` — code, path, and detail — rather than reducing to a
+  bare `complete=False`, with rendering left to Stage 6 slice 5;
+- the parameterized walk records a nested root's descendants under the root's
+  own canonical key rather than the location root's, records a root that is now
+  a file as a file, treats an absent root as conclusive while denial or IO error
+  is `ROOT_UNAVAILABLE` and incomplete, names the failing root in that warning
+  instead of `None`, and trips the identity cycle guard for a junction crossing
+  from one requested root into another;
+- inventory v2 round-trips and rejects v1 while integrity v1 remains accepted
+  through the shared kind-aware validator, and a wrong-kind body is rejected at
+  either version.
 
 Stage 5.5 establishes identity and server-side resolution, not desktop
 presentation or per-view caching. Stage 6 consumes the same tree/index
@@ -1583,7 +1777,7 @@ passthrough.
 | 2 | Command allowlist, JSON encoding, opaque-id and folder-picker slots | Every view type round-trips; DR-BR-25's hostile corpus crosses the real bridge as escaped data, origin is rechecked, and the broadened static sink scan passes |
 | 3 | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | XV-18 plus concurrent-drain ordering; a reliable flood beyond bridge capacity reaches the existing visible `Gap`/resubscribe path, terminal truth is recovered, and shutdown wakes blocked drains and producers |
 | 4 | Plan-tree presentation, paging, selection, indexed autoscroll; vertical sync slice end to end | A desktop sync consumes the Stage 5.5 node ids and produces the same facade calls and classification as the CLI; additive Progress compatibility and identity-pair validation pass; an off-window progress item resolves to the correct visible index under collapse/filter/search; the production plan DOM passes DR-BR-25; plan portions of DR-BR-16's scale gate recorded |
-| 5 | Cached inventory projection and integrity views, five resolution states, recursive folder context actions, per-window detail query | XV-14 states render distinctly; row-id exact scope and folder-id recursive scope work end to end; the inventory DOM extension passes DR-BR-25; inventory portions of DR-BR-16's scale gate recorded |
+| 5 | Cached inventory projection and integrity views, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | XV-14 states render distinctly; row-id exact scope and folder-id recursive scope work end to end; an incomplete refresh is visibly distinguished from a clean one and renders its reason rather than only a chip that did not move; each integrity action reports the subject count it actually selected; the inventory DOM extension passes DR-BR-25; inventory portions of DR-BR-16's scale gate recorded |
 | 6 | History, settings, `ui-state.json`, task close sequence, clean shutdown | Four truth axes and the corrected retained `all-noop` classification are visible without string parsing; closing a busy task cancels and waits; history portions of DR-BR-16's large-operation-count scale gate are recorded |
 | 7 | Documentation: rewrite `DESKTOP_UI.md` acceptance to as-built, README, re-status `ui_mockup/` | — |
 
