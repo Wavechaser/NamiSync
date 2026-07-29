@@ -10,6 +10,8 @@ selection binds, and what the bridge may carry. Closing that seam necessarily
 reaches below the facade where information would otherwise be lost: the
 execution continuation retains user-selection provenance, and selected
 inventory refresh gains an explicit recursive-subtree scan-and-record scope.
+The design is complete for implementation: §9 records the last five resolved
+prerequisites, and no product or bridge-design choice remains open.
 
 **Standing.** `FEATURES.md` owns behavior and `ARCHITECTURE.md` owns
 contracts; both outrank this file. `M1_PLAN.md` owns the milestone's decision
@@ -20,14 +22,18 @@ numbered `DR-BR-##` to avoid colliding with either existing series.
 `DESKTOP_UI.md` remains the user-facing delivery contract; this file is the
 mechanism behind it.
 
-**Propagation is deliberately deferred.** This document is still under active
-revision, and scattering half-settled decisions across the active documents
-would mean re-editing them on every pass. Nothing here propagates until it is
-ready. `DESKTOP_UI.md` in particular **requires revision once it does** — its
-interaction contract and acceptance criteria both still specify a typed
-confirmation phrase, which DR-BR-03 removes for the desktop. Other active
-documents are reviewed for drift at the same time, in one pass rather than
-incrementally.
+Section 10 is normative for implementation: a lane or slice is complete only
+when its numbered acceptance gates, decision prerequisites, regression rows,
+and integration/release gates are all satisfied. The delivery table is an
+ordering aid, not an alternative definition of done.
+
+**Propagation is implementation-gated.** This contract is decision-complete,
+but its behavior is not shipped, so active documents are not rewritten to
+pretend otherwise. Stage 6 slice 8 propagates the as-built result in one pass.
+`DESKTOP_UI.md` in particular **requires revision then** — its interaction
+contract and acceptance criteria still specify a typed confirmation phrase,
+which DR-BR-03 removes for the desktop. Other active documents are reviewed for
+drift at the same time rather than incrementally.
 
 ---
 
@@ -57,14 +63,14 @@ decision that serves none of them is a decision to cut.
 
 ### Engineering goals
 
-1. **Headless parity.** Every capability the desktop uses is reachable at or
-   below `interfaces/service.py`, so a test or a second Python adapter can drive
-   it without a browser, and nothing that *decides* anything runs in the browser.
-   Stated at the service rather than "below `interfaces/`" because DR-BR-09
-   deliberately places the flatten/window/search/anchor mechanics in
-   `interfaces/web`: they are presentation, they hold no authority, and the CLI —
-   a sibling forbidden to import `web` — genuinely cannot reach them. What must
-   never be true is a *decision* the backend cannot make on its own.
+1. **Headless authority.** Every authoritative capability the desktop uses is
+   reachable at or below `interfaces/service.py`, so a test or a second Python
+   adapter can drive it without a browser, and nothing that *decides* anything
+   runs in the browser. DR-BR-09 deliberately places the
+   flatten/window/search/anchor mechanics in `interfaces/web`: they are
+   presentation-only, are tested headlessly at that boundary, and need not be
+   reachable through the CLI. What must never be true is a *domain decision*
+   the backend cannot make on its own.
 2. **The import law survives a second interface.** Nothing in this work
    introduces an upward or sideways import, reconstructs domain structure from
    display strings, or moves path arithmetic above `workflows/`.
@@ -74,12 +80,17 @@ decision that serves none of them is a decision to cut.
 4. **Mutations are idempotent and revision-guarded.** Every state-changing
    bridge call is safe to retry and refuses to act on a view the caller has
    already outgrown.
-5. **Bounded work, not just bounded payloads.** Paging bounds the query, the
-   decode, and the allocation — with recorded numbers where a ceiling is
-   claimed.
-6. **No new dormant seams.** A contract lands with its consumer, matching
-   `M1_PLAN.md`'s standing rule; the one exception is a version-bump reservation
-   that would otherwise force a second bump.
+5. **Bounded repeated work, not just bounded payloads.** A window request bounds
+   its detail query, decode, and per-row allocation. The deliberately
+   whole-structure inventory projection and retained-history aggregate are
+   separately measured, cached or indexed as specified by DR-BR-16, and paid at
+   their stated lifecycle rather than once per viewport scroll. Every supported
+   ceiling has recorded time and memory numbers.
+6. **No new dormant seams.** A contract lands with its first consumer, matching
+   `M1_PLAN.md`'s standing rule. The only inherited exception is a version/schema
+   reservation that avoids a second incompatible bump; no Stage 6 cache,
+   projection, or presentation helper lands early merely to make Stage 5.5 look
+   complete.
 
 ### Non-goals
 
@@ -111,8 +122,9 @@ sentence: what the decision does, and what it connects to.
 6. [Concurrency](#6-concurrency)
 7. [Inherited Bridge Posture](#7-inherited-bridge-posture)
 8. [Verification](#8-verification)
-9. [Deferred, Rejected, and Open](#9-deferred-rejected-and-open)
-10. [Delivery](#10-delivery) — work lanes, acceptance gates, regression watchlist
+9. [Deferred, Rejected, and Resolved](#9-deferred-rejected-and-resolved)
+10. [Delivery](#10-delivery) — work lanes, decision prerequisites, acceptance
+    traceability, executable regression watchlist, and Stage 6 slices
 
 ### Decisions by area
 
@@ -263,7 +275,8 @@ everything above to account for.
   — catalogs every piece of state Stage 6 adds that needs explicit
   synchronization because pywebview handlers run on separate threads:
   selection revision (DR-BR-03), reliable-event backpressure, the event-drain
-  guard, the subscription registry, and shutdown order.
+  guard and sequence-gap recovery, the subscription registry, and shutdown
+  order.
 
 - **[DR-BR-27](#dr-br-27--mutating-commands-are-revision-guarded-and-idempotent)**
   — extends DR-BR-03's two safety properties to every other mutating command:
@@ -271,10 +284,8 @@ everything above to account for.
   `APPLIED`/`NOOP`/`STALE`/`CONFLICT` disposition reaching the view, and a
   `view_id` + projection-revision guard so an id-based command cannot freeze a
   subject set the user never saw, with the receipt consulted before the guard so
-  the two do not cancel. **Its single-mechanism assumption is broken and the
-  replacement is open (§9.1)** — the recorder receipt reaches one command family,
-  hashes a timestamp the caller cannot reproduce, and is keyed per gesture while
-  the API is per row.
+  the two do not cancel. Its former single-mechanism assumption is resolved by
+  the recorder/service receipt split in DR-BR-27 and §9.1.
 
 **Verification.** Proof obligations that don't live at a single module.
 
@@ -595,8 +606,8 @@ Integrity actions (`baseline`, `verify`, `rebaseline`) freeze the folder's
 currently indexed descendant rows into exact row ids/paths before admission;
 their existing exact-subject workflow semantics remain unchanged.
 
-**One consequence of that reuse is not neutral and is flagged rather than
-assumed.** `run_integrity` refuses the whole session when its scoped pre-scan is
+**One consequence of that reuse is not neutral.** `run_integrity` currently
+refuses the whole session when its scoped pre-scan is
 not authoritative — `InventoryScopeIncomplete`, taken before any subject is
 examined — and that pre-scan is the exact-path scan, which marks itself
 incomplete on a single per-path access error. Today `selected_paths` holds a
@@ -604,11 +615,17 @@ handful of paths a user named. After folder expansion it holds an entire indexed
 subtree, so one permission-denied descendant among fifty thousand aborts the
 whole folder verify. The input cardinality changes by orders of magnitude while
 the all-or-nothing guard stays fixed, which is the same shape of mismatch this
-decision rejects for refresh two paragraphs below. **Whether that refusal is
-still the right behavior at folder scale is an open product question** (§9), not
-something this decision settles by inheritance. Either way it is gated: a folder
-verify with one unreadable descendant is a required test, so the chosen
-behavior is asserted rather than discovered.
+decision rejects for refresh two paragraphs below.
+
+**Resolution:** a folder-expanded integrity request continues over every
+readable frozen subject. A frozen subject whose exact pre-scan access fails is
+emitted once as `unsupported`, with its warning retained, and receives no
+attestation; the session reports verification incomplete while the remaining
+eligible subjects run normally. This relaxation is narrow: cancellation,
+location/root resolution failure, or any incompleteness not attributable to a
+named frozen subject still refuses the scope before hashing. A folder verify
+with one unreadable descendant is a required test so partial truth cannot become
+a silently clean attestation.
 
 **The action names its scope; it does not predict its count.** A folder
 integrity action can admit far more work than a row action, and integrity
@@ -1196,9 +1213,12 @@ inventory projection is genuine server-side per-view state, and its lifecycle
 is specified there rather than denied here. The default is expanded, so
 collapsing is a deliberate act on a handful of folders, and the existing 64 KB
 inbound cap is the backstop.
-**Responses need a server-enforced `limit` ceiling** — the current cap is
-inbound only, and a truncation must be an explicit refusal rather than a short
-list that reads as a complete tree.
+**Responses have a common server-enforced `limit` ceiling of 256 rows** for
+plan, inventory, and history windows. The current transport cap is inbound
+only, and a truncation must be an explicit refusal rather than a short list
+that reads as a complete tree. M1 starts at 256 because it covers multiple
+fixed-height viewports of prefetch while keeping query, decode, allocation, and
+serialization firmly bounded by one shared number.
 
 Fixed row height is a design constraint, not an aesthetic preference:
 variable heights require measurement passes that make window math fragile.
@@ -1253,6 +1273,9 @@ slim query.**
   responsively, **the supported M1 ceiling is documented rather than left as
   an unknown cliff.** The in-memory projection makes location size a memory
   question as well as a time question, and the gate must record both.
+  Section 9.4 fixes the M1 fixtures, reference machine, sample rules, and
+  ceilings; an implementation result may fail or pass them but may not redefine
+  them after measurement.
 
 Flattening under the active collapsed set, filter, and search remains the
 per-request cost for both trees. If the gate shows it matters, the named
@@ -1323,8 +1346,9 @@ or it leaks memory and serves torn reads.
   between stays instant; a view untouched long enough rebuilds.
 
   The cap is a **count**, not a size-aware budget — predictable, no eviction
-  heuristics. Size it generously (4–6): the WebView2 process tree dwarfs a few
-  slim projections, so being stingy here optimizes the wrong thing. Projection
+  heuristics — and is **six live projections** for M1. The WebView2 process tree
+  dwarfs a few slim projections, so being stingy here optimizes the wrong thing.
+  Projection
   size does scale with location size, so the scale gate records per-projection
   memory and the number is revised against that rather than re-guessed.
 
@@ -1675,6 +1699,15 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   `EventStream` ejects it with a visible `Gap`, and the observer's established
   resubscribe/terminal-record path reconciles. The bridge does not synthesize a
   competing gap vocabulary.
+- **Lost drain response** — adds no acknowledgment protocol, delivery cursor,
+  or server-side per-client receipt. The client already knows the last sequence
+  it accepted. If a drain request fails or the next accepted batch starts after
+  the expected sequence, it immediately takes the existing
+  resubscribe/terminal-record reconciliation path from that last accepted
+  sequence. A lost terminal batch is recovered from the terminal record; live
+  replaceable progress may arrive late after resubscribe but never fabricates
+  continuity. This asks the least of the server and avoids a second delivery
+  state machine whose acknowledgments could themselves be lost or reordered.
 - **Subscription registry** — `SessionObserver.observe` raises when a session
   is already observed, so concurrent task opens must be guarded rather than
   treated as impossible.
@@ -1791,9 +1824,8 @@ formed against, and an idempotency key that survives retry.**
   regenerated on resend, and it is not minted per dispatch, so a double-click or
   a resend collapses to one applied change.
 
-  **⚠ The single mechanism this bullet assumes does not exist, and the
-  replacement is an open decision (§9.1).** Three separate obstacles, all in the
-  current tree:
+  **One mechanism cannot supply this property.** Three separate obstacles exist
+  in the current tree:
 
   1. **The receipt reaches one command family.** `command_id` appears only on
      `InventoryVisibilityCommand`, and only `change_inventory_visibility` keys on
@@ -1814,14 +1846,14 @@ formed against, and an idempotency key that survives retry.**
      gesture, and the receipt key is `command_id` alone. Ten rows under one
      `command_id` collide on the second row.
 
-  The shape of the fix is a split by mechanism rather than one asserted rule —
-  recorder-keyed for acknowledge/restore, with a per-(gesture, row) derived key
-  and a caller-supplied timestamp so a retry is byte-identical; and a
-  service-held `command_id → (request_id, session_id)` map for every facade call
-  that mints an identity and submits a session, returning the existing pair on a
-  repeat. That is recorded as the likely answer, **not** as a decision: it
-  changes a recorder hashing rule that existing M1 code depends on, which is a
-  call to make deliberately.
+  **Resolution: split by mechanism.** Acknowledge/restore remain
+  recorder-keyed, using a per-(gesture, row) derived key and one
+  caller-supplied timestamp reused byte-identically on retry. Every facade call
+  that mints an identity and submits a session instead uses a service-held
+  `command_id → (request_id, session_id)` receipt and returns the existing pair
+  on a repeat. That receipt lives exactly as long as the retained session:
+  `close_session` removes its reverse mapping and service shutdown clears the
+  remainder, so retry safety does not become an unbounded process-lifetime map.
 - **The typed disposition reaches the view.** The recorder already answers
   `APPLIED` / `NOOP` / `STALE` / `CONFLICT`, and DR-BR-05's "view types" phrase
   never named one for it. A primitives-only disposition view carries that value
@@ -1877,7 +1909,7 @@ unrecognized body — so it is asserted, not assumed.
 
 ---
 
-## 9. Deferred, Rejected, and Open
+## 9. Deferred, Rejected, and Resolved
 
 **Rejected with reasons recorded:** the inventory snapshot token (DR-BR-20);
 per-node lazy expansion in favor of flattened windows (DR-BR-15); a
@@ -1919,28 +1951,74 @@ persisted selected-kind/integrity summary columns on `history_runs`, which
 require a later schema-version decision rather than an M1 fallback
 (DR-BR-16.2).
 
-**Open, needing a product or design decision before Stage 5.5 lands:**
+**Resolved implementation prerequisites:**
 
-1. **The idempotency mechanism DR-BR-27 asserts does not exist in one form.**
-   The `command_id` receipt reaches exactly one command family, its payload hash
-   covers a timestamp the caller cannot reproduce, and the session-creating
-   commands mint their own identity per dispatch. See DR-BR-27's own note; the
-   decision is which mechanism replaces the single asserted one.
-2. **Folder-scale `InventoryScopeIncomplete`.** Keep the all-or-nothing refusal
-   for folder-expanded integrity — defensible, since verification writes nothing
-   irreversible and failing loudly beats a silently partial attestation — or
-   record an unreadable frozen subject as an unsupported subject and let the rest
-   proceed. DR-BR-06 flags it; neither answer is inherited.
-3. **What a lost event-drain response costs.** DR-BR-27 lists "a retried drain"
-   among the things its key collapses, but a drain carries no key, touches no
-   receipt, and pops destructively. Either narrow that claim and state that a
-   lost drain is recovered by re-reading the terminal record and, for live
-   events, by the existing `Gap`/resubscribe path — or give the drain a cursor
-   the client echoes. Both are defensible; asserting a property nothing supplies
-   is not.
+1. **Idempotency uses two mechanisms, not one fictional universal receipt.**
+   Recorder mutations use a reproducible per-(gesture, row) key and
+   caller-supplied timestamp; session-creating facade commands use the
+   service-held command receipt and lifecycle specified in DR-BR-27.
+2. **Folder integrity continues past unreadable frozen subjects.** Each such
+   subject becomes one visible `unsupported` result, the run stays explicitly
+   verification-incomplete, and every other eligible frozen subject proceeds.
+   Non-subject-specific incompleteness still refuses before hashing.
+3. **Drain recovery is sequence-gap recovery.** No client acknowledgment,
+   echoed cursor, or second server receipt is added. A failed drain or observed
+   sequence discontinuity takes the existing resubscribe/terminal-record path
+   from the last sequence the client accepted.
+4. **M1's scale envelope is 100,000 file-backed subjects, with concrete
+   reference budgets.** This matches the current user's upper bound; ordinary
+   directories are expected to be in the thousands to tens of thousands. The
+   first reference profile is intentionally this development machine, not a
+   claim about minimum supported hardware:
 
-**Closed:** DR-BR-15 settles the former move-ghost filter question — when a
-filter hides the ghost, its synthetic-only ancestor chain disappears with it.
+   - Windows 11 Pro build 26200;
+   - Intel Core i7-13700K, 16 cores / 24 logical processors;
+   - 63.7 GiB RAM;
+   - repository, fixtures, and SQLite databases on a WD_BLACK SN850X 4 TB NVMe;
+   - CPython 3.13.14 and SQLite 3.50.4.
+
+   Measure on AC power with no unrelated sustained workload. Each p95 uses at
+   least 30 warm samples; each cold maximum uses at least five fresh-process or
+   cold-projection samples. The benchmark artifact records exact commit,
+   machine/runtime profile, fixture seed, raw samples, p95, and maximum.
+
+   | Fixture | Required shape |
+   | --- | --- |
+   | Plan | 100,000 operations plus up to 20,000 synthesized/real folder nodes; dependency and path depth reach 32 |
+   | Inventory | 100,000 file rows plus up to 20,000 directory rows in one location; the slim projection therefore reaches 120,000 nodes |
+   | History | 50 recent-run summaries covering 1,000,000 retained items total, with at least one 100,000-item run; detail paging targets that large run |
+   | Projection retention | Six populated 120,000-node inventory projections, then a seventh view to exercise LRU eviction |
+   | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
+
+   | Measurement on the reference profile | Ceiling |
+   | --- | --- |
+   | Local pending/disabled feedback after a critical click | 50 ms maximum |
+   | Typed facade receipt for execute, pause/resume/cancel, or one-row acknowledge/restore, excluding admitted work | 100 ms p95; 250 ms maximum |
+   | Admission that freezes/normalizes the full 100,000-subject scope (folder refresh/integrity or multi-row visibility) | 500 ms p95; 1 s maximum |
+   | Reliable/terminal bridge delivery under the event fixture | 100 ms p95; 250 ms maximum; no `Gap` |
+   | Replaceable progress delivery under the event fixture | 1 s p95; 2 s maximum; monotonic and ordered after coalescing |
+   | Cold 120,000-node plan projection build | 2 s maximum |
+   | Cold 120,000-node inventory slim-projection build | 3 s maximum |
+   | Unchanged-parameter 256-row plan/inventory window | 250 ms p95; 500 ms maximum |
+   | Changed collapse/filter/search visible sequence plus 256-row window | 750 ms p95; 1.5 s maximum |
+   | `preview_selection` over the plan fixture at depth 32 | 500 ms p95; 1 s maximum |
+   | Fifty-run / 1,000,000-item history summary | 3 s maximum |
+   | 256-row history detail window | 500 ms p95; 1 s maximum |
+   | Incremental plan projection memory | 128 MiB maximum |
+   | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
+   | Incremental bridge event-queue memory under the event fixture | 16 MiB maximum |
+
+   Critical feedback and command admission are strict because they determine
+   whether the interface feels alive. Page, projection, progress, and history
+   work may be late up to the larger ceilings, but lateness never permits a
+   torn page, stale mutation, fabricated sequence, wrong count, or clean result
+   from incomplete evidence.
+5. **The common maximum page size is 256 rows.** Plan, inventory, and history
+   use the same ceiling and refuse 257 rather than truncating it.
+
+**Closed earlier:** DR-BR-15 settles the former move-ghost filter question —
+when a filter hides the ghost, its synthetic-only ancestor chain disappears
+with it.
 
 ---
 
@@ -1996,15 +2074,22 @@ boundary.
 
 | Lane | Owns | Delivers | Depends on |
 | --- | --- | --- | --- |
-| **A — Tree substrate** | `core/pathing.py`, `workflows/node_tree.py`, `modules/planner.py` | DR-BR-10 helper promotion (which *removes* the three private helpers from `planner.py`, so that file is owned here); DR-BR-09's hierarchy core (ancestor synthesis, ordering, subtree membership, rollups); DR-BR-11 location-scoped ids and id→path lookup; the ordered depth/parent-indexed array; the pure `patch_row` used by DR-BR-16.1; DR-BR-26 pure-function tests | nothing |
+| **A — Tree substrate** | `core/pathing.py`, `workflows/node_tree.py`, `modules/planner.py` | DR-BR-10 helper promotion (which *removes* the three private helpers from `planner.py`, so that file is owned here); DR-BR-09's hierarchy core (ancestor synthesis, ordering, subtree membership, rollups); DR-BR-11 location-scoped ids and id→path lookup; the ordered depth/parent-indexed array; DR-BR-26 pure-function tests | nothing |
 | **B — Scan scope** | `core/models.py`, `modules/scanner.py`, `db/recorder.py`, `workflows/inventory.py` | DR-BR-06's `SUBTREES` scope and invariants; the parameterized full-walk helper; the three-way recorder branch and indexed literal range; inventory payload v2 and the kind-aware validator; scan-warning retention into `InventoryDetails` | nothing |
 | **C — Selection semantics** | `workflows/selection.py`, `core/execution.py`, `workflows/payloads.py`, `workflows/views.py`, `workflows/sync.py` | DR-BR-01 user deselection, `USER_DESELECTED`, `ExecutionSet` provenance, payload v4, and `run_execution`'s re-derivation and mismatch refusal; DR-BR-02 upward closure; DR-BR-04 replan discard; the corrected `all-noop` predicate | nothing |
-| **D — Facade** | `interfaces/service.py`, `workflows/runtime.py` | DR-BR-03 revision and three-state commitment; DR-BR-05 four lifts with the disposition view; DR-BR-06 id-based commands; DR-BR-27 guards; `view_id` minting; `preview_selection`; the scan-warning view field | **A, B, C** |
+| **D — Facade** | `interfaces/service.py`, `workflows/runtime.py` | DR-BR-03 revision and three-state commitment; DR-BR-05 four lifts with the disposition view; DR-BR-06 id-based commands; the Stage 5.5 portions of DR-BR-27; `preview_selection`; the scan-warning view field | **A, B, C** |
 
 A, B, and C touch disjoint files and can land in any order. **D is the
 integration point** and is where a disagreement between them surfaces — which
 is the same posture `M1_PLAN.md` takes toward its Stage 4 slice, for the same
 reason.
+
+The lane table owns production files, not every gate that mentions their
+output. `patch_row`, projection ownership, `view_id`, and the projection
+revision guard land together in Stage 6 slice 6, where their cache consumer
+exists. Lane A supplies the immutable array and row indexes that slice consumes;
+Lane D does not pre-mint an otherwise unusable `view_id`. This is engineering
+goal 6 applied to the delivery plan.
 
 Two lane notes worth stating so they are not rediscovered:
 
@@ -2032,8 +2117,11 @@ The builder's plan-presentation layers stay in Stage 6: move grouping, ghost
 annotation, and nested-move suppression (DR-BR-13) are plan tree concerns, and
 Stage 5.5 needs none of them to resolve an inventory node id.
 
-Stage 5.5 is **verified through facade-level tests rather than new CLI
-surface**, all proven against `NamiSyncService` directly. Contract tests prove:
+Stage 5.5 is **verified through headless Python tests rather than new CLI
+surface**. Cross-lane behavior is driven through `NamiSyncService`; pure
+builder, scanner, codec, query-plan, and recorder-receipt invariants are tested
+at their owning boundary because a facade test can make those specific defects
+unobservable. Contract tests prove:
 
 - strict workflow payload v4 round-trips user deselection through pause/resume
   and rejects v3; direct choices settle `SKIPPED`, and dependency fallout
@@ -2106,19 +2194,57 @@ green. The `*Not satisfied by*` idiom is `M1_PLAN.md` §5.1's and is used here
 for the same reason. Numbered `BR-G-##` to avoid colliding with the `XV`
 series.
 
+**Gate closure protocol.** A checked box is not evidence. Every numbered gate
+has at least one collected pytest whose name begins `test_br_g_<number>_`; a
+gate split across levels has one such test at each level it names. Tests call
+the production entry point named by the gate. A test double may fault-inject
+the named dependency, but may not replace the unit whose behavior is under
+test. The counterexample in *Not satisfied by* must be present in the fixture
+or assertion, not merely quoted in a comment.
+
+The only non-pytest evidence is a real-WebView2 platform check, a recorded
+scale result, or a source/import scan explicitly required below. Those produce
+an artifact linked from the implementation change. BR-G-42's pytest proves
+deterministic query/decode/allocation bounds and the benchmark harness; its
+wall-clock and memory budgets run separately on §9.4's reference profile. On
+the supported Windows environment, no ordinary gate test may be skipped or
+xfailed; an uncollected, conditionally skipped, or expected-failing test leaves
+the gate open.
+
+To keep the production lanes disjoint without moving their collisions into
+tests, new Stage 5.5 gate tests have fixed owners:
+
+| Owner | New gate-test module | May close independently |
+| --- | --- | --- |
+| A | `tests/test_bridge_tree.py` | BR-G-1's builder clauses, BR-G-2's structure clauses, BR-G-3 |
+| B | `tests/test_bridge_scan_scope.py` | BR-G-4–9 and BR-G-25–28 |
+| C | `tests/test_bridge_selection.py` | BR-G-11 and BR-G-12 |
+| D/integration | `tests/test_bridge_service.py` and `tests/test_bridge_resume.py` | BR-G-1's service refusal, BR-G-10, BR-G-13–18, BR-G-20, BR-G-21, BR-G-24, BR-G-29 |
+
+The headings below group related contracts; they do **not** imply that every
+gate under a heading is lane-local. A, B, and C are independently mergeable
+only on the clauses in the table's last column plus their regression rows. D
+closes the cross-lane Stage 5.5 gates. Section 9's five former prerequisites are
+resolved and are part of the gates below; implementation may not substitute a
+different retry, partial-integrity, drain, scale, or page-size contract merely
+because its local tests are easier.
+
 **Lane A — tree substrate**
 
 - **BR-G-1 — Node ids are scope-qualified and stable.** Two locations each
   containing `docs\a.txt` produce different node ids; rebuilding either tree
-  twice produces byte-identical ids; a foreign-location id is refused by
-  `NamiSyncService`, not filtered. *Not satisfied by* asserting ids are unique
-  within one tree, which a path-only id also satisfies.
+  twice produces byte-identical ids. At integration, a foreign-location id is
+  refused by `NamiSyncService`, not filtered. *Not satisfied by* asserting ids
+  are unique within one tree, which a path-only id also satisfies; and *not
+  satisfied by* testing the service refusal with a syntactically invalid id,
+  which never proves ownership is checked.
 - **BR-G-2 — The emitted array carries the structure interfaces need.** Assert
-  every node exposes pre-order position, depth, parent index, and subtree
-  extent, and that a collapse/filter/search pass over it references no path
-  string except for display matching. *Not satisfied by* a test that flattens
-  correctly while privately calling `normalize_relative_path` — the point is
-  that the array makes that call unnecessary.
+  every node exposes pre-order position, depth, parent index, subtree extent,
+  and stable id→position lookup. Stage 6's BR-G-34 then asserts a
+  collapse/filter/search pass over it references no path string except for
+  display matching. *Not satisfied by* deriving a missing parent or subtree
+  boundary inside the presentation layer; the point is that the array makes
+  path arithmetic there unnecessary.
 - **BR-G-3 — The promotion changed nothing.** The planner's pre-existing test
   file passes unmodified, and a diff of the three helpers shows relocation
   only. *Not satisfied by* new tests written against the promoted helpers,
@@ -2142,12 +2268,15 @@ series.
   asserting the query returns rows; assert that a sibling the wildcard would
   have matched is untouched.
 - **BR-G-7 — Completeness is inherited, not restated.** A subtree containing
-  `THUMBS.DB` reconciles normally; each of the directory placeholder, directory
-  reparse, and repeated-identity conditions withholds all missing inference; and
-  a test asserts the recursive path routes through the shared full-walk helper
-  so a newly added incompleteness cause propagates without a doc edit. *Not
-  satisfied by* enumerating today's causes in the test, which reproduces the
-  closed-list bug one layer down.
+  `THUMBS.DB`, `DESKTOP.INI`, or an owned temp reconciles normally; a file
+  placeholder or file reparse remains complete; each of the directory
+  placeholder, directory reparse, and repeated-directory-identity conditions
+  withholds all missing inference. A junction crossing from one requested root
+  into another trips the shared identity guard. A structural test asserts the
+  recursive path routes through the shared full-walk helper so a newly added
+  incompleteness cause propagates without a doc edit. *Not satisfied by*
+  enumerating today's causes only in a subtree-specific implementation or test,
+  which reproduces the closed-list bug one layer down.
 - **BR-G-8 — Absence and unavailability are distinguished at the root.** A
   deleted root is conclusive and marks its former subtree missing; a
   permission-denied root is `ROOT_UNAVAILABLE`, incomplete, and marks nothing;
@@ -2166,6 +2295,33 @@ series.
   payload-hash work not done at all; and *not satisfied by* asserting a replay
   of the identical command is a `NOOP`, which is the naive assertion this gate
   exists to rule out.
+- **BR-G-25 — Scope normalization preserves the union's meaning.** A mixed
+  request containing exact rows and recursive folders canonicalizes overlapping
+  subtree roots by segment ancestry, preserves an exact file outside those
+  roots, and does **not** recursively expand an exact directory row. Selecting
+  the location root produces `FULL`, not a degenerate `SUBTREES`; duplicate ids
+  do not duplicate subjects. *Not satisfied by* testing each scope form in
+  isolation, where a lossy "convert everything to roots" implementation passes.
+- **BR-G-26 — Every reconciled presence state takes the intended branch.** A
+  completed subtree refresh marks disappeared `present` and `unsupported` rows
+  inside its exact-path/root union missing, preserves already-`missing` rows,
+  and leaves all rows outside the union byte-for-byte unchanged. An incomplete
+  refresh marks none of them missing. *Not satisfied by* counting missing rows
+  without asserting the before/after state of every in-scope and out-of-scope
+  fixture row.
+- **BR-G-27 — Reconciliation seeks literal ranges through the declared index.**
+  The representative subtree predicate is
+  `rel_path_key >= root || '\' AND rel_path_key < root || ']'`; an
+  `EXPLAIN QUERY PLAN` assertion proves SQLite searches through
+  `inventory_location_presence_idx` with the location, presence, and key range
+  constrained. The hostile-root fixtures from BR-G-6 execute through this exact
+  path. *Not satisfied by* a `LIKE` query with escaping, an index merely present
+  in the schema, or a plan that reports a scan.
+- **BR-G-28 — Inventory and integrity codecs version independently.** Inventory
+  v2 round-trips and rejects v1; integrity v1 still round-trips; a wrong-kind
+  body is rejected at either version; and the shared validator's version guard
+  is proven kind-aware. *Not satisfied by* separate test-only decoders or by
+  testing only the two accepted payloads, which misses cross-kind acceptance.
 
 **Lane C — selection semantics**
 
@@ -2195,22 +2351,30 @@ series.
   same answer as the corrected one — the gate must contain at least one input on
   which the two disagree. The corrected predicate's other consumer is
   DR-BR-16.2's retained-history aggregate, which must reach the same verdict from
-  persisted `kind`/`reason` columns.
+  persisted `kind`/`reason` columns. In addition to the classifier
+  counterexample, a service-level test admits a nonempty all-`NOOP` plan,
+  executes it, records its items, and returns `all-noop`; an all-skipped plan is
+  refused before admission. *Not satisfied by* treating both as empty work or
+  by proving only the pure classifier.
 - **BR-G-12 — Safety exclusions are unreachable, and reselection closes upward.**
-  Reselecting a child of a blocked parent leaves the child excluded; a mutation
-  naming a safety-excluded id is refused rather than absorbed. Separately —
-  DR-BR-02's half — reselecting a deselected file *under a user-deselected
-  folder* also clears that folder's `MKDIR` from the user set, so the child is
-  selected in the very next derivation rather than immediately re-excluded as
-  `blocked-dependency`. *Not satisfied by* asserting the final selection is
-  correct after a deselect-only sequence, which merging the two sets also
-  achieves until the reselect path runs; and *not satisfied by* the
-  blocked-parent case alone, which exercises the refusal but never the upward
-  closure.
+  On a graph containing both dependency directions, directly deselecting an
+  operation adds only that id to `user_deselected`, cascades the effective
+  exclusion through every dependent, and labels the fallout
+  `BLOCKED_DEPENDENCY`; reselecting a child of a safety-blocked parent leaves
+  the child excluded. A mutation naming a safety-excluded or unknown id is
+  refused rather than absorbed. Separately — DR-BR-02's half — reselecting a
+  deselected file *under a user-deselected folder* also clears that folder's
+  `MKDIR` from the user set, so the child is selected in the very next
+  derivation rather than immediately re-excluded as `blocked-dependency`.
+  *Not satisfied by* storing dependency fallout in `user_deselected`, asserting
+  the final selection only after a deselect-only sequence, or exercising the
+  blocked-parent case without the upward closure.
 - **BR-G-13 — A replan discards.** A replan of an unchanged tree — reproducing
-  identical operation ids — resets the selection and revision, and the
-  resulting `selection_digest` differs from the pre-replan one. *Not satisfied
-  by* asserting the UI shows a message.
+  identical operation ids — after at least one operation has first been
+  user-deselected resets the selection and revision, and the resulting
+  `selection_digest` differs from the pre-replan deselected one. *Not satisfied
+  by* replanning an untouched default selection, whose digest is allowed to be
+  identical; and *not satisfied by* asserting the UI shows a message.
 - **BR-G-24 — A folder gesture covers the subtree, not the viewport.** A folder
   deselect over a subtree whose descendants are split by a collapsed ancestor
   removes every operation at or under that path, and the folder's rollup counts
@@ -2239,7 +2403,9 @@ series.
   the first reflows the list (DR-BR-20). A replayed multi-row gesture applies
   each row exactly once without raising. A replayed session-creating command
   yields **one** session, not two. The folder-integrity freeze is taken inside
-  the same validation that resolves the ids. *Not satisfied by* asserting
+  the same validation that resolves the ids. The service-held receipt survives
+  while that session is retained, is removed by `close_session`, and is cleared
+  at shutdown. *Not satisfied by* asserting
   acknowledge works, which a non-idempotent implementation also passes on first
   call; and *not satisfied by* asserting the two calls return the same value,
   which is false by construction.
@@ -2275,6 +2441,20 @@ series.
   delivers typed warnings with code, path, and detail through
   `InventoryDetailsView`. *Not satisfied by* asserting `complete is False`,
   which is precisely the reduction this work exists to undo.
+- **BR-G-29 — Every promised location command crosses the real facade.**
+  `acknowledge_inventory`, `restore_inventory`,
+  `list_unacknowledged_missing`, and `list_stale_inventory` are each driven
+  through `NamiSyncService` and return primitives-only views. Refresh,
+  baseline, verify, and rebaseline each accept owned row ids and folder ids,
+  union and deduplicate mixed ids, refuse empty and foreign-location
+  collections, freeze integrity folders to exact subjects before admission,
+  and continue a folder operation past one unreadable frozen subject while
+  emitting that subject once as `unsupported` and keeping the run explicitly
+  verification-incomplete. Cancellation or non-subject-specific incompleteness
+  still refuses before hashing. *Not satisfied by* testing
+  `LocalWorkflowRuntime` directly,
+  by covering only one of the four lifts or four location commands, or by
+  resolving ids in a test helper before calling the service.
 
 **Stage 6 — deferred here because their object does not exist until then**
 
@@ -2289,6 +2469,181 @@ series.
   stale and the client re-reads; the refusal is distinguishable from a receipt
   replay. *Not satisfied by* a monotonic counter nothing advances, which passes
   every assertion in a test that never invalidates.
+- **BR-G-30 — The host assumptions are measured before they become
+  architecture.** On supported Python 3.13 and the pinned pywebview range, the
+  spike records real `CoreWebView2` reachability, pythonnet event-handler syntax,
+  the asset-server origin actually observed at runtime, and off-thread
+  `current_url` behavior. *Not satisfied by* documentation lookup, a mock
+  `Window`, or a different Python/runtime combination.
+- **BR-G-31 — The packaged host keeps its security and process boundaries.**
+  A built installation opens on Edge Chromium, attaches navigation and
+  new-window guards before app data is accepted, rejects a missing or
+  incompatible WebView2 with an actionable message, rejects an off-origin
+  dispatch independently of navigation hardening, and routes no-subcommand
+  launch through `interfaces/launcher.py`. Explicit CLI subcommands do not
+  import or initialize pywebview. A second launch activates the existing window
+  and exits successfully; activation failure is visible and still non-error.
+  *Not satisfied by* running from a source checkout, guarding only navigation,
+  or importing `web` lazily from `cli`.
+- **BR-G-32 — The transport is one allowlisted, inert-data channel.** Every
+  public view type round-trips through the production JSON codec and the one
+  exposed `dispatch(command_json)`; unknown versions, commands, fields, and
+  malformed opaque ids are refused before invocation. The scanner's complete
+  hostile-name corpus crosses the real bridge byte-for-byte as display text,
+  and the broadened DR-BR-25 sink scan is empty. The native folder picker keeps
+  its real path server-side, returns only `{id, display}`, accepts the slot id
+  through dispatch, and refuses a fabricated id; no response or command contains
+  the path as authority. The inbound cap refuses an oversized command or search
+  string before decode/invocation. *Not satisfied by* a
+  direct Python call that bypasses dispatch, a benign-name subset, a test-only
+  renderer, returning a real picker path, or an `innerHTML`-only source scan.
+- **BR-G-33 — Event delivery remains ordered, bounded, recoverable, and
+  stoppable.** Concurrent drains cannot reorder or split one task's sequence;
+  progress coalesces without displacing reliable data; a reliable flood reaches
+  the existing visible `Gap`/resubscribe path and terminal truth is recovered;
+  shutdown refuses new handlers, waits for admitted handlers, and wakes drains
+  and capacity-blocked producers before closing observations. A failed drain or
+  a sequence discontinuity resubscribes from the last client-accepted sequence
+  and recovers terminal truth without a client acknowledgment, echoed cursor,
+  or new server receipt. Fault-inject a lost response containing reliable data
+  and a separate lost response containing the terminal delivery; both reconcile
+  through the production resubscribe/terminal-record path, while replaceable
+  progress may coalesce to the latest truthful snapshot. Concurrent
+  observe attempts create one subscription or a named refusal, and a
+  fault-injected slow facade call proves no `TaskState` lock is held across it.
+  *Not satisfied by* a single drain, a naturally finishing session, one task,
+  or a queue that stays below capacity.
+- **BR-G-34 — One visible-sequence implementation defines both trees.** The
+  same pure flattener produces plan and inventory windows from the ordered array
+  under expanded/collapsed, filter, and casefolded-display-substring search
+  combinations. Changing parameters replaces one active sequence rather than
+  retaining a parameter-keyed family. A folder appears only for a visible
+  descendant or its own match; move-ghost-only ancestors disappear with a
+  filtered ghost; folder rollups remain unfiltered while chip counts describe
+  the filtered view. Search treats regex metacharacters literally, matches the
+  casefolded display form only, and rejects an over-cap query. The default is
+  expanded, fixed row height is enforced, 256 rows are accepted, and 257 are
+  refused rather than truncated. A static assertion proves the implementation calls no
+  path helper and reconstructs no parent or descendant relationship from display
+  text. *Not satisfied by* filtering an already-windowed page, searching the
+  canonical key, or separate plan and inventory flatteners fed the same
+  fixtures.
+- **BR-G-35 — Plan presentation preserves operation truth while compressing
+  moves.** The plan tree memo is byte-stable per request and is dropped with the
+  plan; selection overlays do not rebuild its structure. Move annotation uses
+  the union of target and prior-target ancestors, keeps the ordinary folder
+  selection scope and original operation kinds, emits a noninteractive old-path
+  ghost only when no real node exists there, annotates the real old node when it
+  does, and suppresses nested ghosts. Synthetic node ids never enter execution,
+  persistence, or a selection digest. The production plan DOM passes DR-BR-25.
+  *Not satisfied by* a move-only happy path, a synthetic operation standing in
+  for a folder, or a renderer that relabels inferred groups as renames.
+- **BR-G-36 — Progress compatibility and follow mode use identity, never
+  display paths.** A pre-change Progress body lacking the two identity fields
+  decodes through `.get(...)`; a new body serializes both; one-sided and
+  unknown-type pairs are rejected; and both production reporters emit the
+  correct nominal pair without changing the current envelope version. An
+  off-window item resolves through its server-supplied
+  ancestor chain to the deepest visible ancestor-or-self and exact visible
+  index under collapse, filter, and search; the window and anchor-only paths
+  call the same resolver. User scrolling disables follow until explicit resume.
+  A static/counterexample test proves `current_path` is never used for identity
+  or lookup. *Not satisfied by* testing only a currently materialized operation
+  or by joining an id to a matching display path.
+- **BR-G-37 — Virtualization cannot own or narrow selection.** Rows destroyed
+  and recreated by scrolling recover the server's current selection; a folder
+  gesture covers filtered, collapsed, and off-window descendants; tri-state
+  values and rollups come from the server; and `preview_selection` calls
+  `derive_execution_selection` directly rather than `get_plan_review`. A burst
+  of toggles enters visible pending state, batches within the configured
+  120–150 ms interval as one mutation and one revision advance, and resolves
+  conflict by re-read rather than optimistic local repair. Execute is
+  unconfirmed unless the effective selection carries the irreversible risk from
+  BR-G-20. *Not satisfied by* a fully materialized, unfiltered tree or one click
+  per debounce interval.
+- **BR-G-38 — The inventory projection pays whole-location work once per
+  lifecycle.** A slim explicit-column query builds one immutable projection per
+  `view_id` without constructing full `InventorySnapshot`s; detail queries
+  fetch only the visible row ids. Rebuild occurs outside the service lock and
+  swaps inside it. Concurrent patches and patch-vs-rebuild races satisfy
+  BR-G-22; unchanged node objects and position indexes retain identity after a
+  one-row patch; session terminal causes a rebuild. Two views of one location
+  remain independent, six projections are retained LRU, the seventh evicts the
+  least-recently-used one, and location change, task close, and service shutdown
+  release their views. Eviction and invalidation take the same stale-revision
+  client path. *Not satisfied by* rebuilding on every page, deep-copying every
+  node, guarding only the immutable value rather than the cache map, or testing
+  fewer than seven views.
+- **BR-G-39 — Inventory interaction exposes all observed truth and exact
+  scope.** The five XV-14 resolution states render distinctly; incomplete
+  refresh shows each typed warning's code, path, and detail; row actions remain
+  exact while folder refresh is recursive and folder integrity freezes all
+  indexed descendants regardless of filter. Each integrity action reports the
+  count it actually selected after mode eligibility. One unreadable frozen
+  descendant produces one visible `unsupported` item and an incomplete
+  verification axis while every other eligible subject proceeds.
+  Acknowledge hides the row by default, changes no ancestor rollup, refetches
+  the shifted window only on `APPLIED`, and updates missing/acknowledged chip
+  counts; restore is reachable through the acknowledged filter. No view-open or
+  timer path auto-scans. The production inventory DOM passes DR-BR-25. *Not
+  satisfied by* a generic warning chip, a descendant count predicted before
+  mode selection, or a default view that still contains acknowledged rows.
+- **BR-G-40 — History work is paged before object decoding and preserves
+  classification.** The recent-run query is bounded by its run limit and never
+  calls full `get()` per row. Its indexed primitive aggregate reads
+  `(kind, result, reason, count)` and integrity facts without selecting or
+  decoding `detail_json`; workflow code, not `db`, interprets them. A run's
+  detail query pages by immutable `item_order`, phases load whole, adjacent
+  headline precedence remains XV-10 exact, and retained `all-noop` matches the
+  live kind/reason classifier including `USER_DESELECTED`. `EXPLAIN QUERY PLAN`
+  proves the aggregate seeks the `(run_id, item_type, item_id)` index range, and
+  query-count/decode-spy assertions prove the list path constructs no item
+  objects. A 256-row detail request succeeds and 257 is refused rather than
+  truncated.
+  *Not satisfied by* slicing after `HistoryRepository.get()` or by matching only
+  the final headline of an uncomplicated run.
+- **BR-G-41 — Task and process lifecycle lose neither work nor authority.** A
+  reviewed task exists without a session; a plan session closes after terminal
+  delivery while its artifact survives until task close; compound phases remain
+  one session with independent counters. Closing a live task asks once, enters
+  visible closing, cancels, waits for a terminal **record**, then unsubscribes,
+  closes, and drops the plan; refusal leaves it open. A delayed terminal leaves
+  the card visibly closing without prematurely closing the session or dropping
+  the plan. Closing a terminal task asks nothing. `ui-state.json` round-trips
+  only the permitted cosmetic fields, including collapsed opaque node-id sets,
+  but never serializes a plan request id, session id, task identity, selection,
+  `view_id`, or projection revision; corruption recovers with defaults. Settings
+  round-trip through the service;
+  invalid values do not poison the file, and changed semantics affect the next
+  plan but never an already committed one. Shutdown under concurrent dispatch
+  satisfies DR-BR-24 and XV-18. *Not satisfied by* cleanup triggered by the
+  terminal event, by a task rail reconstructed only from `list_sessions()`, or
+  by a clean idle shutdown.
+- **BR-G-42 — The named scale envelope passes fixed budgets.** Using §9.4's
+  exact fixtures, reference profile, sample rules, and ceilings, record critical
+  click feedback, command/frozen-scope receipt latency, plan projection build
+  and memory, inventory slim-projection build and per-projection memory,
+  unchanged-parameter and changed-parameter window latency, bounded detail-query
+  row and decode counts, `preview_selection` at depth 32, and history
+  summary/detail latency over the exact retained-item fixture. It also records
+  event-drain latency and peak bridge-queue memory under the stated normal
+  burst/rate and proves no `Gap` occurs below that envelope. The ordinary pytest
+  deterministically asserts query count, decoded row count,
+  allocation-sensitive object count, queue bound/coalescing, and fixture shape;
+  the named benchmark command runs cold and warm cases separately and records
+  machine/runtime identity. *Not satisfied by* choosing sizes after seeing
+  results, reporting averages without the declared percentile/maximum,
+  measuring only payload bytes, allowing normal-load gaps, or using many empty
+  history runs instead of a large retained run.
+- **BR-G-43 — Documentation describes the shipped contract, not the plan.**
+  `DESKTOP_UI.md`, the focused component documents, README overview/index/
+  limitations/changelog, and `ui_mockup/` status agree with the implemented
+  behavior and supported scale envelope. A release trace maps every active
+  `DESKTOP_UI.md` acceptance item to a BR-G/test or to an explicit, already
+  approved deferral; zero items are merely omitted. *Not satisfied by* marking
+  this bridge implemented while active documentation still describes the
+  pre-bridge CLI or mockup behavior, or by copying an unmapped requirement into
+  a new prose checklist.
 
 **Import law, gating every lane**
 
@@ -2298,33 +2653,113 @@ series.
   `normalize_relative_path`, `validate_relative_path`, or any `core` path
   helper. *Not satisfied by* the linter alone, which permits indirect use
   through a re-export.
+- **BR-G-44 — The repository closes as one system.** The complete pytest suite
+  and `lint-imports` pass from a clean checkout with the supported interpreter;
+  every `test_br_g_*` test is collected, none is skipped/xfail on Windows, and
+  `git diff --check` is clean. The narrow gate and watchlist commands are
+  diagnostics, not substitutes. *Not satisfied by* running only changed test
+  files, deselecting slow/platform tests, or weakening an existing assertion to
+  preserve green.
+
+Stage 6 follows the same collision rule as Stage 5.5. Host/transport tests live
+under `tests/interfaces/web/test_host.py`, `test_transport.py`, and
+`test_events.py`; pure presentation tests live in `test_visible_sequence.py`;
+sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
+`test_inventory_surface.py`, and `test_lifecycle.py`; scale tests live in
+`tests/test_bridge_scale.py`. Their gate tests retain the
+`test_br_g_<number>_` prefix. A slice may add narrower unit files, but moving a
+gate test elsewhere requires updating this table in the same change so no
+acceptance test becomes undiscoverable.
+
+**Decision-to-gate traceability.** This is the completeness check. A DR is not
+implemented because its code exists; it is implemented only when every gate in
+its row and the applicable regression rows are green.
+
+| Decision | Required gate(s) |
+| --- | --- |
+| DR-BR-01 | BR-G-10–13, BR-G-20, BR-G-24, BR-G-37, BR-G-40 |
+| DR-BR-02 | BR-G-12, BR-G-24, BR-G-37 |
+| DR-BR-03 | BR-G-13–15, BR-G-17, BR-G-20, BR-G-21, BR-G-37 |
+| DR-BR-04 | BR-G-13 |
+| DR-BR-05 | BR-G-16, BR-G-18, BR-G-29 |
+| DR-BR-06 | BR-G-1, BR-G-4–9, BR-G-18, BR-G-25–29, BR-G-39 |
+| DR-BR-07 | BR-G-7 and scanner hostile/completeness regression rows |
+| DR-BR-08 | BR-G-19, BR-G-34, BR-G-36, BR-G-37 |
+| DR-BR-09 | BR-G-2, BR-G-19, BR-G-34, BR-G-35, BR-G-38 |
+| DR-BR-10 | BR-G-2, BR-G-3, BR-G-19 |
+| DR-BR-11 | BR-G-1, BR-G-2, BR-G-23, BR-G-35, BR-G-38 |
+| DR-BR-12 | BR-G-12, BR-G-24, BR-G-29, BR-G-37, BR-G-39 |
+| DR-BR-13 | BR-G-34, BR-G-35 |
+| DR-BR-14 | BR-G-32, BR-G-36 |
+| DR-BR-15 | BR-G-2, BR-G-34, BR-G-36 |
+| DR-BR-16 | BR-G-27, BR-G-34, BR-G-38, BR-G-40, BR-G-42 |
+| DR-BR-16.1 | BR-G-22, BR-G-23, BR-G-38, BR-G-42 |
+| DR-BR-16.2 | BR-G-11, BR-G-40, BR-G-42 |
+| DR-BR-17 | BR-G-14, BR-G-24, BR-G-37 |
+| DR-BR-18 | BR-G-34, BR-G-36 |
+| DR-BR-19 | BR-G-34, BR-G-36 |
+| DR-BR-20 | BR-G-16, BR-G-23, BR-G-38, BR-G-39 |
+| DR-BR-21 | BR-G-35, BR-G-41 |
+| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41 |
+| DR-BR-23 | BR-G-31 |
+| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41 |
+| DR-BR-25 | BR-G-32, BR-G-35, BR-G-39 |
+| DR-BR-26 | BR-G-1–3, BR-G-35 |
+| DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33 |
+
+BR-G-19, BR-G-43, and BR-G-44 are cross-cutting release gates and therefore
+apply to every row even where not repeated. Product goals 1–5 are witnessed,
+respectively, by `{34,35,42}`, `{12,20,24,37,39}`,
+`{18,36,39,40,41}`, `{6,32,35,39}`, and `{15,20,21,37,39,41}`.
 
 ### Regression watchlist (existing M1)
 
-These already pass and this work can silently break them. Each names the lane
-most likely to trip it, so a lane owner knows what to run before merging.
+These are preservation guards, not restatements of the new gates. Every
+currently existing target passes before bridge work; changing an old assertion or fixture to
+accommodate the bridge is a regression unless the governing DR explicitly
+changes that behavior. Commands are repository-root PowerShell commands and use
+stable files/symbols rather than line numbers. A row may run more tests than its
+named XV because that is safer than maintaining a brittle node-id list. XV-19's
+three named files are created by slices 2, 5, and 6 and become mandatory as each
+lands.
 
-| Watch | Why it is at risk | Lane |
+| Watch | Required command | Why it is at risk / owner |
 | --- | --- | --- |
-| `XV-13` scoped completeness | `ScanResult.complete` gains a third scope kind; the exact-`PATHS` branch must keep its current meaning | B |
-| `XV-14` five volume states | Inventory workflow and `InventoryDetails` change shape around resolution | B |
-| `XV-17` history-v3 reservation | No schema change is permitted by this work; assert the marker and shapes are untouched | B, C |
-| `XV-1`/`XV-5` published evidence | `ExecutionSet` gains a field; payload round-trip and pause fidelity must not regress | C |
-| `XV-10` headline precedence | The `all-noop` predicate changes; every adjacent precedence boundary must still flip correctly | C |
-| `XV-7` resumed-refusal settlement | DR-BR-01 inserts a new pre-preflight refusal into `run_execution`, where every existing failure is routed through the `resumed`/`VerifyContinuation` settlement ladder. A mutated resume must still finish `FAILED+RAN`, never fresh `REFUSED+UNRUN`, and a verify resume must still settle verify-incomplete | C |
-| `XV-18` observer teardown | Stage 5.5 adds `view_id` minting and validation to the service; its shutdown must still close every stream before joining. Projection cleanup joins this row only at Stage 6 slice 6 | D |
-| 13 M0 sync/history CLI end-to-end tests | `commit_plan` gains a keyword-only parameter | C, D |
-| Stage 5 CLI location-command tests (`tests/test_cli.py`) | `InventoryDetails` gains a warnings field and the location commands gain an id form; `cli.py` renders `complete=` straight off `InventoryDetails` | B, D |
-| Scanner scope dispatch (`scanner.py:255`) | The dispatch is `if PATHS: _scan_selected else: _scan_full`, so a new `SUBTREES` member silently falls through to a whole-location walk instead of failing | B |
-| `run_integrity` scoped-incompleteness refusal (`inventory.py:567`) | Folder expansion turns a handful of exact paths into a whole indexed subtree, so one unreadable descendant now refuses the entire session before any subject is examined | B, D |
-| `derive_execution_selection` unit tests | Signature gains a keyword-only parameter; existing safety-exclusion behavior must be identical with the default | C |
-| Planner path-helper behavior | Pure relocation, easily "tidied" in transit | A |
-| Inventory/integrity payload tests | `_payload` gains a parameter; integrity must still accept v1 | B |
-| Scanner hostile-name corpus | The walk is parameterized; escaping and unrepresentable-path handling must not shift | B |
+| `XV-1`–`XV-8` compound execution, continuation, and phase truth | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor.py tests/test_post_execution_workflow.py tests/test_payload_roundtrip.py tests/dispatcher/test_dispatcher.py` | `ExecutionSet` and payload v4 change the handoff that must retain evidence, phase, one run, refusal settlement, and independent truth axes / C, D |
+| `XV-9`–`XV-10` history vocabulary and headline precedence | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_history.py tests/test_workflow_views.py tests/test_cli.py` | The retained classifier and `all-noop` input change; every adjacent precedence edge and secondary axis must remain visible / C, Stage 6 slice 7 |
+| `XV-11`–`XV-12` frozen settings and codec shape | `.\.venv\Scripts\python.exe -m pytest -q tests/test_settings_facade.py tests/test_payload_roundtrip.py tests/test_planner.py` | Commitment construction and execution payloads change; no live-settings read or removed field may return / C, D |
+| `XV-13` scope completeness and recorder branch | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py tests/test_recorder_inventory_integrity.py` | `SUBTREES` must not alter exact `PATHS` or fall through to `FULL`; incomplete scans infer no missing rows / B |
+| `XV-14` five volume states and `XV-15` wakeup re-resolution | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py` | Folder expansion and reshaped details must preserve five distinct states and re-resolve on resumed/woken integrity work / B, D |
+| `XV-16` shared hash factory and production composition | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor.py tests/test_inventory_runtime.py tests/test_db_repositories.py tests/test_package.py tests/modules/test_verifier.py` | Payload/runtime edits must not fork verifier construction, diverge copy from verify encoding, or import a second hash implementation / B, C |
+| `XV-17` history-v3 reservation | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | No schema change, ALTER, or second version bump is permitted; the reserved generic item/phase shapes remain exact / B, C, Stage 6 slice 7 |
+| `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
+| `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_transport.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | This becomes executable across slices 2, 5, and 6; all three files are required because transport alone cannot prove production DOM sinks / slices 2, 5, 6 |
+| `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
+| M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | Stage 5.5 leaves this file byte-for-byte unchanged. Slice 1 may replace only the no-subcommand/entry-point expectations required by the launcher decision; every explicit sync, history, inventory, and integrity command remains behaviorally unchanged / B, C, D, slice 1 |
+| Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |
+| Scanner hostile names, cancellation, and walk completeness | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py` | Parameterizing the walk must preserve literal names, escaped/unrepresentable reporting, identity-cycle handling, cancellation checks, and every existing incompleteness cause / B |
+| Recorder receipt, range, and transaction behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_recorder_inventory_integrity.py tests/test_recorder_concurrency.py` | Scope enters the payload hash and missing marking gains a third branch; idempotent transaction and concurrency behavior must not weaken / B, D |
+| Inventory/integrity payload and pause behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py tests/test_payload_roundtrip.py` | A kind-aware shared validator and expanded frozen subject set must preserve integrity v1, pause order, and incomplete-scope settlement / B, C, D |
+| Service facade and import boundary | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/test_package.py` then `.\.venv\Scripts\lint-imports.exe` | New lifts, state, launcher, and web adapter must preserve primitives-only views, lazy CLI imports, shutdown order, and every layer edge / D, slices 1–3 |
 
-A lane is not mergeable on its own gates alone: its watchlist rows must be
-green too. That is the whole point of listing them here rather than
-discovering them at D.
+A lane runs every row naming it before merge. D runs all Stage 5.5 rows because
+it integrates A/B/C. Every Stage 6 slice runs its named rows plus its
+`test_br_g_*` module. Before Stage 5.5 integration, before each vertical slice
+(5–7), and before release, BR-G-44's full-suite command is mandatory; this
+watchlist never authorizes a partial-suite sign-off.
+
+The BR-G-44 release evidence is the unedited output of:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\lint-imports.exe
+git diff --check
+```
+
+The pytest summary must contain no skipped, xfailed, or xpassed bridge gate on
+the supported Windows profile. The implementation change also records the
+collected `test_br_g_*` node ids, so a misspelled or undiscovered gate test
+cannot disappear behind a green full-suite total.
 
 ### Stage 6
 
@@ -2335,25 +2770,29 @@ inventory work depend on plan work it does not need. Extracting the
 tree-agnostic presentation core lets the plan and inventory surfaces proceed as
 a parallel pair.
 
-| # | Department | Slice | Gate |
-| --- | --- | --- | --- |
-| 0 | Host | pywebview reality spike | Supported version range on Python 3.13; `CoreWebView2` reachability, pythonnet handler syntax, asset-server origin at runtime, off-thread `current_url` |
-| 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | Window opens on real WebView2, guards attached, missing/incompatible WebView2 is refused, off-origin dispatch rejected, second launch activates the first, `lint-imports` passes with the launcher contract and no `cli ↔ web` edge |
-| 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | Every view type round-trips; DR-BR-25's hostile corpus crosses the real bridge as escaped data, origin is rechecked, and the broadened static sink scan passes |
-| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | XV-18 plus concurrent-drain ordering; a reliable flood beyond bridge capacity reaches the existing visible `Gap`/resubscribe path, terminal truth is recovered, and shutdown wakes blocked drains and producers |
-| 4 | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver, over Lane A's ordered array | Identical flatten results for a plan tree and an inventory tree of the same shape; a folder with no visible descendant is hidden while a matching folder is kept; the server-enforced `limit` ceiling refuses rather than truncates; BR-G-2's no-path-arithmetic assertion holds |
-| 5 | Sync surface | Plan-tree presentation, selection controls, indexed autoscroll; vertical sync slice end to end | A desktop sync consumes the Stage 5.5 node ids and produces the same facade calls and classification as the CLI; additive `Progress` compatibility and identity-pair validation pass; an off-window progress item resolves to the correct visible index under collapse/filter/search; the production plan DOM passes DR-BR-25; plan portions of DR-BR-16's scale gate recorded |
-| 6 | Integrity surface | Cached inventory projection and `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | XV-14 states render distinctly; row-id exact scope and folder-id recursive scope work end to end; an incomplete refresh is visibly distinguished from a clean one and renders its reason rather than only a chip that did not move; each integrity action reports the subject count it actually selected; BR-G-22 and BR-G-23 pass; the inventory DOM extension passes DR-BR-25; inventory portions of DR-BR-16's scale gate recorded |
-| 7 | Lifecycle | History, settings, `ui-state.json`, task close sequence, clean shutdown | Four truth axes and the corrected retained `all-noop` classification are visible without string parsing; closing a busy task cancels and waits; history portions of DR-BR-16's large-operation-count scale gate are recorded |
-| 8 | Docs | Rewrite `DESKTOP_UI.md` acceptance to as-built, README, re-status `ui_mockup/` | — |
+| # | Department | Slice | Depends on | Acceptance gate |
+| --- | --- | --- | --- | --- |
+| 0 | Host | pywebview reality spike | nothing | BR-G-30 |
+| 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
+| 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 |
+| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
+| 4 | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver over Lane A's ordered array | Lane A | BR-G-2's Stage 6 clause, BR-G-34 |
+| 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-35–37 and the plan portion of BR-G-42 |
+| 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-22, BR-G-23, BR-G-38, BR-G-39 and the inventory portion of BR-G-42 |
+| 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |
+| 8 | Docs/release | Rewrite `DESKTOP_UI.md` acceptance to as-built, focused docs and README, re-status `ui_mockup/`, clean-checkout release proof | 7 | BR-G-43, BR-G-44 |
 
 **Ordering and parallelism.** Slice 0 shares nothing with Stage 5.5 and runs
-beside it; it should complete **before** the Stage 6 decisions here are treated
-as settled, since four of them rest on assumptions no code has verified against
-a real runtime. Slices 1→2→3 are serial within the host/transport departments.
-Slice 4 needs Lane A only, so it may begin as soon as the tree substrate lands —
-before the rest of Stage 5.5 finishes. **Slices 5 and 6 are a parallel pair**
-once 4 and Lane D are in. Slice 7 needs 5 and 6; slice 8 needs everything.
+beside it. It is the falsification gate for the chosen host and must complete
+before later host/transport or vertical slices rely on assumptions no code has
+verified against a real runtime. Slices 1→2→3 are serial within the
+host/transport departments.
+Slice 4 needs Lane A only, so it may begin as soon as that lane lands — before
+the rest of Stage 5.5 finishes. **Slices 5 and 6 are a parallel pair**
+only once the host/transport chain through slice 3, slice 4, and Lane D are all
+in. Slice 7 needs 5 and 6; slice 8 needs 7.
 
-The critical path is therefore Lane A → slice 4 → (5 ∥ 6) → 7, with lanes B, C,
-D and slices 0–3 all off it.
+There is no fixed critical path without duration estimates. The dependency
+shape is
+`max(0→1→2→3, A→4, max(A,B,C)→D) → (5 ∥ 6) → 7 → 8`. Lanes B and C and slices
+0–3 are therefore parallelizable prerequisites, not work "off" the path.
