@@ -39,6 +39,10 @@ collapsed into either clean success or execution failure. Detailed history uses
 the same outcome/reason fields. Rename-shaped review rows prefer the workflow
 view's prior target path as their displayed origin, so recase, move, and
 move-update approvals show the actual old-to-new target spelling.
+For an irreversible in-place update, the CLI renders the authoritative risk in
+the reviewed plan and treats the exact typed `execute` response as the
+destructive acknowledgement. It never guesses acknowledgement from a truthy
+adapter value.
 
 The implemented options and numeric exits are recorded in
 [COMMANDLINE.md](COMMANDLINE.md). The service composition root registers
@@ -64,7 +68,12 @@ preserves the untouched M0/CLI default and opts into the Stage 4
 execute→verify workflow only when requested. An omitted revision is valid only
 for pristine revision-zero selection. Edited review state requires the current
 revision; commitment transitions `reviewing → committing → committed`, with
-admission failure restoring `reviewing`.
+admission failure restoring `reviewing`. Replanning resets user selection but
+advances the request's revision monotonically, even when deterministic
+operation ids repeat. Recognized selection command ids remain retry tombstones
+across that replacement, so a lost response cannot reapply old intent to the
+new artifact. Folder gestures expand only toggleable descendants; a
+safety-disabled row remains disabled without making selectable siblings inert.
 Only the execution registration supplies
 `settle_canceled=runtime.settle_canceled_execution`; the service does not decode
 continuations or decide cancellation policy. Retained `HistoryRunView` exposes
@@ -132,6 +141,15 @@ If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected
 mount; only an actual prior explicit choice is reported as selected.
+
+Session-creating plan, inventory, and integrity commands use bounded
+command-id single-flight guards around receipt lookup, mutable scope
+resolution, admission, and receipt publication. ID-based retry signatures bind
+the canonical raw opaque-id gesture and are checked before rereading mutable
+inventory. Different command ids remain independently admissible; execution
+keeps its named `in-flight` commitment response. Closing a retained session
+releases its receipt, and shutdown prevents a late admission return from
+repopulating cleared receipt state.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is

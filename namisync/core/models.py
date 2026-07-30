@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import PureWindowsPath
 
 from .pathing import (
-    is_relative_path_descendant,
     normalize_relative_path,
+    relative_path_parent,
     validate_relative_path,
 )
 
@@ -249,14 +250,15 @@ class ScanScope:
         if "" in roots:
             return cls.full()
         retained_roots = _minimal_subtree_roots(roots)
+        retained_root_keys = frozenset(
+            normalize_relative_path(root) for root in retained_roots
+        )
         retained_paths = tuple(
             path
             for path in paths
-            if not any(
-                normalize_relative_path(path)
-                == normalize_relative_path(root)
-                or is_relative_path_descendant(path, root)
-                for root in retained_roots
+            if not _key_is_at_or_below(
+                normalize_relative_path(path),
+                retained_root_keys,
             )
         )
         if retained_roots:
@@ -291,12 +293,15 @@ class ScanScope:
                 raise ValueError(
                     "subtree scan requires at least one non-root subtree"
                 )
+            root_keys = frozenset(
+                normalize_relative_path(root) for root in subtree_roots
+            )
             if any(
-                normalize_relative_path(path)
-                == normalize_relative_path(root)
-                or is_relative_path_descendant(path, root)
+                _key_is_at_or_below(
+                    normalize_relative_path(path),
+                    root_keys,
+                )
                 for path in selected_paths
-                for root in subtree_roots
             ):
                 raise ValueError(
                     "subtree scan cannot carry covered exact paths"
@@ -321,32 +326,41 @@ def _canonical_scope_paths(
 
 
 def _minimal_subtree_roots(roots: tuple[str, ...]) -> tuple[str, ...]:
-    retained: list[str] = []
-    for root in sorted(
-        roots,
-        key=lambda path: (
-            len(PureWindowsPath(path).parts),
-            normalize_relative_path(path, allow_root=True),
-            path,
+    keyed = tuple(
+        (
+            root,
+            normalize_relative_path(root, allow_root=True),
+        )
+        for root in roots
+    )
+    retained: dict[str, str] = {}
+    for root, root_key in sorted(
+        keyed,
+        key=lambda item: (
+            len(PureWindowsPath(item[1]).parts),
+            item[1],
+            item[0],
         ),
     ):
-        if any(
-            parent == ""
-            or normalize_relative_path(root, allow_root=True)
-            == normalize_relative_path(parent, allow_root=True)
-            or is_relative_path_descendant(root, parent)
-            for parent in retained
-        ):
+        if _key_is_at_or_below(root_key, retained.keys()):
             continue
-        retained.append(root)
+        retained[root_key] = root
     return tuple(
-        sorted(
-            retained,
-            key=lambda path: normalize_relative_path(
-                path, allow_root=True
-            ),
-        )
+        retained[key]
+        for key in sorted(retained)
     )
+
+
+def _key_is_at_or_below(
+    path_key: str,
+    ancestor_keys: Collection[str],
+) -> bool:
+    current: str | None = path_key
+    while current is not None:
+        if current in ancestor_keys:
+            return True
+        current = relative_path_parent(current)
+    return False
 
 
 _TEMP_NAME = re.compile(

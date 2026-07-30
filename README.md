@@ -14,7 +14,7 @@ separate facts.
 
 ## Current state
 
-M1 Stages 1–5 are implemented. The headless sync, inventory, integrity,
+M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
 history, dispatcher, and service/CLI surfaces are usable; M1 Stage 6, the
 headed local WebView2 desktop, is next. The desktop's service facade and bridge
 security foundation already exist, but no GUI host has shipped.
@@ -113,10 +113,12 @@ never hides the other result axes in rendered output.
 
 - Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
   ids, recursive inventory scope with bounded missing inference, revisioned
-  user selection with payload-safe provenance, retry-safe facade commands,
-  typed scan warnings, and folder-scoped integrity that continues visibly past
-  unreadable subjects. Stage 6 presentation paging and the desktop host remain
-  next.
+  user selection with payload-safe provenance, concurrent retry-safe facade
+  commands, typed scan warnings, and folder-scoped integrity that continues
+  visibly past unreadable subjects. The integrated bridge also closes stale
+  replan intent, resumed-ledger settlement, and irreversible-update
+  confirmation failures. Stage 6 presentation paging and the desktop host
+  remain next.
 - Delivered Stages 1–5 of the integrity product and executor refactor; the
   WebView2 desktop shell remains M1 Stage 6.
   - **Executor:** switched content evidence to XXH3-128 and added the bounded

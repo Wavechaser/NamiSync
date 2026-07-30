@@ -42,7 +42,9 @@ every reachable directory. `PATHS` performs only named-path stats and never
 recurses. `SUBTREES` recursively walks canonical roots and may carry additional
 exact paths outside those roots. Mixed scopes minimize overlapping roots by
 path-segment ancestry, remove covered exact paths, and become `FULL` when the
-location root is selected.
+location root is selected. Core normalization walks canonical parent keys, so
+many sibling roots do not create a quadratic admission-time scan before the
+dispatcher starts work.
 
 Full and subtree recursion use the same parameterized walk over an absolute
 start plus its location-relative prefix. This keeps nested records keyed as

@@ -98,3 +98,82 @@ Stage 6 should consume these seams, not replace them:
 - Stage 6 still owns plan memoization, inventory projection/view-id lifecycle,
   flatten/filter/search/window logic, progress identity/autoscroll, database-
   paged history, web security/transport, task lifecycle, and the scale gates.
+
+## Appended Comprehensive Adversarial Closure
+
+This appendix records the post-landing review requested after all four slices
+were integrated. It intentionally preserves the earlier handoff. Its findings
+supersede only the earlier historical claim that no actionable Stage 5.5 issue
+remained at that checkpoint.
+
+The review traced every Stage 5.5 acceptance gate and regression row through
+the integrated tree, scan, selection, facade, dispatcher, workflow, recorder,
+CLI, history, and existing M1 boundaries. It found and fixed seven substantive
+defect groups:
+
+- Plan replacement had a revision-zero ABA: stale mutation, Execute, or
+  destructive-confirmation intent could cross into a new artifact with
+  identical operation ids. Replans now reset user selection while advancing a
+  monotonic request revision, retain recognized retry tombstones, and turn a
+  mutation/replan race into a current-artifact conflict.
+- Session receipts were check-then-submit. Concurrent duplicate plan,
+  inventory, or integrity commands could admit two sessions, while an ID retry
+  could fail against changed inventory before finding its receipt. Bounded
+  command-id single-flight guards now cover raw gesture lookup, mutable scope
+  resolution, admission, and publication; shutdown cannot repopulate cleared
+  receipts.
+- A safety-disabled descendant made its whole folder selection control inert.
+  Folder gestures now expand only toggleable descendants; direct attempts to
+  mutate a safety-disabled operation still refuse.
+- A malformed resumed selection was rejected correctly but tried to re-begin
+  the already-open ledger run from the malformed selection, raised a token
+  conflict, and stranded the run unfinished. Resume settlement now finishes
+  the established token directly under same-runtime custody. Real dispatcher
+  pause/resume and real-ledger tamper tests prove both normal reopen and
+  terminal mismatch settlement.
+- Multi-root `ScanScope` normalization was quadratic: measured pre-fix times
+  were about 17 seconds for 1,000 sibling roots and 69 seconds for 2,000.
+  Canonical parent-key membership now bounds normalization work by declared
+  path depth, with a deterministic complexity guard. One incomplete root is
+  also permanently pinned to withhold missing inference across the whole mixed
+  receipt.
+- Inventory/integrity workflow decoders coerced version values, admitting
+  floats, strings, and booleans as current schemas. Version and kind guards are
+  now exact while inventory remains v2 and integrity remains v1.
+- The existing CLI crashed on the facade's
+  `confirmation-required` response for an irreversible update. Review now
+  renders the authoritative risk count, typed `execute` supplies the exact
+  boolean acknowledgement, and named non-session admission responses are
+  handled without attribute guessing.
+
+All new tests are permanent. They protect concurrency, reviewed intent,
+durable settlement, schema strictness, bounded admission work, and a real CLI
+safety path rather than a one-off implementation detail. The audit also split
+the combined BR-G-15/21 test so `test_br_g_21_*` is independently collected,
+drove `restore_inventory` through the real facade, and reused the workflow
+inventory-visibility writer instead of retaining duplicate runtime SQL
+composition.
+
+Final evidence for this closure:
+
+- Named Stage 5.5 bridge set: 64 collected and `64 passed in 1.66s`.
+- Complete repository: `772 passed in 25.20s`.
+- Exact CLI watch row, including the new real update path: `58 passed in
+  5.46s`.
+- Import boundaries: 49 files / 181 dependencies; all eight contracts kept,
+  zero broken.
+- `git diff --check` is clean aside from expected LF-to-CRLF notices.
+- Database schema, migrations, ledger v2/history v3 contracts, planner helper
+  semantics, and Stage 6 deferrals remain unchanged.
+
+Successor correction: a replan does **not** return to revision zero. It empties
+`user_deselected` and advances the request revision, so every Stage 6 command
+must use the newly displayed revision. A recognized old mutation command id is
+a `NOOP` retry, while a new command carrying the superseded revision conflicts.
+ID-based session retries bind the canonical raw opaque-id gesture and consult
+that receipt before mutable inventory. Resumed execution remains process-local;
+invalid carried state finishes the run already held by that runtime and never
+executes more domain work.
+
+After these corrections and the final diff-level review, no unresolved
+actionable Stage 5.5 finding remains.

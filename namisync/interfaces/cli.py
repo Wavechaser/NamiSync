@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TextIO
 
 from namisync.interfaces.service import (
+    ExecutionAdmissionView,
     LocationResolutionError,
     NamiSyncService,
     SessionEventView,
@@ -239,7 +240,23 @@ def _run_sync(
             )
             return EXIT_REFUSED
 
-        print("Type 'execute' to commit this exact plan, or press Enter to leave it uncommitted: ", end="", file=stdout)
+        selection_preview = service.preview_selection(plan_session.request_id)
+        irreversible_updates = selection_preview.irreversible_update_count
+        if irreversible_updates:
+            print(
+                "Warning: "
+                f"{irreversible_updates} update(s) will replace target bytes "
+                "without moving the old versions to NamiSync trash.",
+                file=stdout,
+            )
+        prompt = (
+            "Type 'execute' to acknowledge this irreversible risk and commit "
+            "the exact plan, or press Enter to leave it uncommitted: "
+            if irreversible_updates
+            else "Type 'execute' to commit this exact plan, or press Enter "
+            "to leave it uncommitted: "
+        )
+        print(prompt, end="", file=stdout)
         stdout.flush()
         confirmation = stdin.readline().strip()
         if confirmation != "execute":
@@ -248,10 +265,20 @@ def _run_sync(
 
         execution_session = None
         try:
-            execution_session = service.start_execution(
+            admission = service.start_execution(
                 plan_session.request_id,
                 verify_after_execute=namespace.verify_after_copy,
+                destructive_acknowledged=True,
             )
+            if isinstance(admission, ExecutionAdmissionView):
+                print(
+                    "Execution was not admitted: "
+                    f"{admission.disposition}. Re-open the current plan "
+                    "review and retry.",
+                    file=stderr,
+                )
+                return EXIT_REFUSED
+            execution_session = admission
             execution_record = _wait_for_result(
                 service, execution_session.session_id, stdout, stderr
             )

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import replace
+from threading import Event
+from time import monotonic, sleep
 from types import SimpleNamespace
 
 import pytest
 
+from namisync.core.events import PhaseChanged
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import (
     Commitment,
@@ -19,14 +23,18 @@ from namisync.core.planning import (
 )
 from namisync.core.session import (
     Disposition,
+    PauseRequested,
     PhaseResult,
     PhaseStatus,
     RunContext,
     SessionState,
 )
+from namisync.dispatcher import Dispatcher, InProcessResourceLockProvider
+from namisync.interfaces.service import _workflow_registry
 from namisync.workflows.models import (
     ExecuteContinuation,
     ExecutionRequest,
+    PlanRequest,
     VerifyContinuation,
 )
 from namisync.workflows.payloads import (
@@ -34,6 +42,7 @@ from namisync.workflows.payloads import (
     encode_execution_request,
 )
 from namisync.workflows.selection import derive_execution_selection
+from namisync.workflows.runtime import EXECUTION_KIND, LocalWorkflowRuntime
 from namisync.workflows.sync import run_execution
 
 from _db_fixtures import NOW, file_stat, operation, plan
@@ -191,3 +200,189 @@ def test_br_g_10_tampered_execute_and_verify_resume_fail_before_preflight(
         assert result.status is SessionState.COMPLETED
         assert result.phases[-1].status is PhaseStatus.INCOMPLETE
         assert finished == [SessionState.COMPLETED]
+
+
+def test_br_g_10_dispatcher_pause_resume_reopens_the_same_run(
+    tmp_path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"dispatcher resume")
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    original_verifier = runtime._deps.verifier
+    entered = Event()
+    calls = 0
+
+    def pause_once(selection, context, recorder):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            while True:
+                context.run.checkpoint()
+                sleep(0.005)
+        return original_verifier(selection, context, recorder)
+
+    runtime._deps = replace(runtime._deps, verifier=pause_once)
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=runtime.clock,
+        audit_observer_factory=runtime.audit_observer,
+    )
+
+    def wait_for(state: SessionState):
+        deadline = monotonic() + 3
+        while monotonic() < deadline:
+            record = dispatcher.get(session_id)
+            if record.state is state and (
+                state is SessionState.PAUSED or record.result is not None
+            ):
+                return record
+            sleep(0.01)
+        pytest.fail(f"session did not reach {state.value}")
+
+    try:
+        request = PlanRequest("3" * 32, str(source), str(target))
+        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+        execution = runtime.commit_plan(
+            request.request_id,
+            run_id="4" * 32,
+            committed_at=NOW,
+            verify_after_execute=True,
+        )
+        session_id = dispatcher.submit(EXECUTION_KIND, execution)
+        assert entered.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        wait_for(SessionState.PAUSED)
+        assert dispatcher.resume(session_id).accepted
+        record = wait_for(SessionState.COMPLETED)
+    finally:
+        dispatcher.shutdown()
+        runtime.close()
+
+    assert calls == 2
+    assert record.result is not None
+    assert record.result.status is SessionState.COMPLETED
+    assert (target / "payload.bin").read_bytes() == b"dispatcher resume"
+    connection = sqlite3.connect(tmp_path / "ledger.db")
+    try:
+        row = connection.execute(
+            "SELECT ended_at, filesystem_status FROM runs WHERE run_token = ?",
+            ("4" * 32,),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    assert row[0] is not None
+    assert row[1] == SessionState.COMPLETED.value
+
+
+def test_br_g_10_tampered_real_verify_resume_finishes_the_original_run(
+    tmp_path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "a.bin").write_bytes(b"a")
+    (source / "b.bin").write_bytes(b"b")
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    phase = [None]
+
+    def emit(body):
+        if isinstance(body, PhaseChanged):
+            phase[0] = body.phase
+
+    def pause_at_verify():
+        if phase[0] == "verify":
+            raise PauseRequested()
+
+    try:
+        plan_request = PlanRequest("5" * 32, str(source), str(target))
+        runtime.open_plan(runtime.prepare_plan(plan_request).payload).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+        execution = runtime.commit_plan(
+            plan_request.request_id,
+            run_id="6" * 32,
+            committed_at=NOW,
+            verify_after_execute=True,
+        )
+        invocation = runtime.open_execution(
+            runtime.prepare_execution(execution).payload
+        )
+        with pytest.raises(PauseRequested):
+            invocation.run(RunContext(emit, pause_at_verify))
+
+        decoded = decode_execution_request(invocation.snapshot())
+        assert isinstance(decoded.continuation, VerifyContinuation)
+        xset = decoded.execution_set
+        victim = next(iter(xset.selection))
+        tampered_selection = xset.selection - {victim}
+        tampered_xset = replace(
+            xset,
+            selection=tampered_selection,
+            status={
+                op_id: outcome
+                for op_id, outcome in xset.status.items()
+                if op_id in tampered_selection
+            },
+            published_evidence={
+                op_id: evidence
+                for op_id, evidence in xset.published_evidence.items()
+                if op_id in tampered_selection
+            },
+            commitment=replace(
+                xset.commitment,
+                selection_digest=selection_digest(tampered_selection),
+            ),
+        )
+        tampered_candidates = PostCopySelection(
+            tuple(
+                candidate
+                for candidate in decoded.continuation.candidates.candidates
+                if candidate.item_id != str(victim)
+            )
+        )
+        tampered = replace(
+            decoded.continuation,
+            execution_set=tampered_xset,
+            candidates=tampered_candidates,
+        )
+        payload = encode_execution_request(
+            ExecutionRequest(tampered, decoded.started_at)
+        )
+
+        result = runtime.open_execution(payload).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+    finally:
+        runtime.close()
+
+    assert result.status is SessionState.COMPLETED
+    assert result.disposition is Disposition.RAN
+    assert result.error is not None
+    assert "derived selection" in result.error.message
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    connection = sqlite3.connect(tmp_path / "ledger.db")
+    try:
+        row = connection.execute(
+            "SELECT ended_at, filesystem_status FROM runs WHERE run_token = ?",
+            ("6" * 32,),
+        ).fetchone()
+    finally:
+        connection.close()
+    assert row is not None
+    assert row[0] is not None
+    assert row[1] == SessionState.COMPLETED.value

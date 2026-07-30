@@ -62,7 +62,9 @@ roots. Scope factories normalize and deduplicate relative Windows keys,
 remove descendant roots by path-segment ancestry, remove exact paths already
 covered by a root, and promote root `""` to `FULL`. Direct construction
 enforces the same shape invariants, so scanner and recorder branches cannot
-silently reinterpret malformed scope.
+silently reinterpret malformed scope. Root minimization and exact-path coverage
+walk canonical parent keys rather than comparing every declared path with every
+root, so normalization work scales with total path depth.
 
 `SyncOptions.propagate_source_casing` is a fingerprinted planning policy. It
 defaults to false, is available through the primitive semantic-settings

@@ -1,6 +1,6 @@
 # Workflows Module
 
-Status (2026-07-30): M0 reviewed sync/history plus M1 Stages 1-5 are
+Status (2026-07-30): M0 reviewed sync/history plus M1 Stages 1-5.5 are
 implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
@@ -10,8 +10,8 @@ snapshot/patch translation, and the shared facade used by the location CLI
 commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
 re-derives the authoritative set, and strict payload v4 preserves that
-provenance across continuations. The remaining Stage 5.5 facade integration
-and Stage 6 desktop behavior are finalized in `M1_BRIDGE.md`; queue durability,
+provenance across continuations. Stage 5.5 facade integration is complete;
+Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 ## Purpose
@@ -84,7 +84,10 @@ Stage 6 concerns rather than tree-builder policy.
    custody/run token, and retain rowless candidates when copy recording failed.
 8. Return one ordered operation+integrity item stream and independent execute/
    verify phase summaries. Finish the one logical ledger run exactly once; a
-   pause leaves it unfinished for same-process resume.
+   pause leaves it unfinished for same-process resume. A malformed resumed
+   continuation is refused before domain work and finishes the already-open
+   run directly by its custody-bound token; it never attempts to re-begin that
+   run from the malformed carried selection.
 
 The default execution path still ends after step 6, preserving M0 behavior.
 

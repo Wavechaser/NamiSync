@@ -113,6 +113,9 @@ class SyncDependencies:
     open_recording: Callable[[ExecutionSet], AbstractContextManager[RunRecording]]
     save_plan: Callable[[PlanArtifact], None]
     save_execution_details: Callable[[ExecutionDetails], None]
+    finish_existing_recording: (
+        Callable[[ExecutionSet, SessionState, RecordingStatus], None] | None
+    ) = None
     ignores: IgnoreSet = IgnoreSet()
 
 
@@ -866,13 +869,12 @@ def _settle_execute_resume_failure(
         PhaseStatus.FAILED,
         f"{error.type_name}: {error.message}",
     )
-    recording_status = continuation.execution_set.recording
-    with deps.open_recording(continuation.execution_set) as recording:
-        recording_status = _finish_recording(
-            recording,
-            SessionState.FAILED,
-            recording_status,
-        )
+    recording_status = _finish_existing_recording(
+        deps,
+        continuation.execution_set,
+        SessionState.FAILED,
+        continuation.execution_set.recording,
+    )
     return OperationResult(
         status=SessionState.FAILED,
         recording=recording_status,
@@ -903,12 +905,12 @@ def _settle_verify_incomplete(
         continuation.execution_set.recording,
         continuation.recording,
     )
-    with deps.open_recording(continuation.execution_set) as recording:
-        recording_status = _finish_recording(
-            recording,
-            continuation.filesystem_status,
-            recording_status,
-        )
+    recording_status = _finish_existing_recording(
+        deps,
+        continuation.execution_set,
+        continuation.filesystem_status,
+        recording_status,
+    )
     return OperationResult(
         status=continuation.filesystem_status,
         recording=recording_status,
@@ -932,6 +934,23 @@ def _combined_recording(
         if RecordingStatus.DEGRADED in values
         else RecordingStatus.OK
     )
+
+
+def _finish_existing_recording(
+    deps: SyncDependencies,
+    xset: ExecutionSet,
+    status: SessionState,
+    recording_status: RecordingStatus,
+) -> RecordingStatus:
+    finisher = getattr(deps, "finish_existing_recording", None)
+    if finisher is not None:
+        try:
+            finisher(xset, status, recording_status)
+        except Exception:
+            return RecordingStatus.DEGRADED
+        return recording_status
+    with deps.open_recording(xset) as recording:
+        return _finish_recording(recording, status, recording_status)
 
 
 def _finish_recording(

@@ -106,6 +106,11 @@ the planned target path on the right. This makes a case-only `recase` visible as
 and `move_update` review rows.
 Commitment occurs only after the plan session has terminated and released
 custody. Execution output discloses fresh-preflight refusal/material drift.
+When an effective `update` will overwrite target bytes while trash-on-update is
+disabled, review prints the exact count and an irreversible-risk warning. The
+typed `execute` response acknowledges that same reviewed risk and is forwarded
+as the service's destructive acknowledgement; no implicit or `--yes` bypass is
+available.
 Successful safe-subset execution says `completed with exceptions`, itemizes the
 blocked/deferred paths, and tells the user to resolve them and re-plan.
 

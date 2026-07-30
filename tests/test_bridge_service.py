@@ -12,7 +12,7 @@ import pytest
 
 from namisync.core.integrity import RecordDisposition
 from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
-from namisync.core.planning import OperationKind, OperationReason
+from namisync.core.planning import BlockedReason, OperationKind, OperationReason
 from namisync.core.session import SessionState
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.interfaces.service import (
@@ -93,6 +93,7 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
     service._plan_selections = {}
     service._session_receipts = {}
     service._receipt_ids_by_session = {}
+    service._session_receipt_locks = tuple(Lock() for _ in range(64))
     service._visibility_receipts = {}
     service._closed = False
     service._shutdown = None
@@ -137,15 +138,85 @@ def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -
         "request",
         0,
         deselect=(str(copied.op_id),),
+        command_id="old-plan-gesture",
     ).preview
     runtime.artifact = _artifact(plan_value)
     replanned = service.preview_selection("request")
+    replayed = service.mutate_selection(
+        "request",
+        0,
+        deselect=(str(copied.op_id),),
+        command_id="old-plan-gesture",
+    )
+    stale_mutation = service.mutate_selection(
+        "request",
+        changed.revision,
+        deselect=(str(copied.op_id),),
+        command_id="late-old-plan-gesture",
+    )
+    stale_execution = service.start_execution(
+        "request",
+        expected_revision=changed.revision,
+    )
 
     assert changed.revision == 1
     assert changed.selection_digest != initial.selection_digest
-    assert replanned.revision == 0
+    assert replanned.revision > changed.revision
     assert replanned.user_deselected == ()
     assert replanned.selection_digest == initial.selection_digest
+    assert replayed.disposition == "noop"
+    assert replayed.preview.user_deselected == ()
+    assert stale_mutation.disposition == "conflict"
+    assert isinstance(stale_execution, ExecutionAdmissionView)
+    assert stale_execution.disposition == "conflict"
+
+
+def test_br_g_13_mutation_racing_replan_returns_the_current_artifact() -> None:
+    copied = operation(OperationKind.COPY, source=file_stat())
+    plan_value = plan((copied,))
+    first_artifact = _artifact(plan_value)
+    runtime = _PlanRuntime(first_artifact)
+    service = _service(runtime)
+    service.preview_selection("request")
+    entered = Event()
+    release = Event()
+    original_resolve = service._resolve_plan_selection_ids
+
+    def delayed_resolve(request_id, current_plan, identifiers):
+        entered.set()
+        assert release.wait(2)
+        return original_resolve(request_id, current_plan, identifiers)
+
+    service._resolve_plan_selection_ids = delayed_resolve
+    responses: list[object] = []
+    errors: list[Exception] = []
+
+    def mutate() -> None:
+        try:
+            responses.append(
+                service.mutate_selection(
+                    "request",
+                    0,
+                    deselect=(str(copied.op_id),),
+                    command_id="racing-gesture",
+                )
+            )
+        except Exception as error:
+            errors.append(error)
+
+    worker = Thread(target=mutate)
+    worker.start()
+    assert entered.wait(1)
+    runtime.artifact = _artifact(plan_value)
+    release.set()
+    worker.join(2)
+
+    assert not worker.is_alive()
+    assert errors == []
+    response = responses[0]
+    assert response.disposition == "conflict"
+    assert response.preview.revision == 2
+    assert response.preview.user_deselected == ()
 
 
 def test_br_g_13_review_projection_is_bound_to_the_selected_plan_artifact() -> None:
@@ -265,7 +336,7 @@ def test_br_g_14_revision_conflict_noop_and_digest_cycle_are_distinct() -> None:
     assert restored.preview.selection_digest == original.selection_digest
 
 
-def test_br_g_15_and_21_admission_failure_unfreezes_and_race_is_observable() -> None:
+def test_br_g_15_admission_failure_unfreezes_selection() -> None:
     noop = operation(
         OperationKind.NOOP,
         reason=OperationReason.METADATA_MATCH,
@@ -281,6 +352,12 @@ def test_br_g_15_and_21_admission_failure_unfreezes_and_race_is_observable() -> 
         failed_service.start_execution("request", expected_revision=0)
     assert failed_service.preview_selection("request").state == "reviewing"
 
+
+def test_br_g_21_commitment_states_are_named_and_always_resolve() -> None:
+    noop = operation(
+        OperationKind.NOOP,
+        reason=OperationReason.METADATA_MATCH,
+    )
     entered = Event()
     release = Event()
 
@@ -393,6 +470,129 @@ def test_br_g_16_retry_receipts_apply_mutations_and_multirow_changes_once() -> N
     assert "refresh-gesture" not in session_service._session_receipts
 
 
+def test_br_g_16_concurrent_session_retry_admits_exactly_one_session() -> None:
+    entered = Event()
+    second_submission = Event()
+    release = Event()
+    submission_lock = Lock()
+
+    class BlockingDispatcher(_Dispatcher):
+        def submit(self, kind: str, request: object) -> str:
+            with submission_lock:
+                self.submissions.append((kind, request))
+                if len(self.submissions) == 1:
+                    entered.set()
+                else:
+                    second_submission.set()
+            assert release.wait(2)
+            return f"session-{len(self.submissions)}"
+
+    dispatcher = BlockingDispatcher()
+    service = _service(SimpleNamespace(), dispatcher)
+    returned: list[object] = []
+    errors: list[Exception] = []
+
+    def submit() -> None:
+        try:
+            returned.append(
+                service.start_inventory(
+                    root_path="F:\\library",
+                    command_id="double-click",
+                )
+            )
+        except Exception as error:
+            errors.append(error)
+
+    first = Thread(target=submit)
+    second = Thread(target=submit)
+    first.start()
+    assert entered.wait(1)
+    second.start()
+    assert not second_submission.wait(0.1)
+    release.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert errors == []
+    assert len(dispatcher.submissions) == 1
+    assert len(returned) == 2
+    assert returned[0] == returned[1]
+
+
+def test_br_g_16_id_retry_replays_before_mutable_inventory_resolution() -> None:
+    rows = [_inventory_row("row-a", "a.bin")]
+
+    class Runtime:
+        def list_inventory(self, location_id: int):
+            assert location_id == 7
+            return tuple(rows)
+
+    dispatcher = _Dispatcher()
+    service = _service(Runtime(), dispatcher)
+    first = service.start_inventory(
+        location_id=7,
+        selected_ids=("row-a",),
+        command_id="selected-refresh",
+    )
+    rows.clear()
+    replay = service.start_inventory(
+        location_id=7,
+        selected_ids=("row-a",),
+        command_id="selected-refresh",
+    )
+
+    assert replay == first
+    assert len(dispatcher.submissions) == 1
+
+
+def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
+    entered = Event()
+    release = Event()
+
+    class Dispatcher(_Dispatcher):
+        def submit(self, kind: str, request: object) -> str:
+            self.submissions.append((kind, request))
+            entered.set()
+            assert release.wait(2)
+            return "late-session"
+
+        def shutdown(self, timeout: float):
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    runtime = SimpleNamespace(close=lambda: None)
+    dispatcher = Dispatcher()
+    service = _service(runtime, dispatcher)
+    service._observer = SimpleNamespace(close=lambda: None)
+    errors: list[Exception] = []
+
+    def submit() -> None:
+        try:
+            service.start_inventory(
+                root_path="F:\\library",
+                command_id="late-refresh",
+            )
+        except Exception as error:
+            errors.append(error)
+
+    worker = Thread(target=submit)
+    worker.start()
+    assert entered.wait(1)
+    service.close()
+    release.set()
+    worker.join(2)
+
+    assert not worker.is_alive()
+    assert errors == []
+    assert service._session_receipts == {}
+    assert service._receipt_ids_by_session == {}
+
+
 def test_br_g_17_omitted_revision_is_limited_to_pristine_cli_selection() -> None:
     noop = operation(
         OperationKind.NOOP,
@@ -474,6 +674,27 @@ def test_br_g_20_risk_uses_effective_updates_and_excludes_move_update() -> None:
         plan((update, move_update)),
         trash_on_update=False,
     )
+    admission_service = _service(_PlanRuntime(_artifact(plan_value)))
+    with pytest.raises(TypeError, match="must be a bool"):
+        admission_service.start_execution(
+            "request",
+            expected_revision=0,
+            destructive_acknowledged="false",
+        )
+    required = admission_service.start_execution(
+        "request",
+        expected_revision=0,
+    )
+    admitted = admission_service.start_execution(
+        "request",
+        expected_revision=0,
+        destructive_acknowledged=True,
+    )
+
+    assert isinstance(required, ExecutionAdmissionView)
+    assert required.disposition == "confirmation-required"
+    assert isinstance(admitted, ExecutionSession)
+
     service = _service(_PlanRuntime(_artifact(plan_value)))
 
     before = service.preview_selection("request")
@@ -528,6 +749,51 @@ def test_br_g_24_folder_mutation_uses_full_subtree_not_collapsed_rows() -> None:
     assert tree.node_for_id(folder_id).subtree_member_count == 3
 
 
+def test_br_g_24_folder_mutation_skips_safety_disabled_descendants() -> None:
+    folder = operation(
+        OperationKind.MKDIR,
+        source_path="Folder",
+        target_path="Folder",
+        reason=OperationReason.REQUIRED_DIRECTORY,
+    )
+    selectable = operation(
+        OperationKind.COPY,
+        source_path=r"Folder\selectable.bin",
+        target_path=r"Folder\selectable.bin",
+        source=file_stat(identity_index=1),
+    )
+    blocked = replace(
+        operation(
+            OperationKind.COPY,
+            source_path=r"Folder\blocked.bin",
+            target_path=r"Folder\blocked.bin",
+            source=file_stat(identity_index=2),
+        ),
+        blocked_reason=BlockedReason.UNSUPPORTED,
+    )
+    plan_value = plan((folder, selectable, blocked))
+    service = _service(_PlanRuntime(_artifact(plan_value)))
+    tree = service._plan_tree("request", plan_value)
+
+    changed = service.mutate_selection(
+        "request",
+        0,
+        deselect=(tree.node_id_for_path_key("FOLDER"),),
+    ).preview
+
+    assert set(changed.user_deselected) == {
+        str(folder.op_id),
+        str(selectable.op_id),
+    }
+    blocked_view = next(
+        item
+        for item in changed.operations
+        if item.operation_id == str(blocked.op_id)
+    )
+    assert not blocked_view.selected
+    assert blocked_view.reason == "unsupported"
+
+
 def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> None:
     rows = (
         _inventory_row("folder-row", "Folder", kind=EntryKind.DIRECTORY),
@@ -538,6 +804,8 @@ def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> 
             r"100%_]\item.bin",
         ),
     )
+
+    visibility_calls: list[tuple[str, str]] = []
 
     class Runtime:
         def list_inventory(self, location_id: int, selected_paths=()):
@@ -553,6 +821,28 @@ def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> 
             verified_before: datetime,
         ):
             return (rows[3],)
+
+        def acknowledge_inventory(
+            self,
+            command_id: str,
+            location_id: int,
+            row_id: str,
+            *,
+            changed_at: datetime,
+        ) -> RecordDisposition:
+            visibility_calls.append(("acknowledge", row_id))
+            return RecordDisposition.APPLIED
+
+        def restore_inventory(
+            self,
+            command_id: str,
+            location_id: int,
+            row_id: str,
+            *,
+            changed_at: datetime,
+        ) -> RecordDisposition:
+            visibility_calls.append(("restore", row_id))
+            return RecordDisposition.APPLIED
 
     dispatcher = _Dispatcher()
     service = _service(Runtime(), dispatcher)
@@ -593,6 +883,22 @@ def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> 
         }
     assert service.list_unacknowledged_missing(7)[0].row_id == "outside-row"
     assert service.list_stale_inventory(7, NOW)[0].row_id == "hostile-row"
+    assert service.acknowledge_inventory(
+        "ack-row",
+        7,
+        ("outside-row",),
+        changed_at=NOW,
+    )[0].disposition == "applied"
+    assert service.restore_inventory(
+        "restore-row",
+        7,
+        ("outside-row",),
+        changed_at=NOW,
+    )[0].disposition == "applied"
+    assert visibility_calls == [
+        ("acknowledge", "outside-row"),
+        ("restore", "outside-row"),
+    ]
 
     foreign_tree = build_node_tree(
         tree_kind=NodeTreeKind.INVENTORY,

@@ -1455,7 +1455,10 @@ Everything downstream falls out of this split:
 - **One logical recording spans both phases.** Workflow opens one recorder
   invocation and exposes narrow execution/integrity views rather than competing
   writers. It finishes the logical run once at compound terminal settlement; a
-  pause may close and idempotently reopen the same run token on resume.
+  pause may close and idempotently reopen the same run token on resume. If a
+  resumed continuation is invalid, settlement finishes the already-established
+  token directly under same-runtime custody instead of attempting to begin it
+  again from untrusted carried selection.
 - **Standalone integrity freezes mode-aware scope.** A fresh baseline filters to
   eligible rows without evidence, a fresh rebaseline filters to rows with
   evidence, and verify keeps both. Once candidate ids exist, resume preserves
@@ -1465,7 +1468,8 @@ Everything downstream falls out of this split:
   exclusions and canonical `user_deselected` are distinct. Mutations are
   revision-guarded, dependency closure is recalculated server-side, commit
   freezes the state, and execution re-derives the authoritative selection
-  before admitting it. Replan discards prior user selection.
+  before admitting it. Replan discards prior user selection while advancing a
+  monotonic request revision and retaining recognized retry tombstones.
 - **Location scope is resolved before work.** Opaque location-scoped node ids
   resolve through the workflow tree/index to exact paths or recursive subtree
   roots. Folder integrity freezes every eligible indexed descendant regardless
@@ -1604,7 +1608,7 @@ typed scan warnings, and primitive `APPLIED`/`NOOP`/`STALE`/`CONFLICT`
 mutation dispositions. Location-scoped deterministic node identity and the
 pure hierarchy/index builder live in `workflows/node_tree.py`; no interface
 parses paths or rebuilds domain rollups. The inventory request codec advances
-to v2 while integrity stays v1 under a kind-aware validator; sync
+to v2 while integrity stays v1 under an exact-integer, kind-aware validator; sync
 plan/execution advances to v4 for `user_deselected`.
 
 The M1 desktop is a pywebview host forced to Edge Chromium/WebView2. It exposes
@@ -1654,7 +1658,9 @@ server cursor. `Progress` supplies paired item identity for row updates.
 Visibility receipts use a reproducible per-(gesture,row) key and one
 caller-supplied timestamp. Session-creating commands instead retain
 `command_id -> (request_id, session_id)` in the service until `close_session`
-or shutdown; a recognized receipt is checked before a stale-revision guard.
+or shutdown. Plan/inventory/integrity receipt lookup, mutable scope resolution,
+admission, and publication are single-flight per command id; a recognized raw
+ID-gesture receipt is checked before mutable inventory is read again.
 
 Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting,
 collapsed paths, filter chips) directly. It persists no request, session, task,

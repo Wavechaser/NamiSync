@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.core.models as models_module
 import namisync.modules.scanner as scanner_module
 from namisync.core.integrity import IntegrityMode
 from namisync.core.models import (
@@ -23,6 +24,7 @@ from namisync.core.models import (
     ScanResult,
     ScanScope,
     ScanScopeKind,
+    ScanWarning,
     ScanWarningCode,
     UnsupportedReason,
     UnsupportedRecord,
@@ -176,6 +178,7 @@ def _scan(
     *,
     directories: tuple[DirRecord, ...] = (),
     unsupported: tuple[UnsupportedRecord, ...] = (),
+    warnings: tuple[ScanWarning, ...] = (),
     scope: ScanScope | None = None,
     complete: bool = True,
 ) -> ScanResult:
@@ -188,7 +191,7 @@ def _scan(
         files=files,
         directories=directories,
         unsupported=unsupported,
-        warnings=(),
+        warnings=warnings,
         scope=scope or ScanScope.full(),
         complete=complete,
     )
@@ -744,6 +747,33 @@ def test_br_g_25_scope_normalization_preserves_mixed_union_meaning() -> None:
         )
 
 
+def test_br_g_25_scope_normalization_calls_stay_linear_in_declared_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    normalize = models_module.normalize_relative_path
+    calls = 0
+
+    def counted(value: str, *, allow_root: bool = False) -> str:
+        nonlocal calls
+        calls += 1
+        return normalize(value, allow_root=allow_root)
+
+    monkeypatch.setattr(models_module, "normalize_relative_path", counted)
+    roots = tuple(f"Root-{index:04d}" for index in range(400))
+    exact = tuple(
+        f"Root-{index:04d}\\child.bin" for index in range(400)
+    ) + tuple(f"Exact-{index:04d}.bin" for index in range(400))
+
+    scope = ScanScope.scoped(
+        selected_paths=exact,
+        subtree_roots=roots,
+    )
+
+    assert len(scope.subtree_roots) == 400
+    assert len(scope.selected_paths) == 400
+    assert calls < 10_000
+
+
 def test_br_g_26_subtree_reconciliation_handles_every_presence_branch(
     tmp_path: Path,
 ) -> None:
@@ -831,6 +861,44 @@ def test_br_g_26_subtree_reconciliation_handles_every_presence_branch(
         after_incomplete = _rows(setup)
 
         assert after_incomplete == before_incomplete
+    finally:
+        setup.recorder.close()
+
+
+def test_br_g_26_one_incomplete_root_withholds_all_multi_root_inference(
+    tmp_path: Path,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    try:
+        _record(
+            setup,
+            _scan(
+                (
+                    _file(r"A\gone.bin", 1),
+                    _file(r"B\unreadable.bin", 2),
+                )
+            ),
+            "seed-multi-root",
+        )
+        before = _rows(setup)
+
+        _record(
+            setup,
+            _scan(
+                warnings=(
+                    ScanWarning(
+                        ScanWarningCode.ROOT_UNAVAILABLE,
+                        "B",
+                        "access denied",
+                    ),
+                ),
+                scope=ScanScope.subtrees(("A", "B")),
+                complete=False,
+            ),
+            "incomplete-multi-root",
+        )
+
+        assert _rows(setup) == before
     finally:
         setup.recorder.close()
 
@@ -925,3 +993,23 @@ def test_br_g_28_inventory_and_integrity_payload_versions_are_kind_aware() -> No
         decode_integrity_request(
             json.dumps(integrity_v2, separators=(",", ":")).encode()
         )
+    for malformed in (2.0, "2", True):
+        malformed_inventory = json.loads(encoded_inventory)
+        malformed_inventory["version"] = malformed
+        with pytest.raises(ValueError):
+            decode_inventory_request(
+                json.dumps(
+                    malformed_inventory,
+                    separators=(",", ":"),
+                ).encode()
+            )
+    for malformed in (1.0, "1", True):
+        malformed_integrity = json.loads(encoded_integrity)
+        malformed_integrity["version"] = malformed
+        with pytest.raises(ValueError):
+            decode_integrity_request(
+                json.dumps(
+                    malformed_integrity,
+                    separators=(",", ":"),
+                ).encode()
+            )

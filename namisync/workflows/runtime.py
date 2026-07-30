@@ -37,7 +37,6 @@ from namisync.core.planning import (
 from namisync.core.recording import (
     FinishRunCommand,
     HostCommand,
-    InventoryVisibilityCommand,
     InventoryVisibilityAction,
     LocationCommand,
     MappingCommand,
@@ -92,6 +91,7 @@ from .inventory import (
     Scanner,
     bind_integrity_request,
     bind_inventory_request,
+    change_inventory_visibility,
     decode_integrity_request,
     decode_inventory_request,
     encode_integrity_request,
@@ -257,6 +257,7 @@ class LocalWorkflowRuntime:
             open_recording=self._open_recording,
             save_plan=self.save_plan,
             save_execution_details=self._save_execution_details,
+            finish_existing_recording=self._finish_existing_recording,
         )
         inventory_scan = inventory_scanner or self._scanner.scan
         self._inventory_deps = InventoryDependencies(
@@ -370,7 +371,21 @@ class LocalWorkflowRuntime:
         _require_utc(started_at, "execution start")
         request = ExecutionRequest(request.continuation, started_at)
         with self._lock:
-            self._execution_started[str(request.execution_set.run_id)] = started_at
+            run_token = str(request.execution_set.run_id)
+            established = self._execution_started.get(run_token)
+            if resumed:
+                if established is None:
+                    raise ValueError(
+                        "resumed execution was not established by this runtime"
+                    )
+                if established != started_at:
+                    raise ValueError(
+                        "resumed execution start time does not match custody"
+                    )
+            elif established is not None and established != started_at:
+                raise ValueError("execution run token is already in use")
+            else:
+                self._execution_started[run_token] = started_at
         return _ExecutionInvocation(request, self._deps, resumed=resumed)
 
     def settle_canceled_execution(
@@ -388,9 +403,13 @@ class LocalWorkflowRuntime:
             )
         _require_utc(request.started_at, "execution start")
         with self._lock:
-            self._execution_started[
+            established = self._execution_started.get(
                 str(request.execution_set.run_id)
-            ] = request.started_at
+            )
+            if established != request.started_at:
+                raise ValueError(
+                    "canceled execution does not match runtime custody"
+                )
         return settle_canceled_sync_execution(
             request.continuation,
             disposition,
@@ -684,16 +703,15 @@ class LocalWorkflowRuntime:
     ) -> RecordDisposition:
         at = self.clock.now() if changed_at is None else changed_at
         _require_utc(at, "inventory visibility change")
-        with LedgerRecorder(self.ledger_path, clock=self.clock) as recorder:
-            return recorder.change_inventory_visibility(
-                InventoryVisibilityCommand(
-                    command_id,
-                    location_id,
-                    row_id,
-                    action,
-                    at,
-                )
-            )
+        return change_inventory_visibility(
+            command_id,
+            location_id,
+            row_id,
+            action,
+            ledger_path=self.ledger_path,
+            clock=self.clock,
+            changed_at=at,
+        )
 
     def list_history(self, limit: int = 50) -> tuple[HistoryRunView, ...]:
         if not self.history_path.exists():
@@ -802,6 +820,33 @@ class LocalWorkflowRuntime:
         if started_at is None:
             raise RuntimeError("execution start time was not established")
         return _LedgerRunRecording(self, xset, started_at)
+
+    def _finish_existing_recording(
+        self,
+        xset: ExecutionSet,
+        status: SessionState,
+        recording: RecordingStatus,
+    ) -> None:
+        run_token = str(xset.run_id)
+        with self._lock:
+            if run_token not in self._execution_started:
+                raise RuntimeError(
+                    "execution start time was not established"
+                )
+        with LedgerRecorder(
+            self.ledger_path,
+            clock=self.clock,
+        ) as recorder:
+            recorder.finish_run(
+                FinishRunCommand(
+                    run_token,
+                    status,
+                    recording,
+                    self.clock.now(),
+                )
+            )
+        with self._lock:
+            self._execution_started.pop(run_token, None)
 
     def save_plan(self, artifact: PlanArtifact) -> None:
         with self._lock:
@@ -1083,6 +1128,11 @@ class _LedgerRunRecording:
                 self._runtime.clock.now(),
             )
         )
+        with self._runtime._lock:
+            self._runtime._execution_started.pop(
+                str(self._xset.run_id),
+                None,
+            )
 
     def __enter__(self) -> _LedgerRunRecording:
         return self

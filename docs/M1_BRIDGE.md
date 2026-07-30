@@ -151,9 +151,10 @@ commitment.** Who owns the checked/unchecked state of a plan, and what
   the runtime constructs a request from its immutable snapshot. Also where the
   typed-confirmation question and destructive-action confirmation get settled.
 - **[DR-BR-04](#dr-br-04--deselection-does-not-survive-a-replan)**
-  — a replan discards the prior selection and revision outright, because
-  deterministic operation ids would otherwise let a stale checkbox silently
-  re-apply to a plan no one reviewed.
+  — a replan discards the prior selection but advances the request's revision
+  epoch and retains retry tombstones, because deterministic operation ids and
+  a reset-to-zero ABA would otherwise let stale intent silently re-apply to a
+  plan no one reviewed.
 - **[DR-BR-17](#dr-br-17--selection-is-server-side-state-the-dom-is-disposable)**
   — restates DR-BR-03's ownership for virtualized rows: a recycled DOM node
   must re-read authority from the server rather than remember it, and toggles
@@ -564,9 +565,15 @@ let a checkbox state never applied to *this* plan participate in
 `selection_digest`.
 
 **Resolution:** any preflight rescan discrepancy invalidates the plan and
-forces re-review; any mutative refresh of a plan discards its selection and
-resets the revision. The UI states that the selection was reset because the
-plan changed. Required coverage asserts the discard rather than trusting it.
+forces re-review; any mutative refresh of a plan discards its selection while
+advancing the request's revision monotonically. The service retains recognized
+mutation command ids as retry tombstones across replacement: a lost-response
+retry returns `NOOP` against the new empty selection rather than reapplying old
+intent. A new command carrying the old revision conflicts, including an Execute
+or destructive acknowledgement formed against the superseded artifact. The UI
+states that the selection was reset because the plan changed. Required coverage
+asserts the discard, monotonic revision, retry behavior, and mutation/replan
+race rather than trusting presentation.
 
 ### DR-BR-05 — Four runtime methods reach the facade
 
@@ -2300,15 +2307,21 @@ because its local tests are easier.
   subtree roots by segment ancestry, preserves an exact file outside those
   roots, and does **not** recursively expand an exact directory row. Selecting
   the location root produces `FULL`, not a degenerate `SUBTREES`; duplicate ids
-  do not duplicate subjects. *Not satisfied by* testing each scope form in
-  isolation, where a lossy "convert everything to roots" implementation passes.
+  do not duplicate subjects. Canonicalization work over many sibling roots and
+  exact paths remains proportional to the declared path depth rather than
+  comparing every path with every root. *Not satisfied by* testing each scope
+  form in isolation, where a lossy "convert everything to roots"
+  implementation passes; and *not satisfied by* five-item fixtures that hide a
+  quadratic admission-time walk.
 - **BR-G-26 — Every reconciled presence state takes the intended branch.** A
   completed subtree refresh marks disappeared `present` and `unsupported` rows
   inside its exact-path/root union missing, preserves already-`missing` rows,
   and leaves all rows outside the union byte-for-byte unchanged. An incomplete
-  refresh marks none of them missing. *Not satisfied by* counting missing rows
-  without asserting the before/after state of every in-scope and out-of-scope
-  fixture row.
+  refresh marks none of them missing. If one root in a multi-root request is
+  incomplete, missing inference is withheld for the whole combined receipt,
+  including a different root that looked conclusively empty. *Not satisfied
+  by* counting missing rows without asserting the before/after state of every
+  in-scope and out-of-scope fixture row.
 - **BR-G-27 — Reconciliation seeks literal ranges through the declared index.**
   The representative subtree predicate is
   `rel_path_key >= root || '\' AND rel_path_key < root || ']'`; an
@@ -2320,8 +2333,10 @@ because its local tests are easier.
 - **BR-G-28 — Inventory and integrity codecs version independently.** Inventory
   v2 round-trips and rejects v1; integrity v1 still round-trips; a wrong-kind
   body is rejected at either version; and the shared validator's version guard
-  is proven kind-aware. *Not satisfied by* separate test-only decoders or by
-  testing only the two accepted payloads, which misses cross-kind acceptance.
+  is proven kind-aware and exact-type (`2.0`, `"2"`, and `true` do not denote
+  inventory v2, with the equivalent malformed integrity-v1 cases rejected).
+  *Not satisfied by* separate test-only decoders or by testing only the two
+  accepted payloads, which misses cross-kind and coercible-version acceptance.
 
 **Lane C — selection semantics**
 
@@ -2338,6 +2353,10 @@ because its local tests are easier.
   `REFUSED+UNRUN` (XV-7's contract). *Not satisfied by* the commitment digest
   check, which compares the carried selection against a digest computed from
   that same carried selection and is therefore circular.
+  The pause/resume proof drives the real dispatcher snapshot/reopen path. A
+  real-ledger tampered verify continuation must also settle the already-open
+  run terminally; it may not re-begin recording from the tampered selection and
+  strand the run on a start-token conflict.
 - **BR-G-11 — `all-noop` reads kinds, not outcomes.** Run as a **classifier-level
   unit test** over a constructed `OperationResult`/selection pair, not as an
   end-to-end session: the live path may make a divergence unreachable, and a
@@ -2371,18 +2390,23 @@ because its local tests are easier.
   blocked-parent case without the upward closure.
 - **BR-G-13 — A replan discards.** A replan of an unchanged tree — reproducing
   identical operation ids — after at least one operation has first been
-  user-deselected resets the selection and revision, and the resulting
-  `selection_digest` differs from the pre-replan deselected one. *Not satisfied
-  by* replanning an untouched default selection, whose digest is allowed to be
-  identical; and *not satisfied by* asserting the UI shows a message.
+  user-deselected resets the selection, **advances** the revision, and produces
+  the default `selection_digest`. A replay of the recognized old gesture is a
+  `NOOP`; a new mutation, Execute, or confirmation carrying the old revision
+  conflicts. A mutation racing replacement may not return an old-artifact
+  `applied` response. *Not satisfied by* replanning an untouched default
+  selection, whose digest is allowed to be identical; and *not satisfied by*
+  asserting the UI shows a message.
 - **BR-G-24 — A folder gesture covers the subtree, not the viewport.** A folder
   deselect over a subtree whose descendants are split by a collapsed ancestor
   removes every operation at or under that path, and the folder's rollup counts
   are identical whether or not descendants are collapsed. *Not satisfied by* a
   fully-expanded fixture, where subtree scope and rendered scope are
-  indistinguishable. The filter half of this invariant cannot be gated until
-  filters exist and is carried by slice 4's gate; this is the inventory-side
-  clause's missing twin on the selection side.
+  indistinguishable. A safety-disabled descendant is skipped during folder
+  expansion rather than refusing the selectable siblings; naming that disabled
+  operation directly still refuses. The filter half of this invariant cannot
+  be gated until filters exist and is carried by slice 4's gate; this is the
+  inventory-side clause's missing twin on the selection side.
 
 **Lane D — facade**
 
@@ -2402,25 +2426,32 @@ because its local tests are easier.
   `_command_receipt` maps a prior `APPLIED` to `NOOP`; both are success and only
   the first reflows the list (DR-BR-20). A replayed multi-row gesture applies
   each row exactly once without raising. A replayed session-creating command
-  yields **one** session, not two. The folder-integrity freeze is taken inside
-  the same validation that resolves the ids. The service-held receipt survives
-  while that session is retained, is removed by `close_session`, and is cleared
-  at shutdown. *Not satisfied by* asserting
+  yields **one** session, not two, including two concurrent first deliveries of
+  the same command id. An id-based retry checks its canonical raw gesture
+  receipt before rereading mutable inventory, so a disappeared row or changed
+  subtree cannot defeat replay. The folder-integrity freeze is taken inside the
+  same single-flight validation that resolves the ids. The service-held receipt
+  survives while that session is retained, is removed by `close_session`, and
+  is cleared at shutdown without a late admission repopulating it. *Not
+  satisfied by* asserting
   acknowledge works, which a non-idempotent implementation also passes on first
   call; and *not satisfied by* asserting the two calls return the same value,
   which is false by construction.
   **The projection-revision clause is deliberately not here** — the cached
   projection is Stage 6 slice 6, and a Stage 5.5 gate over an object Stage 5.5
   does not build is satisfiable by a counter nothing advances. It is BR-G-23.
-- **BR-G-17 — The CLI is unchanged.** Anchor on the artifact, not a count:
-  `tests/test_cli.py` shows **zero diff** in the lane's merge diff, and any new
-  CLI coverage lands in a new file. That set includes both the M0 sync/history
-  end-to-end tests and the Stage 5 location-command tests, which postdate them
-  and are the ones exposed to `InventoryDetails` reshaping. An omitted revision
-  is accepted only for an untouched default selection. *Not satisfied by*
-  updating those tests to accommodate a new signature — if they need editing,
-  the facade changed behavior; and *not satisfied by* running only the M0
-  subset, which never touches the location commands.
+- **BR-G-17 — CLI compatibility remains explicit.** The original lane merge
+  kept `tests/test_cli.py` byte-identical, proving that facade integration did
+  not silently rewrite existing expectations. The integrated adversarial pass
+  then adds one permanent real-CLI regression for the newly exposed
+  `confirmation-required` admission: a typed `execute` on an effective
+  irreversible update renders the risk, supplies an exact boolean
+  acknowledgement, completes without an admission-view crash, and updates the
+  target. Existing M0 sync/history and Stage 5 location-command tests remain
+  behaviorally unchanged. An omitted revision is accepted only for an
+  untouched default selection. *Not satisfied by* adapting broad expected
+  output to hide a signature break; and *not satisfied by* running only the M0
+  subset, which never touches location commands or the destructive-risk path.
 - **BR-G-20 — Destructive risk is computed from the effective selection.** A plan
   containing one `UPDATE` with `trash_on_update` disabled reports
   `requires_destructive_confirmation` true and `irreversible_update_count` 1;
@@ -2429,6 +2460,8 @@ because its local tests are easier.
   satisfied by* an all-selected fixture, where a flag computed over the plan's
   operations and one computed over the effective selection are
   indistinguishable — which is the specific wrong answer DR-BR-03 names.
+  Admission accepts an exact boolean acknowledgement only; a truthy string such
+  as `"false"` is rejected rather than bypassing the confirmation.
 - **BR-G-21 — The commitment's terminal states are observable.** A mutation
   against a `committing` or `committed` selection returns a response distinct
   from a revision conflict, and the client can tell the two apart without string
@@ -2735,7 +2768,7 @@ lands.
 | `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
 | `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_transport.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | This becomes executable across slices 2, 5, and 6; all three files are required because transport alone cannot prove production DOM sinks / slices 2, 5, 6 |
 | `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
-| M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | Stage 5.5 leaves this file byte-for-byte unchanged. Slice 1 may replace only the no-subcommand/entry-point expectations required by the launcher decision; every explicit sync, history, inventory, and integrity command remains behaviorally unchanged / B, C, D, slice 1 |
+| M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | The initial Stage 5.5 lanes left this file byte-for-byte unchanged; the integrated adversarial closure adds only the permanent irreversible-update admission regression described by BR-G-17. Every prior explicit sync, history, inventory, and integrity command remains behaviorally unchanged. Slice 1 may later replace only the no-subcommand/entry-point expectations required by the launcher decision / B, C, D, slice 1 |
 | Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |
 | Scanner hostile names, cancellation, and walk completeness | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py` | Parameterizing the walk must preserve literal names, escaped/unrepresentable reporting, identity-cycle handling, cancellation checks, and every existing incompleteness cause / B |
 | Recorder receipt, range, and transaction behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_recorder_inventory_integrity.py tests/test_recorder_concurrency.py` | Scope enters the payload hash and missing marking gains a third branch; idempotent transaction and concurrency behavior must not weaken / B, D |

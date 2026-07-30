@@ -839,6 +839,39 @@ def test_cli_uses_semantic_settings_beside_explicit_ledger(
     assert stored.propagate_source_casing
 
 
+def test_cli_typed_execute_acknowledges_an_irreversible_update(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"reviewed replacement")
+    (target / "payload.bin").write_bytes(b"old")
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    with NamiSyncService(ledger, history) as service:
+        service.commit_semantic_settings(
+            SemanticSettingsPatchView(trash_on_update=False)
+        )
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("execute\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS, (stdout.getvalue(), stderr.getvalue())
+    assert (target / "payload.bin").read_bytes() == b"reviewed replacement"
+    assert "trash-on-update=disabled" in stdout.getvalue()
+    assert "acknowledge this irreversible risk" in stdout.getvalue()
+    assert "AttributeError" not in stderr.getvalue()
+    assert stderr.getvalue() == ""
+
+
 def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None:
     source = tmp_path / "source"
     target = tmp_path / "target"

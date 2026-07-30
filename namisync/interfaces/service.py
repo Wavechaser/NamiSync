@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from hashlib import sha256
@@ -429,6 +430,7 @@ class NamiSyncService:
         self._plan_selections: dict[str, _PlanSelectionState] = {}
         self._session_receipts: dict[str, _SessionReceipt] = {}
         self._receipt_ids_by_session: dict[str, set[str]] = {}
+        self._session_receipt_locks = tuple(Lock() for _ in range(64))
         self._visibility_receipts: dict[str, tuple[object, ...]] = {}
         self._closed = False
         self._shutdown: ShutdownView | None = None
@@ -450,29 +452,30 @@ class NamiSyncService:
             str(target_path),
             deletion_policy,
         )
-        replay = self._session_receipt(
-            command_id,
-            "plan",
-            signature,
-        )
-        if replay is not None:
-            return PlanSession(replay.request_id, replay.session_id)
-        request = self._runtime.create_plan_request(
-            uuid4().hex,
-            str(source_path),
-            str(target_path),
-            deletion_policy=deletion_policy,
-        )
-        session_id = self._dispatcher.submit(PLAN_KIND, request)
-        result = PlanSession(request.request_id, str(session_id))
-        self._remember_session_receipt(
-            command_id,
-            "plan",
-            signature,
-            result.request_id,
-            result.session_id,
-        )
-        return result
+        with self._session_command_guard(command_id):
+            replay = self._session_receipt(
+                command_id,
+                "plan",
+                signature,
+            )
+            if replay is not None:
+                return PlanSession(replay.request_id, replay.session_id)
+            request = self._runtime.create_plan_request(
+                uuid4().hex,
+                str(source_path),
+                str(target_path),
+                deletion_policy=deletion_policy,
+            )
+            session_id = self._dispatcher.submit(PLAN_KIND, request)
+            result = PlanSession(request.request_id, str(session_id))
+            self._remember_session_receipt(
+                command_id,
+                "plan",
+                signature,
+                result.request_id,
+                result.session_id,
+            )
+            return result
 
     def read_semantic_settings(self) -> SemanticSettingsView:
         return self._runtime.read_semantic_settings()
@@ -511,6 +514,8 @@ class NamiSyncService:
         reselect: tuple[str, ...] = (),
         command_id: str | None = None,
     ) -> SelectionMutationView:
+        if type(expected_revision) is not int:
+            raise TypeError("expected_revision must be an int")
         state, artifact = self._selection_state(request_id)
         signature = (
             expected_revision,
@@ -518,6 +523,20 @@ class NamiSyncService:
             tuple(reselect),
         )
         with self._lock:
+            current = self._plan_selections.get(request_id)
+            if current is not state:
+                if current is None:
+                    raise KeyError(request_id)
+                return SelectionMutationView(
+                    "conflict",
+                    current.revision,
+                    current.phase,
+                    self._selection_preview_locked(
+                        request_id,
+                        current,
+                        current.artifact,
+                    ),
+                )
             prior_signature = (
                 None
                 if command_id is None
@@ -528,7 +547,7 @@ class NamiSyncService:
                     raise ValueError(
                         "command_id was reused for a different selection mutation"
                     )
-                return SelectionMutationView(
+                response = SelectionMutationView(
                     "noop",
                     state.revision,
                     state.phase,
@@ -538,8 +557,8 @@ class NamiSyncService:
                         artifact,
                     ),
                 )
-            if state.phase != "reviewing":
-                return SelectionMutationView(
+            elif state.phase != "reviewing":
+                response = SelectionMutationView(
                     "in-flight" if state.phase == "committing" else "frozen",
                     state.revision,
                     state.phase,
@@ -549,8 +568,8 @@ class NamiSyncService:
                         artifact,
                     ),
                 )
-            if expected_revision != state.revision:
-                return SelectionMutationView(
+            elif expected_revision != state.revision:
+                response = SelectionMutationView(
                     "conflict",
                     state.revision,
                     state.phase,
@@ -560,34 +579,49 @@ class NamiSyncService:
                         artifact,
                     ),
                 )
-            plan = artifact.plan
-            resolved_deselect = self._resolve_plan_selection_ids(
-                request_id,
-                plan,
-                deselect,
-            )
-            resolved_reselect = self._resolve_plan_selection_ids(
-                request_id,
-                plan,
-                reselect,
-            )
-            state.user_deselected = apply_selection_mutation(
-                plan,
-                state.user_deselected,
-                deselect=frozenset(resolved_deselect),
-                reselect=frozenset(resolved_reselect),
-            )
-            state.revision += 1
-            if command_id is not None:
-                state.mutation_receipts[command_id] = signature
+            else:
+                plan = artifact.plan
+                resolved_deselect = self._resolve_plan_selection_ids(
+                    request_id,
+                    plan,
+                    deselect,
+                )
+                resolved_reselect = self._resolve_plan_selection_ids(
+                    request_id,
+                    plan,
+                    reselect,
+                )
+                state.user_deselected = apply_selection_mutation(
+                    plan,
+                    state.user_deselected,
+                    deselect=frozenset(resolved_deselect),
+                    reselect=frozenset(resolved_reselect),
+                )
+                state.revision += 1
+                if command_id is not None:
+                    state.mutation_receipts[command_id] = signature
+                response = SelectionMutationView(
+                    "applied",
+                    state.revision,
+                    state.phase,
+                    self._selection_preview_locked(
+                        request_id,
+                        state,
+                        artifact,
+                    ),
+                )
+        if self._runtime.get_plan(request_id) is artifact:
+            return response
+        current, current_artifact = self._selection_state(request_id)
+        with self._lock:
             return SelectionMutationView(
-                "applied",
-                state.revision,
-                state.phase,
+                "conflict",
+                current.revision,
+                current.phase,
                 self._selection_preview_locked(
                     request_id,
-                    state,
-                    artifact,
+                    current,
+                    current_artifact,
                 ),
             )
 
@@ -600,6 +634,12 @@ class NamiSyncService:
         destructive_acknowledged: bool = False,
         command_id: str | None = None,
     ) -> ExecutionSession | ExecutionAdmissionView:
+        if type(verify_after_execute) is not bool:
+            raise TypeError("verify_after_execute must be a bool")
+        if expected_revision is not None and type(expected_revision) is not int:
+            raise TypeError("expected_revision must be an int or None")
+        if type(destructive_acknowledged) is not bool:
+            raise TypeError("destructive_acknowledged must be a bool")
         signature = (
             request_id,
             verify_after_execute,
@@ -706,45 +746,46 @@ class NamiSyncService:
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
     ) -> LocationSession:
-        subtree_roots: tuple[str, ...] = ()
-        if selected_ids is not None:
-            selected_paths, subtree_roots = self._resolve_location_ids(
-                location_id,
-                selected_ids,
-                recursive=True,
-            )
         signature = (
             root_path,
             location_id,
-            selected_paths,
+            tuple(selected_paths),
             selected_mount,
-            subtree_roots,
+            _canonical_id_gesture(selected_ids),
         )
-        replay = self._session_receipt(
-            command_id,
-            INVENTORY_KIND,
-            signature,
-        )
-        if replay is not None:
-            return LocationSession(replay.request_id, replay.session_id)
-        request_id = uuid4().hex
-        request = InventoryRequest(
-            request_id=request_id,
-            root_path=root_path,
-            location_id=location_id,
-            selected_paths=selected_paths,
-            selected_mount=selected_mount,
-            subtree_roots=subtree_roots,
-        )
-        result = self._start_location(INVENTORY_KIND, request_id, request)
-        self._remember_session_receipt(
-            command_id,
-            INVENTORY_KIND,
-            signature,
-            result.request_id,
-            result.session_id,
-        )
-        return result
+        with self._session_command_guard(command_id):
+            replay = self._session_receipt(
+                command_id,
+                INVENTORY_KIND,
+                signature,
+            )
+            if replay is not None:
+                return LocationSession(replay.request_id, replay.session_id)
+            subtree_roots: tuple[str, ...] = ()
+            if selected_ids is not None:
+                selected_paths, subtree_roots = self._resolve_location_ids(
+                    location_id,
+                    selected_ids,
+                    recursive=True,
+                )
+            request_id = uuid4().hex
+            request = InventoryRequest(
+                request_id=request_id,
+                root_path=root_path,
+                location_id=location_id,
+                selected_paths=selected_paths,
+                selected_mount=selected_mount,
+                subtree_roots=subtree_roots,
+            )
+            result = self._start_location(INVENTORY_KIND, request_id, request)
+            self._remember_session_receipt(
+                command_id,
+                INVENTORY_KIND,
+                signature,
+                result.request_id,
+                result.session_id,
+            )
+            return result
 
     def start_baseline(
         self,
@@ -812,7 +853,15 @@ class NamiSyncService:
         self._runtime.save_plan(artifact)
         request_id = artifact.request.request_id
         with self._lock:
-            self._plan_selections.pop(request_id, None)
+            prior = self._plan_selections.get(request_id)
+            if prior is None:
+                self._plan_selections[request_id] = _PlanSelectionState(artifact)
+            elif prior.artifact is not artifact:
+                self._plan_selections[request_id] = _PlanSelectionState(
+                    artifact,
+                    revision=prior.revision + 1,
+                    mutation_receipts=dict(prior.mutation_receipts),
+                )
 
     def get_plan(self, request_id: str) -> object:
         return self._runtime.get_plan(request_id)
@@ -1013,39 +1062,41 @@ class NamiSyncService:
         selected_ids: tuple[str, ...] | None,
         command_id: str | None,
     ) -> LocationSession:
-        if selected_ids is not None:
-            selected_paths, _subtree_roots = self._resolve_location_ids(
-                location_id,
-                selected_ids,
-                recursive=False,
-            )
         signature = (
             root_path,
             location_id,
-            selected_paths,
+            tuple(selected_paths),
             selected_mount,
+            _canonical_id_gesture(selected_ids),
         )
-        replay = self._session_receipt(command_id, kind, signature)
-        if replay is not None:
-            return LocationSession(replay.request_id, replay.session_id)
-        request_id = uuid4().hex
-        request = integrity_request(
-            kind,
-            request_id,
-            root_path=root_path,
-            location_id=location_id,
-            selected_paths=selected_paths,
-            selected_mount=selected_mount,
-        )
-        result = self._start_location(kind, request_id, request)
-        self._remember_session_receipt(
-            command_id,
-            kind,
-            signature,
-            result.request_id,
-            result.session_id,
-        )
-        return result
+        with self._session_command_guard(command_id):
+            replay = self._session_receipt(command_id, kind, signature)
+            if replay is not None:
+                return LocationSession(replay.request_id, replay.session_id)
+            if selected_ids is not None:
+                selected_paths, _subtree_roots = self._resolve_location_ids(
+                    location_id,
+                    selected_ids,
+                    recursive=False,
+                )
+            request_id = uuid4().hex
+            request = integrity_request(
+                kind,
+                request_id,
+                root_path=root_path,
+                location_id=location_id,
+                selected_paths=selected_paths,
+                selected_mount=selected_mount,
+            )
+            result = self._start_location(kind, request_id, request)
+            self._remember_session_receipt(
+                command_id,
+                kind,
+                signature,
+                result.request_id,
+                result.session_id,
+            )
+            return result
 
     def _start_location(
         self,
@@ -1068,8 +1119,15 @@ class NamiSyncService:
         artifact = self._runtime.get_plan(request_id)
         with self._lock:
             state = self._plan_selections.get(request_id)
-            if state is None or state.artifact is not artifact:
+            if state is None:
                 state = _PlanSelectionState(artifact)
+                self._plan_selections[request_id] = state
+            elif state.artifact is not artifact:
+                state = _PlanSelectionState(
+                    artifact,
+                    revision=state.revision + 1,
+                    mutation_receipts=dict(state.mutation_receipts),
+                )
                 self._plan_selections[request_id] = state
             return state, artifact
 
@@ -1147,6 +1205,10 @@ class NamiSyncService:
         identifiers: tuple[str, ...],
     ) -> tuple[str, ...]:
         known = {str(operation.op_id) for operation in plan.operations}
+        toggleable = {
+            str(operation_id)
+            for operation_id in derive_execution_selection(plan).selection
+        }
         tree: NodeTree | None = None
         resolved: set[str] = set()
         for identifier in identifiers:
@@ -1156,12 +1218,34 @@ class NamiSyncService:
             if tree is None:
                 tree = self._plan_tree(request_id, plan)
             try:
-                resolved.update(tree.subtree_member_ids(identifier))
+                members = tuple(
+                    member_id
+                    for member_id in tree.subtree_member_ids(identifier)
+                    if member_id in toggleable
+                )
             except KeyError as error:
                 raise ValueError(
                     f"selection id does not belong to plan: {identifier}"
                 ) from error
+            if not members:
+                raise ValueError(
+                    f"selection node contains no selectable operations: {identifier}"
+                )
+            resolved.update(members)
         return tuple(sorted(resolved))
+
+    def _session_command_guard(self, command_id: str | None):
+        if command_id is None:
+            return nullcontext()
+        if not command_id:
+            raise ValueError("command_id must be nonempty")
+        digest = sha256(
+            command_id.encode("utf-8", errors="surrogatepass")
+        ).digest()
+        return self._session_receipt_locks[
+            int.from_bytes(digest[:2], "big")
+            % len(self._session_receipt_locks)
+        ]
 
     def _resolve_location_ids(
         self,
@@ -1226,6 +1310,8 @@ class NamiSyncService:
         if not command_id:
             raise ValueError("command_id must be nonempty")
         with self._lock:
+            if self._closed:
+                raise RuntimeError("service is closed")
             receipt = self._session_receipts.get(command_id)
         if receipt is None:
             return None
@@ -1250,6 +1336,8 @@ class NamiSyncService:
             session_id,
         )
         with self._lock:
+            if self._closed:
+                return
             existing = self._session_receipts.get(command_id)
             if existing is not None and existing != receipt:
                 raise ValueError(
@@ -1295,6 +1383,8 @@ class NamiSyncService:
             changed_at.isoformat(),
         )
         with self._lock:
+            if self._closed:
+                raise RuntimeError("service is closed")
             existing = self._visibility_receipts.get(command_id)
             if existing is not None and existing != signature:
                 raise ValueError("command_id was reused for a different gesture")
@@ -1392,6 +1482,14 @@ def _row_command_id(command_id: str, row_id: str) -> str:
     digest.update(b"\0")
     digest.update(row_id.encode("utf-8"))
     return digest.hexdigest()
+
+
+def _canonical_id_gesture(
+    identifiers: tuple[str, ...] | None,
+) -> tuple[str, ...] | None:
+    if identifiers is None:
+        return None
+    return tuple(sorted(set(identifiers)))
 
 
 def _control_view(result) -> ControlView:

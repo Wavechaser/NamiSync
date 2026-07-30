@@ -629,9 +629,12 @@ def change_inventory_visibility(
     *,
     ledger_path: Path,
     clock: Clock,
+    changed_at: datetime | None = None,
 ) -> RecordDisposition:
     """Acknowledge or restore one missing row through the ledger owner."""
 
+    at = clock.now() if changed_at is None else changed_at
+    _require_utc(at, "inventory visibility change")
     with LedgerRecorder(ledger_path, clock=clock) as recorder:
         return recorder.change_inventory_visibility(
             InventoryVisibilityCommand(
@@ -639,7 +642,7 @@ def change_inventory_visibility(
                 location_id,
                 row_id,
                 action,
-                clock.now(),
+                at,
             )
         )
 
@@ -1035,7 +1038,8 @@ def _payload(
     value = json.loads(payload.decode("utf-8"))
     data = _mapping(value)
     if (
-        int(data["version"]) != expected_version
+        type(data["version"]) is not int
+        or data["version"] != expected_version
         or data["kind"] != expected_kind
     ):
         raise ValueError("unsupported inventory workflow payload")

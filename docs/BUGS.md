@@ -64,6 +64,53 @@ to a global chronological list.
 
 ## WORKFLOW AND CLI
 
+### M1 Stage 5.5 adversarial closure
+
+- SEVERE - FIXED (2026-07-30). Resumed-run ledger settlement. A coherently
+  tampered execute/verify continuation was correctly refused before domain work,
+  but the refusal tried to reopen recording from the tampered selection. The
+  recorder raised a run-token input conflict and left the original ledger run
+  unfinished. Cause: resume-failure settlement reused the fresh/open recording
+  path even though an earlier continuation had already established the run;
+  fixed with a custody-bound finish-existing-run dependency, strict
+  same-runtime start-token validation, and real dispatcher plus real-ledger
+  pause/resume regressions.
+- SEVERE - FIXED (2026-07-30). Replan intent ABA. Replacing a plan reset its
+  selection revision to zero and discarded mutation receipts, so a lost
+  checkbox response, Execute, or destructive confirmation formed against the
+  old artifact could apply to a new artifact with identical deterministic
+  operation ids. A mutation racing replacement could also report that stale
+  state as applied. Cause: artifact identity changed but its concurrency epoch
+  did not survive replacement; fixed by monotonically advancing revisions,
+  retaining recognized gesture tombstones, checking the current artifact after
+  mutation, and returning the new preview as a conflict.
+- SEVERE - FIXED (2026-07-30). Irreversible-update CLI admission. With
+  trash-on-update disabled, typing `execute` returned a
+  `confirmation-required` view that the CLI treated as an execution session,
+  then crashed with `AttributeError` without updating the target. Cause: the
+  facade added a two-step risk handshake without adapting the existing typed
+  CLI confirmation; fixed by rendering the exact irreversible-update warning,
+  forwarding the typed response as an exact boolean acknowledgement, and
+  handling every named admission view defensively.
+- MODERATE - FIXED (2026-07-30). Concurrent retry admission. Two simultaneous
+  first deliveries with one plan/inventory/integrity command id could both pass
+  receipt lookup and submit separate sessions; ID-based retries also reread
+  mutable inventory before finding their receipt. Cause: lookup and receipt
+  publication were separately locked around an unguarded admission; fixed with
+  bounded command-id single-flight guards, raw canonical ID-gesture signatures,
+  and shutdown-safe receipt publication.
+- MODERATE - FIXED (2026-07-30). Mixed folder selection. A single
+  safety-disabled operation beneath a folder made the entire folder toggle
+  raise, leaving otherwise selectable siblings inert. Cause: node expansion
+  passed every descendant into the direct-operation safety validator; fixed by
+  expanding folder gestures to toggleable descendants while retaining refusal
+  for a disabled operation named directly.
+- MODERATE - FIXED (2026-07-30). Inventory workflow version strictness.
+  Inventory `2.9` and integrity `"1"` payload versions were accepted as current
+  schemas. Cause: the shared decoder coerced version values with `int()`; fixed
+  by requiring an exact JSON integer and the exact kind-specific version,
+  including float, string, and boolean rejection coverage.
+
 ### M1 post-execution integration
 
 - SEVERE - FIXED (2026-07-25). Compound ledger-run settlement. Exceptions
@@ -130,6 +177,17 @@ to a global chronological list.
   execution adapter; fixed by applying it before plan admission.
 
 ## SCANNER AND PREFLIGHT
+
+### M1 Stage 5.5 recursive scope
+
+- SEVERE - FIXED (2026-07-30). Multi-root scope admission cost. Normalizing
+  sibling recursive roots compared every root with every retained root and then
+  every exact path with every root; 1,000 sibling roots took about 17 seconds
+  and 2,000 took about 69 seconds before dispatcher admission. Cause: repeated
+  normalization inside quadratic ancestry scans; fixed with canonical-key
+  ancestor-set walks whose normalization count scales with declared path depth,
+  plus a deterministic complexity regression and a multi-root global
+  incompleteness composition test.
 
 ### M0 integration
 
