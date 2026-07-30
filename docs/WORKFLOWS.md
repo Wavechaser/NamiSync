@@ -1,13 +1,15 @@
 # Workflows Module
 
-Status: M0 reviewed sync/history plus M1 Stages 1-5 are implemented. The local
+Status (2026-07-29): M0 reviewed sync/history plus M1 Stages 1-5 are
+implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
 strict execute/verify continuation payloads, optional post-execution
 verification, compound history/views, generic history reads, semantic-settings
 snapshot/patch translation, and the shared facade used by the location CLI
-commands. Desktop actions, queue durability, maintenance/retention, replay,
-undo/repair, and ingest remain later work.
+commands. The unimplemented Stage 5.5 workflow/facade additions and Stage 6
+desktop behavior are finalized in `M1_BRIDGE.md`; queue durability,
+maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 ## Purpose
 
@@ -45,8 +47,12 @@ execution does not receive or reread a settings provider.
 
 ### Execution session
 
-1. Accept only an explicit `Commitment` whose plan fingerprint and selection
-   digest match the reviewed `ExecutionSet`; refuse before preflight otherwise.
+1. Re-derive the authoritative execution selection from the immutable plan,
+   its safety exclusions, and canonical `user_deselected` set. Accept only an
+   explicit `Commitment` whose plan fingerprint and selection digest match that
+   result and refuse a mismatched carried selection before preflight. An
+   all-skipped result refuses because there is nothing to execute; a selected
+   `NOOP` remains executable work.
 2. Reacquire required physical-volume custody.
 3. Consume the immutable semantic snapshot bound into the reviewed plan; never
    reread global defaults to decide admitted filesystem behavior.
@@ -75,6 +81,15 @@ fingerprint and dependency-closed selection. Scripts and queue releases may
 replay an existing commitment; no API plans and executes in one unreviewed
 breath.
 
+Stage 5.5 adds service-owned review state between those sessions. Safety
+exclusions and direct user deselection remain distinct; deselection closes
+downward over dependencies, reselection closes upward only through
+`user_deselected` ancestors, and a replan discards the old user set. Every
+accepted mutation advances the review revision even if the digest is unchanged.
+Commit freezes mutation while the review is committing/committed, and an
+admission failure returns it to reviewing. The client submits revisions and
+opaque ids but never becomes selection authority.
+
 ### M0 implementation
 
 `workflows/sync.py` contains the plain planning and execution functions.
@@ -100,7 +115,11 @@ Stage 1 advanced the opaque plan/execution codec to version 2 and removed
 without adding a replacement execution setting. Stage 4 advances the global
 codec to strict version 3 because execute decoding now has phase-specific
 required fields. Version-1/2 payloads are refused instead of being guessed into
-the changed contract.
+the changed contract. Stage 5.5 advances sync plan/execution payloads to strict
+version 4 for user-selection provenance. Inventory request payloads advance to
+version 2 for recursive subtree scope while integrity requests stay at version
+1; their shared validator is therefore kind-aware rather than enforcing one
+version for both kinds.
 
 The payload round-trips the fingerprinted
 `SyncOptions.propagate_source_casing` seam as a required field. A payload that
@@ -130,10 +149,13 @@ the same safety envelope if another caller supplies a different selection.
 Workflow emits excluded items after execution settles and merges them into the
 terminal result without rewriting successful filesystem status. Blocked intent
 never writes the main ledger; selected no-ops still execute their live guard and
-refresh source/target correspondence. Durable plan files, user selection
-editing, queue release, linked verification, and integrity workflows were not
+refresh source/target correspondence. Direct user deselections emit `SKIPPED`
+with reason `user_deselected`; dependency fallout stays `DEFERRED`, so retained
+history can reconstruct the same classification without guessing. Durable plan
+files, queue release, linked verification, and integrity workflows were not
 part of the implemented M0 slice. Stage 3 now implements the standalone
-inventory/integrity half without changing that M0 execution boundary.
+inventory/integrity half without changing that M0 execution boundary; Stage 5.5
+adds process-local user selection editing.
 
 Stage 4 linked verification deliberately does not build its immediate candidate set
 from inventory rows. The execution continuation retains each successfully
@@ -180,9 +202,20 @@ returns inventory plus nominal phase-tagged outcomes. Missing inventory is
 created automatically; the user is not told to run a hidden prerequisite
 manually.
 
-Selected verification uses scoped refresh. Full verify uses a complete location
-scan before missing marking. UI receives refreshed inventory at the scan-to-hash
-handoff so it never shows stale/empty rows during work.
+Scope has three semantic shapes: `FULL`, exact `PATHS`, and recursive
+`SUBTREES`; mixed requests canonicalize overlapping roots and selecting the
+location root becomes `FULL`. Exact refresh reconciles only named rows.
+Completed subtree refresh reconciles every indexed descendant using a literal
+canonical-path range, while full refresh reconciles the whole location. These
+are separate recorder branches, not a two-valued full/selected shortcut.
+
+Folder verification resolves an opaque location-scoped node id to a canonical
+path and freezes all eligible indexed descendants independently of the current
+filter/window. An unreadable frozen subject emits a visible `unsupported`
+integrity result, makes verification incomplete, and does not suppress eligible
+siblings. Non-subject-specific incompleteness still refuses before hashing. UI
+receives refreshed inventory and typed scan warnings at the scan-to-hash
+handoff so it never shows stale/empty or falsely complete state during work.
 
 Baseline, verify, and rebaseline register pause support. Their continuation
 retains the exact admitted candidate ids plus completed ids/bytes; resume
@@ -245,6 +278,11 @@ verification-incomplete > recording/audit degradation > all-noop > success`.
 Live and reopened history views reuse it, while every lower-priority axis
 remains independently renderable.
 
+The reopened-history classifier is backed by grouped SQL aggregates over
+primitive item kind/outcome/reason, including `user_deselected`; it never loads
+and decodes every detail row merely to classify a summary. Detail is database
+paged in retained `item_order`, while phase summaries remain whole.
+
 Paused compound execution continues from an explicit discriminated
 continuation after fresh preflight. `phase=execute` carries execution status
 and published evidence; `phase=verify` carries `PostCopySelection`'s transient
@@ -265,12 +303,18 @@ The continuation is process-local custody state, not a durable recovery
 format. `InMemorySessionStore.load_all()` deliberately returns no sessions;
 closing the process offers no execute/verify resume even though the strict v3
 codec itself can round-trip an in-process snapshot.
+Splitting integrity continuation payloads is deferred: the existing exact
+candidate/completed-state payload remains until a named late-run pause
+reserialization benchmark over large `completed_bytes` demonstrates that it
+misses the bridge pause-latency budget.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An
 all-noop explicit run is completed/no-op and still history-worthy. A safe-subset
 run can be filesystem `COMPLETED` with itemized `BLOCKED`/`DEFERRED` exclusions;
 interfaces present that as partial completion rather than clean full success.
+An all-skipped review refuses before admission because it contains no executable
+work; it is not an all-noop run.
 
 ## Orthogonality Rules
 
@@ -280,6 +324,8 @@ interfaces present that as partial completion rather than clean full success.
 - Verification does not mutate plans or mark unverified noops.
 - History does not record ledger truth or control work.
 - UI choice does not alter workflow semantics.
+- UI filtering/windowing does not alter folder scope, selection, or integrity
+  candidate membership.
 - Ingest source temporariness does not create role-bearing location state.
 
 ## Expectations
@@ -328,7 +374,9 @@ import from handling refusal differently than baseline/verify.
   refused before preflight; queue/script paths can replay but never mint a
   commitment without human review.
 - Baseline/verify with no prior inventory automatically inventories then hashes;
-  selected verify refreshes only selected canonical paths.
+  exact selected verify refreshes exact canonical paths, while a selected
+  folder refreshes and freezes its complete indexed subtree regardless of the
+  active UI filter/window.
 - Fresh baseline selects only rows lacking evidence, fresh rebaseline selects
   only rows with evidence, and resume preserves the exact frozen selection
   without reapplying either mode filter.
@@ -337,6 +385,12 @@ import from handling refusal differently than baseline/verify.
 - Refusal, all-noop, partial failure, cancel, recorder failure, observer failure,
   and unexpected exception each preserve truthful typed results and history
   behavior.
+- Execution re-derives selection from plan safety plus canonical
+  `user_deselected`, rejects a mismatched carried selection, refuses
+  all-skipped, and still admits selected guarded no-ops.
+- Full, exact-path, and subtree scans take distinct reconciliation branches;
+  subtree missing marking covers descendants with a wildcard-free indexed
+  prefix range and never treats only the subtree root as selected.
 - Pause/resume preserves completed execution and verifier-item outcomes and
   fresh-guards remaining work; scan/plan/import refuse pause without losing
   cancelability.

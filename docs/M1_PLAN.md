@@ -1,10 +1,10 @@
 # M1 Plan
 
-Status: planning decisions revised and reconciled 2026-07-24. Stages 1–3
-(contracts/semantics, executor/hash refactor, and inventory/standalone
-integrity) landed on 2026-07-24; Stage 4 post-execution integration and the
-two-part Stage 5 facade/CLI work landed on 2026-07-25. Stage 6 remains
-unimplemented. This is both
+Status (2026-07-29): Stages 1–3 (contracts/semantics, executor/hash refactor,
+and inventory/standalone integrity), Stage 4 post-execution integration, and
+the two-part Stage 5 facade/CLI work are implemented. `M1_BRIDGE.md` finalizes
+the still-unimplemented Stage 5.5 facade completion and Stage 6 desktop shell.
+This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
@@ -25,6 +25,12 @@ worker-count removal), the active document is edited **as that stage
 lands**, not deferred indefinitely. Once a decision is promoted, the active
 document wins and this file becomes history — the same lifecycle
 `DESIGN_REVIEW.md` has.
+
+For the seam between Stage 5 and Stage 6, `M1_BRIDGE.md` refines this plan: its
+DR-BR decisions, BR-G acceptance criteria, slicing plan, and regression
+watchlist govern wherever this file's earlier GUI sketch is less specific or
+conflicts. The settled behavior and contracts are also summarized in
+`FEATURES.md`, `ARCHITECTURE.md`, and `WORKFLOWS.md`.
 
 ---
 
@@ -59,7 +65,11 @@ sequence is:
    live together rather than appearing as dormant seams in separate modules.
 5. **Facade and CLI.** Retarget the existing CLI and expose the new workflows
    through one interface service.
-6. **GUI shell.** Build the pywebview/WebView2 shell only against the settled
+6. **Facade completion (Stage 5.5).** Land user-selection provenance and review state,
+   recursive subtree scan/reconciliation, reusable workflow node identity/tree
+   construction, typed warning projection, and the remaining id-based service
+   commands.
+7. **GUI shell (Stage 6).** Build the pywebview/WebView2 shell only against the settled
    facade, views, and compound result contract.
 
 The graph still permits bounded parallel development. These are work lanes,
@@ -138,8 +148,11 @@ directly.
   commits. No unused retention key ships while retention is deferred.
 - `ui-state.json`, owned by `interfaces/`: recents (5 source + 5 target,
   maintained separately, per the settled FEATURES bullet), window geometry,
-  column/sort state. Plain file the GUI owns outright; `interfaces/` may
-  write files, it just can't import `db/`.
+  column/sort state, collapsed paths, and filter chips. Plain file the GUI owns
+  outright; `interfaces/` may write files, it just can't import `db/`. The
+  bridge refinement forbids plan request ids, session/task ids, selection,
+  `view_id`, and projection revision here so cosmetic persistence cannot become
+  an unreconciled session store.
 This amends the FEATURES.md *Local Settings File* bullet from one file to
 two — the smaller edit, given what it buys.
 **Also removes obsolete preflight plumbing:** the `SettingsReader` protocol
@@ -259,12 +272,12 @@ a caller — with no protocol declared before a second implementation exists.
 
 Known M1 limitations to document, not silently carry: a task card's plan does
 not survive a process restart, and until M2's durable session store the task
-rail only shows its own process's sessions — a concurrent CLI run is invisible
-to it except through volume-lock contention. Also (review finding 10's
+rail contains only adapter-owned tasks — a concurrent CLI run is invisible to
+it except through volume-lock contention. Also (review finding 10's
 corollary): the plan dictionary now grows for the life of a long-running GUI
 process where the CLI's process-per-command previously hid that; closing a
-task card must call `drop_plan`, matching the dispatcher's existing
-close-drops-record behavior.
+task card must cancel busy work, wait for its terminal record, close the
+session/observation, and call `drop_plan`.
 
 ### History and event schema
 
@@ -357,9 +370,10 @@ always reports `complete=False` (`scanner.py:252`:
 `complete = requested_scope.kind is ScanScopeKind.FULL`), while the recorder's
 selected-path missing branch requires `complete=True` (`recorder.py:573`).
 No selected scan can ever reach it. M1 changes `ScanResult.complete` to mean
-**complete for the declared `ScanScope`**. `ScanResult.is_full_scan` already
-distinguishes full-tree from selected-path scope, so the recorder can retain
-its separate full and selected reconciliation branches. A selected scan sets
+**complete for the declared `ScanScope`**. Stage 5 initially retained separate
+full and exact-selected reconciliation branches. Stage 5.5 adds a genuine third
+`SUBTREES` branch; it must not fall through the two-valued `is_full_scan`
+discriminator into exact-path missing marking. A selected scan sets
 `complete=True` only after every requested key was conclusively observed as
 present, unsupported, or absent; an interrupted or access-failed selected
 scan remains incomplete and marks nothing missing. Still **no new scanner
@@ -595,9 +609,11 @@ disk into script execution in the shell. Sanitizing paths upstream is the
 wrong fix — it corrupts the truth layer, and an escaped-then-echoed path can
 target a filesystem operation that doesn't match what's on disk.
 **Resolution — commands reference opaque ids; paths are display-only.**
-The plan tree already has `operation_id`; inventory rows have canonical keys.
-JS never sends a path back over the bridge — only ids; the adapter resolves
-server-side. View models carry paths in the **escaped display form** the
+Plan rows retain operation identity, while every plan/inventory tree node uses
+a deterministic opaque id qualified by tree kind, scope identity, and canonical
+path key. Synthetic folder ids are never operation ids. JS never sends a path
+back over the bridge — only ids; the adapter resolves server-side and validates
+location ownership. View models carry paths in the **escaped display form** the
 scanner's own hostile-name handling already produces (never raw
 `rel_path`) — malformed surrogate code units are unrepresentable in UTF-8 and
 would mangle or fail on the message channel raw regardless. Sink side:
@@ -625,6 +641,14 @@ order, coalesces `Progress` to its latest snapshot before return, and wakes the
 outstanding request during window shutdown. This retains the `LOSSY` delivery
 class at the bridge boundary without creating a host-to-JS execution channel.
 
+`M1_BRIDGE.md` makes “paged” concrete: one canonical server projection per
+view, backend filtering/search/windowing, a common 256-row response limit with
+257 refused, a six-entry immutable inventory-projection LRU, and history detail
+paged by SQL rather than after whole-run decoding. Lost-response recovery uses
+the client-local last accepted envelope sequence and the existing
+resubscribe/terminal-record route; it adds no client acknowledgement or second
+server cursor.
+
 **DR-M1-19 — Session observation: one thread per live session now, kept
 swappable for later.**
 Each `EventStream` owns a private `Condition`, so nothing except the observer
@@ -638,7 +662,9 @@ surface is a **sink** (`observe(session_id, sink)`), never a raw
 `EventStream` — `EventStream` never escapes `interfaces/service`. The sink is
 keyed by session id, not subscription identity, so a future multiplexer
 changes internals only. Resubscribe/gap handling lives in the observer
-(already required by DR-M1-01/07). All producers converge on the bounded
+(already required by DR-M1-01/07), while the bridge retains only its
+client-local last accepted sequence for retry recovery. All producers converge
+on the bounded
 event-drain queue (DR-M1-18) regardless of thread count.
 **Two fixes to get right the first time, not the tenth:** (1) block on
 `stream.next()` with no timeout and exit on `Terminal`/`StopIteration`
@@ -916,22 +942,66 @@ interface consumers remain behind the
 service and primitive workflow views; no durable session store, database
 schema change, or Stage 6 surface was added.
 
+### Stage 5.5 — Facade Completion
+
+This is the unimplemented bridge prerequisite, specified exhaustively in
+`M1_BRIDGE.md`. It runs three disjoint production lanes before facade
+integration:
+
+- tree substrate: shared relative-path helpers, pure
+  `workflows/node_tree.py`, deterministic scope-qualified node ids, ordered
+  subtree indexes, and id-to-path resolution;
+- scan scope: `FULL`/exact `PATHS`/recursive `SUBTREES`, parameterized recursive
+  walking, three-way recorder reconciliation with a wildcard-free indexed
+  subtree range, inventory payload v2 under a kind-aware validator, and typed
+  warning retention; and
+- selection semantics: separate `user_deselected` provenance, payload v4,
+  upward reselection closure, execution re-derivation/mismatch refusal, replan
+  discard, and the corrected all-noop/all-skipped distinction.
+
+Facade integration adds revisioned reviewing/committing/committed state,
+idempotent/revision-guarded commands, `preview_selection`, opaque-id inventory
+actions, warning views, and the four runtime lifts. It is verified through
+headless tests and adds no CLI surface, database version, projection cache, or
+Stage 6 presentation helper.
+
 ### Stage 6 — Web Desktop Shell
 
-- pywebview host; `nami-sync-gui` entry point plus no-subcommand launch.
+- pywebview host plus one `interfaces/launcher.py`: `nami-sync` and
+  `python -m namisync` with no subcommand open the GUI, explicit subcommands
+  remain CLI, and there is no second GUI executable.
 - Exactly one versioned, schema-validated, allowlisted
   `dispatch(command_json)` method. All data uses structured pull/RPC; live
-  events use one bounded/coalescing `next_events` drain.
+  events use one bounded `next_events` drain that coalesces only replaceable
+  progress, preserves reliable events, permits one concurrent request, and
+  recovers sequence gaps through the existing observer path.
 - Force Edge Chromium; fail actionably without WebView2. Install native
   cancellation hooks for untrusted navigation/new windows and reject every
   dispatch outside the exact packaged origin.
 - Opaque ids rather than command paths, explicit `item_type`/`phase`,
   hardened CSP, `textContent` only, no `innerHTML`, and hostile-name fixtures.
 - Task rail, task shell, plan tree, inventory tree, and history dialog built
-  only against Stage 5's facade/views.
-- GUI single-instance named mutex.
+  against the Stage 5.5 service and workflow tree substrate. Tasks are
+  adapter-owned and may retain a plan without a session.
+- Server-owned revisioned selection; backend search/filter/windowing and
+  visible-sequence anchoring; one canonical projection per view; 256-row
+  pages; six immutable inventory projections with causal re-read and no
+  generation token; database-paged history.
+- Folder actions are subtree-scoped independent of viewport/filter. Typed scan
+  warnings and unreadable frozen integrity subjects remain visible.
+- Paired progress item identity; synchronized service/projection/task state;
+  no task lock across I/O; idempotent mutating receipts; ordered shutdown.
+- GUI single-instance activation: a second launch activates the existing
+  window and exits successfully; activation failure is visible.
+- Cosmetic-only `ui-state.json`; no persisted request/session/task/selection or
+  projection identity.
 - Rewrite `DESKTOP_UI.md` for the web target and update `ui_mockup/` from
   staging artifact to implementation starting point.
+
+The exact eight implementation slices, dependency graph, 44 BR-G gates,
+regression watchlist, reference-machine latency/memory budgets, and 100k-file /
+120k-node / one-million-history-item scale envelope live in `M1_BRIDGE.md` and
+are normative for this stage.
 
 ---
 
@@ -1330,9 +1400,10 @@ failure.
 The existing selected scanner reports `complete=False`, while the recorder's
 selected-path missing reconciliation requires `scan.complete=True`. Therefore
 the proposed scoped missing behavior is currently unreachable. The settled
-contract makes completeness relative to the declared scope and keeps
-`is_full_scan` as the full-tree discriminator; it does not need a new scanner
-module, but it does need producer/contract work.
+Stage 5 contract makes completeness relative to the declared exact scope.
+`M1_BRIDGE.md` later adds `SUBTREES`, which requires a third recorder branch and
+cannot reuse `is_full_scan` as a complete discriminator. Neither change needs a
+new scanner module, but both need producer/contract work.
 
 The plan also needs the first-location sequence explicitly: selected path →
 host/volume/location registration → scan → role-free inventory recording,

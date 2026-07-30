@@ -8,16 +8,16 @@ Every section separates **bones** from **flesh**:
 
 - **Bones** are load-bearing structure — types, protocol shapes, invariants,
   and identity decisions that are expensive or impossible to change once data
-  and dependents exist. Bones are built in full up front even when nothing uses
-  them yet. A missing bone is a rewrite later.
+  and dependents exist. A bone lands at the last responsible irreversible
+  boundary or with its first consumer; “bone” is not permission to merge
+  speculative caches, projections, or presentation helpers early.
 - **Flesh** is behavior that hangs off the bones and grows additively — new
   operations, new policies, new features. A missing piece of flesh is a later
   commit, not a rewrite.
 
-The guiding rule (see FEATURES.md → *Degenerate First Implementations*): build
-every bone now; give each one the simplest correct flesh that the first
-milestone needs; let new flesh arrive through the seams the bones already
-provide.
+The guiding rule (see FEATURES.md → *Degenerate First Implementations*): settle
+each required bone before dependents make it costly to change, ship the simplest
+correct first consumer, and let later flesh arrive through that proven seam.
 
 ---
 
@@ -34,7 +34,7 @@ workflows/     sync, integrity — the ONLY place modules meet
                  imports: core, modules, db
 dispatcher/    session admission, custody, control plane, event fan-out
                  imports: core   (never modules, never workflows)
-interfaces/    cli, api, desktop
+interfaces/    launcher, cli, api, web
                  imports: dispatcher, workflows (via a registry)
 ```
 
@@ -52,13 +52,16 @@ Two consequences worth stating outright:
   exists. A workflow function passes one module's typed return value into the
   next. Control flows through calls and returns; observation flows out through
   events; records flow down through the recorder. Nothing flows sideways.
+- **Adapters are siblings.** `interfaces/launcher.py` may dispatch to `cli` or
+  `web`; neither adapter imports the other, and both reach domain behavior only
+  through `interfaces/service.py`.
 
 ### Dependency direction (bones)
 
 Every collaborator a module needs — recorder, clock, policies — is **received**
 as an argument, wired once at a single composition root. No module constructs
 its own collaborator. This is what makes every module testable with fakes and
-what keeps the SQLite/Qt/OS surfaces injectable rather than hardcoded.
+what keeps the SQLite/desktop-host/OS surfaces injectable rather than hardcoded.
 
 ---
 
@@ -218,6 +221,7 @@ class PhaseChanged: phase: str                                # RELIABLE
 class Progress:     items_done: int; items_total: int | None  # LOSSY
                     bytes_done: int; bytes_total: int | None
                     current_path: str | None
+                    item_id: str | None; item_type: str | None
 class ItemOutcome:  item_id: str; item_type: Literal["operation"] # RELIABLE
                     phase: Literal["execute"]; kind: str; path: str
                     outcome: Outcome; reason: str | None
@@ -254,6 +258,9 @@ Invariants (bones):
   an explicit `Gap` event rather than silently thinned. The replay buffer is
   bounded per session; a late subscriber gets current state plus a bounded
   tail and detects what it missed from the gap-free `seq`.
+- `Progress.item_id` and `item_type` are an optional pair. Current decoders use
+  additive `.get(...)` reads so legacy envelopes remain valid; `current_path`
+  is display-only and never row identity.
 - The verifier emits `ItemOutcome` per file *because that is the only way to
   report a per-file result*. Silent-until-done is not expressible.
 
@@ -262,7 +269,7 @@ Invariants (bones):
 ```python
 class Outcome(StrEnum):
     SUCCEEDED = "succeeded"
-    SKIPPED   = "skipped"    # intentionally not acted on (noop, ignored)
+    SKIPPED   = "skipped"    # intentionally excluded, including user deselection
     FAILED    = "failed"     # attempted, errored
     CANCELED  = "canceled"   # not reached due to cancellation
     DEFERRED  = "deferred"   # valid but held back (dependency, partial-exec)
@@ -273,6 +280,9 @@ Every reviewed operation ends in exactly one of these. M0 safe-subset workflow
 produces `BLOCKED` for direct blockers and `DEFERRED` for quarantined,
 dependency-excluded, or incomplete-scan-withheld work. Quarantine and
 withholding remain reason codes rather than additional top-level outcomes.
+`NOOP` is an operation kind, not `SKIPPED`: a selected no-op still runs its
+guard and records correspondence. An all-skipped review has no work and refuses
+before admission; an all-noop execution remains meaningful and history-worthy.
 
 ### 2.5 Scan, plan, execution (bones = shapes; flesh = fields)
 
@@ -338,9 +348,25 @@ class UnsupportedRecord:        # typed, review-visible; never plannable as work
     rel_path_key: str
     reason: str                 # placeholder | reparse | access-denied | ...
 
+class ScanScopeKind(StrEnum):
+    FULL = "full"
+    PATHS = "paths"             # exact named entries only
+    SUBTREES = "subtrees"       # recursive canonical roots
+
+@dataclass(frozen=True)
+class ScanScope:
+    kind: ScanScopeKind
+    selected_paths: tuple[str, ...] = ()
+    subtree_roots: tuple[str, ...] = ()
+    # FULL carries neither; PATHS carries nonempty selected_paths only;
+    # SUBTREES carries >=1 root and may also carry exact paths. Overlapping
+    # roots and covered exact paths canonicalize, and selecting the location
+    # root normalizes the entire mixed request to FULL.
+
 @dataclass(frozen=True)
 class ScanResult:
     root: Root
+    scope: ScanScope
     profile: CapabilityProfile
     files: tuple[FileRecord, ...]
     directories: tuple[DirRecord, ...]
@@ -420,6 +446,8 @@ class PublishedCopyEvidence:        # core/execution.py
 class ExecutionSet:           # plan + selection + mutable per-op status
     plan: Plan
     selection: Selection        # dependency-closed subset
+    user_deselected: frozenset[OpId]  # direct user intent, distinct from
+                                      # plan-derived safety exclusions
     run_id: RunId
     commitment: Commitment | None   # execution REFUSES a None or mismatched one
     status: dict[OpId, Outcome] # doubles as the pause/resume continuation:
@@ -674,6 +702,9 @@ escapes malformed surrogate code units rather than raising. Ledger command
 hashing, history hash/detail serialization, and opaque workflow payloads use
 the same final UTF-8 rule so free-form evidence cannot reopen that raw encoding
 failure; path validation still rejects malformed path spellings upstream.
+Pure relative-path parent/depth/descendant and suffix helpers also live here so
+planner, workflow node trees, and scope validation share one lexical contract.
+Absolute root containment remains a separate filesystem-safety operation.
 
 **Flesh.** None. Core is all bones by definition.
 
@@ -698,17 +729,25 @@ warnings without aborting safe siblings. Stable-ID volumes recover a
 directory-entry identity omission with one exact-path metadata stat. USN and
 network change sources remain deferred.
 
-**Contract.** `scan(root, ignores, ctx) -> ScanResult`. Implements
+**Contract.** `scan(root, scope, ignores, ctx) -> ScanResult`. Implements
 `ChangeSource`.
 
-**Bones.** The `ScanResult`/`FileRecord`/`CapabilityProfile` shapes; the
-`complete` flag; cancellation via `ctx.checkpoint()`; visited-identity tracking
-so junctions/reparse loops cannot recurse forever.
+**Bones.** The `ScanResult`/`ScanScope`/`FileRecord`/`CapabilityProfile` shapes;
+three-way `FULL`/`PATHS`/`SUBTREES` scope; the `complete` flag; cancellation via
+`ctx.checkpoint()`; visited-identity tracking so junctions/reparse loops cannot
+recurse forever.
 
 **Flesh — now.** Recursive metadata walk (size, mtime_ns, identity, nlink;
-every directory recorded with metadata); pre-use raw-name validation; exact-name
-ignore filtering; capability profiling; placeholder detection
+every directory recorded with metadata); pre-use raw-name validation; fixed
+exact qualified filtering for `DESKTOP.INI`, `THUMBS.DB`, owned temporary names,
+and `.SYNCTRASH` (no per-location ignore snapshot); capability profiling; placeholder detection
 (classify reparse/offline files `unsupported`, never open them); scan warnings.
+**Flesh — M1 Stage 5.5.** Parameterize the proven full-walk helper for recursive
+subtree roots instead of generalizing the exact-path observer. Mixed exact and
+subtree requests deduplicate deterministically. Owned artifacts and file
+placeholder/reparse exclusions do not alone make a scan incomplete; unreadable
+directories, directory placeholder/reparse points, repeated directory identity,
+collisions, and unsafe names do.
 **Flesh — deferred.** USN change-journal `ChangeSource`; network-share awareness.
 
 **Acceptance criteria.**
@@ -717,6 +756,8 @@ ignore filtering; capability profiling; placeholder detection
 - A cloud placeholder file is recorded `unsupported` and is **never opened**
   (asserted by a read-tripwire in test).
 - A partial/errored walk yields `complete=False`; a clean walk yields `True`.
+- Exact paths never imply descendant absence; a completed subtree covers every
+  descendant, and a selected root normalizes to the full-scan branch.
 - A contract-invalid file or directory name is escaped into typed evidence,
   makes the scan incomplete, is never opened/descended, and does not prevent a
   safe sibling from being retained.
@@ -868,7 +909,9 @@ escape and is writable). Commitment/policy-fingerprint checking is deliberately
 commitment exists. The execution session entry verifies the captured semantic
 snapshot and refuses an uncommitted or mismatched set before preflight runs
 (§4.9); a later global-default change affects only future plans.
-**Flesh — deferred.** User-edited partial selections and a graceful
+**Flesh — M1 Stage 5.5.** User-edited review selection is service-owned and
+re-derived before this preflight; preflight itself remains a pure judge of the
+resulting exact selection. **Flesh — deferred.** A graceful
 `continue-with-skips` resume tier (M0 automatic safe-subset execution exists;
 resume remains continue-or-refuse).
 
@@ -1183,6 +1226,20 @@ The review model carries that complete frozen semantic snapshot. Public
 snapshot/patch views enforce exact booleans, tuple-of-string filters, supported
 deletion values, and the nested preservation type before any atomic settings
 write; settings may neither alias a database nor live inside a managed root.
+**Flesh — M1 Stage 5.5/6.** Inventory reconciliation has three explicit shapes:
+full-location missing marking, exact-path replacement without inferred absence,
+and completed-subtree missing marking. Subtree descendants use the canonical
+literal range
+`rel_path_key >= root || '\' AND rel_path_key < root || ']'`, served by
+`inventory_location_presence_idx`; SQL `LIKE` is forbidden because `%` and `_`
+are valid hostile-name characters. Acknowledgement/restore recording is
+idempotent per gesture and row with a caller-supplied timestamp.
+
+History browsing obtains summaries from grouped primitive item
+kind/outcome/reason aggregates and pages detail at the database in
+`item_order`; it never decodes an entire run merely to classify or window it.
+Phase summaries remain whole. These are query/recorder changes only—ledger v2
+and history v3 schemas and markers do not change.
 **Flesh — deferred.** History retention waits for a maintenance session with
 cross-process history-writer custody; no M1 retention setting, facade action, or
 direct UI SQL exists. Also deferred: general migration module; legacy import;
@@ -1193,6 +1250,11 @@ merge across hosts.
 - Two parallel disjoint-volume runs both record completely; neither silently
   loses bookkeeping to lock contention (PoC open concurrency bug — the reason
   for the single serialized writer).
+- A completed subtree scan marks every absent descendant and no sibling missing,
+  including roots containing literal `%` or `_`, through the indexed range.
+- History summary classification agrees with live classification, including
+  genuine selected no-op versus `SKIPPED/user_deselected`, without loading
+  detail JSON; every detail page is bounded and stable by `item_order`.
 - A recording failure is always surfaced to the caller, never swallowed, and
   never inverts a successful `RunResult` into a reported failure (PoC trust bug).
 - The conditional primitive discards a write whose row drifted; a baseline hash
@@ -1249,10 +1311,12 @@ does not wait); pause/resume/cancel — resume re-enters admission at the back
 of its volumes' queue and never preempts a running session (FEATURES → *Resume
 Never Preempts*); a bounded per-session replay buffer (late subscribers get
 current state plus a bounded tail plus an explicit `Gap`).
-Terminal session records are retained until explicitly closed (the task-card
-dismissal), then dropped — the session table is the live view, history is the
-durable trail — and a queued session discarded before running writes its
-history entry first.
+Terminal session records are retained until explicitly closed, then dropped;
+history is the durable trail. Session identity is not desktop task identity:
+the M1 adapter may retain a reviewed plan in a task while no session exists,
+and closes each plan or execution session only after consuming its terminal
+record. A queued session discarded before running writes its history entry
+first.
 
 **Flesh — deferred (M2).** `SqliteSessionStore` — the durable implementation
 behind the same protocol; reload on launch; startup reconciliation (dead-process
@@ -1320,6 +1384,11 @@ envelopes opaquely. The workflow is the sole translator from executor-produced
 `PublishedCopyEvidence` to verifier-consumed `PostCopyCandidate`, so executor
 and verifier remain sibling modules with no direct dependency; the integrity
 contract does not import the execution contract.
+
+M1 does not split integrity continuation storage speculatively. The whole
+candidate/completed-state payload remains until the bridge's named late-run
+pause reserialization benchmark proves it misses budget; only that evidence
+authorizes a restructuring.
 
 At execute→verify handoff, candidate ids and `missing_evidence_ids` are
 disjoint, retain plan order, and together equal exactly the successfully
@@ -1392,6 +1461,17 @@ Everything downstream falls out of this split:
   evidence, and verify keeps both. Once candidate ids exist, resume preserves
   that ordered admitted set and completed counters without reapplying filters
   after evidence changes.
+- **Stage 5.5 review selection is service-owned.** Plan-derived safety
+  exclusions and canonical `user_deselected` are distinct. Mutations are
+  revision-guarded, dependency closure is recalculated server-side, commit
+  freezes the state, and execution re-derives the authoritative selection
+  before admitting it. Replan discards prior user selection.
+- **Location scope is resolved before work.** Opaque location-scoped node ids
+  resolve through the workflow tree/index to exact paths or recursive subtree
+  roots. Folder integrity freezes every eligible indexed descendant regardless
+  of presentation filter/window. One unreadable subject becomes a visible
+  unsupported result and verification-incomplete while siblings proceed;
+  non-subject-specific incompleteness refuses.
 
 **Bones.** The two-session split; top-to-bottom sequencing (scan → plan →
 observe → preflight → execute [→ verify], or location resolve/register → scan
@@ -1421,8 +1501,12 @@ independent filesystem/integrity/recording/audit/canceled truth. **Flesh —
 implemented through M1 Stage 5.** Primitive semantic-settings snapshot/patch
 translation, mode-aware fresh baseline/rebaseline admission, frozen resume
 selection, explicit location facade starts, the four location CLI commands,
-and final headline/exit classification. **Flesh — later M1.** The desktop
-shell (Stage 6).
+and final headline/exit classification. **Flesh — planned M1 Stage 5.5.**
+Reusable pure node-tree/index construction, recursive subtree
+scan/reconciliation, typed inventory warning projection, user-selection
+provenance and re-derivation, and the facade commands/review state needed by the
+desktop. **Flesh — planned M1 Stage 6.** The web desktop shell and presentation
+projections.
 **Flesh — deferred.** Queue-driven durable second sessions;
 replay-from-history; DB maintenance/retention session; undo/repair (each
 generated as an ordinary plan through the same pipeline — the
@@ -1465,12 +1549,13 @@ generated as an ordinary plan through the same pipeline — the
   including future undo and repair — so their conflicts with later runs surface
   in ordinary plan review.
 
-### 4.10 interfaces (cli / api / desktop)
+### 4.10 interfaces (launcher / cli / api / web)
 
 **Contract.** Adapt dispatcher + workflow state to a surface. Own no sync policy.
 
-**Bones.** Read dispatcher session table for status; subscribe to event streams;
-translate user intent into `submit`.
+**Bones.** Read dispatcher session state, subscribe to event streams, and
+translate user intent into service calls. Interface-owned task identity may
+outlive a session but never becomes a second session-state authority.
 
 **Flesh — now (M0).** CLI `sync` (plan → terminal review → commit → execute) +
 `history`; runnable/blocked/deferred review and partial-completion exit 6; real
@@ -1512,16 +1597,69 @@ renderable regardless of the headline. CLI exits map success/all-noop to 0,
 usage to 2, refused to 3, failed to 4, canceled to 5, partial to 6, degradation
 to 7, mismatch to 8, and verification-incomplete to 9.
 
+**Stage 5.5 planned contract (finalized 2026-07-29).** The service adds
+revisioned review selection/commit state, `preview_selection`, opaque-id
+location commands, missing acknowledgement/restore/listing, stale-row listing,
+typed scan warnings, and primitive `APPLIED`/`NOOP`/`STALE`/`CONFLICT`
+mutation dispositions. Location-scoped deterministic node identity and the
+pure hierarchy/index builder live in `workflows/node_tree.py`; no interface
+parses paths or rebuilds domain rollups. The inventory request codec advances
+to v2 while integrity stays v1 under a kind-aware validator; sync
+plan/execution advances to v4 for `user_deselected`.
+
 The M1 desktop is a pywebview host forced to Edge Chromium/WebView2. It exposes
 one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
-bounded/coalescing event drain, cancels untrusted navigation/new-window
+bounded event drain that coalesces only replaceable progress and preserves
+reliable events, cancels untrusted navigation/new-window
 requests through native hooks, and rejects dispatch outside the exact packaged
 origin. UI commands carry opaque ids rather than paths; rendered filenames use
 escaped display strings and `textContent`, never raw HTML. The task rail, plan
-tree, inventory tree, and history dialog consume facade views only.
-Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting)
-directly; it is separate from database-owned semantic settings and needs no
-cross-interface writer mutex.
+tree, inventory tree, and history dialog consume service/workflow views only.
+The native folder picker is the sole path-input exception: the host retains the
+real path in a server slot and returns only an opaque id plus display string.
+`pywebview` is an M1 runtime dependency, not an optional GUI extra.
+Exactly one `nami-sync` launcher sits above sibling `cli` and `web` adapters:
+no subcommand opens the desktop, while explicit subcommands retain CLI
+behavior. `python -m namisync` follows the same dispatch, and there is no
+separate GUI executable.
+
+The adapter owns task cards and cosmetics, not review or projection authority.
+A task may retain a plan with no live session. Busy close confirms, cancels,
+waits for the terminal record, then unsubscribes/closes/drops; application
+shutdown quiesces handlers and wakes drains/producers before closing observers
+and the service. A second GUI launch activates the existing window and exits
+successfully; activation failure is visible.
+
+Each open plan or inventory view uses one canonical server projection. Workflow code
+owns generic node structure, subtree membership, rollups, and opaque id lookup;
+`interfaces/web` owns tree-agnostic flatten/filter/search/window/anchor
+presentation mechanics. Requests use a common maximum of 256 rows and reject
+257. Plan trees are memoized per request. Inventory uses immutable copy/swap
+projections in a six-view LRU, built from a slim whole-location structure query
+and detail-fetched only for visible row ids. History summary/detail paging is
+performed by repository queries, not by loading then slicing.
+
+Inventory has no database generation/snapshot token. Its causal refresh points
+are view open, an observed terminal for the same location, and completed
+acknowledge/restore. Acknowledged rows are hidden by the default server filter,
+participate in no rollup, and carry their count on the filter chip; only an
+`APPLIED` visibility mutation reflows/refetches the list. M1 never auto-scans.
+
+Bridge handlers are concurrent: service review/projection state and adapter
+task state have explicit locks, no task lock spans I/O, and only one event drain
+runs concurrently. Mutating commands use revision guards and retained receipts;
+lost-response recovery uses the client-local last accepted event sequence plus
+the existing resubscribe/terminal-record path, not acknowledgements or a second
+server cursor. `Progress` supplies paired item identity for row updates.
+Visibility receipts use a reproducible per-(gesture,row) key and one
+caller-supplied timestamp. Session-creating commands instead retain
+`command_id -> (request_id, session_id)` in the service until `close_session`
+or shutdown; a recognized receipt is checked before a stale-revision guard.
+
+Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting,
+collapsed paths, filter chips) directly. It persists no request, session, task,
+selection, view id, or projection revision; it is separate from database-owned
+semantic settings and needs no cross-interface writer mutex.
 
 **Stage 1 implementation status (2026-07-24).** The isolated UI-state store and
 a dependency-free hostile-navigation/bridge spike implement and test the
@@ -1548,6 +1686,10 @@ desktop surfaces, and other interfaces behind the same facade.
   `python -O` in the PoC).
 - Any presentation-triggering logic is separable from an event loop, so tests
   never enter a modal loop (PoC 15-minute `QMenu.exec()` hang).
+- `M1_BRIDGE.md` BR-G-1 through BR-G-44 are the executable acceptance contract
+  for Stage 5.5/6, including the 100k-file/120k-node/one-million-history-item
+  performance envelope, 256-row bound, bridge security, race, shutdown, hostile
+  name, selection, subtree, paging, and regression guards.
 
 ---
 
@@ -1600,7 +1742,7 @@ desktop surfaces, and other interfaces behind the same facade.
   isolated verifier operation may land in parallel during M0 construction, but
   does not broaden this shipping gate without its inventory/workflow surface.
 - **M1 — integrity product and executor refactor.** Stages 1–5 are implemented;
-  Stage 6 remains. The settled dependency order is:
+  Stage 5.5 and Stage 6 remain. The settled dependency order is:
   1. contracts and semantics — canonical XXH3-128 evidence, nominal result
      items/phase summaries, four truth axes, execute→verify continuation,
      two-database reset boundary, split settings ownership, and facade/bridge
@@ -1611,14 +1753,19 @@ desktop surfaces, and other interfaces behind the same facade.
      history-v3 reset from Track 2;
   3. role-free inventory plus standalone baseline/verify/rebaseline workflows;
   4. in-session post-execution verification as one vertical integration slice;
-  5. shared facade and CLI expansion; and
-  6. the pywebview/WebView2 desktop shell against settled facade views.
+  5. shared facade and CLI expansion;
+  6. Stage 5.5 bridge-facing facade completion in parallel tree-substrate, scan-scope,
+     and selection-semantics lanes, converging on the service; and
+  7. Stage 6 pywebview/WebView2 desktop shell in the host → transport → event-drain
+     → presentation-core chain, followed by parallel sync/inventory surfaces,
+     lifecycle integration, and documentation/release.
 
   Implementation honored the dependency chain: standalone hashing followed
   HASH Track 2, post-execution integration followed standalone integrity, and
-  the CLI commands followed their workflows. GUI data binding still waits for
-  the now-settled facade and compound contracts. History retention is not part
-  of M1.
+  the CLI commands followed their workflows. The remaining exact dependency
+  graph, slices, gates, regression watchlist, and performance budgets are
+  normative in `M1_BRIDGE.md`; no Stage 6 projection/cache lands early in Stage
+  5.5. History retention is not part of M1.
 - **M2 — durability & scope.** `SqliteSessionStore` behind the existing
   protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
   producer); single queue-owner lock; durable queue and plans; event

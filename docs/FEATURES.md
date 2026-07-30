@@ -1,11 +1,12 @@
 # Features
 
-Implementation note (2026-07-25): M1 Stages 1-5 have landed their contract,
+Implementation note (2026-07-29): M1 Stages 1-5 have landed their contract,
 schema/settings/security prerequisites, pipelined XXH3-128 executor/verifier
 switch, role-free inventory, standalone integrity workflows, generic history
 items, production dispatcher registrations, and optional post-execution
-compound verification. The CLI/facade start surfaces are implemented; only
-the headed desktop host and UI remain assigned to M1 Stage 6.
+compound verification. The CLI/facade start surfaces are implemented.
+`M1_BRIDGE.md` finalizes the still-unimplemented Stage 5.5 facade completion
+and Stage 6 headed desktop shell.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -19,8 +20,8 @@ document's rules.
 ## PROJECT ARCHITECTURE
 
 - **Layered Domain Design**. Core owns shared contracts and the session machine, isolated modules (scanner, planner, preflight, executor, verifier) own sync behavior, the database owns persistence, application workflows coordinate them, and interfaces adapt those workflows.
-- **Headless Workflows**. Planning, execution, inventory, integrity, and history workflows run without Qt and are shared by the desktop UI and CLI.
-- **Thin Desktop Adapter**. The desktop UI presents workflow state and delegates sync decisions to headless layers; it never owns sync policy regardless of which UI toolkit implements it.
+- **Headless Workflows**. Planning, execution, inventory, integrity, history, and reusable node-tree construction run without a desktop host and are shared by the desktop UI and CLI.
+- **Thin Desktop Adapter**. The desktop UI presents workflow state and delegates sync decisions to headless layers; it owns disposable task/presentation state but never sync policy, authoritative selection, inventory reconciliation, or path interpretation.
 - **Typed Core Contracts**. Explicit dataclasses carry scan, plan, execution, progress, verification, and result data across layers.
 - **Defensive JSON Boundaries**. Canonical plans, ledger idempotency hashes, history hashes/detail, and opaque workflow payloads preserve established valid-Unicode encoding while escaping an unpaired surrogate instead of raising; validated path contracts still reject malformed filenames before these boundaries.
 - **Separate State Stores**. The working ledger and append-oriented audit history use independent local SQLite databases.
@@ -46,6 +47,7 @@ document's rules.
 - **One-Way Root Mapping**. NamiSync reconciles a distinct source folder into a distinct, non-nested destination folder.
 - **Dry-Run Review**. Every sync scans both roots and produces a reviewable plan before filesystem mutation. Rename-shaped rows show the observed prior target path and planned target path, including visually meaningful case-only changes such as `keep.txt -> KEEP.txt` and the actual old-to-new paths for move and move-update operations.
 - **Commit-to-Execute**. Execution happens only for a plan the user has reviewed and explicitly committed; the commitment binds to the plan's deterministic fingerprint and to the reviewed selection, so neither can change under an approval. A committed plan runs immediately when its volumes are free, otherwise it queues, and committed plans execute sequentially in commit order. An uncommitted plan is never executed and never expires into execution — it simply remains reviewable. Scripted and queued execution replay committed plans; nothing plans and executes in one unreviewed step, and every committed execution still preflights first, with material drift refused back to review rather than silently re-planned.
+- **Authoritative Review Selection**. Safety exclusions and direct user deselections are separate sets. The service owns revisioned review state, dependency-closes user changes, freezes mutation while committing/committed, and execution re-derives the runnable selection from the plan plus canonical `user_deselected` provenance before accepting it. An all-skipped selection is not executable; selected `NOOP` operations remain meaningful executable and auditable work.
 - **Deletion Policies**. Paired sync supports `trash` by default and `additive`, while `mirror` is available only as an internal policy.
 - **Recent Folders**. The application remembers up to five recent source and destination folders separately.
 
@@ -93,7 +95,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Event Plumbing**. The dispatcher sequences and fans out each session's event stream to GUI, CLI, history recorder — and buffers for replay so a late or reconnecting subscriber can catch up without the operation knowing.
 - **Event Delivery Classes**. Progress events may be coalesced or dropped in favor of the latest snapshot; item outcomes and state transitions reach the history observer under the timeout-guarded audit guarantee, and are never silently dropped for any subscriber — ejection is always announced explicitly. A subscriber attaching late instead receives current state plus a bounded tail, using the envelope's gap-free sequence number to detect what it missed.
 - **Versioned Event Envelope**. Every event carries a schema version, so a persisted or cached event can still be read correctly after the shape evolves.
-- **Session Table**. The dispatcher is the single source of truth for which sessions exist and their current state; the desktop task rail and any CLI status surface are both just views over this table.
+- **Session Table**. The dispatcher is the single source of truth for which sessions exist and their current state. It does not own desktop task identity: an M1 task is adapter state that can retain a reviewed plan while no session exists, and sessions come and go beneath it.
 - **Orderly Teardown**. Application shutdown stops admission, drains or cancels running sessions, and confirms every lock released before exit.
 - **What the Dispatcher Is Not**. The dispatcher never sequences a workflow's internal steps, never interprets a domain result beyond its terminal status, and never writes to the main ledger or history database (its own persisted session table is the sole exception); coordination, recording, and domain meaning stay in workflows, the recorder, and observers.
 
@@ -109,16 +111,23 @@ below describe settled behavior, not current M0 runtime claims.
 - **Placeholder Detection**. Cloud-backed placeholder files (OneDrive, Dropbox, and similar reparse-tagged files) are recognized from their attributes without being opened, recorded as unsupported, and reported as scan warnings instead of being read and silently hydrated. Unsupported entries are typed scan records in their own right — they flow through inventory and plan review as blocked, never-executable items rather than living only in warning text.
 - **Filesystem Capability Profile**. Each scanned root records its filesystem type, timestamp granularity, and whether stable file identity is available, so the planner and preflight can reason about what a root's metadata can and can't prove.
 - **Junction Cycle Protection**. The scanner tracks visited directory identities while walking so a directory junction or reparse loop cannot recurse indefinitely.
+- **Explicit Scan Scope Shapes**. Scanner scope distinguishes a full root, exact paths, and recursive subtrees. Mixed exact/subtree requests canonicalize overlapping roots, and a selected root becomes a full scan; reconciliation mirrors those three shapes rather than treating a subtree as one selected path.
+- **Scope-Honest Completeness**. Owned artifacts and harmless file placeholders/reparse entries are typed exclusions without making the scan incomplete. Unreadable directories, directory placeholders/reparse points, repeated directory identity, collisions, and unsafe names retain typed warnings and make the affected scope incomplete.
 - **M0 Scanner Implemented**. Native walking and selected-path observation produce deterministic typed snapshots with exact owned-artifact ignores, conservative capabilities, cooperative cancellation, placeholder/reparse blocking, collision/hostile-path warnings, and explicit completeness. On stable-identity volumes, the native walk recovers an entry identity with a second metadata-only stat when Windows directory enumeration omits it, preserving correspondence-qualified moves without inventing evidence.
 
 - **Change-Journal Scanning**. The scanner sits behind a pluggable change-source interface; a future NTFS USN-journal-backed source will supply incremental changes without the planner or executor knowing the difference. It requires elevated access or a background service and remains unrealized.
 
 ## FILTERS
 
-- **Location Ignores**. A location can carry ignore patterns evaluated during the scan walk itself, so ignored subtrees are never read; a complete scan is complete modulo its own ignores, and the missing-marking sweep respects that boundary.
+- **Scanner-Owned Ignores**. The scanner invisibly excludes only fixed
+  application/Windows artifacts (`DESKTOP.INI`, `THUMBS.DB`, owned temporary
+  names, and `.SYNCTRASH`) by exact qualified grammar. They are intentional
+  non-subjects and do not make a scan incomplete. User filters remain a separate
+  fingerprinted planning policy, not a mutable scanner ignore snapshot.
 - **Filter Snapshot in Plans**. Live planning applies filter patterns symmetrically to both scanned sides before diffing, then records and fingerprints that filter set in the plan. Later global-default changes affect only future plans; editing a task-local bound filter during review invalidates that plan and requires fresh planning and commitment.
 
 - **Filter Rule Editor**. The desktop UI will offer a rule editor with a live preview of what a filter set would exclude.
+- **Filter Exclusion Explanation**. Plan review will eventually explain why a filtered file has no operation row; Stage 6 does not invent such rows or claim this existing gap is solved.
 
 ## PLANNER
 
@@ -132,7 +141,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Move Detection**. Unambiguous source filesystem-identity changes can become target-side moves; an identity observed at more than one scanned path is excluded from consideration.
 - **Composite Move-Update**. A detected move whose content also changed is planned as one composite operation whose evidence records only at full completion, so a crash partway can never leave old content at the new path while the ledger claims consistency.
 - **Directory Operations**. Every directory the plan will create — empty, or the parent chain of planned copies — is an explicit reviewed `mkdir` operation carrying its source directory's metadata; the executor never creates a directory implicitly. Removable target-only empty directories become policy-controlled operations.
-- **Directory Rename Decomposition**. A renamed or moved source folder is never a directory-level operation: it decomposes into per-file identity moves, the full `mkdir` chain for new locations, and cleanup of the directories it emptied. Target-side file moves are same-volume renames, so a folder rename copies no content bytes. Plan review presents the decomposition grouped under the folder so it reads as one rename, not thousands of rows.
+- **Directory Rename Decomposition**. A renamed or moved source folder is never a directory-level operation: it decomposes into per-file identity moves, the full `mkdir` chain for new locations, and cleanup of the directories it emptied. Target-side file moves are same-volume renames, so a folder move copies no content bytes. Plan review may annotate paired old/new structure, but it never reclassifies the literal operations as one rename or invents a second selection unit.
 - **Conflict Blocking**. Case collisions and file-directory conflicts remain visible as blocked conflict operations instead of being guessed through.
 - **Capacity Planning**. Plans conservatively compute required bytes for all copy and update work, with temporary-file accounting sized for the maximum number of concurrently in-flight temp files rather than assuming one at a time; target free space is never baked into the plan — it is observed at review and preflight time, where the one shared capacity formula judges it.
 - **Stable Plan Ordering**. Operations receive deterministic per-plan identifiers and dependency-aware ordering.
@@ -196,6 +205,11 @@ below describe settled behavior, not current M0 runtime claims.
 - **Acknowledgement Restore**. Acknowledged missing rows can be restored to the normal missing view.
 - **Reappearance Tracking**. Files returning after being marked missing are surfaced as reappeared until a matching hash or new baseline resolves the state.
 - **Selected Inventory Refresh**. Selected paths can be refreshed without walking the entire location or inferring unselected absences.
+- **Recursive Folder Refresh**. Refreshing a folder scans and reconciles its complete subtree. Completed subtree reconciliation marks missing descendants with an indexed literal prefix range, never SQL wildcard matching; exact-path refresh still never infers descendant absence.
+- **Causal Inventory Re-Read**. Inventory has no database generation token. A
+  view re-reads on open, after an observed terminal for its location, and after
+  acknowledge/restore; M1 does not pretend to provide partial cross-process
+  snapshot consistency and never auto-scans in the background.
 - **Evidence Staleness**. Inventory can filter and summarize rows by hash and verification age, and select every row older than a chosen cutoff for re-verification, turning last-seen, hash-observed, and last-verified timestamps into a visible freshness signal instead of silent bookkeeping.
 - **Five-State Volume Resolution**. Every inventory/integrity start, resume, and queued wakeup distinguishes resolved, offline, ambiguous clone, missing root, and unavailable root before scan/hash work; only resolved state can reconcile.
 
@@ -207,7 +221,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Location Verification**. Verification rereads present files against retained size, modification time, and XXH3-128 evidence.
 - **Cache-Honest Reads**. Verification reads bypass the page cache, or are deliberately deferred after a fresh write, so a match attests the medium rather than a buffer NamiSync itself just filled.
 - **Integrity Outcomes**. Verification distinguishes verified, baselined, mismatched, modified, missing, unsupported, canceled, and error results.
-- **Selected Verification**. Exact present inventory paths selected by an interface can be verified without verifying the entire location.
+- **Selected Verification**. Exact rows or folders selected by an interface resolve from opaque location-scoped ids. A folder freezes all eligible indexed descendants independent of the current filter or viewport. An unreadable frozen subject becomes a visible `unsupported` item and verification-incomplete while eligible siblings continue; non-subject-specific scan incompleteness still refuses admission.
 - **Post-Execution Verification**. A sync can continue directly into an optional verification phase while retaining the same session and volume custody. Every successfully published copy, update, or move-update carries transient published evidence into readback even if its ledger write failed; no-op, metadata-only move, directory, trash, and delete work is ineligible. Readback mismatch or incompleteness changes the integrity axis, never the already-settled filesystem result. Same-process pause retains an explicit execute/verify continuation; process close offers no resume. Cancellation starts no new verification work, preserves already-settled filesystem truth, and attempts terminal finish once without ever double-finishing; a finish failure degrades recording.
 - **Safe Conditional Recording**. Hash and verification results are persisted only when the file state remains consistent with the observation being recorded.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
@@ -243,7 +257,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Mapping-Scoped State**. Shared physical locations can participate in multiple mappings while retaining independent source identity and correspondence state.
 - **Run Idempotency**. Executor run tokens uniquely correlate and protect repeated ledger recording.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
-- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` beside the selected ledger under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. The service exposes only primitive full-snapshot/all-optional-patch views, while recents, window geometry, columns, and sorting live separately in interface-owned `ui-state.json`, so workflows never acquire UI vocabulary.
+- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` beside the selected ledger under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. The service exposes only primitive full-snapshot/all-optional-patch views, while recents, window geometry, columns, sorting, collapsed paths, and filter chips live separately in interface-owned `ui-state.json`. UI state never persists a request, session, task, selection, view id, or projection revision.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
 - **M1 Evidence Reset Boundary**. Ledger v2/history v3 require immutable final-contract markers. Old versions and transitional v2/v3 files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
 - **M1 Generic History Reservation**. History v3 stores explicitly tagged operation/execute and standalone integrity items and the phase-summary shape consumed by Stage 4. Compound sync now writes exact execute/verify phase rows without a version/marker change; standalone producers keep writing zero phase rows.
@@ -273,6 +287,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **History Idempotency**. Repeating a recorded run token does not create a duplicate history entry.
 - **History Retention**. Summary and detail retention will preserve the run envelope while pruning eligible old detail, but it is deferred beyond M1 until a maintenance session can coordinate cross-process custody with every audit writer. M1 exposes no retention setting, command, or GUI action.
 - **History Browsing**. Retained runs and their details can be inspected in the desktop History dialog or through the CLI.
+- **Database-Paged History**. Desktop summary and detail commands page in SQL rather than loading whole runs and slicing in memory. Summary classification comes from grouped primitive aggregates over item kind/outcome/reason; detail is ordered by retained `item_order`, while phase summaries remain whole.
 - **M1 Generic History Implemented**. The independent store consumes the dispatcher's reliable preterminal observer protocol and persists idempotent sync/inventory/integrity envelopes, axis-separated summaries, ordered operation/integrity details, and compound phase summaries. Subject-only activities render their location instead of `None -> None`; standalone Stage 3 producers write zero phase rows. Retained views expose filesystem, integrity, recording, audit, disposition, cancellation, and the same derived headline as live results.
 
 - **Task-Grouped History**. GUI activities will be grouped under durable task records while CLI and service activities remain valid without a task parent.
@@ -302,37 +317,40 @@ Stage 5 location activities through the shared service.
 
 - **M1 Facade And CLI Implemented**. One process-local service owns the exact registry, runtime/dispatcher lifecycle, sink-only observation, primitive settings/inventory/result views, and both database overrides. The CLI adds all four location commands, optional execute-to-verify, actionable five-state binding, guarded selected rebaseline, typed phase/item rendering, and deterministic exit codes.
 
-- **GUI Entry Points**. Once the desktop application exists, running `nami-sync`, `nami-sync-gui`, or `python -m namisync` with no subcommand will launch it.
+- **GUI Entry Points**. Once the desktop application exists, `nami-sync` and `python -m namisync` with no subcommand launch it through one launcher above the sibling CLI and web adapters; explicit subcommands retain CLI behavior. No second GUI executable is added.
 
 ## DESKTOP UI
 
-- **Task Rail**. The window provides a scrollable newest-first rail of task cards with status, paths, completion date, close controls, and mini progress bars.
+- **Task Rail**. The window provides a scrollable newest-first rail of adapter-owned task cards with status, paths, completion date, close controls, and mini progress bars. A task may hold a reviewed plan without a live session; closing a busy task confirms, cancels, waits for a terminal record, then unsubscribes, closes, and drops it.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
 - **Folder Selection**. Source and destination support editable recent-folder dropdowns and folder browser buttons.
-- **Plan Tree**. The Plan view displays operations in a directory-nested tree with rolled-up counts, sizes, reasons, hashes, and statuses; a decomposed folder rename reads as one folder-level group, not a flat run of per-file moves.
-- **Inventory Tree**. The Inventory view displays retained files in a directory-nested tree with presence and integrity states.
+- **Plan Tree**. The Plan view displays literal operations in a directory-nested tree with rolled-up counts, sizes, reasons, hashes, and statuses. Move-shaped decompositions use paired old-path annotations and noninteractive ghosts without becoming rename operations or independent selection units; nested move annotations are suppressed where an outer pairing already explains the structure.
+- **Inventory Tree**. The Inventory view displays retained files in a directory-nested tree with presence and integrity states plus visible typed scan warnings.
 - **Plan Filters**. Plan review can filter All, Changes, Moves, and Conflicts with live counts.
 - **Inventory Filters**. Inventory review can filter All, Verified, Baseline, Unbaselined, Missing, Reappeared, and Acknowledged rows with live counts.
 - **View Toggle**. A persistent Plan | Inventory toggle switches between retained plan and location-inventory views without conflating them.
-- **Inventory Actions**. Menus and row context actions support selected verification, missing acknowledgement, acknowledgement restore, path copying, inventory, baseline, and import workflows.
-- **Live Progress**. Sync, scan, baseline, verification, and import workers update overall and per-file progress with current paths and counters.
+- **Inventory Actions**. Menus and row context actions support exact-row or recursive-folder refresh and integrity work, missing acknowledgement, acknowledgement restore, and path copying. Row/folder actions are plainly distinguished; folder integrity predicts no eligibility count and adds no confirmation because admitted work reports its real count and remains pausable/cancelable. Acknowledgement hides rows from the default view without changing rollups and refetches only after an applied mutation.
+- **Server-Owned Selection**. Plan selection is path-scoped across the whole tree, independent of viewport and filter. The DOM is disposable: the service owns revisioned state, exposes a direct selection preview, and receives pending changes in short batches.
+- **Bounded Tree Views**. Each open plan or inventory view has one canonical server projection, never one tree per filter/search condition. Filtering/searching/windowing happen on the backend over a fixed-height visible sequence with a common 256-row page and a hard 257-row refusal; inventory projections are immutable copy/swap entries in a six-view LRU.
+- **Tree Search**. Plan and Inventory search is a literal case-folded display substring operation on the backend. A folder remains visible for its own or a descendant match, rollups remain unfiltered, chips report filtered counts, and active-item anchoring falls back to the nearest visible ancestor.
+- **Live Progress**. Sync, scan, baseline, and verification workers update overall and per-file progress with counters and paired item id/type. The display path is informational and is never used to locate or mutate a row.
+- **Plan Follow Mode**. The Plan view follows the active operation until the user deliberately scrolls away, resolving collapsed or filtered items through the server-visible ancestor chain.
+- **Live Integrity Feedback**. The Inventory view follows the file being hashed and patches settled per-file outcomes without rebuilding or drifting the active projection.
 - **Cooperative UI Workers**. Long-running operations run through cancellable worker sessions with guarded cleanup and release handling, independent of whichever UI toolkit hosts them.
-- **GUI Single Instance**. A second desktop launch is refused with a message naming what the running instance is doing, rather than starting a duplicate window; read-only CLI commands and non-conflicting CLI mutations are not subject to this restriction.
+- **GUI Single Instance**. A second desktop launch activates the existing window and exits successfully; activation failure is visible. Read-only CLI commands and non-conflicting CLI mutations are not subject to the GUI-instance restriction.
 - **Mismatch Severity**. A mismatched-hash row — content differing from recorded evidence while its stats look unchanged — renders distinctly from an ordinary modified row, with a persistent badge on the location until acknowledged; it is the one signal this application exists to surface and it never reads as just another list row.
 - **Dark Theme**. The desktop shell uses a dark-only theme with status colors, operation-kind colors, alternating tree rows, and styled progress controls, regardless of the underlying UI toolkit.
 - **History Dialog**. The desktop UI lists history runs and shows retained activity detail. Retention controls remain absent from the M1 shell until coordinated maintenance exists.
+- **Bridge Responsiveness Envelope**. The M1 bridge is measured on the documented reference machine at up to roughly 100,000 file-backed subjects, 120,000 tree nodes, 50 history runs/1,000,000 detail items, and 256-row pages. Execute/control feedback is immediate, progress may be late but never incorrect, and `M1_BRIDGE.md` owns the exact latency and memory gates.
 
 - **Drag-and-Drop Setup**. Dropping folders onto a task will populate its source and destination fields.
 - **Status Layout Refinement**. The task header will unify live and completed detail while promoting activity state over the affected-byte figure.
 - **Rolling Transfer Metrics**. A rolling estimator will provide responsive throughput and phase-aware ETA instead of the current whole-run average.
 - **Throughput Graph**. The UI will graph current transfer rate against execution progress.
-- **Plan Follow Mode**. The Plan view will follow the active operation until the user deliberately scrolls away, including collapsed-tree handling.
-- **Live Integrity Feedback**. The Inventory view will follow the file being hashed and later update per-file outcomes as verification progresses.
 - **Failure Triage**. Failed operations will group by cause and common path prefix with a suggested action, instead of presenting a long flat list of individual failures.
 - **Cancel and Pause Safety Messaging**. The cancel and pause affordances will state what happens to the in-flight operation and what's kept, phrased from the session's current phase rather than one generic warning.
 - **Completion Notification**. A run that finishes while the window isn't focused will raise a system notification summarizing the outcome, including a call-out when it includes any mismatched files.
 - **Guided Empty States**. Views with no data yet will explain the next step in the application's own vocabulary (locations, mappings, baselines) rather than showing a bare empty list.
-- **Tree Search**. Plan and Inventory trees will support type-to-search filtering in addition to the existing category filters.
 - **Mapping List View**. Stored mappings will be browsable and manageable as named, recurring relationships, not just visible as the source and destination of individual task cards.
 
 ## CROSS-PROCESS SAFETY
