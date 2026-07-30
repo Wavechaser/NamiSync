@@ -124,7 +124,7 @@ def test_worker_count_is_absent_from_contracts_and_payloads() -> None:
     assert b"worker_count" not in execution_payload
 
 
-@pytest.mark.parametrize("schema_version", [1, 2])
+@pytest.mark.parametrize("schema_version", [1, 2, 3])
 def test_old_workflow_payload_is_refused_after_contract_change(
     schema_version: int,
 ) -> None:
@@ -139,7 +139,7 @@ def test_old_workflow_payload_is_refused_after_contract_change(
         decode_plan_request(json.dumps(value).encode("utf-8"))
 
 
-def test_plan_and_execution_payloads_explicitly_use_schema_v3() -> None:
+def test_plan_and_execution_payloads_explicitly_use_schema_v4() -> None:
     plan_value = json.loads(
         encode_plan_request(
             PlanRequest("request", r"C:\source", r"D:\target")
@@ -149,10 +149,10 @@ def test_plan_and_execution_payloads_explicitly_use_schema_v3() -> None:
         encode_execution_request(_rich_execution_request())
     )
 
-    assert plan_value["schema_version"] == 3
-    assert execution_value["schema_version"] == 3
+    assert plan_value["schema_version"] == 4
+    assert execution_value["schema_version"] == 4
 
-    execution_value["schema_version"] = 2
+    execution_value["schema_version"] = 3
     with pytest.raises(ValueError, match="unsupported workflow payload schema"):
         decode_execution_request(
             json.dumps(execution_value).encode("utf-8")
@@ -588,6 +588,47 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
     )
     assert decoded.execution_set.recording is RecordingStatus.DEGRADED
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
+
+
+def test_execution_payload_round_trips_canonical_user_deselection() -> None:
+    original = _rich_execution_request()
+    recase = original.execution_set.plan.operations[8]
+    selection = original.execution_set.selection - {recase.op_id}
+    changed_set = replace(
+        original.execution_set,
+        selection=selection,
+        commitment=Commitment(
+            original.execution_set.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+        user_deselected=frozenset({recase.op_id}),
+    )
+
+    encoded = encode_execution_request(
+        ExecutionRequest(
+            replace(original.continuation, execution_set=changed_set),
+            original.started_at,
+        )
+    )
+    decoded = decode_execution_request(encoded)
+
+    assert decoded.execution_set.user_deselected == frozenset({recase.op_id})
+    assert encode_execution_request(decoded) == encoded
+
+
+@pytest.mark.parametrize("shape", ["missing", "unknown"])
+def test_execution_payload_requires_exact_user_deselection_field(
+    shape: str,
+) -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    if shape == "missing":
+        del value["execution_set"]["user_deselected"]
+    else:
+        value["execution_set"]["unexpected_user_selection"] = []
+
+    with pytest.raises(ValueError, match="missing|unexpected"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
 def test_verify_continuation_is_a_lossless_round_trip() -> None:

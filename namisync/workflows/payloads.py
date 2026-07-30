@@ -62,7 +62,7 @@ from .models import (
 )
 
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 
 def _json_bytes(value: object) -> bytes:
@@ -903,6 +903,9 @@ def _execution_set(value: ExecutionSet) -> dict[str, object]:
     return {
         "plan": _plan(value.plan),
         "selection": sorted(str(item) for item in value.selection),
+        "user_deselected": sorted(
+            str(item) for item in value.user_deselected
+        ),
         "run_id": str(value.run_id),
         "status": {
             str(key): outcome.value
@@ -929,6 +932,7 @@ def _decode_execution_set(value: object) -> ExecutionSet:
         {
             "plan",
             "selection",
+            "user_deselected",
             "run_id",
             "status",
             "commitment",
@@ -944,6 +948,10 @@ def _decode_execution_set(value: object) -> ExecutionSet:
         selection=frozenset(
             OpId(_string(raw, "execution_set.selection[]"))
             for raw in _list(item["selection"])
+        ),
+        user_deselected=frozenset(
+            OpId(_string(raw, "execution_set.user_deselected[]"))
+            for raw in _list(item["user_deselected"])
         ),
         run_id=validated_run_id(
             _string(item["run_id"], "execution_set.run_id")

@@ -176,12 +176,24 @@ def run_execution(
     sink = continuation_sink or (lambda value: None)
     xset = current.execution_set
     try:
-        commitment_error = _commitment_error(xset)
-        exclusion_items = _exclusion_items(
-            xset.plan,
-            derive_execution_selection(xset.plan),
-            xset.selection,
-        )
+        try:
+            decision = derive_execution_selection(
+                xset.plan,
+                user_deselected=xset.user_deselected,
+            )
+        except (TypeError, ValueError) as error:
+            commitment_error = (
+                "reviewed selection provenance is invalid: "
+                f"{type(error).__name__}: {error}"
+            )
+            exclusion_items = ()
+        else:
+            commitment_error = (
+                "carried selection does not match the authoritative derived selection"
+                if decision.selection != xset.selection
+                else _commitment_error(xset)
+            )
+            exclusion_items = _exclusion_items(xset.plan, decision)
     except Exception as error:
         if isinstance(current, VerifyContinuation):
             return _settle_verify_incomplete(
@@ -629,7 +641,6 @@ def _emit_items(ctx: RunContext, items: tuple[ItemOutcome, ...]) -> None:
 def _exclusion_items(
     plan: Plan,
     decision: ExecutionSelection,
-    selection: frozenset,
 ) -> tuple[ItemOutcome, ...]:
     operations = {operation.op_id: operation for operation in plan.operations}
     return tuple(
@@ -642,7 +653,6 @@ def _exclusion_items(
             detail=exclusion.detail,
         )
         for exclusion in decision.exclusions
-        if exclusion.op_id not in selection
     )
 
 
@@ -947,6 +957,8 @@ def _commitment_error(xset: ExecutionSet) -> str | None:
         return "commitment plan fingerprint does not match the reviewed plan"
     if commitment.selection_digest != selection_digest(xset.selection):
         return "commitment selection digest does not match the reviewed selection"
+    if not xset.selection:
+        return "nothing is selected to synchronize"
     return None
 
 

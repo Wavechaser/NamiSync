@@ -111,6 +111,7 @@ class ExecutionSet:
         default_factory=dict
     )
     recording: RecordingStatus = RecordingStatus.OK
+    user_deselected: frozenset[OpId] = frozenset()
 
     def __post_init__(self) -> None:
         validated_run_id(str(self.run_id))
@@ -121,6 +122,20 @@ class ExecutionSet:
         unknown = self.selection - known
         if unknown:
             raise ValueError(f"selection contains unknown operation ids: {sorted(unknown)!r}")
+        if not isinstance(self.user_deselected, frozenset):
+            raise TypeError("user_deselected must be a frozenset")
+        unknown_user_deselected = self.user_deselected - known
+        if unknown_user_deselected:
+            raise ValueError(
+                "user deselection contains unknown operation ids: "
+                f"{sorted(unknown_user_deselected)!r}"
+            )
+        selected_user_deselected = self.user_deselected & self.selection
+        if selected_user_deselected:
+            raise ValueError(
+                "user-deselected operation ids cannot remain selected: "
+                f"{sorted(selected_user_deselected)!r}"
+            )
         invalid_status = self.status.keys() - self.selection
         if invalid_status:
             raise ValueError(

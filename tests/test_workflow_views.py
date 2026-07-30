@@ -20,8 +20,8 @@ from namisync.core.session import (
 from namisync.workflows.views import operation_result_view
 
 
-def _operation(outcome: Outcome) -> ItemOutcome:
-    return ItemOutcome("operation", "copy", "file.txt", outcome)
+def _operation(outcome: Outcome, *, kind: str = "copy") -> ItemOutcome:
+    return ItemOutcome("operation", kind, "file.txt", outcome)
 
 
 def _integrity(
@@ -188,7 +188,7 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
         (
             OperationResult(
                 SessionState.COMPLETED,
-                items=(_operation(Outcome.SKIPPED),),
+                items=(_operation(Outcome.SKIPPED, kind="noop"),),
             ),
             "all-noop",
         ),

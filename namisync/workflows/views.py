@@ -17,6 +17,7 @@ from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityResult,
 )
+from namisync.core.planning import OperationKind
 from namisync.core.session import (
     OperationResult,
     PhaseResult,
@@ -25,6 +26,8 @@ from namisync.core.session import (
     SessionRecord,
 )
 from namisync.db.repositories import InventorySnapshot
+
+from .selection import SELECTION_EXCLUSION_REASONS
 
 
 class ResultCategory(StrEnum):
@@ -410,9 +413,10 @@ def _integrity_axis(
 
 
 def _headline(result: OperationResult, integrity: str) -> ResultCategory:
-    operation_outcomes = [
-        item.outcome for item in result.items if isinstance(item, ItemOutcome)
+    operation_items = [
+        item for item in result.items if isinstance(item, ItemOutcome)
     ]
+    operation_outcomes = [item.outcome for item in operation_items]
     verify_phase_baseline = any(
         isinstance(item, IntegrityOutcome)
         and item.phase == IntegrityMode.VERIFY.value
@@ -439,8 +443,13 @@ def _headline(result: OperationResult, integrity: str) -> ResultCategory:
         or result.audit is RecordingStatus.DEGRADED
     ):
         return ResultCategory.DEGRADED
-    if operation_outcomes and all(
-        value is Outcome.SKIPPED for value in operation_outcomes
+    selected_kinds = [
+        item.kind
+        for item in operation_items
+        if item.reason not in SELECTION_EXCLUSION_REASONS
+    ]
+    if selected_kinds and all(
+        kind == OperationKind.NOOP.value for kind in selected_kinds
     ):
         return ResultCategory.ALL_NOOP
     return ResultCategory.SUCCESS

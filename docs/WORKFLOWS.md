@@ -1,14 +1,17 @@
 # Workflows Module
 
-Status (2026-07-29): M0 reviewed sync/history plus M1 Stages 1-5 are
+Status (2026-07-30): M0 reviewed sync/history plus M1 Stages 1-5 are
 implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
 strict execute/verify continuation payloads, optional post-execution
 verification, compound history/views, generic history reads, semantic-settings
 snapshot/patch translation, and the shared facade used by the location CLI
-commands. The unimplemented Stage 5.5 workflow/facade additions and Stage 6
-desktop behavior are finalized in `M1_BRIDGE.md`; queue durability,
+commands. Stage 5.5's workflow-owned selection semantics are now implemented:
+direct user deselection remains distinct from safety exclusion, execution
+re-derives the authoritative set, and strict payload v4 preserves that
+provenance across continuations. The remaining Stage 5.5 facade integration
+and Stage 6 desktop behavior are finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 ## Purpose
@@ -25,6 +28,16 @@ clock, scanner/change source, repositories, planner/policies,
 observer/preflight, executor, verifier, recorder, and later importer. Planning
 adapters may snapshot semantic defaults when constructing a request; admitted
 execution does not receive or reread a settings provider.
+
+### Node tree substrate
+
+`build_node_tree` is a pure workflow helper over path-keyed members. Its opaque
+node ids bind tree kind, scope identity, and canonical relative-path key; the
+empty-key root is always addressable. It emits deterministic pre-order nodes
+with position, depth, parent index, and exclusive subtree end, plus read-only
+id/path indexes, direct member ids, on-demand subtree membership, and bottom-up
+member counts. Plan presentation, move grouping, and projection caches remain
+Stage 6 concerns rather than tree-builder policy.
 
 ## Reviewed Sync
 
@@ -81,13 +94,13 @@ fingerprint and dependency-closed selection. Scripts and queue releases may
 replay an existing commitment; no API plans and executes in one unreviewed
 breath.
 
-Stage 5.5 adds service-owned review state between those sessions. Safety
-exclusions and direct user deselection remain distinct; deselection closes
-downward over dependencies, reselection closes upward only through
-`user_deselected` ancestors, and a replan discards the old user set. Every
-accepted mutation advances the review revision even if the digest is unchanged.
-Commit freezes mutation while the review is committing/committed, and an
-admission failure returns it to reviewing. The client submits revisions and
+The implemented Stage 5.5 selection substrate keeps safety exclusions and
+direct user deselection distinct. Effective exclusion closes downward over
+dependencies; reselection removes the requested operation and its transitive
+dependencies from `user_deselected`, but can never clear a safety exclusion.
+Execution rejects an empty or mismatched re-derived set before observation and
+preflight. The service integration owns review revisions, replan discard, and
+the reviewing/committing/committed transition; the client submits revisions and
 opaque ids but never becomes selection authority.
 
 ### M0 implementation
@@ -114,9 +127,10 @@ Stage 1 advanced the opaque plan/execution codec to version 2 and removed
 `worker_count` from `SyncOptions`, `Plan`, fingerprints, and both payloads
 without adding a replacement execution setting. Stage 4 advances the global
 codec to strict version 3 because execute decoding now has phase-specific
-required fields. Version-1/2 payloads are refused instead of being guessed into
-the changed contract. Stage 5.5 advances sync plan/execution payloads to strict
-version 4 for user-selection provenance. Inventory request payloads advance to
+required fields. Stage 5.5 advances both plan and execution payloads to strict
+version 4 and requires canonical `user_deselected` on every execution set;
+version 1-3 payloads are refused instead of being guessed into the changed
+contract. Inventory request payloads advance to
 version 2 for recursive subtree scope while integrity requests stay at version
 1; their shared validator is therefore kind-aware rather than enforcing one
 version for both kinds.
@@ -150,12 +164,13 @@ Workflow emits excluded items after execution settles and merges them into the
 terminal result without rewriting successful filesystem status. Blocked intent
 never writes the main ledger; selected no-ops still execute their live guard and
 refresh source/target correspondence. Direct user deselections emit `SKIPPED`
-with reason `user_deselected`; dependency fallout stays `DEFERRED`, so retained
+with reason `user-deselected`; dependency fallout stays `DEFERRED`, so retained
 history can reconstruct the same classification without guessing. Durable plan
 files, queue release, linked verification, and integrity workflows were not
 part of the implemented M0 slice. Stage 3 now implements the standalone
 inventory/integrity half without changing that M0 execution boundary; Stage 5.5
-adds process-local user selection editing.
+now supplies the workflow semantics for process-local user selection editing,
+with service exposure completed by the facade integration.
 
 Stage 4 linked verification deliberately does not build its immediate candidate set
 from inventory rows. The execution continuation retains each successfully
@@ -278,10 +293,14 @@ verification-incomplete > recording/audit degradation > all-noop > success`.
 Live and reopened history views reuse it, while every lower-priority axis
 remains independently renderable.
 
-The reopened-history classifier is backed by grouped SQL aggregates over
-primitive item kind/outcome/reason, including `user_deselected`; it never loads
-and decodes every detail row merely to classify a summary. Detail is database
-paged in retained `item_order`, while phase summaries remain whole.
+Live `all-noop` classification reconstructs effective selected kinds from item
+kind plus the stable typed exclusion-reason set; excluded rows remain visible
+but cannot make skipped non-noop work look like a selected no-op. The
+current retained-history path reconstructs the same classification from
+persisted item kind/outcome/reason, including `user-deselected`, after loading
+the retained detail objects. Stage 6 replaces that summary path with grouped
+SQL aggregation over those primitive columns and database-paged detail in
+stable `item_order`; phase summaries remain whole.
 
 Paused compound execution continues from an explicit discriminated
 continuation after fresh preflight. `phase=execute` carries execution status

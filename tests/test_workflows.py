@@ -9,8 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 from namisync.core.events import ItemOutcome
-from namisync.core.evidence import Outcome
+from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
+from namisync.core.integrity import PostCopySelection
 from namisync.core.models import CapabilityProfile, Root
 from namisync.core.planning import (
     Assignment,
@@ -29,11 +30,23 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.db.connections import connect_ledger_reader
-from namisync.core.session import Disposition, OperationResult, RunContext, SessionState
+from namisync.core.session import (
+    Disposition,
+    OperationResult,
+    PhaseResult,
+    PhaseStatus,
+    RunContext,
+    SessionState,
+)
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
 from namisync.workflows.selection import ExclusionReason, derive_execution_selection
 from namisync.workflows.sync import run_execution
-from namisync.workflows.models import PlanArtifact, PlanRequest
+from namisync.workflows.models import (
+    ExecuteContinuation,
+    PlanArtifact,
+    PlanRequest,
+    VerifyContinuation,
+)
 from namisync.workflows.runtime import LocalWorkflowRuntime
 
 
@@ -409,7 +422,14 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
         source="junction",
         blocked_reason=BlockedReason.UNSUPPORTED,
     )
-    plan = _plan_with((blocked,))
+    noop = _operation(
+        2,
+        OperationKind.NOOP,
+        "same.bin",
+        source="same.bin",
+        reason=OperationReason.METADATA_MATCH,
+    )
+    plan = _plan_with((blocked, noop))
     decision = derive_execution_selection(plan)
     xset = ExecutionSet(
         plan,
@@ -576,6 +596,167 @@ def test_execution_refuses_plan_content_that_no_longer_matches_fingerprint() -> 
     assert result.status is SessionState.REFUSED
     assert result.disposition is Disposition.UNRUN
     assert "plan content" in saved[0].commitment_error
+
+
+def _selection_mismatch_fixture() -> tuple[ExecutionSet, PlanOperation]:
+    folder = _operation(1, OperationKind.MKDIR, "folder", source="folder")
+    child = _operation(
+        2,
+        OperationKind.COPY,
+        r"folder\child.bin",
+        source=r"folder\child.bin",
+        dependencies=(folder.op_id,),
+    )
+    noop = _operation(
+        3,
+        OperationKind.NOOP,
+        "same.bin",
+        source="same.bin",
+        reason=OperationReason.METADATA_MATCH,
+    )
+    plan = _plan_with((folder, child, noop))
+    user_deselected = frozenset({folder.op_id})
+    expected = derive_execution_selection(
+        plan,
+        user_deselected=user_deselected,
+    ).selection
+    tampered = expected | {child.op_id}
+    return (
+        ExecutionSet(
+            plan=plan,
+            selection=tampered,
+            run_id=validated_run_id("9" * 32),
+            commitment=Commitment(
+                plan.fingerprint,
+                selection_digest(tampered),
+                NOW,
+            ),
+            user_deselected=user_deselected,
+        ),
+        child,
+    )
+
+
+def test_execution_refuses_rederived_selection_mismatch_before_preflight() -> None:
+    xset, _ = _selection_mismatch_fixture()
+    saved: list[object] = []
+
+    result = run_execution(
+        xset,
+        RunContext(lambda body: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=saved.append,
+            observer=lambda *args: pytest.fail("preflight observation ran"),
+        ),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert "derived selection" in saved[0].commitment_error
+
+
+def test_execution_refuses_safety_excluded_user_provenance_before_preflight() -> None:
+    blocked = _operation(
+        1,
+        OperationKind.NOOP,
+        "blocked.bin",
+        source="blocked.bin",
+        blocked_reason=BlockedReason.UNSUPPORTED,
+    )
+    noop = _operation(
+        2,
+        OperationKind.NOOP,
+        "same.bin",
+        source="same.bin",
+        reason=OperationReason.METADATA_MATCH,
+    )
+    plan = _plan_with((blocked, noop))
+    selection = frozenset({noop.op_id})
+    xset = ExecutionSet(
+        plan=plan,
+        selection=selection,
+        run_id=validated_run_id("8" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+        user_deselected=frozenset({blocked.op_id}),
+    )
+    saved: list[object] = []
+
+    result = run_execution(
+        xset,
+        RunContext(lambda body: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=saved.append,
+            observer=lambda *args: pytest.fail("preflight observation ran"),
+        ),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert "safety-excluded" in saved[0].commitment_error
+
+
+@pytest.mark.parametrize("phase", ["execute", "verify"])
+def test_resumed_execution_settles_selection_mismatch_without_preflight(
+    phase: str,
+) -> None:
+    xset, _ = _selection_mismatch_fixture()
+    finished: list[SessionState] = []
+
+    class Recording:
+        recorder = object()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def finish(self, status, recording) -> None:
+            finished.append(status)
+
+    continuation = (
+        ExecuteContinuation(xset)
+        if phase == "execute"
+        else VerifyContinuation(
+            execution_set=xset,
+            candidates=PostCopySelection(()),
+            filesystem_status=SessionState.COMPLETED,
+            recording=RecordingStatus.OK,
+            execute_phase=PhaseResult(
+                "execute",
+                PhaseStatus.COMPLETED,
+                1,
+                1,
+                0,
+                0,
+            ),
+        )
+    )
+    result = run_execution(
+        continuation,
+        RunContext(lambda body: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda details: None,
+            observer=lambda *args: pytest.fail("preflight observation ran"),
+            open_recording=lambda execution_set: Recording(),
+        ),
+        resumed=True,
+    )
+
+    assert result.disposition is Disposition.RAN
+    assert result.error is not None
+    assert "derived selection" in result.error.message
+    if phase == "execute":
+        assert result.status is SessionState.FAILED
+        assert finished == [SessionState.FAILED]
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+        assert finished == [SessionState.COMPLETED]
 
 
 def _real_cycle(

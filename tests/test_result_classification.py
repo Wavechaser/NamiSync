@@ -31,8 +31,13 @@ from namisync.interfaces.service import SessionRecordView, classify_result
 from namisync.workflows.views import operation_result_view
 
 
-def _operation(outcome: Outcome) -> ItemOutcome:
-    return ItemOutcome("operation", "copy", "file.bin", outcome)
+def _operation(
+    outcome: Outcome,
+    *,
+    kind: str = "copy",
+    reason: str | None = None,
+) -> ItemOutcome:
+    return ItemOutcome("operation", kind, "file.bin", outcome, reason=reason)
 
 
 def _integrity(result: IntegrityResult) -> IntegrityOutcome:
@@ -176,11 +181,11 @@ def _record(result: OperationResult) -> SessionRecordView:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
-                items=(_operation(Outcome.SKIPPED),),
+                items=(_operation(Outcome.SKIPPED, kind="noop"),),
             ),
             OperationResult(
                 SessionState.COMPLETED,
-                items=(_operation(Outcome.SKIPPED),),
+                items=(_operation(Outcome.SKIPPED, kind="noop"),),
             ),
             "degraded",
             "all-noop",
@@ -206,7 +211,7 @@ def test_each_adjacent_headline_boundary_flips_when_higher_is_removed(
 def test_all_noop_falls_back_to_success_when_no_noop_set_exists() -> None:
     all_noop = OperationResult(
         SessionState.COMPLETED,
-        items=(_operation(Outcome.SKIPPED),),
+        items=(_operation(Outcome.SKIPPED, kind="noop"),),
     )
     success = OperationResult(
         SessionState.COMPLETED,
