@@ -65,10 +65,17 @@ evidence. Selected no-ops still run their live guards and call `record_noop`, so
 even an otherwise degraded safe-subset run refreshes valid correspondence for
 future complete-scan move detection.
 
-Inventory reconciliation batches observations and uses a temporary key table
-for complete missing sweeps, so a 33k+ location never becomes a giant parameter
-list. The integrity primitive gates row, location, canonical path, present
-state, scope token, current stat, and full expected attestation. Evidence,
+Inventory reconciliation batches observations and branches explicitly on
+`FULL`, exact `PATHS`, and recursive/mixed `SUBTREES` after completeness is
+known. Full and subtree branches use a temporary observed-key table; subtree
+missing inference is additionally bounded to exact keys plus each root equality
+and the indexed literal range `>= root || '\' AND < root || ']'`. It marks
+absent prior `present` and `unsupported` rows, never already-`missing` or
+out-of-scope rows, and never uses wildcard-sensitive `LIKE`. Full sweeps still
+scale past 33k rows without a giant parameter list.
+
+The integrity primitive gates row, location, canonical path, present state,
+scope token, current stat, and full expected attestation. Evidence,
 `last_verified_at`, and `reappeared_at` change in one transaction or not at all.
 
 ## Command Contract
@@ -81,7 +88,8 @@ as target identity. At minimum the protocol covers:
 - run/session start and filesystem-result window;
 - confirmed copy/update/move/move-update/recase/trash/delete/mkdir/no-op
   correspondence;
-- complete/scoped inventory reconciliation and missing/reappearance state;
+- full, exact-path, and recursive-subtree inventory reconciliation plus
+  missing/reappearance state;
 - conditional baseline, verify, and rebaseline;
 - mapping/location/rebind and soft-delete state;
 - namespaced annotations;
@@ -143,6 +151,9 @@ no-op handling. Repeating a command after an uncertain response returns the
 already-applied result without duplicating rows, annotations, or run counts.
 Idempotency does not treat different evidence under the same token as valid; it
 raises a token-conflict corruption signal.
+Inventory receipt hashes include both exact paths and recursive subtree roots,
+so reusing one location/scope token with a different recursive scope conflicts
+instead of returning a false replay `NOOP`.
 
 Move rekeying clears/reconciles a colliding retained-missing row at the intended
 same location before insert/update, and updates the old row state on succeeded,
@@ -217,6 +228,13 @@ commits every command eagerly.
   `RecordingStatus.DEGRADED` without changing the filesystem terminal.
 - Complete inventory over 33k entries and large path selections use bounded
   batches with no SQL parameter overflow.
+- Completed subtree reconciliation marks only absent `present`/`unsupported`
+  rows inside its exact-path/root union, preserves every other row, and uses
+  `inventory_location_presence_idx` for the literal descendant range even when
+  roots contain `%`, `_`, or `]`; incomplete subtree scans infer nothing
+  missing.
+- Inventory receipt replay with changed subtree roots raises a token conflict;
+  identical scope replay remains idempotent.
 - Move onto a retained missing row reconciles that row and keeps unrelated run
   writes; location mismatch is rejected by schema.
 - No-op recording requires matching source/target snapshots and persists source

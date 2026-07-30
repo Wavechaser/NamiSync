@@ -7,7 +7,11 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import PureWindowsPath
 
-from .pathing import normalize_relative_path, validate_relative_path
+from .pathing import (
+    is_relative_path_descendant,
+    normalize_relative_path,
+    validate_relative_path,
+)
 
 
 class EntryKind(StrEnum):
@@ -204,12 +208,14 @@ class ScanWarning:
 class ScanScopeKind(StrEnum):
     FULL = "full"
     PATHS = "paths"
+    SUBTREES = "subtrees"
 
 
 @dataclass(frozen=True)
 class ScanScope:
     kind: ScanScopeKind
     selected_paths: tuple[str, ...] = ()
+    subtree_roots: tuple[str, ...] = ()
 
     @classmethod
     def full(cls) -> ScanScope:
@@ -217,14 +223,130 @@ class ScanScope:
 
     @classmethod
     def selected(cls, paths: tuple[str, ...] | list[str]) -> ScanScope:
-        canonical = tuple(sorted({validate_relative_path(path) for path in paths}, key=normalize_relative_path))
-        return cls(ScanScopeKind.PATHS, canonical)
+        return cls(ScanScopeKind.PATHS, _canonical_scope_paths(paths))
+
+    @classmethod
+    def subtrees(
+        cls,
+        roots: tuple[str, ...] | list[str],
+        *,
+        selected_paths: tuple[str, ...] | list[str] = (),
+    ) -> ScanScope:
+        return cls.scoped(
+            selected_paths=selected_paths,
+            subtree_roots=roots,
+        )
+
+    @classmethod
+    def scoped(
+        cls,
+        *,
+        selected_paths: tuple[str, ...] | list[str] = (),
+        subtree_roots: tuple[str, ...] | list[str] = (),
+    ) -> ScanScope:
+        paths = _canonical_scope_paths(selected_paths)
+        roots = _canonical_scope_paths(subtree_roots, allow_root=True)
+        if "" in roots:
+            return cls.full()
+        retained_roots = _minimal_subtree_roots(roots)
+        retained_paths = tuple(
+            path
+            for path in paths
+            if not any(
+                normalize_relative_path(path)
+                == normalize_relative_path(root)
+                or is_relative_path_descendant(path, root)
+                for root in retained_roots
+            )
+        )
+        if retained_roots:
+            return cls(
+                ScanScopeKind.SUBTREES,
+                retained_paths,
+                retained_roots,
+            )
+        if retained_paths:
+            return cls(ScanScopeKind.PATHS, retained_paths)
+        return cls.full()
 
     def __post_init__(self) -> None:
-        if self.kind is ScanScopeKind.FULL and self.selected_paths:
-            raise ValueError("full scan cannot carry selected paths")
-        if self.kind is ScanScopeKind.PATHS and not self.selected_paths:
-            raise ValueError("selected scan requires at least one path")
+        selected_paths = _canonical_scope_paths(self.selected_paths)
+        subtree_roots = _minimal_subtree_roots(
+            _canonical_scope_paths(self.subtree_roots, allow_root=True)
+        )
+        object.__setattr__(self, "selected_paths", selected_paths)
+        object.__setattr__(self, "subtree_roots", subtree_roots)
+        if self.kind is ScanScopeKind.FULL:
+            if selected_paths or subtree_roots:
+                raise ValueError("full scan cannot carry scoped paths")
+            return
+        if self.kind is ScanScopeKind.PATHS:
+            if not selected_paths or subtree_roots:
+                raise ValueError(
+                    "selected scan requires paths and cannot carry subtree roots"
+                )
+            return
+        if self.kind is ScanScopeKind.SUBTREES:
+            if not subtree_roots or "" in subtree_roots:
+                raise ValueError(
+                    "subtree scan requires at least one non-root subtree"
+                )
+            if any(
+                normalize_relative_path(path)
+                == normalize_relative_path(root)
+                or is_relative_path_descendant(path, root)
+                for path in selected_paths
+                for root in subtree_roots
+            ):
+                raise ValueError(
+                    "subtree scan cannot carry covered exact paths"
+                )
+            return
+        raise ValueError(f"unsupported scan scope: {self.kind}")
+
+
+def _canonical_scope_paths(
+    paths: tuple[str, ...] | list[str],
+    *,
+    allow_root: bool = False,
+) -> tuple[str, ...]:
+    by_key: dict[str, str] = {}
+    for path in paths:
+        canonical = validate_relative_path(path, allow_root=allow_root)
+        key = normalize_relative_path(canonical, allow_root=allow_root)
+        retained = by_key.get(key)
+        if retained is None or canonical < retained:
+            by_key[key] = canonical
+    return tuple(by_key[key] for key in sorted(by_key))
+
+
+def _minimal_subtree_roots(roots: tuple[str, ...]) -> tuple[str, ...]:
+    retained: list[str] = []
+    for root in sorted(
+        roots,
+        key=lambda path: (
+            len(PureWindowsPath(path).parts),
+            normalize_relative_path(path, allow_root=True),
+            path,
+        ),
+    ):
+        if any(
+            parent == ""
+            or normalize_relative_path(root, allow_root=True)
+            == normalize_relative_path(parent, allow_root=True)
+            or is_relative_path_descendant(root, parent)
+            for parent in retained
+        ):
+            continue
+        retained.append(root)
+    return tuple(
+        sorted(
+            retained,
+            key=lambda path: normalize_relative_path(
+                path, allow_root=True
+            ),
+        )
+    )
 
 
 _TEMP_NAME = re.compile(

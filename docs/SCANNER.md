@@ -1,7 +1,8 @@
 # Scanner Module
 
-Status: M0 walking and path-scoped implementation complete. Incremental and
-network-aware sources remain later implementations of the same contract.
+Status: M0 walking and exact-path scanning plus M1 Stage 5.5 recursive subtree
+scanning are implemented. Incremental and network-aware sources remain later
+implementations of the same contract.
 
 ## Purpose
 
@@ -13,7 +14,12 @@ warning is executable. It implements `ChangeSource` and imports only core.
 ## Contract
 
 ```python
-scan(root: Root, ignores: IgnoreSet, ctx: RunContext) -> ScanResult
+scan(
+    root: Root,
+    ignores: IgnoreSet,
+    ctx: RunContext,
+    scope: ScanScope | None = None,
+) -> ScanResult
 ```
 
 ## Implemented M0 Surface
@@ -31,12 +37,18 @@ case only, the walker repeats the metadata-only stat through its backend for the
 exact entry path. This preserves correspondence-qualified move detection
 without opening content or fabricating identity.
 
-Full scans retain the walked root plus every reachable directory and declare
-completeness modulo the exact `IgnoreSet`. `ScanScope.selected()` performs
-only named-path stats, never a full walk, and reports completeness relative to
-that declared scope. Present, unsupported, and conclusively absent requested
-keys are complete-for-scope; ignored, access-failed, or interrupted requests
-make the scoped result incomplete.
+`ScanScope` has three explicit shapes. `FULL` retains the location root plus
+every reachable directory. `PATHS` performs only named-path stats and never
+recurses. `SUBTREES` recursively walks canonical roots and may carry additional
+exact paths outside those roots. Mixed scopes minimize overlapping roots by
+path-segment ancestry, remove covered exact paths, and become `FULL` when the
+location root is selected.
+
+Full and subtree recursion use the same parameterized walk over an absolute
+start plus its location-relative prefix. This keeps nested records keyed as
+`PHOTOS\2024\IMG.JPG`, not relative to the nested start. One visited-directory
+identity set spans all roots in a scan. The exact-path branch remains separate
+and retains its existing named-subject completeness rules.
 
 The result contains the resolved root, `VolumeId` plus corroborating
 `VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every walked
@@ -68,7 +80,8 @@ canonically equivalent source/target pair without changing either name.
    `MetadataSnapshot(attributes, created_ns)`. Every `DirRecord` carries the
    same metadata shape plus optional identity. The scanner never enumerates
    ADS and receives no preservation policy.
-7. Track visited directory identity so junctions and mount loops terminate.
+7. Track visited directory identity across every recursive root so junctions,
+   cross-root aliases, and mount loops terminate.
 8. Classify cloud/offline placeholders from attributes/reparse tags without
    hydrating or reading them.
 9. Record access/type/collision/hardlink warnings and set `complete=False` for
@@ -89,11 +102,29 @@ unrepresentable entry, case collision, uncertain reparse traversal, or root
 identity change makes the scan reviewable but non-executable where absence
 could drive mutation.
 
-Selected inventory refresh is a separate scoped observation mode. It may update
-named paths and a complete scoped result may classify a conclusively absent
-requested key as missing. It never implies that an unselected row is missing.
-The recorder branches on `ScanResult.is_full_scan`, not on `complete`, when
-choosing full-tree versus selected reconciliation.
+Exact-path and recursive-subtree refresh are distinct scoped observation modes.
+A complete exact result may classify a conclusively absent named key as
+missing, but never implies descendant absence. A complete subtree result covers
+each retained root, all of its descendants, and any additional exact paths.
+`ScanResult.is_full_scan` remains true only for `FULL`; the recorder branches
+explicitly on all three kinds after checking completeness.
+
+Subtree roots use the full-walk ignore contract: ignored descendants do not
+make the scan incomplete. A missing subtree root is a conclusive empty
+observation. A denied or otherwise unreadable root emits `ROOT_UNAVAILABLE`
+with that root's relative path and makes the whole mixed result incomplete. A
+former directory that is now a file is recorded as that file. File
+placeholders and file reparse points are conclusive unsupported observations;
+directory placeholders, directory reparse points, and repeated directory
+identity remain incomplete because descendants could not be observed. Any
+incomplete root withholds missing inference for the entire mixed scope.
+Directory reparse classification uses both stat mode and Windows'
+`FILE_ATTRIBUTE_DIRECTORY`, because no-follow directory-entry probes may
+report a directory link as non-directory. A provisional file-only owned-temp
+ignore therefore confirms that attribute before skipping the entry; exact-name
+and `.synctrash` ignores remain unconditional. The full location root remains
+stricter than a subtree root: it must be an ordinary non-reparse directory or
+the result is `ROOT_UNAVAILABLE` and incomplete.
 
 An offline/unmounted volume is not an empty complete scan. It yields a typed
 offline result and cannot trigger missing marking or target-only planning.
@@ -120,8 +151,8 @@ simultaneous duplicate keys require explicit user choice.
 - Planner preserves incomplete-scan evidence and warnings in the full reviewed
   plan. Workflow permits only the evidence-positive additive/noop subset and
   withholds destructive/identity work; scanner itself decides neither.
-- Inventory reconciles full and scoped scans differently and never writes from
-  the scanner itself.
+- Inventory reconciles full, exact-path, and subtree scans through distinct
+  branches and never writes from the scanner itself.
 - Dispatcher supplies checkpoint behavior and holds required custody where the
   scan participates in a mutating workflow.
 
@@ -178,6 +209,14 @@ NTFS. Neither implementation changes planner or inventory contracts.
   may reconcile only A/B, and cannot mark unrequested C/D missing; access
   failure or interruption makes the scoped result incomplete and marks no
   requested key missing.
+- A nested subtree scan records the root and descendants under their complete
+  location-relative keys, inherits every full-walk incompleteness cause, and
+  continues scanning other roots even when one root becomes incomplete.
+- Missing, unavailable, and former-directory-now-file roots remain distinct;
+  file versus directory placeholder/reparse fixtures preserve their different
+  completeness consequences, including the native no-follow Windows attribute
+  shape. Full-location scans refuse file, placeholder, and reparse roots before
+  enumeration.
 - Import-linter proves scanner code imports core but no sibling module.
 
 ## M0 Verification

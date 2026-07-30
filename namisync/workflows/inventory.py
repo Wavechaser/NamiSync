@@ -26,10 +26,14 @@ from namisync.core.models import (
     Root,
     ScanResult,
     ScanScope,
+    ScanScopeKind,
+    ScanWarning,
+    ScanWarningCode,
     VolumeEvidence,
     VolumeId,
 )
 from namisync.core.pathing import (
+    normalize_relative_path,
     to_extended_length_path,
     validate_relative_path,
 )
@@ -146,17 +150,18 @@ class InventoryRequest:
     location_id: int | None = None
     selected_paths: tuple[str, ...] = ()
     selected_mount: str | None = None
+    subtree_roots: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_location_request(
             self.request_id, self.root_path, self.location_id
         )
-        if self.selected_paths:
-            object.__setattr__(
-                self,
-                "selected_paths",
-                ScanScope.selected(self.selected_paths).selected_paths,
-            )
+        scope = ScanScope.scoped(
+            selected_paths=self.selected_paths,
+            subtree_roots=self.subtree_roots,
+        )
+        object.__setattr__(self, "selected_paths", scope.selected_paths)
+        object.__setattr__(self, "subtree_roots", scope.subtree_roots)
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,6 +197,7 @@ class InventoryDetails:
     missing_count: int = 0
     complete: bool = False
     selected_paths: tuple[str, ...] = ()
+    warnings: tuple[ScanWarning, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,16 +205,17 @@ class InventoryWorkflowRequest:
     request_id: str
     binding: LocationBinding
     selected_paths: tuple[str, ...] = ()
+    subtree_roots: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.request_id:
             raise ValueError("request id is required")
-        if self.selected_paths:
-            object.__setattr__(
-                self,
-                "selected_paths",
-                ScanScope.selected(self.selected_paths).selected_paths,
-            )
+        scope = ScanScope.scoped(
+            selected_paths=self.selected_paths,
+            subtree_roots=self.subtree_roots,
+        )
+        object.__setattr__(self, "selected_paths", scope.selected_paths)
+        object.__setattr__(self, "subtree_roots", scope.subtree_roots)
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,7 +337,10 @@ def bind_inventory_request(
         resolver=resolver,
     )
     return InventoryWorkflowRequest(
-        request.request_id, binding, request.selected_paths
+        request.request_id,
+        binding,
+        request.selected_paths,
+        request.subtree_roots,
     )
 
 
@@ -483,6 +493,7 @@ def run_inventory(
             request.binding,
             resolution,
             request.selected_paths,
+            request.subtree_roots,
             ctx,
             deps,
             recorder,
@@ -505,6 +516,7 @@ def run_inventory(
             recorded.missing_count,
             scan.complete,
             request.selected_paths,
+            scan.warnings,
         )
     )
     return OperationResult(SessionState.COMPLETED)
@@ -540,6 +552,7 @@ def run_integrity(
             request.binding,
             resolution,
             request.selected_paths,
+            (),
             ctx,
             deps,
             recorder,
@@ -562,9 +575,14 @@ def run_integrity(
                 recorded.missing_count,
                 scan.complete,
                 request.selected_paths,
+                scan.warnings,
             )
         )
-        if request.selected_paths and not scan.complete:
+        if (
+            request.selected_paths
+            and not scan.complete
+            and not _subject_local_incompleteness(scan)
+        ):
             return OperationResult(
                 SessionState.FAILED,
                 error=FailureDetail(
@@ -629,21 +647,23 @@ def change_inventory_visibility(
 def encode_inventory_request(request: InventoryWorkflowRequest) -> bytes:
     return _json_bytes(
         {
-            "version": 1,
+            "version": 2,
             "kind": "inventory",
             "request_id": request.request_id,
             "binding": _binding_dict(request.binding),
             "selected_paths": list(request.selected_paths),
+            "subtree_roots": list(request.subtree_roots),
         }
     )
 
 
 def decode_inventory_request(payload: bytes) -> InventoryWorkflowRequest:
-    value = _payload(payload, "inventory")
+    value = _payload(payload, "inventory", 2)
     return InventoryWorkflowRequest(
         str(value["request_id"]),
         _decode_binding(value["binding"]),
         tuple(str(item) for item in _list(value["selected_paths"])),
+        tuple(str(item) for item in _list(value["subtree_roots"])),
     )
 
 
@@ -670,7 +690,7 @@ def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
 
 
 def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
-    value = _payload(payload, "integrity")
+    value = _payload(payload, "integrity", 1)
     stale = value["stale_before"]
     return IntegrityWorkflowRequest(
         request_id=str(value["request_id"]),
@@ -801,6 +821,7 @@ def _register_and_scan(
     binding: LocationBinding,
     resolution: VolumeResolution,
     selected_paths: tuple[str, ...],
+    subtree_roots: tuple[str, ...],
     ctx: RunContext,
     deps: InventoryDependencies,
     recorder: LedgerRecorder,
@@ -820,10 +841,9 @@ def _register_and_scan(
     if binding.location_id is not None and binding.location_id != location_id:
         raise RuntimeError("resolved location identity changed")
     ctx.emit(PhaseChanged("inventory"))
-    scope = (
-        ScanScope.full()
-        if not selected_paths
-        else ScanScope.selected(selected_paths)
+    scope = ScanScope.scoped(
+        selected_paths=selected_paths,
+        subtree_roots=subtree_roots,
     )
     scan = deps.scanner(
         Root(resolution.root_path, f"inventory:{scope_token}"),
@@ -923,6 +943,50 @@ def _integrity_selection(
     return IntegritySelection(items, completed, request.processed_bytes)
 
 
+def _subject_local_incompleteness(scan: ScanResult) -> bool:
+    """Return whether exact frozen subjects fully explain incompleteness."""
+
+    if scan.scope.kind is not ScanScopeKind.PATHS or not scan.unsupported:
+        return False
+    selected_keys = {
+        normalize_relative_path(path)
+        for path in scan.scope.selected_paths
+    }
+    observed_keys = {
+        record.rel_path_key
+        for record in (
+            *scan.files,
+            *scan.directories,
+            *scan.unsupported,
+        )
+    }
+    warning_keys = {
+        normalize_relative_path(warning.rel_path)
+        for warning in scan.warnings
+        if warning.rel_path is not None
+    }
+    unsupported_keys = {
+        record.rel_path_key for record in scan.unsupported
+    }
+    disappeared_keys = {
+        normalize_relative_path(warning.rel_path)
+        for warning in scan.warnings
+        if (
+            warning.rel_path is not None
+            and warning.code is ScanWarningCode.DISAPPEARED
+        )
+    }
+    if any(
+        warning.rel_path is None
+        or normalize_relative_path(warning.rel_path) not in selected_keys
+        for warning in scan.warnings
+    ):
+        return False
+    if not unsupported_keys <= warning_keys:
+        return False
+    return selected_keys <= observed_keys | disappeared_keys
+
+
 def _refused_resolution(resolution: VolumeResolution) -> OperationResult:
     return OperationResult(
         SessionState.REFUSED,
@@ -963,10 +1027,17 @@ def _decode_binding(value: object) -> LocationBinding:
     )
 
 
-def _payload(payload: bytes, expected_kind: str) -> Mapping[str, object]:
+def _payload(
+    payload: bytes,
+    expected_kind: str,
+    expected_version: int,
+) -> Mapping[str, object]:
     value = json.loads(payload.decode("utf-8"))
     data = _mapping(value)
-    if int(data["version"]) != 1 or data["kind"] != expected_kind:
+    if (
+        int(data["version"]) != expected_version
+        or data["kind"] != expected_kind
+    ):
         raise ValueError("unsupported inventory workflow payload")
     return data
 

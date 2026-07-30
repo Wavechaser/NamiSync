@@ -24,6 +24,7 @@ from namisync.core.models import (
     EntryKind,
     FileIdentity,
     FileStat,
+    ScanScopeKind,
     VolumeId,
 )
 from namisync.core.pathing import normalize_relative_path, validate_relative_path
@@ -75,6 +76,11 @@ class InventoryReconcileResult:
     disposition: RecordDisposition
     observed_count: int
     missing_count: int
+
+
+_SUBTREE_DESCENDANT_PREDICATE = (
+    "rel_path_key >= ? || '\\' AND rel_path_key < ? || ']'"
+)
 
 
 def _primitive(value: object) -> object:
@@ -597,7 +603,11 @@ class LedgerRecorder:
             )
 
         missing = 0
-        if command.scan.complete and command.scan.is_full_scan:
+        scope_kind = command.scan.scope.kind
+        if (
+            command.scan.complete
+            and scope_kind in {ScanScopeKind.FULL, ScanScopeKind.SUBTREES}
+        ):
             connection.execute(
                 "CREATE TEMP TABLE IF NOT EXISTS current_scan_keys(rel_path_key TEXT PRIMARY KEY) WITHOUT ROWID"
             )
@@ -606,6 +616,7 @@ class LedgerRecorder:
                 "INSERT INTO current_scan_keys(rel_path_key) VALUES (?)",
                 ((key,) for key in observed_keys),
             )
+        if command.scan.complete and scope_kind is ScanScopeKind.FULL:
             cursor = connection.execute(
                 """UPDATE inventory
                       SET presence = 'missing',
@@ -621,7 +632,7 @@ class LedgerRecorder:
             )
             missing = cursor.rowcount
             connection.execute("DELETE FROM current_scan_keys")
-        elif command.scan.complete:
+        elif command.scan.complete and scope_kind is ScanScopeKind.PATHS:
             observed = set(observed_keys)
             absent = [
                 normalize_relative_path(path)
@@ -641,6 +652,73 @@ class LedgerRecorder:
                     (at, command.scope_token, command.location_id, *chunk),
                 )
                 missing += cursor.rowcount
+        elif command.scan.complete and scope_kind is ScanScopeKind.SUBTREES:
+            observed = set(observed_keys)
+            absent_exact = [
+                normalize_relative_path(path)
+                for path in command.scan.scope.selected_paths
+                if normalize_relative_path(path) not in observed
+            ]
+            for start in range(0, len(absent_exact), 400):
+                chunk = absent_exact[start : start + 400]
+                placeholders = ",".join("?" for _ in chunk)
+                cursor = connection.execute(
+                    f"""UPDATE inventory
+                           SET presence = 'missing',
+                               missing_since = COALESCE(missing_since, ?),
+                               scope_token = ?
+                         WHERE location_id = ?
+                           AND rel_path_key IN ({placeholders})
+                           AND presence IN ('present', 'unsupported')""",
+                    (at, command.scope_token, command.location_id, *chunk),
+                )
+                missing += cursor.rowcount
+            for root in command.scan.scope.subtree_roots:
+                root_key = normalize_relative_path(root)
+                cursor = connection.execute(
+                    """UPDATE inventory
+                          SET presence = 'missing',
+                              missing_since = COALESCE(missing_since, ?),
+                              scope_token = ?
+                        WHERE location_id = ?
+                          AND presence IN ('present', 'unsupported')
+                          AND rel_path_key = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM current_scan_keys
+                               WHERE current_scan_keys.rel_path_key =
+                                     inventory.rel_path_key
+                          )""",
+                    (
+                        at,
+                        command.scope_token,
+                        command.location_id,
+                        root_key,
+                    ),
+                )
+                missing += cursor.rowcount
+                cursor = connection.execute(
+                    f"""UPDATE inventory
+                           SET presence = 'missing',
+                               missing_since = COALESCE(missing_since, ?),
+                               scope_token = ?
+                         WHERE location_id = ?
+                           AND presence IN ('present', 'unsupported')
+                           AND {_SUBTREE_DESCENDANT_PREDICATE}
+                           AND NOT EXISTS (
+                               SELECT 1 FROM current_scan_keys
+                                WHERE current_scan_keys.rel_path_key =
+                                      inventory.rel_path_key
+                           )""",
+                    (
+                        at,
+                        command.scope_token,
+                        command.location_id,
+                        root_key,
+                        root_key,
+                    ),
+                )
+                missing += cursor.rowcount
+            connection.execute("DELETE FROM current_scan_keys")
         return len(observed_keys), missing
 
     def record_integrity(self, command: IntegrityRecordCommand) -> RecordDisposition:

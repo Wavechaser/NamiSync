@@ -6,7 +6,8 @@ content contract, nominal heterogeneous result vocabulary, schema-v3 event
 codec, published-copy/post-copy evidence, compound phase results, and the
 continuation state consumed by standalone and linked integrity workflows.
 Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
-shared workflow tree substrate without changing their semantics.
+shared workflow tree substrate without changing their semantics, and makes
+recursive inventory scope an explicit core contract.
 
 ## Purpose
 
@@ -53,6 +54,15 @@ canonical Windows relative paths, immutable filesystem evidence, deterministic
 plan serialization and capacity, and root-qualified observation/refusal
 shapes. OS walking and observation remain in operation modules; core stays
 standard-library-only and behavior-free.
+
+`ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
+paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
+carries one or more minimal subtree roots plus any exact paths outside those
+roots. Scope factories normalize and deduplicate relative Windows keys,
+remove descendant roots by path-segment ancestry, remove exact paths already
+covered by a root, and promote root `""` to `FULL`. Direct construction
+enforces the same shape invariants, so scanner and recorder branches cannot
+silently reinterpret malformed scope.
 
 `SyncOptions.propagate_source_casing` is a fingerprinted planning policy. It
 defaults to false, is available through the primitive semantic-settings
@@ -308,6 +318,8 @@ logic; no scanner role or inventory representation is added.
   ordinary case variants identically.
 - Path tests reject drive, UNC, device, traversal, NUL, mixed-separator escape,
   and reparse-root escape cases while accepting valid long relative paths.
+- Scan-scope tests prove exact-only, recursive-subtree, and full shapes are
+  canonical, segment-aware, and reject malformed direct construction.
 - UTC/DST boundary tests prove all core timestamps are aware UTC values.
 - Attestations cannot be constructed without algorithm, digest, provenance,
   subject stat evidence, and observation time.

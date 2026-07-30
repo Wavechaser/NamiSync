@@ -1,8 +1,8 @@
 # Inventory Domain
 
-Status: the M1 role-free inventory workflow, scoped reconciliation,
-acknowledgement/restore, typed queries, and standalone integrity selection are
-implemented. Inventory is not a new
+Status: the M1 role-free inventory workflow, three-shape scoped reconciliation,
+acknowledgement/restore, typed queries, standalone integrity selection, and the
+Stage 5.5 recursive scan-scope foundation are implemented. Inventory is not a new
 sideways-calling operation module: scanner observes, workflows coordinate, and
 database repositories/recorder retain state. The Stage 5 CLI exposes explicit
 location inventory and integrity starts through the shared service; desktop
@@ -24,11 +24,13 @@ provenance, and scope token. Ordinary scans update only current observation
 fields and cannot rewrite an established attestation.
 
 `LedgerRecorder.record_inventory()` batches present, directory, and unsupported
-observations. A complete online full scan uses a temporary key table to mark
-unseen present/unsupported rows missing without a parameter-sized `NOT IN`;
-incomplete and offline scans infer no missing state, while complete selected
-refreshes affect only selected keys. Reappearance is set on a missing-to-present
-transition.
+observations. A complete online `FULL` scan uses a temporary observed-key table
+to mark unseen present/unsupported rows missing without a parameter-sized
+`NOT IN`. Exact `PATHS` reconciliation affects only named keys. `SUBTREES`
+reuses the observed-key anti-join but bounds it to the union of remaining exact
+paths, each root equality, and each root's literal canonical descendant range.
+Incomplete and offline scans infer no missing state. Reappearance is set on a
+missing-to-present transition.
 
 `LedgerRepository` returns immutable typed rows and bounded canonical-path
 selections. The conditional integrity recorder writes attestation and optionally
@@ -57,6 +59,22 @@ exact admitted inventory row ids plus completed ids/bytes. A resume always
 refreshes physical inventory but reconstructs the original ordered candidate
 set without reapplying those mode filters, so evidence drift cannot drop
 pending work and a newly appeared row cannot enter an admitted session.
+
+Inventory continuation payloads are strict version 2 because they carry
+`subtree_roots` separately from exact `selected_paths`. Integrity continuations
+remain version 1 because folder actions freeze indexed descendants into the
+existing exact-subject shape before admission. Their shared decoder validates
+kind and expected version independently. Inventory and integrity details retain
+the scanner's typed warnings; an incomplete refresh therefore preserves the
+warning code, relative path, and detail rather than reporting only
+`complete=False`.
+
+An exact integrity pre-scan may continue when all incompleteness is explained by
+warning-backed unreadable frozen subjects. Those rows enter the verifier once as
+`unsupported`, receive no attestation, and keep the integrity result incomplete
+without suppressing readable siblings. An ignored subject, a root/global
+warning, cancellation, or any other unaccounted scope gap still refuses before
+hashing.
 
 ## State Model
 
@@ -96,10 +114,19 @@ records.
 
 ### Scoped refresh
 
-- Observe and update only requested canonical keys.
-- A requested absent path may be marked missing if its parent/root observation
-  is authoritative for that exact path.
-- Unrequested rows retain state; no location-wide missing sweep runs.
+- `PATHS` observes and reconciles only requested canonical keys; an exact
+  directory row never implies anything about its children.
+- `SUBTREES` recursively observes each canonical root and may retain exact paths
+  outside the roots in the same session. Overlapping roots and covered exact
+  paths are removed by segment-aware normalization; selecting the location root
+  becomes `FULL`.
+- Completed subtree missing inference covers prior `present` and `unsupported`
+  rows at each root and below it. It uses the default-binary range
+  `>= root || '\' AND < root || ']'` plus a separate equality, never `LIKE`, so
+  `%`, `_`, and `]` remain literal filename characters.
+- Already-missing and out-of-scope rows remain byte-for-byte unchanged. One
+  incomplete root conservatively withholds missing inference for the whole
+  mixed scope while retaining safe observations and typed warnings.
 
 ### Offline and visibility states
 
@@ -167,7 +194,15 @@ summary and policy; missing acknowledgement is not pruning.
 - Complete rescan marks only truly unseen in-scope rows missing and preserves
   their hash/stat evidence.
 - Incomplete scan and offline volume mark no unseen row missing.
-- Scoped refresh changes only requested keys and performs bounded queries.
+- Exact and recursive scoped refreshes take distinct branches, change only
+  their declared union, and perform bounded indexed queries.
+- Nested and hostile-name subtree fixtures prove canonical keys and literal
+  missing ranges; incomplete, absent, unavailable, and now-file roots preserve
+  their distinct reconciliation outcomes.
+- Inventory v2 and integrity v1 payloads round-trip and reject wrong versions
+  and wrong workflow kinds independently.
+- Incomplete inventory details retain typed scan warnings, and unreadable
+  frozen integrity subjects do not suppress readable siblings.
 - Returning missing rows become reappeared; matching verify or explicit
   baseline clears reappearance atomically.
 - Acknowledgement/restore changes visibility state without deleting evidence.

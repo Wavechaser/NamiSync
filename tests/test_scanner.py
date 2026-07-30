@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import os
+import stat as stat_module
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -173,6 +174,11 @@ def _fake_stat(
     nlink: int = 1,
 ) -> SimpleNamespace:
     return SimpleNamespace(
+        st_mode=(
+            stat_module.S_IFDIR | 0o755
+            if directory
+            else stat_module.S_IFREG | 0o644
+        ),
         st_ino=ino,
         st_size=0 if directory else 5,
         st_mtime_ns=1_000,
@@ -226,6 +232,43 @@ class FakeBackend:
     def scandir(self, path: str):
         self.scandir_calls.append(path)
         yield iter(self.entries.get(path, ()))
+
+
+@pytest.mark.parametrize(
+    "root_stat",
+    [
+        _fake_stat(ino=1),
+        _fake_stat(
+            ino=1,
+            directory=True,
+            attributes=(
+                FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_OFFLINE
+            ),
+        ),
+        _fake_stat(
+            ino=1,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+    ],
+)
+def test_full_scan_refuses_nonordinary_location_root(root_stat) -> None:
+    backend = FakeBackend({}, _profile())
+    backend.lstat = lambda _path: root_stat
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\root", "source"),
+        IgnoreSet(),
+        _ctx(),
+    )
+
+    assert not result.complete
+    assert result.files == ()
+    assert result.directories == ()
+    assert result.unsupported == ()
+    assert backend.scandir_calls == []
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+    assert result.warnings[0].rel_path is None
 
 
 def _profile(fs_type: str = "NTFS", *, identity: bool = True, hardlinks: bool = True) -> CapabilityProfile:

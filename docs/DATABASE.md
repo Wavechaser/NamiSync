@@ -153,9 +153,16 @@ kind rather than rendering every activity as source-to-target.
 ## Inventory And Missing Retention
 
 Missing marking uses temp tables or bounded batches, not a giant `NOT IN` list.
-It runs only after a complete online full-location scan. Missing rows retain
-evidence and may be acknowledged/restored/reappeared. Tombstone pruning is a
-future explicit policy with impact review, not an incidental scan cleanup.
+It runs only after a complete online scan of the declared scope. `FULL` uses an
+all-location observed-key anti-join, exact `PATHS` updates only absent named
+keys, and `SUBTREES` bounds the same anti-join to exact paths plus each root
+equality and descendant range. The existing
+`inventory_location_presence_idx(location_id, presence, rel_path_key)` supports
+the default-binary literal range `root || '\'` through `root || ']'`; no
+`LIKE`, collation change, schema migration, or ledger version bump is involved.
+Missing rows retain evidence and may be acknowledged/restored/reappeared.
+Tombstone pruning is a future explicit policy with impact review, not an
+incidental scan cleanup.
 
 ## Schema Evolution
 
@@ -225,8 +232,10 @@ rather than current implementation claims.
 - Volume mount-letter/label changes preserve location identity; a changed
   filesystem type requires rebind, and simultaneous duplicate identities require
   explicit user choice.
-- Complete/scoped/offline inventory reconciliation obeys `INVENTORY.md` and
-  scales beyond 33k rows without variable overflow.
+- Full/exact/subtree/offline inventory reconciliation obeys `INVENTORY.md`,
+  seeks subtree descendants through the declared presence/key index, preserves
+  hostile names literally, and scales beyond 33k rows without variable
+  overflow.
 - Large mapping/inventory selections use bounded query counts demonstrated by
   instrumentation benchmarks.
 - History integrity detail, sync operations, and subject-only activities all

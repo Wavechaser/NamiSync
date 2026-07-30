@@ -13,7 +13,10 @@ import namisync.workflows.inventory as inventory_workflow
 from namisync.core.evidence import RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
+    IntegrityOutcome,
+    IntegrityResult,
     IntegrityRunResult,
+    InventoryState,
     VerifierContext,
 )
 from namisync.core.models import (
@@ -25,6 +28,11 @@ from namisync.core.models import (
     Root,
     ScanResult,
     ScanScope,
+    ScanScopeKind,
+    ScanWarning,
+    ScanWarningCode,
+    UnsupportedReason,
+    UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
 )
@@ -107,8 +115,16 @@ class _Backend:
 
 
 class _Scanner:
-    def __init__(self, *, records: tuple[FileRecord, ...] = ()) -> None:
+    def __init__(
+        self,
+        *,
+        records: tuple[FileRecord, ...] = (),
+        unsupported: tuple[UnsupportedRecord, ...] = (),
+        warnings: tuple[ScanWarning, ...] = (),
+    ) -> None:
         self.records = records
+        self.unsupported = unsupported
+        self.warnings = warnings
         self.complete = True
         self.calls: list[tuple[Root, ScanScope]] = []
         self.before_scan = None
@@ -137,8 +153,12 @@ class _Scanner:
             PROFILE,
             records,
             (),
-            (),
-            (),
+            tuple(
+                row
+                for row in self.unsupported
+                if not selected or row.rel_path in selected
+            ),
+            self.warnings,
             scope,
             self.complete,
         )
@@ -271,6 +291,47 @@ def test_first_location_registers_role_free_before_scan_then_records_inventory(
     with LedgerRepository(ledger_path) as repository:
         rows = repository.get_inventory(details[-1].location_id or 0)
     assert tuple(row.rel_path for row in rows) == ("file.txt",)
+
+
+def test_incomplete_inventory_retains_typed_scan_warnings(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    warning = ScanWarning(
+        ScanWarningCode.ROOT_UNAVAILABLE,
+        "Folder",
+        "denied",
+    )
+    scanner = _Scanner(warnings=(warning,))
+    scanner.complete = False
+    details: list[InventoryDetails] = []
+
+    result = run_inventory(
+        bind_inventory_request(
+            InventoryRequest(
+                "warning",
+                root_path=str(root),
+                subtree_roots=("Folder",),
+            ),
+            ledger_path=tmp_path / "ledger.db",
+            backend=_Backend(root, mount),
+            resolver=_Resolver(mount),
+        ),
+        _context(),
+        _dependencies(
+            tmp_path / "ledger.db",
+            scanner,
+            _Resolver(mount),
+            details,
+        ),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert scanner.calls[0][1].kind is ScanScopeKind.SUBTREES
+    assert details[-1].complete is False
+    assert details[-1].warnings == (warning,)
 
 
 def test_ambiguity_is_resolved_before_submission(tmp_path: Path) -> None:
@@ -475,6 +536,103 @@ def test_incomplete_selected_integrity_refresh_runs_no_hash_and_is_not_unrun_ref
     assert result.error is not None
     assert result.error.type_name == "InventoryScopeIncomplete"
     assert runner_calls == 0
+
+
+def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    scanner = _Scanner(records=(_file(), _file("readable.txt")))
+    resolver = _Resolver(mount)
+    details: list[InventoryDetails] = []
+    deps = _dependencies(ledger_path, scanner, resolver, details)
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    warning = ScanWarning(
+        ScanWarningCode.ACCESS_DENIED,
+        "file.txt",
+        "denied",
+    )
+    scanner.records = (_file("readable.txt"),)
+    scanner.unsupported = (
+        UnsupportedRecord(
+            "file.txt",
+            normalize_relative_path("file.txt"),
+            UnsupportedReason.ACCESS_DENIED,
+        ),
+    )
+    scanner.warnings = (warning,)
+    scanner.complete = False
+    selected_states: list[InventoryState] = []
+
+    def runner(selection, *_args):
+        assert len(selection.items) == 2
+        selected_states.extend(
+            item.expected_state for item in selection.items
+        )
+        return IntegrityRunResult(
+            tuple(
+                IntegrityOutcome(
+                    item_id=item.item_id,
+                    row_id=item.row_id,
+                    location_id=item.location_id,
+                    path=item.display_path,
+                    result=(
+                        IntegrityResult.UNSUPPORTED
+                        if item.expected_state
+                        is InventoryState.UNSUPPORTED
+                        else IntegrityResult.VERIFIED
+                    ),
+                    phase=IntegrityMode.VERIFY.value,
+                )
+                for item in selection.items
+            ),
+            RecordingStatus.OK,
+        )
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "folder-expanded",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+            ("file.txt", "readable.txt"),
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=deps.ledger_path,
+            scanner=deps.scanner,
+            resolver=deps.resolver,
+            clock=deps.clock,
+            host_key=deps.host_key,
+            host_name=deps.host_name,
+            save_details=deps.save_details,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=deps.clock,
+                hasher_factory=xxh3_128,
+            ),
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert selected_states == [
+        InventoryState.UNSUPPORTED,
+        InventoryState.PRESENT,
+    ]
+    assert [item.result for item in result.items] == [
+        IntegrityResult.UNSUPPORTED,
+        IntegrityResult.VERIFIED,
+    ]
+    assert details[-1].warnings == (warning,)
 
 
 def test_integrity_resume_uses_a_new_inventory_refresh_receipt(tmp_path: Path) -> None:
