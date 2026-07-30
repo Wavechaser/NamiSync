@@ -83,6 +83,58 @@ def normalize_relative_path(value: str, *, allow_root: bool = False) -> str:
     return _uppercase_one_codepoint(canonical)
 
 
+def relative_path_depth(path: str) -> int:
+    """Return the number of components in a relative Windows path."""
+
+    return len(PureWindowsPath(path).parts)
+
+
+def relative_path_parent(path: str) -> str | None:
+    """Return a relative path's parent, or ``None`` for a top-level path."""
+
+    parent = str(PureWindowsPath(path).parent)
+    return None if parent == "." else parent
+
+
+def is_relative_path_descendant(path: str, directory: str) -> bool:
+    """Return whether ``path`` is strictly below ``directory`` by segments."""
+
+    path_key = normalize_relative_path(path)
+    directory_key = normalize_relative_path(directory)
+    return path_key.startswith(directory_key + "\\")
+
+
+def strip_common_relative_path_suffix(
+    left: str,
+    right: str,
+) -> tuple[str, str]:
+    """Strip equal trailing path components and preserve each prefix spelling."""
+
+    left_parts = PureWindowsPath(
+        validate_relative_path(left, allow_root=True)
+    ).parts
+    right_parts = PureWindowsPath(
+        validate_relative_path(right, allow_root=True)
+    ).parts
+    common_count = 0
+    for left_part, right_part in zip(
+        reversed(left_parts),
+        reversed(right_parts),
+        strict=False,
+    ):
+        if _uppercase_one_codepoint(left_part) != _uppercase_one_codepoint(
+            right_part
+        ):
+            break
+        common_count += 1
+    if common_count == 0:
+        return "\\".join(left_parts), "\\".join(right_parts)
+    return (
+        "\\".join(left_parts[:-common_count]),
+        "\\".join(right_parts[:-common_count]),
+    )
+
+
 def is_path_below(candidate: str, root: str) -> bool:
     """Return whether two resolved absolute paths preserve root containment."""
 

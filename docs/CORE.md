@@ -5,6 +5,8 @@ and recording contracts are implemented. M1 Stages 2-4 add the fixed XXH3-128
 content contract, nominal heterogeneous result vocabulary, schema-v3 event
 codec, published-copy/post-copy evidence, compound phase results, and the
 continuation state consumed by standalone and linked integrity workflows.
+Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
+shared workflow tree substrate without changing their semantics.
 
 ## Purpose
 
@@ -40,8 +42,8 @@ attestation format.
 - Protocols for recorder, clock, failure policy, copy backend, streaming hasher
   factory, change source, destination policy, metadata extraction, session
   storage, and filesystem observations needed by module contracts.
-- Windows relative-path normalization, validation, containment, and long-path
-  conversion helpers.
+- Windows relative-path normalization, validation, hierarchy, containment, and
+  long-path conversion helpers.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
 
@@ -184,6 +186,14 @@ Unicode normalization is deliberately not part of path identity: NFC and NFD
 spellings remain distinct stored paths. Planner may identify a unique
 same-parent canonical-equivalence pair for review, but no core path helper
 rewrites either spelling.
+
+Relative hierarchy uses `relative_path_depth()`, `relative_path_parent()`, and
+strict `is_relative_path_descendant()`. They operate on relative Windows path
+segments and remain distinct from `is_path_below()`, which checks resolved
+absolute-root containment. `strip_common_relative_path_suffix()` removes equal
+trailing segments under the same one-codepoint case mapping while preserving
+the original spelling of both remaining prefixes; it never performs a raw
+character-suffix match.
 
 Filesystem enumeration may observe names outside this lexical contract. Those
 names never enter `FileRecord`, `DirRecord`, `UnsupportedRecord`, or operation

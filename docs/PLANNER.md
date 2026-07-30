@@ -1,9 +1,10 @@
 # Planner Module
 
 Status: M0 path-preserving paired-sync implementation complete. M1 Stage 1
-removes the unused worker-count field from the immutable plan contract. Later
-scopes, content evidence, ingest policies, replay, repair, and undo reuse the
-same plan shape.
+removes the unused worker-count field from the immutable plan contract.
+Stage 5.5 relocates the planner's three relative hierarchy helpers to
+`core.pathing` without changing planning behavior. Later scopes, content
+evidence, ingest policies, replay, repair, and undo reuse the same plan shape.
 
 ## Purpose
 
@@ -28,6 +29,11 @@ assignment, policy, scope, deterministic-id/fingerprint, selection-digest,
 and shared capacity contracts. M0 implements `Scope.everything()` and the
 batch-shaped identity destination policy; the other scope constructors remain
 declared but raise rather than pretending to work.
+
+Depth ordering, parent walks, and strict descendant checks use the shared
+relative-path helpers in `namisync.core.pathing`. Their Stage 5.5 promotion was
+a pure relocation: the existing planner test file and all 31 behavioral tests
+remain unchanged.
 
 The implementation emits explicit parent-first directory operations, file
 copy/update/no-op intent, correspondence-qualified move or composite

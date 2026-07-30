@@ -16,7 +16,13 @@ from namisync.core.models import (
     MetadataSnapshot,
     ScanResult,
 )
-from namisync.core.pathing import normalize_relative_path, validate_relative_path
+from namisync.core.pathing import (
+    is_relative_path_descendant,
+    normalize_relative_path,
+    relative_path_depth,
+    relative_path_parent,
+    validate_relative_path,
+)
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
@@ -37,21 +43,6 @@ from namisync.core.planning import (
     plan_fingerprint,
     policy_fingerprint,
 )
-
-
-def _depth(path: str) -> int:
-    return len(PureWindowsPath(path).parts)
-
-
-def _parent(path: str) -> str | None:
-    parent = str(PureWindowsPath(path).parent)
-    return None if parent == "." else parent
-
-
-def _is_descendant(path: str, directory: str) -> bool:
-    path_key = normalize_relative_path(path)
-    directory_key = normalize_relative_path(directory)
-    return path_key.startswith(directory_key + "\\")
 
 
 def _metadata_equal(source: FileStat, target: FileStat, granularity_ns: int) -> bool:
@@ -170,12 +161,12 @@ def _validate_assignment(
 
 
 def _nearest_created_parent(path: str, created: dict[str, PlanOperation]) -> PlanOperation | None:
-    parent = _parent(path)
+    parent = relative_path_parent(path)
     while parent is not None:
         operation = created.get(normalize_relative_path(parent))
         if operation is not None:
             return operation
-        parent = _parent(parent)
+        parent = relative_path_parent(parent)
     return None
 
 
@@ -246,12 +237,12 @@ def plan(
     target_files = tuple(record for record in target_files_all if not options.filters.excludes(record.rel_path))
     source_dirs = tuple(
         record
-        for record in sorted(source.directories, key=lambda item: (_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
+        for record in sorted(source.directories, key=lambda item: (relative_path_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
         if record.rel_path and not options.filters.excludes(record.rel_path)
     )
     target_dirs = tuple(
         record
-        for record in sorted(target.directories, key=lambda item: (_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
+        for record in sorted(target.directories, key=lambda item: (relative_path_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
         if record.rel_path
     )
 
@@ -272,14 +263,14 @@ def plan(
 
     required_directory_paths: set[str] = {record.rel_path for record in source_dirs}
     for item in assignment.items:
-        parent = _parent(item.target_rel_path)
+        parent = relative_path_parent(item.target_rel_path)
         while parent is not None:
             required_directory_paths.add(parent)
-            parent = _parent(parent)
+            parent = relative_path_parent(parent)
 
     mkdir_operations: list[PlanOperation] = []
     created_directories: dict[str, PlanOperation] = {}
-    for directory_path in sorted(required_directory_paths, key=lambda value: (_depth(value), normalize_relative_path(value), value)):
+    for directory_path in sorted(required_directory_paths, key=lambda value: (relative_path_depth(value), normalize_relative_path(value), value)):
         directory_key = normalize_relative_path(directory_path)
         existing_dirs = target_dirs_by_key.get(directory_key, [])
         existing_files = target_files_by_key.get(directory_key, [])
@@ -550,7 +541,7 @@ def plan(
             removal_by_path[operation.target_rel_path] = operation
         elif operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE} and operation.prior_target_rel_path:
             removal_by_path[operation.prior_target_rel_path] = operation
-    for directory in sorted(target_dirs, key=lambda item: (-_depth(item.rel_path), item.rel_path_key, item.rel_path)):
+    for directory in sorted(target_dirs, key=lambda item: (-relative_path_depth(item.rel_path), item.rel_path_key, item.rel_path)):
         if (
             options.deletion_policy is DeletionPolicy.ADDITIVE
             or directory.rel_path_key in desired_directory_keys
@@ -559,18 +550,18 @@ def plan(
             continue
         excluded_child = any(
             bool(record.rel_path)
-            and _is_descendant(record.rel_path, directory.rel_path)
+            and is_relative_path_descendant(record.rel_path, directory.rel_path)
             and options.filters.excludes(record.rel_path)
             for record in (*target.files, *target.directories)
             if record.rel_path != directory.rel_path
         )
-        unsupported_child = any(_is_descendant(record.rel_path, directory.rel_path) for record in target.unsupported)
+        unsupported_child = any(is_relative_path_descendant(record.rel_path, directory.rel_path) for record in target.unsupported)
         remaining_file = any(
-            _is_descendant(record.rel_path, directory.rel_path) and record.rel_path_key not in removed_file_keys
+            is_relative_path_descendant(record.rel_path, directory.rel_path) and record.rel_path_key not in removed_file_keys
             for record in target.files
         )
         remaining_directory = any(
-            _parent(child.rel_path) == directory.rel_path
+            relative_path_parent(child.rel_path) == directory.rel_path
             and child.rel_path_key not in cleanup_by_key
             and child.rel_path_key not in desired_directory_keys
             for child in target_dirs
@@ -580,12 +571,12 @@ def plan(
         dependencies = [
             operation.op_id
             for path, operation in removal_by_path.items()
-            if path == directory.rel_path or _is_descendant(path, directory.rel_path)
+            if path == directory.rel_path or is_relative_path_descendant(path, directory.rel_path)
         ]
         dependencies.extend(
             operation.op_id
             for key, operation in cleanup_by_key.items()
-            if _parent(operation.target_rel_path) == directory.rel_path
+            if relative_path_parent(operation.target_rel_path) == directory.rel_path
         )
         dependencies = sorted(set(dependencies), key=str)
         cleanup = PlanOperation(
