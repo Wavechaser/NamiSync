@@ -121,8 +121,9 @@ their contract, and update the matching tests and documentation when it does.
   `docs/obsolete/`, `README.md`, or `AGENTS.md` need updates for the committed
   behavior.
 - Do not commit behavior changes whose matching documentation is stale.
-- When committing or pushing a versioned update, add a concise entry to the
-  README changelog describing the user-meaningful change.
+- Update the README changelog once when a delivery stage is complete, using one
+  concise summary of its user-meaningful changes. Intermediate slice commits do
+  not each add fragmented changelog entries.
 
 ## Cleanup
 

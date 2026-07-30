@@ -1501,7 +1501,7 @@ independent filesystem/integrity/recording/audit/canceled truth. **Flesh —
 implemented through M1 Stage 5.** Primitive semantic-settings snapshot/patch
 translation, mode-aware fresh baseline/rebaseline admission, frozen resume
 selection, explicit location facade starts, the four location CLI commands,
-and final headline/exit classification. **Flesh — planned M1 Stage 5.5.**
+and final headline/exit classification. **Flesh — implemented through M1 Stage 5.5.**
 Reusable pure node-tree/index construction, recursive subtree
 scan/reconciliation, typed inventory warning projection, user-selection
 provenance and re-derivation, and the facade commands/review state needed by the
@@ -1597,7 +1597,7 @@ renderable regardless of the headline. CLI exits map success/all-noop to 0,
 usage to 2, refused to 3, failed to 4, canceled to 5, partial to 6, degradation
 to 7, mismatch to 8, and verification-incomplete to 9.
 
-**Stage 5.5 planned contract (finalized 2026-07-29).** The service adds
+**Stage 5.5 implemented contract (landed 2026-07-30).** The service adds
 revisioned review selection/commit state, `preview_selection`, opaque-id
 location commands, missing acknowledgement/restore/listing, stale-row listing,
 typed scan warnings, and primitive `APPLIED`/`NOOP`/`STALE`/`CONFLICT`
@@ -1741,8 +1741,8 @@ desktop surfaces, and other interfaces behind the same facade.
   `history`. Ships a real, safe, hash-on-copy sync tool with an audit trail. The
   isolated verifier operation may land in parallel during M0 construction, but
   does not broaden this shipping gate without its inventory/workflow surface.
-- **M1 — integrity product and executor refactor.** Stages 1–5 are implemented;
-  Stage 5.5 and Stage 6 remain. The settled dependency order is:
+- **M1 — integrity product and executor refactor.** Stages 1–5.5 are implemented;
+  Stage 6 remains. The settled dependency order is:
   1. contracts and semantics — canonical XXH3-128 evidence, nominal result
      items/phase summaries, four truth axes, execute→verify continuation,
      two-database reset boundary, split settings ownership, and facade/bridge
@@ -1762,10 +1762,10 @@ desktop surfaces, and other interfaces behind the same facade.
 
   Implementation honored the dependency chain: standalone hashing followed
   HASH Track 2, post-execution integration followed standalone integrity, and
-  the CLI commands followed their workflows. The remaining exact dependency
-  graph, slices, gates, regression watchlist, and performance budgets are
-  normative in `M1_BRIDGE.md`; no Stage 6 projection/cache lands early in Stage
-  5.5. History retention is not part of M1.
+  the CLI commands followed their workflows. The delivery graph, slices, gates,
+  regression watchlist, and performance budgets are recorded in
+  `M1_BRIDGE.md`; its Stage 6 requirements remain normative. History retention
+  is not part of M1.
 - **M2 — durability & scope.** `SqliteSessionStore` behind the existing
   protocol; reload + startup reconciliation (`INTERRUPTED` gets its first
   producer); single queue-owner lock; durable queue and plans; event

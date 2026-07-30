@@ -20,6 +20,7 @@ from namisync.core.events import (
     Terminal,
 )
 from namisync.core.models import VolumeId
+from namisync.core.planning import OperationKind
 from namisync.core.session import (
     OperationResult,
     SessionId,
@@ -51,7 +52,7 @@ from namisync.workflows.inventory import (
 )
 from namisync.workflows.views import operation_result_view
 
-from _db_fixtures import NOW
+from _db_fixtures import NOW, operation, plan
 
 
 def _record(
@@ -477,6 +478,10 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     service._dispatcher = Dispatcher()
     service._runtime = Runtime()
     service._lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
     service._closed = False
     service._shutdown = None
 
@@ -490,14 +495,22 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
 
 def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> None:
     calls: list[tuple[str, bool]] = []
+    artifact = SimpleNamespace(plan=plan((operation(OperationKind.NOOP),)))
 
     class Runtime:
+        def get_plan(self, request_id: str):
+            return artifact
+
         def commit_plan(
             self,
             request_id: str,
             *,
             verify_after_execute: bool = False,
+            user_deselected=frozenset(),
+            expected_artifact=None,
         ):
+            assert user_deselected == frozenset()
+            assert expected_artifact is artifact
             calls.append((request_id, verify_after_execute))
             return SimpleNamespace(
                 execution_set=SimpleNamespace(run_id=f"run-{request_id}")
@@ -511,6 +524,10 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
     service = object.__new__(NamiSyncService)
     service._runtime = Runtime()
     service._dispatcher = Dispatcher()
+    service._lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
 
     default = service.start_execution("default")
     verified = service.start_execution(

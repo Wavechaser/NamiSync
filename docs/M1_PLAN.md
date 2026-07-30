@@ -1,9 +1,10 @@
 # M1 Plan
 
-Status (2026-07-29): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (2026-07-30): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
-the two-part Stage 5 facade/CLI work are implemented. `M1_BRIDGE.md` finalizes
-the still-unimplemented Stage 5.5 facade completion and Stage 6 desktop shell.
+the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
+implemented. `M1_BRIDGE.md` records the landed bridge contract and the
+still-unimplemented Stage 6 desktop shell.
 This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
@@ -944,9 +945,9 @@ schema change, or Stage 6 surface was added.
 
 ### Stage 5.5 — Facade Completion
 
-This is the unimplemented bridge prerequisite, specified exhaustively in
-`M1_BRIDGE.md`. It runs three disjoint production lanes before facade
-integration:
+This bridge prerequisite landed on 2026-07-30 as three disjoint production
+lanes followed by facade integration, specified exhaustively in
+`M1_BRIDGE.md`:
 
 - tree substrate: shared relative-path helpers, pure
   `workflows/node_tree.py`, deterministic scope-qualified node ids, ordered

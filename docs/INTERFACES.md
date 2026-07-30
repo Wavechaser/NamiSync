@@ -1,11 +1,12 @@
 # Interfaces Layer
 
-Status: M1 Stage 5's process-local `interfaces/service.py` facade, reviewed
+Status: M1 Stage 5.5's process-local `interfaces/service.py` facade, reviewed
 sync/history adapter, explicit inventory/baseline/verify/rebaseline commands,
-semantic-settings seam, and final axis-preserving result classification are
-implemented. M1 Stage 1's isolated cosmetic UI-state storage and tested
-WebView2 security spike remain the desktop foundation; the desktop host remains
-Stage 6, and the API remains latent.
+semantic-settings seam, revisioned selection, opaque-id location actions,
+retry receipts, typed scan warnings, and final axis-preserving result
+classification are implemented. M1 Stage 1's isolated cosmetic UI-state
+storage and tested WebView2 security spike remain the desktop foundation; the
+desktop host remains Stage 6, and the API remains latent.
 
 ## Purpose
 
@@ -57,8 +58,13 @@ views. Runtime plan storage remains the existing process-local dictionary behind
 named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
 does not survive process exit.
 
-`start_execution(request_id, *, verify_after_execute=False)` preserves the M0
-default and opts into the Stage 4 execute→verify workflow only when requested.
+`start_execution(request_id, *, verify_after_execute=False,
+expected_revision=None, destructive_acknowledged=False, command_id=None)`
+preserves the untouched M0/CLI default and opts into the Stage 4
+execute→verify workflow only when requested. An omitted revision is valid only
+for pristine revision-zero selection. Edited review state requires the current
+revision; commitment transitions `reviewing → committing → committed`, with
+admission failure restoring `reviewing`.
 Only the execution registration supplies
 `settle_canceled=runtime.settle_canceled_execution`; the service does not decode
 continuations or decide cancellation policy. Retained `HistoryRunView` exposes
@@ -70,16 +76,33 @@ The current public start/settings surface is:
 
 ```python
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
-start_plan(source, target, *, deletion_policy=None) -> PlanSession
-start_execution(request_id, *, verify_after_execute=False) -> ExecutionSession
+start_plan(source, target, *, deletion_policy=None, command_id=None) -> PlanSession
+preview_selection(request_id) -> SelectionPreviewView
+mutate_selection(request_id, expected_revision, *,
+                 deselect=(), reselect=(), command_id=None)
+    -> SelectionMutationView
+start_execution(request_id, *, verify_after_execute=False,
+                expected_revision=None, destructive_acknowledged=False,
+                command_id=None)
+    -> ExecutionSession | ExecutionAdmissionView
 start_inventory(*, root_path=None, location_id=None,
-                selected_paths=(), selected_mount=None) -> LocationSession
+                selected_paths=(), selected_mount=None,
+                selected_ids=None, command_id=None) -> LocationSession
 start_baseline(*, root_path=None, location_id=None,
-               selected_paths=(), selected_mount=None) -> LocationSession
+               selected_paths=(), selected_mount=None,
+               selected_ids=None, command_id=None) -> LocationSession
 start_verify(*, root_path=None, location_id=None,
-             selected_paths=(), selected_mount=None) -> LocationSession
+             selected_paths=(), selected_mount=None,
+             selected_ids=None, command_id=None) -> LocationSession
 start_rebaseline(*, root_path=None, location_id=None,
-                 selected_paths=(), selected_mount=None) -> LocationSession
+                 selected_paths=(), selected_mount=None,
+                 selected_ids=None, command_id=None) -> LocationSession
+list_unacknowledged_missing(location_id) -> tuple[InventoryRowView, ...]
+list_stale_inventory(location_id, verified_before) -> tuple[InventoryRowView, ...]
+acknowledge_inventory(command_id, location_id, row_ids, *, changed_at)
+    -> tuple[InventoryDispositionView, ...]
+restore_inventory(command_id, location_id, row_ids, *, changed_at)
+    -> tuple[InventoryDispositionView, ...]
 read_semantic_settings() -> SemanticSettingsView
 commit_semantic_settings(patch: SemanticSettingsPatchView) -> SemanticSettingsView
 ```
@@ -90,11 +113,21 @@ admission and return a primitive `LocationSession`. An unresolved binding raises
 offline, ambiguous, missing-root, and unavailable-root guidance without
 starting work. `LocationResolutionView` carries primitive state, root/id,
 selected mount, candidates, and detail.
-`InventoryDetailsView` adds request/scope, observed/missing counts, and
-completeness; `InventoryRowView` carries primitive path/presence/evidence
-fields. `list_inventory()` and `mapping_ids_for_location()` expose role-free
-refresh and zero/one/many mapping guidance without leaking repositories or
-domain objects.
+`InventoryDetailsView` adds request/scope, observed/missing counts,
+completeness, and primitive typed warnings. `InventoryRowView` carries
+primitive path/presence/evidence fields. `list_inventory()`,
+`list_unacknowledged_missing()`, `list_stale_inventory()`, and
+`mapping_ids_for_location()` expose role-free reads without leaking
+repositories or domain objects. Visibility mutations return the recorder's
+typed disposition per row; a retry reuses the gesture id, derived per-row
+receipt ids, and the original UTC timestamp.
+
+The id-based location form rejects an explicit empty collection and ids from a
+different location. Row ids remain exact subjects. Folder node ids resolve
+through the location-scoped workflow tree: refresh carries a recursive subtree
+root so it can discover new descendants, while integrity freezes the indexed
+subtree to exact paths before admission. Path-based CLI calls retain their
+existing full/exact behavior.
 If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected

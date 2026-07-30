@@ -111,10 +111,12 @@ never hides the other result axes in rendered output.
 
 ### M1
 
-- Finalized the Stage 5.5/6 bridge implementation contract with traceable
-  acceptance gates and regression commands, retry and partial-integrity
-  semantics, sequence-gap event recovery, 256-row paging, and a measured
-  100,000-file reference envelope.
+- Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
+  ids, recursive inventory scope with bounded missing inference, revisioned
+  user selection with payload-safe provenance, retry-safe facade commands,
+  typed scan warnings, and folder-scoped integrity that continues visibly past
+  unreadable subjects. Stage 6 presentation paging and the desktop host remain
+  next.
 - Delivered Stages 1–5 of the integrity product and executor refactor; the
   WebView2 desktop shell remains M1 Stage 6.
   - **Executor:** switched content evidence to XXH3-128 and added the bounded

@@ -1,9 +1,9 @@
 # M1 Bridge and Presentation Contract
 
-Status: design and decision log for M1 Stage 5.5 (facade completion) and
-Stage 6 (web desktop shell). Every decision here is unimplemented except
-DR-BR-07, which records already-landed scanner work and is retained because
-the reasoning behind that removal governs the presentation gap it leaves. It
+Status (2026-07-30): design, decision, and acceptance log for implemented M1
+Stage 5.5 (facade completion) and still-unimplemented Stage 6 (web desktop
+shell). Stage 5.5 landed its tree substrate, recursive scan scope, selection
+semantics, and facade integration without taking Stage 6 presentation work. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
 computes where, how large plans and inventories reach the client, how
 selection binds, and what the bridge may carry. Closing that seam necessarily
@@ -27,9 +27,9 @@ when its numbered acceptance gates, decision prerequisites, regression rows,
 and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
-**Propagation is implementation-gated.** This contract is decision-complete,
-but its behavior is not shipped, so active documents are not rewritten to
-pretend otherwise. Stage 6 slice 8 propagates the as-built result in one pass.
+**Propagation is implementation-gated.** Stage 5.5 behavior is now promoted
+into the active focused documents and README. Stage 6 remains unshipped; its
+slice 8 still performs the final desktop as-built documentation pass.
 `DESKTOP_UI.md` in particular **requires revision then** — its interaction
 contract and acceptance criteria still specify a typed confirmation phrase,
 which DR-BR-03 removes for the desktop. Other active documents are reviewed for

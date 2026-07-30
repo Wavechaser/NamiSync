@@ -1,12 +1,13 @@
 # Features
 
-Implementation note (2026-07-29): M1 Stages 1-5 have landed their contract,
+Implementation note (2026-07-30): M1 Stages 1-5.5 have landed their contract,
 schema/settings/security prerequisites, pipelined XXH3-128 executor/verifier
 switch, role-free inventory, standalone integrity workflows, generic history
 items, production dispatcher registrations, and optional post-execution
-compound verification. The CLI/facade start surfaces are implemented.
-`M1_BRIDGE.md` finalizes the still-unimplemented Stage 5.5 facade completion
-and Stage 6 headed desktop shell.
+compound verification. The CLI and Stage 5.5 facade/tree/selection/subtree
+surfaces are implemented. `M1_BRIDGE.md` remains the decision and acceptance
+record for the implemented Stage 5.5 prerequisite and the still-unimplemented
+Stage 6 headed desktop shell.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward

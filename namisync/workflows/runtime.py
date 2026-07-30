@@ -23,6 +23,7 @@ from namisync.core.integrity import (
     VerifierContext,
 )
 from namisync.core.models import ScanResult, VolumeEvidence, VolumeId
+from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
@@ -36,6 +37,7 @@ from namisync.core.planning import (
 from namisync.core.recording import (
     FinishRunCommand,
     HostCommand,
+    InventoryVisibilityCommand,
     InventoryVisibilityAction,
     LocationCommand,
     MappingCommand,
@@ -90,7 +92,6 @@ from .inventory import (
     Scanner,
     bind_integrity_request,
     bind_inventory_request,
-    change_inventory_visibility,
     decode_integrity_request,
     decode_inventory_request,
     encode_integrity_request,
@@ -122,6 +123,7 @@ from .sync import (
     run_plan,
     settle_canceled_execution as settle_canceled_sync_execution,
 )
+from .node_tree import NodeTree, NodeTreeKind, NodeTreeMember, build_node_tree
 from .selection import derive_execution_selection
 from .views import (
     PreservationSettingsView,
@@ -145,6 +147,31 @@ _INTEGRITY_KINDS = {
     VERIFY_KIND: IntegrityMode.VERIFY,
     REBASELINE_KIND: IntegrityMode.REBASELINE,
 }
+
+
+def execution_selection_digest_hex(selection: frozenset[str]) -> str:
+    """Return the canonical commitment digest for one effective selection."""
+
+    return selection_digest(selection).hex()
+
+
+def build_plan_node_tree(request_id: str, plan_value: Plan) -> NodeTree:
+    """Build the workflow-owned hierarchy for one immutable plan artifact."""
+
+    return build_node_tree(
+        tree_kind=NodeTreeKind.PLAN,
+        scope_identity=request_id,
+        members=(
+            NodeTreeMember(
+                str(operation.op_id),
+                operation.target_rel_path,
+                normalize_relative_path(operation.target_rel_path),
+                operation.kind.value == "mkdir"
+                or operation.reason.value == "directory_cleanup",
+            )
+            for operation in plan_value.operations
+        ),
+    )
 
 
 def default_database_paths() -> tuple[Path, Path]:
@@ -456,10 +483,21 @@ class LocalWorkflowRuntime:
             ),
         )
 
-    def get_plan_review(self, request_id: str) -> PlanReview:
+    def get_plan_review(
+        self,
+        request_id: str,
+        *,
+        user_deselected: frozenset[str] = frozenset(),
+        expected_artifact: object | None = None,
+    ) -> PlanReview:
         artifact = self.get_plan(request_id)
+        if expected_artifact is not None and artifact is not expected_artifact:
+            raise ValueError("plan changed before review projection")
         plan_value = artifact.plan
-        decision = derive_execution_selection(plan_value)
+        decision = derive_execution_selection(
+            plan_value,
+            user_deselected=user_deselected,
+        )
         exclusions = {item.op_id: item for item in decision.exclusions}
         warnings = tuple(
             _warning_text("source", warning.code.value, warning.rel_path, warning.detail)
@@ -524,11 +562,20 @@ class LocalWorkflowRuntime:
         run_id: str | None = None,
         committed_at: datetime | None = None,
         verify_after_execute: bool = False,
+        user_deselected: frozenset[str] = frozenset(),
+        expected_artifact: object | None = None,
     ) -> ExecutionRequest:
         artifact = self.get_plan(request_id)
+        if expected_artifact is not None and artifact is not expected_artifact:
+            raise ValueError("plan changed before selection commitment")
         if not artifact.verdict.ok:
             raise ValueError("a refused plan cannot be committed")
-        selection = derive_execution_selection(artifact.plan).selection
+        selection = derive_execution_selection(
+            artifact.plan,
+            user_deselected=user_deselected,
+        ).selection
+        if not selection:
+            raise ValueError("Nothing is selected to synchronize")
         committed = committed_at or self.clock.now()
         _require_utc(committed, "commitment")
         commitment = Commitment(
@@ -544,6 +591,7 @@ class LocalWorkflowRuntime:
                     selection,
                     token,
                     commitment=commitment,
+                    user_deselected=user_deselected,
                 ),
                 verify_after_execute=verify_after_execute,
             )
@@ -592,30 +640,60 @@ class LocalWorkflowRuntime:
             return repository.get_unacknowledged_missing(location_id)
 
     def acknowledge_inventory(
-        self, command_id: str, location_id: int, row_id: str
+        self,
+        command_id: str,
+        location_id: int,
+        row_id: str,
+        *,
+        changed_at: datetime | None = None,
     ) -> RecordDisposition:
         self._require_open()
-        return change_inventory_visibility(
+        return self._change_inventory_visibility(
             command_id,
             location_id,
             row_id,
             InventoryVisibilityAction.ACKNOWLEDGE,
-            ledger_path=self.ledger_path,
-            clock=self.clock,
+            changed_at=changed_at,
         )
 
     def restore_inventory(
-        self, command_id: str, location_id: int, row_id: str
+        self,
+        command_id: str,
+        location_id: int,
+        row_id: str,
+        *,
+        changed_at: datetime | None = None,
     ) -> RecordDisposition:
         self._require_open()
-        return change_inventory_visibility(
+        return self._change_inventory_visibility(
             command_id,
             location_id,
             row_id,
             InventoryVisibilityAction.RESTORE,
-            ledger_path=self.ledger_path,
-            clock=self.clock,
+            changed_at=changed_at,
         )
+
+    def _change_inventory_visibility(
+        self,
+        command_id: str,
+        location_id: int,
+        row_id: str,
+        action: InventoryVisibilityAction,
+        *,
+        changed_at: datetime | None,
+    ) -> RecordDisposition:
+        at = self.clock.now() if changed_at is None else changed_at
+        _require_utc(at, "inventory visibility change")
+        with LedgerRecorder(self.ledger_path, clock=self.clock) as recorder:
+            return recorder.change_inventory_visibility(
+                InventoryVisibilityCommand(
+                    command_id,
+                    location_id,
+                    row_id,
+                    action,
+                    at,
+                )
+            )
 
     def list_history(self, limit: int = 50) -> tuple[HistoryRunView, ...]:
         if not self.history_path.exists():
