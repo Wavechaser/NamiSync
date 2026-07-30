@@ -189,6 +189,29 @@ def test_bridge_rejects_nonstandard_json_and_non_json_handler_results() -> None:
     with pytest.raises(BridgeProtocolError, match="not valid JSON"):
         bridge.dispatch(invalid_number)
 
+    duplicate_command = (
+        '{"schema_version":1,"request_id":"request-duplicate",'
+        '"command":"echo","command":"echo","payload":{}}'
+    )
+    with pytest.raises(BridgeProtocolError, match="not valid JSON"):
+        bridge.dispatch(duplicate_command)
+
+    for invalid_version in (True, 1.0, "1"):
+        with pytest.raises(BridgeProtocolError, match="schema version"):
+            bridge.dispatch(
+                json.dumps(
+                    {
+                        "schema_version": invalid_version,
+                        "request_id": "request-version",
+                        "command": "echo",
+                        "payload": {},
+                    }
+                )
+            )
+
+    with pytest.raises(BridgeProtocolError, match="Unicode"):
+        bridge.dispatch("\ud800")
+
     bad_result = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
@@ -199,3 +222,32 @@ def test_bridge_rejects_nonstandard_json_and_non_json_handler_results() -> None:
     )
     with pytest.raises(BridgeProtocolError, match="returned non-JSON"):
         bridge.dispatch(bad_result)
+
+
+@pytest.mark.parametrize(
+    "command_json",
+    [
+        (
+            '{"schema_version":1,"request_id":"overflow",'
+            '"command":"echo","payload":{"value":1e999}}'
+        ),
+        (
+            '{"schema_version":1,"request_id":"surrogate",'
+            '"command":"echo","payload":{"value":"\\ud800"}}'
+        ),
+    ],
+)
+def test_bridge_rejects_non_json_payload_values_before_handler(
+    command_json: str,
+) -> None:
+    handled: list[object] = []
+    bridge = BridgeDispatcher(
+        origin=ExactOrigin.parse("https://app.invalid"),
+        current_url=lambda: "https://app.invalid/",
+        handlers={"echo": handled.append},
+    )
+
+    with pytest.raises(BridgeProtocolError):
+        bridge.dispatch(command_json)
+
+    assert handled == []

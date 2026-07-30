@@ -84,6 +84,22 @@ class _Control:
             raise PauseRequested()
 
 
+class _DegradedAuditObserver:
+    """Sentinel that projects observer-construction failure onto audit status."""
+
+    def __init__(self, failure: BaseException) -> None:
+        self._failure = failure
+
+    def on_event(self, envelope) -> None:
+        raise RuntimeError("audit observer is unavailable") from self._failure
+
+    def finalize(self, result: OperationResult) -> None:
+        raise RuntimeError("audit observer is unavailable") from self._failure
+
+    def close(self) -> None:
+        pass
+
+
 class Dispatcher:
     """Schedule generic registered sessions by their required resources."""
 
@@ -116,6 +132,7 @@ class Dispatcher:
         self._records: dict[SessionId, SessionRecord] = {}
         self._controls: dict[SessionId, _Control] = {}
         self._hubs: dict[SessionId, EventHub] = {}
+        self._state_publication_locks: dict[SessionId, Lock] = {}
         self._item_events: dict[SessionId, list[ResultItem]] = {}
         self._pending: deque[SessionId] = deque()
         self._reserved: set[ResourceId] = set()
@@ -169,7 +186,10 @@ class Dispatcher:
             admission_order=admission_order,
             created_at=created_at,
         )
-        observer = self._audit_factory(record)
+        try:
+            observer = self._audit_factory(record)
+        except BaseException as error:
+            observer = _DegradedAuditObserver(error)
         hub = EventHub(
             session_id=session_id,
             initial_state=record.state,
@@ -185,21 +205,24 @@ class Dispatcher:
         except BaseException:
             hub.close(self._audit_timeout)
             raise
-        with self._condition:
-            stopped = not self._accepting
-            if not stopped:
-                self._records[session_id] = record
-                self._controls[session_id] = _Control()
-                self._hubs[session_id] = hub
-                self._item_events[session_id] = []
-                self._pending.append(session_id)
-        if stopped:
-            try:
-                self._store.drop(session_id)
-            finally:
-                hub.close(self._audit_timeout)
-            raise AdmissionClosed("dispatcher stopped during admission")
-        hub.emit(StateChanged(SessionState.PENDING))
+        publication_lock = Lock()
+        with publication_lock:
+            with self._condition:
+                stopped = not self._accepting
+                if not stopped:
+                    self._records[session_id] = record
+                    self._controls[session_id] = _Control()
+                    self._hubs[session_id] = hub
+                    self._state_publication_locks[session_id] = publication_lock
+                    self._item_events[session_id] = []
+                    self._pending.append(session_id)
+            if stopped:
+                try:
+                    self._store.drop(session_id)
+                finally:
+                    hub.close(self._audit_timeout)
+                raise AdmissionClosed("dispatcher stopped during admission")
+            hub.emit(StateChanged(SessionState.PENDING))
         with self._condition:
             self._condition.notify_all()
         return session_id
@@ -229,29 +252,35 @@ class Dispatcher:
             hub = self._hubs.get(session_id)
             if hub is None:
                 raise SessionNotFound(str(session_id))
-        return hub.subscribe(from_seq)
+            return hub.subscribe(from_seq)
 
     def pause(self, session_id: SessionId) -> ControlResult:
-        with self._condition:
-            record = self._records.get(session_id)
-            if record is None:
-                return self._missing_control(session_id)
-            decision = control_decision(
-                ControlAction.PAUSE, record.state, record.supports_pause
-            )
-            if decision is ControlCode.UNSUPPORTED:
-                return ControlResult(
-                    ControlCode.UNSUPPORTED,
-                    session_id,
-                    record.state,
-                    record.state,
-                    "this registered session kind does not support pause",
+        publication_lock = self._publication_lock_for(session_id)
+        if publication_lock is None:
+            return self._missing_control(session_id)
+        with publication_lock:
+            with self._condition:
+                record = self._records.get(session_id)
+                if record is None:
+                    return self._missing_control(session_id)
+                decision = control_decision(
+                    ControlAction.PAUSE, record.state, record.supports_pause
                 )
-            if decision is not ControlCode.ACCEPTED:
-                return self._illegal_control(record, "pause")
-            self._controls[session_id].request_pause()
-            updated, hub = self._transition_locked(session_id, SessionState.PAUSING)
-        hub.emit(StateChanged(updated.state))
+                if decision is ControlCode.UNSUPPORTED:
+                    return ControlResult(
+                        ControlCode.UNSUPPORTED,
+                        session_id,
+                        record.state,
+                        record.state,
+                        "this registered session kind does not support pause",
+                    )
+                if decision is not ControlCode.ACCEPTED:
+                    return self._illegal_control(record, "pause")
+                self._controls[session_id].request_pause()
+                updated, hub = self._transition_locked(
+                    session_id, SessionState.PAUSING
+                )
+            hub.emit(StateChanged(updated.state))
         return ControlResult(
             ControlCode.ACCEPTED,
             session_id,
@@ -261,19 +290,25 @@ class Dispatcher:
         )
 
     def resume(self, session_id: SessionId) -> ControlResult:
-        with self._condition:
-            record = self._records.get(session_id)
-            if record is None:
-                return self._missing_control(session_id)
-            if control_decision(
-                ControlAction.RESUME, record.state, record.supports_pause
-            ) is not ControlCode.ACCEPTED:
-                return self._illegal_control(record, "resume")
-            self._controls[session_id].reset()
-            updated, hub = self._transition_locked(session_id, SessionState.PENDING)
-            self._pending.append(session_id)
-            self._condition.notify_all()
-        hub.emit(StateChanged(updated.state))
+        publication_lock = self._publication_lock_for(session_id)
+        if publication_lock is None:
+            return self._missing_control(session_id)
+        with publication_lock:
+            with self._condition:
+                record = self._records.get(session_id)
+                if record is None:
+                    return self._missing_control(session_id)
+                if control_decision(
+                    ControlAction.RESUME, record.state, record.supports_pause
+                ) is not ControlCode.ACCEPTED:
+                    return self._illegal_control(record, "resume")
+                self._controls[session_id].reset()
+                updated, hub = self._transition_locked(
+                    session_id, SessionState.PENDING
+                )
+                self._pending.append(session_id)
+                self._condition.notify_all()
+            hub.emit(StateChanged(updated.state))
         return ControlResult(
             ControlCode.ACCEPTED,
             session_id,
@@ -283,33 +318,39 @@ class Dispatcher:
         )
 
     def cancel(self, session_id: SessionId) -> ControlResult:
-        with self._condition:
-            record = self._records.get(session_id)
-            if record is None:
-                return self._missing_control(session_id)
-            if control_decision(
-                ControlAction.CANCEL, record.state, record.supports_pause
-            ) is not ControlCode.ACCEPTED:
-                return self._illegal_control(record, "cancel")
-            control = self._controls[session_id]
-            control.request_cancel()
-            if record.state is SessionState.PAUSING:
-                return ControlResult(
-                    ControlCode.ACCEPTED,
-                    session_id,
-                    record.state,
-                    record.state,
-                    "cancel will settle after the in-progress pause drain",
+        publication_lock = self._publication_lock_for(session_id)
+        if publication_lock is None:
+            return self._missing_control(session_id)
+        with publication_lock:
+            with self._condition:
+                record = self._records.get(session_id)
+                if record is None:
+                    return self._missing_control(session_id)
+                if control_decision(
+                    ControlAction.CANCEL, record.state, record.supports_pause
+                ) is not ControlCode.ACCEPTED:
+                    return self._illegal_control(record, "cancel")
+                control = self._controls[session_id]
+                control.request_cancel()
+                if record.state is SessionState.PAUSING:
+                    return ControlResult(
+                        ControlCode.ACCEPTED,
+                        session_id,
+                        record.state,
+                        record.state,
+                        "cancel will settle after the in-progress pause drain",
+                    )
+                updated, hub = self._transition_locked(
+                    session_id, SessionState.CANCELING
                 )
-            updated, hub = self._transition_locked(session_id, SessionState.CANCELING)
-            if record.state in (
-                SessionState.PENDING,
-                SessionState.PAUSED,
-                SessionState.INTERRUPTED,
-            ) and session_id not in self._pending:
-                self._pending.append(session_id)
-            self._condition.notify_all()
-        hub.emit(StateChanged(updated.state))
+                if record.state in (
+                    SessionState.PENDING,
+                    SessionState.PAUSED,
+                    SessionState.INTERRUPTED,
+                ) and session_id not in self._pending:
+                    self._pending.append(session_id)
+                self._condition.notify_all()
+            hub.emit(StateChanged(updated.state))
         return ControlResult(
             ControlCode.ACCEPTED,
             session_id,
@@ -330,6 +371,7 @@ class Dispatcher:
             hub = self._hubs.pop(session_id)
             self._records.pop(session_id, None)
             self._controls.pop(session_id, None)
+            self._state_publication_locks.pop(session_id, None)
             self._item_events.pop(session_id, None)
         hub.close(self._audit_timeout)
 
@@ -445,6 +487,7 @@ class Dispatcher:
                 record = self._records[session_id]
                 registration = self._registry[record.kind]
                 control = self._controls[session_id]
+                publication_lock = self._state_publication_locks[session_id]
             if record.state is SessionState.CANCELING:
                 self._run_canceled(session_id, registration, record)
                 return
@@ -483,17 +526,19 @@ class Dispatcher:
                     failure=error,
                 )
                 return
-            with self._condition:
-                current = self._records[session_id]
-                if current.state is not SessionState.CANCELING:
-                    updated, hub = self._transition_locked(
-                        session_id, SessionState.RUNNING
-                    )
-                else:
-                    updated = None
-                    hub = None
-            if updated is not None and hub is not None:
-                hub.emit(StateChanged(updated.state))
+            resumed_attempt = current.started_at is not None
+            with publication_lock:
+                with self._condition:
+                    current = self._records[session_id]
+                    if current.state is not SessionState.CANCELING:
+                        updated, hub = self._transition_locked(
+                            session_id, SessionState.RUNNING
+                        )
+                    else:
+                        updated = None
+                        hub = None
+                if updated is not None and hub is not None:
+                    hub.emit(StateChanged(updated.state))
             if updated is None:
                 self._run_canceled(session_id, registration, current)
                 return
@@ -503,6 +548,7 @@ class Dispatcher:
                 invocation=invocation,
                 disposition=Disposition.RAN,
                 failure=None,
+                settle_pre_run_canceled=resumed_attempt,
             )
         finally:
             self._release_custody(session_id)
@@ -515,21 +561,16 @@ class Dispatcher:
         record: SessionRecord,
     ) -> None:
         disposition = self._disposition(record)
-        canceled_result = None
         failure = None
-        if record.started_at is not None and registration.settle_canceled is not None:
-            try:
-                canceled_result = registration.settle_canceled(
-                    record.payload,
-                    disposition,
-                )
-                if result_terminal_state(canceled_result) is not SessionState.CANCELED:
-                    raise ValueError(
-                        "canceled settlement must project to CANCELED"
-                    )
-            except Exception as error:
-                canceled_result = None
-                failure = error
+        try:
+            canceled_result = self._settled_cancellation(
+                registration,
+                record,
+                disposition,
+            )
+        except Exception as error:
+            canceled_result = None
+            failure = error
         self._run_core(
             session_id,
             registration,
@@ -548,6 +589,7 @@ class Dispatcher:
         disposition: Disposition,
         failure: BaseException | None,
         canceled_result: OperationResult | None = None,
+        settle_pre_run_canceled: bool = False,
     ) -> None:
         with self._condition:
             control = self._controls[session_id]
@@ -558,12 +600,28 @@ class Dispatcher:
                 return canceled_result
             if failure is not None:
                 raise failure
-            context.checkpoint()
-            if invocation is None:
-                raise Canceled()
             try:
+                try:
+                    context.checkpoint()
+                except Canceled:
+                    if not settle_pre_run_canceled:
+                        raise
+                    with self._condition:
+                        current = self._records[session_id]
+                    settled = self._settled_cancellation(
+                        registration,
+                        current,
+                        disposition,
+                    )
+                    if settled is None:
+                        raise
+                    return settled
+                if invocation is None:
+                    raise Canceled()
                 return invocation.run(context)
             except PauseRequested:
+                if invocation is None:
+                    raise
                 if not registration.supports_pause:
                     raise RuntimeError("registered invocation paused without capability")
                 self._replace_payload(session_id, invocation.snapshot())
@@ -583,6 +641,19 @@ class Dispatcher:
             with self._condition:
                 self._item_events.pop(session_id, None)
 
+    @staticmethod
+    def _settled_cancellation(
+        registration: WorkflowRegistration,
+        record: SessionRecord,
+        disposition: Disposition,
+    ) -> OperationResult | None:
+        if record.started_at is None or registration.settle_canceled is None:
+            return None
+        result = registration.settle_canceled(record.payload, disposition)
+        if result_terminal_state(result) is not SessionState.CANCELED:
+            raise ValueError("canceled settlement must project to CANCELED")
+        return result
+
     def _settle(
         self,
         session_id: SessionId,
@@ -594,8 +665,12 @@ class Dispatcher:
         # briefly without a result, but it must never expose provisional
         # ``audit=OK`` before the observer acknowledges finalization.
         transition_result = None if is_terminal(state) else result
-        updated, hub = self._transition(session_id, state, transition_result)
-        hub.emit(StateChanged(updated.state))
+        publication_lock = self._publication_lock_for(session_id)
+        if publication_lock is None:
+            raise SessionNotFound(str(session_id))
+        with publication_lock:
+            updated, hub = self._transition(session_id, state, transition_result)
+            hub.emit(StateChanged(updated.state))
 
     def _publish_result(self, session_id: SessionId, result: OperationResult) -> None:
         with self._condition:
@@ -670,25 +745,39 @@ class Dispatcher:
             self._condition.notify_all()
 
     def _worker_done(self, session_id: SessionId) -> None:
+        publication_lock = self._publication_lock_for(session_id)
+        if publication_lock is None:
+            with self._condition:
+                self._workers.pop(session_id, None)
+                self._condition.notify_all()
+            return
         transition: tuple[SessionRecord, EventHub] | None = None
+        with publication_lock:
+            with self._condition:
+                self._workers.pop(session_id, None)
+                record = self._records.get(session_id)
+                control = self._controls.get(session_id)
+                if (
+                    record is not None
+                    and control is not None
+                    and record.state is SessionState.PAUSED
+                    and control.cancel_requested()
+                ):
+                    transition = self._transition_locked(
+                        session_id, SessionState.CANCELING
+                    )
+                    self._pending.append(session_id)
+                self._condition.notify_all()
+            if transition is not None:
+                updated, hub = transition
+                hub.emit(StateChanged(updated.state))
+
+    def _publication_lock_for(self, session_id: SessionId):
+        # Never wait for a publication lock while holding ``_condition``.
+        # Each lock spans one persisted lifecycle transition and its matching
+        # reliable event without blocking unrelated sessions.
         with self._condition:
-            self._workers.pop(session_id, None)
-            record = self._records.get(session_id)
-            control = self._controls.get(session_id)
-            if (
-                record is not None
-                and control is not None
-                and record.state is SessionState.PAUSED
-                and control.cancel_requested()
-            ):
-                transition = self._transition_locked(
-                    session_id, SessionState.CANCELING
-                )
-                self._pending.append(session_id)
-            self._condition.notify_all()
-        if transition is not None:
-            updated, hub = transition
-            hub.emit(StateChanged(updated.state))
+            return self._state_publication_locks.get(session_id)
 
     @staticmethod
     def _disposition(record: SessionRecord) -> Disposition:

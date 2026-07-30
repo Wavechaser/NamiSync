@@ -15,6 +15,7 @@ from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
 from namisync.core.planning import BlockedReason, OperationKind, OperationReason
 from namisync.core.session import SessionState
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
+from namisync.dispatcher import SessionNotFound
 from namisync.interfaces.service import (
     ExecutionAdmissionView,
     ExecutionSession,
@@ -94,6 +95,7 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
     service._session_receipts = {}
     service._receipt_ids_by_session = {}
     service._session_receipt_locks = tuple(Lock() for _ in range(64))
+    service._session_receipt_lifecycle = Lock()
     service._visibility_receipts = {}
     service._closed = False
     service._shutdown = None
@@ -521,6 +523,60 @@ def test_br_g_16_concurrent_session_retry_admits_exactly_one_session() -> None:
     assert returned[0] == returned[1]
 
 
+def test_br_g_16_execution_command_id_is_single_flight_across_plans() -> None:
+    entered = Event()
+    second_submission = Event()
+    release = Event()
+    submission_lock = Lock()
+
+    class BlockingDispatcher(_Dispatcher):
+        def submit(self, kind: str, request: object) -> str:
+            with submission_lock:
+                self.submissions.append((kind, request))
+                if len(self.submissions) == 1:
+                    entered.set()
+                else:
+                    second_submission.set()
+            assert release.wait(2)
+            return f"session-{len(self.submissions)}"
+
+    runtime = _PlanRuntime(
+        _artifact(plan((operation(OperationKind.NOOP),)))
+    )
+    dispatcher = BlockingDispatcher()
+    service = _service(runtime, dispatcher)
+    returned: list[object] = []
+    errors: list[Exception] = []
+
+    def submit(request_id: str) -> None:
+        try:
+            returned.append(
+                service.start_execution(
+                    request_id,
+                    command_id="execution-double-click",
+                )
+            )
+        except Exception as error:
+            errors.append(error)
+
+    first = Thread(target=submit, args=("request-a",))
+    second = Thread(target=submit, args=("request-b",))
+    first.start()
+    assert entered.wait(1)
+    second.start()
+    assert not second_submission.wait(0.1)
+    release.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert len(dispatcher.submissions) == 1
+    assert len(returned) == 1
+    assert len(errors) == 1
+    assert "different command" in str(errors[0])
+
+
 def test_br_g_16_id_retry_replays_before_mutable_inventory_resolution() -> None:
     rows = [_inventory_row("row-a", "a.bin")]
 
@@ -541,6 +597,49 @@ def test_br_g_16_id_retry_replays_before_mutable_inventory_resolution() -> None:
         location_id=7,
         selected_ids=("row-a",),
         command_id="selected-refresh",
+    )
+
+    assert replay == first
+    assert len(dispatcher.submissions) == 1
+
+
+def test_br_g_16_plan_retry_replays_before_paths_are_revalidated(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+
+    class Runtime:
+        def create_plan_request(
+            self,
+            request_id: str,
+            source_path: str,
+            target_path: str,
+            *,
+            deletion_policy: str | None,
+        ):
+            return SimpleNamespace(
+                request_id=request_id,
+                source_path=source_path,
+                target_path=target_path,
+                deletion_policy=deletion_policy,
+            )
+
+    dispatcher = _Dispatcher()
+    service = _service(Runtime(), dispatcher)
+    first = service.start_plan(
+        str(source),
+        str(target),
+        command_id="plan-retry",
+    )
+    source.rmdir()
+
+    replay = service.start_plan(
+        str(source),
+        str(target),
+        command_id="plan-retry",
     )
 
     assert replay == first
@@ -589,6 +688,129 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
 
     assert not worker.is_alive()
     assert errors == []
+    assert service._session_receipts == {}
+    assert service._receipt_ids_by_session == {}
+
+
+def test_br_g_16_close_and_retry_do_not_replay_a_closed_session() -> None:
+    close_entered = Event()
+    close_release = Event()
+
+    class RetainingDispatcher(_Dispatcher):
+        def __init__(self) -> None:
+            super().__init__()
+            self.sessions: set[str] = set()
+
+        def submit(self, kind: str, request: object) -> str:
+            session_id = super().submit(kind, request)
+            self.sessions.add(session_id)
+            return session_id
+
+        def get(self, session_id: str):
+            if session_id not in self.sessions:
+                raise SessionNotFound(session_id)
+            return SimpleNamespace(session_id=session_id)
+
+        def close(self, session_id: str) -> None:
+            if session_id not in self.sessions:
+                raise SessionNotFound(session_id)
+            self.sessions.remove(session_id)
+            close_entered.set()
+            assert close_release.wait(2)
+            super().close(session_id)
+
+    dispatcher = RetainingDispatcher()
+    service = _service(SimpleNamespace(), dispatcher)
+    first = service.start_inventory(
+        root_path="F:\\library",
+        command_id="refresh-retry",
+    )
+    closed: list[bool] = []
+    replayed: list[object] = []
+    closer = Thread(
+        target=lambda: (
+            service.close_session(first.session_id),
+            closed.append(True),
+        )
+    )
+    retry = Thread(
+        target=lambda: replayed.append(
+            service.start_inventory(
+                root_path="F:\\library",
+                command_id="refresh-retry",
+            )
+        )
+    )
+
+    closer.start()
+    assert close_entered.wait(1)
+    retry.start()
+    assert not replayed
+    close_release.set()
+    closer.join(2)
+    retry.join(2)
+
+    assert not closer.is_alive()
+    assert not retry.is_alive()
+    assert closed == [True]
+    assert replayed[0] != first
+    assert replayed[0].session_id in dispatcher.sessions
+    assert len(dispatcher.submissions) == 2
+
+
+def test_br_g_16_close_before_receipt_publication_drops_late_receipt() -> None:
+    remember_entered = Event()
+    remember_release = Event()
+
+    class RetainingDispatcher(_Dispatcher):
+        def __init__(self) -> None:
+            super().__init__()
+            self.sessions: set[str] = set()
+
+        def submit(self, kind: str, request: object) -> str:
+            session_id = super().submit(kind, request)
+            self.sessions.add(session_id)
+            return session_id
+
+        def get(self, session_id: str):
+            if session_id not in self.sessions:
+                raise SessionNotFound(session_id)
+            return SimpleNamespace(session_id=session_id)
+
+        def close(self, session_id: str) -> None:
+            if session_id not in self.sessions:
+                raise SessionNotFound(session_id)
+            self.sessions.remove(session_id)
+            super().close(session_id)
+
+    dispatcher = RetainingDispatcher()
+    service = _service(SimpleNamespace(), dispatcher)
+    remember = service._remember_session_receipt
+
+    def delayed_remember(*args) -> None:
+        remember_entered.set()
+        assert remember_release.wait(2)
+        remember(*args)
+
+    service._remember_session_receipt = delayed_remember
+    admitted: list[object] = []
+    worker = Thread(
+        target=lambda: admitted.append(
+            service.start_inventory(
+                root_path="F:\\library",
+                command_id="late-receipt",
+            )
+        )
+    )
+
+    worker.start()
+    assert remember_entered.wait(1)
+    service.close_session("session-1")
+    remember_release.set()
+    worker.join(2)
+
+    assert not worker.is_alive()
+    assert admitted[0].session_id == "session-1"
     assert service._session_receipts == {}
     assert service._receipt_ids_by_session == {}
 

@@ -68,10 +68,16 @@ running session, and starts with the workflow's fresh guard. Cancel requests are
 cooperative but terminal cleanup/release is unconditional.
 
 M0 preserves the adapter's opaque continuation by calling `snapshot()` after a
-pause unwind and before releasing custody or publishing `PAUSED`. Reliable item
-outcomes are accumulated by session across attempts, so a pause followed by a
-later cancel or failure retains outcomes earned before the pause without asking
-the workflow to emit them twice.
+pause unwind and before releasing custody or publishing `PAUSED`. This includes
+a pause observed at the runner's entry checkpoint before `invocation.run()`;
+the admitted invocation still establishes and serializes its resumable
+continuation before the dispatcher reports `PAUSED`. Reliable item outcomes are
+accumulated by session across attempts, so a pause followed by a later cancel or
+failure retains outcomes earned before the pause without asking the workflow to
+emit them twice. If cancel reaches a resumed attempt's RUNNING checkpoint before
+`invocation.run()`, dispatcher uses the registration's retained-payload
+cancellation settlement before publishing the terminal; it cannot substitute a
+generic canceled result that strands workflow custody.
 
 ## Admission And Volume Scheduling
 
@@ -109,6 +115,14 @@ whose bounded queue overruns is ejected and first receives
 `Gap(first_missed_seq)`. Late subscribers receive current state plus a bounded
 tail/detectable gap—not a false promise of full replay.
 
+A per-session publication gate spans each persisted lifecycle transition and
+its matching reliable `StateChanged`. Later transitions cannot publish first or
+make the hub's current-state replay regress, while unrelated sessions remain
+independent. Dispatcher also serializes hub subscription registration with
+terminal `close()`: if subscribe wins, close shuts that stream; if close wins,
+subscribe returns `SessionNotFound`. A closed session cannot retain a newly
+orphaned stream.
+
 An ordinary `EventStream.close()` is an immediate unsubscribe as well as a
 reader wakeup. The stream invokes its hub-removal callback once, outside the
 stream condition, so explicit interface unsubscribe does not leave closed
@@ -130,7 +144,9 @@ import dispatcher: `on_event(Envelope)`, `finalize(OperationResult)`, and
 `close()`. The composition root supplies an observer factory. The pump invokes
 these methods on a bounded daemon worker, catches observer exceptions, and
 stops producer backpressure after the injected timeout by setting
-`audit=DEGRADED`.
+`audit=DEGRADED`. Failure while the composition root constructs or opens the
+observer is isolated the same way: admission continues with a degraded-audit
+sentinel, so history availability cannot decide whether domain work runs.
 
 ## Session Store
 

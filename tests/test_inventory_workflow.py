@@ -538,6 +538,74 @@ def test_incomplete_selected_integrity_refresh_runs_no_hash_and_is_not_unrun_ref
     assert runner_calls == 0
 
 
+@pytest.mark.parametrize(
+    "stale_before",
+    [None, datetime(2027, 1, 1, tzinfo=timezone.utc)],
+    ids=("full", "stale"),
+)
+def test_incomplete_unbounded_integrity_refresh_runs_no_hash(
+    tmp_path: Path,
+    stale_before: datetime | None,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    scanner = _Scanner(records=(_file(),))
+    resolver = _Resolver(mount)
+    details: list[InventoryDetails] = []
+    deps = _dependencies(ledger_path, scanner, resolver, details)
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    scanner.complete = False
+    scanner.warnings = (
+        ScanWarning(
+            ScanWarningCode.ENUMERATION_ERROR,
+            None,
+            "root enumeration failed",
+        ),
+    )
+    runner_calls = 0
+
+    def runner(*_args):
+        nonlocal runner_calls
+        runner_calls += 1
+        raise AssertionError("incomplete refresh must not hash")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "incomplete-unbounded",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+            stale_before=stale_before,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=deps.ledger_path,
+            scanner=deps.scanner,
+            resolver=deps.resolver,
+            clock=deps.clock,
+            host_key=deps.host_key,
+            host_name=deps.host_name,
+            save_details=deps.save_details,
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.error is not None
+    assert result.error.type_name == "InventoryScopeIncomplete"
+    assert details[-1].complete is False
+    assert details[-1].warnings == scanner.warnings
+    assert runner_calls == 0
+
+
 def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
     tmp_path: Path,
 ) -> None:
@@ -736,6 +804,76 @@ def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:
 
     assert decode_inventory_request(encode_inventory_request(inventory)) == inventory
     assert decode_integrity_request(encode_integrity_request(integrity)) == integrity
+
+
+def test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json() -> None:
+    binding = LocationBinding(
+        VOLUME_ID,
+        "managed",
+        "M:\\",
+        ("M:\\",),
+        False,
+        7,
+    )
+    inventory = InventoryWorkflowRequest(
+        "inventory-strict",
+        binding,
+        ("Folder/File.txt",),
+    )
+    integrity = IntegrityWorkflowRequest(
+        request_id="integrity-strict",
+        binding=binding,
+        mode=IntegrityMode.VERIFY,
+        selection_item_ids=("7:11",),
+        completed_bytes=(("7:11", 13),),
+        processed_bytes=13,
+    )
+
+    invalid_inventory = json.loads(encode_inventory_request(inventory))
+    invalid_inventory["request_id"] = 7
+    with pytest.raises(ValueError):
+        decode_inventory_request(
+            json.dumps(invalid_inventory, separators=(",", ":")).encode()
+        )
+
+    invalid_inventory = json.loads(encode_inventory_request(inventory))
+    invalid_inventory["binding"]["location_id"] = True
+    with pytest.raises(ValueError):
+        decode_inventory_request(
+            json.dumps(invalid_inventory, separators=(",", ":")).encode()
+        )
+
+    invalid_inventory = json.loads(encode_inventory_request(inventory))
+    invalid_inventory["unknown"] = "field"
+    with pytest.raises(ValueError):
+        decode_inventory_request(
+            json.dumps(invalid_inventory, separators=(",", ":")).encode()
+        )
+
+    duplicate_kind = (
+        encode_inventory_request(inventory)
+        .decode("utf-8")
+        .replace(
+            '"kind":"inventory"',
+            '"kind":"inventory","kind":"inventory"',
+        )
+    )
+    with pytest.raises(ValueError, match="duplicate"):
+        decode_inventory_request(duplicate_kind.encode("utf-8"))
+
+    invalid_integrity = json.loads(encode_integrity_request(integrity))
+    invalid_integrity["processed_bytes"] = 13.0
+    with pytest.raises(ValueError):
+        decode_integrity_request(
+            json.dumps(invalid_integrity, separators=(",", ":")).encode()
+        )
+
+    invalid_integrity = json.loads(encode_integrity_request(integrity))
+    invalid_integrity["completed_bytes"] = [["7:11", "13"]]
+    with pytest.raises(ValueError):
+        decode_integrity_request(
+            json.dumps(invalid_integrity, separators=(",", ":")).encode()
+        )
 
 
 def test_integrity_continuation_rejects_progress_without_saved_selection() -> None:

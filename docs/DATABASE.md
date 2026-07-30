@@ -38,7 +38,9 @@ roots before creation. `timestamps.py` is the single fixed-width aware-UTC
 representation used by both schemas.
 
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
-values. Canonical path selections are queried in bounded 400-key chunks.
+values. Canonical path selections are queried in bounded 400-key chunks inside
+one read transaction, so a concurrent commit cannot split one selection across
+different database snapshots.
 
 History version 3 retains the run envelope/summary and replaces operation-only
 detail with generic `history_items` tagged by item type and phase. Sync and
@@ -65,6 +67,9 @@ or maintenance writer is claimed yet.
 Windows named mutex, rereads the latest document while holding it, applies only
 the supplied patch fields, and atomically replaces the UTF-8 JSON file. This
 prevents two processes editing unrelated settings from reverting one another.
+Reads require the exact integer schema discriminator and reject duplicate JSON
+object keys rather than accepting boolean/integer equivalence or last-key-wins
+ambiguity.
 The store accepts user-facing `trash` and `additive`; hidden `mirror` is not a
 persistable preference. Runtime composition defaults the path to
 `settings.json` beside the selected ledger, so an explicit ledger override

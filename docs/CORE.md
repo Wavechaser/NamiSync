@@ -172,10 +172,13 @@ so no corrective second terminal or circular acknowledgement exists.
 
 The version-3 envelope codec round-trips `StateChanged`, `PhaseChanged`,
 `Progress`, nominal `ItemOutcome` and `IntegrityOutcome` values, `Gap`, and
-`Terminal`, and rejects unknown schema/body versions. Every reliable result
-item carries an explicit `item_type` and `phase`; `run_session` accumulates only
-the nominal `ResultItem` base in emission order, including prior items retained
-across pause/resume. Structural `hasattr(item_id/path)` guessing is forbidden.
+`Terminal`, and rejects unknown schema/body versions. Its scalar decoder is
+non-coercive: schema/sequence/counter fields require exact integers, booleans
+cannot impersonate numbers, and string fields remain strings. Every reliable
+result item carries an explicit `item_type` and `phase`; `run_session`
+accumulates only the nominal `ResultItem` base in emission order, including
+prior items retained across pause/resume. Structural
+`hasattr(item_id/path)` guessing is forbidden.
 
 ## Path And Identity Rules
 

@@ -7,7 +7,7 @@ from time import monotonic, sleep
 import pytest
 
 from namisync.core.evidence import RecordingStatus
-from namisync.core.events import ItemOutcome, PhaseChanged, Terminal
+from namisync.core.events import ItemOutcome, PhaseChanged, StateChanged, Terminal
 from namisync.core.evidence import Outcome
 from namisync.core.session import (
     Disposition,
@@ -227,6 +227,229 @@ def test_pause_releases_custody_and_resume_reopens_snapshotted_payload() -> None
     wait_for(dispatcher, session_id, SessionState.COMPLETED)
     assert opened == [b"initial", b"continued"]
     assert dispatcher.shutdown().custody_released
+
+
+def test_state_change_publication_cannot_fall_behind_a_later_transition(
+    monkeypatch,
+) -> None:
+    entered = Event()
+    pausing_emit_entered = Event()
+    paused_emit_entered = Event()
+    release_pausing_emit = Event()
+
+    def pauseable(context):
+        entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                lambda payload: pauseable,
+                supports_pause=True,
+            )
+        }
+    )
+    session_id = dispatcher.submit("pausable", b"payload")
+    stream = dispatcher.subscribe(session_id)
+    assert entered.wait(2)
+    hub = dispatcher._hubs[session_id]
+    original_emit = hub.emit
+
+    def blocking_emit(body):
+        if (
+            isinstance(body, StateChanged)
+            and body.state is SessionState.PAUSING
+        ):
+            pausing_emit_entered.set()
+            assert release_pausing_emit.wait(2)
+        elif (
+            isinstance(body, StateChanged)
+            and body.state is SessionState.PAUSED
+        ):
+            paused_emit_entered.set()
+        return original_emit(body)
+
+    monkeypatch.setattr(hub, "emit", blocking_emit)
+    pause_result = []
+    pause_thread = Thread(
+        target=lambda: pause_result.append(dispatcher.pause(session_id))
+    )
+    pause_thread.start()
+    assert pausing_emit_entered.wait(2)
+    try:
+        assert not paused_emit_entered.wait(0.1)
+        assert dispatcher.get(session_id).state is SessionState.PAUSING
+    finally:
+        release_pausing_emit.set()
+        pause_thread.join(2)
+
+    assert not pause_thread.is_alive()
+    assert pause_result[0].accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+    assert dispatcher.cancel(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+    states = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except (TimeoutError, StopIteration):
+            break
+        if isinstance(envelope.body, StateChanged):
+            states.append(envelope.body.state)
+    assert states == [
+        SessionState.PENDING,
+        SessionState.RUNNING,
+        SessionState.PAUSING,
+        SessionState.PAUSED,
+        SessionState.CANCELING,
+        SessionState.CANCELED,
+    ]
+    assert dispatcher.shutdown().complete
+
+
+def test_pause_before_invocation_run_snapshots_before_later_cancel(
+    monkeypatch,
+) -> None:
+    run_core_entered = Event()
+    release_run_core = Event()
+    invocation_run_entered = Event()
+    settled_payloads = []
+
+    def run(context):
+        invocation_run_entered.set()
+        return OperationResult(SessionState.COMPLETED)
+
+    def settle_canceled(payload, disposition):
+        settled_payloads.append(payload)
+        if payload != b"continued":
+            raise ValueError("pause did not retain the continuation")
+        return OperationResult(
+            SessionState.CANCELED,
+            disposition=disposition,
+            canceled=True,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                lambda payload: run,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        }
+    )
+    original_run_core = dispatcher._run_core
+
+    def blocking_run_core(*args, **kwargs):
+        run_core_entered.set()
+        assert release_run_core.wait(2)
+        return original_run_core(*args, **kwargs)
+
+    monkeypatch.setattr(dispatcher, "_run_core", blocking_run_core)
+    session_id = dispatcher.submit("pausable", b"initial")
+    assert run_core_entered.wait(2)
+    assert dispatcher.get(session_id).state is SessionState.RUNNING
+    assert dispatcher.pause(session_id).accepted
+    release_run_core.set()
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        with dispatcher._condition:
+            if session_id not in dispatcher._workers:
+                break
+        sleep(0.005)
+    else:
+        raise AssertionError("paused worker did not finish")
+
+    assert dispatcher.cancel(session_id).accepted
+    record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+    assert record.result is not None
+    assert record.result.disposition is Disposition.RAN
+    assert settled_payloads == [b"continued"]
+    assert not invocation_run_entered.is_set()
+    assert dispatcher.shutdown().complete
+
+
+def test_resume_canceled_before_invocation_run_uses_retained_settlement(
+    monkeypatch,
+) -> None:
+    first_entered = Event()
+    resumed_run_core = Event()
+    release_run_core = Event()
+    resumed_invocation = Event()
+    settled: list[tuple[bytes, Disposition]] = []
+
+    def run_for(payload):
+        if payload == b"initial":
+            def pauseable(context):
+                first_entered.set()
+                while True:
+                    context.checkpoint()
+                    sleep(0.005)
+
+            return pauseable
+
+        def should_not_run(context):
+            resumed_invocation.set()
+            return OperationResult(SessionState.COMPLETED)
+
+        return should_not_run
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.CANCELED,
+            disposition=disposition,
+            canceled=True,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                run_for,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        }
+    )
+    session_id = dispatcher.submit("pausable", b"initial")
+    assert first_entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        with dispatcher._condition:
+            if session_id not in dispatcher._workers:
+                break
+        sleep(0.005)
+    else:
+        raise AssertionError("paused worker did not finish")
+
+    original_run_core = dispatcher._run_core
+
+    def blocking_run_core(*args, **kwargs):
+        resumed_run_core.set()
+        assert release_run_core.wait(2)
+        return original_run_core(*args, **kwargs)
+
+    monkeypatch.setattr(dispatcher, "_run_core", blocking_run_core)
+    assert dispatcher.resume(session_id).accepted
+    assert resumed_run_core.wait(2)
+    assert dispatcher.get(session_id).state is SessionState.RUNNING
+    assert dispatcher.cancel(session_id).accepted
+    release_run_core.set()
+    record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+    assert settled == [(b"continued", Disposition.RAN)]
+    assert record.result is not None
+    assert record.result.disposition is Disposition.RAN
+    assert not resumed_invocation.is_set()
+    assert dispatcher.shutdown().complete
 
 
 def test_resume_reenters_at_back_of_contended_resource_queue() -> None:
@@ -718,6 +941,63 @@ def test_queued_cancel_is_unrun_and_terminal_record_survives_until_close() -> No
     assert dispatcher.shutdown().complete
 
 
+def test_subscribe_and_terminal_close_cannot_leave_an_orphan_stream(
+    monkeypatch,
+) -> None:
+    dispatcher = Dispatcher({"short": registration(lambda payload: completed)})
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    hub = dispatcher._hubs[session_id]
+    original_subscribe = hub.subscribe
+    subscribe_entered = Event()
+    release_subscribe = Event()
+    close_done = Event()
+    streams = []
+    failures = []
+
+    def blocking_subscribe(from_seq=None):
+        subscribe_entered.set()
+        assert release_subscribe.wait(2)
+        return original_subscribe(from_seq)
+
+    def subscribe():
+        try:
+            streams.append(dispatcher.subscribe(session_id))
+        except BaseException as error:
+            failures.append(error)
+
+    def close():
+        try:
+            dispatcher.close(session_id)
+        finally:
+            close_done.set()
+
+    monkeypatch.setattr(hub, "subscribe", blocking_subscribe)
+    subscribe_thread = Thread(target=subscribe)
+    close_thread = Thread(target=close)
+    subscribe_thread.start()
+    assert subscribe_entered.wait(2)
+    close_thread.start()
+    try:
+        assert not close_done.wait(0.1)
+    finally:
+        release_subscribe.set()
+        subscribe_thread.join(2)
+        close_thread.join(2)
+
+    assert not subscribe_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert failures == []
+    assert len(streams) == 1
+    stream = streams[0]
+    while True:
+        try:
+            stream.next(0)
+        except StopIteration:
+            break
+    assert dispatcher.shutdown().complete
+
+
 def test_control_rejections_do_not_change_state() -> None:
     release = Event()
     entered = Event()
@@ -1071,6 +1351,23 @@ def test_observer_failure_degrades_audit_without_rewriting_filesystem_status() -
     )
     session_id = dispatcher.submit("observed", b"payload")
     record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert record.result is not None
+    assert record.result.status is SessionState.COMPLETED
+    assert record.result.audit is RecordingStatus.DEGRADED
+    assert dispatcher.shutdown().complete
+
+
+def test_observer_factory_failure_degrades_audit_without_aborting_admission() -> None:
+    def unavailable_history(record):
+        raise OSError("history database cannot be opened")
+
+    dispatcher = Dispatcher(
+        {"observed": registration(lambda payload: completed)},
+        audit_observer_factory=unavailable_history,
+    )
+    session_id = dispatcher.submit("observed", b"payload")
+    record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
     assert record.result is not None
     assert record.result.status is SessionState.COMPLETED
     assert record.result.audit is RecordingStatus.DEGRADED

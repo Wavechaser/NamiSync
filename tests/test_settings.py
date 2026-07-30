@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import multiprocessing
 from pathlib import Path
 
@@ -104,6 +105,48 @@ def test_semantic_settings_reject_hidden_mirror_and_bad_schema(tmp_path: Path) -
         SemanticSettingsStore(tmp_path / "mirror-settings.json").commit(
             SemanticSettingsPatch(deletion_policy=DeletionPolicy.MIRROR)
         )
+
+
+@pytest.mark.parametrize("schema_version", [True, 1.0, "1"])
+def test_semantic_settings_schema_version_requires_an_exact_integer(
+    tmp_path: Path,
+    schema_version: object,
+) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": schema_version,
+                "filters": [],
+                "deletion_policy": "trash",
+                "trash_on_update": True,
+                "preservation": {
+                    "preserve_ads": False,
+                    "preserve_created": True,
+                    "preserve_acl": False,
+                },
+                "propagate_source_casing": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SettingsFormatError, match="unsupported"):
+        SemanticSettingsStore(path).read()
+
+
+def test_semantic_settings_reject_duplicate_json_keys(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(
+        '{"schema_version":1,"schema_version":1,"filters":[],'
+        '"deletion_policy":"trash","trash_on_update":true,'
+        '"preservation":{"preserve_ads":false,"preserve_created":true,'
+        '"preserve_acl":false},"propagate_source_casing":false}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SettingsFormatError, match="duplicate"):
+        SemanticSettingsStore(path).read()
 
 
 def test_concurrent_semantic_commits_reread_under_named_mutex(

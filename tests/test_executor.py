@@ -28,7 +28,14 @@ from namisync.core.execution import (
     RunId,
     validated_run_id,
 )
-from namisync.core.models import CapabilityProfile, EntryKind, FileStat, IgnoreSet, Root
+from namisync.core.models import (
+    CapabilityProfile,
+    EntryKind,
+    FileIdentity,
+    FileStat,
+    IgnoreSet,
+    Root,
+)
 from namisync.core.planning import (
     Assignment,
     DeletionPolicy,
@@ -2684,6 +2691,39 @@ def test_directory_metadata_is_applied_after_child_operation(tmp_path: Path) -> 
     assert [call[0] for call in recorder.calls] == ["copied", "mkdir"]
 
 
+def test_mkdir_refuses_vanished_reviewed_source_directory(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_directory = source / "folder"
+    source_directory.mkdir()
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "folder")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+        reason=OperationReason.REQUIRED_DIRECTORY,
+    )
+    source_directory.rmdir()
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+    )
+
+    assert result.status is SessionState.FAILED
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.reason == "source-missing"
+    assert not (target / "folder").exists()
+    assert recorder.calls == []
+
+
 def test_explicit_directory_chain_supports_long_destination_path(tmp_path: Path) -> None:
     source, target = _roots(tmp_path)
     first_name = "a" * 150
@@ -2807,6 +2847,8 @@ def test_directory_cleanup_succeeds_after_last_child_is_trashed(tmp_path: Path) 
 
 def test_directory_cleanup_succeeds_after_last_child_is_moved(tmp_path: Path) -> None:
     source, target = _roots(tmp_path)
+    source_new_folder = source / "new"
+    source_new_folder.mkdir()
     old_folder = target / "old"
     new_folder = target / "new"
     old_folder.mkdir()
@@ -2817,15 +2859,23 @@ def test_directory_cleanup_succeeds_after_last_child_is_moved(tmp_path: Path) ->
     child_stat = fs.stat(target, r"old\child.bin")
     directory_stat = fs.stat(target, "old")
     assert child_stat is not None and directory_stat is not None
+    source_child = source_new_folder / "child.bin"
+    source_child.write_bytes(b"content")
+    os.utime(
+        source_child,
+        ns=(child_stat.mtime_ns, child_stat.mtime_ns),
+    )
+    source_stat = fs.stat(source, r"new\child.bin")
+    assert source_stat is not None
     time.sleep(0.02)
     move = _operation(
         1,
         OperationKind.MOVE,
-        source_rel_path=None,
+        source_rel_path=r"new\child.bin",
         target_rel_path=r"new\child.bin",
-        source_expected=None,
+        source_expected=source_stat,
         target_expected=None,
-        intended=child_stat,
+        intended=source_stat,
         prior_target_rel_path=r"old\child.bin",
         prior_target_expected=child_stat,
         reason=OperationReason.IDENTITY_RENAME,
@@ -3841,14 +3891,22 @@ def test_move_uses_nonreplacing_target_rename_and_records_result(tmp_path: Path)
     fs = NativeFileSystem()
     old_stat = fs.stat(target, "old.bin")
     assert old_stat is not None
+    source_file = source / "new.bin"
+    source_file.write_bytes(b"moved")
+    os.utime(
+        source_file,
+        ns=(old_stat.mtime_ns, old_stat.mtime_ns),
+    )
+    source_stat = fs.stat(source, "new.bin")
+    assert source_stat is not None
     operation = _operation(
         1,
         OperationKind.MOVE,
-        source_rel_path=None,
+        source_rel_path="new.bin",
         target_rel_path="new.bin",
-        source_expected=None,
+        source_expected=source_stat,
         target_expected=None,
-        intended=old_stat,
+        intended=source_stat,
         prior_target_rel_path="old.bin",
         prior_target_expected=old_stat,
     )
@@ -3860,6 +3918,44 @@ def test_move_uses_nonreplacing_target_rename_and_records_result(tmp_path: Path)
     assert (target / "new.bin").read_bytes() == b"moved"
     assert recorder.calls[0][0] == "moved"
     assert result.bytes_total == 0
+
+
+def test_move_refuses_vanished_reviewed_source_before_target_rename(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / "new.bin"
+    source_file.write_bytes(b"same")
+    (target / "old.bin").write_bytes(b"same")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "new.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.MOVE,
+        source_rel_path="new.bin",
+        target_rel_path="new.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+        prior_target_rel_path="old.bin",
+        prior_target_expected=old_stat,
+        reason=OperationReason.IDENTITY_RENAME,
+    )
+    source_file.unlink()
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+    )
+
+    assert result.status is SessionState.FAILED
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.reason == "source-missing"
+    assert (target / "old.bin").read_bytes() == b"same"
+    assert not (target / "new.bin").exists()
+    assert recorder.calls == []
 
 
 def test_recase_renames_in_place_without_copy_or_trash(tmp_path: Path) -> None:
@@ -3935,14 +4031,22 @@ def test_move_occupancy_or_vanished_old_path_fails_without_overwrite(
     fs = NativeFileSystem()
     old_stat = fs.stat(target, "old.bin")
     assert old_stat is not None
+    source_file = source / "new.bin"
+    source_file.write_bytes(b"old")
+    os.utime(
+        source_file,
+        ns=(old_stat.mtime_ns, old_stat.mtime_ns),
+    )
+    source_stat = fs.stat(source, "new.bin")
+    assert source_stat is not None
     operation = _operation(
         1,
         OperationKind.MOVE,
-        source_rel_path=None,
+        source_rel_path="new.bin",
         target_rel_path="new.bin",
-        source_expected=None,
+        source_expected=source_stat,
         target_expected=None,
-        intended=old_stat,
+        intended=source_stat,
         prior_target_rel_path="old.bin",
         prior_target_expected=old_stat,
     )
@@ -3963,6 +4067,103 @@ def test_move_occupancy_or_vanished_old_path_fails_without_overwrite(
     if not old_missing:
         assert (target / "old.bin").read_bytes() == b"old"
         assert (target / "new.bin").read_bytes() == b"occupant"
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize(
+    ("kind", "source_name", "old_name", "new_name", "reason"),
+    (
+        (
+            OperationKind.MOVE,
+            "new.bin",
+            "old.bin",
+            "new.bin",
+            OperationReason.IDENTITY_RENAME,
+        ),
+        (
+            OperationKind.RECASE,
+            "KEEP.txt",
+            "keep.txt",
+            "KEEP.txt",
+            OperationReason.CASE_MISMATCH,
+        ),
+    ),
+    ids=("move", "recase"),
+)
+def test_pure_rename_refuses_substituted_post_rename_identity(
+    tmp_path: Path,
+    kind: OperationKind,
+    source_name: str,
+    old_name: str,
+    new_name: str,
+    reason: OperationReason,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / source_name
+    old_target = target / old_name
+    source_file.write_bytes(b"same")
+    old_target.write_bytes(b"same")
+
+    class SubstitutingPostRenameFileSystem(NativeFileSystem):
+        def __init__(self) -> None:
+            self.renamed = False
+
+        def rename_new(self, old: Path, new: Path) -> None:
+            super().rename_new(old, new)
+            self.renamed = True
+
+        def stat_path(self, path: Path) -> FileStat | None:
+            actual = super().stat_path(path)
+            if (
+                self.renamed
+                and actual is not None
+                and path.name == new_name
+            ):
+                identity = actual.file_identity
+                assert identity is not None
+                return replace(
+                    actual,
+                    file_identity=FileIdentity(
+                        identity.volume_serial,
+                        identity.file_index + 1,
+                    ),
+                )
+            return actual
+
+    fs = SubstitutingPostRenameFileSystem()
+    old_stat = fs.stat(target, old_name)
+    assert old_stat is not None
+    os.utime(
+        source_file,
+        ns=(old_stat.mtime_ns, old_stat.mtime_ns),
+    )
+    source_stat = fs.stat(source, source_name)
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        kind,
+        source_rel_path=source_name,
+        target_rel_path=new_name,
+        source_expected=source_stat,
+        target_expected=(
+            old_stat if kind is OperationKind.RECASE else None
+        ),
+        intended=(
+            old_stat if kind is OperationKind.RECASE else source_stat
+        ),
+        prior_target_rel_path=old_name,
+        prior_target_expected=old_stat,
+        reason=reason,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+    )
+
+    assert result.status is SessionState.FAILED
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.reason == "target-drift"
     assert recorder.calls == []
 
 

@@ -1693,7 +1693,14 @@ def execute(
                 continue
             if operation.kind is OperationKind.MKDIR:
                 try:
-                    _start_directory(operation, xset, fs, target_root, state)
+                    _start_directory(
+                        operation,
+                        xset,
+                        fs,
+                        source_root,
+                        target_root,
+                        state,
+                    )
                 except (Canceled, PauseRequested):
                     raise
                 except Exception as error:
@@ -1867,7 +1874,15 @@ def _execute_operation(
             progress,
         )
     if operation.kind is OperationKind.MOVE:
-        return _move(operation, xset, recorder, fs, target_root, state)
+        return _move(
+            operation,
+            xset,
+            recorder,
+            fs,
+            source_root,
+            target_root,
+            state,
+        )
     if operation.kind is OperationKind.RECASE:
         return _recase(
             operation,
@@ -2257,10 +2272,24 @@ def _move(
     xset: ExecutionSet,
     recorder: Recorder,
     fs: ExecutorFileSystem,
+    source_root: Path,
     target_root: Path,
     state: _ExecutionState,
 ) -> _Settled:
+    if operation.source_rel_path is None or operation.source_expected is None:
+        raise OperationFailure(
+            ExecutionReason.SOURCE_MISSING,
+            "move operation lacks source evidence",
+        )
     old_rel, old_expected = _prior_target(operation)
+    _guard_present(
+        fs,
+        source_root,
+        operation.source_rel_path,
+        operation.source_expected,
+        missing=ExecutionReason.SOURCE_MISSING,
+        drift=ExecutionReason.SOURCE_DRIFT,
+    )
     _guard_present(
         fs,
         target_root,
@@ -2285,6 +2314,12 @@ def _move(
     moved = _profiled_stat(
         _require_stat_path(fs, new),
         xset.plan.target_profile.stable_file_identity,
+    )
+    _guard_path_stat(
+        moved,
+        old_expected,
+        ExecutionReason.TARGET_DRIFT,
+        "moved target is not the reviewed target version",
     )
     _record(state, detail, lambda: recorder.record_moved(operation.op_id, moved))
     return _Settled(Outcome.SUCCEEDED, detail=detail)
@@ -2345,6 +2380,12 @@ def _recase(
     recased = _profiled_stat(
         _require_stat_path(fs, new),
         xset.plan.target_profile.stable_file_identity,
+    )
+    _guard_path_stat(
+        recased,
+        old_expected,
+        ExecutionReason.TARGET_DRIFT,
+        "recased target is not the reviewed target version",
     )
     _record(
         state,
@@ -2635,10 +2676,24 @@ def _start_directory(
     operation: PlanOperation,
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
+    source_root: Path,
     target_root: Path,
     state: _ExecutionState,
 ) -> None:
     del xset
+    if operation.source_rel_path is None or operation.source_expected is None:
+        raise OperationFailure(
+            ExecutionReason.SOURCE_MISSING,
+            "mkdir operation lacks source evidence",
+        )
+    _guard_present(
+        fs,
+        source_root,
+        operation.source_rel_path,
+        operation.source_expected,
+        missing=ExecutionReason.SOURCE_MISSING,
+        drift=ExecutionReason.SOURCE_DRIFT,
+    )
     _guard_absent(fs, target_root, operation.target_rel_path)
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
     try:

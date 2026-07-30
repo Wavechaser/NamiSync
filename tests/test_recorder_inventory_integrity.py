@@ -16,6 +16,8 @@ from namisync.core.models import (
     FileRecord,
     ScanResult,
     ScanScope,
+    UnsupportedReason,
+    UnsupportedRecord,
     VolumeEvidence,
 )
 from namisync.core.pathing import normalize_relative_path
@@ -36,6 +38,7 @@ def _scan(
     *,
     complete: bool = True,
     scope: ScanScope | None = None,
+    unsupported: tuple[UnsupportedRecord, ...] = (),
 ) -> ScanResult:
     sync_plan = plan(())
     return ScanResult(
@@ -45,7 +48,7 @@ def _scan(
         profile=sync_plan.source_profile,
         files=records,
         directories=(),
-        unsupported=(),
+        unsupported=unsupported,
         warnings=(),
         scope=scope or ScanScope.full(),
         complete=complete,
@@ -62,6 +65,14 @@ def _file(path: str, index: int, *, size: int = 7) -> FileRecord:
         stat.file_identity,
         stat.nlink,
         stat.metadata,
+    )
+
+
+def _unsupported(path: str) -> UnsupportedRecord:
+    return UnsupportedRecord(
+        path,
+        normalize_relative_path(path),
+        UnsupportedReason.ACCESS_DENIED,
     )
 
 
@@ -209,6 +220,87 @@ def test_selected_inventory_reconciles_only_its_complete_scope(tmp_path: Path) -
             "C.txt": "present",
             "D.txt": "present",
         }
+    finally:
+        setup.recorder.close()
+
+
+def test_exact_inventory_marks_absent_unsupported_subject_missing(
+    tmp_path: Path,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    path = "unreadable.txt"
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (), unsupported=(_unsupported(path),)),
+                "unsupported",
+                NOW,
+            )
+        )
+        refreshed = setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(
+                    setup,
+                    (),
+                    scope=ScanScope.selected((path,)),
+                ),
+                "selected-absent",
+                NOW,
+            )
+        )
+
+        with LedgerRepository(setup.recorder.path) as repository:
+            row = repository.get_inventory(setup.source_location_id)[0]
+
+        assert refreshed.missing_count == 1
+        assert row.presence.value == "missing"
+        assert row.missing_since is not None
+    finally:
+        setup.recorder.close()
+
+
+def test_unsupported_reappearance_sets_reappeared_marker(tmp_path: Path) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    path = "unreadable.txt"
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (), unsupported=(_unsupported(path),)),
+                "unsupported",
+                NOW,
+            )
+        )
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, ()),
+                "missing",
+                NOW,
+            )
+        )
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (), unsupported=(_unsupported(path),)),
+                "reappeared-unsupported",
+                NOW,
+            )
+        )
+
+        with LedgerRepository(setup.recorder.path) as repository:
+            row = repository.get_inventory(setup.source_location_id)[0]
+
+        assert row.presence.value == "unsupported"
+        assert row.missing_since is None
+        assert row.reappeared_at is not None
     finally:
         setup.recorder.close()
 

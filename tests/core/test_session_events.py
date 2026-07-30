@@ -722,3 +722,52 @@ def test_event_deserialization_rejects_unknown_schema() -> None:
     serialized["schema_version"] = 999
     with pytest.raises(ValueError, match="unsupported event schema"):
         envelope_from_dict(serialized)
+
+
+def test_event_deserialization_rejects_coercive_scalar_types() -> None:
+    envelope = Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=PhaseChanged("phase"),
+    )
+
+    serialized = envelope_to_dict(envelope)
+    serialized["schema_version"] = float(SCHEMA_VERSION)
+    with pytest.raises(ValueError, match="schema version"):
+        envelope_from_dict(serialized)
+
+    serialized = envelope_to_dict(envelope)
+    serialized["seq"] = 1.0
+    with pytest.raises(ValueError, match="sequence"):
+        envelope_from_dict(serialized)
+
+    serialized = envelope_to_dict(envelope)
+    body = serialized["body"]
+    assert isinstance(body, dict)
+    body["phase"] = 7
+    with pytest.raises(ValueError, match="phase"):
+        envelope_from_dict(serialized)
+
+    canceled = Envelope(
+        session_id=SessionId("b" * 32),
+        seq=1,
+        at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=Terminal(
+            OperationResult(
+                SessionState.CANCELED,
+                disposition=Disposition.RAN,
+                canceled=True,
+            )
+        ),
+    )
+    serialized = envelope_to_dict(canceled)
+    body = serialized["body"]
+    assert isinstance(body, dict)
+    result = body["result"]
+    assert isinstance(result, dict)
+    result["canceled"] = "false"
+    with pytest.raises(ValueError, match="canceled"):
+        envelope_from_dict(serialized)

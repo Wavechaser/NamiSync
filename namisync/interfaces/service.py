@@ -293,12 +293,15 @@ class SessionObserver:
 
     def unsubscribe(self, session_id: str) -> None:
         with self._lock:
-            observation = self._observations.pop(session_id, None)
+            observation = self._observations.get(session_id)
         if observation is None:
             return
         observation.stop.set()
         self._close_streams((observation,))
         self._join_threads((observation,))
+        with self._lock:
+            if self._observations.get(session_id) is observation:
+                self._observations.pop(session_id, None)
 
     def wait(self, session_id: str) -> SessionRecordView:
         with self._lock:
@@ -322,15 +325,32 @@ class SessionObserver:
 
     def close(self) -> None:
         with self._lock:
-            if self._closed:
+            if self._closed and not self._observations:
                 return
             self._closed = True
             observations = tuple(self._observations.values())
-            self._observations.clear()
         for observation in observations:
             observation.stop.set()
         self._close_streams(observations)
-        self._join_threads(observations)
+        try:
+            self._join_threads(observations)
+        finally:
+            with self._lock:
+                for observation in observations:
+                    thread = observation.thread
+                    if (
+                        thread is None
+                        or thread is current_thread()
+                        or not thread.is_alive()
+                    ):
+                        if (
+                            self._observations.get(observation.session_id)
+                            is observation
+                        ):
+                            self._observations.pop(
+                                observation.session_id,
+                                None,
+                            )
 
     def _run(self, observation: _Observation) -> None:
         stream = observation.stream
@@ -427,13 +447,17 @@ class NamiSyncService:
         self._dispatcher = _dispatcher(self._runtime)
         self._observer = SessionObserver(self._dispatcher)
         self._lock = Lock()
+        self._close_lock = Lock()
         self._plan_selections: dict[str, _PlanSelectionState] = {}
         self._session_receipts: dict[str, _SessionReceipt] = {}
         self._receipt_ids_by_session: dict[str, set[str]] = {}
         self._session_receipt_locks = tuple(Lock() for _ in range(64))
+        self._session_receipt_lifecycle = Lock()
         self._visibility_receipts: dict[str, tuple[object, ...]] = {}
         self._closed = False
         self._shutdown: ShutdownView | None = None
+        self._runtime_closed = False
+        self._observer_closed = False
 
     def start_plan(
         self,
@@ -443,13 +467,9 @@ class NamiSyncService:
         deletion_policy: str | None = None,
         command_id: str | None = None,
     ) -> PlanSession:
-        try:
-            source_path, target_path = _validated_paths(source, target)
-        except (OSError, ValueError) as error:
-            raise SyncPathInputError(str(error)) from error
         signature = (
-            str(source_path),
-            str(target_path),
+            source,
+            target,
             deletion_policy,
         )
         with self._session_command_guard(command_id):
@@ -460,6 +480,10 @@ class NamiSyncService:
             )
             if replay is not None:
                 return PlanSession(replay.request_id, replay.session_id)
+            try:
+                source_path, target_path = _validated_paths(source, target)
+            except (OSError, ValueError) as error:
+                raise SyncPathInputError(str(error)) from error
             request = self._runtime.create_plan_request(
                 uuid4().hex,
                 str(source_path),
@@ -478,12 +502,14 @@ class NamiSyncService:
             return result
 
     def read_semantic_settings(self) -> SemanticSettingsView:
+        self._require_open()
         return self._runtime.read_semantic_settings()
 
     def commit_semantic_settings(
         self,
         patch: SemanticSettingsPatchView,
     ) -> SemanticSettingsView:
+        self._require_open()
         return self._runtime.commit_semantic_settings(patch)
 
     def get_plan_review(self, request_id: str):
@@ -640,6 +666,24 @@ class NamiSyncService:
             raise TypeError("expected_revision must be an int or None")
         if type(destructive_acknowledged) is not bool:
             raise TypeError("destructive_acknowledged must be a bool")
+        with self._session_command_guard(command_id):
+            return self._start_execution_once(
+                request_id,
+                verify_after_execute=verify_after_execute,
+                expected_revision=expected_revision,
+                destructive_acknowledged=destructive_acknowledged,
+                command_id=command_id,
+            )
+
+    def _start_execution_once(
+        self,
+        request_id: str,
+        *,
+        verify_after_execute: bool,
+        expected_revision: int | None,
+        destructive_acknowledged: bool,
+        command_id: str | None,
+    ) -> ExecutionSession | ExecutionAdmissionView:
         signature = (
             request_id,
             verify_after_execute,
@@ -837,6 +881,7 @@ class NamiSyncService:
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
     ) -> LocationSession:
+        self._require_open()
         if selected_ids is None and not selected_paths:
             raise ValueError("rebaseline requires an explicit selected scope")
         return self._start_integrity(
@@ -850,6 +895,7 @@ class NamiSyncService:
         )
 
     def save_plan(self, artifact: object) -> None:
+        self._require_open()
         self._runtime.save_plan(artifact)
         request_id = artifact.request.request_id
         with self._lock:
@@ -864,9 +910,11 @@ class NamiSyncService:
                 )
 
     def get_plan(self, request_id: str) -> object:
+        self._require_open()
         return self._runtime.get_plan(request_id)
 
     def drop_plan(self, request_id: str) -> None:
+        self._require_open()
         self._runtime.drop_plan(request_id)
         with self._lock:
             self._plan_selections.pop(request_id, None)
@@ -878,6 +926,7 @@ class NamiSyncService:
         return tuple(session_record_view(item) for item in self._dispatcher.list())
 
     def observe(self, session_id: str, sink: SessionSink) -> SessionRecordView:
+        self._require_open()
         return self._observer.observe(session_id, sink)
 
     def unsubscribe(self, session_id: str) -> None:
@@ -897,18 +946,21 @@ class NamiSyncService:
 
     def close_session(self, session_id: str) -> None:
         self._observer.unsubscribe(session_id)
-        self._dispatcher.close(session_id)
-        with self._lock:
-            for command_id in self._receipt_ids_by_session.pop(
-                session_id,
-                (),
-            ):
-                self._session_receipts.pop(command_id, None)
+        with self._session_receipt_lifecycle_guard():
+            self._dispatcher.close(session_id)
+            with self._lock:
+                for command_id in self._receipt_ids_by_session.pop(
+                    session_id,
+                    (),
+                ):
+                    self._session_receipts.pop(command_id, None)
 
     def get_execution_details(self, run_id: str):
+        self._require_open()
         return self._runtime.get_execution_details(run_id)
 
     def get_inventory_details(self, request_id: str) -> InventoryDetailsView:
+        self._require_open()
         details = self._runtime.get_inventory_details(request_id)
         resolution = _location_resolution_view(details.resolution)
         return InventoryDetailsView(
@@ -942,6 +994,7 @@ class NamiSyncService:
         location_id: int,
         selected_paths: tuple[str, ...] = (),
     ) -> tuple[InventoryRowView, ...]:
+        self._require_open()
         return tuple(
             inventory_row_view(row)
             for row in self._runtime.list_inventory(
@@ -951,6 +1004,7 @@ class NamiSyncService:
         )
 
     def mapping_ids_for_location(self, location_id: int) -> tuple[str, ...]:
+        self._require_open()
         return tuple(
             str(mapping_id)
             for mapping_id in self._runtime.mapping_ids_for_location(
@@ -962,6 +1016,7 @@ class NamiSyncService:
         self,
         location_id: int,
     ) -> tuple[InventoryRowView, ...]:
+        self._require_open()
         return tuple(
             inventory_row_view(row)
             for row in self._runtime.list_unacknowledged_missing(location_id)
@@ -972,6 +1027,7 @@ class NamiSyncService:
         location_id: int,
         verified_before: datetime,
     ) -> tuple[InventoryRowView, ...]:
+        self._require_open()
         return tuple(
             inventory_row_view(row)
             for row in self._runtime.list_stale_inventory(
@@ -988,6 +1044,7 @@ class NamiSyncService:
         *,
         changed_at: datetime,
     ) -> tuple[InventoryDispositionView, ...]:
+        self._require_open()
         return self._change_inventory_visibility(
             "acknowledge",
             command_id,
@@ -1004,6 +1061,7 @@ class NamiSyncService:
         *,
         changed_at: datetime,
     ) -> tuple[InventoryDispositionView, ...]:
+        self._require_open()
         return self._change_inventory_visibility(
             "restore",
             command_id,
@@ -1013,36 +1071,61 @@ class NamiSyncService:
         )
 
     def list_history(self, limit: int = 50):
+        self._require_open()
         return self._runtime.list_history(limit)
 
     def get_history(self, run_token: str):
+        self._require_open()
         return self._runtime.get_history(run_token)
 
     def close(self, timeout: float = 10.0) -> ShutdownView:
+        close_lock = getattr(self, "_close_lock", None)
+        with (nullcontext() if close_lock is None else close_lock):
+            return self._close_once(timeout)
+
+    def _close_once(self, timeout: float) -> ShutdownView:
         with self._lock:
             if self._closed:
-                if self._shutdown is None:
-                    raise RuntimeError("service shutdown did not complete")
-                return self._shutdown
-            self._closed = True
-            self._plan_selections.clear()
-            self._session_receipts.clear()
-            self._receipt_ids_by_session.clear()
-            self._visibility_receipts.clear()
-        try:
-            self._observer.close()
-        finally:
+                if (
+                    self._shutdown is not None
+                    and self._shutdown.complete
+                    and getattr(self, "_runtime_closed", False)
+                    and getattr(self, "_observer_closed", False)
+                ):
+                    return self._shutdown
+            else:
+                self._closed = True
+                self._plan_selections.clear()
+                self._session_receipts.clear()
+                self._receipt_ids_by_session.clear()
+                self._visibility_receipts.clear()
+        observer_failure: BaseException | None = None
+        if not getattr(self, "_observer_closed", False):
             try:
-                result = self._dispatcher.shutdown(timeout=timeout)
-                view = ShutdownView(
-                    complete=result.complete,
-                    unfinished=tuple(str(item) for item in result.unfinished),
-                    custody_released=result.custody_released,
-                )
+                self._observer.close()
+            except BaseException as error:
+                observer_failure = error
+            else:
                 with self._lock:
-                    self._shutdown = view
-            finally:
+                    self._observer_closed = True
+        with self._lock:
+            view = self._shutdown
+        if view is None or not view.complete:
+            result = self._dispatcher.shutdown(timeout=timeout)
+            view = ShutdownView(
+                complete=result.complete,
+                unfinished=tuple(str(item) for item in result.unfinished),
+                custody_released=result.custody_released,
+            )
+            with self._lock:
+                self._shutdown = view
+        if view.complete:
+            if not getattr(self, "_runtime_closed", False):
                 self._runtime.close()
+                with self._lock:
+                    self._runtime_closed = True
+        if observer_failure is not None:
+            raise observer_failure
         return view
 
     def __enter__(self) -> NamiSyncService:
@@ -1116,6 +1199,7 @@ class NamiSyncService:
         self,
         request_id: str,
     ) -> tuple[_PlanSelectionState, object]:
+        self._require_open()
         artifact = self._runtime.get_plan(request_id)
         with self._lock:
             state = self._plan_selections.get(request_id)
@@ -1235,6 +1319,7 @@ class NamiSyncService:
         return tuple(sorted(resolved))
 
     def _session_command_guard(self, command_id: str | None):
+        self._require_open()
         if command_id is None:
             return nullcontext()
         if not command_id:
@@ -1246,6 +1331,18 @@ class NamiSyncService:
             int.from_bytes(digest[:2], "big")
             % len(self._session_receipt_locks)
         ]
+
+    def _require_open(self) -> None:
+        lock = getattr(self, "_lock", None)
+        if lock is None:
+            return
+        with lock:
+            if getattr(self, "_closed", False):
+                raise RuntimeError("service is closed")
+
+    def _session_receipt_lifecycle_guard(self):
+        lock = getattr(self, "_session_receipt_lifecycle", None)
+        return nullcontext() if lock is None else lock
 
     def _resolve_location_ids(
         self,
@@ -1309,15 +1406,35 @@ class NamiSyncService:
             return None
         if not command_id:
             raise ValueError("command_id must be nonempty")
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("service is closed")
-            receipt = self._session_receipts.get(command_id)
-        if receipt is None:
-            return None
-        if receipt.kind != kind or receipt.signature != signature:
-            raise ValueError("command_id was reused for a different command")
-        return receipt
+        with self._session_receipt_lifecycle_guard():
+            with self._lock:
+                if self._closed:
+                    raise RuntimeError("service is closed")
+                receipt = self._session_receipts.get(command_id)
+            if receipt is None:
+                return None
+            if receipt.kind != kind or receipt.signature != signature:
+                raise ValueError("command_id was reused for a different command")
+            get_session = getattr(self._dispatcher, "get", None)
+            if get_session is not None:
+                try:
+                    get_session(receipt.session_id)
+                except SessionNotFound:
+                    with self._lock:
+                        if self._session_receipts.get(command_id) is receipt:
+                            self._session_receipts.pop(command_id, None)
+                            receipt_ids = self._receipt_ids_by_session.get(
+                                receipt.session_id
+                            )
+                            if receipt_ids is not None:
+                                receipt_ids.discard(command_id)
+                                if not receipt_ids:
+                                    self._receipt_ids_by_session.pop(
+                                        receipt.session_id,
+                                        None,
+                                    )
+                    return None
+            return receipt
 
     def _remember_session_receipt(
         self,
@@ -1335,19 +1452,26 @@ class NamiSyncService:
             request_id,
             session_id,
         )
-        with self._lock:
-            if self._closed:
-                return
-            existing = self._session_receipts.get(command_id)
-            if existing is not None and existing != receipt:
-                raise ValueError(
-                    "command_id raced with a different admitted session"
-                )
-            self._session_receipts[command_id] = receipt
-            self._receipt_ids_by_session.setdefault(
-                session_id,
-                set(),
-            ).add(command_id)
+        with self._session_receipt_lifecycle_guard():
+            get_session = getattr(self._dispatcher, "get", None)
+            if get_session is not None:
+                try:
+                    get_session(session_id)
+                except SessionNotFound:
+                    return
+            with self._lock:
+                if self._closed:
+                    return
+                existing = self._session_receipts.get(command_id)
+                if existing is not None and existing != receipt:
+                    raise ValueError(
+                        "command_id raced with a different admitted session"
+                    )
+                self._session_receipts[command_id] = receipt
+                self._receipt_ids_by_session.setdefault(
+                    session_id,
+                    set(),
+                ).add(command_id)
 
     def _change_inventory_visibility(
         self,
@@ -1357,6 +1481,7 @@ class NamiSyncService:
         row_ids: tuple[str, ...],
         changed_at: datetime,
     ) -> tuple[InventoryDispositionView, ...]:
+        self._require_open()
         if not command_id:
             raise ValueError("command_id must be nonempty")
         if (

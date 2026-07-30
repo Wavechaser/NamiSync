@@ -47,6 +47,7 @@ from namisync.core.session import (
     Disposition,
     FailureDetail,
     OperationResult,
+    PauseRequested,
     SessionRecord,
     SessionState,
 )
@@ -231,6 +232,7 @@ class LocalWorkflowRuntime:
             clock=self.clock,
         )
         self._lock = Lock()
+        self._close_lock = Lock()
         self._plans: dict[str, PlanArtifact] = {}
         self._execution_details: dict[str, ExecutionDetails] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
@@ -370,23 +372,15 @@ class LocalWorkflowRuntime:
         started_at = request.started_at or self.clock.now()
         _require_utc(started_at, "execution start")
         request = ExecutionRequest(request.continuation, started_at)
-        with self._lock:
-            run_token = str(request.execution_set.run_id)
-            established = self._execution_started.get(run_token)
-            if resumed:
-                if established is None:
-                    raise ValueError(
-                        "resumed execution was not established by this runtime"
-                    )
-                if established != started_at:
-                    raise ValueError(
-                        "resumed execution start time does not match custody"
-                    )
-            elif established is not None and established != started_at:
-                raise ValueError("execution run token is already in use")
-            else:
-                self._execution_started[run_token] = started_at
-        return _ExecutionInvocation(request, self._deps, resumed=resumed)
+        if resumed:
+            self._validate_execution_start(request)
+        return _ExecutionInvocation(
+            request,
+            self._deps,
+            resumed=resumed,
+            claim_start=self._claim_execution_start,
+            release_start=self._release_execution_start,
+        )
 
     def settle_canceled_execution(
         self,
@@ -410,11 +404,14 @@ class LocalWorkflowRuntime:
                 raise ValueError(
                     "canceled execution does not match runtime custody"
                 )
-        return settle_canceled_sync_execution(
-            request.continuation,
-            disposition,
-            self._deps,
-        )
+        try:
+            return settle_canceled_sync_execution(
+                request.continuation,
+                disposition,
+                self._deps,
+            )
+        finally:
+            self._release_execution_start(request)
 
     def prepare_inventory(self, request: object) -> WorkflowPreparation:
         self._require_open()
@@ -726,14 +723,21 @@ class LocalWorkflowRuntime:
             return _history_view(repository.get(run_token))
 
     def close(self) -> None:
-        with self._lock:
-            if self._closed:
-                return
-            self._closed = True
-            store = self._history_store
-            self._history_store = None
-        if store is not None:
-            store.close()
+        with self._close_lock:
+            with self._lock:
+                if self._closed:
+                    return
+                self._closed = True
+                store = self._history_store
+            try:
+                if store is not None:
+                    store.close()
+            except BaseException:
+                with self._lock:
+                    self._closed = False
+                raise
+            with self._lock:
+                self._history_store = None
 
     def _resolve_volume(self, path: str) -> VolumeId:
         resolved = self._scanner_backend.resolve_root(path)
@@ -820,6 +824,56 @@ class LocalWorkflowRuntime:
         if started_at is None:
             raise RuntimeError("execution start time was not established")
         return _LedgerRunRecording(self, xset, started_at)
+
+    def _validate_execution_start(self, request: ExecutionRequest) -> None:
+        started_at = request.started_at
+        if started_at is None:
+            raise ValueError("execution start time was not established")
+        run_token = str(request.execution_set.run_id)
+        with self._lock:
+            established = self._execution_started.get(run_token)
+        if established is None:
+            raise ValueError(
+                "resumed execution was not established by this runtime"
+            )
+        if established != started_at:
+            raise ValueError(
+                "resumed execution start time does not match custody"
+            )
+
+    def _claim_execution_start(
+        self,
+        request: ExecutionRequest,
+        resumed: bool,
+    ) -> None:
+        started_at = request.started_at
+        if started_at is None:
+            raise ValueError("execution start time was not established")
+        run_token = str(request.execution_set.run_id)
+        with self._lock:
+            established = self._execution_started.get(run_token)
+            if resumed:
+                if established is None:
+                    raise ValueError(
+                        "resumed execution was not established by this runtime"
+                    )
+                if established != started_at:
+                    raise ValueError(
+                        "resumed execution start time does not match custody"
+                    )
+            elif established is not None:
+                raise ValueError("execution run token is already in use")
+            else:
+                self._execution_started[run_token] = started_at
+
+    def _release_execution_start(self, request: ExecutionRequest) -> None:
+        started_at = request.started_at
+        if started_at is None:
+            return
+        run_token = str(request.execution_set.run_id)
+        with self._lock:
+            if self._execution_started.get(run_token) == started_at:
+                self._execution_started.pop(run_token, None)
 
     def _finish_existing_recording(
         self,
@@ -935,22 +989,38 @@ class _ExecutionInvocation:
         deps: SyncDependencies,
         *,
         resumed: bool,
+        claim_start: Callable[[ExecutionRequest, bool], None],
+        release_start: Callable[[ExecutionRequest], None],
     ) -> None:
         self._request = request
         self._continuation = request.continuation
         self._deps = deps
         self._resumed = resumed
+        self._claim_start = claim_start
+        self._release_start = release_start
+        self._started = False
 
     def run(self, context) -> object:
-        return run_execution(
-            self._continuation,
-            context,
-            self._deps,
-            continuation_sink=self._capture_continuation,
-            resumed=self._resumed,
-        )
+        self._ensure_started()
+        paused = False
+        try:
+            return run_execution(
+                self._continuation,
+                context,
+                self._deps,
+                continuation_sink=self._capture_continuation,
+                resumed=self._resumed,
+            )
+        except PauseRequested:
+            paused = True
+            raise
+        finally:
+            if not paused:
+                self._release_start(self._request)
+                self._started = False
 
     def snapshot(self) -> bytes:
+        self._ensure_started()
         return encode_execution_request(
             ExecutionRequest(
                 self._continuation,
@@ -963,6 +1033,12 @@ class _ExecutionInvocation:
         continuation,
     ) -> None:
         self._continuation = continuation
+
+    def _ensure_started(self) -> None:
+        if self._started:
+            return
+        self._claim_start(self._request, self._resumed)
+        self._started = True
 
 
 class _InventoryInvocation:

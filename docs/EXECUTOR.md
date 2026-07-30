@@ -181,18 +181,23 @@ ordinary case-insensitive NTFS the destination aliases the source object and the
 updates only its directory-entry spelling. On a case-sensitive target a
 distinct occupied destination makes the primitive fail without overwrite. The
 executor flushes the parent, re-stats the same file, and records the new target
-spelling and correspondence. It transfers zero bytes, preserves file identity
-and metadata, creates no trash entry, and never recases parent directories.
+spelling and correspondence only when the post-rename stat still identifies the
+reviewed old target version. The recorder repeats that version check
+defensively. It transfers zero bytes, preserves file identity and metadata,
+creates no trash entry, and never recases parent directories.
 
 ### Move
 
-Revalidate old target and new destination, refuse occupancy, perform a
-same-volume non-replacing atomic rename whose primitive itself fails if the
-destination appeared, attempt best-effort parent-directory flushes, stat the
-result, then record correspondence. Source identity must be validated on the
-object being renamed where the OS API permits handle-relative rename. A vanished
-or swapped old target yields a typed skipped/failed outcome and must not leave
-the old ledger row `present`.
+Revalidate the reviewed source-tree subject, old target, and new destination;
+refuse occupancy; then perform a same-volume non-replacing atomic rename whose
+primitive itself fails if the destination appeared. After best-effort
+parent-directory flushes, stat the result and require it to remain the reviewed
+old target version before recording correspondence. The recorder repeats that
+version check defensively; it does not replace it with exact comparison against
+source metadata that planning intentionally treats as equal within target
+timestamp granularity. A vanished or drifted source subject, or a vanished or
+swapped old target, yields a typed failed outcome and must not create a stale
+mapping claim.
 
 ### Composite move-update
 
@@ -203,11 +208,12 @@ both old and new versions, never neither, and leaves no completed mapping claim.
 
 ### Mkdir
 
-Create only the planned directory after validating parent containment and
-expected absence. Existing matching directories may converge to a typed no-op;
-the create primitive must atomically fail if a new entry appeared, and
-wrong-type entries fail. Apply source directory attributes and restore directory
-timestamps only after all descendant child operations have settled.
+Create only the planned directory after revalidating the reviewed source
+directory, parent containment, and expected target absence. Existing matching
+directories may converge to a typed no-op; the create primitive must atomically
+fail if a new entry appeared, and wrong-type entries fail. Apply source
+directory attributes and restore directory timestamps only after all descendant
+child operations have settled.
 Every created directory has its own reviewed mkdir-with-metadata operation from
 an all-directory `DirRecord`; executor never creates implicit parent paths.
 
@@ -268,6 +274,13 @@ if an injected/native boundary reports failure after the syscall took effect.
 Persistent failure records `sharing-violation` after the configured bound and
 independent work continues. Unexpected executor exceptions are contained by the
 session wrapper, release custody, and never suppress already-earned outcomes.
+
+One pause boundary remains unresolved: the durable UPDATE/MOVE_UPDATE retry
+continuation is process-local and is not yet serialized into `ExecutionSet`.
+If pause is honored after such a durable sub-step, resume can reject the
+executor's own mutation. `BUGS.md` records the required product choice between
+persisting that continuation, rolling the owned stage back before pause, or
+deferring pause until the operation reaches a safe boundary.
 
 ## Progress
 
@@ -431,16 +444,16 @@ chunk bands remain private constants, not settings.
   credited those bytes.
 - Trash cannot escape through reparse points, cross volumes, overwrite a trash
   collision, or degrade to copy-delete.
-- Move occupancy, vanished-old-path, wrong type, and retained-missing-row cases
-  produce correct filesystem and recorder outcomes without rolling back other
-  earned records.
+- Move occupancy, vanished/drifted source, vanished-old-path, wrong type,
+  post-rename substitution, and retained-missing-row cases produce correct
+  filesystem and recorder outcomes without rolling back other earned records.
 - Recase preserves target identity/metadata and requested basename spelling,
-  transfers zero bytes, creates no trash, rejects source/old-target drift, and
-  cannot overwrite a distinct destination.
+  transfers zero bytes, creates no trash, rejects source/old-target drift and
+  post-rename substitution, and cannot overwrite a distinct destination.
 - Directory create/delete tests cover full chains, wrong types, nonempty races,
-  no recursive unplanned deletion, and metadata application only after every
-  child operation has settled; every created empty or non-empty directory comes
-  from its own reviewed `DirRecord` operation.
+  vanished source directories, no recursive unplanned deletion, and metadata
+  application only after every child operation has settled; every created empty
+  or non-empty directory comes from its own reviewed `DirRecord` operation.
 - Same-run trash/move cleanup tolerates only directory mtime/link-count churn,
   rejects replacement and identity-less directories, and removes only when
   `RemoveDirectory` confirms emptiness.

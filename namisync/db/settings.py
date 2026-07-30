@@ -90,7 +90,10 @@ class SemanticSettingsStore:
         except FileNotFoundError:
             return SemanticSettings()
         try:
-            value = json.loads(payload.decode("utf-8"))
+            value = json.loads(
+                payload.decode("utf-8"),
+                object_pairs_hook=_unique_settings_object,
+            )
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise SettingsFormatError("settings.json is not valid UTF-8 JSON") from error
         return _decode_settings(value)
@@ -229,7 +232,10 @@ def _decode_settings(value: object) -> SemanticSettings:
     }
     if set(value) != expected:
         raise SettingsFormatError("settings.json has missing or unknown keys")
-    if value["schema_version"] != SETTINGS_SCHEMA_VERSION:
+    if (
+        type(value["schema_version"]) is not int
+        or value["schema_version"] != SETTINGS_SCHEMA_VERSION
+    ):
         raise SettingsFormatError(
             f"unsupported settings schema version: {value['schema_version']}"
         )
@@ -268,6 +274,19 @@ def _decode_settings(value: object) -> SemanticSettings:
         )
     except (TypeError, ValueError) as error:
         raise SettingsFormatError("settings.json contains an invalid value") from error
+
+
+def _unique_settings_object(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise SettingsFormatError(
+                f"settings.json contains duplicate key: {key}"
+            )
+        value[key] = item
+    return value
 
 
 def _atomic_write(path: Path, payload: bytes) -> None:

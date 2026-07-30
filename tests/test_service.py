@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 
 import pytest
 
@@ -42,7 +42,7 @@ from namisync.interfaces.service import (
     SessionObserver,
     SessionRecordView,
 )
-from namisync.workflows import InventoryRequest
+from namisync.workflows import InventoryRequest, LocalWorkflowRuntime
 from namisync.workflows.inventory import (
     IntegrityRequest,
     LocationBinding,
@@ -337,6 +337,42 @@ def test_close_closes_every_stream_before_joining_observers() -> None:
     assert all(stream.closed for stream in streams.values())
 
 
+def test_observer_close_timeout_retains_thread_for_retry() -> None:
+    session_id = "slow-sink"
+    stream = _SequenceStream(
+        _envelope(session_id, 1, PhaseChanged("blocked"))
+    )
+    sink_entered = Event()
+    release_sink = Event()
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            assert requested == session_id
+            return stream
+
+    def sink(_update) -> None:
+        sink_entered.set()
+        assert release_sink.wait(2)
+
+    observer = SessionObserver(Dispatcher(), join_timeout=0.05)
+    observer.observe(session_id, sink)
+    assert sink_entered.wait(0.5)
+    observation = observer._observations[session_id]
+
+    with pytest.raises(TimeoutError, match="slow-sink"):
+        observer.close()
+    assert observer._observations[session_id] is observation
+
+    release_sink.set()
+    assert observation.done.wait(0.5)
+    observer.close()
+    observer.close()
+    assert observer._observations == {}
+
+
 def test_gap_recovery_resubscribes_from_first_undelivered_sequence() -> None:
     session_id = "gap"
     terminal_result = OperationResult(SessionState.COMPLETED)
@@ -484,6 +520,7 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     service._visibility_receipts = {}
     service._closed = False
     service._shutdown = None
+    service._runtime_closed = False
 
     first = service.close()
     second = service.close()
@@ -491,6 +528,323 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     assert log == ["observer", "dispatcher", "runtime"]
     assert first is second
     assert first.complete
+
+
+def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:
+    log: list[str] = []
+    shutdowns = [
+        SimpleNamespace(
+            complete=False,
+            unfinished=("running-session",),
+            custody_released=False,
+        ),
+        SimpleNamespace(
+            complete=True,
+            unfinished=(),
+            custody_released=True,
+        ),
+    ]
+
+    class Observer:
+        def close(self) -> None:
+            log.append("observer")
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            log.append("dispatcher")
+            return shutdowns.pop(0)
+
+    class Runtime:
+        def close(self) -> None:
+            log.append("runtime")
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
+    service._lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+
+    incomplete = service.close(timeout=0)
+    assert not incomplete.complete
+    assert log == ["observer", "dispatcher"]
+    with pytest.raises(RuntimeError, match="service is closed"):
+        service.read_semantic_settings()
+    with pytest.raises(RuntimeError, match="service is closed"):
+        service.start_inventory(root_path="F:\\library")
+    assert log == ["observer", "dispatcher"]
+
+    complete = service.close(timeout=1)
+    cached = service.close(timeout=1)
+
+    assert complete.complete
+    assert cached is complete
+    assert log == ["observer", "dispatcher", "dispatcher", "runtime"]
+
+
+def test_service_close_retries_an_observer_join_failure() -> None:
+    log: list[str] = []
+    observer_attempts = 0
+
+    class Observer:
+        def close(self) -> None:
+            nonlocal observer_attempts
+            observer_attempts += 1
+            log.append("observer")
+            if observer_attempts == 1:
+                raise TimeoutError("observer still running")
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            log.append("dispatcher")
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    class Runtime:
+        def close(self) -> None:
+            log.append("runtime")
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
+    service._lock = Lock()
+    service._close_lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+    service._observer_closed = False
+
+    with pytest.raises(TimeoutError, match="observer still running"):
+        service.close()
+    completed = service.close()
+    cached = service.close()
+
+    assert completed.complete
+    assert cached is completed
+    assert log == ["observer", "dispatcher", "runtime", "observer"]
+
+
+def test_runtime_close_failure_can_be_retried_without_repeating_shutdown() -> None:
+    log: list[str] = []
+    close_attempts = 0
+
+    class Observer:
+        def close(self) -> None:
+            log.append("observer")
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            log.append("dispatcher")
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    class Runtime:
+        def close(self) -> None:
+            nonlocal close_attempts
+            close_attempts += 1
+            log.append("runtime")
+            if close_attempts == 1:
+                raise RuntimeError("history close failed")
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
+    service._lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+
+    with pytest.raises(RuntimeError, match="history close failed"):
+        service.close()
+    completed = service.close()
+    cached = service.close()
+
+    assert completed.complete
+    assert cached is completed
+    assert log == ["observer", "dispatcher", "runtime", "runtime"]
+
+
+def test_concurrent_service_close_serializes_dependency_retry() -> None:
+    first_runtime_close = Event()
+    release_first_close = Event()
+    second_started = Event()
+    second_done = Event()
+    close_attempts = 0
+    shutdown_attempts = 0
+
+    class Observer:
+        def close(self) -> None:
+            pass
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            nonlocal shutdown_attempts
+            shutdown_attempts += 1
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    class Runtime:
+        def close(self) -> None:
+            nonlocal close_attempts
+            close_attempts += 1
+            if close_attempts == 1:
+                first_runtime_close.set()
+                assert release_first_close.wait(2)
+                raise RuntimeError("first close failed")
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
+    service._lock = Lock()
+    service._close_lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+    first_errors: list[Exception] = []
+    second_results: list[object] = []
+
+    def first_close() -> None:
+        try:
+            service.close()
+        except Exception as error:
+            first_errors.append(error)
+
+    def second_close() -> None:
+        second_started.set()
+        second_results.append(service.close())
+        second_done.set()
+
+    first = Thread(target=first_close)
+    second = Thread(target=second_close)
+    first.start()
+    assert first_runtime_close.wait(1)
+    second.start()
+    assert second_started.wait(1)
+    assert not second_done.wait(0.1)
+    release_first_close.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert len(first_errors) == 1
+    assert str(first_errors[0]) == "first close failed"
+    assert second_results[0].complete
+    assert shutdown_attempts == 1
+    assert close_attempts == 2
+
+
+def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
+    attempts = 0
+
+    class Store:
+        def close(self) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise RuntimeError("writer close failed")
+
+    store = Store()
+    runtime = object.__new__(LocalWorkflowRuntime)
+    runtime._lock = Lock()
+    runtime._close_lock = Lock()
+    runtime._closed = False
+    runtime._history_store = store
+
+    with pytest.raises(RuntimeError, match="writer close failed"):
+        runtime.close()
+    assert not runtime._closed
+    assert runtime._history_store is store
+
+    runtime.close()
+    assert runtime._closed
+    assert runtime._history_store is None
+    assert attempts == 2
+
+
+def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
+    first_entered = Event()
+    release_first = Event()
+    second_started = Event()
+    second_done = Event()
+    attempts = 0
+
+    class Store:
+        def close(self) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                first_entered.set()
+                assert release_first.wait(2)
+                raise RuntimeError("writer close failed")
+
+    store = Store()
+    runtime = object.__new__(LocalWorkflowRuntime)
+    runtime._lock = Lock()
+    runtime._close_lock = Lock()
+    runtime._closed = False
+    runtime._history_store = store
+    first_errors: list[Exception] = []
+
+    def first_close() -> None:
+        try:
+            runtime.close()
+        except Exception as error:
+            first_errors.append(error)
+
+    def second_close() -> None:
+        second_started.set()
+        runtime.close()
+        second_done.set()
+
+    first = Thread(target=first_close)
+    second = Thread(target=second_close)
+    first.start()
+    assert first_entered.wait(1)
+    second.start()
+    assert second_started.wait(1)
+    assert not second_done.wait(0.1)
+    release_first.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert len(first_errors) == 1
+    assert second_done.is_set()
+    assert attempts == 2
+    assert runtime._closed
+    assert runtime._history_store is None
 
 
 def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> None:

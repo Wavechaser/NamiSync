@@ -108,12 +108,17 @@ class Envelope:
     body: object
 
     def __post_init__(self) -> None:
-        if not self.session_id:
+        if not isinstance(self.session_id, str) or not self.session_id:
             raise ValueError("session_id must be non-empty")
-        if self.seq < 1:
+        if type(self.seq) is not int or self.seq < 1:
             raise ValueError("event sequence must be positive")
-        if self.schema_version != SCHEMA_VERSION:
+        if (
+            type(self.schema_version) is not int
+            or self.schema_version != SCHEMA_VERSION
+        ):
             raise ValueError(f"unsupported event schema version: {self.schema_version}")
+        if not isinstance(self.at, datetime):
+            raise TypeError("event timestamp must be a datetime")
         if self.at.tzinfo is None or self.at.utcoffset() is None:
             raise ValueError("event timestamp must be timezone-aware")
         if self.at.utcoffset() != timezone.utc.utcoffset(self.at):
@@ -175,39 +180,58 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
         SessionState,
     )
 
-    version = int(data["schema_version"])
+    version = _integer(data["schema_version"], "event schema version")
     if version != SCHEMA_VERSION:
         raise ValueError(f"unsupported event schema version: {version}")
-    body_type = str(data["body_type"])
+    body_type = _string(data["body_type"], "event body type")
     raw = data["body"]
     if not isinstance(raw, Mapping):
         raise TypeError("event body must be a mapping")
     if body_type == "StateChanged":
-        body: object = StateChanged(SessionState(str(raw["state"])))
+        body: object = StateChanged(
+            SessionState(_string(raw["state"], "state event state"))
+        )
     elif body_type == "PhaseChanged":
-        body = PhaseChanged(str(raw["phase"]))
+        body = PhaseChanged(_string(raw["phase"], "phase event phase"))
     elif body_type == "Progress":
         body = Progress(
-            items_done=int(raw["items_done"]),
-            items_total=_optional_int(raw["items_total"]),
-            bytes_done=int(raw["bytes_done"]),
-            bytes_total=_optional_int(raw["bytes_total"]),
-            current_path=_optional_str(raw["current_path"]),
+            items_done=_integer(
+                raw["items_done"], "progress items_done"
+            ),
+            items_total=_optional_int(
+                raw["items_total"], "progress items_total"
+            ),
+            bytes_done=_integer(
+                raw["bytes_done"], "progress bytes_done"
+            ),
+            bytes_total=_optional_int(
+                raw["bytes_total"], "progress bytes_total"
+            ),
+            current_path=_optional_str(
+                raw["current_path"], "progress current_path"
+            ),
         )
     elif body_type in {"ItemOutcome", "IntegrityOutcome"}:
         body = result_item_from_dict(raw)
         if type(body).__name__ != body_type:
             raise ValueError("event body type disagrees with item_type")
     elif body_type == "Gap":
-        body = Gap(int(raw["first_missed_seq"]))
+        body = Gap(
+            _integer(raw["first_missed_seq"], "gap first_missed_seq")
+        )
     elif body_type == "Terminal":
         result_raw = raw["result"]
         if not isinstance(result_raw, Mapping):
             raise TypeError("terminal result must be a mapping")
         error_raw = result_raw.get("error")
         error = None
-        if isinstance(error_raw, Mapping):
-            error = FailureDetail(str(error_raw["type_name"]), str(error_raw["message"]))
+        if error_raw is not None:
+            if not isinstance(error_raw, Mapping):
+                raise ValueError("terminal result error must be an object or null")
+            error = FailureDetail(
+                _string(error_raw["type_name"], "terminal error type_name"),
+                _string(error_raw["message"], "terminal error message"),
+            )
         items_raw = result_raw.get("items", ())
         if not isinstance(items_raw, list):
             raise TypeError("terminal items must be a list")
@@ -216,41 +240,77 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
             raise TypeError("terminal phases must be a list")
         body = Terminal(
             OperationResult(
-                status=SessionState(str(result_raw["status"])),
-                recording=RecordingStatus(str(result_raw["recording"])),
-                audit=RecordingStatus(str(result_raw["audit"])),
-                disposition=Disposition(str(result_raw["disposition"])),
-                canceled=bool(result_raw["canceled"]),
+                status=SessionState(
+                    _string(result_raw["status"], "terminal status")
+                ),
+                recording=RecordingStatus(
+                    _string(result_raw["recording"], "terminal recording")
+                ),
+                audit=RecordingStatus(
+                    _string(result_raw["audit"], "terminal audit")
+                ),
+                disposition=Disposition(
+                    _string(
+                        result_raw["disposition"],
+                        "terminal disposition",
+                    )
+                ),
+                canceled=_boolean(
+                    result_raw["canceled"], "terminal canceled"
+                ),
                 items=tuple(result_item_from_dict(item) for item in items_raw),
                 phases=tuple(
                     PhaseResult(
-                        phase=str(_mapping_value(phase, "phase")),
+                        phase=_string(
+                            _mapping_value(phase, "phase"),
+                            "terminal phase name",
+                        ),
                         status=PhaseStatus(
-                            str(_mapping_value(phase, "status"))
+                            _string(
+                                _mapping_value(phase, "status"),
+                                "terminal phase status",
+                            )
                         ),
-                        items_done=int(_mapping_value(phase, "items_done")),
+                        items_done=_integer(
+                            _mapping_value(phase, "items_done"),
+                            "terminal phase items_done",
+                        ),
                         items_total=_optional_int(
-                            _mapping_value(phase, "items_total")
+                            _mapping_value(phase, "items_total"),
+                            "terminal phase items_total",
                         ),
-                        bytes_done=int(_mapping_value(phase, "bytes_done")),
+                        bytes_done=_integer(
+                            _mapping_value(phase, "bytes_done"),
+                            "terminal phase bytes_done",
+                        ),
                         bytes_total=_optional_int(
-                            _mapping_value(phase, "bytes_total")
+                            _mapping_value(phase, "bytes_total"),
+                            "terminal phase bytes_total",
                         ),
-                        error=_optional_str(_mapping_value(phase, "error")),
+                        error=_optional_str(
+                            _mapping_value(phase, "error"),
+                            "terminal phase error",
+                        ),
                     )
                     for phase in phases_raw
                 ),
-                bytes_done=int(result_raw["bytes_done"]),
-                bytes_total=int(result_raw["bytes_total"]),
+                bytes_done=_integer(
+                    result_raw["bytes_done"], "terminal bytes_done"
+                ),
+                bytes_total=_integer(
+                    result_raw["bytes_total"], "terminal bytes_total"
+                ),
                 error=error,
             )
         )
     else:
         raise ValueError(f"unsupported event body type: {body_type}")
     return Envelope(
-        session_id=SessionId(str(data["session_id"])),
-        seq=int(data["seq"]),
-        at=datetime.fromisoformat(str(data["at"])),
+        session_id=SessionId(
+            _string(data["session_id"], "event session_id")
+        ),
+        seq=_integer(data["seq"], "event sequence"),
+        at=_datetime(data["at"], "event timestamp"),
         schema_version=version,
         body=body,
     )
@@ -298,8 +358,8 @@ def result_item_to_dict(item: ResultItem) -> dict[str, object]:
 def result_item_from_dict(data: Mapping[str, object]) -> ResultItem:
     """Deserialize a tagged result item and reject structural guessing."""
 
-    item_type = str(data["item_type"])
-    phase = str(data["phase"])
+    item_type = _string(data["item_type"], "result item type")
+    phase = _string(data["phase"], "result item phase")
     if item_type == ItemOutcome.item_type:
         if phase != ItemOutcome.phase:
             raise ValueError("operation result item must use execute phase")
@@ -307,38 +367,64 @@ def result_item_from_dict(data: Mapping[str, object]) -> ResultItem:
         if not isinstance(detail, Mapping):
             raise TypeError("operation item detail must be a mapping")
         return ItemOutcome(
-            item_id=str(data["item_id"]),
-            kind=str(data["kind"]),
-            path=str(data["path"]),
-            outcome=Outcome(str(data["result"])),
-            reason=_optional_str(data.get("reason")),
+            item_id=_string(data["item_id"], "operation item id"),
+            kind=_string(data["kind"], "operation item kind"),
+            path=_string(data["path"], "operation item path"),
+            outcome=Outcome(
+                _string(data["result"], "operation item result")
+            ),
+            reason=_optional_str(
+                data.get("reason"), "operation item reason"
+            ),
             detail=dict(detail),
         )
     if item_type == IntegrityOutcome.item_type:
         if phase not in {mode.value for mode in IntegrityMode}:
             raise ValueError("integrity result item has an invalid phase")
         return IntegrityOutcome(
-            item_id=str(data["item_id"]),
-            row_id=_optional_str(data["row_id"]),
-            location_id=_optional_str(data["location_id"]),
-            path=str(data["path"]),
-            result=IntegrityResult(str(data["result"])),
+            item_id=_string(data["item_id"], "integrity item id"),
+            row_id=_optional_str(
+                data["row_id"], "integrity item row_id"
+            ),
+            location_id=_optional_str(
+                data["location_id"], "integrity item location_id"
+            ),
+            path=_string(data["path"], "integrity item path"),
+            result=IntegrityResult(
+                _string(data["result"], "integrity item result")
+            ),
             reason=(
                 None
                 if data.get("reason") is None
-                else IntegrityReason(str(data["reason"]))
+                else IntegrityReason(
+                    _string(data["reason"], "integrity item reason")
+                )
             ),
-            detail=_optional_str(data.get("detail")),
+            detail=_optional_str(
+                data.get("detail"), "integrity item detail"
+            ),
             read_strategy=(
                 None
                 if data.get("read_strategy") is None
-                else ReadStrategy(str(data["read_strategy"]))
+                else ReadStrategy(
+                    _string(
+                        data["read_strategy"],
+                        "integrity item read_strategy",
+                    )
+                )
             ),
-            recording=RecordingStatus(str(data["recording"])),
+            recording=RecordingStatus(
+                _string(data["recording"], "integrity item recording")
+            ),
             record_disposition=(
                 None
                 if data.get("record_disposition") is None
-                else RecordDisposition(str(data["record_disposition"]))
+                else RecordDisposition(
+                    _string(
+                        data["record_disposition"],
+                        "integrity item record_disposition",
+                    )
+                )
             ),
             phase=phase,
         )
@@ -375,12 +461,37 @@ def _result_to_dict(result: "OperationResult") -> dict[str, object]:
     }
 
 
-def _optional_int(value: object) -> int | None:
-    return None if value is None else int(value)
+def _integer(value: object, context: str) -> int:
+    if type(value) is not int:
+        raise ValueError(f"{context} must be an integer")
+    return value
 
 
-def _optional_str(value: object) -> str | None:
-    return None if value is None else str(value)
+def _optional_int(value: object, context: str) -> int | None:
+    return None if value is None else _integer(value, context)
+
+
+def _string(value: object, context: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{context} must be a string")
+    return value
+
+
+def _optional_str(value: object, context: str) -> str | None:
+    return None if value is None else _string(value, context)
+
+
+def _boolean(value: object, context: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{context} must be a boolean")
+    return value
+
+
+def _datetime(value: object, context: str) -> datetime:
+    try:
+        return datetime.fromisoformat(_string(value, context))
+    except ValueError as error:
+        raise ValueError(f"{context} must be an ISO-8601 datetime") from error
 
 
 def _mapping_value(value: object, key: str) -> object:

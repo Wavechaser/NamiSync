@@ -28,6 +28,31 @@ to a global chronological list.
 
 ### M1 executor refactor
 
+- SEVERE - OPEN (2026-07-30). Pause after a durable retry sub-step. UPDATE can
+  pause after creating its backup but before a retried publish, and MOVE_UPDATE
+  can pause after publishing the new target but before trashing the old one;
+  resume then restarts from scan-time guards and rejects the executor's own
+  durable mutation as drift or collision. Cause: retry continuations live only
+  in process-local `_ExecutionState` and are not carried by the paused
+  `ExecutionSet`. The fix needs a product decision: persist operation-local
+  continuation, roll back owned durable stages before honoring pause, or defer
+  pause until an operation-safe boundary.
+- MODERATE - FIXED (2026-07-30). Pure-move recording within timestamp
+  granularity. A valid MOVE could rename the reviewed target and then degrade
+  recording when its timestamp differed exactly from the source while still
+  falling within the target volume's equality granularity. Cause: the recorder
+  compared a pure rename result to source-derived intended metadata before
+  checking the reviewed old-target version; fixed by making
+  `prior_target_expected` the complete pure MOVE/RECASE attestation while
+  retaining intended-content validation for MOVE_UPDATE.
+- SEVERE - FIXED (2026-07-30). Pure rename and directory source revalidation.
+  MOVE could rename a reviewed old target after the corresponding source
+  subject vanished, MKDIR could create a target for a vanished source
+  directory, and MOVE/RECASE recording could bless a substituted post-rename
+  target with matching size/mtime. Cause: those handlers skipped the universal
+  source point-of-touch guard and accepted intended metadata without binding the
+  rename result to the reviewed old target identity; fixed with source guards,
+  post-rename version checks, and the same defensive recorder check.
 - MODERATE - FIXED (2026-07-25). Post-publish metadata repair. On volumes with
   last-access updates enabled, observing a renamed file could change its access
   time and force the otherwise conditional second metadata rewrite and flush on
@@ -62,10 +87,140 @@ to a global chronological list.
   retry assumed every operation could restart; fixed by validated continuation
   from the last durable sub-step.
 
+## DISPATCHER AND HISTORY
+
+### M1 integrated adversarial review
+
+- MODERATE - OPEN (2026-07-30). Audit timeout parity. A history finalization
+  that commits after the audit acknowledgement deadline leaves the delivered
+  immutable terminal at `audit=degraded` while the retained history row says
+  `audit=ok`. Cause: `HistoryObserver.finalize` persists the provisional OK
+  value before the audit pump knows whether acknowledgement met its deadline.
+  Correcting this needs one settlement policy for a timed-out writer: cancel or
+  compensate the late write, persist the final degraded axis through a separate
+  deadline-aware handshake, or explicitly relax live/reopened parity.
+- SEVERE - FIXED (2026-07-30). Resumed pre-invocation cancellation. Canceling a
+  paused execution just after resume published RUNNING but before
+  `invocation.run()` produced a generic canceled terminal while leaving runtime
+  custody and the ledger run unfinished. Cause: the dispatcher's initial
+  checkpoint bypassed the registration-owned cancellation settlement for an
+  already-started attempt; fixed by routing that race through the retained
+  payload settlement before terminal publication.
+- SEVERE - FIXED (2026-07-30). Audit construction failure isolation. A corrupt
+  or unwritable history database raised from the observer factory before the
+  session was admitted, preventing filesystem and ledger work even though
+  history is an independent axis. Cause: admission isolated observer delivery
+  failures but not factory/open failures; fixed with a degraded-audit sentinel
+  that preserves admission and yields `audit=degraded`.
+- MODERATE - FIXED (2026-07-30). Lifecycle event ordering. A delayed
+  `StateChanged(PAUSING)` publication could be overtaken by persisted
+  `PAUSED`, leaving existing and late subscribers with a regressed current
+  state. Cause: record transitions were locked but their reliable events were
+  emitted after releasing the transition lock; fixed with a per-session
+  publication gate spanning each transition and matching state event.
+- MODERATE - FIXED (2026-07-30). Subscribe/close stream orphan. Subscription
+  could capture a terminal session hub, lose a race with explicit close, and
+  then append a stream to the already-closed hub; after replay drained, the
+  stream never closed. Cause: hub lookup and subscription registration were
+  separate critical sections; fixed by registering under the dispatcher
+  condition so either subscribe or terminal close wins completely.
+
+## INTERFACES
+
+### M1 integrated adversarial review
+
+- MODERATE - FIXED (2026-07-30). Observer-close retry. A blocked sink that
+  exceeded the observer join timeout was removed from retained observation
+  state; after the first service close raised, the next close returned cached
+  success while that observer thread could still be alive. Cause: both observer
+  and service treated a failed join as an irreversible first attempt; fixed by
+  retaining unjoined observations and retrying their close before the service
+  may return cached success.
+- MODERATE - FIXED (2026-07-30). Dependency-close retry. Once dispatcher
+  shutdown completed, a runtime/history close exception made every later
+  service close fail immediately; the runtime also discarded the store whose
+  writer close failed. Cause: dispatcher completion and dependency closure
+  shared one cache state, while runtime closure became irreversible before its
+  dependency succeeded; fixed by caching dispatcher completion separately,
+  serializing close attempts, retrying only runtime closure, and retaining the
+  store/open state after a failed close.
+- MODERATE - FIXED (2026-07-30). Session-receipt lifetime races. A retry could
+  replay a session after dispatcher close but before receipt removal, while the
+  inverse admit/close interleaving could publish a receipt for an already
+  closed session. Cause: dispatcher retention and service receipt
+  lookup/publication/removal had separate synchronization; fixed with one
+  lifecycle gate and retained-session checks around all three transitions.
+- MODERATE - FIXED (2026-07-30). Closed-facade boundary. After an incomplete
+  shutdown correctly kept runtime dependencies alive for a later close retry,
+  public plan, settings, inventory, integrity, history, and observation calls
+  could still reach those dependencies and recreate cleared process state.
+  Cause: `_closed` guarded receipt-bearing commands but not the complete domain
+  facade; fixed with a shared open check while retaining only session
+  status/control and shutdown cleanup after closure begins.
+- MODERATE - FIXED (2026-07-30). Incomplete service shutdown. A shutdown
+  deadline permanently cached `complete=False` and still closed runtime/history,
+  so non-cooperative workers could finalize through closed dependencies and a
+  later `close()` could not recover. Cause: admission closure, dependency
+  closure, and completed shutdown were one irreversible flag; fixed by keeping
+  runtime open after an incomplete dispatcher result and allowing close to
+  retry until completion.
+
+## DATABASE AND INVENTORY
+
+### M1 integrated adversarial review
+
+- SEVERE - FIXED (2026-07-30). Non-authoritative full integrity verification.
+  A full or stale-scope refresh with a global enumeration failure still entered
+  the verifier and returned completed. Cause: the incomplete-scan refusal was
+  conditional on exact selected paths; fixed by refusing every incomplete
+  unbounded refresh and retaining only the fully explained exact-subject
+  exception.
+- MODERATE - FIXED (2026-07-30). Torn multi-batch inventory read. Selecting
+  more than 400 canonical keys could observe old rows in one batch and a newer
+  concurrent commit in the next, producing a state that never existed. Cause:
+  each bounded SELECT ran in its own autocommit snapshot; fixed with one explicit
+  read transaction spanning all batches.
+- MODERATE - FIXED (2026-07-30). Unsupported-row reconciliation. A completed
+  exact PATHS refresh did not mark an absent prior unsupported row missing, and
+  missing-to-unsupported reappearance failed to set `reappeared_at`. Cause: the
+  exact absent update filtered only `present` and unsupported upsert lacked the
+  present path's transition marker; fixed by reconciling both visible states
+  and applying the same reappearance transition.
+
+## CORE AND SECURITY PROTOCOLS
+
+### M1 integrated adversarial review
+
+- MODERATE - FIXED (2026-07-30). Coercive event decoding. Schema and sequence
+  floats were truncated, scalar fields were stringified, and terminal
+  `canceled="false"` became true. Cause: the versioned event decoder used
+  Python conversion constructors instead of validating transported JSON types;
+  fixed with exact integer/boolean/string decoding across envelopes, terminal
+  results, phases, and nominal items.
+- MODERATE - FIXED (2026-07-30). Bridge JSON ambiguity. The security spike
+  accepted boolean/float schema 1, duplicate keys, exponent-overflow infinity,
+  and escaped lone surrogates; a handler could run on the last two before output
+  validation noticed them. Cause: validation covered JSON syntax and top-level
+  shape but not exact discriminators or recursive request values; fixed with
+  duplicate-key rejection, exact schema typing, valid-Unicode checks, and
+  recursive finite JSON validation before handler dispatch.
+
 ## WORKFLOW AND CLI
 
 ### M1 Stage 5.5 adversarial closure
 
+- SEVERE - FIXED (2026-07-30). Canceled-settlement custody release. A failed
+  ledger open or final write while settling a paused or just-resumed execution
+  left its exact run token permanently claimed in
+  `LocalWorkflowRuntime._execution_started`, even though dispatcher made the
+  session terminal. Cause: only successful recorder finish removed the
+  process-local claim; fixed by releasing the validated exact start claim in a
+  settlement `finally`, including thrown-open and degraded-finish regressions.
+- MODERATE - FIXED (2026-07-30). Concurrent workflow-runtime close. One caller
+  could mark the runtime closed and block in history-store close; a second
+  caller then returned success before the first failed and reopened the runtime.
+  Cause: the state lock protected flags but not the dependency-close attempt;
+  fixed with a runtime-local close gate that serializes failure and retry.
 - SEVERE - FIXED (2026-07-30). Resumed-run ledger settlement. A coherently
   tampered execute/verify continuation was correctly refused before domain work,
   but the refusal tried to reopen recording from the tampered selection. The
@@ -94,11 +249,13 @@ to a global chronological list.
   handling every named admission view defensively.
 - MODERATE - FIXED (2026-07-30). Concurrent retry admission. Two simultaneous
   first deliveries with one plan/inventory/integrity command id could both pass
-  receipt lookup and submit separate sessions; ID-based retries also reread
-  mutable inventory before finding their receipt. Cause: lookup and receipt
-  publication were separately locked around an unguarded admission; fixed with
-  bounded command-id single-flight guards, raw canonical ID-gesture signatures,
-  and shutdown-safe receipt publication.
+  receipt lookup and submit separate sessions; the initial closure left
+  execution outside that guard, and a plan retry revalidated paths before
+  finding its receipt. ID-based retries also reread mutable inventory first.
+  Cause: retry protection was applied inconsistently across session-creating
+  families; fixed with bounded command-id single-flight guards around every
+  family, raw gesture signatures checked before mutable validation, and
+  shutdown-safe receipt publication.
 - MODERATE - FIXED (2026-07-30). Mixed folder selection. A single
   safety-disabled operation beneath a folder made the entire folder toggle
   raise, leaving otherwise selectable siblings inert. Cause: node expansion
@@ -110,6 +267,20 @@ to a global chronological list.
   schemas. Cause: the shared decoder coerced version values with `int()`; fixed
   by requiring an exact JSON integer and the exact kind-specific version,
   including float, string, and boolean rejection coverage.
+- MODERATE - FIXED (2026-07-30). Workflow and settings JSON coercion. Inventory
+  and integrity continuation fields converted strings, floats, booleans, and
+  nulls with `str()`/`int()`/`bool()`, while settings accepted boolean/float
+  schema version 1 and duplicate keys used last-key-wins semantics. Cause:
+  version checks were hardened without applying the same rule to the remaining
+  persisted shape; fixed with exact field/type validation and duplicate-key
+  rejection at both boundaries.
+- MODERATE - FIXED (2026-07-30). Pre-recording execution custody. Opening a
+  fresh execution claimed its run token before the dispatcher entered workflow
+  work, and fresh commitment/preflight refusal or exception never released it;
+  pausing at the runner-entry checkpoint also failed to snapshot `started_at`,
+  so later cancel settlement failed. Cause: custody was attached to adapter
+  decode rather than actual/snapshotted start; fixed with lazy claim, terminal
+  cleanup, and entry-checkpoint pause snapshotting.
 
 ### M1 post-execution integration
 

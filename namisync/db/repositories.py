@@ -189,17 +189,23 @@ class LedgerRepository:
         else:
             keys = sorted({normalize_relative_path(path) for path in path_keys})
             rows = []
-            for start in range(0, len(keys), 400):
-                chunk = keys[start : start + 400]
-                placeholders = ",".join("?" for _ in chunk)
-                rows.extend(
-                    self._connection.execute(
-                        f"""SELECT * FROM inventory
-                              WHERE location_id = ? AND rel_path_key IN ({placeholders})
-                              ORDER BY rel_path_key, id""",
-                        (location_id, *chunk),
-                    ).fetchall()
-                )
+            if keys:
+                self._connection.execute("BEGIN")
+                try:
+                    for start in range(0, len(keys), 400):
+                        chunk = keys[start : start + 400]
+                        placeholders = ",".join("?" for _ in chunk)
+                        rows.extend(
+                            self._connection.execute(
+                                f"""SELECT * FROM inventory
+                                      WHERE location_id = ?
+                                        AND rel_path_key IN ({placeholders})
+                                      ORDER BY rel_path_key, id""",
+                                (location_id, *chunk),
+                            ).fetchall()
+                        )
+                finally:
+                    self._connection.rollback()
         return tuple(_inventory_snapshot(row) for row in rows)
 
     def get_location(self, location_id: int) -> LocationSnapshot:

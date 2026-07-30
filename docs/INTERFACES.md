@@ -142,14 +142,18 @@ If a queued or resumed activity becomes unresolved at wake-up, its retained
 same corrective guidance. A provisional ambiguous binding exposes no selected
 mount; only an actual prior explicit choice is reported as selected.
 
-Session-creating plan, inventory, and integrity commands use bounded
-command-id single-flight guards around receipt lookup, mutable scope
-resolution, admission, and receipt publication. ID-based retry signatures bind
-the canonical raw opaque-id gesture and are checked before rereading mutable
-inventory. Different command ids remain independently admissible; execution
-keeps its named `in-flight` commitment response. Closing a retained session
-releases its receipt, and shutdown prevents a late admission return from
-repopulating cleared receipt state.
+Session-creating plan, execution, inventory, and integrity commands use bounded
+command-id single-flight guards around receipt lookup, mutable validation,
+admission, and receipt publication. Plan retries check the original path
+gesture before revalidating a filesystem that may have changed after admission;
+ID-based location retry signatures likewise bind the canonical raw opaque-id
+gesture and are checked before rereading mutable inventory. Different command
+ids remain independently admissible; execution keeps its named `in-flight`
+commitment response. Closing a retained session releases its receipt, and
+receipt lookup, publication, and removal share one lifecycle gate with
+dispatcher retention so neither a retry nor a late admission can return a
+receipt for an already-closed session. Shutdown prevents a late admission
+return from repopulating cleared receipt state.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -180,7 +184,22 @@ ejected stream from the first undelivered sequence, and never exposes the raw
 stream. Unsubscribe closes every stream before joining its worker. Service
 shutdown closes all observer streams and joins all observer threads before
 dispatcher shutdown, then closes the workflow runtime last so audit finalization
-cannot reach a closed history store.
+cannot reach a closed history store. A join timeout retains the unjoined
+observation and makes the service close fail; later close retries that join, and
+cached success is unavailable until it completes. If dispatcher shutdown
+reaches its deadline with unfinished custody or observer work, the service
+leaves the runtime open and a later `close()` retries shutdown. A complete
+dispatcher result is cached,
+but the overall close becomes final/cacheable only after runtime dependency
+closure also succeeds; a dependency-close exception leaves its store retained
+and a later serialized `close()` retries that step without repeating dispatcher
+shutdown. The runtime serializes its own store-close attempt as well, so a
+concurrent caller cannot return success before an earlier close fails. Once the
+first shutdown attempt begins,
+the domain facade rejects new starts, plan/selection/settings/inventory/history
+access, mutations, and new observation even when dependencies remain open for
+settlement. Existing session status, control, unsubscribe/wait, explicit
+session close, and the shutdown retry remain available for cleanup.
 
 `cli` and `web` occupy one import-linter layer above `service`: neither adapter
 may import the other, and the service may import neither adapter. The
@@ -207,10 +226,11 @@ packaged scheme/host/effective port.
 
 The only public bridge method is versioned, size-bounded, allowlisted
 `dispatch`. It rechecks the current exact origin on every call, accepts one
-strict JSON request object, and returns a JSON-safe structured result. There is
-no `evaluate_js`, `run_js`, or `Window.state` data path. The actual Stage 6 host
-must preserve this shape and add the bounded/coalesced event drain plus escaped
-DOM rendering.
+strict JSON request object, rejects duplicate keys, non-integer schema
+discriminators, and invalid Unicode, and returns a JSON-safe structured result.
+There is no `evaluate_js`, `run_js`, or `Window.state` data path. The actual
+Stage 6 host must preserve this shape and add the bounded/coalesced event drain
+plus escaped DOM rendering.
 
 ## Common Adapter Contract
 

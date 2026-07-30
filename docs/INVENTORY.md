@@ -30,11 +30,13 @@ to mark unseen present/unsupported rows missing without a parameter-sized
 reuses the observed-key anti-join but bounds it to the union of remaining exact
 paths, each root equality, and each root's literal canonical descendant range.
 Incomplete and offline scans infer no missing state. Reappearance is set on a
-missing-to-present transition.
+missing-to-present or missing-to-unsupported transition.
 
 `LedgerRepository` returns immutable typed rows and bounded canonical-path
-selections. The conditional integrity recorder writes attestation and optionally
-clears `reappeared_at`/advances true verification time in the same transaction.
+selections. Every multi-batch selection stays in one read transaction so a
+concurrent inventory commit cannot produce a torn result. The conditional
+integrity recorder writes attestation and optionally clears
+`reappeared_at`/advances true verification time in the same transaction.
 Acknowledgement/restore changes only visibility state, while stale-age queries
 select candidates without mutating them.
 
@@ -64,17 +66,19 @@ Inventory continuation payloads are strict version 2 because they carry
 `subtree_roots` separately from exact `selected_paths`. Integrity continuations
 remain version 1 because folder actions freeze indexed descendants into the
 existing exact-subject shape before admission. Their shared decoder validates
-kind and expected version independently. Inventory and integrity details retain
-the scanner's typed warnings; an incomplete refresh therefore preserves the
-warning code, relative path, and detail rather than reporting only
+the exact field set and JSON scalar types, rejects duplicate object keys, and
+checks kind and expected version independently. Inventory and integrity details
+retain the scanner's typed warnings; an incomplete refresh therefore preserves
+the warning code, relative path, and detail rather than reporting only
 `complete=False`.
 
-An exact integrity pre-scan may continue when all incompleteness is explained by
-warning-backed unreadable frozen subjects. Those rows enter the verifier once as
-`unsupported`, receive no attestation, and keep the integrity result incomplete
-without suppressing readable siblings. An ignored subject, a root/global
-warning, cancellation, or any other unaccounted scope gap still refuses before
-hashing.
+Every incomplete full or stale-scope integrity refresh refuses before hashing.
+An exact integrity pre-scan may continue only when all incompleteness is
+explained by warning-backed unreadable frozen subjects. Those rows enter the
+verifier once as `unsupported`, receive no attestation, and keep the integrity
+result incomplete without suppressing readable siblings. An ignored subject, a
+root/global warning, cancellation, or any other unaccounted scope gap still
+refuses before hashing.
 
 ## State Model
 
@@ -115,7 +119,8 @@ records.
 ### Scoped refresh
 
 - `PATHS` observes and reconciles only requested canonical keys; an exact
-  directory row never implies anything about its children.
+  directory row never implies anything about its children. A completed exact
+  observation marks an absent prior `present` or `unsupported` subject missing.
 - `SUBTREES` recursively observes each canonical root and may retain exact paths
   outside the roots in the same session. Overlapping roots and covered exact
   paths are removed by segment-aware normalization; selecting the location root
@@ -203,8 +208,9 @@ summary and policy; missing acknowledgement is not pruning.
   and wrong workflow kinds independently.
 - Incomplete inventory details retain typed scan warnings, and unreadable
   frozen integrity subjects do not suppress readable siblings.
-- Returning missing rows become reappeared; matching verify or explicit
-  baseline clears reappearance atomically.
+- Returning missing rows become reappeared whether the new observation is
+  `present` or `unsupported`; matching verify or explicit baseline clears
+  reappearance atomically.
 - Acknowledgement/restore changes visibility state without deleting evidence.
 - Hashed baseline stats are not overwritten by ordinary observation of modified
   content; verifier classifies it `modified`.

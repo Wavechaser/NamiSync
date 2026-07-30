@@ -117,6 +117,10 @@ and supplies the dispatcher history observer. Planning and declined review do
 not create either database. Invalid database locations are rejected before the
 plan session, and an execution refusal may still create independent audit
 history while leaving managed files and ledger configuration untouched.
+Execution start custody is established only when the invocation actually enters
+workflow work, or when a pre-run pause snapshots a resumable start. Terminal
+refusal or failure before ledger recording releases that custody; a cooperative
+pause retains it for exact resume/cancel settlement.
 Execution recomputes the decoded plan fingerprint before comparing commitment,
 so payload content cannot change behind a retained fingerprint. This makes
 lossless payload encoding a correctness invariant, not a convenience: every plan
@@ -135,8 +139,8 @@ version 4 and requires canonical `user_deselected` on every execution set;
 version 1-3 payloads are refused instead of being guessed into the changed
 contract. Inventory request payloads advance to
 version 2 for recursive subtree scope while integrity requests stay at version
-1; their shared validator is therefore kind-aware rather than enforcing one
-version for both kinds.
+1; their strict shared validator is therefore kind-aware rather than enforcing
+one version for both kinds.
 
 The payload round-trips the fingerprinted
 `SyncOptions.propagate_source_casing` seam as a required field. A payload that
@@ -208,6 +212,11 @@ settled execute filesystem status and adds a zero-work incomplete verify phase.
 All terminal paths after recorder entry share one finish-once boundary.
 `PauseRequested`, `KeyboardInterrupt`, `SystemExit`, and other
 `BaseException` subclasses are not normalized into a workflow failure.
+A resumed execution canceled at the dispatcher's entry checkpoint is settled
+from its retained payload before `invocation.run()`, so the same finish-once
+ledger boundary runs. Once that exact cancellation settlement is elected, its
+validated process-local start claim is released in `finally` even if recorder
+open throws or finalization degrades.
 
 ## Integrity Workflow
 
@@ -415,7 +424,9 @@ import from handling refusal differently than baseline/verify.
   prefix range and never treats only the subtree root as selected.
 - Pause/resume preserves completed execution and verifier-item outcomes and
   fresh-guards remaining work; scan/plan/import refuse pause without losing
-  cancelability.
+  cancelability. The open mid-operation UPDATE/MOVE_UPDATE durable-sub-step
+  limitation is documented in `EXECUTOR.md` and `BUGS.md`; this guarantee does
+  not yet cover that boundary.
 - Linked verify candidates equal successful byte-producing publishes and are
   derived from `PublishedCopyEvidence`, including copies whose ledger write
   degraded. The execution-to-verification boundary exposes refreshed phase

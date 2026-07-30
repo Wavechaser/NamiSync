@@ -598,6 +598,9 @@ class LedgerRecorder:
                        observation_host_id = excluded.observation_host_id,
                        scope_token = excluded.scope_token,
                        unsupported_reason = excluded.unsupported_reason,
+                       reappeared_at = CASE
+                           WHEN inventory.presence = 'missing' THEN excluded.last_observed_at
+                           ELSE inventory.reappeared_at END,
                        missing_since = NULL, acknowledged_at = NULL""",
                 unsupported_rows[start : start + 400],
             )
@@ -648,7 +651,7 @@ class LedgerRecorder:
                                missing_since = COALESCE(missing_since, ?),
                                scope_token = ?
                          WHERE location_id = ? AND rel_path_key IN ({placeholders})
-                           AND presence = 'present'""",
+                           AND presence IN ('present', 'unsupported')""",
                     (at, command.scope_token, command.location_id, *chunk),
                 )
                 missing += cursor.rowcount
@@ -1231,7 +1234,17 @@ class SyncRunRecorder:
     ) -> int:
         if operation.source_rel_path is None or operation.source_expected is None:
             raise StaleRecordingError("move lacks source evidence")
-        if not self._matches_intended(operation, target):
+        if attestation is None:
+            if (
+                operation.prior_target_expected is None
+                or not self._matches_reviewed_stat(
+                    target, operation.prior_target_expected
+                )
+            ):
+                raise StaleRecordingError(
+                    "move result is not the reviewed target version"
+                )
+        elif not self._matches_intended(operation, target):
             raise StaleRecordingError("move result differs from reviewed intent")
         source_id = self._owner._upsert_observation(
             connection,
@@ -1327,6 +1340,20 @@ class SyncRunRecorder:
             actual.kind is intended.kind
             and actual.size == intended.size
             and actual.mtime_ns == intended.mtime_ns
+        )
+
+    @staticmethod
+    def _matches_reviewed_stat(actual: FileStat, expected: FileStat) -> bool:
+        return (
+            actual.kind is expected.kind
+            and actual.size == expected.size
+            and actual.mtime_ns == expected.mtime_ns
+            and actual.nlink == expected.nlink
+            and actual.metadata == expected.metadata
+            and (
+                expected.file_identity is None
+                or actual.file_identity == expected.file_identity
+            )
         )
 
     def _record_absent(

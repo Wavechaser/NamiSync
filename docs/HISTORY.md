@@ -114,12 +114,15 @@ mismatch, and partial+degraded cases are tested for live/reopened parity.
 
 ## Failure Semantics
 
-A history serialization/database failure or backpressure timeout sets
-`OperationResult.audit=DEGRADED` and system health loudly, but never rewrites
-filesystem `status` or ledger `recording`. History may be behind only when that
-axis says so for a delivered terminal; a process crash has no completed result,
-loses at most the bounded buffer, and is surfaced by startup reconciliation. An
-unbounded queue and silent loss are forbidden.
+A history-open, observer-construction, serialization/database, or backpressure
+failure sets `OperationResult.audit=DEGRADED` and system health loudly, but
+never aborts dispatcher admission or rewrites filesystem `status` or ledger
+`recording`. If construction fails before an observer exists, dispatcher uses a
+degraded-audit sentinel and still runs the admitted domain session. History may
+be behind only when that axis says so for a delivered terminal outside the
+known late-finalization timeout defect below; a process crash has no completed
+result, loses at most the bounded buffer, and is surfaced by startup
+reconciliation. An unbounded queue and silent loss are forbidden.
 
 Finalization is deliberately two phase. The runner first supplies the
 provisional domain/recording result and waits for history to drain and attempt
@@ -128,6 +131,11 @@ releases one immutable Terminal to ordinary subscribers. A timeout is itself a
 failed acknowledgement: blocking ends, `audit=DEGRADED`, and no second
 corrective Terminal exists. The call-driven recorder completes its own terminal
 flush before result assembly and does not participate in this handshake.
+The retained row can currently diverge when a final history write completes
+after that deadline: it may contain the provisional `audit=ok` while the live
+terminal correctly remains degraded. `BUGS.md` records the open settlement
+choice; live/reopened parity must not be claimed for this timeout case until it
+is resolved.
 
 An unexpected workflow error still emits/finalizes a failed attempt through the
 generic session wrapper. History code catches its own SQLite/serialization
@@ -203,8 +211,9 @@ acceptance gates.
 - All-noop and zero-mutation refusal remain browseable.
 - Unexpected SQLite/OS/domain exceptions still attempt truthful failed history
   without changing the original result.
-- Observer failure degrades the explicit audit result/health signal and never
-  rolls back ledger or filesystem work.
+- Observer construction/open or later delivery failure degrades the explicit
+  audit result/health signal, never aborts admission, and never rolls back
+  ledger or filesystem work.
 - A buffer-pressure test proves admitted history events are delivered within
   the bound while `audit=OK` and no backpressure happens mid-filesystem
   operation; timeout stops blocking and yields `audit=DEGRADED` rather than

@@ -161,11 +161,18 @@ class BridgeDispatcher:
         self._origin.require(self._current_url())
         if not isinstance(command_json, str):
             raise BridgeProtocolError("bridge command must be a JSON string")
-        if len(command_json.encode("utf-8")) > _MAX_COMMAND_BYTES:
+        try:
+            command_size = len(command_json.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise BridgeProtocolError(
+                "bridge command must contain valid Unicode"
+            ) from error
+        if command_size > _MAX_COMMAND_BYTES:
             raise BridgeProtocolError("bridge command exceeds the size limit")
         try:
             raw = json.loads(
                 command_json,
+                object_pairs_hook=_unique_object,
                 parse_constant=lambda value: _reject_json_constant(value),
             )
         except (json.JSONDecodeError, ValueError) as error:
@@ -197,7 +204,10 @@ def _validate_command(value: object) -> dict[str, object]:
         "payload",
     }:
         raise BridgeProtocolError("bridge command has missing or unknown fields")
-    if value["schema_version"] != BRIDGE_SCHEMA_VERSION:
+    if (
+        type(value["schema_version"]) is not int
+        or value["schema_version"] != BRIDGE_SCHEMA_VERSION
+    ):
         raise BridgeProtocolError(
             f"unsupported bridge schema version: {value['schema_version']}"
         )
@@ -212,6 +222,9 @@ def _validate_command(value: object) -> dict[str, object]:
         isinstance(key, str) for key in payload
     ):
         raise BridgeProtocolError("bridge payload must be a string-keyed object")
+    _require_json_value(request_id)
+    _require_json_value(command)
+    _require_json_value(payload)
     return {
         "schema_version": BRIDGE_SCHEMA_VERSION,
         "request_id": request_id,
@@ -224,8 +237,27 @@ def _reject_json_constant(value: str) -> None:
     raise ValueError(f"invalid JSON number: {value}")
 
 
+def _unique_object(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
 def _require_json_value(value: object) -> None:
-    if value is None or isinstance(value, (bool, int, str)):
+    if value is None or isinstance(value, (bool, int)):
+        return
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise BridgeProtocolError(
+                "structured bridge data contains invalid Unicode"
+            ) from error
         return
     if isinstance(value, float):
         if math.isfinite(value):

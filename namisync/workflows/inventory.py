@@ -578,16 +578,15 @@ def run_integrity(
                 scan.warnings,
             )
         )
-        if (
+        if not scan.complete and not (
             request.selected_paths
-            and not scan.complete
-            and not _subject_local_incompleteness(scan)
+            and _subject_local_incompleteness(scan)
         ):
             return OperationResult(
                 SessionState.FAILED,
                 error=FailureDetail(
                     "InventoryScopeIncomplete",
-                    "selected inventory refresh was not authoritative",
+                    "inventory refresh was not authoritative",
                 ),
             )
         with LedgerRepository(deps.ledger_path) as repository:
@@ -662,11 +661,29 @@ def encode_inventory_request(request: InventoryWorkflowRequest) -> bytes:
 
 def decode_inventory_request(payload: bytes) -> InventoryWorkflowRequest:
     value = _payload(payload, "inventory", 2)
+    _expect_keys(
+        value,
+        {
+            "version",
+            "kind",
+            "request_id",
+            "binding",
+            "selected_paths",
+            "subtree_roots",
+        },
+        "inventory payload",
+    )
     return InventoryWorkflowRequest(
-        str(value["request_id"]),
+        _string(value["request_id"], "inventory.request_id"),
         _decode_binding(value["binding"]),
-        tuple(str(item) for item in _list(value["selected_paths"])),
-        tuple(str(item) for item in _list(value["subtree_roots"])),
+        tuple(
+            _string(item, "inventory.selected_paths[]")
+            for item in _list(value["selected_paths"])
+        ),
+        tuple(
+            _string(item, "inventory.subtree_roots[]")
+            for item in _list(value["subtree_roots"])
+        ),
     )
 
 
@@ -694,24 +711,65 @@ def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
 
 def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
     value = _payload(payload, "integrity", 1)
+    _expect_keys(
+        value,
+        {
+            "version",
+            "kind",
+            "request_id",
+            "binding",
+            "mode",
+            "selected_paths",
+            "stale_before",
+            "selection_item_ids",
+            "completed_bytes",
+            "processed_bytes",
+            "refresh_generation",
+        },
+        "integrity payload",
+    )
     stale = value["stale_before"]
+    completed_bytes: list[tuple[str, int]] = []
+    for raw in _list(value["completed_bytes"]):
+        item = _list(raw)
+        if len(item) != 2:
+            raise ValueError(
+                "integrity.completed_bytes[] must contain an id and byte count"
+            )
+        completed_bytes.append(
+            (
+                _string(item[0], "integrity.completed_bytes[].item_id"),
+                _integer(item[1], "integrity.completed_bytes[].bytes"),
+            )
+        )
     return IntegrityWorkflowRequest(
-        request_id=str(value["request_id"]),
+        request_id=_string(value["request_id"], "integrity.request_id"),
         binding=_decode_binding(value["binding"]),
-        mode=IntegrityMode(str(value["mode"])),
+        mode=IntegrityMode(_string(value["mode"], "integrity.mode")),
         selected_paths=tuple(
-            str(item) for item in _list(value["selected_paths"])
+            _string(item, "integrity.selected_paths[]")
+            for item in _list(value["selected_paths"])
         ),
-        stale_before=None if stale is None else datetime.fromisoformat(str(stale)),
+        stale_before=(
+            None
+            if stale is None
+            else datetime.fromisoformat(
+                _string(stale, "integrity.stale_before")
+            )
+        ),
         selection_item_ids=tuple(
-            str(item) for item in _list(value["selection_item_ids"])
+            _string(item, "integrity.selection_item_ids[]")
+            for item in _list(value["selection_item_ids"])
         ),
-        completed_bytes=tuple(
-            (str(item[0]), int(item[1]))
-            for item in (_list(raw) for raw in _list(value["completed_bytes"]))
+        completed_bytes=tuple(completed_bytes),
+        processed_bytes=_integer(
+            value["processed_bytes"],
+            "integrity.processed_bytes",
         ),
-        processed_bytes=int(value["processed_bytes"]),
-        refresh_generation=int(value["refresh_generation"]),
+        refresh_generation=_integer(
+            value["refresh_generation"],
+            "integrity.refresh_generation",
+        ),
     )
 
 
@@ -1019,14 +1077,43 @@ def _binding_dict(binding: LocationBinding) -> dict[str, object]:
 
 def _decode_binding(value: object) -> LocationBinding:
     data = _mapping(value)
+    _expect_keys(
+        data,
+        {
+            "volume",
+            "volume_relative_path",
+            "selected_mount",
+            "expected_mounts",
+            "explicit_ambiguity_choice",
+            "location_id",
+        },
+        "location binding",
+    )
     volume = _mapping(data["volume"])
+    _expect_keys(volume, {"serial", "fs_type"}, "location binding volume")
     return LocationBinding(
-        VolumeId(str(volume["serial"]), str(volume["fs_type"])),
-        str(data["volume_relative_path"]),
-        str(data["selected_mount"]),
-        tuple(str(item) for item in _list(data["expected_mounts"])),
-        bool(data["explicit_ambiguity_choice"]),
-        None if data["location_id"] is None else int(data["location_id"]),
+        VolumeId(
+            _string(volume["serial"], "location binding volume.serial"),
+            _string(volume["fs_type"], "location binding volume.fs_type"),
+        ),
+        _string(
+            data["volume_relative_path"],
+            "location binding.volume_relative_path",
+        ),
+        _string(data["selected_mount"], "location binding.selected_mount"),
+        tuple(
+            _string(item, "location binding.expected_mounts[]")
+            for item in _list(data["expected_mounts"])
+        ),
+        _boolean(
+            data["explicit_ambiguity_choice"],
+            "location binding.explicit_ambiguity_choice",
+        ),
+        (
+            None
+            if data["location_id"] is None
+            else _integer(data["location_id"], "location binding.location_id")
+        ),
     )
 
 
@@ -1035,12 +1122,22 @@ def _payload(
     expected_kind: str,
     expected_version: int,
 ) -> Mapping[str, object]:
-    value = json.loads(payload.decode("utf-8"))
+    try:
+        value = json.loads(
+            payload.decode("utf-8"),
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError(
+            "inventory workflow payload is not valid UTF-8 JSON"
+        ) from error
     data = _mapping(value)
+    version = data.get("version")
     if (
-        type(data["version"]) is not int
-        or data["version"] != expected_version
-        or data["kind"] != expected_kind
+        type(version) is not int
+        or version != expected_version
+        or data.get("kind") != expected_kind
     ):
         raise ValueError("unsupported inventory workflow payload")
     return data
@@ -1056,14 +1153,60 @@ def _json_bytes(value: object) -> bytes:
 
 
 def _mapping(value: object) -> Mapping[str, object]:
-    if not isinstance(value, Mapping):
-        raise TypeError("workflow payload value must be an object")
+    if not isinstance(value, dict) or not all(
+        isinstance(key, str) for key in value
+    ):
+        raise ValueError("workflow payload value must be an object")
     return value
 
 
 def _list(value: object) -> list[object]:
     if not isinstance(value, list):
-        raise TypeError("workflow payload value must be a list")
+        raise ValueError("workflow payload value must be a list")
+    return value
+
+
+def _unique_object(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(
+                f"inventory workflow payload contains duplicate key: {key}"
+            )
+        value[key] = item
+    return value
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"invalid JSON number: {value}")
+
+
+def _expect_keys(
+    value: Mapping[str, object],
+    expected: set[str],
+    context: str,
+) -> None:
+    if set(value) != expected:
+        raise ValueError(f"{context} has missing or unknown fields")
+
+
+def _string(value: object, context: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{context} must be a string")
+    return value
+
+
+def _integer(value: object, context: str) -> int:
+    if type(value) is not int:
+        raise ValueError(f"{context} must be an integer")
+    return value
+
+
+def _boolean(value: object, context: str) -> bool:
+    if type(value) is not bool:
+        raise ValueError(f"{context} must be a boolean")
     return value
 
 

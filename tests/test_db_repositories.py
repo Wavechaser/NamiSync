@@ -91,6 +91,53 @@ def test_large_inventory_selection_uses_bounded_queries(tmp_path: Path) -> None:
         setup.recorder.close()
 
 
+def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    records = tuple(
+        _file(f"folder\\file-{index:04d}.bin", index) for index in range(401)
+    )
+    writer = connect_ledger_writer(setup.recorder.path)
+    select_count = 0
+
+    def update_between_batches(statement: str) -> None:
+        nonlocal select_count
+        if not statement.lstrip().upper().startswith("SELECT * FROM INVENTORY"):
+            return
+        select_count += 1
+        if select_count == 2:
+            writer.execute(
+                "UPDATE inventory SET scope_token = ? WHERE location_id = ?",
+                ("scope-new", setup.source_location_id),
+            )
+
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, records),
+                "scope-old",
+                NOW,
+            )
+        )
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=update_between_batches
+        ) as repository:
+            selected = repository.get_inventory(
+                setup.source_location_id,
+                (record.rel_path for record in records),
+            )
+
+        assert select_count == 2
+        assert {row.scope_token for row in selected} == {"scope-old"}
+        with LedgerRepository(setup.recorder.path) as repository:
+            durable = repository.get_inventory(setup.source_location_id)
+        assert {row.scope_token for row in durable} == {"scope-new"}
+    finally:
+        writer.close()
+        setup.recorder.close()
+
+
 def test_readonly_repository_can_browse_during_active_writer_lifetime(tmp_path: Path) -> None:
     source = file_stat(identity_index=51)
     target = file_stat(identity_index=52, volume_serial="target-serial")
