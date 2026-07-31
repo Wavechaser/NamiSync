@@ -27,8 +27,9 @@ matching pair.
 
 ## Setup and dependencies
 
-NamiSync requires Windows 11 x64 and Python 3.13 or later. Runtime dependency:
-`xxhash` 3.x. Development dependencies are `pytest` and `import-linter`.
+NamiSync requires Windows 11 x64 and Python 3.13 or later. Runtime dependencies
+are `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
+Development dependencies are `pytest` and `import-linter`.
 
 Create a virtual environment, then install the editable development package:
 
@@ -43,7 +44,8 @@ Run the tests and check the import boundaries:
 .\.venv\Scripts\lint-imports.exe
 ```
 
-M1's future desktop additionally requires Microsoft Edge WebView2 Runtime; the
+M1's future desktop additionally requires Microsoft Edge WebView2 Runtime.
+Declaring pywebview does not make explicit CLI commands initialize a GUI; the
 Stage 6 host will fail with an install action rather than falling back to an
 older browser engine.
 
@@ -111,6 +113,11 @@ never hides the other result axes in rendered output.
 
 ### M1
 
+- Completed the Stage 6 pywebview reality spike on CPython 3.13.14 and
+  pywebview 6.2.1: native guards now attach only on the WinForms UI thread,
+  dispatch authorization follows native WebView2 document state across
+  canceled navigation, and the tested host dependency is pinned. The headed
+  desktop itself remains unshipped.
 - Completed the integrated M1 adversarial review across execution,
   inventory/integrity, persistence, dispatcher/history, facade concurrency,
   and strict persisted/bridge protocols. Straightforward invariant violations

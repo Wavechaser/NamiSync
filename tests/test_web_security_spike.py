@@ -11,9 +11,8 @@ from namisync.interfaces.web.security_spike import (
     BridgeDispatcher,
     BridgeOriginError,
     BridgeProtocolError,
-    ExactOrigin,
     WebView2Unavailable,
-    install_pywebview2_guards,
+    configure_pywebview2_security,
     start_edge_chromium,
 )
 
@@ -26,15 +25,49 @@ class EventHook:
         self.handlers.append(handler)
         return self
 
-    def emit(self, args) -> None:
+    def emit(self, args, *, sender=None) -> None:
         for handler in self.handlers:
-            handler(None, args)
+            handler(sender, args)
 
 
 class FakeCoreWebView2:
-    def __init__(self) -> None:
+    def __init__(self, source: str = "http://127.0.0.1:41700/index.html") -> None:
+        self.Source = source
         self.NavigationStarting = EventHook()
         self.NewWindowRequested = EventHook()
+        self.SourceChanged = EventHook()
+
+
+class BeforeLoadHook:
+    def __init__(self, window) -> None:
+        self.handlers = []
+        self._window = window
+
+    def __iadd__(self, handler):
+        self.handlers.append(handler)
+        return self
+
+    def emit(self) -> None:
+        self._window._on_ui_thread = True
+        try:
+            for handler in self.handlers:
+                handler()
+        finally:
+            self._window._on_ui_thread = False
+
+
+class FakeManagedWebView:
+    def __init__(self, window, core: FakeCoreWebView2) -> None:
+        self._window = window
+        self._core = core
+        self.core_accesses = 0
+
+    @property
+    def CoreWebView2(self) -> FakeCoreWebView2:
+        self.core_accesses += 1
+        if not self._window._on_ui_thread:
+            raise AssertionError("CoreWebView2 accessed outside the UI callback")
+        return self._core
 
 
 class NavigationArgs:
@@ -56,31 +89,122 @@ class NewWindowArgs:
 
 
 def _window(core: FakeCoreWebView2):
-    return SimpleNamespace(
-        native=SimpleNamespace(
-            browser=SimpleNamespace(
-                webview=SimpleNamespace(CoreWebView2=core)
-            )
+    window = SimpleNamespace(_on_ui_thread=False)
+    managed_webview = FakeManagedWebView(window, core)
+    window.native = SimpleNamespace(
+        InvokeRequired=False,
+        browser=SimpleNamespace(
+            webview=managed_webview,
         )
     )
+    window.events = SimpleNamespace(before_load=BeforeLoadHook(window))
+    window.managed_webview = managed_webview
+    return window
+
+
+def _trusted_document(
+    source: str = "https://app.invalid/index.html",
+):
+    core = FakeCoreWebView2(source)
+    window = _window(core)
+    document = configure_pywebview2_security(
+        window,
+        source.rsplit("/", 1)[0],
+    )
+    window.events.before_load.emit()
+    return document
+
+
+def test_native_installation_waits_for_synchronous_ui_before_load() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+
+    document = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700",
+    )
+
+    assert window.managed_webview.core_accesses == 0
+    assert len(core.NavigationStarting.handlers) == 0
+
+    bridge = BridgeDispatcher(
+        document=document,
+        handlers={"ping": lambda payload: payload},
+    )
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "before-native-attach",
+            "command": "ping",
+            "payload": {},
+        }
+    )
+    with pytest.raises(BridgeOriginError):
+        bridge.dispatch(command)
+
+    window.events.before_load.emit()
+    window.events.before_load.emit()
+
+    assert window.managed_webview.core_accesses == 1
+    assert len(core.NavigationStarting.handlers) == 1
+    assert len(core.NewWindowRequested.handlers) == 1
+    assert len(core.SourceChanged.handlers) == 1
+    assert bridge.dispatch(command)["result"] == {}
+
+
+def test_native_installation_refuses_an_off_ui_before_load_callback() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+    window.native.InvokeRequired = True
+    configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700",
+    )
+
+    with pytest.raises(RuntimeError, match="UI thread"):
+        window.events.before_load.emit()
+
+    assert window.managed_webview.core_accesses == 0
+    assert len(core.NavigationStarting.handlers) == 0
 
 
 def test_native_webview2_hooks_cancel_untrusted_navigation_and_all_popups() -> None:
     core = FakeCoreWebView2()
-    install_pywebview2_guards(
-        _window(core),
+    window = _window(core)
+    document = configure_pywebview2_security(
+        window,
         "http://127.0.0.1:41700",
     )
+    window.events.before_load.emit()
     trusted = NavigationArgs("http://127.0.0.1:41700/index.html")
     external = NavigationArgs("https://example.com/")
-    core.NavigationStarting.emit(trusted)
-    core.NavigationStarting.emit(external)
+    core.NavigationStarting.emit(trusted, sender=core)
+    core.NavigationStarting.emit(external, sender=core)
     popup = NewWindowArgs("https://example.com/")
-    core.NewWindowRequested.emit(popup)
+    core.NewWindowRequested.emit(popup, sender=core)
 
     assert not trusted.Cancel
     assert external.Cancel
     assert popup.Handled
+
+    bridge = BridgeDispatcher(
+        document=document,
+        handlers={"ping": lambda payload: payload},
+    )
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "after-cancelled-navigation",
+            "command": "ping",
+            "payload": {},
+        }
+    )
+    assert bridge.dispatch(command)["result"] == {}
+
+    core.Source = "https://example.com/"
+    core.SourceChanged.emit(SimpleNamespace(), sender=core)
+    with pytest.raises(BridgeOriginError):
+        bridge.dispatch(command)
 
 
 def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
@@ -109,11 +233,16 @@ def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
 
 
 def test_dispatch_rechecks_origin_and_returns_hostile_text_as_data() -> None:
-    current = ["http://127.0.0.1:41700/index.html"]
+    core = FakeCoreWebView2()
+    window = _window(core)
+    document = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700",
+    )
+    window.events.before_load.emit()
     hostile = '</script><img src=x onerror="alert(1)">'
     bridge = BridgeDispatcher(
-        origin=ExactOrigin.parse("http://127.0.0.1:41700"),
-        current_url=lambda: current[0],
+        document=document,
         handlers={"next_events": lambda payload: [{"path": payload["path"]}]},
     )
     command = json.dumps(
@@ -131,15 +260,15 @@ def test_dispatch_rechecks_origin_and_returns_hostile_text_as_data() -> None:
         "result": [{"path": hostile}],
     }
 
-    current[0] = "https://example.com/"
+    core.Source = "https://example.com/"
+    core.SourceChanged.emit(SimpleNamespace(), sender=core)
     with pytest.raises(BridgeOriginError):
         bridge.dispatch(command)
 
 
 def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> None:
     bridge = BridgeDispatcher(
-        origin=ExactOrigin.parse("https://app.invalid"),
-        current_url=lambda: "https://app.invalid/index.html",
+        document=_trusted_document(),
         handlers={"ping": lambda payload: payload},
     )
     public_methods = {
@@ -175,8 +304,7 @@ def test_bridge_source_has_no_host_to_javascript_application_data_channel() -> N
 
 def test_bridge_rejects_nonstandard_json_and_non_json_handler_results() -> None:
     bridge = BridgeDispatcher(
-        origin=ExactOrigin.parse("https://app.invalid"),
-        current_url=lambda: "https://app.invalid/",
+        document=_trusted_document(),
         handlers={
             "echo": lambda payload: payload,
             "bad_result": lambda payload: {"nested": {1: payload}},
@@ -242,8 +370,7 @@ def test_bridge_rejects_non_json_payload_values_before_handler(
 ) -> None:
     handled: list[object] = []
     bridge = BridgeDispatcher(
-        origin=ExactOrigin.parse("https://app.invalid"),
-        current_url=lambda: "https://app.invalid/",
+        document=_trusted_document(),
         handlers={"echo": handled.append},
     )
 

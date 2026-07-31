@@ -5,80 +5,87 @@ Branch: `milestone1`
 
 ## Session Outcome
 
-Completed a comprehensive integrated adversarial review of the landed M1 stack
-described by `M1_PLAN.md`, `HASH_REFACTOR.md`, and `M1_BRIDGE.md`, excluding the
-still-unimplemented Stage 6 WebView2 desktop shell.
+Completed the M1 Stage 6 slice-0 pywebview reality spike on top of the landed
+integrated M1 audit.
 
-The reviewed implementation and permanent regressions are in commit
-`a5e6ece` (`Harden integrated M1 invariants`). This follow-up handoff replacement
-is the next documentation-only commit on the same branch.
+- Pinned the measured host dependency as `pywebview==6.2.1`; the editable
+  distribution metadata now declares it alongside `xxhash`.
+- Replaced worker-thread `CoreWebView2` access with one idempotent installer
+  registered on pywebview's synchronous `before_load` event. The installer
+  verifies WinForms UI-thread ownership and attaches `NavigationStarting`,
+  `NewWindowRequested`, and `SourceChanged` before application calls are
+  exposed.
+- Replaced `window.get_current_url()` dispatch authority with
+  `NativeDocumentState`, a lock-protected snapshot updated from native
+  `CoreWebView2.Source`. Dispatch remains fail-closed before attachment and
+  after a genuinely off-origin native source, but a rejected navigation target
+  cannot lock the still-trusted packaged page out of the bridge.
+- Added permanent regressions for deferred/idempotent UI-thread attachment,
+  off-UI refusal, fail-closed pre-attachment behavior, canceled-navigation
+  continuity, and committed off-origin rejection.
+- Updated the bug log, interface/desktop/architecture contracts, M1 plan and
+  bridge gates, README dependency guidance, and changelog.
 
-No database schema, migration, ledger contract, or history contract changed.
-The complete fixed/open defect record is in `BUGS.md`; focused component
-documents and the README now match the reviewed behavior.
+No facade, workflow, dispatcher, core, module, database, schema, migration, or
+CLI contract changed. The headed product window, packaged assets, event drain,
+and launcher remain later Stage 6 slices.
 
-## Fixed Findings
+## Live Reality Evidence
 
-- **Execution atomicity and idempotency:** MOVE/MKDIR now revalidate their
-  reviewed source subjects; MOVE/RECASE bind the post-rename result to the exact
-  reviewed old target; pure MOVE recording accepts target timestamps that were
-  intentionally only granularity-equal to the source; resume/cancel and
-  pre-recording paths release exact runtime custody and settle the ledger.
-- **Inventory and persistence:** incomplete full/stale integrity refreshes
-  refuse before verification; exact PATHS reconciliation covers unsupported
-  rows and reappearance; multi-batch inventory reads use one SQLite snapshot.
-- **Dispatcher and history isolation:** state transitions and their reliable
-  events are serialized; subscribe/close cannot orphan a stream; audit observer
-  construction failure degrades only the audit axis; entry-checkpoint resumed
-  cancellation uses the workflow-owned retained-payload settlement.
-- **Facade and shutdown concurrency:** every session-start family is
-  command-id single-flight; receipt lookup/publication/removal is linearized
-  with dispatcher retention; a closed facade cannot repopulate runtime state;
-  incomplete dispatcher shutdown, observer join timeout, runtime dependency
-  close failure, and concurrent close retries are all recoverable and cannot
-  report false cached success.
-- **Protocol boundaries:** core events, inventory/integrity continuations,
-  semantic settings, and the web security spike reject coercive scalar types,
-  duplicate keys, non-finite numbers, invalid Unicode, and unknown/missing
-  schema fields before handler or domain execution.
+The live Windows run used CPython 3.13.14 x64, pywebview 6.2.1,
+pythonnet 3.1.0, and Microsoft Edge WebView2 Runtime 150.0.4078.105.
 
-## Open Design Decisions
+- Forced `gui="edgechromium"` selected the Edge Chromium renderer.
+- The packaged static asset received a random loopback origin; the final
+  verification run used `http://127.0.0.1:7016`.
+- `Microsoft.Web.WebView2.Core.CoreWebView2` was reachable and pythonnet native
+  event `+=`/`-=` syntax worked on the WinForms UI thread.
+- Direct `CoreWebView2` access from pywebview's setup worker deadlocked in the
+  original probe. The revised `initialized -> before_load` path attached
+  without deadlock.
+- After native cancellation of `https://example.invalid/`,
+  `window.get_current_url()` still reported that rejected URL, but the native
+  source remained trusted and the packaged page's `after-cancel` dispatch
+  succeeded through `NativeDocumentState`.
 
-Two defects remain open because either fix changes a product contract:
-
-1. **Pause after a durable UPDATE/MOVE_UPDATE retry sub-step.** A pause after an
-   update backup or move-update publish loses the process-local sub-step
-   continuation; resume can then reject the executor's own mutation. Options:
-   serialize the operation-local continuation, roll back the owned durable
-   stage before honoring pause, or defer pause until the operation reaches a
-   safe boundary. For M1, deferring pause to the operation boundary is the
-   smallest safety-preserving contract; persisting sub-step state is the more
-   capable but materially larger design.
-2. **Audit-timeout live/retained parity.** A history write that completes after
-   the acknowledgement deadline can persist provisional `audit=ok` after the
-   immutable live terminal has correctly settled `audit=degraded`. Options:
-   cancel/compensate the late write, add a deadline-aware settlement handshake
-   that persists the final axis, or explicitly relax live/reopened parity.
-   Relaxing parity would make history misleading and should not be the default.
-
-Both are recorded as OPEN in `BUGS.md`; no silent workaround was introduced.
+The run also reconfirmed a separate Stage 6 transport constraint: canceled
+navigation can make pywebview reinject its JavaScript bridge and lose an
+in-flight return callback after Python has executed the handler. This slice
+does not add transport retries. Slice 2 must preserve command-id receipts for
+mutations, and slice 3 must preserve the planned drain resubscription and
+terminal-record recovery.
 
 ## Verification
 
-- Full repository: `814 passed in 26.76s`.
-- Focused final lifecycle set: `69 passed in 2.69s`.
+- Focused security spike: `10 passed in 0.04s`.
+- Full repository: `816 passed in 25.58s`.
 - Import boundaries: 49 files / 181 dependencies; all eight contracts kept,
   zero broken.
-- Independent builder/reviewer passes found no remaining concrete
-  straightforward lifecycle defect after the final observer retry fix.
-- `git diff --check` is clean apart from the repository's expected LF-to-CRLF
-  notices.
+- Hidden real-WebView2 verification: forced Edge Chromium, attached through
+  the production callback path, canceled off-origin navigation, and accepted
+  the subsequent trusted-page dispatch.
+- Package health: `pip check` reported no broken requirements; installed
+  metadata lists `pywebview==6.2.1` and `xxhash<4,>=3.8.1`.
+- Explicit CLI import remained headless and did not import `webview`.
+- `git diff --check` was clean apart from expected LF-to-CRLF notices.
 
 ## Immediate Next Context
 
-Resolve the two contract decisions above before, or explicitly alongside, Stage
-6. The desktop shell still owns presentation paging/projection caches,
-flattening/filtering/search, progress identity/autoscroll, database-paged
-history, bounded/coalesced web event transport, task lifecycle, and the headed
-WebView2 host. It must consume the reviewed service/workflow seams rather than
-reimplementing sync, inventory, integrity, history, or dispatcher policy.
+Stage 6 slice 1 should preserve this initialization order:
+
+1. Create the window with a JavaScript API object whose only public method is
+   `dispatch`; keep every host reference private because pywebview recursively
+   exposes public API-object attributes.
+2. Before startup, register `window.events.initialized`. When it fires,
+   derive the exact random asset origin from `window.real_url`, call
+   `configure_pywebview2_security`, and install the resulting document state
+   into `BridgeDispatcher`.
+3. Let the synchronous UI-thread `before_load` callback attach native handlers
+   before pywebview injects the application API.
+4. Start only through forced Edge Chromium and surface WebView2 absence
+   actionably.
+
+Do not reach `CoreWebView2` from setup or dispatch workers, and do not restore
+`get_current_url()` as dispatch authority. The pre-existing executor
+operation-safe-pause and audit-timeout parity decisions remain open in
+`BUGS.md`; this slice does not change them.

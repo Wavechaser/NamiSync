@@ -127,6 +127,24 @@ to a global chronological list.
 
 ## INTERFACES
 
+### M1 Stage 6 host reality spike
+
+- SEVERE - FIXED (2026-07-30). Off-thread native-control deadlock.
+  `CoreWebView2` access from pywebview's setup worker could hang instead of
+  raising a cross-thread error, preventing host startup. Cause: the initial
+  mock treated the managed WinForms control like an ordinary Python object;
+  fixed by registering one idempotent synchronous `before_load` callback that
+  reaches the native control and subscribes its events only on the WinForms UI
+  thread before application calls are exposed.
+- SEVERE - FIXED (2026-07-30). Trusted-page bridge lockout after canceled
+  navigation. WebView2 retained the packaged document after canceling an
+  off-origin request, but pywebview's managed `Source` and
+  `get_current_url()` reported the rejected target, so the independent origin
+  check would reject the still-trusted page indefinitely. Cause: the bridge
+  treated wrapper navigation intent as committed native document authority;
+  fixed with a lock-protected snapshot of native `CoreWebView2.Source` updated
+  on the UI thread and read without marshaling by concurrent dispatch workers.
+
 ### M1 integrated adversarial review
 
 - MODERATE - FIXED (2026-07-30). Observer-close retry. A blocked sink that

@@ -1616,7 +1616,16 @@ one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
 bounded event drain that coalesces only replaceable progress and preserves
 reliable events, cancels untrusted navigation/new-window
 requests through native hooks, and rejects dispatch outside the exact packaged
-origin. UI commands carry opaque ids rather than paths; rendered filenames use
+origin. A pre-start `initialized` callback derives that origin from
+`window.real_url` after the asset server chooses its loopback port, then
+registers one idempotent synchronous `before_load` callback. Native
+`CoreWebView2` access and event subscription occur only in that callback on the
+WinForms UI thread; setup and bridge workers never touch the UI-affine object.
+A lock-protected snapshot follows native committed `CoreWebView2.Source`, not pywebview's
+managed `Source` or `get_current_url()`, because those can report a canceled
+navigation target while the trusted document remains active. Each dispatch
+checks the snapshot without UI-thread marshaling. UI commands carry opaque ids
+rather than paths; rendered filenames use
 escaped display strings and `textContent`, never raw HTML. The task rail, plan
 tree, inventory tree, and history dialog consume service/workflow views only.
 The native folder picker is the sole path-input exception: the host retains the
@@ -1667,11 +1676,13 @@ collapsed paths, filter chips) directly. It persists no request, session, task,
 selection, view id, or projection revision; it is separate from database-owned
 semantic settings and needs no cross-interface writer mutex.
 
-**Stage 1 implementation status (2026-07-24).** The isolated UI-state store and
-a dependency-free hostile-navigation/bridge spike implement and test the
-forced-renderer call shape, native `CoreWebView2` guards, exact-origin dispatch
-recheck, strict versioned allowlist, and structured return boundary. They do
-not create a window, frontend assets, event drain, or pywebview dependency.
+**Stage 1 implementation status (updated 2026-07-30).** The isolated UI-state
+store and hostile-navigation/bridge spike implement and test the
+forced-renderer call shape, UI-thread-only native `CoreWebView2` guards,
+native committed-origin dispatch recheck, strict versioned allowlist, and
+structured return boundary. Pywebview 6.2.1 is pinned from the Stage 6
+reality run. These foundations do not yet create the product window, packaged
+frontend assets, or event drain.
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
 

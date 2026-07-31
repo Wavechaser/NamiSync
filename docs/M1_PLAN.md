@@ -588,6 +588,18 @@ security-equivalent.** Four gaps this decision originally left open:
    handlers that cancel every URL outside the exact packaged asset origin.
    Every `dispatch()` call also rejects unless the current top-level URL is
    that exact origin. This is backend hardening, not a second message API.
+
+   **Stage 6 reality refinement (2026-07-30).** `before_load` is still not
+   used to cancel navigation; it is the synchronous pre-API-injection boundary
+   on which the WinForms UI thread may safely reach `CoreWebView2` and attach
+   the native handlers exactly once. A pre-start `initialized` callback first
+   derives the random asset-server origin from `window.real_url` and registers
+   that `before_load` callback. Direct access from pywebview's setup or exposed-
+   function workers can deadlock. The independent dispatch check reads a
+   lock-protected snapshot maintained from native committed
+   `CoreWebView2.Source`, never pywebview's managed `Source` or
+   `get_current_url()`: after a canceled navigation those managed values may
+   report the rejected target while the trusted document remains active.
 3. **The renderer must be forced.** pywebview documents an MSHTML fallback;
    silently accepting it means the product is not reliably WebView2 and the
    CSP/isolation assumptions above do not hold. Force Edge Chromium and

@@ -217,20 +217,43 @@ cross-process semantic write coordination deliberately remains in the database
 settings store.
 
 `interfaces/web/security_spike.py` proves the security-sensitive host shape
-without shipping a desktop or adding a pywebview dependency. Startup explicitly
-requests `gui="edgechromium"` and turns only pywebview's renderer-unavailable
-failure into an actionable WebView2 message. Once the native control exists,
-the spike attaches `NavigationStarting` and `NewWindowRequested` handlers on
-`CoreWebView2`, cancels every popup, and cancels navigation away from the exact
-packaged scheme/host/effective port.
+without shipping a desktop. The supported host dependency is pinned to the
+reality-tested pywebview 6.2.1. Startup explicitly requests
+`gui="edgechromium"` and turns only pywebview's renderer-unavailable failure
+into an actionable WebView2 message.
+
+The live Windows spike established two constraints that the earlier mock did
+not represent. First, pywebview runs its setup callback and exposed functions
+off the WinForms UI thread; reading `CoreWebView2` there can deadlock rather
+than raise. Before startup the host registers an `initialized` callback; after
+the asset server has selected its loopback port, that callback derives the
+exact origin from `window.real_url` and registers one idempotent installer on
+pywebview's synchronous `before_load` event. The `before_load` callback runs on
+the UI thread and attaches `NavigationStarting`, `NewWindowRequested`, and
+`SourceChanged` exactly once before pywebview exposes application calls.
+Second, after native cancellation, pywebview's managed `Source` and
+`get_current_url()` can report the rejected target even though
+`CoreWebView2.Source` and the active document remain at the packaged origin.
+The native callbacks consequently maintain a lock-protected committed-source
+snapshot, and `dispatch` rechecks that snapshot without crossing into the UI
+thread. A canceled target never replaces it; a genuinely committed off-origin
+native source does and makes dispatch fail closed.
 
 The only public bridge method is versioned, size-bounded, allowlisted
-`dispatch`. It rechecks the current exact origin on every call, accepts one
+`dispatch`. It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
 There is no `evaluate_js`, `run_js`, or `Window.state` data path. The actual
 Stage 6 host must preserve this shape and add the bounded/coalesced event drain
 plus escaped DOM rendering.
+
+The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
+pythonnet 3.1.0, and WebView2 Runtime 150.0.4078.105. It forced the
+`edgechromium` renderer, reached
+`Microsoft.Web.WebView2.Core.CoreWebView2`, exercised pythonnet native event
+subscription, observed a random loopback asset origin, and confirmed that
+bridge handlers receive a Python `str` URL off-thread while also exposing the
+canceled-navigation discrepancy above.
 
 ## Common Adapter Contract
 

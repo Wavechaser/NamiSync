@@ -1728,6 +1728,14 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   half-applied. The dispatcher already has the pattern to copy — it waits on an
   in-flight admission count before closing — and the bridge needs the same
   counter over its handlers.
+- **Native document authority** — `CoreWebView2` remains owned by the WinForms
+  UI thread. One idempotent synchronous `before_load` callback attaches the
+  native handlers and writes a small committed-source snapshot; setup and
+  dispatch workers only read that snapshot under its own lock. Pywebview's
+  managed `Source`/`get_current_url()` are not authority because a canceled
+  navigation can leave them naming the rejected target while native
+  `CoreWebView2.Source` remains trusted. This lock is bridge-global and never
+  nests inside a `TaskState` or service lock.
 
 **Shape:** one `TaskState` per task holding queue, subscription, and view
 state, with a single lock. **Never hold a task lock across I/O.** DR-BR-11's
@@ -1747,6 +1755,17 @@ no `evaluate_js`, `run_js`, or `Window.state` as application-data channels;
 opaque ids inbound and escaped display text outbound; `textContent` only and
 no `innerHTML`; the packaged asset server serves static assets and is not an
 API channel.
+
+The Stage 6 reality run refines how that posture is implemented. A callback
+registered before startup observes `window.real_url` during `initialized`,
+after the asset server has selected its random loopback port, and registers
+one idempotent synchronous `before_load` callback. Native `CoreWebView2` access
+and event subscription occur only in that callback on the WinForms UI thread,
+before pywebview injects application calls. The independent origin recheck
+consumes a lock-protected native committed-source snapshot updated by
+`SourceChanged`; it never calls pywebview `get_current_url()` from a handler. A
+canceled target does not poison the snapshot, while a committed off-origin
+native source does.
 
 The folder picker is the single flow where a real path legitimately enters.
 The host runs the native dialog, retains the path in a server-side slot, and
@@ -2506,13 +2525,20 @@ because its local tests are easier.
   architecture.** On supported Python 3.13 and the pinned pywebview range, the
   spike records real `CoreWebView2` reachability, pythonnet event-handler syntax,
   the asset-server origin actually observed at runtime, and off-thread
-  `current_url` behavior. *Not satisfied by* documentation lookup, a mock
-  `Window`, or a different Python/runtime combination.
+  `current_url` behavior. It proves that native access/attachment occurs on the
+  synchronous WinForms `before_load` callback rather than a setup or bridge
+  worker, and that dispatch authority follows cached native committed
+  `CoreWebView2.Source` across a canceled off-origin navigation rather than the
+  poisoned managed `Source`/`get_current_url()` value. *Not satisfied by*
+  documentation lookup, a mock `Window`, a different Python/runtime
+  combination, a native property read from a worker, or an origin test that
+  never attempts and cancels navigation.
 - **BR-G-31 — The packaged host keeps its security and process boundaries.**
   A built installation opens on Edge Chromium, attaches navigation and
-  new-window guards before app data is accepted, rejects a missing or
-  incompatible WebView2 with an actionable message, rejects an off-origin
-  dispatch independently of navigation hardening, and routes no-subcommand
+  new-window/source guards on the UI thread before app data is accepted,
+  rejects a missing or incompatible WebView2 with an actionable message,
+  rejects an off-origin committed native source independently of navigation
+  hardening, and routes no-subcommand
   launch through `interfaces/launcher.py`. Explicit CLI subcommands do not
   import or initialize pywebview. A second launch activates the existing window
   and exits successfully; activation failure is visible and still non-error.

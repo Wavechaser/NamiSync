@@ -96,12 +96,23 @@ task.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
-acceptable. Once the native control exists, it attaches the tested
-`NavigationStarting` and `NewWindowRequested` guards to `CoreWebView2`:
-navigation outside the exact packaged asset origin is canceled and every popup
-is handled/canceled. `dispatch` independently rechecks the current top-level
-origin on every call. The packaged static-asset server is not an API or event
-channel.
+acceptable. Before startup the host registers an `initialized` callback. Once
+the static asset server has selected its random loopback port, that callback
+derives the exact origin from `window.real_url` and registers an idempotent
+synchronous `before_load` callback. On the WinForms UI thread `before_load`
+reaches `CoreWebView2` and attaches the tested `NavigationStarting`,
+`NewWindowRequested`, and `SourceChanged` handlers exactly once before
+application calls are exposed; setup and dispatch workers never access the
+UI-affine native object. Navigation outside the exact packaged asset origin is
+canceled and every popup is handled/canceled.
+
+`dispatch` independently rechecks a lock-protected snapshot of the native
+committed `CoreWebView2.Source` on every call. It does not authorize from
+pywebview's managed `Source` or `get_current_url()`: both can report a rejected
+navigation target after WebView2 canceled it and retained the packaged
+document. A canceled request leaves the snapshot unchanged, while a genuinely
+committed off-origin source replaces it and causes dispatch to fail closed.
+The packaged static-asset server is not an API or event channel.
 
 The frontend uses a restrictive CSP and DOM APIs such as `textContent` for all
 filesystem-derived data. It must never use `innerHTML`, build executable script

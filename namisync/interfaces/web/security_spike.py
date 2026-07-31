@@ -1,4 +1,4 @@
-"""Stage 1 proof of the pywebview/WebView2 bridge security boundary."""
+"""Stage 6 proof of the pywebview/WebView2 host security boundary."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from threading import Lock
 from typing import Protocol
 from urllib.parse import SplitResult, urlsplit
 
@@ -72,21 +73,46 @@ class ExactOrigin:
             raise BridgeOriginError("bridge dispatch rejected outside packaged origin")
 
 
-class NativeNavigationGuard:
-    """Installs native WebView2 guards behind pywebview's Windows backend."""
+class NativeDocumentState:
+    """Thread-safe snapshot of the native top-level document source."""
 
     def __init__(self, origin: ExactOrigin) -> None:
         self._origin = origin
+        self._lock = Lock()
+        self._current_url = ""
+
+    def require_trusted(self) -> None:
+        with self._lock:
+            current_url = self._current_url
+        self._origin.require(current_url)
+
+    def _record(self, current_url: str) -> None:
+        with self._lock:
+            self._current_url = current_url
+
+
+class _NativeNavigationGuard:
+    """Installs native WebView2 guards behind pywebview's Windows backend."""
+
+    def __init__(
+        self,
+        origin: ExactOrigin,
+        document: NativeDocumentState,
+    ) -> None:
+        self._origin = origin
+        self._document = document
 
     def attach(self, core_webview2: object) -> None:
         try:
             core_webview2.NavigationStarting += self._on_navigation_starting
             core_webview2.NewWindowRequested += self._on_new_window_requested
+            core_webview2.SourceChanged += self._on_source_changed
         except AttributeError as error:
             raise RuntimeError(
                 "pywebview Edge Chromium backend does not expose required "
                 "WebView2 navigation events"
             ) from error
+        self._document._record(_core_source(core_webview2))
 
     def _on_navigation_starting(self, sender: object, args: object) -> None:
         del sender
@@ -97,24 +123,49 @@ class NativeNavigationGuard:
         del sender
         _set_event_flag(args, "Handled", True)
 
+    def _on_source_changed(self, sender: object, args: object) -> None:
+        del args
+        self._document._record(_core_source(sender))
 
-def install_pywebview2_guards(
+
+def configure_pywebview2_security(
     window: object, trusted_origin: str
-) -> NativeNavigationGuard:
-    """Reach the forced Edge backend once and attach native WebView2 handlers."""
+) -> NativeDocumentState:
+    """Attach native guards synchronously before pywebview exposes its API."""
+
+    origin = ExactOrigin.parse(trusted_origin)
+    document = NativeDocumentState(origin)
+    guard = _NativeNavigationGuard(origin, document)
+    attached = False
+
+    def attach_before_load() -> None:
+        nonlocal attached
+        if attached:
+            return
+        try:
+            native = window.native
+            if native.InvokeRequired:
+                raise RuntimeError(
+                    "WebView2 security guards must attach on the WinForms UI thread"
+                )
+            core = native.browser.webview.CoreWebView2
+        except AttributeError as error:
+            raise RuntimeError(
+                "forced Edge Chromium backend is unavailable; install Microsoft "
+                "Edge WebView2 Runtime"
+            ) from error
+        if core is None:
+            raise RuntimeError("WebView2 is not initialized")
+        guard.attach(core)
+        attached = True
 
     try:
-        core = window.native.browser.webview.CoreWebView2
+        window.events.before_load += attach_before_load
     except AttributeError as error:
         raise RuntimeError(
-            "forced Edge Chromium backend is unavailable; install Microsoft "
-            "Edge WebView2 Runtime"
+            "pywebview does not expose the synchronous before_load event"
         ) from error
-    if core is None:
-        raise RuntimeError("WebView2 is not initialized")
-    guard = NativeNavigationGuard(ExactOrigin.parse(trusted_origin))
-    guard.attach(core)
-    return guard
+    return document
 
 
 def start_edge_chromium(
@@ -140,8 +191,7 @@ class BridgeDispatcher:
     def __init__(
         self,
         *,
-        origin: ExactOrigin,
-        current_url: Callable[[], str],
+        document: NativeDocumentState,
         handlers: Mapping[str, Callable[[Mapping[str, object]], object]],
     ) -> None:
         if not handlers or any(
@@ -151,14 +201,13 @@ class BridgeDispatcher:
             raise ValueError("bridge handlers require explicit public command names")
         if any(not callable(handler) for handler in handlers.values()):
             raise TypeError("every bridge command handler must be callable")
-        self._origin = origin
-        self._current_url = current_url
+        self._document = document
         self._handlers = dict(handlers)
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Validate one command and return ordinary structured data."""
 
-        self._origin.require(self._current_url())
+        self._document.require_trusted()
         if not isinstance(command_json, str):
             raise BridgeProtocolError("bridge command must be a JSON string")
         try:
@@ -282,6 +331,15 @@ def _event_uri(args: object) -> str:
     value = getattr(args, "Uri", None)
     if value is None:
         getter = getattr(args, "get_Uri", None)
+        if callable(getter):
+            value = getter()
+    return "" if value is None else str(value)
+
+
+def _core_source(core_webview2: object) -> str:
+    value = getattr(core_webview2, "Source", None)
+    if value is None:
+        getter = getattr(core_webview2, "get_Source", None)
         if callable(getter):
             value = getter()
     return "" if value is None else str(value)
