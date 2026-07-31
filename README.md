@@ -46,8 +46,8 @@ Run the tests and check the import boundaries:
 
 M1's future desktop additionally requires Microsoft Edge WebView2 Runtime.
 Declaring pywebview does not make explicit CLI commands initialize a GUI; the
-Stage 6 host will fail with an install action rather than falling back to an
-older browser engine.
+Stage 6 host contract refuses pywebview's silent older-engine fallback with an
+install action.
 
 ## Command line
 
@@ -116,8 +116,11 @@ never hides the other result axes in rendered output.
 - Completed the Stage 6 pywebview reality spike on CPython 3.13.14 and
   pywebview 6.2.1: native guards now attach only on the WinForms UI thread,
   dispatch authorization follows native WebView2 document state across
-  canceled navigation, and the tested host dependency is pinned. The headed
-  desktop itself remains unshipped.
+  canceled navigation, attachment failures are observable, frame navigation
+  and popup/browser escape paths are closed, hardened settings and the actual
+  Edge Chromium renderer are verified, full asset URLs derive exact origins,
+  and the security-relevant host dependency is pinned. The headed desktop
+  itself remains unshipped.
 - Completed the integrated M1 adversarial review across execution,
   inventory/integrity, persistence, dispatcher/history, facade concurrency,
   and strict persisted/bridge protocols. Straightforward invariant violations

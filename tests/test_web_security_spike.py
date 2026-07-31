@@ -11,6 +11,7 @@ from namisync.interfaces.web.security_spike import (
     BridgeDispatcher,
     BridgeOriginError,
     BridgeProtocolError,
+    ExactOrigin,
     WebView2Unavailable,
     configure_pywebview2_security,
     start_edge_chromium,
@@ -30,10 +31,23 @@ class EventHook:
             handler(sender, args)
 
 
+class InitializedHook:
+    def __init__(self) -> None:
+        self.handlers = []
+
+    def __iadd__(self, handler):
+        self.handlers.append(handler)
+        return self
+
+    def emit(self) -> bool:
+        return any(handler() is False for handler in self.handlers)
+
+
 class FakeCoreWebView2:
     def __init__(self, source: str = "http://127.0.0.1:41700/index.html") -> None:
         self.Source = source
         self.NavigationStarting = EventHook()
+        self.FrameNavigationStarting = EventHook()
         self.NewWindowRequested = EventHook()
         self.SourceChanged = EventHook()
 
@@ -41,6 +55,7 @@ class FakeCoreWebView2:
 class BeforeLoadHook:
     def __init__(self, window) -> None:
         self.handlers = []
+        self.errors = []
         self._window = window
 
     def __iadd__(self, handler):
@@ -51,7 +66,10 @@ class BeforeLoadHook:
         self._window._on_ui_thread = True
         try:
             for handler in self.handlers:
-                handler()
+                try:
+                    handler()
+                except Exception as error:
+                    self.errors.append(error)
         finally:
             self._window._on_ui_thread = False
 
@@ -109,7 +127,7 @@ def _trusted_document(
     window = _window(core)
     document = configure_pywebview2_security(
         window,
-        source.rsplit("/", 1)[0],
+        source,
     )
     window.events.before_load.emit()
     return document
@@ -139,14 +157,17 @@ def test_native_installation_waits_for_synchronous_ui_before_load() -> None:
             "payload": {},
         }
     )
-    with pytest.raises(BridgeOriginError):
+    with pytest.raises(BridgeOriginError, match="not attached"):
         bridge.dispatch(command)
 
     window.events.before_load.emit()
     window.events.before_load.emit()
 
     assert window.managed_webview.core_accesses == 1
+    assert document.is_attached
+    assert document.attachment_error is None
     assert len(core.NavigationStarting.handlers) == 1
+    assert len(core.FrameNavigationStarting.handlers) == 1
     assert len(core.NewWindowRequested.handlers) == 1
     assert len(core.SourceChanged.handlers) == 1
     assert bridge.dispatch(command)["result"] == {}
@@ -156,19 +177,88 @@ def test_native_installation_refuses_an_off_ui_before_load_callback() -> None:
     core = FakeCoreWebView2()
     window = _window(core)
     window.native.InvokeRequired = True
-    configure_pywebview2_security(
+    document = configure_pywebview2_security(
         window,
         "http://127.0.0.1:41700",
     )
 
-    with pytest.raises(RuntimeError, match="UI thread"):
-        window.events.before_load.emit()
+    window.events.before_load.emit()
 
+    assert not document.is_attached
+    assert document.attachment_error is not None
+    assert "UI thread" in document.attachment_error
+    assert len(window.events.before_load.errors) == 1
     assert window.managed_webview.core_accesses == 0
     assert len(core.NavigationStarting.handlers) == 0
 
+    bridge = BridgeDispatcher(
+        document=document,
+        handlers={"ping": lambda payload: payload},
+    )
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "failed-native-attach",
+            "command": "ping",
+            "payload": {},
+        }
+    )
+    with pytest.raises(BridgeOriginError, match="attachment failed.*UI thread"):
+        bridge.dispatch(command)
 
-def test_native_webview2_hooks_cancel_untrusted_navigation_and_all_popups() -> None:
+
+def test_native_installation_failure_is_sticky_after_a_partial_subscription() -> None:
+    core = FakeCoreWebView2()
+    del core.FrameNavigationStarting
+    window = _window(core)
+    document = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+    )
+
+    window.events.before_load.emit()
+    window.events.before_load.emit()
+
+    assert not document.is_attached
+    assert document.attachment_error is not None
+    assert "navigation events" in document.attachment_error
+    assert len(window.events.before_load.errors) == 1
+    assert window.managed_webview.core_accesses == 1
+    assert len(core.NavigationStarting.handlers) == 1
+
+
+def test_native_installation_records_uninitialized_webview2() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+    window.managed_webview._core = None
+    document = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+    )
+
+    window.events.before_load.emit()
+
+    assert not document.is_attached
+    assert document.attachment_error == "WebView2 is not initialized"
+    assert len(window.events.before_load.errors) == 1
+
+
+def test_native_installation_records_an_unavailable_document_source() -> None:
+    core = FakeCoreWebView2(source="")
+    window = _window(core)
+    document = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+    )
+
+    window.events.before_load.emit()
+
+    assert not document.is_attached
+    assert document.attachment_error == "WebView2 document source is unavailable"
+    assert len(window.events.before_load.errors) == 1
+
+
+def test_native_webview2_hooks_cancel_untrusted_navigation_frames_and_popups() -> None:
     core = FakeCoreWebView2()
     window = _window(core)
     document = configure_pywebview2_security(
@@ -180,11 +270,17 @@ def test_native_webview2_hooks_cancel_untrusted_navigation_and_all_popups() -> N
     external = NavigationArgs("https://example.com/")
     core.NavigationStarting.emit(trusted, sender=core)
     core.NavigationStarting.emit(external, sender=core)
+    trusted_frame = NavigationArgs("http://127.0.0.1:41700/frame.html")
+    external_frame = NavigationArgs("https://example.com/frame.html")
+    core.FrameNavigationStarting.emit(trusted_frame, sender=core)
+    core.FrameNavigationStarting.emit(external_frame, sender=core)
     popup = NewWindowArgs("https://example.com/")
     core.NewWindowRequested.emit(popup, sender=core)
 
     assert not trusted.Cancel
     assert external.Cancel
+    assert trusted_frame.Cancel
+    assert external_frame.Cancel
     assert popup.Handled
 
     bridge = BridgeDispatcher(
@@ -209,27 +305,163 @@ def test_native_webview2_hooks_cancel_untrusted_navigation_and_all_popups() -> N
 
 def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
     calls = []
+    initial_settings = {
+        "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+        "ALLOW_FILE_URLS": True,
+        "ALLOW_DOWNLOADS": True,
+        "REMOTE_DEBUGGING_PORT": 9222,
+    }
+    required_settings = {
+        "OPEN_EXTERNAL_LINKS_IN_BROWSER": False,
+        "ALLOW_FILE_URLS": False,
+        "ALLOW_DOWNLOADS": False,
+        "REMOTE_DEBUGGING_PORT": None,
+    }
 
     class Webview:
+        settings = dict(initial_settings)
+        renderer = "edgechromium"
+        windows = [
+            SimpleNamespace(
+                events=SimpleNamespace(initialized=InitializedHook()),
+            )
+        ]
+
         @staticmethod
-        def start(func=None, *, gui: str) -> None:
-            calls.append((func, gui))
+        def start(func=None, *, gui: str, debug: bool) -> None:
+            assert Webview.settings == required_settings
+            assert not Webview.windows[0].events.initialized.emit()
+            calls.append((func, gui, debug))
 
     setup = lambda: None
     start_edge_chromium(Webview, setup)
-    assert calls == [(setup, "edgechromium")]
+    assert calls == [(setup, "edgechromium", False)]
+
+    class BrokenWebview:
+        settings = dict(initial_settings)
+        renderer = "mshtml"
+        windows = [
+            SimpleNamespace(
+                events=SimpleNamespace(initialized=InitializedHook()),
+            )
+        ]
+
+        @staticmethod
+        def start(func=None, *, gui: str, debug: bool) -> None:
+            del func, gui, debug
+            assert BrokenWebview.windows[0].events.initialized.emit()
+
+    with pytest.raises(WebView2Unavailable, match="install"):
+        start_edge_chromium(BrokenWebview)
 
     class WebViewException(Exception):
         pass
 
-    class BrokenWebview:
-        @staticmethod
-        def start(func=None, *, gui: str) -> None:
-            del func, gui
-            raise WebViewException("runtime missing")
+    unrelated_error = WebViewException("GUI is not initialized")
 
-    with pytest.raises(WebView2Unavailable, match="install"):
-        start_edge_chromium(BrokenWebview)
+    class MisconfiguredWebview:
+        settings = dict(initial_settings)
+        renderer = "edgechromium"
+        windows = [
+            SimpleNamespace(
+                events=SimpleNamespace(initialized=InitializedHook()),
+            )
+        ]
+
+        @staticmethod
+        def start(func=None, *, gui: str, debug: bool) -> None:
+            del func, gui, debug
+            raise unrelated_error
+
+    with pytest.raises(WebViewException, match="GUI is not initialized") as raised:
+        start_edge_chromium(MisconfiguredWebview)
+    assert raised.value is unrelated_error
+
+
+def test_start_refuses_missing_security_settings_before_native_startup() -> None:
+    started = False
+
+    class IncompleteWebview:
+        settings = {
+            "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+            "ALLOW_FILE_URLS": True,
+            "ALLOW_DOWNLOADS": True,
+        }
+        renderer = "edgechromium"
+        windows = [
+            SimpleNamespace(
+                events=SimpleNamespace(initialized=InitializedHook()),
+            )
+        ]
+
+        @staticmethod
+        def start(func=None, *, gui: str, debug: bool) -> None:
+            nonlocal started
+            del func, gui, debug
+            started = True
+
+    with pytest.raises(RuntimeError, match="REMOTE_DEBUGGING_PORT"):
+        start_edge_chromium(IncompleteWebview)
+    assert not started
+
+
+@pytest.mark.parametrize(
+    ("asset_url", "allowed_url"),
+    [
+        (
+            "http://127.0.0.1:41700",
+            "http://127.0.0.1:41700/index.html",
+        ),
+        (
+            "http://127.0.0.1:41700/index.html?view=plan#current",
+            "http://127.0.0.1:41700/assets/app.js",
+        ),
+        (
+            "https://APP.INVALID/root/index.html",
+            "https://app.invalid/other?query=yes",
+        ),
+        (
+            "http://[::1]:41700/root?next=https://example.invalid/a/b",
+            "http://[::1]:41700/other",
+        ),
+    ],
+)
+def test_exact_origin_derives_from_full_asset_urls(
+    asset_url: str,
+    allowed_url: str,
+) -> None:
+    origin = ExactOrigin.from_url(asset_url)
+
+    assert origin.allows(allowed_url)
+    assert not origin.allows("https://example.invalid/")
+
+
+def test_exact_origin_parse_remains_strict_for_origin_contracts() -> None:
+    assert ExactOrigin.parse("https://app.invalid/") == ExactOrigin(
+        scheme="https",
+        host="app.invalid",
+        port=443,
+    )
+    with pytest.raises(ValueError, match="must not include a path"):
+        ExactOrigin.parse("https://app.invalid/index.html")
+    assert ExactOrigin.from_url("http://app.invalid:0/index.html").port == 0
+    loopback = ExactOrigin.from_url("http://127.0.0.1:41700/index.html")
+    assert not loopback.allows("http://127.0.0.1:41701/index.html")
+    assert not loopback.allows("https://127.0.0.1:41700/index.html")
+
+
+@pytest.mark.parametrize(
+    "asset_url",
+    [
+        "relative/index.html",
+        "file:///C:/app/index.html",
+        "https://user@app.invalid/index.html",
+        "http://app.invalid:not-a-port/index.html",
+    ],
+)
+def test_exact_origin_rejects_non_http_authorities(asset_url: str) -> None:
+    with pytest.raises(ValueError, match="packaged asset origin"):
+        ExactOrigin.from_url(asset_url)
 
 
 def test_dispatch_rechecks_origin_and_returns_hostile_text_as_data() -> None:
@@ -290,7 +522,7 @@ def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> N
         bridge.dispatch(command)
 
 
-def test_bridge_source_has_no_host_to_javascript_application_data_channel() -> None:
+def test_namisync_bridge_module_constructs_no_javascript() -> None:
     source = inspect.getsource(
         __import__(
             "namisync.interfaces.web.security_spike",

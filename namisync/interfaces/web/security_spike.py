@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from threading import Lock
 from typing import Protocol
@@ -13,6 +13,12 @@ from urllib.parse import SplitResult, urlsplit
 
 BRIDGE_SCHEMA_VERSION = 1
 _MAX_COMMAND_BYTES = 64 * 1024
+_REQUIRED_WEBVIEW_SETTINGS: tuple[tuple[str, object], ...] = (
+    ("OPEN_EXTERNAL_LINKS_IN_BROWSER", False),
+    ("ALLOW_FILE_URLS", False),
+    ("ALLOW_DOWNLOADS", False),
+    ("REMOTE_DEBUGGING_PORT", None),
+)
 
 
 class BridgeProtocolError(ValueError):
@@ -20,15 +26,23 @@ class BridgeProtocolError(ValueError):
 
 
 class BridgeOriginError(PermissionError):
-    """The current top-level document is not the packaged asset origin."""
+    """Native document authority is unavailable or outside the packaged origin."""
 
 
 class WebView2Unavailable(RuntimeError):
     """The required Edge Chromium renderer could not be started."""
 
 
+class _AttachmentError(RuntimeError):
+    """A sanitized native-guard attachment failure."""
+
+
 class _WebviewModule(Protocol):
-    def start(self, func=None, *, gui: str) -> None: ...
+    settings: MutableMapping[str, object]
+    renderer: str | None
+    windows: list[object]
+
+    def start(self, func=None, *, gui: str, debug: bool) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,8 +57,16 @@ class ExactOrigin:
     def parse(cls, value: str) -> ExactOrigin:
         parsed = urlsplit(value)
         if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-            raise ValueError("packaged asset origin must not include a path or query")
+            raise ValueError(
+                "packaged asset origin must not include a path, query, or fragment"
+            )
         return cls._from_split(parsed)
+
+    @classmethod
+    def from_url(cls, value: str) -> ExactOrigin:
+        """Derive an origin from a complete packaged-asset URL."""
+
+        return cls._from_split(urlsplit(value))
 
     @classmethod
     def _from_split(cls, parsed: SplitResult) -> ExactOrigin:
@@ -57,9 +79,10 @@ class ExactOrigin:
             raise ValueError("packaged asset origin must be an HTTP(S) origin")
         default_port = 443 if parsed.scheme.lower() == "https" else 80
         try:
-            port = parsed.port or default_port
+            parsed_port = parsed.port
         except ValueError as error:
             raise ValueError("packaged asset origin has an invalid port") from error
+        port = parsed_port if parsed_port is not None else default_port
         return cls(parsed.scheme.lower(), parsed.hostname.lower(), port)
 
     def allows(self, value: str) -> bool:
@@ -74,17 +97,49 @@ class ExactOrigin:
 
 
 class NativeDocumentState:
-    """Thread-safe snapshot of the native top-level document source."""
+    """Thread-safe native attachment and top-level document state."""
 
     def __init__(self, origin: ExactOrigin) -> None:
         self._origin = origin
         self._lock = Lock()
         self._current_url = ""
+        self._attached = False
+        self._attachment_error: str | None = None
+
+    @property
+    def is_attached(self) -> bool:
+        with self._lock:
+            return self._attached
+
+    @property
+    def attachment_error(self) -> str | None:
+        with self._lock:
+            return self._attachment_error
 
     def require_trusted(self) -> None:
         with self._lock:
+            attached = self._attached
+            attachment_error = self._attachment_error
             current_url = self._current_url
+        if attachment_error is not None:
+            raise BridgeOriginError(
+                "bridge unavailable because WebView2 security attachment failed: "
+                f"{attachment_error}"
+            )
+        if not attached:
+            raise BridgeOriginError(
+                "bridge unavailable because WebView2 security guards are not attached"
+            )
         self._origin.require(current_url)
+
+    def _mark_attached(self, current_url: str) -> None:
+        with self._lock:
+            self._current_url = current_url
+            self._attached = True
+
+    def _record_attachment_failure(self, message: str) -> None:
+        with self._lock:
+            self._attachment_error = message
 
     def _record(self, current_url: str) -> None:
         with self._lock:
@@ -105,14 +160,20 @@ class _NativeNavigationGuard:
     def attach(self, core_webview2: object) -> None:
         try:
             core_webview2.NavigationStarting += self._on_navigation_starting
+            core_webview2.FrameNavigationStarting += (
+                self._on_frame_navigation_starting
+            )
             core_webview2.NewWindowRequested += self._on_new_window_requested
             core_webview2.SourceChanged += self._on_source_changed
         except AttributeError as error:
-            raise RuntimeError(
+            raise _AttachmentError(
                 "pywebview Edge Chromium backend does not expose required "
                 "WebView2 navigation events"
             ) from error
-        self._document._record(_core_source(core_webview2))
+        current_url = _core_source(core_webview2)
+        if not current_url:
+            raise _AttachmentError("WebView2 document source is unavailable")
+        self._document._mark_attached(current_url)
 
     def _on_navigation_starting(self, sender: object, args: object) -> None:
         del sender
@@ -123,41 +184,52 @@ class _NativeNavigationGuard:
         del sender
         _set_event_flag(args, "Handled", True)
 
+    def _on_frame_navigation_starting(self, sender: object, args: object) -> None:
+        del sender
+        _set_event_flag(args, "Cancel", True)
+
     def _on_source_changed(self, sender: object, args: object) -> None:
         del args
         self._document._record(_core_source(sender))
 
 
 def configure_pywebview2_security(
-    window: object, trusted_origin: str
+    window: object, trusted_url: str
 ) -> NativeDocumentState:
     """Attach native guards synchronously before pywebview exposes its API."""
 
-    origin = ExactOrigin.parse(trusted_origin)
+    origin = ExactOrigin.from_url(trusted_url)
     document = NativeDocumentState(origin)
     guard = _NativeNavigationGuard(origin, document)
-    attached = False
+    attempted = False
 
     def attach_before_load() -> None:
-        nonlocal attached
-        if attached:
+        nonlocal attempted
+        if attempted:
             return
+        attempted = True
         try:
-            native = window.native
-            if native.InvokeRequired:
-                raise RuntimeError(
-                    "WebView2 security guards must attach on the WinForms UI thread"
-                )
-            core = native.browser.webview.CoreWebView2
-        except AttributeError as error:
-            raise RuntimeError(
-                "forced Edge Chromium backend is unavailable; install Microsoft "
-                "Edge WebView2 Runtime"
-            ) from error
-        if core is None:
-            raise RuntimeError("WebView2 is not initialized")
-        guard.attach(core)
-        attached = True
+            try:
+                native = window.native
+                if native.InvokeRequired:
+                    raise _AttachmentError(
+                        "WebView2 security guards must attach on the WinForms UI "
+                        "thread"
+                    )
+                core = native.browser.webview.CoreWebView2
+            except AttributeError as error:
+                raise _AttachmentError(
+                    "forced Edge Chromium backend is unavailable; install Microsoft "
+                    "Edge WebView2 Runtime"
+                ) from error
+            if core is None:
+                raise _AttachmentError("WebView2 is not initialized")
+            guard.attach(core)
+        except Exception as error:
+            document._record_attachment_failure(
+                _safe_attachment_failure(error)
+            )
+            raise
 
     try:
         window.events.before_load += attach_before_load
@@ -168,6 +240,28 @@ def configure_pywebview2_security(
     return document
 
 
+def _safe_attachment_failure(error: Exception) -> str:
+    if isinstance(error, _AttachmentError):
+        return str(error)
+    return "native WebView2 security guards could not attach"
+
+
+def harden_pywebview_settings(webview_module: _WebviewModule) -> None:
+    """Pin pywebview settings that close renderer escape paths."""
+
+    for name, value in _REQUIRED_WEBVIEW_SETTINGS:
+        try:
+            if name not in webview_module.settings:
+                raise KeyError(name)
+            webview_module.settings[name] = value
+            if webview_module.settings[name] != value:
+                raise ValueError(name)
+        except Exception as error:
+            raise RuntimeError(
+                f"required pywebview security setting is unavailable: {name}"
+            ) from error
+
+
 def start_edge_chromium(
     webview_module: _WebviewModule,
     setup: Callable[[], None] | None = None,
@@ -175,14 +269,34 @@ def start_edge_chromium(
     """Force pywebview's Edge Chromium renderer; never accept MSHTML fallback."""
 
     try:
-        webview_module.start(setup, gui="edgechromium")
-    except Exception as error:
-        if type(error).__name__ != "WebViewException":
-            raise
-        raise WebView2Unavailable(
-            "NamiSync requires Microsoft Edge WebView2 Runtime; install it "
-            "and restart NamiSync."
+        window = webview_module.windows[0]
+        initialized = window.events.initialized
+    except (AttributeError, IndexError) as error:
+        raise RuntimeError(
+            "create a pywebview window before starting the desktop host"
         ) from error
+
+    harden_pywebview_settings(webview_module)
+    renderer_checked = False
+    renderer_error: WebView2Unavailable | None = None
+
+    def verify_renderer() -> bool | None:
+        nonlocal renderer_checked, renderer_error
+        renderer_checked = True
+        if webview_module.renderer != "edgechromium":
+            renderer_error = WebView2Unavailable(
+                "NamiSync requires Microsoft Edge WebView2 Runtime; install it "
+                "and restart NamiSync."
+            )
+            return False
+        return None
+
+    initialized += verify_renderer
+    webview_module.start(setup, gui="edgechromium", debug=False)
+    if renderer_error is not None:
+        raise renderer_error
+    if not renderer_checked:
+        raise RuntimeError("pywebview renderer initialization was not observed")
 
 
 class BridgeDispatcher:

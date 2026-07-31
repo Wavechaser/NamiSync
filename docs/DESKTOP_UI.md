@@ -83,28 +83,43 @@ dispatch(command_json)
 It remains versioned, JSON-schema-shaped, size-bounded, and command-allowlisted
 through `BridgeDispatcher`. Commands and responses use opaque ids and primitive
 structured data, never raw filesystem paths as authority. The frontend starts
-every request and receives structured return values; host-initiated
-`evaluate_js`, `run_js`, and `Window.state` are forbidden application-data
-channels.
+every request and receives structured return values. NamiSync-owned code never
+constructs JavaScript or calls `evaluate_js`, `run_js`, or `Window.state` as an
+application-data channel. Pinned pywebview 6.2.1 internally constructs
+JavaScript to return exposed-function results, so its serializer/escaper and
+the real-browser hostile-name round trip remain part of the security boundary.
 
 Live state uses one bounded, coalescing `next_events` pull/drain request. The
 host preserves reliable item and terminal ordering, allows replaceable progress
 snapshots to collapse, and makes a gap or disconnected task visible instead of
 inventing history. A JavaScript call must never block indefinitely waiting for
 an event, and the frontend must keep at most one outstanding event drain per
-task.
+task. Pywebview may reinject its bridge after any `NavigationCompleted`,
+including a canceled or failed navigation, and discard in-flight return
+callbacks. `pywebviewready` is therefore a repeatable event: initialization is
+idempotent, does not duplicate listeners, and every firing ensures exactly one
+drain is re-armed per task.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
-acceptable. Before startup the host registers an `initialized` callback. Once
-the static asset server has selected its random loopback port, that callback
-derives the exact origin from `window.real_url` and registers an idempotent
-synchronous `before_load` callback. On the WinForms UI thread `before_load`
-reaches `CoreWebView2` and attaches the tested `NavigationStarting`,
-`NewWindowRequested`, and `SourceChanged` handlers exactly once before
-application calls are exposed; setup and dispatch workers never access the
-UI-affine native object. Navigation outside the exact packaged asset origin is
-canceled and every popup is handled/canceled.
+acceptable. Before native startup it sets
+`OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
+`ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
+`debug=False`, and uses zero-argument `initialized` callbacks. The start
+wrapper verifies the selected renderer; once the static asset server has
+selected its random loopback port, the host callback derives the exact origin
+from the complete `window.real_url` with `urlsplit` and registers an
+idempotent synchronous `before_load` callback. On the WinForms UI thread
+`before_load` reaches
+`CoreWebView2` and attaches the tested `NavigationStarting`,
+`FrameNavigationStarting`, `NewWindowRequested`, and `SourceChanged` handlers
+exactly once before application calls are exposed; setup and dispatch workers
+never access the UI-affine native object. Top-level navigation outside the
+exact packaged asset origin is canceled, every frame navigation is canceled,
+and every popup is handled. Attachment failure is sticky and observable:
+dispatch remains closed and the host tears down the dead window with an
+actionable message after load rather than relying on an exception that
+pywebview logs and swallows.
 
 `dispatch` independently rechecks a lock-protected snapshot of the native
 committed `CoreWebView2.Source` on every call. It does not authorize from
@@ -112,12 +127,20 @@ pywebview's managed `Source` or `get_current_url()`: both can report a rejected
 navigation target after WebView2 canceled it and retained the packaged
 document. A canceled request leaves the snapshot unchanged, while a genuinely
 committed off-origin source replaces it and causes dispatch to fail closed.
-The packaged static-asset server is not an API or event channel.
+Origin authorization is an entry-time admission check; the bridge neither
+holds the document lock across a handler nor rolls back completed work if
+navigation or reinjection makes its response undeliverable. That state is
+uncertain delivery, not uncertain commit: mutations retry with the same
+`command_id`, and drains recover from the last accepted sequence. The packaged
+static-asset server is not an API or event channel.
 
-The frontend uses a restrictive CSP and DOM APIs such as `textContent` for all
-filesystem-derived data. It must never use `innerHTML`, build executable script
-from returned data, or interpolate a filename into an attribute, URL, command,
-or bridge request. Hostile-name fixtures are required end-to-end.
+The frontend places the restrictive CSP meta element first in `<head>` so no
+earlier resource escapes it; `frame-src 'none'` independently blocks frames
+during initial parsing before the native hooks exist. DOM APIs such as
+`textContent` render all filesystem-derived data. The frontend must never use
+`innerHTML`, build executable script from returned data, or interpolate a
+filename into an attribute, URL, command, style, or bridge request.
+Hostile-name fixtures are required end-to-end.
 
 ## Interaction contract
 

@@ -144,6 +144,32 @@ to a global chronological list.
   treated wrapper navigation intent as committed native document authority;
   fixed with a lock-protected snapshot of native `CoreWebView2.Source` updated
   on the UI thread and read without marshaling by concurrent dispatch workers.
+- SEVERE - FIXED (2026-07-31). Invisible native-guard attachment failure.
+  Pywebview logs and swallows exceptions from synchronous event handlers, so a
+  failed `before_load` installer left dispatch closed but gave the host no
+  actionable state and could retry after a partial subscription. Fixed with
+  explicit pending/attached/failed state, one sticky attachment attempt,
+  attachment-specific fail-closed dispatch, and host-visible error state.
+- SEVERE - FIXED (2026-07-31). New-window system-browser escape. Pywebview's
+  own `NewWindowRequested` handler is subscribed before NamiSync's and opened
+  attacker-chosen URLs in the user's default browser before the later native
+  handler could mark the request handled. Fixed by pinning
+  `OPEN_EXTERNAL_LINKS_IN_BROWSER=False` before native startup, alongside
+  disabled file URLs, downloads, remote debugging, and debug mode; the native
+  popup and navigation guards remain defense in depth.
+- MODERATE - FIXED (2026-07-31). Frame navigation depended only on document
+  CSP. Top-level `NavigationStarting` does not observe iframe navigation, so a
+  weakened or late CSP would leave no native frame control. Fixed by attaching
+  `FrameNavigationStarting` and canceling every frame navigation, while
+  retaining first-in-`head` `frame-src 'none'` for initial parsing.
+- MINOR - FIXED (2026-07-31). Renderer startup misdiagnosis and fragile asset
+  origin derivation. Every exception merely named `WebViewException` was
+  rewritten as a missing-WebView2 error even though pywebview silently falls
+  back to MSHTML when the runtime is absent; future host code was also likely
+  to trim `window.real_url` incorrectly. Fixed by explicitly refusing a
+  non-Edge-Chromium renderer during `initialized`, preserving unrelated
+  startup exceptions, and deriving the exact origin from the complete URL with
+  `urlsplit`.
 
 ### M1 integrated adversarial review
 

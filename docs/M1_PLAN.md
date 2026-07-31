@@ -569,42 +569,57 @@ command allowlist sit behind it; nothing else is reachable.
 **Amended per review finding 4 — the inbound half alone is not
 security-equivalent.** Four gaps this decision originally left open:
 
-1. **Host-initiated JavaScript is unnecessary and forbidden for application
-   data.** Interpolating serialized event data into `evaluate_js` would make a
-   filename JavaScript source; pywebview's `evaluate_js` also has no structured
-   argument channel. JavaScript initiates every exchange through
-   `dispatch(command_json)` and receives ordinary structured return values.
-   Live delivery uses one outstanding `next_events`/event-drain request against
-   a bounded Python queue. Neither `evaluate_js`, `run_js`, nor
-   `Window.state` is an application-data channel. No event payload is ever
-   executable text.
+1. **NamiSync-owned host-initiated JavaScript is unnecessary and forbidden for
+   application data.** Interpolating serialized event data into `evaluate_js`
+   would make a filename JavaScript source; pywebview's public
+   `evaluate_js` also has no structured argument channel. JavaScript initiates
+   every exchange through `dispatch(command_json)` and receives ordinary
+   structured return values. Live delivery uses one outstanding
+   `next_events`/event-drain request against a bounded Python queue. NamiSync
+   code calls neither `evaluate_js`, `run_js`, nor `Window.state` for
+   application data. Pinned pywebview 6.2.1 does internally construct
+   JavaScript in `webview.util.js_bridge_call` to return exposed-function
+   results; its JSON escaping is part of the security boundary, every version
+   change requires re-audit, and a real-browser hostile-name round trip proves
+   the complete return path.
 2. **No sender-origin value.** pywebview's exposed functions run on separate
    threads and do not surface WebView2's sender origin, so the adapter cannot
    authenticate a caller the way raw `WebMessageReceived` would. Public
    `before_load` is not a documented cancellation hook, and pywebview's
    Windows backend otherwise redirects a new-window request into the existing
-   view when external opening is disabled. The WebView host therefore installs
-   narrow native WebView2 `NavigationStarting` and `NewWindowRequested`
-   handlers that cancel every URL outside the exact packaged asset origin.
+   view when external opening is disabled. The WebView host therefore disables
+   external-browser opening and installs narrow native WebView2
+   `NavigationStarting`, `FrameNavigationStarting`, and `NewWindowRequested`
+   handlers that cancel every top-level URL outside the exact packaged asset
+   origin, every frame navigation, and every popup.
    Every `dispatch()` call also rejects unless the current top-level URL is
    that exact origin. This is backend hardening, not a second message API.
 
    **Stage 6 reality refinement (2026-07-30).** `before_load` is still not
    used to cancel navigation; it is the synchronous pre-API-injection boundary
    on which the WinForms UI thread may safely reach `CoreWebView2` and attach
-   the native handlers exactly once. A pre-start `initialized` callback first
-   derives the random asset-server origin from `window.real_url` and registers
-   that `before_load` callback. Direct access from pywebview's setup or exposed-
-   function workers can deadlock. The independent dispatch check reads a
+   the native handlers exactly once. A pre-start zero-argument host
+   `initialized` callback derives the random asset-server origin from the
+   complete `window.real_url` with `urlsplit` and registers that `before_load`
+   callback; the start wrapper's separate zero-argument renderer guard refuses
+   fallback during the same synchronous event. Direct access from pywebview's
+   setup or exposed-function workers can deadlock. Attachment
+   success/failure is recorded because pywebview logs and swallows event-handler
+   exceptions; dispatch stays closed until success and the headed host tears
+   down actionably after failure. The independent dispatch check reads a
    lock-protected snapshot maintained from native committed
    `CoreWebView2.Source`, never pywebview's managed `Source` or
    `get_current_url()`: after a canceled navigation those managed values may
    report the rejected target while the trusted document remains active.
 3. **The renderer must be forced.** pywebview documents an MSHTML fallback;
    silently accepting it means the product is not reliably WebView2 and the
-   CSP/isolation assumptions above do not hold. Force Edge Chromium and
-   **fail actionably** if the WebView2 runtime is unavailable — a clear
-   install prompt, never a degraded silent fallback.
+   CSP/isolation assumptions above do not hold. Before native startup pin
+   `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
+   `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, pass
+   `debug=False`, verify the renderer during synchronous `initialized`, and
+   **fail actionably** if the WebView2 runtime is unavailable — a clear install
+   prompt, never a degraded silent fallback. Unrelated startup exceptions keep
+   their original diagnosis.
 4. **Separate asset serving from the API surface.** pywebview's built-in local
    server is for packaged UI assets only; it is not an event/API channel and
    must not become one. Restricted to static packaged assets.
@@ -661,6 +676,15 @@ paged by SQL rather than after whole-run decoding. Lost-response recovery uses
 the client-local last accepted envelope sequence and the existing
 resubscribe/terminal-record route; it adds no client acknowledgement or second
 server cursor.
+
+Pywebview reinjects its bridge after every `NavigationCompleted`, including
+canceled and failed navigation, and recreates its return-callback table. The
+renderer can trigger this repeatedly. The frontend consequently treats
+`pywebviewready` as repeatable: initialization is idempotent, listener
+registration is not duplicated, and every firing ensures exactly one
+`next_events` drain is armed per task. A lost mutation result is retried with
+the original gesture `command_id`; a lost drain follows the sequence recovery
+above.
 
 **DR-M1-19 — Session observation: one thread per live session now, kept
 swappable for later.**
@@ -762,7 +786,8 @@ its Stage 4 consumer.
   `interfaces/ui_state.py` for cosmetic state (DR-M1-03/04/05).
 - Complete a hostile-navigation bridge spike proving forced Edge Chromium,
   native cancellation of untrusted navigation/new windows, exact-origin
-  rejection in `dispatch`, and structured pull/RPC without `evaluate_js`.
+  rejection in `dispatch`, and structured pull/RPC without NamiSync-owned
+  JavaScript construction.
 
 ### Stage 2 — Executor and Hash Refactor
 
@@ -1109,10 +1134,13 @@ resumed-preflight refusal against the same unfinished run.
   `items` list whose entries retain nominal `item_type` and `phase` tags; no
   integrity item is lost or swept into an operation-only accumulator
   (DR-M1-12).
-- A hostile filename returned by `dispatch` reaches JS as structured data and
-  never as interpolated script text; application-data delivery invokes neither
-  `evaluate_js`, `run_js`, nor `Window.state` (DR-M1-15/18).
-- Native WebView2 hooks cancel external navigation and new-window requests,
+- A hostile filename completes the real page-JS → `dispatch` → pinned
+  pywebview return transport → production `textContent` round trip
+  byte-for-byte; NamiSync-owned code constructs no JavaScript and invokes
+  neither `evaluate_js`, `run_js`, nor `Window.state` for application data
+  (DR-M1-15/18).
+- Native WebView2 hooks cancel external top-level navigation, every frame
+  navigation, and new-window requests,
   and a dispatch attempted from any non-packaged top-level origin is rejected
   even if navigation hardening is deliberately bypassed in the test
   (DR-M1-15).
@@ -1304,13 +1332,17 @@ ledger query and silently drop every candidate whose copy-ledger write was
   `SessionNotFound`. *Not satisfied by* only covering a session that ends
   naturally before teardown, where blocked-`next()`-needs-close never runs.
 - **XV-19 — Bridge: ids in, escaped text out, origin re-checked
-  independently.** Feed the scanner's hostile-name corpus through a real
-  `dispatch` round-trip; assert every filename reaches JS only as escaped
-  display text via `textContent` (grep proves zero `innerHTML`/`evaluate_js`
-  for app data), no command can be built from a raw path (ids only), and — with
-  navigation hardening deliberately bypassed in-test — a dispatch from a
-  non-packaged origin is rejected on the origin recheck alone. *Not satisfied
-  by* one benign filename and a single-file `innerHTML` grep.
+   independently.** Feed the scanner's hostile-name corpus through a real
+  WebView2 round trip from page JavaScript through `dispatch`, the pinned
+  pywebview return transport, and the production `textContent` sink; read the
+  rendered text back and compare the exact escaped display value. A separate
+  source scan proves only that NamiSync-owned code constructs no JavaScript
+  and that packaged assets contain no forbidden DOM/script sinks. Assert that
+  no command can be built from a raw path (ids only), and — with navigation
+  hardening deliberately bypassed in-test — a dispatch from a non-packaged
+  origin is rejected on the origin recheck alone. *Not satisfied by* one benign
+  filename, a direct Python dispatch, or a single-file `innerHTML`/
+  `evaluate_js` grep.
 - **XV-20 — Checkpoint is stateless; tests don't count it.** Cancel at each
   pipeline stage and assert clean teardown via stage-state synchronization; then
   double the checkpoint poll frequency and assert identical cancellation
@@ -1460,9 +1492,12 @@ trusted-origin/navigation enforcement mechanism and a data-safe host-to-JS
 transport. Interpolating serialized event data into `evaluate_js` would
 undermine the hostile-filename defense.
 
-The revised resolution removes host-to-JS application-data transport entirely:
+The revised resolution removes NamiSync-owned host-to-JS script construction:
 JavaScript drains structured results through `dispatch`, while native WebView2
 handlers enforce navigation and each dispatch rechecks the top-level origin.
+Pinned pywebview still implements the exposed-function return internally with
+`evaluate_js`; its escaper is audited and the real-browser round trip covers
+that third-party path.
 
 The plan must also force the Edge Chromium renderer and fail actionably when it
 is unavailable. pywebview documents an MSHTML fallback; accepting that fallback

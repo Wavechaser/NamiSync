@@ -1684,7 +1684,8 @@ ordinary user behavior, are both rejected.
 ### DR-BR-24 — Bridge handlers are concurrent and must be synchronized
 
 DR-M1-15 established that pywebview's exposed functions run on separate
-threads. `BridgeDispatcher` correctly has no locking, because the spike's
+threads—one newly spawned, unbounded thread per exposed-function call in the
+pinned host. `BridgeDispatcher` correctly has no locking, because the spike's
 handlers were pure. Every piece of state Stage 6 adds is not, and the runtime
 is protected only for what it already owns (`_plans` is lock-guarded).
 
@@ -1695,7 +1696,9 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   Two concurrent drains each pop a partial batch and events arrive out of
   order. **An ordering guarantee enforced only by client discipline is not a
   guarantee**; the server holds a per-task drain guard and a second concurrent
-  drain waits or is refused explicitly.
+  drain waits or is refused explicitly. Each blocking drain has a bounded
+  25–30 second wait, returns an empty batch on timeout, and is explicitly woken
+  on close so pywebview threads cannot accumulate forever.
 - **Reliable queue overflow** — the bridge queue is a second bounded handoff
   after the dispatcher's already-bounded `EventStream`, so it must not invent a
   second silent-loss policy. `Progress` is replaceable: a newer snapshot
@@ -1715,6 +1718,14 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   replaceable progress may arrive late after resubscribe but never fabricates
   continuity. This asks the least of the server and avoids a second delivery
   state machine whose acknowledgments could themselves be lost or reordered.
+- **Bridge reinjection** — pywebview reinjects after every
+  `NavigationCompleted`, including canceled or failed navigation, and rebuilds
+  the in-flight return-callback table. The renderer can trigger this
+  repeatedly. `pywebviewready` is therefore repeatable: frontend
+  initialization is idempotent, listener registration is not duplicated, and
+  every firing ensures exactly one drain is re-armed per task. A lost mutation
+  response retries with the original gesture `command_id`; a lost drain uses
+  the sequence recovery above.
 - **Subscription registry** — `SessionObserver.observe` raises when a session
   is already observed, so concurrent task opens must be guarded rather than
   treated as impossible.
@@ -1749,23 +1760,32 @@ site, since a concurrent rebuild produces identical output.
 Unchanged from `M1_PLAN.md` and restated only so this document is
 self-contained: exactly one exposed `dispatch(command_json)`, versioned and
 schema-validated and allowlisted (DR-M1-15/17); forced Edge Chromium with an
-actionable failure and no MSHTML fallback; native `NavigationStarting` and
-`NewWindowRequested` cancellation plus an independent per-call origin recheck;
-no `evaluate_js`, `run_js`, or `Window.state` as application-data channels;
-opaque ids inbound and escaped display text outbound; `textContent` only and
-no `innerHTML`; the packaged asset server serves static assets and is not an
-API channel.
+actionable failure and no MSHTML fallback; hardened pywebview settings with
+`debug=False`; native `NavigationStarting`, `FrameNavigationStarting`, and
+`NewWindowRequested` cancellation plus an independent per-call origin
+recheck; no NamiSync-owned `evaluate_js`, `run_js`, `Window.state`, or
+JavaScript construction as an application-data channel; opaque ids inbound
+and escaped display text outbound; `textContent` only and no `innerHTML`; the
+packaged asset server serves static assets and is not an API channel. Pinned
+pywebview 6.2.1 internally constructs JavaScript for exposed-function returns,
+so its serializer/escaper is audited on every version change and covered by
+the real-browser hostile-name round trip.
 
-The Stage 6 reality run refines how that posture is implemented. A callback
-registered before startup observes `window.real_url` during `initialized`,
-after the asset server has selected its random loopback port, and registers
-one idempotent synchronous `before_load` callback. Native `CoreWebView2` access
-and event subscription occur only in that callback on the WinForms UI thread,
+The Stage 6 reality run refines how that posture is implemented. A
+zero-argument host callback registered before startup observes
+`window.real_url` during `initialized`, after the asset server has selected its
+random loopback port, and registers one idempotent synchronous `before_load`
+callback; the start wrapper's separate zero-argument callback refuses a
+non-Edge-Chromium renderer in the same event. Native `CoreWebView2` access and
+event subscription occur only in `before_load` on the WinForms UI thread,
 before pywebview injects application calls. The independent origin recheck
 consumes a lock-protected native committed-source snapshot updated by
 `SourceChanged`; it never calls pywebview `get_current_url()` from a handler. A
 canceled target does not poison the snapshot, while a committed off-origin
-native source does.
+native source does. Attachment success/failure is sticky and observable
+because pywebview swallows callback exceptions; dispatch stays closed and the
+host tears down actionably after failure. The exact origin is reconstructed
+from the full `window.real_url` with `urlsplit`, never `rsplit`.
 
 The folder picker is the single flow where a real path legitimately enters.
 The host runs the native dialog, retains the path in a server-side slot, and
@@ -1800,9 +1820,12 @@ is the one most likely to regress.
 
 **Resolution: both layers, and the DOM test is required.**
 
-- **A WebView2 integration test** drives the real host with the scanner's
-  hostile-name corpus and asserts the rendered nodes are text nodes carrying
-  the exact escaped display form — not markup, not attributes, not script.
+- **A WebView2 integration test** drives real page JavaScript through
+  `window.pywebview.api.dispatch`, the Python handler, pinned pywebview's
+  internal `evaluate_js` return transport, and the production `textContent`
+  sink. It reads the rendered value back and compares the exact escaped display
+  form from the scanner's hostile-name corpus—byte-for-byte text, not markup,
+  attributes, or script.
   Slice 2 cannot honestly satisfy this by inventing a test-only renderer: the
   production plan and inventory sinks do not exist yet. Slice 2 proves bridge
   round-trip and static sink restrictions; the DOM assertion lands against the
@@ -1812,7 +1835,10 @@ is the one most likely to regress.
   `innerHTML`, `eval`, and `Function(` misses most markup sinks. It also
   rejects `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`,
   `DOMParser`, `Range.createContextualFragment`, dynamic `setAttribute` names,
-  and assignment of returned data into `href`, `src`, or any `on*` attribute.
+  assignment of returned data into `href`, `src`, `style`/`cssText`, or any
+  `on*` attribute, plus `eval`, `new Function`, and string-form timers. This
+  source scan proves only that NamiSync-owned code constructs no JavaScript;
+  it cannot prove or inspect the third-party return transport.
 
 Bridge round-trip tests over the same corpus land in slice 2, covering the
 ids-in / escaped-text-out and origin-recheck clauses of XV-19 without claiming
@@ -1919,6 +1945,16 @@ formed against, and an idempotency key that survives retry.**
   whole subject set**, with a single revision bump per gesture: a per-row guard
   refuses rows 2..n of a gesture against a revision that gesture's own first row
   advanced.
+
+**Origin authorization is entry-only.** `dispatch` admits a handler against
+the current native committed document, then releases that lock before the
+handler runs. It does not recheck after completion or roll back a mutation
+whose response becomes undeliverable after navigation or bridge reinjection.
+That is uncertain delivery, not uncertain commit: the client retries the same
+gesture with the same `command_id`. Recorder-backed mutations replay as
+`NOOP` after an earlier `APPLIED`; session-creating commands return the
+retained original request/session identity. Receipt lookup still precedes
+mutable-state reread and revision validation.
 
 **Refusal is not an error dialog.** A stale command re-reads and re-renders; the
 user sees current truth and repeats the gesture if they still want it. This is
@@ -2529,16 +2565,22 @@ because its local tests are easier.
   synchronous WinForms `before_load` callback rather than a setup or bridge
   worker, and that dispatch authority follows cached native committed
   `CoreWebView2.Source` across a canceled off-origin navigation rather than the
-  poisoned managed `Source`/`get_current_url()` value. *Not satisfied by*
+  poisoned managed `Source`/`get_current_url()` value. It also records the
+  pinned host's internal result-return transport and proves a canceled
+  navigation can trigger reinjection/callback loss. *Not satisfied by*
   documentation lookup, a mock `Window`, a different Python/runtime
-  combination, a native property read from a worker, or an origin test that
-  never attempts and cancels navigation.
+  combination, a native property read from a worker, an origin test that never
+  attempts and cancels navigation, or a source scan confined to NamiSync code.
 - **BR-G-31 — The packaged host keeps its security and process boundaries.**
-  A built installation opens on Edge Chromium, attaches navigation and
-  new-window/source guards on the UI thread before app data is accepted,
-  rejects a missing or incompatible WebView2 with an actionable message,
-  rejects an off-origin committed native source independently of navigation
-  hardening, and routes no-subcommand
+  A built installation pins `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`,
+  `ALLOW_FILE_URLS=False`, `ALLOW_DOWNLOADS=False`,
+  `REMOTE_DEBUGGING_PORT=None`, and `debug=False` before native startup; opens
+  only on Edge Chromium; and attaches top-level navigation, all-frame,
+  new-window, and source guards on the UI thread before app data is accepted.
+  It makes swallowed attachment failure observable and tears the window down
+  actionably; rejects a missing or incompatible WebView2 with an actionable
+  message; rejects an off-origin committed native source independently of
+  navigation hardening; and routes no-subcommand
   launch through `interfaces/launcher.py`. Explicit CLI subcommands do not
   import or initialize pywebview. A second launch activates the existing window
   and exits successfully; activation failure is visible and still non-error.
@@ -2548,8 +2590,11 @@ because its local tests are easier.
   public view type round-trips through the production JSON codec and the one
   exposed `dispatch(command_json)`; unknown versions, commands, fields, and
   malformed opaque ids are refused before invocation. The scanner's complete
-  hostile-name corpus crosses the real bridge byte-for-byte as display text,
-  and the broadened DR-BR-25 sink scan is empty. The native folder picker keeps
+  hostile-name corpus crosses page JavaScript, the real pinned pywebview return
+  transport, and the production `textContent` sink byte-for-byte as display
+  text, and the broadened DR-BR-25 sink scan is empty. Bridge error messages
+  expose no filesystem paths or internals even though pywebview otherwise
+  returns Python tracebacks to the renderer. The native folder picker keeps
   its real path server-side, returns only `{id, display}`, accepts the slot id
   through dispatch, and refuses a fabricated id; no response or command contains
   the path as authority. The inbound cap refuses an oversized command or search
@@ -2570,6 +2615,9 @@ because its local tests are easier.
   progress may coalesce to the latest truthful snapshot. Concurrent
   observe attempts create one subscription or a named refusal, and a
   fault-injected slow facade call proves no `TaskState` lock is held across it.
+  Repeated `pywebviewready` firings while a drain is outstanding install one
+  listener set, retain at most one drain per task, and re-arm delivery after
+  each bridge reincarnation.
   *Not satisfied by* a single drain, a naturally finishing session, one task,
   or a queue that stays below capacity.
 - **BR-G-34 — One visible-sequence implementation defines both trees.** The
@@ -2792,7 +2840,7 @@ lands.
 | `XV-16` shared hash factory and production composition | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor.py tests/test_inventory_runtime.py tests/test_db_repositories.py tests/test_package.py tests/modules/test_verifier.py` | Payload/runtime edits must not fork verifier construction, diverge copy from verify encoding, or import a second hash implementation / B, C |
 | `XV-17` history-v3 reservation | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | No schema change, ALTER, or second version bump is permitted; the reserved generic item/phase shapes remain exact / B, C, Stage 6 slice 7 |
 | `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
-| `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_transport.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | This becomes executable across slices 2, 5, and 6; all three files are required because transport alone cannot prove production DOM sinks / slices 2, 5, 6 |
+| `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_transport.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → production `textContent` round trip and NamiSync-owned sink scan become executable across slices 2, 5, and 6; all three files are required because transport alone cannot prove production DOM sinks / slices 2, 5, 6 |
 | `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
 | M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | The initial Stage 5.5 lanes left this file byte-for-byte unchanged; the integrated adversarial closure adds only the permanent irreversible-update admission regression described by BR-G-17. Every prior explicit sync, history, inventory, and integrity command remains behaviorally unchanged. Slice 1 may later replace only the no-subcommand/entry-point expectations required by the launcher decision / B, C, D, slice 1 |
 | Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |

@@ -1614,13 +1614,18 @@ plan/execution advances to v4 for `user_deselected`.
 The M1 desktop is a pywebview host forced to Edge Chromium/WebView2. It exposes
 one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
 bounded event drain that coalesces only replaceable progress and preserves
-reliable events, cancels untrusted navigation/new-window
-requests through native hooks, and rejects dispatch outside the exact packaged
-origin. A pre-start `initialized` callback derives that origin from
-`window.real_url` after the asset server chooses its loopback port, then
-registers one idempotent synchronous `before_load` callback. Native
+reliable events, cancels untrusted top-level navigation, every frame
+navigation, and new-window requests through native hooks, and rejects dispatch
+outside the exact packaged origin. Before native startup it hardens pywebview's
+external-link, file-URL, download, remote-debugging, and debug settings. A
+pre-start zero-argument `initialized` renderer guard refuses any
+non-Edge-Chromium backend; a host callback derives the origin from the complete
+`window.real_url` with `urlsplit` after the asset server chooses its loopback
+port, then registers one idempotent synchronous `before_load` callback. Native
 `CoreWebView2` access and event subscription occur only in that callback on the
 WinForms UI thread; setup and bridge workers never touch the UI-affine object.
+A sticky attachment state keeps dispatch closed and lets the host tear down
+actionably when pywebview logs and swallows a callback failure.
 A lock-protected snapshot follows native committed `CoreWebView2.Source`, not pywebview's
 managed `Source` or `get_current_url()`, because those can report a canceled
 navigation target while the trusted document remains active. Each dispatch
@@ -1628,6 +1633,9 @@ checks the snapshot without UI-thread marshaling. UI commands carry opaque ids
 rather than paths; rendered filenames use
 escaped display strings and `textContent`, never raw HTML. The task rail, plan
 tree, inventory tree, and history dialog consume service/workflow views only.
+NamiSync-owned code never constructs JavaScript for application data; pinned
+pywebview's internal exposed-function return escaper remains a version-audited,
+real-browser-tested part of the security boundary.
 The native folder picker is the sole path-input exception: the host retains the
 real path in a server slot and returns only an opaque id plus display string.
 `pywebview` is an M1 runtime dependency, not an optional GUI extra.

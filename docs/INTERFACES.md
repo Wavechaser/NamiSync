@@ -218,19 +218,33 @@ settings store.
 
 `interfaces/web/security_spike.py` proves the security-sensitive host shape
 without shipping a desktop. The supported host dependency is pinned to the
-reality-tested pywebview 6.2.1. Startup explicitly requests
-`gui="edgechromium"` and turns only pywebview's renderer-unavailable failure
-into an actionable WebView2 message.
+reality-tested pywebview 6.2.1. That exact pin is security-relevant:
+pywebview internally returns exposed-function results through
+`webview.util.js_bridge_call` and `Window.evaluate_js`, so any version change
+must re-audit that serialization/escaping path and rerun the real-WebView2
+hostile-name round trip. Startup pins
+`OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
+`ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
+`debug=False`, and explicitly requests `gui="edgechromium"`. A synchronous
+`initialized` check refuses pywebview's otherwise silent MSHTML fallback with
+an actionable WebView2 message; unrelated startup exceptions retain their
+original diagnosis.
 
 The live Windows spike established two constraints that the earlier mock did
 not represent. First, pywebview runs its setup callback and exposed functions
 off the WinForms UI thread; reading `CoreWebView2` there can deadlock rather
-than raise. Before startup the host registers an `initialized` callback; after
-the asset server has selected its loopback port, that callback derives the
-exact origin from `window.real_url` and registers one idempotent installer on
-pywebview's synchronous `before_load` event. The `before_load` callback runs on
-the UI thread and attaches `NavigationStarting`, `NewWindowRequested`, and
-`SourceChanged` exactly once before pywebview exposes application calls.
+than raise. Before startup the initialization path registers zero-argument
+`initialized` callbacks: the start wrapper verifies the renderer, while the
+host callback—after the asset server has selected its loopback port—derives
+the exact origin from the complete `window.real_url` with `urlsplit`, without
+string trimming, and registers one idempotent installer on pywebview's
+synchronous `before_load` event. The `before_load` callback runs on the UI
+thread and attaches `NavigationStarting`, `FrameNavigationStarting`,
+`NewWindowRequested`, and `SourceChanged` exactly once before pywebview
+exposes application calls. Attachment state is explicit and sticky: dispatch
+fails closed before attachment or after failure, while the headed host must
+turn a recorded failure into an actionable teardown instead of leaving a dead
+window open.
 Second, after native cancellation, pywebview's managed `Source` and
 `get_current_url()` can report the rejected target even though
 `CoreWebView2.Source` and the active document remain at the packaged origin.
@@ -243,9 +257,22 @@ The only public bridge method is versioned, size-bounded, allowlisted
 `dispatch`. It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
-There is no `evaluate_js`, `run_js`, or `Window.state` data path. The actual
-Stage 6 host must preserve this shape and add the bounded/coalesced event drain
+NamiSync application code never constructs JavaScript or calls `evaluate_js`,
+`run_js`, or `Window.state` to carry application data. Pinned pywebview does
+construct JavaScript internally for its exposed-function return transport;
+its escaping is therefore inside the tested security boundary, not evidence
+that the transport is system-wide script-free. The actual Stage 6 host must
+preserve the NamiSync-owned shape and add the bounded/coalesced event drain
 plus escaped DOM rendering.
+
+Pywebview reinjects its bridge after every `NavigationCompleted`, including
+canceled or failed navigation, and rebuilds its in-flight return-callback
+table. The renderer can trigger this repeatedly. Frontend initialization must
+therefore treat `pywebviewready` as repeatable and idempotent, install no
+duplicate listeners, and ensure exactly one `next_events` request is re-armed
+per task after every firing. A lost mutation response retries with its
+original `command_id`; a lost drain resumes from the last accepted sequence
+and reconciles through terminal truth.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, and WebView2 Runtime 150.0.4078.105. It forced the
