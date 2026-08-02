@@ -409,6 +409,7 @@ def test_xv_8_retained_history_classification_matches_live_result(
         "retained-partial-degraded": OperationResult(
             SessionState.COMPLETED,
             recording=RecordingStatus.DEGRADED,
+            audit=RecordingStatus.DEGRADED,
             items=(succeeded, blocked, verified),
             phases=(execute_two, verify_complete),
             bytes_done=7,

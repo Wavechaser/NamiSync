@@ -91,14 +91,17 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
-- MODERATE - OPEN (2026-07-30). Audit timeout parity. A history finalization
+- MODERATE - FIXED (2026-08-02). Audit timeout parity. A history finalization
   that commits after the audit acknowledgement deadline leaves the delivered
   immutable terminal at `audit=degraded` while the retained history row says
   `audit=ok`. Cause: `HistoryObserver.finalize` persists the provisional OK
   value before the audit pump knows whether acknowledgement met its deadline.
-  Correcting this needs one settlement policy for a timed-out writer: cancel or
-  compensate the late write, persist the final degraded axis through a separate
-  deadline-aware handshake, or explicitly relax live/reopened parity.
+  Fixed with one atomic decision latch on the finalization command: the caller
+  wins an expired cutoff and any late row carries that degraded axis, while a
+  pump that claimed ownership first makes the caller wait for its actual
+  success or failure. History now persists the decided `result.audit` value
+  inside the existing immutable payload and transaction; no schema, version, or
+  corrective write was added.
 - SEVERE - FIXED (2026-07-30). Resumed pre-invocation cancellation. Canceling a
   paused execution just after resume published RUNNING but before
   `invocation.run()` produced a generic canceled terminal while leaving runtime

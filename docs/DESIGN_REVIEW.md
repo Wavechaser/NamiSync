@@ -623,14 +623,14 @@ no directory-level mutation exists.
 History consumed `Terminal` to finalize its row, but `Terminal.result.audit`
 had to already report whether that final write succeeded.
 
-**Resolution (2026-07-18):** Bounded two-phase finalization. Before the runner
-releases the one immutable `Terminal`, it drains the audit subscriber and
-history attempts and acknowledges its final write within the same generous
-timeout; success stamps `audit=OK`, timeout or failure stamps `audit=DEGRADED`
-and releases blocking. History finalizes from the drain step, never parses the
-`Terminal` it acknowledged, and no second terminal exists. The `recording`
-axis has no such loop — the recorder is call-driven and its terminal flush
-completes before result assembly.
+**Resolution (2026-08-02):** Two-phase finalization with one atomic ownership
+decision. Before the runner releases the one immutable `Terminal`, it drains
+the audit subscriber. If the caller wins the five-second cutoff, any late row
+carries the same degraded audit axis; if the pump wins, the caller waits for
+the actual commit success or failure. History finalizes from the drain step,
+never parses the `Terminal` it settled, and no second terminal or corrective
+write exists. The `recording` axis has no such loop — the recorder is
+call-driven and its terminal flush completes before result assembly.
 
 ### DR-36 — Runner aggregation lacked an unwind-emission rule; pause mislabeled
 

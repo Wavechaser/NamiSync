@@ -189,15 +189,19 @@ module — while on `PauseRequested` it emits nothing for them, because they
 remain pending for resume. Emit-as-you-go plus this unwind finalizer means the
 runner never introspects module internals.
 
-Audit finalization is a bounded two-phase step, not a circularity: before the
-runner emits the one immutable `Terminal`, it drains the audit subscriber and
-history attempts its final write, acknowledging within the same generous
-timeout. Success stamps `audit=OK`; timeout or failure stamps `audit=DEGRADED`
-and releases any blocking. Only then is `Terminal` — carrying the settled
-audit axis — released to ordinary subscribers. History finalizes from the
-drain step; it never parses the `Terminal` it already acknowledged, and no
-second terminal exists. (The `recording` axis has no such loop: the recorder
-is call-driven, and its terminal flush completes before result assembly.)
+Audit finalization is a two-phase step, not a circularity: before the runner
+emits the one immutable `Terminal`, it drains the audit subscriber and races
+the pump against the five-second ownership cutoff through one atomic decision
+latch. If the caller wins, it releases `audit=DEGRADED`, and any row the late
+pump commits carries that same degraded axis. If the pump wins, the caller
+waits for its actual commit result: success stamps both live and retained
+`audit=OK`, while failure stamps live `audit=DEGRADED` and leaves no
+contradictory row. The default history writer may retry for ten seconds, so
+pump-owned finalization
+can outlive the five-second cutoff. History never parses the `Terminal` it
+already settled, and no second terminal or corrective write exists. (The
+`recording` axis has no such loop: the recorder is call-driven, and its terminal
+flush completes before result assembly.)
 
 ### 2.3 Events (bones)
 

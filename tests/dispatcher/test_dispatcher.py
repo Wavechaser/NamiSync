@@ -1357,6 +1357,47 @@ def test_observer_failure_degrades_audit_without_rewriting_filesystem_status() -
     assert dispatcher.shutdown().complete
 
 
+def test_late_history_after_caller_timeout_matches_live_degraded_axis() -> None:
+    event_entered = Event()
+    release_event = Event()
+    finalized = Event()
+    retained_results = []
+
+    class LateObserver:
+        def on_event(self, envelope):
+            del envelope
+            event_entered.set()
+            assert release_event.wait(2)
+
+        def finalize(self, result):
+            retained_results.append(result)
+            finalized.set()
+
+        def close(self):
+            pass
+
+    def run(context):
+        context.emit(PhaseChanged("one"))
+        return OperationResult(SessionState.COMPLETED)
+
+    dispatcher = Dispatcher(
+        {"observed": registration(lambda payload: run)},
+        audit_observer_factory=lambda record: LateObserver(),
+        audit_timeout=0.05,
+    )
+    session_id = dispatcher.submit("observed", b"payload")
+    assert event_entered.wait(2)
+
+    record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
+    assert record.result is not None
+    assert record.result.audit is RecordingStatus.DEGRADED
+    release_event.set()
+    assert finalized.wait(2)
+    assert retained_results[0].audit is record.result.audit
+    assert dispatcher.shutdown().complete
+
+
 def test_observer_factory_failure_degrades_audit_without_aborting_admission() -> None:
     def unavailable_history(record):
         raise OSError("history database cannot be opened")

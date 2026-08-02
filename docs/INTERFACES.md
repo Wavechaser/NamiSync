@@ -295,8 +295,8 @@ canceled-navigation discrepancy above.
 - Read current session records and observe through the service's sink API.
 - Treat progress as a replaceable snapshot. Handle bounded state/item/terminal
   delivery, including `Gap` plus resubscription for an ejected/late ordinary
-  subscriber; history has timeout-bounded admission delivery and exposes failure
-  through the audit axis rather than pretending the stream was complete.
+subscriber; history has timeout-bounded admission delivery and an atomic
+finalization ownership cutoff that keeps live and retained audit axes equal.
 - Present refusal, cancellation, partial failure, recording-behind, history
   failure, integrity mismatch, and verification-incomplete as distinct states.
 - Keep plan, inventory, and history presentation models orthogonal.

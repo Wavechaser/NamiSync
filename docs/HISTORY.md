@@ -61,17 +61,22 @@ The history observer attaches at session admission as the distinguished reliable
 audit subscriber. It creates an activity envelope using session/run token,
 activity kind, actual UTC start, host provenance, subject or source/target
 context, and schema version. It consumes ordered preterminal phase/item events.
-When the runner requests finalization, it drains those events and writes the
-final envelope/summary from the provisional typed result, then acknowledges
-success or failure within the same timeout. It never derives its final state by
-parsing the Terminal that depends on that acknowledgement.
+When the runner requests finalization, it drains those events and races the
+caller against the pump at one atomic ownership latch. A caller that reaches
+the five-second cutoff first decides degraded; any late row carries that axis.
+A pump that owns finalization first writes the provisional OK axis and the
+caller waits for its actual success or failure. The observer never derives its
+final state by parsing the Terminal that depends on that settlement.
 
 Its queue is bounded and sized for at least the reliable events emitted between
 adjacent checkpoints. When full, the producer waits at the next safe checkpoint
 boundary instead of dropping audit, capped by an injected generous timeout.
-Drain within that bound guarantees in-process delivery; failure/timeout degrades
-the session's audit axis and stops blocking. Disk durability remains
-best-effort: a process crash may lose at most the bounded in-flight buffer.
+Drain within that bound guarantees in-process delivery. Caller-owned timeout or
+pump-owned failure degrades the session's audit axis without changing domain or
+ledger truth. The default history writer may retry for ten seconds, so a
+pump-owned finalization can outlive the five-second ownership cutoff. Disk
+durability remains best-effort: a process crash may lose at most the bounded
+in-flight buffer.
 
 Every explicit attempt is recordable: success, partial failure, all-noop,
 blocked, capacity/preflight refusal, cancellation, unexpected exception,
@@ -119,23 +124,19 @@ failure sets `OperationResult.audit=DEGRADED` and system health loudly, but
 never aborts dispatcher admission or rewrites filesystem `status` or ledger
 `recording`. If construction fails before an observer exists, dispatcher uses a
 degraded-audit sentinel and still runs the admitted domain session. History may
-be behind only when that axis says so for a delivered terminal outside the
-known late-finalization timeout defect below; a process crash has no completed
-result, loses at most the bounded buffer, and is surfaced by startup
-reconciliation. An unbounded queue and silent loss are forbidden.
+be behind only when that axis says so for a delivered terminal; a process crash
+has no completed result, loses at most the bounded buffer, and is surfaced by
+startup reconciliation. An unbounded queue and silent loss are forbidden.
 
 Finalization is deliberately two phase. The runner first supplies the
-provisional domain/recording result and waits for history to drain and attempt
-its final write. It then settles the audit axis from the acknowledgement and
-releases one immutable Terminal to ordinary subscribers. A timeout is itself a
-failed acknowledgement: blocking ends, `audit=DEGRADED`, and no second
-corrective Terminal exists. The call-driven recorder completes its own terminal
-flush before result assembly and does not participate in this handshake.
-The retained row can currently diverge when a final history write completes
-after that deadline: it may contain the provisional `audit=ok` while the live
-terminal correctly remains degraded. `BUGS.md` records the open settlement
-choice; live/reopened parity must not be claimed for this timeout case until it
-is resolved.
+provisional domain/recording result. One latch then decides the audit axis
+before history builds its immutable payload hash: caller-owned timeout makes
+both the Terminal and any late row degraded; pump ownership makes the caller
+wait for the real outcome, yielding OK only after success and degraded with no
+row after failure. The observer persists `result.audit` in the existing history
+transaction. No second corrective Terminal or write exists, and the call-driven
+recorder completes its own terminal flush before result assembly without
+participating in this handshake.
 
 An unexpected workflow error still emits/finalizes a failed attempt through the
 generic session wrapper. History code catches its own SQLite/serialization
@@ -196,9 +197,9 @@ Tests cover sync and integrity axis/detail round-trip through the generic v3 sto
 outcomes, blocked/no-op/refused attempts, exact duplicate delivery, conflicting
 duplicate diagnosis, idempotent run finalization, read-only browsing,
 old-schema refusal, unknown reliable-body rejection, and failure isolation.
-Buffer pressure, acknowledgement timeout, and single-terminal settlement are
-dispatcher tests. Retention, replay, discard audit, and export remain future
-acceptance gates.
+Buffer pressure, caller/pump ownership races, late success/failure, and
+single-terminal settlement are dispatcher tests. Retention, replay, discard
+audit, and export remain future acceptance gates.
 
 - Every terminal path listed above produces exactly one idempotent envelope with
   actual start/end ordering and activity kind.
@@ -218,9 +219,10 @@ acceptance gates.
   the bound while `audit=OK` and no backpressure happens mid-filesystem
   operation; timeout stops blocking and yields `audit=DEGRADED` rather than
   silent loss under an OK result.
-- Terminal-finalization fault injection proves success/failure acknowledgement
-  is reflected in the single Terminal delivered to ordinary subscribers; no
-  second corrective Terminal is emitted.
+- Terminal-finalization fault injection proves caller-win and pump-win races,
+  late success/failure, and degraded retained round-trip remain identical in
+  the single Terminal and retained row; no second corrective Terminal is
+  emitted.
 - Retention on a writable connection prunes eligible detail, preserves envelope
   and summary, handles timezone/precision boundaries, and is idempotent.
 - Replay is unavailable with an explicit reason after detail pruning and always

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from threading import Event, Thread
-from time import monotonic
+from time import monotonic, sleep
 
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import Gap, PhaseChanged, Progress, StateChanged, Terminal
@@ -130,6 +130,143 @@ def test_audit_observer_receives_reliable_preterminal_events_and_finalizes() -> 
     hub.emit(Terminal(result))
     assert [type(envelope.body) for envelope in observer.events] == [PhaseChanged]
     assert observer.results == [result]
+    assert hub.close(0.5)
+
+
+def test_caller_timeout_wins_and_pump_conforms_persisted_result() -> None:
+    release_event = Event()
+    event_entered = Event()
+    finalized = Event()
+
+    class DelayedEvent(Observer):
+        def on_event(self, envelope) -> None:
+            event_entered.set()
+            assert release_event.wait(2)
+            super().on_event(envelope)
+
+        def finalize(self, result) -> None:
+            super().finalize(result)
+            finalized.set()
+
+    observer = DelayedEvent()
+    hub = make_hub(observer=observer, audit_timeout=0.05)
+    hub.emit(PhaseChanged("one"))
+    assert event_entered.wait(2)
+
+    status = hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+
+    assert status is RecordingStatus.DEGRADED
+    release_event.set()
+    assert finalized.wait(2)
+    assert observer.results[0].audit is RecordingStatus.DEGRADED
+    assert hub.close(0.5)
+
+
+def test_queued_finalize_does_not_write_after_prior_event_failure() -> None:
+    event_entered = Event()
+    release_event = Event()
+    complete = Event()
+    statuses: list[RecordingStatus] = []
+
+    class FailedEvent(Observer):
+        def on_event(self, envelope) -> None:
+            del envelope
+            event_entered.set()
+            assert release_event.wait(2)
+            raise RuntimeError("history event failed")
+
+    observer = FailedEvent()
+    hub = make_hub(observer=observer, audit_timeout=0.5)
+    hub.emit(PhaseChanged("one"))
+    assert event_entered.wait(2)
+
+    def finalize() -> None:
+        statuses.append(
+            hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        )
+        complete.set()
+
+    thread = Thread(target=finalize)
+    thread.start()
+    deadline = monotonic() + 2
+    while hub._audit._queue.empty() and monotonic() < deadline:
+        sleep(0.001)
+    assert not hub._audit._queue.empty()
+    release_event.set()
+    assert complete.wait(2)
+    thread.join()
+
+    assert statuses == [RecordingStatus.DEGRADED]
+    assert observer.results == []
+    assert hub.close(0.5)
+
+
+def test_pump_claim_before_deadline_waits_for_late_success() -> None:
+    finalize_entered = Event()
+    release_finalize = Event()
+    complete = Event()
+    statuses: list[RecordingStatus] = []
+
+    class DelayedFinalize(Observer):
+        def finalize(self, result) -> None:
+            finalize_entered.set()
+            assert release_finalize.wait(2)
+            super().finalize(result)
+
+    observer = DelayedFinalize()
+    hub = make_hub(observer=observer, audit_timeout=0.05)
+
+    def finalize() -> None:
+        statuses.append(
+            hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        )
+        complete.set()
+
+    thread = Thread(target=finalize)
+    thread.start()
+    assert finalize_entered.wait(2)
+    assert not complete.wait(0.1)
+    assert not hub.audit_degraded
+    release_finalize.set()
+    assert complete.wait(2)
+    thread.join()
+
+    assert statuses == [RecordingStatus.OK]
+    assert observer.results[0].audit is RecordingStatus.OK
+    assert hub.close(0.5)
+
+
+def test_pump_claim_before_deadline_reports_late_commit_failure() -> None:
+    finalize_entered = Event()
+    release_finalize = Event()
+    complete = Event()
+    statuses: list[RecordingStatus] = []
+
+    class FailedFinalize(Observer):
+        def finalize(self, result) -> None:
+            del result
+            finalize_entered.set()
+            assert release_finalize.wait(2)
+            raise RuntimeError("history commit failed")
+
+    hub = make_hub(observer=FailedFinalize(), audit_timeout=0.05)
+
+    def finalize() -> None:
+        statuses.append(
+            hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        )
+        complete.set()
+
+    thread = Thread(target=finalize)
+    thread.start()
+    assert finalize_entered.wait(2)
+    assert not complete.wait(0.1)
+    release_finalize.set()
+    assert complete.wait(2)
+    thread.join()
+
+    assert statuses == [RecordingStatus.DEGRADED]
+    assert hub.audit_degraded
     assert hub.close(0.5)
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from queue import Full, Queue
 from threading import Condition, Event, Lock, Thread
@@ -136,6 +136,24 @@ class _Finalize:
     result: OperationResult
     complete: Event
     succeeded: bool = False
+    _lock: Lock = field(default_factory=Lock, repr=False)
+    _decided: bool = False
+    _timed_out: bool = False
+
+    def claim(self, timed_out: bool) -> bool:
+        with self._lock:
+            if self._decided:
+                return False
+            self._decided = True
+            self._timed_out = timed_out
+            return True
+
+    @property
+    def timed_out(self) -> bool:
+        with self._lock:
+            if not self._decided:
+                raise RuntimeError("audit finalization is not decided")
+            return self._timed_out
 
 
 class _Stop:
@@ -191,9 +209,16 @@ class _AuditPump:
             self._degraded.set()
             return RecordingStatus.DEGRADED
         remaining = deadline - monotonic()
-        if remaining <= 0 or not command.complete.wait(remaining):
+        if remaining > 0 and command.complete.wait(remaining):
+            return self._final_status(command)
+        if command.claim(timed_out=True):
             self._degraded.set()
             return RecordingStatus.DEGRADED
+        # Pump ownership preserves parity; the default 10s writer retry can outlive the 5s cutoff.
+        command.complete.wait()
+        return self._final_status(command)
+
+    def _final_status(self, command: _Finalize) -> RecordingStatus:
         if not command.succeeded or self.degraded:
             return RecordingStatus.DEGRADED
         return RecordingStatus.OK
@@ -221,13 +246,23 @@ class _AuditPump:
                     self._closed.set()
                     return
                 if isinstance(command, _Finalize):
-                    if not self.degraded:
-                        try:
-                            self._observer.finalize(command.result)
-                            self._observer.close()
-                            command.succeeded = True
-                        except BaseException:
-                            self._degraded.set()
+                    result = command.result
+                    pump_owned = command.claim(timed_out=False)
+                    if pump_owned and self.degraded:
+                        command.complete.set()
+                        self._closed.set()
+                        return
+                    if not pump_owned:
+                        if command.timed_out:
+                            result = replace(
+                                result, audit=RecordingStatus.DEGRADED
+                            )
+                    try:
+                        self._observer.finalize(result)
+                        self._observer.close()
+                        command.succeeded = True
+                    except BaseException:
+                        self._degraded.set()
                     command.complete.set()
                     self._closed.set()
                     return

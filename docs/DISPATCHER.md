@@ -134,10 +134,12 @@ History attaches at admission before workflow events. Subscriber exceptions and
 timeouts are isolated and surfaced through `OperationResult.audit`; they do not
 rewrite filesystem or ledger truth. Dispatcher must not substitute an unbounded
 queue or silent loss. Before terminal fanout, the runner drains history and
-requests its final acknowledgement; success settles `audit=OK`, while timeout
-or failure settles `audit=DEGRADED` and releases blocking. The immutable
-Terminal is then sent to ordinary subscribers, never used as history's own
-finalization input.
+requests finalization through an atomic ownership latch. A caller that wins the
+five-second cutoff settles degraded, and any row the late pump commits carries
+that same axis. A pump that wins makes the caller wait for its actual outcome:
+commit success settles OK, while failure settles degraded with no
+contradictory row. The immutable Terminal is then sent to ordinary subscribers,
+never used as history's own finalization input.
 
 The implemented observer seam is structural and core-typed, so `db` need not
 import dispatcher: `on_event(Envelope)`, `finalize(OperationResult)`, and

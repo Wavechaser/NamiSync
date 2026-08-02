@@ -283,8 +283,9 @@ produce terminal. Filesystem, integrity, ledger `recording`, and history
 `audit` statuses are independent. A verify-phase mismatch or exception never
 rewrites successful execution; a ledger failure never suppresses byte
 classification; a history failure/timeout degrades only `audit`. The runner
-drains and finalizes history first, settles the audit axis from its bounded
-acknowledgement, and only then releases the immutable Terminal.
+drains and finalizes history first, settles the audit axis through the atomic
+caller/pump ownership decision and actual pump outcome, and only then releases
+the immutable Terminal.
 
 Execution and integrity outcomes implement one nominal `ResultItem` contract
 with explicit `item_type` and `phase` tags. Standalone Stage 3 sessions write

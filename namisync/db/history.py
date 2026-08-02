@@ -293,7 +293,7 @@ class HistoryObserver:
                         encode_utc(ended_at),
                         result.status.value,
                         result.recording.value,
-                        RecordingStatus.OK.value,
+                        result.audit.value,
                         result.disposition.value,
                         int(result.canceled),
                         result.bytes_done,
