@@ -1616,12 +1616,16 @@ one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
 bounded event drain that coalesces only replaceable progress and preserves
 reliable events, cancels untrusted top-level navigation, every frame
 navigation, and new-window requests through native hooks, and rejects dispatch
-outside the exact packaged origin. Before native startup it hardens pywebview's
-external-link, file-URL, download, remote-debugging, and debug settings. A
-pre-start zero-argument `initialized` renderer guard refuses any
-non-Edge-Chromium backend; a host callback derives the origin from the complete
-`window.real_url` with `urlsplit` after the asset server chooses its loopback
-port, then registers one idempotent synchronous `before_load` callback. Native
+outside the exact packaged origin. Before `create_window` it hardens pywebview's
+external-link, file-URL, download, and remote-debugging settings and performs a
+read-only WebView2 runtime registry probe; `start_edge_chromium` repeats that
+preparation before native initialization and passes `debug=False`. A configured
+`WEBVIEW2_RUNTIME_PATH` short-circuits the registry probe. One pre-start
+zero-argument `initialized` callback first refuses any non-Edge-Chromium
+backend and only then invokes the host callback, which derives the origin from
+the complete `window.real_url` with `urlsplit` after the asset server chooses
+its loopback port and registers one idempotent synchronous `before_load`
+callback. Native
 `CoreWebView2` access and event subscription occur only in that callback on the
 WinForms UI thread; setup and bridge workers never touch the UI-affine object.
 A sticky attachment state keeps dispatch closed and lets the host tear down

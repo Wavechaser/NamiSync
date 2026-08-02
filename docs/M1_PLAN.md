@@ -595,14 +595,15 @@ security-equivalent.** Four gaps this decision originally left open:
    Every `dispatch()` call also rejects unless the current top-level URL is
    that exact origin. This is backend hardening, not a second message API.
 
-   **Stage 6 reality refinement (2026-07-30).** `before_load` is still not
-   used to cancel navigation; it is the synchronous pre-API-injection boundary
+   **Stage 6 reality refinement (2026-07-30, corrected 2026-08-01).**
+   `before_load` is still not used to cancel navigation; it is the synchronous
+   pre-API-injection boundary
    on which the WinForms UI thread may safely reach `CoreWebView2` and attach
-   the native handlers exactly once. A pre-start zero-argument host
-   `initialized` callback derives the random asset-server origin from the
-   complete `window.real_url` with `urlsplit` and registers that `before_load`
-   callback; the start wrapper's separate zero-argument renderer guard refuses
-   fallback during the same synchronous event. Direct access from pywebview's
+   the native handlers exactly once. One pre-start zero-argument callback first
+   verifies the renderer and invokes host initialization only on Edge Chromium.
+   The host then derives the random asset-server origin from the complete
+   `window.real_url` with `urlsplit` and registers that `before_load` callback.
+   Direct access from pywebview's
    setup or exposed-function workers can deadlock. Attachment
    success/failure is recorded because pywebview logs and swallows event-handler
    exceptions; dispatch stays closed until success and the headed host tears
@@ -613,10 +614,13 @@ security-equivalent.** Four gaps this decision originally left open:
    report the rejected target while the trusted document remains active.
 3. **The renderer must be forced.** pywebview documents an MSHTML fallback;
    silently accepting it means the product is not reliably WebView2 and the
-   CSP/isolation assumptions above do not hold. Before native startup pin
+   CSP/isolation assumptions above do not hold. Before `create_window`, pin
    `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
-   `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, pass
-   `debug=False`, verify the renderer during synchronous `initialized`, and
+   `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, then use read-only
+   registry access to preflight the WebView2 runtime before pywebview can import
+   its mutating MSHTML fallback. A configured `WEBVIEW2_RUNTIME_PATH` bypasses
+   that probe. Repeat preparation before startup, pass `debug=False`, verify the
+   renderer before host setup during synchronous `initialized`, and
    **fail actionably** if the WebView2 runtime is unavailable — a clear install
    prompt, never a degraded silent fallback. Unrelated startup exceptions keep
    their original diagnosis.
@@ -1143,6 +1147,12 @@ resumed-preflight refusal against the same unfinished run.
   navigation, and new-window requests,
   and a dispatch attempted from any non-packaged top-level origin is rejected
   even if navigation hardening is deliberately bypassed in the test
+  (DR-M1-15).
+- On the packaged page, `window.open('https://example.invalid/')` does not
+  launch the system browser or replace the packaged document, and a subsequent
+  production bridge call still succeeds. This must exercise pywebview's first
+  `NewWindowRequested` handler and its `load_url` redirect into NamiSync's
+  `NavigationStarting` guard rather than invoking either handler in isolation
   (DR-M1-15).
 - Observer teardown: unsubscribe, window close, and app shutdown with a live
   session each terminate every observer thread rather than blocking forever

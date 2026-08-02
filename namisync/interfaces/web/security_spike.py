@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import winreg
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from threading import Lock
@@ -18,6 +19,12 @@ _REQUIRED_WEBVIEW_SETTINGS: tuple[tuple[str, object], ...] = (
     ("ALLOW_FILE_URLS", False),
     ("ALLOW_DOWNLOADS", False),
     ("REMOTE_DEBUGGING_PORT", None),
+)
+_WEBVIEW2_RUNTIME_CLIENT = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+_WEBVIEW2_MINIMUM_VERSION = (86, 0, 622, 0)
+_WEBVIEW2_INSTALL_MESSAGE = (
+    "NamiSync requires Microsoft Edge WebView2 Runtime; install it and restart "
+    "NamiSync."
 )
 
 
@@ -262,39 +269,98 @@ def harden_pywebview_settings(webview_module: _WebviewModule) -> None:
             ) from error
 
 
+def prepare_pywebview_host(webview_module: _WebviewModule) -> None:
+    """Harden pywebview and refuse a missing WebView2 before window creation."""
+
+    harden_pywebview_settings(webview_module)
+    try:
+        fixed_runtime = webview_module.settings["WEBVIEW2_RUNTIME_PATH"]
+    except Exception as error:
+        raise RuntimeError(
+            "required pywebview security setting is unavailable: "
+            "WEBVIEW2_RUNTIME_PATH"
+        ) from error
+    if fixed_runtime:
+        return
+    if not _has_webview2_runtime():
+        raise WebView2Unavailable(_WEBVIEW2_INSTALL_MESSAGE)
+
+
+def _has_webview2_runtime() -> bool:
+    probes = (
+        (
+            winreg.HKEY_CURRENT_USER,
+            rf"SOFTWARE\Microsoft\EdgeUpdate\Clients\{_WEBVIEW2_RUNTIME_CLIENT}",
+        ),
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\"
+            f"{_WEBVIEW2_RUNTIME_CLIENT}",
+        ),
+    )
+    for hive, path in probes:
+        try:
+            with winreg.OpenKey(hive, path, 0, winreg.KEY_READ) as key:
+                version, _ = winreg.QueryValueEx(key, "pv")
+        except Exception:
+            continue
+        if _is_supported_webview2_version(version):
+            return True
+    return False
+
+
+def _is_supported_webview2_version(value: object) -> bool:
+    try:
+        parts = tuple(int(part) for part in str(value).split("."))
+    except ValueError:
+        return False
+    if not parts or len(parts) > len(_WEBVIEW2_MINIMUM_VERSION):
+        return False
+    padded = parts + (0,) * (len(_WEBVIEW2_MINIMUM_VERSION) - len(parts))
+    return padded >= _WEBVIEW2_MINIMUM_VERSION
+
+
 def start_edge_chromium(
     webview_module: _WebviewModule,
     setup: Callable[[], None] | None = None,
+    *,
+    on_initialized: Callable[[], None] | None = None,
 ) -> None:
     """Force pywebview's Edge Chromium renderer; never accept MSHTML fallback."""
 
+    prepare_pywebview_host(webview_module)
     try:
         window = webview_module.windows[0]
-        initialized = window.events.initialized
+        initialized_event = window.events.initialized
     except (AttributeError, IndexError) as error:
         raise RuntimeError(
             "create a pywebview window before starting the desktop host"
         ) from error
 
-    harden_pywebview_settings(webview_module)
     renderer_checked = False
     renderer_error: WebView2Unavailable | None = None
+    host_initialization_error: Exception | None = None
 
-    def verify_renderer() -> bool | None:
-        nonlocal renderer_checked, renderer_error
+    def initialize_host_if_edge_chromium() -> bool | None:
+        nonlocal renderer_checked, renderer_error, host_initialization_error
         renderer_checked = True
         if webview_module.renderer != "edgechromium":
-            renderer_error = WebView2Unavailable(
-                "NamiSync requires Microsoft Edge WebView2 Runtime; install it "
-                "and restart NamiSync."
-            )
+            renderer_error = WebView2Unavailable(_WEBVIEW2_INSTALL_MESSAGE)
             return False
+        if on_initialized is not None:
+            try:
+                on_initialized()
+            except Exception as error:
+                host_initialization_error = error
+                return False
         return None
 
-    initialized += verify_renderer
+    initialized_event += initialize_host_if_edge_chromium
     webview_module.start(setup, gui="edgechromium", debug=False)
     if renderer_error is not None:
         raise renderer_error
+    if host_initialization_error is not None:
+        raise host_initialization_error
     if not renderer_checked:
         raise RuntimeError("pywebview renderer initialization was not observed")
 

@@ -46,8 +46,9 @@ Run the tests and check the import boundaries:
 
 M1's future desktop additionally requires Microsoft Edge WebView2 Runtime.
 Declaring pywebview does not make explicit CLI commands initialize a GUI; the
-Stage 6 host contract refuses pywebview's silent older-engine fallback with an
-install action.
+Stage 6 host contract performs a read-only runtime preflight before window
+creation, then refuses pywebview's silent older-engine fallback with an install
+action and no fallback-time registry writes.
 
 ## Command line
 
@@ -118,9 +119,10 @@ never hides the other result axes in rendered output.
   dispatch authorization follows native WebView2 document state across
   canceled navigation, attachment failures are observable, frame navigation
   and popup/browser escape paths are closed, hardened settings and the actual
-  Edge Chromium renderer are verified, full asset URLs derive exact origins,
-  and the security-relevant host dependency is pinned. The headed desktop
-  itself remains unshipped.
+  Edge Chromium renderer are verified, WebView2 absence is refused through a
+  read-only pre-window probe before pywebview can import its mutating MSHTML
+  fallback, full asset URLs derive exact origins, and the security-relevant
+  host dependency is pinned. The headed desktop itself remains unshipped.
 - Completed the integrated M1 adversarial review across execution,
   inventory/integrity, persistence, dispatcher/history, facade concurrency,
   and strict persisted/bridge protocols. Straightforward invariant violations

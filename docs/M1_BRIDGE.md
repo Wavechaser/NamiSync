@@ -1771,14 +1771,16 @@ pywebview 6.2.1 internally constructs JavaScript for exposed-function returns,
 so its serializer/escaper is audited on every version change and covered by
 the real-browser hostile-name round trip.
 
-The Stage 6 reality run refines how that posture is implemented. A
-zero-argument host callback registered before startup observes
-`window.real_url` during `initialized`, after the asset server has selected its
-random loopback port, and registers one idempotent synchronous `before_load`
-callback; the start wrapper's separate zero-argument callback refuses a
-non-Edge-Chromium renderer in the same event. Native `CoreWebView2` access and
-event subscription occur only in `before_load` on the WinForms UI thread,
-before pywebview injects application calls. The independent origin recheck
+The Stage 6 reality run refines how that posture is implemented. A pre-window
+preparation step hardens pywebview and probes the WebView2 runtime with
+read-only registry access; a configured fixed runtime bypasses the probe. The
+start wrapper repeats preparation before pywebview initialization, then its
+single zero-argument `initialized` callback refuses a non-Edge-Chromium
+renderer before invoking host initialization. The host observes
+`window.real_url` after the asset server has selected its random loopback port
+and registers one idempotent synchronous `before_load` callback. Native
+`CoreWebView2` access and event subscription occur only in `before_load` on the
+WinForms UI thread, before pywebview injects application calls. The independent origin recheck
 consumes a lock-protected native committed-source snapshot updated by
 `SourceChanged`; it never calls pywebview `get_current_url()` from a handler. A
 canceled target does not poison the snapshot, while a committed off-origin
@@ -2567,12 +2569,18 @@ because its local tests are easier.
   `CoreWebView2.Source` across a canceled off-origin navigation rather than the
   poisoned managed `Source`/`get_current_url()` value. It also records the
   pinned host's internal result-return transport and proves a canceled
-  navigation can trigger reinjection/callback loss. *Not satisfied by*
+  navigation can trigger reinjection/callback loss. Its rerun also invokes
+  `window.open('https://example.invalid/')` from the packaged page through
+  pywebview's real first popup handler and NamiSync's later guards, proving no
+  system browser launch, no document replacement, and a working subsequent
+  bridge call. *Not satisfied by*
   documentation lookup, a mock `Window`, a different Python/runtime
   combination, a native property read from a worker, an origin test that never
   attempts and cancels navigation, or a source scan confined to NamiSync code.
 - **BR-G-31 — The packaged host keeps its security and process boundaries.**
-  A built installation pins `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`,
+  A built installation prepares pywebview before `create_window`, using only
+  read-only registry access to reject missing WebView2 before pywebview can
+  import MSHTML, and pins `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`,
   `ALLOW_FILE_URLS=False`, `ALLOW_DOWNLOADS=False`,
   `REMOTE_DEBUGGING_PORT=None`, and `debug=False` before native startup; opens
   only on Edge Chromium; and attaches top-level navigation, all-frame,
@@ -2584,8 +2592,10 @@ because its local tests are easier.
   launch through `interfaces/launcher.py`. Explicit CLI subcommands do not
   import or initialize pywebview. A second launch activates the existing window
   and exits successfully; activation failure is visible and still non-error.
-  *Not satisfied by* running from a source checkout, guarding only navigation,
-  or importing `web` lazily from `cli`.
+  The real packaged-page popup composition leaves the page and bridge usable
+  without opening a system browser. *Not satisfied by* running from a source
+  checkout, guarding only navigation, testing popup handlers separately, or
+  importing `web` lazily from `cli`.
 - **BR-G-32 — The transport is one allowlisted, inert-data channel.** Every
   public view type round-trips through the production JSON codec and the one
   exposed `dispatch(command_json)`; unknown versions, commands, fields, and

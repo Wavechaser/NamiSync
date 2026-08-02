@@ -222,24 +222,28 @@ reality-tested pywebview 6.2.1. That exact pin is security-relevant:
 pywebview internally returns exposed-function results through
 `webview.util.js_bridge_call` and `Window.evaluate_js`, so any version change
 must re-audit that serialization/escaping path and rerun the real-WebView2
-hostile-name round trip. Startup pins
+hostile-name round trip. Before `create_window`, host preparation pins
 `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
-`debug=False`, and explicitly requests `gui="edgechromium"`. A synchronous
-`initialized` check refuses pywebview's otherwise silent MSHTML fallback with
-an actionable WebView2 message; unrelated startup exceptions retain their
-original diagnosis.
+`debug=False`, and performs a read-only registry probe for the WebView2 runtime;
+a configured `WEBVIEW2_RUNTIME_PATH` short-circuits that probe. The start
+wrapper repeats preparation before explicitly requesting `gui="edgechromium"`.
+This refuses absence before pywebview can import its registry-mutating MSHTML
+fallback. A synchronous `initialized` check still refuses any non-Edge result
+with an actionable message; unrelated startup exceptions retain their original
+diagnosis.
 
 The live Windows spike established two constraints that the earlier mock did
 not represent. First, pywebview runs its setup callback and exposed functions
 off the WinForms UI thread; reading `CoreWebView2` there can deadlock rather
-than raise. Before startup the initialization path registers zero-argument
-`initialized` callbacks: the start wrapper verifies the renderer, while the
-host callback—after the asset server has selected its loopback port—derives
-the exact origin from the complete `window.real_url` with `urlsplit`, without
-string trimming, and registers one idempotent installer on pywebview's
-synchronous `before_load` event. The `before_load` callback runs on the UI
-thread and attaches `NavigationStarting`, `FrameNavigationStarting`,
+than raise. Before startup the start wrapper registers one composed
+zero-argument `initialized` callback: it verifies the renderer first and only
+then invokes host initialization, so an MSHTML refusal cannot run native
+security setup. After the asset server has selected its loopback port, the host
+callback derives the exact origin from the complete `window.real_url` with
+`urlsplit`, without string trimming, and registers one idempotent installer on
+pywebview's synchronous `before_load` event. The `before_load` callback runs on
+the UI thread and attaches `NavigationStarting`, `FrameNavigationStarting`,
 `NewWindowRequested`, and `SourceChanged` exactly once before pywebview
 exposes application calls. Attachment state is explicit and sticky: dispatch
 fails closed before attachment or after failure, while the headed host must

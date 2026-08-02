@@ -1,88 +1,75 @@
 # NamiSync Session Handoff
 
-Date: 2026-07-31
+Date: 2026-08-01
 Branch: `milestone1`
 
 ## Session Outcome
 
-Committed and pushed the completed Stage 6 slice-0 reality spike as
-`2040146` (`Validate Stage 6 pywebview host`), then addressed the independent
-review in the follow-up change.
+Reviewed the two preceding Stage 6 commits (`2040146` and `0aafeb3`) and
+closed the follow-up defects in the pywebview refusal and popup proof.
 
-- Made native-guard attachment state explicit and sticky. Pywebview's
-  swallowed `before_load` exceptions now leave a host-visible failure, dispatch
-  reports attachment failure rather than an origin mismatch, and a partial
-  subscription is not retried or duplicated.
-- Hardened pywebview before native startup:
-  `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
-  `ALLOW_DOWNLOADS=False`, `REMOTE_DEBUGGING_PORT=None`, and `debug=False`.
-  This closes pywebview's earlier system-browser popup handler and pins the
-  remaining host settings.
-- Replaced name-based `WebViewException` rewriting with a synchronous
-  `initialized` renderer check. Pywebview 6.2.1 silently selects MSHTML when
-  WebView2 is absent; the wrapper now aborts that initialization and raises the
-  actionable WebView2 error while unrelated startup exceptions propagate
-  unchanged.
-- Added `FrameNavigationStarting` and cancel every frame navigation, retaining
-  first-in-`head` `frame-src 'none'` as the independent bootstrap control.
-- Added full-URL origin derivation with `urlsplit`, including paths, queries,
-  fragments, IPv6, explicit port zero, and strict rejection of non-HTTP
-  authorities. Future code must pass `window.real_url` directly and must not
-  trim it with `rsplit`.
-- Corrected the bridge documentation: NamiSync code constructs no JavaScript,
-  but pinned pywebview internally uses `evaluate_js` for exposed-function
-  returns. Its escaper is now explicitly security-relevant and must be
-  re-audited on every version change.
-- Promoted the repeatable/unbounded bridge reinjection contract and entry-only
-  dispatch authorization contract. `pywebviewready` initialization must be
-  idempotent and re-arm one drain; completed-but-undelivered mutations retry
-  with the original `command_id`.
-- Moved the fully accounted review to
-  `docs/obsolete/TMP_STAGE6_SPIKE_REVIEW.md` with a disposition banner.
+- Added `prepare_pywebview_host`, which hardens all four security-sensitive
+  pywebview settings and checks the stable WebView2 Runtime through read-only
+  HKCU/HKLM `pv` queries before any window is created. A configured
+  `WEBVIEW2_RUNTIME_PATH` follows pywebview's fixed-runtime short circuit.
+- Made `start_edge_chromium` repeat preparation before `webview.start()`. A
+  machine without the runtime is now refused before pywebview imports WinForms,
+  so its MSHTML fallback cannot create or write Internet Explorer
+  feature-control keys.
+- Kept the runtime renderer check as defense in depth, but composed host
+  initialization behind it. The host callback is not invoked for MSHTML, and a
+  host-initialization exception is captured, aborts initialization, and is
+  re-raised rather than swallowed by pywebview's event machinery.
+- Added registry-path, read-only access, minimum-version, fixed-runtime,
+  pre-start refusal, callback-order, and composed popup-chain regressions.
+- Extended BR-G-30/31 and the desktop acceptance criteria with the real
+  `window.open('https://example.invalid/')` chain: no system browser, no
+  packaged-document replacement, and a successful bridge call after
+  pywebview's reinjection.
+- Updated `BUGS.md`, architecture, interfaces, desktop, M1 plan/bridge, and the
+  README changelog to state the corrected initialization contract.
 
 No facade, workflow, dispatcher, core, module, database, schema, migration, or
-CLI contract changed. The headed product window, packaged assets, event drain,
-and launcher remain later Stage 6 slices.
+CLI contract changed. The executor operation-safe-pause and audit-timeout
+parity bugs remain open; this session did not attempt those product decisions.
 
 ## Verification
 
-- Focused security spike: `23 passed in 0.06s`.
-- Full repository: `829 passed in 26.47s`.
+- Focused security spike: `33 passed in 0.08s`.
+- Full repository: `839 passed in 41.47s`.
 - Import boundaries: 49 files / 181 dependencies; all eight contracts kept,
   zero broken.
-- Hidden real-host verification: pywebview 6.2.1 selected `edgechromium`, the
-  synchronous renderer check ran, all four settings were hardened before
-  native startup, `debug=False` was used, and the hidden window closed cleanly.
 - Package health: `pip check` reported no broken requirements.
-- `git diff --check` reported no whitespace errors; only expected LF-to-CRLF
-  notices appeared.
+- Supplemental hidden real-host check on the current CPython 3.14.6 project
+  environment: pywebview 6.2.1 stayed on the packaged loopback document,
+  launched no system browser, and completed a bridge call after the canceled
+  popup caused reinjection. This is useful evidence but does not replace the
+  formal CPython 3.13 built-installation BR-G-30/31 rerun.
+- `git diff --check` was clean apart from expected LF-to-CRLF notices.
 
 ## Immediate Next Context
 
-Stage 6 slice 1 should preserve this order:
+Stage 6 slice 1 must preserve this order:
 
-1. Create the pywebview window and one private JavaScript API object whose only
+1. Import pywebview, then call `prepare_pywebview_host(webview)` before
+   `create_window`. Do not register the host's `initialized` callback directly.
+2. Create the pywebview window and one private JavaScript API object whose only
    public method is `dispatch`.
-2. Register the zero-argument `initialized` callback that passes the complete
+3. Call `start_edge_chromium(..., on_initialized=initialize_host)`. The wrapper
+   verifies Edge Chromium before `initialize_host` passes the complete
    `window.real_url` to `configure_pywebview2_security`.
-3. Start only through `start_edge_chromium`; it hardens the settings, passes
-   `debug=False`, and refuses the MSHTML fallback during `initialized`.
-4. Let synchronous UI-thread `before_load` attach
-   `NavigationStarting`, `FrameNavigationStarting`, `NewWindowRequested`, and
-   `SourceChanged` before pywebview exposes application calls.
+4. Let synchronous UI-thread `before_load` attach `NavigationStarting`,
+   `FrameNavigationStarting`, `NewWindowRequested`, and `SourceChanged` before
+   pywebview exposes application calls.
 5. After `loaded`, inspect `NativeDocumentState.is_attached` and
-   `attachment_error`; tear down with an actionable message if attachment did
-   not succeed. Do not rely on callback exceptions propagating.
+   `attachment_error`; tear down actionably if attachment did not succeed.
 
-For slices 2–3, the real-browser hostile-name proof must traverse page
-JavaScript → dispatch → pywebview's pinned return transport → production
-`textContent` and read the exact rendered value back. Treat
-`pywebviewready` as repeatable, keep at most one bounded `next_events` drain
-per task, wake it during shutdown, and retry uncertain mutation delivery with
-the original command receipt.
+The formal BR-G-30/31 rerun must execute the popup probe from the built packaged
+page on supported CPython 3.13. A canceled popup can cause pywebview to reinject
+its bridge and invalidate an in-flight return callback, so test bridge usability
+with a fresh dispatch after the next idempotent `pywebviewready`, not with a
+same-turn dispatch started beside `window.open`.
 
 Do not reach `CoreWebView2` from setup or dispatch workers, restore
 `get_current_url()` as authority, trim `window.real_url`, or add a
-NamiSync-owned host-to-JavaScript data channel. The pre-existing executor
-operation-safe-pause and audit-timeout parity decisions remain open in
-`BUGS.md`.
+NamiSync-owned host-to-JavaScript data channel.

@@ -102,13 +102,17 @@ drain is re-armed per task.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
-acceptable. Before native startup it sets
+acceptable. Before `create_window` it calls the shared host preparation, which
+sets
 `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
-`ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
-`debug=False`, and uses zero-argument `initialized` callbacks. The start
-wrapper verifies the selected renderer; once the static asset server has
-selected its random loopback port, the host callback derives the exact origin
-from the complete `window.real_url` with `urlsplit` and registers an
+`ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None` and performs only
+read-only WebView2 runtime registry access. A configured
+`WEBVIEW2_RUNTIME_PATH` bypasses that probe. The start wrapper repeats
+preparation, passes `debug=False`, and uses one zero-argument `initialized`
+callback that verifies the selected renderer before invoking the host callback.
+Once the static asset server has selected its random loopback port, the host
+callback derives the exact origin from the complete `window.real_url` with
+`urlsplit` and registers an
 idempotent synchronous `before_load` callback. On the WinForms UI thread
 `before_load` reaches
 `CoreWebView2` and attaches the tested `NavigationStarting`,
@@ -202,6 +206,10 @@ details may evolve, but contrast and no-color-only signaling are requirements.
 - The app starts only with Edge Chromium/WebView2, blocks external navigation
   and popups, rejects off-origin dispatch, and transports no application data
   through executable JavaScript text.
+- Missing WebView2 is refused before pywebview initialization without writing
+  fallback browser settings to HKCU. From the packaged page,
+  `window.open('https://example.invalid/')` neither launches the system browser
+  nor replaces the document, and the bridge remains usable afterward.
 - A bounded coalescing event drain preserves reliable item/terminal ordering,
   makes gaps visible, and closes all observations cleanly on task close and
   app shutdown.

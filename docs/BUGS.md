@@ -129,6 +129,16 @@ to a global chronological list.
 
 ### M1 Stage 6 host reality spike
 
+- MODERATE - FIXED (2026-08-01). Missing-WebView2 refusal changed the user's
+  registry before reporting that the required renderer was unavailable.
+  Pywebview selected its Windows backend during `webview.start()` and imported
+  MSHTML as its fallback; the MSHTML module then created and wrote Internet
+  Explorer feature-control keys before NamiSync's `initialized` renderer check
+  could run. Fixed with a read-only WebView2 runtime registry preflight that the
+  host must run before `create_window` and that `start_edge_chromium` repeats
+  before pywebview initialization. A configured fixed runtime bypasses the
+  registry probe, while the synchronous renderer check remains defense in
+  depth and gates the host initialization callback.
 - SEVERE - FIXED (2026-07-30). Off-thread native-control deadlock.
   `CoreWebView2` access from pywebview's setup worker could hang instead of
   raising a cross-thread error, preventing host startup. Cause: the initial
@@ -156,7 +166,10 @@ to a global chronological list.
   handler could mark the request handled. Fixed by pinning
   `OPEN_EXTERNAL_LINKS_IN_BROWSER=False` before native startup, alongside
   disabled file URLs, downloads, remote debugging, and debug mode; the native
-  popup and navigation guards remain defense in depth.
+  popup and navigation guards remain defense in depth. The composed handler
+  order is covered: pywebview's redirect into the current view reaches the
+  native navigation guard, which cancels it while the packaged document and
+  bridge remain usable.
 - MODERATE - FIXED (2026-07-31). Frame navigation depended only on document
   CSP. Top-level `NavigationStarting` does not observe iframe navigation, so a
   weakened or late CSP would leave no native frame control. Fixed by attaching

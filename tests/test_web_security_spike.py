@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.interfaces.web.security_spike as security_spike
 from namisync.interfaces.web.security_spike import (
     BRIDGE_SCHEMA_VERSION,
     BridgeDispatcher,
@@ -14,6 +15,7 @@ from namisync.interfaces.web.security_spike import (
     ExactOrigin,
     WebView2Unavailable,
     configure_pywebview2_security,
+    prepare_pywebview_host,
     start_edge_chromium,
 )
 
@@ -40,7 +42,8 @@ class InitializedHook:
         return self
 
     def emit(self) -> bool:
-        return any(handler() is False for handler in self.handlers)
+        return_values = [handler() for handler in self.handlers]
+        return any(value is False for value in return_values)
 
 
 class FakeCoreWebView2:
@@ -303,19 +306,179 @@ def test_native_webview2_hooks_cancel_untrusted_navigation_frames_and_popups() -
         bridge.dispatch(command)
 
 
+def test_pywebview_popup_chain_keeps_packaged_document_and_bridge() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+    system_browser_launches: list[str] = []
+    attempted_navigations: list[NavigationArgs] = []
+    settings = {"OPEN_EXTERNAL_LINKS_IN_BROWSER": False}
+
+    def pywebview_new_window_handler(sender: object, args: NewWindowArgs) -> None:
+        del sender
+        args.set_Handled(True)
+        uri = args.get_Uri()
+        if settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"]:
+            system_browser_launches.append(uri)
+            return
+        navigation = NavigationArgs(uri)
+        attempted_navigations.append(navigation)
+        core.NavigationStarting.emit(navigation, sender=core)
+        if not navigation.Cancel:
+            core.Source = uri
+            core.SourceChanged.emit(SimpleNamespace(), sender=core)
+
+    core.NewWindowRequested += pywebview_new_window_handler
+    document = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+    )
+    window.events.before_load.emit()
+    bridge = BridgeDispatcher(
+        document=document,
+        handlers={"ping": lambda payload: payload},
+    )
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "after-window-open",
+            "command": "ping",
+            "payload": {"still": "trusted"},
+        }
+    )
+
+    popup = NewWindowArgs("https://example.invalid/")
+    core.NewWindowRequested.emit(popup, sender=core)
+
+    assert popup.Handled
+    assert system_browser_launches == []
+    assert len(attempted_navigations) == 1
+    assert attempted_navigations[0].Cancel
+    assert core.Source == "http://127.0.0.1:41700/index.html"
+    assert bridge.dispatch(command)["result"] == {"still": "trusted"}
+
+
+def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, str, int, int]] = []
+
+    class RegistryKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            del args
+
+    def open_key(hive: object, path: str, reserved: int, access: int):
+        calls.append((hive, path, reserved, access))
+        if hive == security_spike.winreg.HKEY_CURRENT_USER:
+            raise FileNotFoundError(path)
+        return RegistryKey()
+
+    def query_value(key: RegistryKey, name: str) -> tuple[str, int]:
+        del key
+        assert name == "pv"
+        return "150.0.4078.105", 1
+
+    def reject_write(*args, **kwargs) -> None:
+        del args, kwargs
+        pytest.fail("runtime detection attempted a registry write")
+
+    monkeypatch.setattr(security_spike.winreg, "OpenKey", open_key)
+    monkeypatch.setattr(security_spike.winreg, "QueryValueEx", query_value)
+    monkeypatch.setattr(security_spike.winreg, "CreateKeyEx", reject_write)
+    monkeypatch.setattr(security_spike.winreg, "SetValueEx", reject_write)
+    webview = SimpleNamespace(
+        settings={
+            "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+            "ALLOW_FILE_URLS": True,
+            "ALLOW_DOWNLOADS": True,
+            "REMOTE_DEBUGGING_PORT": 9222,
+            "WEBVIEW2_RUNTIME_PATH": None,
+        }
+    )
+
+    prepare_pywebview_host(webview)
+
+    assert webview.settings == {
+        "OPEN_EXTERNAL_LINKS_IN_BROWSER": False,
+        "ALLOW_FILE_URLS": False,
+        "ALLOW_DOWNLOADS": False,
+        "REMOTE_DEBUGGING_PORT": None,
+        "WEBVIEW2_RUNTIME_PATH": None,
+    }
+    assert calls == [
+        (
+            security_spike.winreg.HKEY_CURRENT_USER,
+            "SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\"
+            "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            0,
+            security_spike.winreg.KEY_READ,
+        ),
+        (
+            security_spike.winreg.HKEY_LOCAL_MACHINE,
+            "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\"
+            "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            0,
+            security_spike.winreg.KEY_READ,
+        ),
+    ]
+
+
+def test_prepare_pywebview_host_accepts_a_fixed_runtime_without_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        security_spike.winreg,
+        "OpenKey",
+        lambda *args, **kwargs: pytest.fail("fixed runtime should skip the registry"),
+    )
+    webview = SimpleNamespace(
+        settings={
+            "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+            "ALLOW_FILE_URLS": True,
+            "ALLOW_DOWNLOADS": True,
+            "REMOTE_DEBUGGING_PORT": 9222,
+            "WEBVIEW2_RUNTIME_PATH": r"runtime\WebView2",
+        }
+    )
+
+    prepare_pywebview_host(webview)
+
+    assert webview.settings["WEBVIEW2_RUNTIME_PATH"] == r"runtime\WebView2"
+
+
+@pytest.mark.parametrize(
+    ("version", "supported"),
+    [
+        ("85.0.9999.999", False),
+        ("86.0.621.999", False),
+        ("86.0.622", True),
+        ("150.0.4078.105", True),
+        ("not-a-version", False),
+        (None, False),
+    ],
+)
+def test_webview2_runtime_version_gate(version: object, supported: bool) -> None:
+    assert security_spike._is_supported_webview2_version(version) is supported
+
+
 def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
     calls = []
+    host_initialized = []
     initial_settings = {
         "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
         "ALLOW_FILE_URLS": True,
         "ALLOW_DOWNLOADS": True,
         "REMOTE_DEBUGGING_PORT": 9222,
+        "WEBVIEW2_RUNTIME_PATH": r"runtime\WebView2",
     }
     required_settings = {
         "OPEN_EXTERNAL_LINKS_IN_BROWSER": False,
         "ALLOW_FILE_URLS": False,
         "ALLOW_DOWNLOADS": False,
         "REMOTE_DEBUGGING_PORT": None,
+        "WEBVIEW2_RUNTIME_PATH": r"runtime\WebView2",
     }
 
     class Webview:
@@ -334,8 +497,13 @@ def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
             calls.append((func, gui, debug))
 
     setup = lambda: None
-    start_edge_chromium(Webview, setup)
+    start_edge_chromium(
+        Webview,
+        setup,
+        on_initialized=lambda: host_initialized.append("edgechromium"),
+    )
     assert calls == [(setup, "edgechromium", False)]
+    assert host_initialized == ["edgechromium"]
 
     class BrokenWebview:
         settings = dict(initial_settings)
@@ -351,8 +519,13 @@ def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
             del func, gui, debug
             assert BrokenWebview.windows[0].events.initialized.emit()
 
+    refused_host_initialization = []
     with pytest.raises(WebView2Unavailable, match="install"):
-        start_edge_chromium(BrokenWebview)
+        start_edge_chromium(
+            BrokenWebview,
+            on_initialized=lambda: refused_host_initialization.append("called"),
+        )
+    assert refused_host_initialization == []
 
     class WebViewException(Exception):
         pass
@@ -376,6 +549,32 @@ def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
     with pytest.raises(WebViewException, match="GUI is not initialized") as raised:
         start_edge_chromium(MisconfiguredWebview)
     assert raised.value is unrelated_error
+
+    host_error = RuntimeError("origin setup failed")
+
+    class HostInitializationFailure:
+        settings = dict(initial_settings)
+        renderer = "edgechromium"
+        windows = [
+            SimpleNamespace(
+                events=SimpleNamespace(initialized=InitializedHook()),
+            )
+        ]
+
+        @staticmethod
+        def start(func=None, *, gui: str, debug: bool) -> None:
+            del func, gui, debug
+            assert HostInitializationFailure.windows[0].events.initialized.emit()
+
+    def fail_host_initialization() -> None:
+        raise host_error
+
+    with pytest.raises(RuntimeError, match="origin setup failed") as raised:
+        start_edge_chromium(
+            HostInitializationFailure,
+            on_initialized=fail_host_initialization,
+        )
+    assert raised.value is host_error
 
 
 def test_start_refuses_missing_security_settings_before_native_startup() -> None:
@@ -403,6 +602,42 @@ def test_start_refuses_missing_security_settings_before_native_startup() -> None
     with pytest.raises(RuntimeError, match="REMOTE_DEBUGGING_PORT"):
         start_edge_chromium(IncompleteWebview)
     assert not started
+
+
+def test_start_refuses_missing_runtime_before_pywebview_initialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initialized = InitializedHook()
+    started = False
+
+    def missing_key(*args, **kwargs):
+        del args, kwargs
+        raise FileNotFoundError
+
+    monkeypatch.setattr(security_spike.winreg, "OpenKey", missing_key)
+
+    class MissingRuntimeWebview:
+        settings = {
+            "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+            "ALLOW_FILE_URLS": True,
+            "ALLOW_DOWNLOADS": True,
+            "REMOTE_DEBUGGING_PORT": 9222,
+            "WEBVIEW2_RUNTIME_PATH": None,
+        }
+        renderer = None
+        windows = [SimpleNamespace(events=SimpleNamespace(initialized=initialized))]
+
+        @staticmethod
+        def start(func=None, *, gui: str, debug: bool) -> None:
+            nonlocal started
+            del func, gui, debug
+            started = True
+
+    with pytest.raises(WebView2Unavailable, match="install"):
+        start_edge_chromium(MissingRuntimeWebview)
+
+    assert not started
+    assert initialized.handlers == []
 
 
 @pytest.mark.parametrize(
