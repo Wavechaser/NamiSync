@@ -165,7 +165,7 @@ is lossy/coalescible.
 Terminal finalization is a two-phase handshake. The runner first drains the
 audit subscriber and asks it to finalize the run from the preterminal event
 stream and provisional result. One atomic latch decides ownership at the
-five-second cutoff: a caller win makes both the Terminal and any late row
+production cutoff: a caller win makes both the Terminal and any late row
 degraded, while a pump win makes the caller wait for the actual commit result.
 The runner then constructs and releases the one immutable `Terminal` to
 ordinary subscribers. History never needs to consume or parse that Terminal,

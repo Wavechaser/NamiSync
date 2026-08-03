@@ -1772,8 +1772,9 @@ so its serializer/escaper is audited on every version change and covered by
 the real-browser hostile-name round trip.
 
 The Stage 6 reality run refines how that posture is implemented. A pre-window
-preparation step hardens pywebview and probes the WebView2 runtime with
-read-only registry access; a configured fixed runtime bypasses the probe. The
+preparation step hardens pywebview and probes the WebView2 runtime through one
+read-only compatibility module behavior-checked against the pinned pywebview
+6.2.1 detector; a configured fixed runtime bypasses the probe. The
 start wrapper repeats preparation before pywebview initialization, then its
 single zero-argument `initialized` callback refuses a non-Edge-Chromium
 renderer before invoking host initialization. The host observes
@@ -2579,8 +2580,9 @@ because its local tests are easier.
   attempts and cancels navigation, or a source scan confined to NamiSync code.
 - **BR-G-31 — The packaged host keeps its security and process boundaries.**
   A built installation prepares pywebview before `create_window`, using only
-  read-only registry access to reject missing WebView2 before pywebview can
-  import MSHTML, and pins `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`,
+  read-only registry access through the upstream-parity compatibility detector
+  to reject missing WebView2 before pywebview can import MSHTML, and pins
+  `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`,
   `ALLOW_FILE_URLS=False`, `ALLOW_DOWNLOADS=False`,
   `REMOTE_DEBUGGING_PORT=None`, and `debug=False` before native startup; opens
   only on Edge Chromium; and attaches top-level navigation, all-frame,

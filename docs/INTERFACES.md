@@ -225,8 +225,14 @@ must re-audit that serialization/escaping path and rerun the real-WebView2
 hostile-name round trip. Before `create_window`, host preparation pins
 `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
-`debug=False`, and performs a read-only registry probe for the WebView2 runtime;
-a configured `WEBVIEW2_RUNTIME_PATH` short-circuits that probe. The start
+`debug=False`, and performs a read-only registry probe for the WebView2 runtime.
+The side-effect-free compatibility module mirrors pinned pywebview 6.2.1's
+.NET prerequisite, accepted Edge channels, and HKCU/HKLM architecture routing;
+behavioral parity tests execute the upstream detector functions without
+importing WinForms. Its `86.0.622.0` token is the exact argument used by the
+pinned backend's compatibility helper; the mirror preserves that helper's
+actual comparison and does not claim current security patching. A configured
+`WEBVIEW2_RUNTIME_PATH` short-circuits that probe. The start
 wrapper repeats preparation before explicitly requesting `gui="edgechromium"`.
 This refuses absence before pywebview can import its registry-mutating MSHTML
 fallback. A synchronous `initialized` check still refuses any non-Edge result

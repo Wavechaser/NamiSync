@@ -44,7 +44,12 @@ from namisync.core.recording import (
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_writer
 from .schema import initialize_ledger
 from .timestamps import encode_utc
-from .writer import RecordingError, SerializedWriter, TokenConflictError
+from .writer import (
+    DEFAULT_RETRY_TIMEOUT_SECONDS,
+    RecordingError,
+    SerializedWriter,
+    TokenConflictError,
+)
 
 
 class Clock(Protocol):
@@ -142,7 +147,7 @@ class LedgerRecorder:
         *,
         clock: Clock,
         busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
-        retry_timeout_seconds: float = 10.0,
+        retry_timeout_seconds: float = DEFAULT_RETRY_TIMEOUT_SECONDS,
         retry_interval_seconds: float = 0.025,
         managed_roots: tuple[str | Path, ...] = (),
     ) -> None:

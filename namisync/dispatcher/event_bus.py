@@ -214,7 +214,7 @@ class _AuditPump:
         if command.claim(timed_out=True):
             self._degraded.set()
             return RecordingStatus.DEGRADED
-        # Pump ownership preserves parity; the default 10s writer retry can outlive the 5s cutoff.
+        # Pump ownership still waits because scheduling/SQLite calls can outlive a retry bound.
         command.complete.wait()
         return self._final_status(command)
 

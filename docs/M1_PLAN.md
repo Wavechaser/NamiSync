@@ -617,8 +617,9 @@ security-equivalent.** Four gaps this decision originally left open:
    CSP/isolation assumptions above do not hold. Before `create_window`, pin
    `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
    `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, then use read-only
-   registry access to preflight the WebView2 runtime before pywebview can import
-   its mutating MSHTML fallback. A configured `WEBVIEW2_RUNTIME_PATH` bypasses
+   registry access through one side-effect-free, upstream-parity compatibility
+   module to preflight the WebView2 runtime before pywebview can import its
+   mutating MSHTML fallback. A configured `WEBVIEW2_RUNTIME_PATH` bypasses
    that probe. Repeat preparation before startup, pass `debug=False`, verify the
    renderer before host setup during synchronous `initialized`, and
    **fail actionably** if the WebView2 runtime is unavailable — a clear install

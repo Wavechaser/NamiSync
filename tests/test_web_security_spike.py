@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.interfaces.web.pywebview_runtime as pywebview_runtime
 import namisync.interfaces.web.security_spike as security_spike
 from namisync.interfaces.web.security_spike import (
     BRIDGE_SCHEMA_VERSION,
@@ -363,6 +364,9 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
     calls: list[tuple[object, str, int, int]] = []
 
     class RegistryKey:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
         def __enter__(self):
             return self
 
@@ -371,12 +375,14 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
 
     def open_key(hive: object, path: str, reserved: int, access: int):
         calls.append((hive, path, reserved, access))
-        if hive == security_spike.winreg.HKEY_CURRENT_USER:
+        if hive == pywebview_runtime.winreg.HKEY_CURRENT_USER:
             raise FileNotFoundError(path)
-        return RegistryKey()
+        return RegistryKey(path)
 
     def query_value(key: RegistryKey, name: str) -> tuple[str, int]:
-        del key
+        if key.path == pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH:
+            assert name == "Release"
+            return str(pywebview_runtime.MINIMUM_DOTNET_RELEASE), 1
         assert name == "pv"
         return "150.0.4078.105", 1
 
@@ -384,10 +390,10 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
         del args, kwargs
         pytest.fail("runtime detection attempted a registry write")
 
-    monkeypatch.setattr(security_spike.winreg, "OpenKey", open_key)
-    monkeypatch.setattr(security_spike.winreg, "QueryValueEx", query_value)
-    monkeypatch.setattr(security_spike.winreg, "CreateKeyEx", reject_write)
-    monkeypatch.setattr(security_spike.winreg, "SetValueEx", reject_write)
+    monkeypatch.setattr(pywebview_runtime.winreg, "OpenKey", open_key)
+    monkeypatch.setattr(pywebview_runtime.winreg, "QueryValueEx", query_value)
+    monkeypatch.setattr(pywebview_runtime.winreg, "CreateKeyEx", reject_write)
+    monkeypatch.setattr(pywebview_runtime.winreg, "SetValueEx", reject_write)
     webview = SimpleNamespace(
         settings={
             "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
@@ -409,18 +415,24 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
     }
     assert calls == [
         (
-            security_spike.winreg.HKEY_CURRENT_USER,
+            pywebview_runtime.winreg.HKEY_LOCAL_MACHINE,
+            pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH,
+            0,
+            pywebview_runtime.winreg.KEY_READ,
+        ),
+        (
+            pywebview_runtime.winreg.HKEY_CURRENT_USER,
             "SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\"
             "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
             0,
-            security_spike.winreg.KEY_READ,
+            pywebview_runtime.winreg.KEY_READ,
         ),
         (
-            security_spike.winreg.HKEY_LOCAL_MACHINE,
+            pywebview_runtime.winreg.HKEY_LOCAL_MACHINE,
             "SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\"
             "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
             0,
-            security_spike.winreg.KEY_READ,
+            pywebview_runtime.winreg.KEY_READ,
         ),
     ]
 
@@ -429,7 +441,7 @@ def test_prepare_pywebview_host_accepts_a_fixed_runtime_without_registry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        security_spike.winreg,
+        pywebview_runtime.winreg,
         "OpenKey",
         lambda *args, **kwargs: pytest.fail("fixed runtime should skip the registry"),
     )
@@ -452,15 +464,15 @@ def test_prepare_pywebview_host_accepts_a_fixed_runtime_without_registry(
     ("version", "supported"),
     [
         ("85.0.9999.999", False),
-        ("86.0.621.999", False),
+        ("86.0.621.999", True),
         ("86.0.622", True),
         ("150.0.4078.105", True),
         ("not-a-version", False),
         (None, False),
     ],
 )
-def test_webview2_runtime_version_gate(version: object, supported: bool) -> None:
-    assert security_spike._is_supported_webview2_version(version) is supported
+def test_webview2_runtime_version_helper(version: object, supported: bool) -> None:
+    assert pywebview_runtime.is_supported_webview2_version(version) is supported
 
 
 def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
@@ -614,7 +626,7 @@ def test_start_refuses_missing_runtime_before_pywebview_initialization(
         del args, kwargs
         raise FileNotFoundError
 
-    monkeypatch.setattr(security_spike.winreg, "OpenKey", missing_key)
+    monkeypatch.setattr(pywebview_runtime.winreg, "OpenKey", missing_key)
 
     class MissingRuntimeWebview:
         settings = {

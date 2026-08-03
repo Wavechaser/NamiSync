@@ -191,15 +191,17 @@ runner never introspects module internals.
 
 Audit finalization is a two-phase step, not a circularity: before the runner
 emits the one immutable `Terminal`, it drains the audit subscriber and races
-the pump against the five-second ownership cutoff through one atomic decision
+the pump against the production ownership cutoff through one atomic decision
 latch. If the caller wins, it releases `audit=DEGRADED`, and any row the late
 pump commits carries that same degraded axis. If the pump wins, the caller
 waits for its actual commit result: success stamps both live and retained
 `audit=OK`, while failure stamps live `audit=DEGRADED` and leaves no
-contradictory row. The default history writer may retry for ten seconds, so
-pump-owned finalization
-can outlive the five-second cutoff. History never parses the `Terminal` it
-already settled, and no second terminal or corrective write exists. (The
+contradictory row. Production derives an eleven-second audit cutoff from the
+ten-second history-writer retry bound. Its twenty-two-second service shutdown
+allowance covers the cutoff followed by a pump-owned retry, plus one second of
+margin; none of these limits is an independent literal. History never parses
+the `Terminal` it already settled, and no second terminal or corrective write
+exists. (The
 `recording` axis has no such loop: the recorder is call-driven, and its terminal
 flush completes before result assembly.)
 
@@ -1623,7 +1625,14 @@ navigation, and new-window requests through native hooks, and rejects dispatch
 outside the exact packaged origin. Before `create_window` it hardens pywebview's
 external-link, file-URL, download, and remote-debugging settings and performs a
 read-only WebView2 runtime registry probe; `start_edge_chromium` repeats that
-preparation before native initialization and passes `debug=False`. A configured
+preparation before native initialization and passes `debug=False`. The probe
+lives in one compatibility module that mirrors the pinned pywebview 6.2.1
+detector and is behavior-checked against its source without importing WinForms.
+It includes pywebview's .NET prerequisite, four accepted Edge channels, and
+HKCU/HKLM architecture routing. The `86.0.622.0` token is retained because the
+pinned backend passes that exact value to its compatibility helper; NamiSync
+mirrors the helper's actual comparison and does not treat it as a security
+patch-freshness claim. A configured
 `WEBVIEW2_RUNTIME_PATH` short-circuits the registry probe. One pre-start
 zero-argument `initialized` callback first refuses any non-Edge-Chromium
 backend and only then invokes the host callback, which derives the origin from

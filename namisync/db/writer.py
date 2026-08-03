@@ -13,6 +13,7 @@ from .connections import DEFAULT_BUSY_TIMEOUT_MS
 
 
 T = TypeVar("T")
+DEFAULT_RETRY_TIMEOUT_SECONDS = 10.0
 
 
 class RecordingError(RuntimeError):
@@ -41,7 +42,7 @@ class SerializedWriter:
         connect: Callable[..., sqlite3.Connection],
         *,
         busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS,
-        retry_timeout_seconds: float = 10.0,
+        retry_timeout_seconds: float = DEFAULT_RETRY_TIMEOUT_SECONDS,
         retry_interval_seconds: float = 0.025,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,

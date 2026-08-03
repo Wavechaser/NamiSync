@@ -40,6 +40,7 @@ from namisync.workflows.node_tree import (
     build_node_tree,
 )
 from namisync.workflows.runtime import (
+    HISTORY_WRITER_RETRY_TIMEOUT_SECONDS,
     build_plan_node_tree,
     execution_selection_digest_hex,
 )
@@ -63,6 +64,17 @@ from namisync.workflows.views import (
 
 SessionUpdate = SessionEventView | SessionRecordView
 SessionSink = Callable[[SessionUpdate], None]
+FINALIZATION_TIMEOUT_MARGIN_SECONDS = 1.0
+# Keep ordinary history retry inside the audit cutoff, and shutdown long enough
+# for a late pump claim to consume both bounds in sequence.
+AUDIT_FINALIZATION_TIMEOUT_SECONDS = (
+    HISTORY_WRITER_RETRY_TIMEOUT_SECONDS + FINALIZATION_TIMEOUT_MARGIN_SECONDS
+)
+SERVICE_CLOSE_TIMEOUT_SECONDS = (
+    AUDIT_FINALIZATION_TIMEOUT_SECONDS
+    + HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
+    + FINALIZATION_TIMEOUT_MARGIN_SECONDS
+)
 
 
 class SyncPathInputError(ValueError):
@@ -1078,7 +1090,7 @@ class NamiSyncService:
         self._require_open()
         return self._runtime.get_history(run_token)
 
-    def close(self, timeout: float = 10.0) -> ShutdownView:
+    def close(self, timeout: float = SERVICE_CLOSE_TIMEOUT_SECONDS) -> ShutdownView:
         close_lock = getattr(self, "_close_lock", None)
         with (nullcontext() if close_lock is None else close_lock):
             return self._close_once(timeout)
@@ -1538,6 +1550,7 @@ def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:
         _workflow_registry(runtime),
         clock=runtime.clock,
         audit_observer_factory=runtime.audit_observer,
+        audit_timeout=AUDIT_FINALIZATION_TIMEOUT_SECONDS,
     )
 
 

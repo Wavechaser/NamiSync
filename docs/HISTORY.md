@@ -63,7 +63,7 @@ activity kind, actual UTC start, host provenance, subject or source/target
 context, and schema version. It consumes ordered preterminal phase/item events.
 When the runner requests finalization, it drains those events and races the
 caller against the pump at one atomic ownership latch. A caller that reaches
-the five-second cutoff first decides degraded; any late row carries that axis.
+the production cutoff first decides degraded; any late row carries that axis.
 A pump that owns finalization first writes the provisional OK axis and the
 caller waits for its actual success or failure. The observer never derives its
 final state by parsing the Terminal that depends on that settlement.
@@ -73,8 +73,9 @@ adjacent checkpoints. When full, the producer waits at the next safe checkpoint
 boundary instead of dropping audit, capped by an injected generous timeout.
 Drain within that bound guarantees in-process delivery. Caller-owned timeout or
 pump-owned failure degrades the session's audit axis without changing domain or
-ledger truth. The default history writer may retry for ten seconds, so a
-pump-owned finalization can outlive the five-second ownership cutoff. Disk
+ledger truth. Production derives an eleven-second cutoff from the ten-second
+history-writer retry bound and gives service shutdown twenty-two seconds to
+cover the cutoff plus a complete late retry and margin. Disk
 durability remains best-effort: a process crash may lose at most the bounded
 in-flight buffer.
 

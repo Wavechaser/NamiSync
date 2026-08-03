@@ -101,7 +101,10 @@ to a global chronological list.
   pump that claimed ownership first makes the caller wait for its actual
   success or failure. History now persists the decided `result.audit` value
   inside the existing immutable payload and transaction; no schema, version, or
-  corrective write was added.
+  corrective write was added. The 2026-08-03 hardening derives the production
+  eleven-second audit cutoff from the writer's ten-second retry bound and the
+  twenty-two-second service-close allowance from both sequential bounds plus
+  margin, with tests pinning the ordering.
 - SEVERE - FIXED (2026-07-30). Resumed pre-invocation cancellation. Canceling a
   paused execution just after resume published RUNNING but before
   `invocation.run()` produced a generic canceled terminal while leaving runtime
@@ -139,9 +142,14 @@ to a global chronological list.
   Explorer feature-control keys before NamiSync's `initialized` renderer check
   could run. Fixed with a read-only WebView2 runtime registry preflight that the
   host must run before `create_window` and that `start_edge_chromium` repeats
-  before pywebview initialization. A configured fixed runtime bypasses the
-  registry probe, while the synchronous renderer check remains defense in
-  depth and gates the host initialization callback.
+  before pywebview initialization. The 2026-08-03 hardening moves the complete
+  pywebview-compatible registry plan into one side-effect-free module and
+  behavior-checks it against the pinned upstream detector, including x86's
+  plain HKLM path and the upstream version helper's real behavior. The
+  `86.0.622.0` argument is preserved because it is pywebview 6.2.1's WinForms
+  compatibility gate, not as a NamiSync security-patch minimum. A configured
+  fixed runtime bypasses the registry probe, while the synchronous renderer
+  check remains defense in depth and gates the host initialization callback.
 - SEVERE - FIXED (2026-07-30). Off-thread native-control deadlock.
   `CoreWebView2` access from pywebview's setup worker could hang instead of
   raising a cross-thread error, preventing host startup. Cause: the initial

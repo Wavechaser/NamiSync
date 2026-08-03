@@ -625,7 +625,7 @@ had to already report whether that final write succeeded.
 
 **Resolution (2026-08-02):** Two-phase finalization with one atomic ownership
 decision. Before the runner releases the one immutable `Terminal`, it drains
-the audit subscriber. If the caller wins the five-second cutoff, any late row
+the audit subscriber. If the caller wins the production cutoff, any late row
 carries the same degraded audit axis; if the pump wins, the caller waits for
 the actual commit success or failure. History finalizes from the drain step,
 never parses the `Terminal` it settled, and no second terminal or corrective

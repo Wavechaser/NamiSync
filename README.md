@@ -120,15 +120,17 @@ never hides the other result axes in rendered output.
   canceled navigation, attachment failures are observable, frame navigation
   and popup/browser escape paths are closed, hardened settings and the actual
   Edge Chromium renderer are verified, WebView2 absence is refused through a
-  read-only pre-window probe before pywebview can import its mutating MSHTML
-  fallback, full asset URLs derive exact origins, and the security-relevant
+  read-only pre-window compatibility detector behavior-checked against pinned
+  pywebview before it can import its mutating MSHTML fallback, full asset URLs
+  derive exact origins, and the security-relevant
   host dependency is pinned. The headed desktop itself remains unshipped.
 - Completed the integrated M1 adversarial review across execution,
   inventory/integrity, persistence, dispatcher/history, facade concurrency,
   and strict persisted/bridge protocols. Straightforward invariant violations
   are closed with permanent regressions; an atomic history-finalization
   ownership decision now keeps timeout audit truth identical live and after
-  reopen. Operation-safe pause after a durable retry sub-step remains the
+  reopen, with writer, audit, and shutdown timeouts derived in strict order.
+  Operation-safe pause after a durable retry sub-step remains the
   explicit design decision in `BUGS.md`. The Stage 6 desktop shell remains next.
 - Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
   ids, recursive inventory scope with bounded missing inference, revisioned

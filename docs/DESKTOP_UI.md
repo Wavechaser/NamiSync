@@ -106,7 +106,12 @@ acceptable. Before `create_window` it calls the shared host preparation, which
 sets
 `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None` and performs only
-read-only WebView2 runtime registry access. A configured
+read-only WebView2 runtime registry access through one side-effect-free
+compatibility module. It mirrors pinned pywebview 6.2.1's .NET prerequisite,
+accepted Edge channels, and HKCU/HKLM architecture routing, with executable
+upstream parity coverage. The `86.0.622.0` token is retained because that
+backend passes it to its compatibility helper; NamiSync mirrors the helper's
+actual comparison and makes no security-patch freshness claim. A configured
 `WEBVIEW2_RUNTIME_PATH` bypasses that probe. The start wrapper repeats
 preparation, passes `debug=False`, and uses one zero-argument `initialized`
 callback that verifies the selected renderer before invoking the host callback.

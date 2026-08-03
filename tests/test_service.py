@@ -8,10 +8,12 @@ from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 from threading import Event, Lock, Thread
+from unittest.mock import Mock
 
 import pytest
 
 import namisync.interfaces.cli as cli_module
+import namisync.interfaces.service as service_module
 from namisync.core.events import (
     Envelope,
     Gap,
@@ -28,6 +30,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.dispatcher import SessionNotFound
+from namisync.db.writer import DEFAULT_RETRY_TIMEOUT_SECONDS
 from namisync.interfaces import main as package_main
 from namisync.interfaces.service import (
     InventoryDetailsView,
@@ -43,6 +46,7 @@ from namisync.interfaces.service import (
     SessionRecordView,
 )
 from namisync.workflows import InventoryRequest, LocalWorkflowRuntime
+from namisync.workflows.runtime import HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
 from namisync.workflows.inventory import (
     IntegrityRequest,
     LocationBinding,
@@ -528,6 +532,81 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     assert log == ["observer", "dispatcher", "runtime"]
     assert first is second
     assert first.complete
+
+
+def test_production_timeouts_order_writer_audit_and_shutdown() -> None:
+    assert HISTORY_WRITER_RETRY_TIMEOUT_SECONDS == DEFAULT_RETRY_TIMEOUT_SECONDS
+    assert service_module.FINALIZATION_TIMEOUT_MARGIN_SECONDS > 0
+    assert service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS == (
+        HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
+        + service_module.FINALIZATION_TIMEOUT_MARGIN_SECONDS
+    )
+    assert service_module.SERVICE_CLOSE_TIMEOUT_SECONDS == (
+        service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS
+        + HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
+        + service_module.FINALIZATION_TIMEOUT_MARGIN_SECONDS
+    )
+
+
+def test_service_composition_passes_derived_audit_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def dispatcher(registry, **kwargs):
+        captured["registry"] = registry
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(service_module, "Dispatcher", dispatcher)
+    runtime = Mock()
+
+    service_module._dispatcher(runtime)
+
+    assert captured["audit_timeout"] == (
+        service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS
+    )
+    assert captured["clock"] is runtime.clock
+    assert captured["audit_observer_factory"] is runtime.audit_observer
+
+
+def test_service_default_close_uses_ordered_shutdown_timeout() -> None:
+    observed: list[float] = []
+
+    class Observer:
+        def close(self) -> None:
+            pass
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            observed.append(timeout)
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    class Runtime:
+        def close(self) -> None:
+            pass
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
+    service._lock = Lock()
+    service._close_lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+    service._observer_closed = False
+
+    assert service.close().complete
+    assert observed == [service_module.SERVICE_CLOSE_TIMEOUT_SECONDS]
 
 
 def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:

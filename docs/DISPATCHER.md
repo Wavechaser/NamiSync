@@ -135,11 +135,17 @@ timeouts are isolated and surfaced through `OperationResult.audit`; they do not
 rewrite filesystem or ledger truth. Dispatcher must not substitute an unbounded
 queue or silent loss. Before terminal fanout, the runner drains history and
 requests finalization through an atomic ownership latch. A caller that wins the
-five-second cutoff settles degraded, and any row the late pump commits carries
+production cutoff settles degraded, and any row the late pump commits carries
 that same axis. A pump that wins makes the caller wait for its actual outcome:
 commit success settles OK, while failure settles degraded with no
 contradictory row. The immutable Terminal is then sent to ordinary subscribers,
 never used as history's own finalization input.
+
+The production composition derives that cutoff as eleven seconds from the
+history writer's ten-second retry bound. Service shutdown allows twenty-two
+seconds: the cutoff plus a complete pump-owned writer retry and one second of
+margin. Tests pin both strict inequalities so changing any constituent bound
+cannot silently make ordinary late finalization outlive shutdown.
 
 The implemented observer seam is structural and core-typed, so `db` need not
 import dispatcher: `on_event(Envelope)`, `finalize(OperationResult)`, and

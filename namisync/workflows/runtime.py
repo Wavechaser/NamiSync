@@ -65,6 +65,7 @@ from namisync.db.settings import (
     SemanticSettingsPatch,
     SemanticSettingsStore,
 )
+from namisync.db.writer import DEFAULT_RETRY_TIMEOUT_SECONDS
 from namisync.modules.executor import (
     ExecutorPolicies,
     NativeCopyBackend,
@@ -134,6 +135,9 @@ from .views import (
     phase_result_view,
     result_item_view,
 )
+
+
+HISTORY_WRITER_RETRY_TIMEOUT_SECONDS = DEFAULT_RETRY_TIMEOUT_SECONDS
 
 
 PLAN_KIND = "sync-plan"
@@ -958,6 +962,7 @@ class LocalWorkflowRuntime:
                 self._history_store = HistoryStore(
                     self.history_path,
                     clock=self.clock,
+                    retry_timeout_seconds=HISTORY_WRITER_RETRY_TIMEOUT_SECONDS,
                     managed_roots=managed_roots,
                 )
             return self._history_store
