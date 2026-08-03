@@ -1191,9 +1191,10 @@ ledger query and silently drop every candidate whose copy-ledger write was
 
 #### Execute → verify handoff (the highest-fear seam)
 
-- **XV-1 — Published-evidence cardinality.** Every settled COPY/UPDATE/
+- **XV-1 — Published-evidence cardinality.** Every successfully settled COPY/UPDATE/
   MOVE_UPDATE yields exactly one `ExecutionSet.published_evidence` entry;
-  `set(published_evidence) == {settled byte-producing op_ids}`. Fault-inject one
+  `set(published_evidence) == {successfully settled byte-producing op_ids}`.
+  Fault-inject one
   `_settle()` to mark status succeeded but omit evidence and assert the session
   reports a named verification-incomplete invariant error, not a clean
   all-verified terminal. *Not satisfied by* asserting `published_evidence` is

@@ -28,15 +28,42 @@ to a global chronological list.
 
 ### M1 executor refactor
 
-- SEVERE - OPEN (2026-07-30). Pause after a durable retry sub-step. UPDATE can
-  pause after creating its backup but before a retried publish, and MOVE_UPDATE
-  can pause after publishing the new target but before trashing the old one;
-  resume then restarts from scan-time guards and rejects the executor's own
-  durable mutation as drift or collision. Cause: retry continuations live only
-  in process-local `_ExecutionState` and are not carried by the paused
-  `ExecutionSet`. The fix needs a product decision: persist operation-local
-  continuation, roll back owned durable stages before honoring pause, or defer
-  pause until an operation-safe boundary.
+- SEVERE - FIXED (2026-08-03). Cancellation after a published byte operation
+  could label COPY or UPDATE `CANCELED` even though the new target was already
+  live, omit the mutation from item detail, and leave recording falsely `OK`.
+  Cause: the blanket cancel unwind never consulted operation-local retry state;
+  fixed by classifying prepared versus published state before temp cleanup,
+  settling a published-but-unfinished operation `FAILED` with the typed
+  `canceled-after-publish` reason and explicit durable-state detail, degrading
+  recording, and never attaching success-only `PublishedCopyEvidence`.
+- SEVERE - FIXED (2026-08-03). Cancellation during MOVE_UPDATE's durable retry
+  could report `CANCELED` after the new target published, whether the old target
+  was still live or had already reached trash. Cause: cancel settlement ignored
+  the composite continuation; fixed by reporting the observed `new-and-old` or
+  `new-and-trash` state, settling the unfinished operation `FAILED` with
+  `canceled-after-publish`, degrading recording, and leaving the next reviewed
+  scan/plan to converge without rollback.
+- MODERATE - FIXED (2026-08-03). Cancellation after UPDATE created its durable
+  backup but before replacement hid that retained old version from the canceled
+  item's detail. Cause: cleanup considered only the staged temp and the blanket
+  outcome carried no continuation facts; fixed by retaining the backup, removing
+  only the owned temp, and reporting its path, backup method, and retained state.
+  M1 still has no trash purge: reclamation remains with the deferred
+  maintenance-session retention workflow, and cancellation never deletes the
+  only recoverable old version.
+- SEVERE - FIXED (2026-08-03). Pause after a durable retry sub-step. UPDATE could
+  pause after creating its backup but before a retried publish, MOVE_UPDATE
+  could pause after publishing the new target but before trashing the old one,
+  and post-publish COPY metadata retry had the same collision shape; resume then
+  restarted from scan-time guards and rejected the executor's own mutation.
+  Cause: retry state was process-local while checkpoints unwound it. Fixed by
+  installing validated COPY/UPDATE/MOVE_UPDATE stage continuations at the first
+  owned durable boundary, latching pause at retry-backoff checkpoints, reusing
+  already-staged bytes through natural settlement, and only then raising
+  `PauseRequested`. Cancellation still propagates immediately; policy `Stop`
+  suppresses a latched pause and settles all later operations `policy-stop`.
+  Production retry sleeps total at most 350 ms (50 + 100 + 200); further latency
+  is uncapped I/O on already-staged data, not another file copy.
 - MODERATE - FIXED (2026-07-30). Pure-move recording within timestamp
   granularity. A valid MOVE could rename the reviewed target and then degrade
   recording when its timestamp differed exactly from the source while still

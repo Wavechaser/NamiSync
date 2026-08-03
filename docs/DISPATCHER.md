@@ -67,6 +67,13 @@ re-enters admission at the back of every required volume queue, never preempts a
 running session, and starts with the workflow's fresh guard. Cancel requests are
 cooperative but terminal cleanup/release is unconditional.
 
+Execution may deliberately remain `PAUSING` while one durable retry operation
+settles from process-local staged state. That module-owned drain does not alter
+the dispatcher contract: `PAUSED` still appears only after unwind and custody
+release, cancellation still preempts it, and a terminal policy `Stop` may win
+the race and take `PAUSING` directly to `FAILED` instead of creating an empty
+paused continuation.
+
 M0 preserves the adapter's opaque continuation by calling `snapshot()` after a
 pause unwind and before releasing custody or publishing `PAUSED`. This includes
 a pause observed at the runner's entry checkpoint before `invocation.run()`;

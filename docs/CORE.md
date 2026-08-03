@@ -108,11 +108,13 @@ request is either a legal transition or a typed rejection with no state change.
 it is not a normal runtime terminal.
 
 `Checkpoint` never waits. It returns normally, raises `PauseRequested`, or
-raises `Canceled`; either exception unwinds the workflow stack to the generic
-runner. A pause transitions to `PAUSED` without a terminal and releases volume
-custody. Resume re-enters admission at the back of the required volumes' queue
-and performs fresh observation/preflight. Cancellation produces the one
-`CANCELED` terminal.
+raises `Canceled`. Modules normally let either exception unwind to the generic
+runner. Executor alone may catch `PauseRequested` at a durable retry-backoff
+checkpoint, latch it until the current operation settles, and then re-raise at
+the operation boundary; `Canceled` is never latched. A pause transitions to
+`PAUSED` without a terminal and releases volume custody. Resume re-enters
+admission at the back of the required volumes' queue and performs fresh
+observation/preflight. Cancellation produces the one `CANCELED` terminal.
 
 The generic runner in `core/session.py` is the sole `Terminal` producer for
 every workflow. Modules and workflows return typed results and emit only
@@ -133,9 +135,10 @@ is attached to the one terminal/log path. `KeyboardInterrupt`, `SystemExit`,
 and other `BaseException` subclasses deliberately escape without being
 normalized into a workflow result. Operation modules emit outcomes as work settles rather than holding a
 private result list until return. Before `Canceled` leaves an item-processing
-module, its unwind finalizer emits `CANCELED` for the in-flight and every
-unreached selected item. The same finalizer emits nothing for unreached work on
-`PauseRequested`, because that work remains pending for resume.
+module, its unwind finalizer emits an outcome derived from any durable in-flight
+state and `CANCELED` for every unreached selected item. The same finalizer emits
+nothing for unreached work on `PauseRequested`, because that work remains
+pending for resume.
 
 The runner accepts a dispatcher-owned item accumulator. It is retained across
 pause attempts and cleared only after terminal settlement, so a resumed session

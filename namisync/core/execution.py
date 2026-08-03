@@ -228,6 +228,7 @@ class ExecutionReason(StrEnum):
     IO_ERROR = "io-error"
     POLICY_STOP = "policy-stop"
     CANCELED = "canceled"
+    CANCELED_AFTER_PUBLISH = "canceled-after-publish"
     RECORDER_FAILED = "recorder-failed"
 
 

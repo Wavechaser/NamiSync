@@ -1615,6 +1615,14 @@ but unexecuted plan has no live session at all**, so the rail cannot be
 derived purely from `list_sessions()` — session-derived fields refresh from
 it, but task identity is the adapter's.
 
+`SessionRecordView.state` and `StateChanged` already carry the core `pausing`
+value; Stage 6 must render it as **Pausing…**, not collapse it into `running` or
+prematurely show `paused`. Durable executor retries can remain in that state
+while one already-staged operation settles. Repeat pause/resume controls are
+disabled during the drain, cancellation remains available, and either `paused`
+or a legal terminal state may follow. This is presentation of an existing
+bridge value, not a payload/schema addition.
+
 **Plan sessions close as soon as their terminal result is delivered.** The
 plan *artifact* lives in the runtime keyed by request id and is what
 `get_plan_review` reads; the session record is only the delivery vehicle, and
@@ -2728,7 +2736,9 @@ because its local tests are easier.
   visible closing, cancels, waits for a terminal **record**, then unsubscribes,
   closes, and drops the plan; refusal leaves it open. A delayed terminal leaves
   the card visibly closing without prematurely closing the session or dropping
-  the plan. Closing a terminal task asks nothing. `ui-state.json` round-trips
+  the plan. The rail renders `pausing` distinctly until `paused` or terminal,
+  with repeat pause/resume disabled and cancel still available. Closing a
+  terminal task asks nothing. `ui-state.json` round-trips
   only the permitted cosmetic fields, including collapsed opaque node-id sets,
   but never serializes a plan request id, session id, task identity, selection,
   `view_id`, or projection revision; corruption recovers with defaults. Settings

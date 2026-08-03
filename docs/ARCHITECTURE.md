@@ -128,9 +128,14 @@ operations and between copy chunks, verifier between files — calls
 Pause and cancel are the same call site with two answers. This single decision
 is why pause is free instead of an unpayable retrofit.
 
-Pause never blocks in place — a blocked stack would hold the volume custody
-that `PAUSED` promises to release. Both pause and cancel *unwind*. The
-continuation state a pause must preserve is explicit. In the execute phase,
+Pause normally unwinds rather than blocking in place — a blocked stack would
+hold the volume custody that `PAUSED` promises to release. The narrow exception
+is a retry-backoff checkpoint while process-local COPY/UPDATE/MOVE_UPDATE state
+owns staged or published filesystem state: pause is latched until that operation
+settles, then unwinds at its ordinary boundary. Production backoff contributes
+at most 350 ms; remaining delay is uncapped I/O over already-staged data, never
+another main-file copy. Cancellation still unwinds immediately and preempts the
+latch. The continuation state a pause must preserve is explicit. In the execute phase,
 `ExecutionSet` records completed operation status plus published copy evidence,
 so everything unreached is remaining work. In the optional M1 verify phase, the
 discriminated continuation also records transient candidates, completed ids,
@@ -183,11 +188,14 @@ the session's emitted RELIABLE events whose payload nominally implements
 never duck-types on `item_id`/`path` (pause emits no terminal at all — the
 session isn't over). Control-flow exceptions carry no payload; what makes the
 unwind lossless is a **module obligation**: an
-item-processing module's own `finally` emits a `CANCELED` outcome for the
-in-flight item and every unreached selected item before `Canceled` leaves the
-module — while on `PauseRequested` it emits nothing for them, because they
-remain pending for resume. Emit-as-you-go plus this unwind finalizer means the
-runner never introspects module internals.
+item-processing module's own unwind finalizer emits a state-derived outcome for
+the in-flight item and `CANCELED` for every unreached selected item before
+`Canceled` leaves the module. An unfinished byte operation whose target already
+published is `FAILED/canceled-after-publish`, recording is degraded, and no
+success-only published evidence is invented; an unpublished prepared operation
+remains `CANCELED`. On `PauseRequested` the finalizer emits nothing for
+unreached work, because it remains pending for resume. Emit-as-you-go plus this
+unwind finalizer means the runner never introspects module internals.
 
 Audit finalization is a two-phase step, not a circularity: before the runner
 emits the one immutable `Terminal`, it drains the audit subscriber and races
@@ -1012,9 +1020,14 @@ only after the directory's children settle (child creates and renames churn
 parent times — directory times are restored last); the cancel-unwind finalizer
 (§2.2a — canceled outcomes for in-flight and unreached items emitted before
 unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams;
-and process-local retry continuations for committed update/move-update sub-steps,
-which revalidate the exact prepared/published and backup/trash evidence before
-resuming rather than restarting against the executor's own prior mutation.
+and process-local retry continuations covering COPY plus committed
+update/move-update sub-steps. They revalidate exact prepared/published and
+backup/trash evidence before resuming and latch a retry-backoff pause until
+operation settlement rather than unwinding into the executor's own prior
+mutation. Cancellation instead derives the current item's outcome from that
+state immediately: retained UPDATE backups remain visible,
+published-but-unfinished work is failed with a typed reason and degraded
+recording, and no rollback or false success evidence is attempted.
 
 **Flesh — now.** copy/update/recase/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails

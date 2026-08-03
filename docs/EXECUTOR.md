@@ -248,14 +248,19 @@ queue operation waits, so at most one further read is admitted after a
 stage-observed request. Either request aborts both workers, joins them, releases
 the complete byte budget, and unwinds rather than blocking. First-error storage
 preserves one original worker/callback/control exception instead of leaking a
-queue-shutdown artifact. Executor catches `Canceled` only long enough to
-clean/retain exact owned temps and emit reliable canceled outcomes for the
-in-flight and unreached selection, then re-raises for runner aggregation and the
-one canceled terminal. Pause abandons/reclaims an in-flight temp through
-ordinary exact-name recovery, preserves completed `ExecutionSet` statuses,
-forces pause-drain recording, and re-raises without terminal; dispatcher then
-releases custody. Resume queues at the back, freshly re-observes/preflights in
-workflow, and continues only unreached work.
+queue-shutdown artifact. Executor catches `Canceled` only long enough to inspect
+any process-local durable retry continuation before cleanup and emit reliable
+outcomes for the in-flight and unreached selection, then re-raises for runner
+aggregation and the one canceled terminal. A prepared-but-unpublished operation
+remains `CANCELED`; an unfinished operation whose target already published is
+`FAILED` with `canceled-after-publish`, structured on-disk-state detail,
+degraded recording, and no success-only published evidence. UPDATE reports and
+retains its owned backup while deleting only the staged temp. MOVE_UPDATE
+distinguishes new+old from new+trash; neither is rolled back. Ordinary pause
+abandons/reclaims an in-flight temp through exact-name recovery, preserves
+completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
+without terminal; dispatcher then releases custody. Resume queues at the back,
+freshly re-observes/preflights in workflow, and continues only unreached work.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the
@@ -264,23 +269,27 @@ copy-recording result across a same-process execute pause. If status reaches
 verification-incomplete invariant failure rather than silently omitting
 readback.
 
-Sharing violations use bounded retry with injected clock/backoff and checkpoint
-between attempts. A simple operation restarts after exact-temp cleanup; an
-update or move-update with a durable sub-step retains an operation-local
-continuation, revalidates the prepared/published file and owned backup/trash,
-and resumes at replace or old-to-trash rename instead of colliding with its own
-hardlink or published destination. It also recognizes the exact committed state
-if an injected/native boundary reports failure after the syscall took effect.
+Sharing violations use bounded retry with injected clock/backoff and checkpoints
+between attempts. COPY, UPDATE, and MOVE_UPDATE install an operation-local stage
+continuation once their prepared bytes or backup/publish state must survive a
+retry. They revalidate the prepared/published file and owned backup/trash, resume
+at publish, replace, metadata repair, or old-to-trash rename, and recognize the
+exact committed state if an injected/native boundary reports failure after the
+syscall took effect. No guarded retry recopies the main payload, and UPDATE's
+copy-backup continuation is installed only after that backup exists.
+
+Pause observed at a retry-backoff checkpoint while such a continuation is live
+is latched until that operation settles, then raised at the ordinary operation
+boundary. Cancellation is never latched and preempts a pending pause. If the
+settling failure policy returns `Stop`, that terminal policy decision suppresses
+the pause: later operations settle `policy-stop` without another checkpoint and
+the run terminates. The production sharing policy contributes at most 350 ms of
+retry sleep (50 + 100 + 200 ms). This is not a hard elapsed-time bound: remaining
+latency is filesystem durability/metadata/rename and recorder I/O over
+already-staged data. Custom injected policies own their own sleep budget.
 Persistent failure records `sharing-violation` after the configured bound and
 independent work continues. Unexpected executor exceptions are contained by the
 session wrapper, release custody, and never suppress already-earned outcomes.
-
-One pause boundary remains unresolved: the durable UPDATE/MOVE_UPDATE retry
-continuation is process-local and is not yet serialized into `ExecutionSet`.
-If pause is honored after such a durable sub-step, resume can reject the
-executor's own mutation. `BUGS.md` records the required product choice between
-persisting that continuation, rolling the owned stage back before pause, or
-deferring pause until the operation reaches a safe boundary.
 
 ## Progress
 

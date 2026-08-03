@@ -130,8 +130,11 @@ never hides the other result axes in rendered output.
   are closed with permanent regressions; an atomic history-finalization
   ownership decision now keeps timeout audit truth identical live and after
   reopen, with writer, audit, and shutdown timeouts derived in strict order.
-  Operation-safe pause after a durable retry sub-step remains the
-  explicit design decision in `BUGS.md`. The Stage 6 desktop shell remains next.
+  Durable COPY/UPDATE/MOVE_UPDATE retries now latch pause until the owned
+  operation settles without recopying staged payloads, preserve policy-stop and
+  immediate-cancel precedence, and report retained backups or partial publishes
+  honestly without false success evidence. The Stage 6 desktop shell remains
+  next.
 - Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
   ids, recursive inventory scope with bounded missing inference, revisioned
   user selection with payload-safe provenance, concurrent retry-safe facade

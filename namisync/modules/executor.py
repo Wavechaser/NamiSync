@@ -1493,6 +1493,16 @@ class _PreparedCopy:
 
 
 @dataclass(slots=True)
+class _CopyContinuation:
+    prepared: _PreparedCopy
+    prepared_stat: FileStat
+    published: bool = False
+    published_stat: FileStat | None = None
+    attestation: Attestation | None = None
+    detail: dict[str, object] = field(default_factory=dict)
+
+
+@dataclass(slots=True)
 class _UpdateContinuation:
     prepared: _PreparedCopy
     prepared_stat: FileStat
@@ -1501,14 +1511,18 @@ class _UpdateContinuation:
     backup_stat: FileStat | None
     detail: dict[str, object]
     published: bool = False
+    published_stat: FileStat | None = None
+    attestation: Attestation | None = None
 
 
 @dataclass(slots=True)
 class _MoveUpdateContinuation:
     prepared: _PreparedCopy
+    prepared_stat: FileStat
     old_relative_path: str
     old_expected: FileStat
-    published_stat: FileStat
+    published: bool = False
+    published_stat: FileStat | None = None
     trash: Path | None = None
     attestation: Attestation | None = None
 
@@ -1522,8 +1536,10 @@ class _ExecutionState:
     ready_directories: set[OpId] = field(default_factory=set)
     restore_directories: set[OpId] = field(default_factory=set)
     retry_continuations: dict[
-        OpId, _UpdateContinuation | _MoveUpdateContinuation
+        OpId, _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
     ] = field(default_factory=dict)
+    retry_errors: dict[OpId, Exception] = field(default_factory=dict)
+    pause_latched: bool = False
     filesystem_failed: bool = False
 
     @property
@@ -1654,10 +1670,9 @@ def execute(
             if operation.op_id not in xset.selection or operation.op_id in xset.status:
                 continue
             current = operation
-            ctx.checkpoint()
-            progress.start(operation)
 
             if stop_requested:
+                progress.start(operation)
                 _settle(
                     xset,
                     state,
@@ -1667,6 +1682,8 @@ def execute(
                     _Settled(Outcome.CANCELED, ExecutionReason.POLICY_STOP),
                 )
                 continue
+            ctx.checkpoint()
+            progress.start(operation)
             if operation.blocked:
                 _settle(
                     xset,
@@ -1731,14 +1748,16 @@ def execute(
                         isinstance(decision, Retry)
                         and attempt <= policies.max_retries
                     ):
+                        state.retry_errors[operation.op_id] = error
                         if operation.op_id not in state.retry_continuations:
                             _cleanup_inflight(state, fs)
-                        ctx.checkpoint()
+                        _retry_checkpoint(ctx, state, operation.op_id)
                         policies.sleep(decision.after)
-                        ctx.checkpoint()
+                        _retry_checkpoint(ctx, state, operation.op_id)
                         continue
                     cleanup_error = _cleanup_inflight(state, fs)
                     state.retry_continuations.pop(operation.op_id, None)
+                    state.retry_errors.pop(operation.op_id, None)
                     if cleanup_error is not None:
                         error = OperationFailure(
                             ExecutionReason.CLEANUP_FAILED,
@@ -1748,10 +1767,18 @@ def execute(
                     _settle_failure(xset, state, progress, ctx, operation, error)
                     if isinstance(decision, Stop):
                         stop_requested = True
+                        state.pause_latched = False
+                    elif state.pause_latched:
+                        state.pause_latched = False
+                        raise PauseRequested()
                     break
                 else:
                     state.retry_continuations.pop(operation.op_id, None)
+                    state.retry_errors.pop(operation.op_id, None)
                     _settle(xset, state, progress, ctx, operation, settled)
+                    if state.pause_latched:
+                        state.pause_latched = False
+                        raise PauseRequested()
                     break
 
         _finalize_directories(
@@ -1763,7 +1790,32 @@ def execute(
         except Exception:
             state.recording = RecordingStatus.DEGRADED
     except Canceled:
+        durable_settlement = (
+            None
+            if current is None or current.op_id in xset.status
+            else _canceled_durable_settlement(
+                current,
+                fs,
+                target_root,
+                state,
+            )
+        )
         cleanup_error = _cleanup_inflight(state, fs)
+        if durable_settlement is not None and current is not None:
+            detail = dict(durable_settlement.detail)
+            if cleanup_error is not None:
+                detail["cleanup_error"] = str(cleanup_error)
+                cleanup_error = None
+            state.retry_continuations.pop(current.op_id, None)
+            state.retry_errors.pop(current.op_id, None)
+            _settle(
+                xset,
+                state,
+                progress,
+                ctx,
+                current,
+                replace(durable_settlement, detail=detail),
+            )
         _finalize_directories(
             xset, ctx, recorder, fs, target_root, state, progress
         )
@@ -2029,40 +2081,90 @@ def _copy(
     state: _ExecutionState,
     progress: _ProgressTracker,
 ) -> _Settled:
-    prepared = _prepare_copy(
-        operation,
-        xset,
-        ctx,
-        policies,
-        fs,
-        source_root,
-        target_root,
-        state,
-        progress,
-    )
-    try:
-        fs.publish_new(prepared.temp, prepared.target)
-    except FileExistsError as error:
-        raise OperationFailure(
-            ExecutionReason.DESTINATION_OCCUPIED,
-            "destination appeared before conditional publish",
-            cause=error,
-        ) from error
-    state.inflight_temp = None
-    published = _published_copy_stat(prepared, xset, fs)
-    detail = _durability_detail(fs, prepared.target.parent)
-    attestation = _attestation(prepared.digest, published, policies.clock)
+    existing = state.retry_continuations.get(operation.op_id)
+    if existing is None:
+        prepared = _prepare_copy(
+            operation,
+            xset,
+            ctx,
+            policies,
+            fs,
+            source_root,
+            target_root,
+            state,
+            progress,
+        )
+        continuation = _CopyContinuation(
+            prepared=prepared,
+            prepared_stat=_require_stat_path(fs, prepared.temp),
+        )
+        state.retry_continuations[operation.op_id] = continuation
+    elif isinstance(existing, _CopyContinuation):
+        continuation = existing
+        prepared = continuation.prepared
+    else:
+        raise RuntimeError("executor continuation kind does not match copy")
+
+    if not continuation.published:
+        temp_stat = fs.stat_path(prepared.temp)
+        if temp_stat is None:
+            published = _require_stat_path(fs, prepared.target)
+            if not _same_file_version(published, continuation.prepared_stat):
+                raise OperationFailure(
+                    ExecutionReason.TARGET_DRIFT,
+                    "copy temp disappeared without the prepared file being published",
+                )
+            continuation.published = True
+            state.inflight_temp = None
+        else:
+            _guard_present(
+                fs,
+                source_root,
+                operation.source_rel_path,
+                operation.source_expected,
+                missing=ExecutionReason.SOURCE_MISSING,
+                drift=ExecutionReason.SOURCE_DRIFT,
+            )
+            _guard_path_stat(
+                temp_stat,
+                continuation.prepared_stat,
+                ExecutionReason.TARGET_DRIFT,
+                "prepared copy temp drifted before retry",
+            )
+            _guard_expected_target(fs, target_root, operation)
+            try:
+                fs.publish_new(prepared.temp, prepared.target)
+            except FileExistsError as error:
+                raise OperationFailure(
+                    ExecutionReason.DESTINATION_OCCUPIED,
+                    "destination appeared before conditional publish",
+                    cause=error,
+                ) from error
+            state.inflight_temp = None
+            continuation.published = True
+
+    if continuation.published_stat is None:
+        continuation.published_stat = _published_copy_stat(prepared, xset, fs)
+    assert continuation.published_stat is not None
+    continuation.detail.update(_durability_detail(fs, prepared.target.parent))
+    if continuation.attestation is None:
+        continuation.attestation = _attestation(
+            prepared.digest,
+            continuation.published_stat,
+            policies.clock,
+        )
+    assert continuation.attestation is not None
     recorded_identity = _record(
         state,
-        detail,
-        lambda: recorder.record_copied(operation.op_id, attestation),
+        continuation.detail,
+        lambda: recorder.record_copied(operation.op_id, continuation.attestation),
         identity_required=True,
     )
     return _Settled(
         Outcome.SUCCEEDED,
-        detail=detail,
+        detail=continuation.detail,
         published_evidence=PublishedCopyEvidence(
-            attestation, recorded_identity
+            continuation.attestation, recorded_identity
         ),
     )
 
@@ -2104,6 +2206,8 @@ def _update(
             missing=ExecutionReason.TARGET_MISSING,
             drift=ExecutionReason.TARGET_DRIFT,
         )
+        prepared_stat = _require_stat_path(fs, prepared.temp)
+        live_stat = _require_stat_path(fs, prepared.target)
         detail: dict[str, object] = {}
         trash: Path | None = None
         backup_error: Exception | None = None
@@ -2144,13 +2248,16 @@ def _update(
                 )
         continuation = _UpdateContinuation(
             prepared=prepared,
-            prepared_stat=_require_stat_path(fs, prepared.temp),
-            live_stat=_require_stat_path(fs, prepared.target),
+            prepared_stat=prepared_stat,
+            live_stat=live_stat,
             trash=trash,
-            backup_stat=None if trash is None else _require_stat_path(fs, trash),
+            backup_stat=None,
             detail=detail,
         )
         state.retry_continuations[operation.op_id] = continuation
+        if trash is not None:
+            continuation.backup_stat = _require_stat_path(fs, trash)
+            continuation.live_stat = _require_stat_path(fs, prepared.target)
         if backup_error is not None:
             raise backup_error
     elif isinstance(existing, _UpdateContinuation):
@@ -2158,6 +2265,10 @@ def _update(
         prepared = continuation.prepared
     else:
         raise RuntimeError("executor continuation kind does not match update")
+
+    if continuation.trash is not None and continuation.backup_stat is None:
+        continuation.backup_stat = _require_stat_path(fs, continuation.trash)
+        continuation.live_stat = _require_stat_path(fs, prepared.target)
 
     if not continuation.published:
         temp_stat = fs.stat_path(prepared.temp)
@@ -2239,7 +2350,9 @@ def _update(
             preserve_created=xset.plan.preservation.preserve_created,
             apply_readonly=True,
         )
-    published_stat = _published_copy_stat(prepared, xset, fs)
+    if continuation.published_stat is None:
+        continuation.published_stat = _published_copy_stat(prepared, xset, fs)
+    assert continuation.published_stat is not None
     continuation.detail.update(
         _durability_detail(
             fs,
@@ -2251,18 +2364,24 @@ def _update(
             ),
         )
     )
-    attestation = _attestation(prepared.digest, published_stat, policies.clock)
+    if continuation.attestation is None:
+        continuation.attestation = _attestation(
+            prepared.digest,
+            continuation.published_stat,
+            policies.clock,
+        )
+    assert continuation.attestation is not None
     recorded_identity = _record(
         state,
         continuation.detail,
-        lambda: recorder.record_updated(operation.op_id, attestation),
+        lambda: recorder.record_updated(operation.op_id, continuation.attestation),
         identity_required=True,
     )
     return _Settled(
         Outcome.SUCCEEDED,
         detail=continuation.detail,
         published_evidence=PublishedCopyEvidence(
-            attestation, recorded_identity
+            continuation.attestation, recorded_identity
         ),
     )
 
@@ -2429,21 +2548,11 @@ def _move_update(
             state,
             progress,
         )
-        try:
-            fs.publish_new(prepared.temp, prepared.target)
-        except FileExistsError as error:
-            raise OperationFailure(
-                ExecutionReason.DESTINATION_OCCUPIED,
-                "move-update destination appeared before conditional publish",
-                cause=error,
-            ) from error
-        state.inflight_temp = None
-        published_stat = _published_copy_stat(prepared, xset, fs)
         continuation = _MoveUpdateContinuation(
             prepared=prepared,
+            prepared_stat=_require_stat_path(fs, prepared.temp),
             old_relative_path=old_rel,
             old_expected=old_expected,
-            published_stat=published_stat,
         )
         state.retry_continuations[operation.op_id] = continuation
     elif isinstance(existing, _MoveUpdateContinuation):
@@ -2452,13 +2561,65 @@ def _move_update(
     else:
         raise RuntimeError("executor continuation kind does not match move-update")
 
-    if existing is not None:
+    if not continuation.published:
+        temp_stat = fs.stat_path(prepared.temp)
+        if temp_stat is None:
+            published_actual = _require_stat_path(fs, prepared.target)
+            if not _same_file_version(
+                published_actual,
+                continuation.prepared_stat,
+            ):
+                raise OperationFailure(
+                    ExecutionReason.TARGET_DRIFT,
+                    "move-update temp disappeared without the prepared file being published",
+                )
+            continuation.published = True
+            state.inflight_temp = None
+        else:
+            _guard_present(
+                fs,
+                source_root,
+                operation.source_rel_path,
+                operation.source_expected,
+                missing=ExecutionReason.SOURCE_MISSING,
+                drift=ExecutionReason.SOURCE_DRIFT,
+            )
+            _guard_path_stat(
+                temp_stat,
+                continuation.prepared_stat,
+                ExecutionReason.TARGET_DRIFT,
+                "prepared move-update temp drifted before retry",
+            )
+            _guard_present(
+                fs,
+                target_root,
+                continuation.old_relative_path,
+                continuation.old_expected,
+                missing=ExecutionReason.TARGET_MISSING,
+                drift=ExecutionReason.TARGET_DRIFT,
+            )
+            _guard_expected_target(fs, target_root, operation)
+            try:
+                fs.publish_new(prepared.temp, prepared.target)
+            except FileExistsError as error:
+                raise OperationFailure(
+                    ExecutionReason.DESTINATION_OCCUPIED,
+                    "move-update destination appeared before conditional publish",
+                    cause=error,
+                ) from error
+            state.inflight_temp = None
+            continuation.published = True
+
+    if continuation.published_stat is None:
+        continuation.published_stat = _published_copy_stat(prepared, xset, fs)
+    elif existing is not None:
         published_actual = _require_stat_path(fs, prepared.target)
         if not _same_file_version(published_actual, continuation.published_stat):
             raise OperationFailure(
                 ExecutionReason.TARGET_DRIFT,
                 "published move-update target drifted before completion",
             )
+    assert continuation.published_stat is not None
     if continuation.attestation is None:
         continuation.attestation = _attestation(
             prepared.digest, continuation.published_stat, policies.clock
@@ -2895,6 +3056,196 @@ def _cleanup_inflight(
     except Exception as error:
         return error
     return None
+
+
+def _retry_checkpoint(
+    ctx: RunContext,
+    state: _ExecutionState,
+    op_id: OpId,
+) -> None:
+    """Latch pause while process-local state owns a prepared durable stage."""
+
+    try:
+        ctx.checkpoint()
+    except PauseRequested:
+        if op_id not in state.retry_continuations:
+            raise
+        state.pause_latched = True
+
+
+def _canceled_durable_settlement(
+    operation: PlanOperation,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled | None:
+    continuation = state.retry_continuations.get(operation.op_id)
+    if continuation is None:
+        return None
+
+    detail: dict[str, object] = {}
+    retry_error = state.retry_errors.get(operation.op_id)
+    if retry_error is not None:
+        detail["retry_error_type"] = type(retry_error).__name__
+        detail["retry_error"] = str(retry_error)
+
+    try:
+        if isinstance(continuation, _UpdateContinuation):
+            published = _update_publish_state(continuation, fs)
+            detail.update(continuation.detail)
+            _describe_retained_update_backup(continuation, fs, detail)
+        else:
+            published = _new_publish_state(continuation, fs)
+    except Exception as error:
+        detail["durable_state"] = "unverified"
+        detail["state_error_type"] = type(error).__name__
+        detail["state_error"] = str(error)
+        _mark_unrecorded_publish(state, detail)
+        return _Settled(
+            Outcome.FAILED,
+            ExecutionReason.CANCELED_AFTER_PUBLISH,
+            detail,
+        )
+
+    if not published:
+        detail.setdefault("durable_state", "prepared-not-published")
+        return _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail)
+
+    if isinstance(continuation, _MoveUpdateContinuation):
+        _describe_canceled_move_update(
+            continuation,
+            fs,
+            target_root,
+            detail,
+        )
+    elif isinstance(continuation, _UpdateContinuation):
+        detail["durable_state"] = (
+            "target-published-with-backup"
+            if detail.get("backup_state") == "retained"
+            else "target-published"
+        )
+    else:
+        detail["durable_state"] = "target-published"
+    detail["published_path"] = operation.target_rel_path
+    _mark_unrecorded_publish(state, detail)
+    return _Settled(
+        Outcome.FAILED,
+        ExecutionReason.CANCELED_AFTER_PUBLISH,
+        detail,
+    )
+
+
+def _new_publish_state(
+    continuation: _CopyContinuation | _MoveUpdateContinuation,
+    fs: ExecutorFileSystem,
+) -> bool:
+    prepared = continuation.prepared
+    temp = fs.stat_path(prepared.temp)
+    target = fs.stat_path(prepared.target)
+    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
+        if target is None:
+            return False
+        raise OperationFailure(
+            ExecutionReason.TARGET_DRIFT,
+            "prepared temp and destination both exist during cancel settlement",
+        )
+    if temp is None and target is not None and _same_file_version(
+        target,
+        continuation.prepared_stat,
+    ):
+        return True
+    raise OperationFailure(
+        ExecutionReason.TARGET_DRIFT,
+        "cannot classify prepared versus published state during cancel settlement",
+    )
+
+
+def _update_publish_state(
+    continuation: _UpdateContinuation,
+    fs: ExecutorFileSystem,
+) -> bool:
+    prepared = continuation.prepared
+    temp = fs.stat_path(prepared.temp)
+    target = fs.stat_path(prepared.target)
+    if (
+        temp is not None
+        and _same_file_version(temp, continuation.prepared_stat)
+        and target is not None
+        and _same_file_version(target, continuation.live_stat)
+    ):
+        return False
+    if temp is None and target is not None and _same_file_version(
+        target,
+        continuation.prepared_stat,
+    ):
+        return True
+    raise OperationFailure(
+        ExecutionReason.TARGET_DRIFT,
+        "cannot classify live versus published update during cancel settlement",
+    )
+
+
+def _describe_retained_update_backup(
+    continuation: _UpdateContinuation,
+    fs: ExecutorFileSystem,
+    detail: dict[str, object],
+) -> None:
+    if continuation.trash is None:
+        return
+    detail["backup_path"] = str(continuation.trash)
+    try:
+        backup = fs.stat_path(continuation.trash)
+    except Exception as error:
+        detail["backup_state"] = "unverified"
+        detail["backup_state_error"] = f"{type(error).__name__}: {error}"
+        return
+    detail["backup_state"] = "retained" if backup is not None else "absent"
+    if backup is not None:
+        detail["durable_state"] = "backup-retained"
+
+
+def _describe_canceled_move_update(
+    continuation: _MoveUpdateContinuation,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    detail: dict[str, object],
+) -> None:
+    detail["prior_path"] = continuation.old_relative_path
+    if continuation.trash is None:
+        detail["durable_state"] = "new-and-old-unclassified"
+        return
+    detail["trash_path"] = str(continuation.trash)
+    try:
+        old = fs.stat(target_root, continuation.old_relative_path)
+        trash = fs.stat_path(continuation.trash)
+    except Exception as error:
+        detail["durable_state"] = "new-and-old-unverified"
+        detail["old_state_error"] = f"{type(error).__name__}: {error}"
+        return
+    if old is not None and _matches_expected(old, continuation.old_expected):
+        detail["durable_state"] = (
+            "new-and-old"
+            if trash is None
+            else "new-old-and-trash-unverified"
+        )
+    elif old is None and trash is not None and _matches_expected(
+        trash,
+        continuation.old_expected,
+    ):
+        detail["durable_state"] = "new-and-trash"
+    else:
+        detail["durable_state"] = "new-and-old-unverified"
+
+
+def _mark_unrecorded_publish(
+    state: _ExecutionState,
+    detail: dict[str, object],
+) -> None:
+    state.recording = RecordingStatus.DEGRADED
+    detail["recording"] = RecordingStatus.DEGRADED.value
+    detail["recording_error"] = (
+        "cancellation interrupted settlement of a published filesystem mutation"
+    )
 
 
 def _guard_present(

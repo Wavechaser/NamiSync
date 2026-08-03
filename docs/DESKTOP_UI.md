@@ -168,6 +168,11 @@ The task rail is a presentation grouping over live service sessions and
 retained history, not a new durable task model. It shows activity kind, source
 and target when applicable, current phase, progress, and a truthful terminal
 headline. Subject-only activities do not fabricate a source-to-target label.
+An accepted pause immediately renders **Pausing…** from the existing `pausing`
+session state and remains distinct from **Paused** until custody actually
+releases. Repeat pause/resume is disabled during that drain, cancellation stays
+available, and the next state may be paused or terminal if the active operation
+settles the run first.
 Closing a terminal task drops only its live presentation state; retained
 history remains. Closing queued or busy work asks for the service-supported
 control, waits for actual terminal observation, and never treats a transient
@@ -233,7 +238,7 @@ details may evolve, but contrast and no-color-only signaling are requirements.
   executable content.
 - Plan, inventory, settings, and history consume facade views only and remain
   semantically separate; UI cosmetics never change a plan's captured settings.
-- Busy, paused, canceled, refused, partial, degraded, mismatch, and compound
+- Busy, pausing, paused, canceled, refused, partial, degraded, mismatch, and compound
   verification outcomes are truthful and distinguishable without parsing
   strings or inferring status from bytes.
 - Tests cover exact confirmation, location ambiguity, opaque-id authority,
