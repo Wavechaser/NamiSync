@@ -91,6 +91,26 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
+- MODERATE - FIXED (2026-08-03). Audit backpressure coupled to finalization.
+  One `audit_timeout` fed three unrelated bounds — the finalization cutoff, the
+  per-envelope `offer` enqueue wait, and hub close — so deriving a longer
+  finalization cutoff from the writer's retry bound silently multiplied how
+  long a wedged audit writer could stall the emitting workflow thread with a
+  full queue, freezing live progress. Cause: producer backpressure and durable
+  finalization were treated as one knob although only finalization must outlast
+  a writer retry. Fixed with an independent `audit_offer_timeout` on
+  `Dispatcher`/`EventHub`, a service constant that must not scale with the
+  history writer, and a regression that emits under a long finalization cutoff
+  and asserts the producer still degrades promptly.
+- MODERATE - FIXED (2026-08-03). Shutdown allowance visibly long. Deriving
+  every audit bound from the generic ten-second serialized-writer retry made
+  worst-case service close twenty-two seconds, long enough to read as an
+  unresponsive window once Stage 6 calls it during teardown. Cause: history
+  finalization reused the ledger's retry bound although it is an independently
+  degradable axis whose exhaustion costs one audit row rather than filesystem
+  or integrity truth. Fixed by giving history its own five-second retry bound,
+  which carries the derived cutoff to six seconds and service close to twelve,
+  with tests pinning both the ordering and a shutdown ceiling.
 - MODERATE - FIXED (2026-08-02). Audit timeout parity. A history finalization
   that commits after the audit acknowledgement deadline leaves the delivered
   immutable terminal at `audit=degraded` while the retained history row says
@@ -102,9 +122,8 @@ to a global chronological list.
   success or failure. History now persists the decided `result.audit` value
   inside the existing immutable payload and transaction; no schema, version, or
   corrective write was added. The 2026-08-03 hardening derives the production
-  eleven-second audit cutoff from the writer's ten-second retry bound and the
-  twenty-two-second service-close allowance from both sequential bounds plus
-  margin, with tests pinning the ordering.
+  audit cutoff and the service-close allowance from the history writer's retry
+  bound rather than from independent literals, with tests pinning the ordering.
 - SEVERE - FIXED (2026-07-30). Resumed pre-invocation cancellation. Canceling a
   paused execution just after resume published RUNNING but before
   `invocation.run()` produced a generic canceled terminal while leaving runtime
@@ -135,6 +154,19 @@ to a global chronological list.
 
 ### M1 Stage 6 host reality spike
 
+- MINOR - FIXED (2026-08-03). Prerequisite misdiagnosis and an overstated
+  parity claim. An absent .NET Framework release key made the host report that
+  Microsoft Edge WebView2 Runtime needed installing, when the actual missing
+  prerequisite was .NET 4.6.2; the same state is also the one place the
+  side-effect-free mirror deliberately diverges from pywebview 6.2.1, whose
+  `_is_chromium` raises `UnboundLocalError` from a `finally` that closes a
+  never-bound `net_key`. Cause: the detector reported one boolean, and the
+  parity tests covered an outdated .NET release but never an absent key. Fixed
+  with an explicit `missing_dotnet_framework` query and its own install
+  message, a documented divergence in the mirror, and regressions pinning both
+  the divergence and the message each refusal chooses. Windows 11 ships .NET
+  Framework 4.8 in-box, so the state is not reachable on a supported
+  installation.
 - MODERATE - FIXED (2026-08-01). Missing-WebView2 refusal changed the user's
   registry before reporting that the required renderer was unavailable.
   Pywebview selected its Windows backend during `webview.start()` and imported

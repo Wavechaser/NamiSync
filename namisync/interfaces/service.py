@@ -75,6 +75,11 @@ SERVICE_CLOSE_TIMEOUT_SECONDS = (
     + HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
     + FINALIZATION_TIMEOUT_MARGIN_SECONDS
 )
+# Producer backpressure only. A wedged audit writer must degrade the audit axis
+# quickly rather than stall the emitting workflow thread, so this bound is
+# deliberately independent of the finalization cutoff above and must not scale
+# with the history writer's retry bound.
+AUDIT_OFFER_TIMEOUT_SECONDS = 5.0
 
 
 class SyncPathInputError(ValueError):
@@ -1551,6 +1556,7 @@ def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:
         clock=runtime.clock,
         audit_observer_factory=runtime.audit_observer,
         audit_timeout=AUDIT_FINALIZATION_TIMEOUT_SECONDS,
+        audit_offer_timeout=AUDIT_OFFER_TIMEOUT_SECONDS,
     )
 
 

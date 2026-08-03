@@ -115,6 +115,7 @@ class Dispatcher:
         subscriber_capacity: int = 64,
         audit_capacity: int = 64,
         audit_timeout: float = 5.0,
+        audit_offer_timeout: float = 5.0,
     ) -> None:
         self._registry = dict(registry)
         self._store = store if store is not None else InMemorySessionStore()
@@ -127,6 +128,7 @@ class Dispatcher:
         self._subscriber_capacity = subscriber_capacity
         self._audit_capacity = audit_capacity
         self._audit_timeout = audit_timeout
+        self._audit_offer_timeout = audit_offer_timeout
 
         self._condition = Condition()
         self._records: dict[SessionId, SessionRecord] = {}
@@ -199,6 +201,7 @@ class Dispatcher:
             subscriber_capacity=self._subscriber_capacity,
             audit_capacity=self._audit_capacity,
             audit_timeout=self._audit_timeout,
+            audit_offer_timeout=self._audit_offer_timeout,
         )
         try:
             self._store.put(record)

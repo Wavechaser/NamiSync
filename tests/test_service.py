@@ -535,7 +535,10 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
 
 
 def test_production_timeouts_order_writer_audit_and_shutdown() -> None:
-    assert HISTORY_WRITER_RETRY_TIMEOUT_SECONDS == DEFAULT_RETRY_TIMEOUT_SECONDS
+    # History finalization retries for strictly less than the generic writer
+    # bound, because every audit and shutdown bound scales from it and the
+    # worst-case window close must stay responsive.
+    assert 0 < HISTORY_WRITER_RETRY_TIMEOUT_SECONDS < DEFAULT_RETRY_TIMEOUT_SECONDS
     assert service_module.FINALIZATION_TIMEOUT_MARGIN_SECONDS > 0
     assert service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS == (
         HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
@@ -545,6 +548,20 @@ def test_production_timeouts_order_writer_audit_and_shutdown() -> None:
         service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS
         + HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
         + service_module.FINALIZATION_TIMEOUT_MARGIN_SECONDS
+    )
+    assert service_module.SERVICE_CLOSE_TIMEOUT_SECONDS <= 15.0
+
+
+def test_audit_offer_backpressure_is_independent_of_finalization() -> None:
+    # A wedged audit writer must degrade quickly rather than stall the emitting
+    # workflow thread, so producer backpressure must never scale with the
+    # finalization cutoff derived from the history writer's retry bound.
+    assert service_module.AUDIT_OFFER_TIMEOUT_SECONDS > 0
+    assert service_module.AUDIT_OFFER_TIMEOUT_SECONDS <= (
+        HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
+    )
+    assert service_module.AUDIT_OFFER_TIMEOUT_SECONDS < (
+        service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS
     )
 
 
@@ -565,6 +582,9 @@ def test_service_composition_passes_derived_audit_timeout(
 
     assert captured["audit_timeout"] == (
         service_module.AUDIT_FINALIZATION_TIMEOUT_SECONDS
+    )
+    assert captured["audit_offer_timeout"] == (
+        service_module.AUDIT_OFFER_TIMEOUT_SECONDS
     )
     assert captured["clock"] is runtime.clock
     assert captured["audit_observer_factory"] is runtime.audit_observer

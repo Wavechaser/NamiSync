@@ -196,10 +196,15 @@ latch. If the caller wins, it releases `audit=DEGRADED`, and any row the late
 pump commits carries that same degraded axis. If the pump wins, the caller
 waits for its actual commit result: success stamps both live and retained
 `audit=OK`, while failure stamps live `audit=DEGRADED` and leaves no
-contradictory row. Production derives an eleven-second audit cutoff from the
-ten-second history-writer retry bound. Its twenty-two-second service shutdown
-allowance covers the cutoff followed by a pump-owned retry, plus one second of
-margin; none of these limits is an independent literal. History never parses
+contradictory row. Production derives a six-second audit cutoff from the
+five-second history-writer retry bound, which is deliberately shorter than the
+generic serialized-writer bound because exhausting it costs one audit row and
+an honest degraded axis, never filesystem or integrity truth. Its
+twelve-second service shutdown allowance covers the cutoff followed by a
+pump-owned retry, plus one second of margin; none of these limits is an
+independent literal. Audit *offer* backpressure is a separate bound and does
+not scale with them: it exists only so a wedged writer degrades quickly
+instead of stalling the emitting workflow thread. History never parses
 the `Terminal` it already settled, and no second terminal or corrective write
 exists. (The
 `recording` axis has no such loop: the recorder is call-driven, and its terminal

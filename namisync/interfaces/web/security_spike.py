@@ -10,7 +10,7 @@ from threading import Lock
 from typing import Protocol
 from urllib.parse import SplitResult, urlsplit
 
-from .pywebview_runtime import has_webview2_runtime
+from .pywebview_runtime import has_webview2_runtime, missing_dotnet_framework
 
 
 BRIDGE_SCHEMA_VERSION = 1
@@ -24,6 +24,10 @@ _REQUIRED_WEBVIEW_SETTINGS: tuple[tuple[str, object], ...] = (
 _WEBVIEW2_INSTALL_MESSAGE = (
     "NamiSync requires Microsoft Edge WebView2 Runtime; install it and restart "
     "NamiSync."
+)
+_DOTNET_INSTALL_MESSAGE = (
+    "NamiSync requires Microsoft .NET Framework 4.6.2 or later before Microsoft "
+    "Edge WebView2 Runtime can be used; install it and restart NamiSync."
 )
 
 
@@ -272,6 +276,9 @@ def prepare_pywebview_host(webview_module: _WebviewModule) -> None:
     """Harden pywebview and refuse a missing WebView2 before window creation."""
 
     harden_pywebview_settings(webview_module)
+    # Presence probe only. The detector reads the value itself; this turns a
+    # pywebview that dropped the key into the same actionable settings error as
+    # the hardened keys above, instead of an opaque KeyError from the detector.
     try:
         _ = webview_module.settings["WEBVIEW2_RUNTIME_PATH"]
     except Exception as error:
@@ -280,7 +287,11 @@ def prepare_pywebview_host(webview_module: _WebviewModule) -> None:
             "WEBVIEW2_RUNTIME_PATH"
         ) from error
     if not has_webview2_runtime(webview_module.settings):
-        raise WebView2Unavailable(_WEBVIEW2_INSTALL_MESSAGE)
+        raise WebView2Unavailable(
+            _DOTNET_INSTALL_MESSAGE
+            if missing_dotnet_framework()
+            else _WEBVIEW2_INSTALL_MESSAGE
+        )
 
 
 def start_edge_chromium(

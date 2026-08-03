@@ -73,9 +73,13 @@ adjacent checkpoints. When full, the producer waits at the next safe checkpoint
 boundary instead of dropping audit, capped by an injected generous timeout.
 Drain within that bound guarantees in-process delivery. Caller-owned timeout or
 pump-owned failure degrades the session's audit axis without changing domain or
-ledger truth. Production derives an eleven-second cutoff from the ten-second
-history-writer retry bound and gives service shutdown twenty-two seconds to
-cover the cutoff plus a complete late retry and margin. Disk
+ledger truth. That producer wait is bounded by its own offer timeout, which is
+independent of finalization so a long finalization cutoff can never stall live
+emission. Production derives a six-second finalization cutoff from the
+five-second history-writer retry bound — shorter than the generic
+serialized-writer bound, because exhausting it costs one audit row rather than
+domain truth — and gives service shutdown twelve seconds to cover the cutoff
+plus a complete late retry and margin. Disk
 durability remains best-effort: a process crash may lose at most the bounded
 in-flight buffer.
 

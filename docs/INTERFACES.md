@@ -235,9 +235,14 @@ actual comparison and does not claim current security patching. A configured
 `WEBVIEW2_RUNTIME_PATH` short-circuits that probe. The start
 wrapper repeats preparation before explicitly requesting `gui="edgechromium"`.
 This refuses absence before pywebview can import its registry-mutating MSHTML
-fallback. A synchronous `initialized` check still refuses any non-Edge result
-with an actionable message; unrelated startup exceptions retain their original
-diagnosis.
+fallback. A refusal names the prerequisite it actually found missing: an absent
+.NET Framework release key reports .NET 4.6.2 rather than blaming WebView2.
+That state is also the mirror's one deliberate divergence — pinned upstream
+raises `UnboundLocalError` from a `finally` closing a never-bound key, while
+the mirror refuses cleanly — and it is unreachable on Windows 11, which ships
+.NET Framework 4.8 in-box. A synchronous `initialized` check still refuses any
+non-Edge result with an actionable message; unrelated startup exceptions retain
+their original diagnosis.
 
 The live Windows spike established two constraints that the earlier mock did
 not represent. First, pywebview runs its setup callback and exposed functions

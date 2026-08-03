@@ -55,6 +55,17 @@ commit_semantic_settings(patch) -> SemanticSettingsView
 and event/record views. The desktop owns the bounded presentation queue fed by
 that sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe on task close and close every observation before service shutdown.
+
+`NamiSyncService.close()` is bounded but not instantaneous: its derived
+allowance is twelve seconds, reached only when the audit writer is genuinely
+wedged, and a healthy close returns in milliseconds. The host must therefore
+never call it from pywebview's `closing` callback, which pywebview runs
+synchronously on the WinForms UI thread — a window that stops pumping messages
+is marked unresponsive by Windows within a few seconds. The close handler
+returns `False` to veto the immediate close, shows a determinate closing
+affordance, runs the ordered teardown off the UI thread, and closes the window
+programmatically when the `ShutdownView` returns. An incomplete shutdown stays
+visible rather than being swallowed by window destruction.
 `classify_result()` supplies the single headline and independent filesystem,
 integrity, recording, audit, disposition, and cancellation axes. The frontend
 renders those facts; it never reimplements headline precedence or parses

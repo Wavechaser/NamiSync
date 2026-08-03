@@ -43,6 +43,10 @@ def make_hub(**overrides) -> EventHub:
         "audit_timeout": 0.2,
     }
     options.update(overrides)
+    # Offer backpressure defaults to the finalization bound so existing cases
+    # keep their original single-timeout behavior; tests that care about the
+    # split pass it explicitly.
+    options.setdefault("audit_offer_timeout", options["audit_timeout"])
     return EventHub(**options)
 
 
@@ -268,6 +272,41 @@ def test_pump_claim_before_deadline_reports_late_commit_failure() -> None:
     assert statuses == [RecordingStatus.DEGRADED]
     assert hub.audit_degraded
     assert hub.close(0.5)
+
+
+def test_producer_backpressure_uses_the_offer_bound_not_the_finalization_bound() -> None:
+    """A long finalization cutoff must not stall the emitting workflow thread.
+
+    Finalization has to outlast the history writer's retry bound so a late but
+    legitimate commit is not falsely degraded. Offer is the opposite concern:
+    it exists only so a wedged audit writer degrades quickly instead of
+    freezing live progress. Sharing one knob made raising the former silently
+    multiply the latter.
+    """
+
+    release = Event()
+
+    class Stalled(Observer):
+        def on_event(self, envelope) -> None:
+            del envelope
+            release.wait(5)
+
+    hub = make_hub(
+        observer=Stalled(),
+        audit_capacity=1,
+        audit_timeout=30.0,
+        audit_offer_timeout=0.05,
+    )
+    hub.emit(PhaseChanged("one"))
+    hub.emit(PhaseChanged("two"))
+    started = monotonic()
+    hub.emit(PhaseChanged("three"))
+    elapsed = monotonic() - started
+
+    assert hub.audit_degraded
+    assert elapsed < 1.0
+    release.set()
+    assert hub.close(1.0)
 
 
 def test_stalled_audit_is_timeout_bounded_and_degrades() -> None:

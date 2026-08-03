@@ -171,6 +171,51 @@ def test_detector_matches_fixed_runtime_and_missing_dotnet_contract(
     assert not _upstream_detector(fake, architecture="AMD64")
 
 
+def test_absent_dotnet_key_is_the_one_deliberate_upstream_divergence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Upstream crashes where the mirror refuses; pin that we diverge on purpose.
+
+    ``_is_chromium`` closes ``net_key`` in a ``finally`` that also runs when the
+    opening ``OpenKey`` raised, so an absent .NET release key raises
+    ``UnboundLocalError`` out of pywebview instead of returning False. Windows 11
+    ships .NET Framework 4.8 in-box, so this state is unreachable on a supported
+    installation, but the mirror must still refuse cleanly and name the real
+    prerequisite.
+    """
+
+    fake = FakeRegistry({})
+    monkeypatch.setattr(runtime, "winreg", fake)
+
+    assert not runtime.has_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
+    )
+    assert runtime.missing_dotnet_framework()
+    with pytest.raises(UnboundLocalError):
+        _upstream_detector(fake, architecture="AMD64")
+
+
+def test_present_dotnet_key_does_not_report_a_prerequisite_gap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeRegistry(
+        {
+            (
+                FakeRegistry.HKEY_LOCAL_MACHINE,
+                runtime.DOTNET_RELEASE_REGISTRY_PATH,
+                "Release",
+            ): runtime.MINIMUM_DOTNET_RELEASE,
+        }
+    )
+    monkeypatch.setattr(runtime, "winreg", fake)
+
+    assert not runtime.missing_dotnet_framework()
+    assert not runtime.has_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
+    )
+    assert not _upstream_detector(fake, architecture="AMD64")
+
+
 def test_malformed_earlier_channel_aborts_like_the_upstream_detector(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

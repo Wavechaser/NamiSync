@@ -137,7 +137,16 @@ from .views import (
 )
 
 
-HISTORY_WRITER_RETRY_TIMEOUT_SECONDS = DEFAULT_RETRY_TIMEOUT_SECONDS
+# History finalization is an independently degradable axis, so it retries for
+# less than the ledger's generic bound: exhausting it costs one audit row and
+# an honest ``audit=degraded``, never filesystem or integrity truth. Every
+# derived audit and shutdown bound scales from this value, so keeping it well
+# under the generic default is what keeps window close responsive.
+HISTORY_WRITER_RETRY_TIMEOUT_SECONDS = 5.0
+if HISTORY_WRITER_RETRY_TIMEOUT_SECONDS > DEFAULT_RETRY_TIMEOUT_SECONDS:
+    raise AssertionError(
+        "history retry must not exceed the generic serialized-writer bound"
+    )
 
 
 PLAN_KIND = "sync-plan"

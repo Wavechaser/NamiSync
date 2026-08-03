@@ -141,11 +141,22 @@ commit success settles OK, while failure settles degraded with no
 contradictory row. The immutable Terminal is then sent to ordinary subscribers,
 never used as history's own finalization input.
 
-The production composition derives that cutoff as eleven seconds from the
-history writer's ten-second retry bound. Service shutdown allows twenty-two
+The production composition derives that cutoff as six seconds from the history
+writer's five-second retry bound. History retries for strictly less than the
+generic serialized-writer bound: it is an independently degradable axis, so
+exhausting it costs one audit row and an honest `audit=DEGRADED`, and every
+audit and shutdown bound scales from it. Service shutdown allows twelve
 seconds: the cutoff plus a complete pump-owned writer retry and one second of
-margin. Tests pin both strict inequalities so changing any constituent bound
-cannot silently make ordinary late finalization outlive shutdown.
+margin. Tests pin the strict inequalities so changing any constituent bound
+cannot silently make ordinary late finalization outlive shutdown, and pin the
+shutdown ceiling so it cannot grow back into a visible hang.
+
+The audit *offer* bound is separate and does not scale with finalization.
+Finalization must outlast a writer retry so a late but legitimate commit is not
+falsely degraded; offer exists only so a wedged audit writer degrades quickly
+rather than stalling the emitting workflow thread while its bounded queue is
+full. Sharing one knob made raising the former silently multiply the latter, so
+the two are now independent constructor arguments with their own regression.
 
 The implemented observer seam is structural and core-typed, so `db` need not
 import dispatcher: `on_event(Envelope)`, `finalize(OperationResult)`, and

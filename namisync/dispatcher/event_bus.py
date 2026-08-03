@@ -289,6 +289,7 @@ class EventHub:
         subscriber_capacity: int,
         audit_capacity: int,
         audit_timeout: float,
+        audit_offer_timeout: float,
     ) -> None:
         if replay_capacity < 1:
             raise ValueError("replay capacity must be positive")
@@ -296,12 +297,15 @@ class EventHub:
             raise ValueError("subscriber capacity must be positive")
         if audit_timeout <= 0:
             raise ValueError("audit timeout must be positive")
+        if audit_offer_timeout <= 0:
+            raise ValueError("audit offer timeout must be positive")
         self._session_id = session_id
         self._state = initial_state
         self._clock = clock
         self._replay_capacity = replay_capacity
         self._subscriber_capacity = subscriber_capacity
         self._audit_timeout = audit_timeout
+        self._audit_offer_timeout = audit_offer_timeout
         self._replay: deque[Envelope] = deque(maxlen=replay_capacity)
         self._subscribers: list[EventStream] = []
         self._seq = 0
@@ -334,7 +338,11 @@ class EventHub:
                 delivery_class(body) is DeliveryClass.RELIABLE
                 and not isinstance(body, Terminal)
             ):
-                self._audit.offer(envelope, self._audit_timeout)
+                # Producer backpressure, not durable finalization: this bound
+                # exists only to stop a wedged audit writer from stalling the
+                # emitting workflow thread, so it is deliberately independent
+                # of the finalization cutoff that must outlast a writer retry.
+                self._audit.offer(envelope, self._audit_offer_timeout)
             live: list[EventStream] = []
             for stream in self._subscribers:
                 stream._offer(envelope)
