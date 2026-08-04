@@ -133,8 +133,10 @@ never hides the other result axes in rendered output.
   Durable COPY/UPDATE/MOVE_UPDATE retries now latch pause until the owned
   operation settles without recopying staged payloads, preserve policy-stop and
   immediate-cancel precedence, and report retained backups or partial publishes
-  honestly without false success evidence. The Stage 6 desktop shell remains
-  next.
+  honestly without false success evidence. An intact owned temp prevents a
+  foreign target write from being misreported as NamiSync publication, and
+  policy-stop status settlement remains cancelable. The Stage 6 desktop shell
+  remains next.
 - Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
   ids, recursive inventory scope with bounded missing inference, revisioned
   user selection with payload-safe provenance, concurrent retry-safe facade

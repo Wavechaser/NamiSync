@@ -28,6 +28,17 @@ to a global chronological list.
 
 ### M1 executor refactor
 
+- SEVERE - FIXED (2026-08-03). Cancel after a failed UPDATE replace could claim
+  `canceled-after-publish` for a foreign write made by the process that held the
+  target lock during backoff; COPY had the same false-credit shape if a foreign
+  destination appeared. Cause: cancellation required the target still match
+  reviewed/prepared evidence before accepting an intact owned temp as proof of
+  non-publication, then treated every classification failure as publication.
+  Fixed by making an intact matching temp decisive negative evidence regardless
+  of target drift, recording the unexpected target state in item detail,
+  preferring the continuation's synchronous/cached publish evidence, and
+  keeping genuinely unverified state failed under its drift/I/O reason without
+  degrading recording or claiming publication.
 - SEVERE - FIXED (2026-08-03). Cancellation after a published byte operation
   could label COPY or UPDATE `CANCELED` even though the new target was already
   live, omit the mutation from item detail, and leave recording falsely `OK`.
@@ -61,7 +72,8 @@ to a global chronological list.
   owned durable boundary, latching pause at retry-backoff checkpoints, reusing
   already-staged bytes through natural settlement, and only then raising
   `PauseRequested`. Cancellation still propagates immediately; policy `Stop`
-  suppresses a latched pause and settles all later operations `policy-stop`.
+  suppresses a latched pause and settles later operations `policy-stop`, while
+  cancel-only checkpoints keep that status-emission sweep interruptible.
   Production retry sleeps total at most 350 ms (50 + 100 + 200); further latency
   is uncapped I/O on already-staged data, not another file copy.
 - MODERATE - FIXED (2026-07-30). Pure-move recording within timestamp

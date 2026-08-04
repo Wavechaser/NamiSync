@@ -3588,6 +3588,184 @@ def test_cancel_during_published_copy_retry_fails_without_false_evidence(
     assert (target / "file.bin").read_bytes() == b"published-copy"
 
 
+def test_cancel_after_failed_copy_publish_does_not_claim_foreign_target(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"prepared-copy")
+    fs = SharingOnceFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep(_delay: float) -> None:
+        nonlocal cancel_requested
+        (target / "file.bin").write_bytes(b"foreign-write")
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=sleep),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.outcome is Outcome.CANCELED
+    assert item.reason == "canceled"
+    assert item.detail["publish_state"] == "not-published"
+    assert item.detail["target_state"] == "unexpectedly-present-before-publish"
+    assert xset.recording is RecordingStatus.OK
+    assert xset.published_evidence == {}
+    assert fs.attempts == 1
+    assert (target / "file.bin").read_bytes() == b"foreign-write"
+    assert not list(target.glob("*.synctmp-*"))
+
+
+class VanishingTempSharingFileSystem(NativeFileSystem):
+    def publish_new(self, temp: Path, target: Path) -> None:
+        del target
+        temp.unlink()
+        error = OSError("sharing report with missing staged temp")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+
+def test_unclassifiable_cancel_does_not_assume_publish_or_degrade_recording(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"prepared-copy")
+    fs = VanishingTempSharingFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep(_delay: float) -> None:
+        nonlocal cancel_requested
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=sleep),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "target-missing"
+    assert item.detail["publish_state"] == "unverified"
+    assert item.detail["durable_state"] == "unverified"
+    assert xset.recording is RecordingStatus.OK
+    assert xset.published_evidence == {}
+
+
+class PublishedMtimeThenFlushSharingFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.flush_attempts = 0
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        super().ensure_published_metadata(path, *args, **kwargs)
+        native = path.stat(follow_symlinks=False)
+        os.utime(
+            path,
+            ns=(native.st_atime_ns, native.st_mtime_ns + 2_000_000_000),
+        )
+        observed = self.stat_path(path)
+        assert observed is not None
+        return observed
+
+    def flush_directory(self, path: Path) -> bool:
+        self.flush_attempts += 1
+        if self.flush_attempts == 1:
+            error = OSError("sharing violation after repaired metadata")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        return super().flush_directory(path)
+
+
+def test_cancel_uses_cached_published_stat_after_metadata_changes(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"published-copy")
+    fs = PublishedMtimeThenFlushSharingFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep(_delay: float) -> None:
+        nonlocal cancel_requested
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=sleep),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "canceled-after-publish"
+    assert item.detail["publish_state"] == "published"
+    assert item.detail["target_state"] == "published"
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence == {}
+
+
 class PrepareSharingFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.failed = False
@@ -3961,6 +4139,62 @@ def test_cancel_during_update_retry_reports_owned_durable_state(
         assert (target / "file.bin").read_bytes() == b"new-version"
 
 
+def test_cancel_after_failed_update_replace_does_not_claim_foreign_write(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = ReplaceSharingOnceFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,), hardlinks=False))
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep(_delay: float) -> None:
+        nonlocal cancel_requested
+        (target / "file.bin").write_bytes(b"foreign-write")
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=sleep),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert item.outcome is Outcome.CANCELED
+    assert item.reason == "canceled"
+    assert item.detail["publish_state"] == "not-published"
+    assert item.detail["target_state"] == "changed-before-publish"
+    assert item.detail["durable_state"] == "backup-retained"
+    assert xset.recording is RecordingStatus.OK
+    assert xset.published_evidence == {}
+    assert fs.attempts == 1
+    assert (target / "file.bin").read_bytes() == b"foreign-write"
+    assert trash.read_bytes() == b"old-version"
+    assert not list(target.glob("*.synctmp-*"))
+
+
 def test_cancel_preempts_an_already_latched_durable_pause(tmp_path: Path) -> None:
     source, target = _roots(tmp_path)
     (source / "file.bin").write_bytes(b"new-version")
@@ -4014,6 +4248,12 @@ class RetryThenStopPolicy:
     def on_item_failed(self, operation, error, attempt):
         del operation, error
         return Retry(0) if attempt == 1 else Stop()
+
+
+class ImmediateStopPolicy:
+    def on_item_failed(self, operation, error, attempt):
+        del operation, error, attempt
+        return Stop()
 
 
 def test_policy_stop_suppresses_latched_pause_and_settles_remaining_work(
@@ -4070,6 +4310,63 @@ def test_policy_stop_suppresses_latched_pause_and_settles_remaining_work(
     assert [item.outcome for item in items] == [Outcome.FAILED, Outcome.CANCELED]
     assert items[1].reason == "policy-stop"
     assert not (target / "later.bin").exists()
+
+
+def test_cancel_interrupts_policy_stop_settlement_sweep(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    operations: list[PlanOperation] = []
+    fs = PrepareSharingFileSystem()
+    for index, name in enumerate(
+        ("locked.bin", "stopped.bin", "cancel-now.bin", "unreached.bin"),
+        start=1,
+    ):
+        (source / name).write_bytes(name.encode())
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                index,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+    xset = _xset(_plan(source, target, tuple(operations)))
+    checkpoint_calls = 0
+    events: list[object] = []
+
+    def checkpoint() -> None:
+        nonlocal checkpoint_calls
+        checkpoint_calls += 1
+        if checkpoint_calls == 3:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(failure=ImmediateStopPolicy()),
+            fs,
+        )
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert checkpoint_calls == 3
+    assert [item.outcome for item in items] == [
+        Outcome.FAILED,
+        Outcome.CANCELED,
+        Outcome.CANCELED,
+        Outcome.CANCELED,
+    ]
+    assert [item.reason for item in items] == [
+        "sharing-violation",
+        "policy-stop",
+        "canceled",
+        "canceled",
+    ]
 
 
 class PersistentSharingFileSystem(NativeFileSystem):

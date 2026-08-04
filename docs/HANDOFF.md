@@ -5,75 +5,65 @@ Branch: `milestone1`
 
 ## Session Outcome
 
-Closed the durable-retry pause defect and its cancellation siblings without
-changing persisted continuation, payload, or database contracts.
+Corrected the cancellation classifier introduced by the durable-retry fix and
+made the policy-Stop settlement sweep cancelable.
 
-- **Pause now drains an owned durable retry operation.** COPY, UPDATE, and
-  MOVE_UPDATE install process-local continuations once staged or published
-  filesystem state must survive a retry. A pause observed at the two retry
-  backoff checkpoints is latched until that operation settles, then unwinds at
-  the ordinary boundary. Resume therefore never collides with the executor's
-  own backup, trash entry, or published target.
-- **The latency statement is bounded where the product owns it.** Production
-  retry sleeps total at most 350 ms (50 + 100 + 200 ms). Remaining time is
-  uncapped filesystem and recorder latency over already-staged data; guarded
-  attempts do not copy the main payload again. A pause rides all remaining
-  retries so requesting pause cannot make a transient failure permanent.
-- **Cancel and policy Stop have explicit precedence.** Cancellation always
-  preempts a latched pause and settles immediately from the continuation's
-  durable state. A failure-policy `Stop` suppresses the latch, settles later
-  operations `policy-stop`, and terminates rather than losing the policy
-  decision across a resume.
-- **Cancellation reports published truth rather than blanket `CANCELED`.** A
-  prepared-but-unpublished operation remains canceled. Published-but-unfinished
-  COPY/UPDATE/MOVE_UPDATE settles `FAILED/canceled-after-publish`, records the
-  observed durable shape, degrades recording, and carries no success-only
-  `PublishedCopyEvidence`. MOVE_UPDATE distinguishes new+old from new+trash.
-- **UPDATE backups remain recoverable and visible.** Cancellation deletes only
-  the owned staged temp and reports the retained backup path/method/state in the
-  item detail. It never deletes the old version. Purging retained trash remains
-  part of the deferred maintenance-session retention work.
-- **The bridge contract exposes the drain.** The existing `PAUSING` lifecycle
-  value must render as **Pausing…** until unwind and custody release; it is
-  distinct from `PAUSED`, remains cancelable, and can transition directly to a
-  terminal state when policy Stop wins.
-- Updated `BUGS.md`, executor/core/dispatcher/architecture contracts, Stage 6
-  bridge and desktop UI requirements, features, plan wording, and README.
+- **An intact owned temp is decisive non-publication evidence.** After a failed
+  COPY publish or UPDATE replace, a foreign process may create or rewrite the
+  target during retry backoff. If NamiSync's matching staged temp still exists,
+  cancellation now settles the operation `CANCELED`, records the unexpected
+  target state, removes only the temp, and leaves recording `OK`. It never
+  claims `canceled-after-publish` for the foreign mutation.
+- **Positive publication evidence is explicit.** The classifier first trusts
+  the continuation's synchronous `published` flag, describes the target against
+  cached `published_stat` when available, and uses consumed-temp plus a present
+  target only as the committed-but-raised fallback. Post-publish metadata
+  changes therefore no longer degrade otherwise reliable durable-state detail.
+- **Unknown is not silently promoted to published.** If neither the owned temp
+  nor positive publication evidence can classify the state, the item fails with
+  its target-drift/target-missing/I/O reason, reports `publish_state=unverified`,
+  preserves any known UPDATE backup detail, and does not degrade recording or
+  claim NamiSync publication.
+- **Policy Stop remains authoritative but interruptible.** A latched pause is
+  still suppressed after a failure-policy `Stop`; the later `policy-stop`
+  outcome sweep now checks cancellation before each status emission while
+  ignoring pause. A large plan therefore does not delay cancel until every
+  remaining item event has been emitted.
+- Updated `BUGS.md`, `EXECUTOR.md`, and README to state the corrected evidence
+  hierarchy and cancel behavior.
+
+No payload, schema, persisted continuation, or public bridge type changed.
 
 ## Verification
 
-- Focused executor suite: `152 passed`.
-- Executor/dispatcher/resume/payload integration selection: `298 passed`.
-- Full repository: `881 passed in 30.65s`.
+- Focused executor suite: `157 passed`.
+- Executor/dispatcher/resume/payload integration selection: `303 passed`.
+- Full repository: `886 passed in 30.38s`.
 - Import boundaries: all eight contracts kept, zero broken (50 files and 183
   dependencies analyzed).
 - Package health: `pip check` reported no broken requirements.
-- New regressions cover pause with and without a continuation, post-publish
-  COPY, UPDATE backup/replace, MOVE_UPDATE old-to-trash, the 350 ms production
-  retry budget, cancellation before and after publish, new+old/new+trash state,
-  cancellation over a latched pause, and policy Stop over a latched pause.
+- New regressions cover foreign UPDATE writes after a failed replace, foreign
+  COPY destinations after a failed publish, a genuinely unclassifiable missing
+  temp/target state, cached post-metadata published evidence, and cancellation
+  partway through a policy-stop outcome sweep.
 
 ## Immediate Next Context
 
-`BUGS.md` has no remaining open executor durable-retry entry. Stage 6 remains
-the next product delivery: implement the pywebview/WebView2 desktop shell in the
-slice order and against the host/security gates in `M1_BRIDGE.md` and
-`DESKTOP_UI.md`.
+`BUGS.md` records the classifier regression as fixed. Stage 6 remains the next
+product delivery: implement the pywebview/WebView2 desktop shell in the slice
+order and against `M1_BRIDGE.md` and `DESKTOP_UI.md`.
 
-The executor behavior delivered here relies on process-local continuations and
-is deliberately an M1 safe-boundary solution, not restart-resume persistence.
-Preserve these invariants in later work:
+Preserve this cancellation evidence order in later executor work:
 
-1. `PAUSING` may last through all remaining guarded attempts; do not replace
-   this with a one-attempt cap or claim a hard elapsed-time bound.
-2. Once a continuation exists, retries operate on already-staged data and must
-   not call `_prepare_copy` again.
-3. Cancellation is immediate. It never waits out retries and never deletes an
-   UPDATE backup that may be the only recoverable old version.
-4. A published but unfinished canceled operation is failed with explicit state
-   and degraded recording, never succeeded without XV-1 evidence and never
-   mislabeled canceled.
-5. Policy Stop suppresses a pending pause so later selected operations retain
-   their `policy-stop` settlement.
-6. Persisted operation-local continuation remains an M2 concern if restart
-   resume is introduced; do not put it into the M1 `ExecutionSet` payload.
+1. `continuation.published` is decisive positive evidence after a publish call
+   returned successfully.
+2. A matching intact owned temp is decisive negative evidence because
+   `publish_new` and `replace` consume it. Target drift cannot override this.
+3. With no intact temp, a present target is the fallback for a publish that
+   committed before its call reported failure; compare it to cached
+   `published_stat` for descriptive detail when available.
+4. If state remains unclassifiable, fail under the observed drift/I/O reason.
+   Do not claim `canceled-after-publish` or degrade recording without positive
+   evidence that NamiSync published.
+5. Policy Stop suppresses pause, not cancel. Keep cancellation observable while
+   settling the remaining status-only `policy-stop` outcomes.

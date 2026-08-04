@@ -254,7 +254,12 @@ outcomes for the in-flight and unreached selection, then re-raises for runner
 aggregation and the one canceled terminal. A prepared-but-unpublished operation
 remains `CANCELED`; an unfinished operation whose target already published is
 `FAILED` with `canceled-after-publish`, structured on-disk-state detail,
-degraded recording, and no success-only published evidence. UPDATE reports and
+degraded recording, and no success-only published evidence. The classifier
+prefers the continuation's synchronous publish flag and cached post-repair stat.
+Otherwise an intact matching owned temp proves the publish did not occur even
+if the target changed independently; consumed temp plus a present target is the
+committed-but-raised fallback. Truly unverified state fails with its drift/I/O
+reason and does not claim publication or degrade recording. UPDATE reports and
 retains its owned backup while deleting only the staged temp. MOVE_UPDATE
 distinguishes new+old from new+trash; neither is rolled back. Ordinary pause
 abandons/reclaims an in-flight temp through exact-name recovery, preserves
@@ -282,11 +287,12 @@ Pause observed at a retry-backoff checkpoint while such a continuation is live
 is latched until that operation settles, then raised at the ordinary operation
 boundary. Cancellation is never latched and preempts a pending pause. If the
 settling failure policy returns `Stop`, that terminal policy decision suppresses
-the pause: later operations settle `policy-stop` without another checkpoint and
-the run terminates. The production sharing policy contributes at most 350 ms of
-retry sleep (50 + 100 + 200 ms). This is not a hard elapsed-time bound: remaining
-latency is filesystem durability/metadata/rename and recorder I/O over
-already-staged data. Custom injected policies own their own sleep budget.
+the pause: later operations settle `policy-stop`, with pause ignored but a
+cancel checkpoint before each status emission so a large sweep remains
+interruptible. The production sharing policy contributes at most 350 ms of
+retry sleep (50 + 100 + 200 ms). This is not a hard elapsed-time bound:
+remaining latency is filesystem durability/metadata/rename and recorder I/O
+over already-staged data. Custom injected policies own their own sleep budget.
 Persistent failure records `sharing-violation` after the configured bound and
 independent work continues. Unexpected executor exceptions are contained by the
 session wrapper, release custody, and never suppress already-earned outcomes.

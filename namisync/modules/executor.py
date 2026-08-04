@@ -1672,6 +1672,7 @@ def execute(
             current = operation
 
             if stop_requested:
+                _policy_stop_checkpoint(ctx)
                 progress.start(operation)
                 _settle(
                     xset,
@@ -3073,6 +3074,15 @@ def _retry_checkpoint(
         state.pause_latched = True
 
 
+def _policy_stop_checkpoint(ctx: RunContext) -> None:
+    """Keep Stop authoritative while allowing cancel to interrupt its sweep."""
+
+    try:
+        ctx.checkpoint()
+    except PauseRequested:
+        pass
+
+
 def _canceled_durable_settlement(
     operation: PlanOperation,
     fs: ExecutorFileSystem,
@@ -3091,26 +3101,32 @@ def _canceled_durable_settlement(
 
     try:
         if isinstance(continuation, _UpdateContinuation):
-            published = _update_publish_state(continuation, fs)
             detail.update(continuation.detail)
             _describe_retained_update_backup(continuation, fs, detail)
+            published = _update_publish_state(continuation, fs, detail)
         else:
-            published = _new_publish_state(continuation, fs)
+            published = _new_publish_state(continuation, fs, detail)
     except Exception as error:
-        detail["durable_state"] = "unverified"
+        detail.setdefault("durable_state", "unverified")
+        detail["publish_state"] = "unverified"
         detail["state_error_type"] = type(error).__name__
         detail["state_error"] = str(error)
-        _mark_unrecorded_publish(state, detail)
         return _Settled(
             Outcome.FAILED,
-            ExecutionReason.CANCELED_AFTER_PUBLISH,
+            (
+                error.reason
+                if isinstance(error, OperationFailure)
+                else ExecutionReason.IO_ERROR
+            ),
             detail,
         )
 
     if not published:
+        detail["publish_state"] = "not-published"
         detail.setdefault("durable_state", "prepared-not-published")
         return _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail)
 
+    detail["publish_state"] = "published"
     if isinstance(continuation, _MoveUpdateContinuation):
         _describe_canceled_move_update(
             continuation,
@@ -3138,24 +3154,42 @@ def _canceled_durable_settlement(
 def _new_publish_state(
     continuation: _CopyContinuation | _MoveUpdateContinuation,
     fs: ExecutorFileSystem,
+    detail: dict[str, object],
 ) -> bool:
     prepared = continuation.prepared
+    if continuation.published:
+        _describe_published_target(
+            prepared.target,
+            continuation.published_stat or continuation.prepared_stat,
+            fs,
+            detail,
+        )
+        return True
+
     temp = fs.stat_path(prepared.temp)
     target = fs.stat_path(prepared.target)
     if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        if target is None:
-            return False
-        raise OperationFailure(
-            ExecutionReason.TARGET_DRIFT,
-            "prepared temp and destination both exist during cancel settlement",
+        if target is not None:
+            detail["target_state"] = "unexpectedly-present-before-publish"
+        return False
+    if temp is None and target is not None:
+        detail["target_state"] = (
+            "published"
+            if _same_file_version(
+                target,
+                continuation.published_stat or continuation.prepared_stat,
+            )
+            else "changed-after-publish"
         )
-    if temp is None and target is not None and _same_file_version(
-        target,
-        continuation.prepared_stat,
-    ):
         return True
+    detail["temp_state"] = "missing" if temp is None else "unexpected"
+    detail["target_state"] = "missing" if target is None else "present"
     raise OperationFailure(
-        ExecutionReason.TARGET_DRIFT,
+        (
+            ExecutionReason.TARGET_MISSING
+            if target is None
+            else ExecutionReason.TARGET_DRIFT
+        ),
         "cannot classify prepared versus published state during cancel settlement",
     )
 
@@ -3163,26 +3197,66 @@ def _new_publish_state(
 def _update_publish_state(
     continuation: _UpdateContinuation,
     fs: ExecutorFileSystem,
+    detail: dict[str, object],
 ) -> bool:
     prepared = continuation.prepared
+    if continuation.published:
+        _describe_published_target(
+            prepared.target,
+            continuation.published_stat or continuation.prepared_stat,
+            fs,
+            detail,
+        )
+        return True
+
     temp = fs.stat_path(prepared.temp)
     target = fs.stat_path(prepared.target)
-    if (
-        temp is not None
-        and _same_file_version(temp, continuation.prepared_stat)
-        and target is not None
-        and _same_file_version(target, continuation.live_stat)
-    ):
+    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
+        if target is None:
+            detail["target_state"] = "missing-before-publish"
+        elif not _same_file_version(target, continuation.live_stat):
+            detail["target_state"] = "changed-before-publish"
         return False
-    if temp is None and target is not None and _same_file_version(
-        target,
-        continuation.prepared_stat,
-    ):
+    if temp is None and target is not None:
+        detail["target_state"] = (
+            "published"
+            if _same_file_version(
+                target,
+                continuation.published_stat or continuation.prepared_stat,
+            )
+            else "changed-after-publish"
+        )
         return True
+    detail["temp_state"] = "missing" if temp is None else "unexpected"
+    detail["target_state"] = "missing" if target is None else "present"
     raise OperationFailure(
-        ExecutionReason.TARGET_DRIFT,
+        (
+            ExecutionReason.TARGET_MISSING
+            if target is None
+            else ExecutionReason.TARGET_DRIFT
+        ),
         "cannot classify live versus published update during cancel settlement",
     )
+
+
+def _describe_published_target(
+    target: Path,
+    expected: FileStat,
+    fs: ExecutorFileSystem,
+    detail: dict[str, object],
+) -> None:
+    try:
+        actual = fs.stat_path(target)
+    except Exception as error:
+        detail["target_state"] = "unverified-after-publish"
+        detail["target_state_error"] = f"{type(error).__name__}: {error}"
+        return
+    if actual is None:
+        detail["target_state"] = "missing-after-publish"
+    elif _same_file_version(actual, expected):
+        detail["target_state"] = "published"
+    else:
+        detail["target_state"] = "changed-after-publish"
 
 
 def _describe_retained_update_backup(
