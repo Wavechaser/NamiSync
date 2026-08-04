@@ -4,7 +4,8 @@ Status (2026-07-30): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. `M1_BRIDGE.md` records the landed bridge contract and the
-still-unimplemented Stage 6 desktop shell.
+still-unimplemented Stage 6 desktop shell; `M1_SHELL.md` owns the remaining
+delivery order and beta-packaging placement.
 This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
@@ -30,7 +31,9 @@ document wins and this file becomes history — the same lifecycle
 For the seam between Stage 5 and Stage 6, `M1_BRIDGE.md` refines this plan: its
 DR-BR decisions, BR-G acceptance criteria, slicing plan, and regression
 watchlist govern wherever this file's earlier GUI sketch is less specific or
-conflicts. The settled behavior and contracts are also summarized in
+conflicts. `M1_SHELL.md` further owns the pre-shell Phase 0, entry points,
+frontend/package layout, and final packaging placement. The settled behavior
+and contracts are also summarized in
 `FEATURES.md`, `ARCHITECTURE.md`, and `WORKFLOWS.md`.
 
 ---
@@ -1011,8 +1014,9 @@ Stage 6 presentation helper.
 ### Stage 6 — Web Desktop Shell
 
 - pywebview host plus one `interfaces/launcher.py`: `nami-sync` and
-  `python -m namisync` with no subcommand open the GUI, explicit subcommands
-  remain CLI, and there is no second GUI executable.
+  `python -m namisync` remain console/CLI entry points and no-subcommand use
+  points to `nami-sync-gui`; that GUI-subsystem entry point opens the sole
+  desktop implementation without retaining a console window.
 - Exactly one versioned, schema-validated, allowlisted
   `dispatch(command_json)` method. All data uses structured pull/RPC; live
   events use one bounded `next_events` drain that coalesces only replaceable

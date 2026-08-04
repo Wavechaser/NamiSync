@@ -202,10 +202,11 @@ settlement. Existing session status, control, unsubscribe/wait, explicit
 session close, and the shutdown retry remain available for cleanup.
 
 `cli` and `web` occupy one import-linter layer above `service`: neither adapter
-may import the other, and the service may import neither adapter. The
-`interfaces` package initializer preserves its public `main` entry point through
-a lazy wrapper, so importing the package or future web host does not import the
-CLI adapter until that function is actually invoked.
+may import the other, and the service may import neither adapter. Stage 6 adds
+`interfaces.launcher` as the top layer. Its console and GUI functions import
+only the selected sibling lazily, so explicit CLI work never imports pywebview.
+The `interfaces` package initializer preserves its public `main` entry point
+through a lazy wrapper.
 
 ## M1 Stage 1 Desktop Foundations
 
@@ -226,6 +227,17 @@ hostile-name round trip. Before `create_window`, host preparation pins
 `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
 `debug=False`, and performs a read-only registry probe for the WebView2 runtime.
+
+Before the Stage 6 host imports pywebview, Phase 0 adds one runtime version
+source, an injectable `%LOCALAPPDATA%\NamiSync` path set, and rotating file
+logging shared by the `namisync` and `pywebview` loggers. Pythonnet 3.1.0 is an
+exact Windows dependency because delegate subscription, WinForms thread
+marshaling, and `CoreWebView2` access are part of the proven boundary. Bottle
+has a floor of 0.13.4. The supported pythonnet runtime is its default Windows
+.NET Framework (`netfx`) path, so the existing read-only .NET Framework probe
+covers both native-host prerequisites. The product WebView2 data directory is
+the explicit `%LOCALAPPDATA%\NamiSync\webview2` path, not pywebview's temporary
+private-mode default.
 The side-effect-free compatibility module mirrors pinned pywebview 6.2.1's
 .NET prerequisite, accepted Edge channels, and HKCU/HKLM architecture routing;
 behavioral parity tests execute the upstream detector functions without
@@ -290,7 +302,7 @@ original `command_id`; a lost drain resumes from the last accepted sequence
 and reconciles through terminal truth.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
-pythonnet 3.1.0, and WebView2 Runtime 150.0.4078.105. It forced the
+pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the
 `edgechromium` renderer, reached
 `Microsoft.Web.WebView2.Core.CoreWebView2`, exercised pythonnet native event
 subscription, observed a random loopback asset origin, and confirmed that

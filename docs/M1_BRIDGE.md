@@ -20,7 +20,10 @@ this document refines them with implementation detail settled afterward and
 does not overrule them. Where it adds a decision M1_PLAN did not make, it is
 numbered `DR-BR-##` to avoid colliding with either existing series.
 `DESKTOP_UI.md` remains the user-facing delivery contract; this file is the
-mechanism behind it.
+mechanism behind it. `M1_SHELL.md` owns the remaining Stage 6 implementation
+sequence and packaging placement. Its later console/GUI entry-point decision
+supersedes this file's older no-subcommand desktop-launch wording; the BR-G
+semantics and gates here otherwise remain authoritative.
 
 Section 10 is normative for implementation: a lane or slice is complete only
 when its numbered acceptance gates, decision prerequisites, regression rows,
@@ -28,12 +31,10 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior is now promoted
-into the active focused documents and README. Stage 6 remains unshipped; its
-slice 8 still performs the final desktop as-built documentation pass.
-`DESKTOP_UI.md` in particular **requires revision then** — its interaction
-contract and acceptance criteria still specify a typed confirmation phrase,
-which DR-BR-03 removes for the desktop. Other active documents are reviewed for
-drift at the same time rather than incrementally.
+into the active focused documents and README. Stage 6 remains unshipped;
+`M1_SHELL.md` and `DESKTOP_UI.md` now record the pre-implementation host and
+packaging decisions, while slice 8 still performs the final as-built pass over
+every active document and `ui_mockup/`.
 
 ---
 
@@ -2099,11 +2100,12 @@ with it.
 
 ### Packaging
 
-`pywebview` is a normal runtime dependency, not an optional extra. NamiSync is
-a headed Windows product, so a standard installation includes the desktop host
-and no-subcommand `nami-sync` launches it. Explicit CLI subcommands remain
-headless at runtime: they do not import or initialize `pywebview`, and GUI
-imports stay quarantined under `interfaces/web`.
+`pywebview` is a normal runtime dependency, not an optional extra. The console
+script `nami-sync` and `python -m namisync` remain CLI-only; no-subcommand use
+prints usage and points to the GUI launcher. The `nami-sync-gui` GUI script
+starts the same web adapter without retaining a console window. Explicit CLI
+work does not import or initialize `pywebview`, and GUI imports stay
+quarantined under `interfaces/web`.
 
 This packaging decision does not accept a renderer fallback. Slice 0 pins the
 supported pywebview version range after proving Python 3.13 compatibility and
@@ -2112,30 +2114,16 @@ WebView2 runtime with an actionable error rather than falling back to MSHTML.
 Moving the host to an optional extra remains possible later, but is not an M1
 distribution mode.
 
-**No-subcommand launch needs a launcher module.** The console script is
-`namisync.interfaces.cli:main`, and DR-M1-01 forbids the edge this would
-create: "`cli` and `web` do not import each other; both import `service`;
-`service` imports neither," encoded as an import-linter layers contract with
-`cli` and `web` as independent siblings. Dispatching to the desktop from
-`cli.main` is exactly that forbidden import, and it would surface as a linter
-failure during slice 1 rather than as a design choice.
-
-`nami-sync` therefore points at a small launcher that is **neither adapter**:
-it inspects argv and dispatches to the CLI or the web host, with the contract
-extended to permit `launcher → {cli, web}` while `cli ↮ web` stands. It lives at
-**`namisync/interfaces/launcher.py`** — the path matters, because every import
-contract in `pyproject.toml` is scoped by package path and the only one covering
-adapters is `source_modules = ["namisync.interfaces"]`. "Neither adapter" invites
-placing it outside that package, where it would be the single module in the
-distribution governed by no contract at all, free to import `core`, `modules`,
-and `db`, and also outside BR-G-19's static assertion, which is scoped to symbols
-under `interfaces/`. Inside `interfaces/`, the existing forbidden-imports
-contract covers it for free and the layers contract gains it as a new top layer
-above `cli | web`. That
-also makes the headless claim true by construction: the launcher decides
-before either side is imported, so an explicit CLI subcommand never pays
-pywebview's import cost. Lazy imports inside `cli.main` would achieve the
-same runtime effect while still violating the contract.
+**Both entry-point families use a launcher module.** The current console script
+is `namisync.interfaces.cli:main`; Slice 1 retargets it and the package module
+entry point to `interfaces.launcher:main`, while the GUI script targets
+`interfaces.launcher:gui_main`. The launcher is **neither adapter**: its two
+functions import the selected sibling lazily, and the layers contract permits
+`launcher → {cli, web}` while `cli ↮ web` stands. It lives at
+**`namisync/interfaces/launcher.py`** so the existing `interfaces` forbidden
+imports and BR-G-19 static scan cover it. The new top layer sits above
+`cli | web`, which remain above `service`. Importing the web adapter lazily from
+`cli.main` would still violate that contract.
 
 ### Stage 5.5 — four work lanes
 
@@ -2598,9 +2586,12 @@ because its local tests are easier.
   It makes swallowed attachment failure observable and tears the window down
   actionably; rejects a missing or incompatible WebView2 with an actionable
   message; rejects an off-origin committed native source independently of
-  navigation hardening; and routes no-subcommand
-  launch through `interfaces/launcher.py`. Explicit CLI subcommands do not
-  import or initialize pywebview. A second launch activates the existing window
+  navigation hardening; routes both console/package-module entry points through
+  `interfaces/launcher.py` without importing the web adapter; and exposes
+  `nami-sync-gui` through that same launcher as a GUI-subsystem entry point.
+  No-subcommand console use prints usage and points to the GUI launcher.
+  Explicit CLI subcommands do not import or initialize pywebview. A second
+  desktop launch activates the existing window
   and exits successfully; activation failure is visible and still non-error.
   The real packaged-page popup composition leaves the page and bridge usable
   without opening a system browser. *Not satisfied by* running from a source
@@ -2782,8 +2773,9 @@ because its local tests are easier.
   `normalize_relative_path`, `validate_relative_path`, or any `core` path
   helper. *Not satisfied by* the linter alone, which permits indirect use
   through a re-export.
-- **BR-G-44 — The repository closes as one system.** The complete pytest suite
-  and `lint-imports` pass from a clean checkout with the supported interpreter;
+- **BR-G-44 — The repository closes as one system.** The complete pytest suite,
+  including tests excluded by ordinary-development marker defaults, and
+  `lint-imports` pass from a clean checkout with the supported interpreter;
   every `test_br_g_*` test is collected, none is skipped/xfail on Windows, and
   `git diff --check` is clean. The narrow gate and watchlist commands are
   diagnostics, not substitutes. *Not satisfied by* running only changed test
@@ -2880,7 +2872,7 @@ watchlist never authorizes a partial-suite sign-off.
 The BR-G-44 release evidence is the unedited output of:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pytest -q -o "addopts="
 .\.venv\Scripts\lint-imports.exe
 git diff --check
 ```
@@ -2909,7 +2901,7 @@ a parallel pair.
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-35–37 and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-22, BR-G-23, BR-G-38, BR-G-39 and the inventory portion of BR-G-42 |
 | 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |
-| 8 | Docs/release | Rewrite `DESKTOP_UI.md` acceptance to as-built, focused docs and README, re-status `ui_mockup/`, clean-checkout release proof | 7 | BR-G-43, BR-G-44 |
+| 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | 7 | BR-G-43, BR-G-44 |
 
 **Ordering and parallelism.** Slice 0 shares nothing with Stage 5.5 and runs
 beside it. It is the falsification gate for the chosen host and must complete

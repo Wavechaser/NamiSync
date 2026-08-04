@@ -1,69 +1,52 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-03
+Date: 2026-08-04
 Branch: `milestone1`
 
 ## Session Outcome
 
-Corrected the cancellation classifier introduced by the durable-retry fix and
-made the policy-Stop settlement sweep cancelable.
+Stage 6 now has one consolidated implementation and packaging plan:
+`M1_SHELL.md`.
 
-- **An intact owned temp is decisive non-publication evidence.** After a failed
-  COPY publish or UPDATE replace, a foreign process may create or rewrite the
-  target during retry backoff. If NamiSync's matching staged temp still exists,
-  cancellation now settles the operation `CANCELED`, records the unexpected
-  target state, removes only the temp, and leaves recording `OK`. It never
-  claims `canceled-after-publish` for the foreign mutation.
-- **Positive publication evidence is explicit.** The classifier first trusts
-  the continuation's synchronous `published` flag, describes the target against
-  cached `published_stat` when available, and uses consumed-temp plus a present
-  target only as the committed-but-raised fallback. Post-publish metadata
-  changes therefore no longer degrade otherwise reliable durable-state detail.
-- **Unknown is not silently promoted to published.** If neither the owned temp
-  nor positive publication evidence can classify the state, the item fails with
-  its target-drift/target-missing/I/O reason, reports `publish_state=unverified`,
-  preserves any known UPDATE backup detail, and does not degrade recording or
-  claim NamiSync publication.
-- **Policy Stop remains authoritative but interruptible.** A latched pause is
-  still suppressed after a failure-policy `Stop`; the later `policy-stop`
-  outcome sweep now checks cancellation before each status emission while
-  ignoring pause. A large plan therefore does not delay cancel until every
-  remaining item event has been emitted.
-- Updated `BUGS.md`, `EXECUTOR.md`, and README to state the corrected evidence
-  hierarchy and cancel behavior.
+- A pre-shell Phase 0 owns the single `0.1.0` runtime version source,
+  injectable local-data paths, rotating file logging installed before
+  pywebview import, exact pythonnet and Bottle declarations, and project
+  license metadata. It creates no window.
+- Slices 1-7 deliver the production host, strict bridge transport, reusable
+  headed harness, bounded drain, shared virtual presentation core, sync,
+  inventory/integrity, and lifecycle/history surfaces.
+- PyInstaller, the resolved build environment, CI, third-party notices and GPL
+  source directions, as-built documentation, and release evidence are deferred
+  together to Slice 8, after a running vertical shell exists.
+- Console entry points remain CLI-only and point no-subcommand users to the
+  GUI-subsystem `nami-sync-gui` launcher. Both route lazily through
+  `interfaces.launcher`; there is still one GUI implementation.
+- The plan records the plain-ES-module asset layout, deterministic WebView2
+  storage, fixed 28-pixel virtual rows, single JavaScript bridge wrapper,
+  child-process headed harness, shutdown order, and best-effort single-instance
+  activation.
 
-No payload, schema, persisted continuation, or public bridge type changed.
+`DESKTOP_UI.md` now reflects those packaging/host decisions. Narrow consistency
+edits remove the superseded no-subcommand desktop-launch claim from active
+architecture, feature, CLI, interface, M1 plan, and BR-G-31 text. `M1_BRIDGE.md`
+remains authoritative for bridge semantics and gates; its release command now
+explicitly clears the default headed-test exclusion.
 
 ## Verification
 
-- Focused executor suite: `157 passed`.
-- Executor/dispatcher/resume/payload integration selection: `303 passed`.
-- Full repository: `886 passed in 30.38s`.
-- Import boundaries: all eight contracts kept, zero broken (50 files and 183
-  dependencies analyzed).
-- Package health: `pip check` reported no broken requirements.
-- New regressions cover foreign UPDATE writes after a failed replace, foreign
-  COPY destinations after a failed publish, a genuinely unclassifiable missing
-  temp/target state, cached post-metadata published evidence, and cancellation
-  partway through a policy-stop outcome sweep.
+- Documentation-only change; no product code or dependency declaration changed.
+- `git diff --check` is clean.
+- Active-document searches find no remaining claim that bare `nami-sync` opens
+  the desktop.
 
 ## Immediate Next Context
 
-`BUGS.md` records the classifier regression as fixed. Stage 6 remains the next
-product delivery: implement the pywebview/WebView2 desktop shell in the slice
-order and against `M1_BRIDGE.md` and `DESKTOP_UI.md`.
+Implement `M1_SHELL.md` Phase 0 before creating the product window. Keep the
+product version at `0.1.0`. Phase 0 ends after version/path/logging/dependency/
+license declarations and focused tests; it does not pull forward assets,
+launchers, PyInstaller, CI, or the dependency lock.
 
-Preserve this cancellation evidence order in later executor work:
-
-1. `continuation.published` is decisive positive evidence after a publish call
-   returned successfully.
-2. A matching intact owned temp is decisive negative evidence because
-   `publish_new` and `replace` consume it. Target drift cannot override this.
-3. With no intact temp, a present target is the fallback for a publish that
-   committed before its call reported failure; compare it to cached
-   `published_stat` for descriptive detail when available.
-4. If state remains unclassifiable, fail under the observed drift/I/O reason.
-   Do not claim `canceled-after-publish` or degrade recording without positive
-   evidence that NamiSync published.
-5. Policy Stop suppresses pause, not cancel. Keep cancellation observable while
-   settling the remaining status-only `policy-stop` outcomes.
+Slice 1 then renames `security_spike.py` to `bridge.py` and lands the smallest
+installed-wheel shell through the documented startup and shutdown state
+machines. Treat `M1_BRIDGE.md` BR-G gates as acceptance criteria, not optional
+follow-up hardening.

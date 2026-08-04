@@ -1,8 +1,9 @@
 # Desktop UI
 
-Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5 provide the
+Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
-seams; no headed desktop host or frontend has shipped yet.
+seams; no headed desktop host or frontend has shipped yet. `M1_SHELL.md` owns
+the remaining implementation order and beta-package closure.
 
 ## Purpose
 
@@ -21,7 +22,7 @@ starting frontend artifact to revise into the packaged UI.
 
 Stage 6 delivers:
 
-- a `nami-sync-gui` desktop entry point and a no-subcommand desktop launch;
+- a `nami-sync-gui` GUI-subsystem entry point with no retained console window;
 - one single-instance desktop shell, task rail, work area, plan review,
   inventory view, and history dialog;
 - desktop actions for reviewed sync, inventory, baseline, verify, rebaseline,
@@ -34,6 +35,46 @@ It does not add durable plan or session storage, cross-process task visibility,
 general migration, history retention, unattended execution, a settings CLI,
 or a new workflow API. Session and saved-plan state are process-local in M1:
 closing the desktop loses unexecuted plans and restart-resume is not promised.
+
+## Packaging and local host state
+
+The console and desktop entry points deliberately remain separate Windows
+subsystems over one implementation. `nami-sync` and `python -m namisync` always
+route through `interfaces/launcher.py` to the CLI; with no subcommand they print
+usage, point to `nami-sync-gui`, and exit with the existing usage status.
+`nami-sync-gui` configures local paths and logging, then lazily imports the web
+host. Explicit CLI work never imports or initializes pywebview.
+
+NamiSync remains version `0.1.0` until M1 is complete. One runtime version
+constant supplies project metadata, About/runtime display, logging, and later
+frozen-file metadata. The host stack pins pywebview 6.2.1 and pythonnet 3.1.0;
+Bottle has a floor of 0.13.4, the reality-tested server version. NamiSync uses
+pythonnet's default Windows .NET Framework (`netfx`) runtime and refuses a
+conflicting runtime override. The existing read-only .NET Framework check is
+therefore also the pythonnet prerequisite check.
+
+One host-owned path set places production data under
+`%LOCALAPPDATA%\NamiSync`: databases/settings/UI state at the root, rotating
+UTF-8 logs under `logs`, and persistent WebView2 user data under `webview2`.
+The GUI-only `--data-dir PATH` option accepts an absolute local root for tests
+and isolated runs; it must relocate every artifact together.
+The `namisync` and `pywebview` loggers share the file handler, which is installed
+before pywebview import. Pywebview starts with `private_mode=True` and the
+explicit `webview2` storage path; browser state never becomes plan, task, or
+filesystem authority.
+
+Frontend assets are setuptools package data and use plain same-origin ES
+modules. There is no npm, framework, bundler, transpiler, source map, inline
+script, or inline event handler. The first running shell and installed-wheel
+proof precede PyInstaller work. The frozen specification, dependency lock, CI,
+third-party notices, and exact-source release material close in the final beta
+packaging slice.
+
+M1 does not bundle or automatically invoke the Evergreen WebView2 Bootstrapper.
+The supported target remains Windows 11; missing WebView2 is refused read-only
+with an official installation direction. M1 beta binaries may be unsigned and
+must publish hashes, exact source identity, and an honest warning that Windows
+or enterprise policy may block unknown unsigned code.
 
 ## Adapter boundary
 
@@ -99,6 +140,9 @@ constructs JavaScript or calls `evaluate_js`, `run_js`, or `Window.state` as an
 application-data channel. Pinned pywebview 6.2.1 internally constructs
 JavaScript to return exposed-function results, so its serializer/escaper and
 the real-browser hostile-name round trip remain part of the security boundary.
+The exact pythonnet 3.1.0 pin is equally part of that boundary because native
+delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
+through it.
 
 Live state uses one bounded, coalescing `next_events` pull/drain request. The
 host preserves reliable item and terminal ordering, allows replaceable progress
@@ -179,12 +223,14 @@ control, waits for actual terminal observation, and never treats a transient
 progress flag as completion.
 
 Sync remains a two-session interaction: plan first, review its immutable
-fingerprint-bound intent, choose a dependency-closed selection, type the exact
-confirmation, then start execution with fresh preflight. Editing selection or
-plan-affecting options requires a new commitment. There is no execute-anyway,
-auto-commit, or unattended path. `verify_after_execute` is an explicit option;
-when selected, the one execution session may return ordered operation and
-integrity items plus ordered phase summaries.
+fingerprint-bound intent, choose a dependency-closed selection, then start
+execution with fresh preflight. The service decides whether the selection needs
+an explicit destructive confirmation; the browser never derives that risk or
+requires a typed phrase. Editing selection or plan-affecting options requires a
+new commitment. There is no execute-anyway, auto-commit, or unattended path.
+`verify_after_execute` is an explicit option; when selected, the one execution
+session may return ordered operation and integrity items plus ordered phase
+summaries.
 
 Plan review shows executable operation ids, dependencies, reasons, source and
 destination, bytes, evidence, conflicts, blocks, and deferred outcomes. A
@@ -223,7 +269,9 @@ details may evolve, but contrast and no-color-only signaling are requirements.
 ## Acceptance criteria
 
 - A desktop request produces the same facade call, primitive views, result
-  classification, and mandatory sync review as the CLI.
+  classification, and mandatory sync review as the CLI. Console entry points
+  remain CLI-only, the GUI entry point retains no console, and an explicit CLI
+  subprocess imports no pywebview module.
 - The app starts only with Edge Chromium/WebView2, blocks external navigation
   and popups, rejects off-origin dispatch, and transports no application data
   through executable JavaScript text.
@@ -231,6 +279,9 @@ details may evolve, but contrast and no-color-only signaling are requirements.
   fallback browser settings to HKCU. From the packaged page,
   `window.open('https://example.invalid/')` neither launches the system browser
   nor replaces the document, and the bridge remains usable afterward.
+- File logging and the deterministic WebView2 storage path are configured before
+  pywebview import. An injected headed-test root receives every local artifact
+  and leaves the real per-user directory untouched.
 - A bounded coalescing event drain preserves reliable item/terminal ordering,
   makes gaps visible, and closes all observations cleanly on task close and
   app shutdown.
@@ -241,6 +292,6 @@ details may evolve, but contrast and no-color-only signaling are requirements.
 - Busy, pausing, paused, canceled, refused, partial, degraded, mismatch, and compound
   verification outcomes are truthful and distinguishable without parsing
   strings or inferring status from bytes.
-- Tests cover exact confirmation, location ambiguity, opaque-id authority,
+- Tests cover destructive-confirmation gating, location ambiguity, opaque-id authority,
   duplicate/out-of-order bridge responses, event-gap recovery, context target
   selection, process-local restart limits, and one-instance behavior.

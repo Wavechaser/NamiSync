@@ -16,9 +16,10 @@ The CLI delegates process composition, session observation, and typed result
 classification to `interfaces/service.py`; it does not construct a dispatcher
 or workflow runtime.
 
-Until a desktop exists, no subcommand prints usage and exits nonzero; nothing
-runs implicitly. Once the desktop is delivered, `nami-sync`, `nami-sync-gui`,
-and `python -m namisync` with no subcommand launch it.
+No-subcommand `nami-sync` and `python -m namisync` print usage and exit
+nonzero; once the desktop exists they also point to `nami-sync-gui`. Nothing
+runs implicitly. `nami-sync-gui` is the GUI-subsystem launcher for the sole
+desktop implementation and retains no console window.
 
 ## Commands
 

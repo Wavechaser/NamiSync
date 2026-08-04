@@ -1587,8 +1587,7 @@ outlive a session but never becomes a second session-state authority.
 
 **Flesh — now (M0).** CLI `sync` (plan → terminal review → commit → execute) +
 `history`; runnable/blocked/deferred review and partial-completion exit 6; real
-entry-point wiring; no-subcommand prints usage and exits nonzero until the
-desktop exists.
+entry-point wiring; no-subcommand prints usage and exits nonzero.
 **Flesh — M1.** `interfaces/service.py` is the shared facade/composition
 surface for both adapters, with typed commands/views, session observation,
 result classification across all four axes, and process-local
@@ -1673,11 +1672,13 @@ pywebview's internal exposed-function return escaper remains a version-audited,
 real-browser-tested part of the security boundary.
 The native folder picker is the sole path-input exception: the host retains the
 real path in a server slot and returns only an opaque id plus display string.
-`pywebview` is an M1 runtime dependency, not an optional GUI extra.
-Exactly one `nami-sync` launcher sits above sibling `cli` and `web` adapters:
-no subcommand opens the desktop, while explicit subcommands retain CLI
-behavior. `python -m namisync` follows the same dispatch, and there is no
-separate GUI executable.
+`pywebview` is an M1 runtime dependency, not an optional GUI extra. One
+`interfaces.launcher` layer sits above sibling `cli` and `web` adapters. The
+console entry points `nami-sync` and `python -m namisync` remain CLI-only;
+no-subcommand use prints usage and points to `nami-sync-gui`. The
+GUI-subsystem `nami-sync-gui` entry point starts the same web adapter without a
+retained console. This is one GUI implementation exposed through correctly
+classified Windows launchers, not a second desktop.
 
 The adapter owns task cards and cosmetics, not review or projection authority.
 A task may retain a plan with no live session. Busy close confirms, cancels,

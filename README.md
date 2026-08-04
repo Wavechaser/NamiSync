@@ -101,6 +101,7 @@ never hides the other result axes in rendered output.
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
 - [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
 - [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.
+- [M1 Shell](docs/M1_SHELL.md) — ordered Stage 6 host, frontend, and beta-package delivery plan.
 - [Command line](docs/COMMANDLINE.md) — commands, review, output, and exits.
 - [Executor](docs/EXECUTOR.md) — guarded filesystem mutation, pipeline, and recovery.
 - [Inventory](docs/INVENTORY.md), [Verifier](docs/VERIFIER.md), and

@@ -7,7 +7,8 @@ items, production dispatcher registrations, and optional post-execution
 compound verification. The CLI and Stage 5.5 facade/tree/selection/subtree
 surfaces are implemented. `M1_BRIDGE.md` remains the decision and acceptance
 record for the implemented Stage 5.5 prerequisite and the still-unimplemented
-Stage 6 headed desktop shell.
+Stage 6 headed desktop shell; `M1_SHELL.md` owns its delivery order and
+beta-package closure.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -312,13 +313,13 @@ Stage 5 location activities through the shared service.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
 - **Location Binding**. Location commands require exactly one positional root or named location id; repeatable exact paths define scope, and clone ambiguity requires a listed mount rather than inferred fallback.
 - **Typed Exit Classification**. The workflow headline precedence is failed, partial, refused, mismatch, canceled, verification-incomplete, recording/audit degradation, all-noop, then success. CLI codes 0 and 2-9 map those categories without hiding secondary axes or parsing diagnostic text.
-- **No-Subcommand Behavior**. Until a desktop implementation exists, running `nami-sync` or `python -m namisync` with no subcommand prints usage and exits nonzero; nothing ever runs implicitly.
+- **No-Subcommand Behavior**. Running `nami-sync` or `python -m namisync` with no subcommand prints usage, points to `nami-sync-gui` once available, and exits nonzero; nothing ever runs implicitly.
 - **Concurrent Read-Only Commands**. The read-only history command runs alongside a GUI session or other CLI invocations; mutating commands are subject to the same volume and queue arbitration as any other session.
 - **M0 Workflow And CLI Implemented**. `nami-sync sync` and `python -m namisync sync` now execute the real two-session scanner → planner → safe-selection/preflight → explicit commitment → fresh-preflight → executor/recorder pipeline through dispatcher custody. Review and execution distinguish runnable, blocked, and deferred work; completed safe subsets exit with the dedicated partial status while `nami-sync history` retains itemized exclusions. Real entry points, no-op correspondence/history, stale-plan refusal, declined-review non-mutation, database isolation, and import boundaries have integration coverage.
 
 - **M1 Facade And CLI Implemented**. One process-local service owns the exact registry, runtime/dispatcher lifecycle, sink-only observation, primitive settings/inventory/result views, and both database overrides. The CLI adds all four location commands, optional execute-to-verify, actionable five-state binding, guarded selected rebaseline, typed phase/item rendering, and deterministic exit codes.
 
-- **GUI Entry Points**. Once the desktop application exists, `nami-sync` and `python -m namisync` with no subcommand launch it through one launcher above the sibling CLI and web adapters; explicit subcommands retain CLI behavior. No second GUI executable is added.
+- **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 
 ## DESKTOP UI
 
