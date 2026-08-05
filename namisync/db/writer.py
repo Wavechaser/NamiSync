@@ -51,6 +51,7 @@ class SerializedWriter:
             raise ValueError("retry bounds cannot be negative")
         self.path = Path(path).resolve()
         self._connection = connect(self.path, busy_timeout_ms=busy_timeout_ms)
+        self._busy_timeout_ms = int(busy_timeout_ms)
         self._retry_timeout = retry_timeout_seconds
         self._retry_interval = retry_interval_seconds
         self._monotonic = monotonic
@@ -60,10 +61,29 @@ class SerializedWriter:
 
     def transact(self, operation: Callable[[sqlite3.Connection], T]) -> T:
         deadline = self._monotonic() + self._retry_timeout
-        with self._lock:
+        remaining = max(0.0, deadline - self._monotonic())
+        if not self._lock.acquire(timeout=remaining):
+            raise RecordingBusyError(
+                f"database remained busy for {self._retry_timeout:.3f}s"
+            )
+        try:
             self._require_open()
+            attempted = False
+            last_busy_error: sqlite3.OperationalError | None = None
             while True:
+                remaining = deadline - self._monotonic()
+                if remaining <= 0 and (attempted or self._retry_timeout > 0):
+                    raise RecordingBusyError(
+                        f"database remained busy for {self._retry_timeout:.3f}s"
+                    ) from last_busy_error
+                busy_timeout_ms = min(
+                    self._busy_timeout_ms,
+                    max(0, int(remaining * 1_000)),
+                )
                 try:
+                    self._connection.execute(
+                        f"PRAGMA busy_timeout = {busy_timeout_ms}"
+                    )
                     self._connection.execute("BEGIN IMMEDIATE")
                     result = operation(self._connection)
                     self._connection.commit()
@@ -72,17 +92,22 @@ class SerializedWriter:
                     self._connection.rollback()
                     if not _is_busy(error):
                         raise RecordingError(str(error)) from error
-                    if self._monotonic() >= deadline:
+                    attempted = True
+                    last_busy_error = error
+                    remaining = deadline - self._monotonic()
+                    if remaining <= 0:
                         raise RecordingBusyError(
                             f"database remained busy for {self._retry_timeout:.3f}s"
                         ) from error
-                    self._sleep(self._retry_interval)
+                    self._sleep(min(self._retry_interval, remaining))
                 except sqlite3.Error as error:
                     self._connection.rollback()
                     raise RecordingError(str(error)) from error
                 except BaseException:
                     self._connection.rollback()
                     raise
+        finally:
+            self._lock.release()
 
     def flush(self) -> None:
         """M0 commands commit eagerly; retaining this boundary freezes the API."""

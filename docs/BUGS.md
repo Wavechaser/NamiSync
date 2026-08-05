@@ -28,6 +28,37 @@ to a global chronological list.
 
 ### M1 executor refactor
 
+- SEVERE - FIXED (2026-08-04). An external replacement of the live UPDATE
+  target while NamiSync created its backup could become the continuation's new
+  baseline and then be overwritten, even though the owned trash entry preserved
+  only the reviewed older version. Cause: executor refreshed `live_stat` after
+  backup creation instead of retaining the pre-backup point-of-touch evidence.
+  Fixed by keeping that original stat across retry, accounting only for the
+  owned hardlink's expected link-count increment, and guarding it again before
+  copied-backup repair and target replacement. An external swap after the final
+  guard but before the path-based replace remains the documented non-atomic
+  threat boundary.
+- MODERATE - FIXED (2026-08-04). UPDATE cancellation called any file present at
+  its planned backup path `retained`, even if another process replaced the owned
+  backup during retry, and exposed a machine-specific absolute path in durable
+  result detail. Cause: cancellation kept only the path and tested existence.
+  Fixed with explicit backup creation/repaired-version evidence shared by
+  hardlink and copy backups, current-version classification as `retained`,
+  `changed`, `absent`, or `unverified`, and target-root-relative detail paths.
+  Before repaired evidence is cached, stable identity binds the backup when the
+  target profile supplies it; an identity-weak same-kind/same-size replacement
+  remains outside the evidence available to this minimal guard.
+- MODERATE - FIXED (2026-08-04). A copied UPDATE backup whose atomic publish
+  succeeded but post-publish metadata repair hit a sharing violation could
+  resume past that repair and leave the recovery copy with publication-damaged
+  metadata. Cause: copy-backup metadata completion lived inside the copy helper,
+  while retry state represented only backup presence and the outer continuation
+  repaired hardlinks alone. Fixed with one explicit backup completion stage for
+  both backup methods, separate creation and repaired stats, retry validation,
+  and a regression that fails the first copied-backup repair then verifies the
+  second attempt restores the displaced target metadata before replacing the
+  live target. Hardlink repair remains after replacement because its backup
+  still shares the displaced live inode until then.
 - MODERATE - FIXED (2026-08-04). A post-publication sharing retry could record
   COPY, UPDATE, or MOVE_UPDATE success for a same-size/same-mtime file that
   replaced NamiSync's target during backoff. Cause: a resumed continuation
@@ -146,6 +177,18 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
+- MODERATE - FIXED (2026-08-04). Audit-pump close could spend the complete
+  caller timeout waiting to enqueue its stop command and then spend the complete
+  timeout again joining the worker, so the advertised shutdown allowance was
+  not an end-to-end bound. Cause: queue and thread APIs each received the
+  original duration. Fixed with one monotonic close deadline and recomputed
+  remaining time for enqueue and join.
+- MODERATE - FIXED (2026-08-04). History event admission recalculated
+  `max(event_hashes)` for every new reliable envelope, making a large result
+  stream quadratic before finalization and increasing audit-backpressure risk.
+  Cause: the duplicate hash map was also used as an ordered-sequence index.
+  Fixed by retaining one highest-accepted-sequence scalar while preserving exact
+  duplicate idempotency and conflicting/out-of-order rejection.
 - MODERATE - FIXED (2026-08-03). Audit backpressure coupled to finalization.
   One `audit_timeout` fed three unrelated bounds — the finalization cutoff, the
   per-envelope `offer` enqueue wait, and hub close — so deriving a longer
@@ -216,12 +259,14 @@ to a global chronological list.
   side-effect-free mirror deliberately diverges from pywebview 6.2.1, whose
   `_is_chromium` raises `UnboundLocalError` from a `finally` that closes a
   never-bound `net_key`. Cause: the detector reported one boolean, and the
-  parity tests covered an outdated .NET release but never an absent key. Fixed
-  with an explicit `missing_dotnet_framework` query and its own install
-  message, a documented divergence in the mirror, and regressions pinning both
-  the divergence and the message each refusal chooses. Windows 11 ships .NET
-  Framework 4.8 in-box, so the state is not reachable on a supported
-  installation.
+  parity tests covered an outdated .NET release but never an absent key. The
+  initial fix added a second prerequisite query and its own install message.
+  The 2026-08-04 follow-up replaces those two registry snapshots with one typed
+  probe carrying availability plus .NET, WebView2, or detection-failure reason;
+  unreadable and malformed values now recommend repair instead of being
+  mislabeled as missing. Regressions pin the single .NET read, the divergence,
+  and each refusal message. Windows 11 ships .NET Framework 4.8 in-box, so the
+  absent-key state is not reachable on a supported installation.
 - MODERATE - FIXED (2026-08-01). Missing-WebView2 refusal changed the user's
   registry before reporting that the required renderer was unavailable.
   Pywebview selected its Windows backend during `webview.start()` and imported
@@ -324,6 +369,15 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
+- MODERATE - FIXED (2026-08-04). Serialized database contention could outlive
+  its configured retry bound: waiting for the in-process writer lock was
+  unbounded, each SQLite attempt retained the full busy timeout, and retry sleep
+  was not capped to the remaining allowance. Cause: only the outer retry loop
+  consulted its deadline. Fixed with one monotonic contention budget spanning
+  local-lock acquisition, per-attempt `busy_timeout`, and backoff, including an
+  explicit zero-budget single immediate attempt and no positive-budget attempt
+  after expiry. Transaction work after acquiring the write lock remains outside
+  this contention budget.
 - SEVERE - FIXED (2026-07-30). Non-authoritative full integrity verification.
   A full or stale-scope refresh with a global enumeration failure still entered
   the verifier and returned completed. Cause: the incomplete-scan refusal was
@@ -439,6 +493,19 @@ to a global chronological list.
 
 ### M1 post-execution integration
 
+- MODERATE - FIXED (2026-08-04). Running execution cancellation without
+  post-copy verification re-raised `Canceled` after the workflow had already
+  finished its ledger run, causing the generic runner to construct a fresh
+  cancellation result with default `recording=OK`. A cancel-after-publish path
+  could therefore deliver a terminal that hid the executor's degraded recording
+  truth, while both modes could omit non-executed plan exclusions from the
+  cancellation result. Cause: only the compound execute-to-verify path
+  normalized execution cancellation into a typed workflow result, and neither
+  cancellation branch merged executor emissions with exclusions. Fixed by
+  returning the same typed canceled result in both modes, preserving the
+  `ExecutionSet` recording axis, emitting and merging the complete ordered item
+  stream, and omitting the execute phase only when no compound verification was
+  requested.
 - SEVERE - FIXED (2026-07-25). Compound ledger-run settlement. Exceptions
   during execute-result projection, continuation publication, verify phase
   entry/context creation, or verifier-result aggregation could escape after the

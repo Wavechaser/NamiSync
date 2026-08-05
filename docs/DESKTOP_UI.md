@@ -167,7 +167,12 @@ accepted Edge channels, and HKCU/HKLM architecture routing, with executable
 upstream parity coverage. The `86.0.622.0` token is retained because that
 backend passes it to its compatibility helper; NamiSync mirrors the helper's
 actual comparison and makes no security-patch freshness claim. A configured
-`WEBVIEW2_RUNTIME_PATH` bypasses that probe. The start wrapper repeats
+`WEBVIEW2_RUNTIME_PATH` bypasses that probe. One typed probe snapshot supplies
+both availability and refusal reason: an absent prerequisite names .NET or
+WebView2, while an unreadable or malformed registry state reports detection
+failure and recommends repair instead of falsely claiming a component is
+missing. Host preparation never repeats the .NET registry read merely to choose
+its message. The start wrapper repeats
 preparation, passes `debug=False`, and uses one zero-argument `initialized`
 callback that verifies the selected renderer before invoking the host callback.
 Once the static asset server has selected its random loopback port, the host

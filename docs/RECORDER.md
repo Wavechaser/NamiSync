@@ -137,8 +137,14 @@ observation.
 One in-process writer owns a writable ledger connection or serialized command
 queue. Parallel disjoint-volume sessions may submit concurrently but commit in a
 defined order. Cross-process connections use WAL, foreign keys, bounded busy
-timeout, and bounded retry. Long CPU/path matching work happens before opening a
-write transaction; inputs are pre-indexed by canonical key.
+timeout, and bounded retry. One monotonic contention deadline covers acquisition
+of the in-process writer lock, every SQLite busy-handler allowance, and retry
+sleep; each attempt caps `PRAGMA busy_timeout` to the remaining budget and no
+positive-budget attempt begins after expiry. A zero retry budget still permits
+one immediate uncontended attempt. The operation body begins only after the
+write transaction is acquired and is deliberately outside this contention
+budget. Long CPU/path matching work happens before opening a write transaction;
+inputs are pre-indexed by canonical key.
 
 Transactions are operation/batch scoped, not multi-hour activity scoped. One
 late failure cannot erase hours of earned verification evidence. A failed

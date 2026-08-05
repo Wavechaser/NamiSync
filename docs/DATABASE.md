@@ -121,9 +121,12 @@ from referencing a target file in another location.
 ## Connection Rules
 
 Every writable ledger connection enables foreign keys, WAL, bounded busy
-timeout, and explicit transactions. Read repositories use read-only connections
-where possible. A function named/read-scoped as read-only may never be used for
-retention or other writes—the PoC made that error and disabled pruning entirely.
+timeout, and explicit transactions. The serialized writer spends one monotonic
+contention budget across its local lock, SQLite busy waits, and retry sleeps;
+the transaction body is not misclassified as contention time. Read repositories
+use read-only connections where possible. A function named/read-scoped as
+read-only may never be used for retention or other writes—the PoC made that
+error and disabled pruning entirely.
 
 The serialized recorder owns normal writes. Schema creation/migration and
 dedicated maintenance are the only other write owners and do not run inside

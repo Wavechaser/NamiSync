@@ -474,6 +474,49 @@ def test_conflicting_duplicate_event_sequence_is_rejected_before_storage(
             )
 
 
+def test_history_sequence_ordering_preserves_old_duplicate_idempotency(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    first = ItemOutcome("first", "copy", "a", Outcome.SUCCEEDED)
+    third = ItemOutcome("third", "copy", "c", Outcome.SUCCEEDED)
+    late = ItemOutcome("late", "copy", "b", Outcome.SUCCEEDED)
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+        observer.on_event(_envelope(record, 1, first))
+        observer.on_event(_envelope(record, 3, third))
+
+        observer.on_event(_envelope(record, 1, first))
+        with pytest.raises(HistoryIntegrityError, match="out of order"):
+            observer.on_event(_envelope(record, 2, late))
+
+
+def test_history_sequence_admission_does_not_scan_prior_hashes(tmp_path: Path) -> None:
+    class NonIterableHashes(dict[int, bytes]):
+        def __iter__(self):
+            raise AssertionError("sequence admission scanned all prior hashes")
+
+    record = _record()
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+        observer._event_hashes = NonIterableHashes()
+        for sequence in range(1, 101):
+            observer.on_event(
+                _envelope(
+                    record,
+                    sequence,
+                    ItemOutcome(
+                        f"op-{sequence}",
+                        "copy",
+                        f"{sequence}.bin",
+                        Outcome.SUCCEEDED,
+                    ),
+                )
+            )
+
+        assert observer._highest_event_seq == 100
+
+
 def test_history_failure_does_not_mutate_domain_result(tmp_path: Path) -> None:
     record = _record()
     result = OperationResult(SessionState.COMPLETED)

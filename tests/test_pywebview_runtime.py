@@ -135,13 +135,14 @@ def test_side_effect_free_detector_matches_pinned_pywebview_registry_choices(
     )
     monkeypatch.setattr(runtime, "winreg", fake)
 
-    ours = runtime.has_webview2_runtime(
+    ours = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": None}, architecture=architecture
     )
     upstream = _upstream_detector(fake, architecture=architecture)
 
-    assert ours
-    assert ours is upstream
+    assert ours.available
+    assert ours.refusal_reason is None
+    assert ours.available is upstream
     assert all(access in {None, fake.KEY_READ} for *_, access in fake.opens)
 
 
@@ -159,14 +160,22 @@ def test_detector_matches_fixed_runtime_and_missing_dotnet_contract(
     )
     monkeypatch.setattr(runtime, "winreg", fake)
 
-    assert runtime.has_webview2_runtime(
-        {"WEBVIEW2_RUNTIME_PATH": r"runtime\\WebView2"}, architecture="AMD64"
+    fixed_probe = runtime.probe_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": r"runtime\\WebView2"},
+        architecture="AMD64",
     )
+    assert fixed_probe.available
+    assert fixed_probe.refusal_reason is None
     assert _upstream_detector(
         fake, architecture="AMD64", fixed=r"runtime\\WebView2"
     )
-    assert not runtime.has_webview2_runtime(
+    missing_probe = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
+    )
+    assert not missing_probe.available
+    assert (
+        missing_probe.refusal_reason
+        is runtime.WebView2RefusalReason.DOTNET_FRAMEWORK
     )
     assert not _upstream_detector(fake, architecture="AMD64")
 
@@ -187,10 +196,11 @@ def test_absent_dotnet_key_is_the_one_deliberate_upstream_divergence(
     fake = FakeRegistry({})
     monkeypatch.setattr(runtime, "winreg", fake)
 
-    assert not runtime.has_webview2_runtime(
+    probe = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
     )
-    assert runtime.missing_dotnet_framework()
+    assert not probe.available
+    assert probe.refusal_reason is runtime.WebView2RefusalReason.DOTNET_FRAMEWORK
     with pytest.raises(UnboundLocalError):
         _upstream_detector(fake, architecture="AMD64")
 
@@ -209,10 +219,63 @@ def test_present_dotnet_key_does_not_report_a_prerequisite_gap(
     )
     monkeypatch.setattr(runtime, "winreg", fake)
 
-    assert not runtime.missing_dotnet_framework()
-    assert not runtime.has_webview2_runtime(
+    probe = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
     )
+    assert not probe.available
+    assert probe.refusal_reason is runtime.WebView2RefusalReason.WEBVIEW2_RUNTIME
+    assert not _upstream_detector(fake, architecture="AMD64")
+
+
+def test_numeric_string_dotnet_release_is_not_misdiagnosed_as_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeRegistry(
+        {
+            (
+                FakeRegistry.HKEY_LOCAL_MACHINE,
+                runtime.DOTNET_RELEASE_REGISTRY_PATH,
+                "Release",
+            ): str(runtime.MINIMUM_DOTNET_RELEASE),
+        }
+    )
+    monkeypatch.setattr(runtime, "winreg", fake)
+
+    probe = runtime.probe_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
+    )
+
+    assert not probe.available
+    assert probe.refusal_reason is runtime.WebView2RefusalReason.DETECTION_FAILED
+    assert not _upstream_detector(fake, architecture="AMD64")
+
+
+def test_dotnet_registry_read_failure_is_not_misdiagnosed_as_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeRegistry(
+        {
+            (
+                FakeRegistry.HKEY_LOCAL_MACHINE,
+                runtime.DOTNET_RELEASE_REGISTRY_PATH,
+                "Release",
+            ): runtime.MINIMUM_DOTNET_RELEASE,
+        }
+    )
+
+    def deny_query(key: RegistryKey, name: str):
+        del key, name
+        raise PermissionError("registry read denied")
+
+    monkeypatch.setattr(fake, "QueryValueEx", deny_query)
+    monkeypatch.setattr(runtime, "winreg", fake)
+
+    probe = runtime.probe_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
+    )
+
+    assert not probe.available
+    assert probe.refusal_reason is runtime.WebView2RefusalReason.DETECTION_FAILED
     assert not _upstream_detector(fake, architecture="AMD64")
 
 
@@ -240,13 +303,14 @@ def test_malformed_earlier_channel_aborts_like_the_upstream_detector(
     }
     monkeypatch.setattr(runtime, "winreg", fake)
 
-    ours = runtime.has_webview2_runtime(
+    ours = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
     )
     upstream = _upstream_detector(fake, architecture="AMD64")
 
-    assert not ours
-    assert ours is upstream
+    assert not ours.available
+    assert ours.refusal_reason is runtime.WebView2RefusalReason.DETECTION_FAILED
+    assert ours.available is upstream
 
 
 @pytest.mark.parametrize(
@@ -280,9 +344,9 @@ def test_version_gate_matches_pinned_pywebview_helper(
     )
     monkeypatch.setattr(runtime, "winreg", fake)
 
-    ours = runtime.has_webview2_runtime(
+    ours = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
     )
     upstream = _upstream_detector(fake, architecture="AMD64")
 
-    assert ours is upstream
+    assert ours.available is upstream

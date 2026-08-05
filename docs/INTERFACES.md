@@ -244,7 +244,11 @@ behavioral parity tests execute the upstream detector functions without
 importing WinForms. Its `86.0.622.0` token is the exact argument used by the
 pinned backend's compatibility helper; the mirror preserves that helper's
 actual comparison and does not claim current security patching. A configured
-`WEBVIEW2_RUNTIME_PATH` short-circuits that probe. The start
+`WEBVIEW2_RUNTIME_PATH` short-circuits that probe. One typed probe result carries
+availability and the refusal reason from the same registry snapshot; host
+preparation does not repeat the .NET read to choose a message. Missing .NET or
+WebView2 receives its specific install action, while malformed or unreadable
+registry state is a detection failure with a repair action. The start
 wrapper repeats preparation before explicitly requesting `gui="edgechromium"`.
 This refuses absence before pywebview can import its registry-mutating MSHTML
 fallback. A refusal names the prerequisite it actually found missing: an absent

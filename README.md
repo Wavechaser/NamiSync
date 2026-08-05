@@ -115,6 +115,14 @@ never hides the other result axes in rendered output.
 
 ### M1
 
+- Completed the post-review simplification pass: COPY/UPDATE/MOVE_UPDATE now
+  share one ordered published-completion path; UPDATE backup metadata and
+  identity evidence are explicit across hardlink/copy methods; cancellation
+  preserves degraded recording and reports only validated, root-relative
+  recovery artifacts. Persistence and audit shutdown spend single monotonic
+  contention/close budgets, history sequence admission is constant-time, and
+  WebView2 prerequisite availability plus diagnosis comes from one typed,
+  read-only registry snapshot.
 - Completed the Stage 6 pywebview reality spike on CPython 3.13.14 and
   pywebview 6.2.1: native guards now attach only on the WinForms UI thread,
   dispatch authorization follows native WebView2 document state across

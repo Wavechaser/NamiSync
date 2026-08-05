@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 from threading import Event, Thread
 from time import monotonic, sleep
 
+import pytest
+
+import namisync.dispatcher.event_bus as event_bus
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import Gap, PhaseChanged, Progress, StateChanged, Terminal
 from namisync.core.session import OperationResult, SessionId, SessionState
@@ -327,3 +330,37 @@ def test_stalled_audit_is_timeout_bounded_and_degrades() -> None:
     assert hub.finalize_audit(OperationResult(SessionState.COMPLETED)) is RecordingStatus.DEGRADED
     release.set()
     assert hub.close(0.5)
+
+
+def test_audit_close_spends_one_deadline_across_enqueue_and_join(
+    monkeypatch,
+) -> None:
+    class QueueProbe:
+        def __init__(self) -> None:
+            self.timeouts: list[float] = []
+
+        def put(self, command, *, timeout: float) -> None:
+            assert isinstance(command, event_bus._Stop)
+            self.timeouts.append(timeout)
+
+    class ThreadProbe:
+        def __init__(self) -> None:
+            self.timeouts: list[float] = []
+
+        def join(self, timeout: float) -> None:
+            self.timeouts.append(timeout)
+
+        def is_alive(self) -> bool:
+            return True
+
+    times = iter((10.0, 10.025, 10.075))
+    monkeypatch.setattr(event_bus, "monotonic", lambda: next(times))
+    pump = object.__new__(event_bus._AuditPump)
+    pump._closed = Event()
+    pump._degraded = Event()
+    pump._queue = QueueProbe()
+    pump._thread = ThreadProbe()
+
+    assert not pump.close(0.1)
+    assert pump._queue.timeouts == [pytest.approx(0.075)]
+    assert pump._thread.timeouts == [pytest.approx(0.025)]

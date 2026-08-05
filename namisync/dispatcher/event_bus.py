@@ -226,12 +226,15 @@ class _AuditPump:
     def close(self, timeout: float) -> bool:
         if self._closed.is_set():
             return True
+        deadline = monotonic() + timeout
         try:
-            self._queue.put(_Stop(), timeout=timeout)
+            remaining = max(0.0, deadline - monotonic())
+            self._queue.put(_Stop(), timeout=remaining)
         except Full:
             self._degraded.set()
             return False
-        self._thread.join(timeout)
+        remaining = max(0.0, deadline - monotonic())
+        self._thread.join(remaining)
         return not self._thread.is_alive()
 
     def _run(self) -> None:

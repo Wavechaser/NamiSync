@@ -10,7 +10,10 @@ from threading import Lock
 from typing import Protocol
 from urllib.parse import SplitResult, urlsplit
 
-from .pywebview_runtime import has_webview2_runtime, missing_dotnet_framework
+from .pywebview_runtime import (
+    WebView2RefusalReason,
+    probe_webview2_runtime,
+)
 
 
 BRIDGE_SCHEMA_VERSION = 1
@@ -28,6 +31,11 @@ _WEBVIEW2_INSTALL_MESSAGE = (
 _DOTNET_INSTALL_MESSAGE = (
     "NamiSync requires Microsoft .NET Framework 4.6.2 or later before Microsoft "
     "Edge WebView2 Runtime can be used; install it and restart NamiSync."
+)
+_RUNTIME_DETECTION_MESSAGE = (
+    "NamiSync could not verify its Microsoft .NET Framework and Edge WebView2 "
+    "Runtime prerequisites; restart NamiSync. If this continues, repair or "
+    "reinstall those components."
 )
 
 
@@ -286,12 +294,18 @@ def prepare_pywebview_host(webview_module: _WebviewModule) -> None:
             "required pywebview security setting is unavailable: "
             "WEBVIEW2_RUNTIME_PATH"
         ) from error
-    if not has_webview2_runtime(webview_module.settings):
-        raise WebView2Unavailable(
-            _DOTNET_INSTALL_MESSAGE
-            if missing_dotnet_framework()
-            else _WEBVIEW2_INSTALL_MESSAGE
-        )
+    runtime_probe = probe_webview2_runtime(webview_module.settings)
+    if not runtime_probe.available:
+        if (
+            runtime_probe.refusal_reason
+            is WebView2RefusalReason.DOTNET_FRAMEWORK
+        ):
+            message = _DOTNET_INSTALL_MESSAGE
+        elif runtime_probe.refusal_reason is WebView2RefusalReason.WEBVIEW2_RUNTIME:
+            message = _WEBVIEW2_INSTALL_MESSAGE
+        else:
+            message = _RUNTIME_DETECTION_MESSAGE
+        raise WebView2Unavailable(message)
 
 
 def start_edge_chromium(

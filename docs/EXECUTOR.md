@@ -103,13 +103,20 @@ documentation rather than becoming a false compare-and-swap guarantee.
    creation time or deferred readonly; otherwise perform no target metadata
    write, target reopen, or second file flush. The resulting observed stat is
    reused for the size guard and attestation.
-10. Open the parent directory with `GENERIC_WRITE` and
-   `FILE_FLAG_BACKUP_SEMANTICS`, then attempt a best-effort flush. A refused or
-   unsupported flush is a per-operation durability warning; the result claims
-   durability only for what was actually flushed.
-11. Require the published target size to equal the hashed byte count and
-    construct `Attestation(ContentEvidence("xxh3_128", ...), target_stat)` so
-    target identity is never confused with source identity.
+10. Require the published target size to equal the hashed byte count before any
+    operation-specific destructive completion step. MOVE_UPDATE builds the
+    attestation at this point, so an attestation-construction failure cannot
+    move the reviewed old path to trash. COPY and UPDATE defer attestation until
+    their filesystem completion and durability work finishes.
+11. Complete the operation-specific filesystem work, including UPDATE's
+    hardlink-backup metadata or MOVE_UPDATE's old-to-trash rename, then open
+    every affected parent directory with `GENERIC_WRITE` and
+    `FILE_FLAG_BACKUP_SEMANTICS`, then attempt best-effort flushes. A refused or
+    unsupported flush is a per-operation durability warning; the result claims
+    durability only for what was actually flushed. Construct or reuse
+    `Attestation(ContentEvidence("xxh3_128", ...), target_stat)` in the safe
+    operation-specific order so target identity remains distinct from source
+    identity.
 12. Call recorder. A successful COPY/UPDATE/MOVE_UPDATE transaction returns the
     actual target inventory row/location/scope/path identity; idempotent replay
     returns that same tuple. A recorder failure preserves the filesystem
@@ -137,10 +144,16 @@ touches the current target. With trash-on-update enabled it then:
    `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
    temp, flushes it, and atomically publishes the complete backup inside the run
    directory before proceeding;
-3. clears readonly on the live target if Windows requires it for replacement;
-4. atomically publishes the prepared temp over the live path with `os.replace`;
-5. applies the new file's readonly bit and remaining post-publish metadata;
-6. performs the best-effort parent flush, re-stats, and records success.
+3. for a copied backup, captures creation evidence and completes post-publish
+   metadata repair before any destructive change to the live target; retries
+   validate that evidence, while a hardlink defers metadata repair because it
+   still shares the live inode;
+4. clears readonly on the live target if Windows requires it for replacement;
+5. atomically publishes the prepared temp over the live path with `os.replace`;
+6. applies the new file's readonly bit and remaining post-publish metadata;
+7. validates and completes hardlink-backup metadata after the replacement, then
+   performs the best-effort parent flushes, constructs the attestation, and
+   records success.
 
 When changed content also carries an opted-in basename casing change, this same
 required update publishes at the source-spelled basename. Metadata-equal casing
@@ -160,6 +173,12 @@ planning, and ages out with the trash run directory; ordinary temp recovery
 still never walks `.synctrash`. Readonly ordering/recovery restores the old
 version's planned attributes after replacement so the hardlinked trash inode is
 not left silently degraded.
+
+Backup creation never redefines the accepted live target version. UPDATE keeps
+the pre-backup stat across retries, permits only its own hardlink's expected
+link-count increment, and rechecks that evidence before copied-backup repair and
+replacement. A swap during backup creation therefore fails as target drift
+without overwriting the external bytes.
 
 The final guard cannot make the subsequent path-based replacement conditional
 on target identity. If an external process swaps the live target after backup
@@ -259,9 +278,15 @@ prefers the continuation's synchronous publish flag and cached post-repair stat.
 Otherwise an intact matching owned temp proves the publish did not occur even
 if the target changed independently; consumed temp plus a present target is the
 committed-but-raised fallback. Truly unverified state fails with its drift/I/O
-reason and does not claim publication or degrade recording. UPDATE reports and
-retains its owned backup while deleting only the staged temp. MOVE_UPDATE
-distinguishes new+old from new+trash; neither is rolled back. Ordinary pause
+reason and does not claim publication or degrade recording. UPDATE deletes only
+the staged temp and reports a backup as `retained` only when its current version
+matches the continuation's creation or repaired evidence; replacement, absence,
+and read failure are reported as `changed`, `absent`, or `unverified`. Backup and
+MOVE_UPDATE trash paths in result detail are target-root-relative rather than
+machine-specific absolute paths. Before repaired evidence exists, an
+identity-weak profile cannot distinguish a same-kind/same-size backup
+substitution. MOVE_UPDATE distinguishes new+old from
+new+trash; neither is rolled back. Ordinary pause
 abandons/reclaims an in-flight temp through exact-name recovery, preserves
 completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
 without terminal; dispatcher then releases custody. Resume queues at the back,
@@ -281,7 +306,13 @@ retry. They revalidate the prepared/published file and owned backup/trash, resum
 at publish, replace, metadata repair, or old-to-trash rename, and recognize the
 exact committed state if an injected/native boundary reports failure after the
 syscall took effect. No guarded retry recopies the main payload, and UPDATE's
-copy-backup continuation is installed only after that backup exists.
+copy-backup continuation is installed only after that backup exists. All three
+byte-producing operations then use one completion path for the resumed-target
+guard, target metadata/stat, size guard, operation-safe attestation/filesystem
+ordering, directory durability, and recording; their tails cannot silently
+drift into separate implementations. MOVE_UPDATE attests before its destructive
+old-to-trash finish; COPY and UPDATE attest after their operation-specific
+completion/durability boundary.
 
 Every retry attempt that begins with an already-published continuation performs
 one target stat before any remaining metadata repair, durability, attestation,

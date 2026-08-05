@@ -379,10 +379,10 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
             raise FileNotFoundError(path)
         return RegistryKey(path)
 
-    def query_value(key: RegistryKey, name: str) -> tuple[str, int]:
+    def query_value(key: RegistryKey, name: str) -> tuple[object, int]:
         if key.path == pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH:
             assert name == "Release"
-            return str(pywebview_runtime.MINIMUM_DOTNET_RELEASE), 1
+            return pywebview_runtime.MINIMUM_DOTNET_RELEASE, 1
         assert name == "pv"
         return "150.0.4078.105", 1
 
@@ -435,6 +435,48 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
             pywebview_runtime.winreg.KEY_READ,
         ),
     ]
+
+
+def test_prepare_pywebview_host_reports_malformed_dotnet_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    queries = 0
+
+    class RegistryKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            del args
+
+    def open_key(hive: object, path: str, reserved: int, access: int):
+        del hive, reserved, access
+        assert path == pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH
+        return RegistryKey()
+
+    def query_value(key: RegistryKey, name: str) -> tuple[str, int]:
+        nonlocal queries
+        del key
+        assert name == "Release"
+        queries += 1
+        return str(pywebview_runtime.MINIMUM_DOTNET_RELEASE), 1
+
+    monkeypatch.setattr(pywebview_runtime.winreg, "OpenKey", open_key)
+    monkeypatch.setattr(pywebview_runtime.winreg, "QueryValueEx", query_value)
+    webview = SimpleNamespace(
+        settings={
+            "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+            "ALLOW_FILE_URLS": True,
+            "ALLOW_DOWNLOADS": True,
+            "REMOTE_DEBUGGING_PORT": 9222,
+            "WEBVIEW2_RUNTIME_PATH": None,
+        }
+    )
+
+    with pytest.raises(WebView2Unavailable, match="could not verify"):
+        prepare_pywebview_host(webview)
+
+    assert queries == 1
 
 
 def test_prepare_pywebview_host_accepts_a_fixed_runtime_without_registry(
@@ -620,8 +662,10 @@ def _stub_runtime_registry(
     monkeypatch: pytest.MonkeyPatch,
     *,
     dotnet_present: bool,
-) -> None:
+) -> list[str]:
     """Fail every WebView2 client probe, choosing whether .NET itself is found."""
+
+    opened_paths: list[str] = []
 
     class Key:
         def __init__(self, path: str) -> None:
@@ -635,6 +679,7 @@ def _stub_runtime_registry(
 
     def open_key(hive, path, *args, **kwargs):
         del hive, args, kwargs
+        opened_paths.append(path)
         if path == pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH and dotnet_present:
             return Key(path)
         raise FileNotFoundError(path)
@@ -645,12 +690,13 @@ def _stub_runtime_registry(
 
     monkeypatch.setattr(pywebview_runtime.winreg, "OpenKey", open_key)
     monkeypatch.setattr(pywebview_runtime.winreg, "QueryValueEx", query_value)
+    return opened_paths
 
 
 def test_start_refuses_missing_dotnet_with_its_own_prerequisite_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _stub_runtime_registry(monkeypatch, dotnet_present=False)
+    opened_paths = _stub_runtime_registry(monkeypatch, dotnet_present=False)
 
     class NoDotnetWebview:
         settings = {
@@ -669,9 +715,11 @@ def test_start_refuses_missing_dotnet_with_its_own_prerequisite_message(
         def start(func=None, *, gui: str, debug: bool) -> None:
             raise AssertionError("pywebview must not start without .NET")
 
-    assert pywebview_runtime.missing_dotnet_framework()
     with pytest.raises(WebView2Unavailable, match=r"\.NET Framework 4\.6\.2"):
         start_edge_chromium(NoDotnetWebview)
+    assert (
+        opened_paths.count(pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH) == 1
+    )
 
 
 def test_start_refuses_missing_runtime_before_pywebview_initialization(
@@ -680,7 +728,7 @@ def test_start_refuses_missing_runtime_before_pywebview_initialization(
     initialized = InitializedHook()
     started = False
 
-    _stub_runtime_registry(monkeypatch, dotnet_present=True)
+    opened_paths = _stub_runtime_registry(monkeypatch, dotnet_present=True)
 
     class MissingRuntimeWebview:
         settings = {
@@ -699,13 +747,15 @@ def test_start_refuses_missing_runtime_before_pywebview_initialization(
             del func, gui, debug
             started = True
 
-    assert not pywebview_runtime.missing_dotnet_framework()
     with pytest.raises(WebView2Unavailable, match="Edge WebView2 Runtime") as raised:
         start_edge_chromium(MissingRuntimeWebview)
     assert ".NET Framework" not in str(raised.value)
 
     assert not started
     assert initialized.handlers == []
+    assert (
+        opened_paths.count(pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH) == 1
+    )
 
 
 @pytest.mark.parametrize(

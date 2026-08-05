@@ -196,6 +196,7 @@ class HistoryObserver:
         self._record = record
         self._context = context
         self._event_hashes: dict[int, bytes] = {}
+        self._highest_event_seq: int | None = None
         self._items: list[tuple[int, ResultItem]] = []
         self._running_at: datetime | None = record.started_at
         self._closed = False
@@ -215,9 +216,13 @@ class HistoryObserver:
             if prior != digest:
                 raise HistoryIntegrityError("event sequence was reused with another payload")
             return
-        if self._event_hashes and envelope.seq < max(self._event_hashes):
+        if (
+            self._highest_event_seq is not None
+            and envelope.seq < self._highest_event_seq
+        ):
             raise HistoryIntegrityError("reliable events arrived out of order")
         self._event_hashes[envelope.seq] = digest
+        self._highest_event_seq = envelope.seq
         if (
             isinstance(envelope.body, StateChanged)
             and envelope.body.state is SessionState.RUNNING

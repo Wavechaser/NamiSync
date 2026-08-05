@@ -173,6 +173,9 @@ stops producer backpressure after the injected timeout by setting
 `audit=DEGRADED`. Failure while the composition root constructs or opens the
 observer is isolated the same way: admission continues with a degraded-audit
 sentinel, so history availability cannot decide whether domain work runs.
+Pump shutdown spends one monotonic deadline across both enqueueing its stop
+command and joining the worker; queue delay cannot silently grant a second full
+join allowance.
 
 ## Session Store
 

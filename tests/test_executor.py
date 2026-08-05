@@ -2515,6 +2515,61 @@ def test_hardlink_backup_restores_and_flushes_displaced_readonly_inode_before_re
     fs.clear_readonly(trash)
 
 
+class HardlinkCompletionOrderFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.order: list[str] = []
+        self.backup_metadata_completed = False
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        result = super().ensure_published_metadata(path, *args, **kwargs)
+        if ".synctrash" in path.parts:
+            self.order.append("backup-metadata")
+            self.backup_metadata_completed = True
+        else:
+            self.order.append("target-metadata")
+        return result
+
+
+def test_update_hardlink_backup_metadata_completes_before_attestation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = HardlinkCompletionOrderFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    def fail_attestation(*_args, **_kwargs):
+        assert fs.backup_metadata_completed
+        fs.order.append("attestation")
+        raise RuntimeError("injected attestation failure")
+
+    monkeypatch.setattr(executor_module, "_attestation", fail_attestation)
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=True)),
+        fs=fs,
+    )
+
+    trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert result.status is SessionState.FAILED
+    assert fs.order == ["target-metadata", "backup-metadata", "attestation"]
+    assert (target / "file.bin").read_bytes() == b"new-version"
+    assert trash.read_bytes() == b"old-version"
+    assert recorder.calls == []
+
+
 class ReplaceFaultFileSystem(NativeFileSystem):
     def __init__(self, *, after: bool) -> None:
         self.after = after
@@ -4141,6 +4196,213 @@ def test_update_retry_recognizes_committed_copy_backup(tmp_path: Path) -> None:
     assert [call[0] for call in recorder.calls] == ["updated"]
 
 
+class CopyBackupMetadataSharingOnceFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.backup_metadata_attempts = 0
+        self.replace_metadata_attempts: list[int] = []
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        if ".synctrash" in path.parts:
+            self.backup_metadata_attempts += 1
+            if self.backup_metadata_attempts == 1:
+                observed = self.stat_path(path)
+                assert observed is not None
+                damaged_mtime = observed.mtime_ns + 10_000_000_000
+                os.utime(path, ns=(damaged_mtime, damaged_mtime))
+                error = OSError("sharing violation before backup metadata repair")
+                error.winerror = 32  # type: ignore[attr-defined]
+                raise error
+        return super().ensure_published_metadata(path, *args, **kwargs)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.replace_metadata_attempts.append(self.backup_metadata_attempts)
+        super().replace(temp, target)
+
+
+def test_copied_backup_metadata_repair_resumes_before_update_replace(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = CopyBackupMetadataSharingOnceFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)),
+        fs=fs,
+    )
+
+    trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    repaired = fs.stat_path(trash)
+    assert result.status is SessionState.COMPLETED
+    assert fs.backup_metadata_attempts == 2
+    assert fs.replace_metadata_attempts == [2]
+    assert repaired is not None
+    assert repaired.mtime_ns == target_stat.mtime_ns
+    assert trash.read_bytes() == b"old-version"
+    assert (target / "file.bin").read_bytes() == b"new-version"
+    assert [call[0] for call in recorder.calls] == ["updated"]
+
+
+class CopyBackupMetadataSharingAlwaysFileSystem(
+    CopyBackupMetadataSharingOnceFileSystem
+):
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        if ".synctrash" in path.parts:
+            self.backup_metadata_attempts += 1
+            error = OSError("persistent backup metadata sharing violation")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        return NativeFileSystem.ensure_published_metadata(
+            self,
+            path,
+            *args,
+            **kwargs,
+        )
+
+
+def test_persistent_copied_backup_metadata_failure_prevents_update_replace(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = CopyBackupMetadataSharingAlwaysFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)),
+        fs=fs,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert fs.backup_metadata_attempts == 3
+    assert fs.replace_metadata_attempts == []
+    assert (target / "file.bin").read_bytes() == b"old-version"
+    assert recorder.calls == []
+
+
+def test_resumed_update_rejects_target_drift_before_backup_metadata_repair(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = CopyBackupMetadataSharingOnceFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    published_target = target / "file.bin"
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)),
+        fs=fs,
+        policies=_policies(
+            sleep=lambda _delay: _replace_published_target(
+                published_target,
+                fs,
+            )
+        ),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert fs.backup_metadata_attempts == 1
+    assert recorder.calls == []
+    assert published_target.read_bytes() == b"bad-version"
+
+
+class CopyBackupStatSharingOnceFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.backup_created = False
+        self.backup_stat_failed = False
+        self.backup_copy_attempts = 0
+
+    def copy_backup(self, source, temp, target, checkpoint) -> None:
+        self.backup_copy_attempts += 1
+        super().copy_backup(source, temp, target, checkpoint)
+        self.backup_created = True
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if (
+            self.backup_created
+            and not self.backup_stat_failed
+            and ".synctrash" in path.parts
+        ):
+            self.backup_stat_failed = True
+            error = OSError("sharing violation observing published backup")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+        return super().stat_path(path)
+
+
+def test_update_retry_retains_continuation_when_backup_stat_temporarily_fails(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = CopyBackupStatSharingOnceFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)),
+        fs=fs,
+    )
+
+    trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert result.status is SessionState.COMPLETED
+    assert fs.backup_copy_attempts == 1
+    assert fs.backup_stat_failed
+    assert trash.read_bytes() == b"old-version"
+    assert (target / "file.bin").read_bytes() == b"new-version"
+    assert [call[0] for call in recorder.calls] == ["updated"]
+
+
 class ReplaceSharingAlwaysFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.attempts = 0
@@ -4299,7 +4561,9 @@ def test_cancel_during_update_retry_reports_owned_durable_state(
     assert item.outcome is expected_outcome
     assert item.detail["durable_state"] == expected_state
     assert item.detail["backup_state"] == "retained"
-    assert Path(item.detail["backup_path"]) == trash
+    assert item.detail["backup_path"] == (
+        f".synctrash\\{RUN_ID}\\file.bin"
+    )
     assert trash.read_bytes() == b"old-version"
     assert not list(target.glob("*.synctmp-*"))
     assert xset.published_evidence == {}
@@ -4312,6 +4576,68 @@ def test_cancel_during_update_retry_reports_owned_durable_state(
         assert xset.recording is RecordingStatus.DEGRADED
         assert item.detail["recording"] == "degraded"
         assert (target / "file.bin").read_bytes() == b"new-version"
+
+
+def test_cancel_during_update_retry_does_not_claim_replaced_backup(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    (target / "file.bin").write_bytes(b"old-version")
+    fs = ReplaceSharingAlwaysFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,), hardlinks=False))
+    trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep(_delay: float) -> None:
+        nonlocal cancel_requested
+        retained = fs.stat_path(trash)
+        assert retained is not None
+        replacement = trash.with_name("replacement.bin")
+        replacement.write_bytes(b"bad-version")
+        os.utime(
+            replacement,
+            ns=(retained.mtime_ns, retained.mtime_ns),
+        )
+        os.replace(replacement, trash)
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=sleep),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.outcome is Outcome.CANCELED
+    assert item.reason == "canceled"
+    assert item.detail["backup_state"] == "changed"
+    assert item.detail["backup_path"] == (
+        f".synctrash\\{RUN_ID}\\file.bin"
+    )
+    assert item.detail["durable_state"] == "target-not-published"
+    assert trash.read_bytes() == b"bad-version"
+    assert (target / "file.bin").read_bytes() == b"old-version"
 
 
 def test_cancel_after_failed_update_replace_does_not_claim_foreign_write(
@@ -5552,6 +5878,9 @@ def test_cancel_during_move_update_retry_reports_partial_publish(
     assert item.outcome is Outcome.FAILED
     assert item.reason == "canceled-after-publish"
     assert item.detail["durable_state"] == expected_state
+    assert item.detail["trash_path"] == (
+        f".synctrash\\{RUN_ID}\\old.bin"
+    )
     assert item.detail["recording"] == "degraded"
     assert xset.recording is RecordingStatus.DEGRADED
     assert xset.published_evidence == {}
@@ -5728,7 +6057,7 @@ class ExternalSwapAfterBackupFileSystem(NativeFileSystem):
         source.write_bytes(b"external-swap")
 
 
-def test_update_external_swap_bound_preserves_planned_old_and_attests_new(
+def test_update_external_swap_after_backup_is_rejected_without_overwrite(
     tmp_path: Path,
 ) -> None:
     source, target = _roots(tmp_path)
@@ -5748,13 +6077,17 @@ def test_update_external_swap_bound_preserves_planned_old_and_attests_new(
         intended=source_stat,
     )
 
-    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+    )
 
-    assert result.status is SessionState.COMPLETED
-    assert (target / "file.bin").read_bytes() == b"planned-new"
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert (target / "file.bin").read_bytes() == b"external-swap"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"planned-old"
-    attestation = recorder.calls[0][2]
-    assert attestation.subject == fs.stat(target, "file.bin")
+    assert recorder.calls == []
 
 
 def test_progress_rate_is_throttled_while_item_outcomes_remain_reliable(

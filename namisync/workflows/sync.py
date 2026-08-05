@@ -313,6 +313,13 @@ def run_execution(
         )
 
     execution_items: tuple[ItemOutcome, ...] = ()
+    emitted_execution_items: list[ItemOutcome] = []
+
+    def observe_execution(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            emitted_execution_items.append(body)
+        ctx.emit(body)
+
     with deps.open_recording(xset) as recording:
         finished = False
         finished_recording = xset.recording
@@ -342,7 +349,7 @@ def run_execution(
                 )
                 result = deps.executor(
                     xset,
-                    ctx,
+                    RunContext(observe_execution, ctx.checkpoint),
                     recording.recorder,
                     deps.executor_policies,
                     deps.executor_fs,
@@ -391,12 +398,16 @@ def run_execution(
             except PauseRequested:
                 raise
             except Canceled:
+                _emit_items(ctx, exclusion_items)
+                execution_items = _merge_operation_results(
+                    xset.plan,
+                    tuple(emitted_execution_items),
+                    exclusion_items,
+                )
                 recording_status = finish_once(
                     SessionState.CANCELED,
                     xset.recording,
                 )
-                if not verify_after_execute:
-                    raise
                 phase = _execute_continuation_phase(
                     xset,
                     PhaseStatus.CANCELED,
@@ -407,8 +418,8 @@ def run_execution(
                     recording=recording_status,
                     disposition=Disposition.RAN,
                     canceled=True,
-                    items=exclusion_items,
-                    phases=(phase,),
+                    items=execution_items,
+                    phases=(phase,) if verify_after_execute else (),
                     bytes_done=phase.bytes_done,
                     bytes_total=phase.bytes_total or phase.bytes_done,
                 )
@@ -419,6 +430,12 @@ def run_execution(
                 )
                 if not verify_after_execute:
                     raise
+                _emit_items(ctx, exclusion_items)
+                execution_items = _merge_operation_results(
+                    xset.plan,
+                    tuple(emitted_execution_items),
+                    exclusion_items,
+                )
                 phase = _execute_continuation_phase(
                     xset,
                     PhaseStatus.FAILED,
@@ -428,7 +445,7 @@ def run_execution(
                     status=SessionState.FAILED,
                     recording=recording_status,
                     disposition=Disposition.RAN,
-                    items=execution_items or exclusion_items,
+                    items=execution_items,
                     phases=(phase,),
                     bytes_done=phase.bytes_done,
                     bytes_total=phase.bytes_total or phase.bytes_done,

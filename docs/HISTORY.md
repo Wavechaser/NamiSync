@@ -35,6 +35,12 @@ a different payload raises `TokenConflictError`. A failed history transaction
 propagates to the dispatcher acknowledgement without mutating the provisional
 filesystem or ledger result.
 
+Sequence admission retains the highest accepted sequence as a scalar while the
+hash map remains available for duplicate verification. Each new event is
+therefore checked in constant time instead of rescanning every prior sequence;
+exact duplicate idempotency and conflicting/out-of-order rejection are
+unchanged.
+
 Event/finalization hashes and stored operation-detail JSON keep existing valid
 Unicode bytes/text unchanged and defensively backslash-escape malformed
 surrogate code units. This is not a path-policy relaxation: validated paths

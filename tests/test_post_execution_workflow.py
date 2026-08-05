@@ -1190,6 +1190,97 @@ def test_running_execute_cancel_never_starts_verify() -> None:
     ]
 
 
+@pytest.mark.parametrize("verify_after_execute", [False, True])
+def test_running_execute_cancel_preserves_degraded_recording_status(
+    verify_after_execute: bool,
+) -> None:
+    operation = _operation(16, 5)
+    excluded = _operation(17, 7)
+    initial = _execution_set(operation, excluded)
+    selection = frozenset({operation.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+        user_deselected=frozenset({excluded.op_id}),
+    )
+    recordings: list[_Recording] = []
+    events: list[object] = []
+
+    def cancel_executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        _settle(execution_set, context, operation)
+        execution_set.recording = RecordingStatus.DEGRADED
+        raise Canceled()
+
+    result = run_execution(
+        ExecuteContinuation(
+            xset,
+            verify_after_execute=verify_after_execute,
+        ),
+        RunContext(events.append, lambda: None),
+        _deps(
+            executor=cancel_executor,
+            verifier=lambda *args: pytest.fail(
+                "verification started after execution cancellation"
+            ),
+            recordings=recordings,
+        ),
+    )
+
+    assert result.status is SessionState.CANCELED
+    assert result.canceled
+    assert result.recording is RecordingStatus.DEGRADED
+    result_items = [item for item in result.items if isinstance(item, ItemOutcome)]
+    emitted_items = [item for item in events if isinstance(item, ItemOutcome)]
+    assert [item.item_id for item in result_items] == [
+        str(operation.op_id),
+        str(excluded.op_id),
+    ]
+    assert emitted_items == result_items
+    assert result_items[0].outcome is Outcome.SUCCEEDED
+    assert result_items[1].outcome is Outcome.SKIPPED
+    assert result_items[1].reason == "user-deselected"
+    assert recordings[0].finishes == [
+        (SessionState.CANCELED, RecordingStatus.DEGRADED)
+    ]
+
+
+def test_compound_execute_failure_returns_emitted_item_truth() -> None:
+    operation = _operation(18, 5)
+    xset = _execution_set(operation)
+    recordings: list[_Recording] = []
+    events: list[object] = []
+
+    def fail_executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        _settle(execution_set, context, operation)
+        raise RuntimeError("execution failed after settlement")
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(events.append, lambda: None),
+        _deps(
+            executor=fail_executor,
+            verifier=lambda *args: pytest.fail(
+                "verification started after execution failure"
+            ),
+            recordings=recordings,
+        ),
+    )
+
+    result_items = [item for item in result.items if isinstance(item, ItemOutcome)]
+    emitted_items = [item for item in events if isinstance(item, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert emitted_items == result_items
+    assert [item.item_id for item in result_items] == [str(operation.op_id)]
+    assert result_items[0].outcome is Outcome.SUCCEEDED
+
+
 def test_real_runtime_copy_readback_uses_one_finished_run(
     tmp_path: Path,
 ) -> None:

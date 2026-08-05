@@ -193,7 +193,7 @@ The implemented compound transition rules are explicit:
 ```text
 execute
   pause  -> snapshot operation status + published evidence
-  cancel -> terminal canceled; do not start new readback work
+  cancel -> typed terminal canceled; preserve recording truth; start no readback
   settle -> when requested, enter verify for candidates or missing-evidence failures
 
 verify
@@ -203,6 +203,15 @@ verify
   exception -> retain filesystem truth; incomplete verify PhaseResult
   complete  -> settle one compound terminal result
 ```
+
+Running execute cancellation returns the same typed workflow result whether or
+not post-copy verification was requested. It finishes the one ledger run with
+the `ExecutionSet`'s current recording axis, so an executor-detected degraded
+recording cannot be replaced by the generic runner's default `OK`. It captures
+the executor's emitted outcomes, emits plan exclusions, and merges the complete
+item result in reviewed plan order. The execute phase summary remains
+compound-only; a plain execute cancellation does not invent a
+verification-shaped phase.
 
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to
