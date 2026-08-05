@@ -591,7 +591,16 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
             and queues[0].full()
             and queues[1].full()
         ):
-            plateau_reads.append(source.reads)
+            # The two FIFOs are sampled separately and workers run
+            # concurrently, so both can read as full while the pipeline is
+            # still filling and a worker sits between its get and its put.
+            # Three samples that merely happen to agree are therefore not
+            # evidence of a plateau; require three consecutive samples at the
+            # same read count and restart the run whenever the reader moves.
+            reads = source.reads
+            if plateau_reads and plateau_reads[-1] != reads:
+                plateau_reads.clear()
+            plateau_reads.append(reads)
             if len(plateau_reads) >= 3:
                 hash_fifo_blocked.set()
 
@@ -609,6 +618,7 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
         assert len(queues) == 2
         assert queues[0].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
         assert queues[1].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
+        assert len(plateau_reads) == 3
         assert len(set(plateau_reads)) == 1
         assert source.reads == plateau_reads[-1]
         assert source.reads < chunk_count
