@@ -362,7 +362,6 @@ def _validate_bounded_text(value: object, maximum: int, field: str) -> str:
 class _ExistingRun:
     context_hash: bytes
     last_committed_seq: int
-    event_chain_hash: bytes
     terminal_payload_hash: bytes | None
 
 
@@ -434,7 +433,7 @@ class HistoryStore:
             try:
                 row = connection.execute(
                     """SELECT context_hash, last_committed_seq,
-                              event_chain_hash, terminal_payload_hash
+                              terminal_payload_hash
                          FROM history_runs WHERE run_token = ?""",
                     (run_token,),
                 ).fetchone()
@@ -447,7 +446,6 @@ class HistoryStore:
         return _ExistingRun(
             context_hash=bytes(row["context_hash"]),
             last_committed_seq=int(row["last_committed_seq"]),
-            event_chain_hash=bytes(row["event_chain_hash"]),
             terminal_payload_hash=(
                 None
                 if row["terminal_payload_hash"] is None
@@ -506,9 +504,6 @@ class HistoryObserver:
         self._highest_event_seq = (
             None if existing is None or existing.last_committed_seq == 0
             else existing.last_committed_seq
-        )
-        self._event_chain_hash = (
-            _EMPTY_EVENT_CHAIN if existing is None else existing.event_chain_hash
         )
         self._existing_terminal_hash = (
             None if existing is None else existing.terminal_payload_hash
@@ -616,11 +611,11 @@ class HistoryObserver:
         if not self._pending:
             return
         try:
-            result, _ = self._commit_window(None)
+            self._commit_window(None)
         except BaseException:
             self._failed = True
             raise
-        self._accept_commit(result)
+        self._accept_commit()
 
     def finalize(self, result: OperationResult) -> None:
         if self._closed:
@@ -638,11 +633,11 @@ class HistoryObserver:
             self._failed = True
             raise
         try:
-            append, payload_hash = self._commit_window(result)
+            _, payload_hash = self._commit_window(result)
         except BaseException:
             self._failed = True
             raise
-        self._accept_commit(append)
+        self._accept_commit()
         self._existing_terminal_hash = payload_hash
         self._finalized = True
 
@@ -946,11 +941,12 @@ class HistoryObserver:
             terminal_payload_hash=terminal_hash,
         )
 
-    def _accept_commit(self, result: _AppendResult) -> None:
+    def _accept_commit(self) -> None:
+        """Release the window only after its transaction is durable."""
+
         self._pending.clear()
         self._event_hashes.clear()
         self._pending_bytes = 0
-        self._event_chain_hash = result.event_chain_hash
 
     def close(self) -> None:
         if self._closed:

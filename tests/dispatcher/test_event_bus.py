@@ -109,6 +109,25 @@ def test_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
     assert hub.close(0.5)
 
 
+def test_truncated_replay_keeps_its_gap_inside_the_subscriber_bound() -> None:
+    # A replay buffer larger than one subscriber's bound is the normal
+    # production shape (128 versus 64), so the truncation gap must be counted
+    # against the bound rather than delivered on top of an already full tail.
+    hub = make_hub(replay_capacity=8, subscriber_capacity=4)
+    for index in range(8):
+        hub.emit(PhaseChanged(f"phase-{index}"))
+
+    stream = hub.subscribe(from_seq=1)
+
+    assert len(stream._items) == 4
+    assert isinstance(stream.next(0.1).body, Gap)
+    assert [
+        stream.next(0.1).body for _ in range(3)
+    ] == [PhaseChanged("phase-5"), PhaseChanged("phase-6"), PhaseChanged("phase-7")]
+    assert not stream.ejected
+    assert hub.close(0.5)
+
+
 def test_explicit_stream_close_unsubscribes_immediately_and_idempotently() -> None:
     hub = make_hub()
 

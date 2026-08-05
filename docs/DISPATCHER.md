@@ -133,7 +133,10 @@ boundary and only until an injected generous timeout. Failure/timeout degrades
 the session's `audit` status and stops blocking. Any other reliable subscriber
 whose bounded queue overruns is ejected and first receives
 `Gap(first_missed_seq)`. Late subscribers receive current state plus a bounded
-tail/detectable gap—not a false promise of full replay.
+tail/detectable gap—not a false promise of full replay. When the retained replay
+is longer than one subscriber's bound, the truncation itself is what creates
+that gap, so the leading `Gap` occupies a slot inside the bound: a new stream
+never starts with more buffered envelopes than its capacity.
 
 A per-session publication gate spans each persisted lifecycle transition and
 its matching reliable `StateChanged`. Later transitions cannot publish first or

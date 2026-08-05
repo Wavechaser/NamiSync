@@ -561,8 +561,12 @@ class EventHub:
             if allowance < 0:
                 allowance = 0
             if len(selected) > allowance:
-                selected = selected[-allowance:] if allowance else []
+                # Truncating the tail is itself what creates the gap, so the
+                # gap envelope must claim a slot inside the subscriber bound
+                # instead of being handed out on top of a full buffer.
                 gap_needed = True
+                allowance = max(0, self._subscriber_capacity - 1)
+                selected = selected[-allowance:] if allowance else []
             initial: list[Envelope] = []
             if gap_needed:
                 initial.append(

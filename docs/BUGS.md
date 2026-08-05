@@ -177,6 +177,16 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
+- MINOR - FIXED (2026-08-05). Subscribing to a hub whose retained replay was
+  longer than one subscriber's bound produced a stream holding
+  `subscriber_capacity + 1` envelopes, so the next reliable event ejected a
+  consumer that had not been given a chance to drain. Cause: the truncation
+  branch reserved a slot for the leading `Gap` only when a gap was already
+  needed before truncating, not when truncation itself created it. Production
+  sizing (128-event replay, 64-event subscriber bound) reaches this on any
+  session that has emitted more events than the subscriber bound. Fixed by
+  recomputing the allowance once truncation forces the gap; a regression pins
+  the initial buffer at the bound.
 - MODERATE - FIXED (2026-08-05). A broken audit prefix stopped the pump without
   draining its bounded command queue. Each degraded terminal hub could therefore
   retain a full queue of large reliable envelopes; a timed-out flush that later
