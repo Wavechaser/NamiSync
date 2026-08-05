@@ -786,15 +786,21 @@ def test_standalone_verify_round_trips_integrity_history_without_phase_rows(
         assert record.result.audit is RecordingStatus.OK
         assert len(record.result.items) == 1
 
-        history = runtime.get_history("history-verify")
+        history = runtime.get_history_summary("history-verify")
+        items = runtime.get_history_items("history-verify")
         assert history.activity_kind == "verify"
         assert history.subject_kind == "location"
         assert history.subject_id == str(location_id)
         assert history.source_context is None
         assert history.target_context is None
         assert [
-            (item.item_type, item.phase, item.path, item.result)
-            for item in history.items
+            (
+                retained.item.item_type,
+                retained.item.phase,
+                retained.item.path,
+                retained.item.result,
+            )
+            for retained in items.items
         ] == [("integrity", "verify", "a.txt", "verified")]
         assert history.phases == ()
 
@@ -917,6 +923,13 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         assert len(continuation.selection_item_ids) == 2
         assert len(continuation.completed_bytes) == 1
         assert continuation.processed_bytes == 7
+        paused_history = runtime.get_history_summary("pause-verify")
+        paused_items = runtime.get_history_items("pause-verify")
+        assert paused_history.completion_status == "incomplete"
+        assert paused_history.current_state == SessionState.PAUSED.value
+        assert [retained.item.path for retained in paused_items.items] == [
+            "a.txt"
+        ]
 
         scanner.records += (_file("c.txt", 3),)
         assert dispatcher.resume(session_id).accepted
@@ -933,8 +946,13 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
             "c.txt",
         ]
 
-        history = runtime.get_history("pause-verify")
-        assert [item.path for item in history.items] == ["a.txt", "b.txt"]
+        history = runtime.get_history_summary("pause-verify")
+        items = runtime.get_history_items("pause-verify")
+        assert history.item_count == 2
+        assert [retained.item.path for retained in items.items] == [
+            "a.txt",
+            "b.txt",
+        ]
     finally:
         allow_checkpoint.set()
         assert dispatcher.shutdown().complete

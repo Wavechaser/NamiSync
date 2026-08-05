@@ -17,9 +17,12 @@ from .connections import (
 
 
 LEDGER_SCHEMA_VERSION = 2
-HISTORY_SCHEMA_VERSION = 3
+HISTORY_SCHEMA_VERSION = 4
 LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128"
-HISTORY_CONTRACT_ID = "m1-history-generic-items-phases-v1"
+HISTORY_CONTRACT_ID = "m1-history-windowed-events-v1"
+MAX_HISTORY_PHASE_NAME_BYTES = 256
+MAX_HISTORY_ERROR_TYPE_BYTES = 256
+MAX_HISTORY_ERROR_MESSAGE_BYTES = 4_096
 
 
 class SchemaResetRequired(sqlite3.DatabaseError):
@@ -275,60 +278,142 @@ CREATE TABLE IF NOT EXISTS history_runs (
     subject_id TEXT,
     source_context TEXT,
     target_context TEXT,
-    started_at TEXT NOT NULL,
-    ended_at TEXT NOT NULL,
-    filesystem_status TEXT NOT NULL,
-    recording_status TEXT NOT NULL,
-    audit_status TEXT NOT NULL,
-    disposition TEXT NOT NULL,
-    canceled INTEGER NOT NULL CHECK(canceled IN (0, 1)),
-    bytes_done INTEGER NOT NULL,
-    bytes_total INTEGER NOT NULL,
-    succeeded_count INTEGER NOT NULL,
-    skipped_count INTEGER NOT NULL,
-    failed_count INTEGER NOT NULL,
-    canceled_count INTEGER NOT NULL,
-    deferred_count INTEGER NOT NULL,
-    blocked_count INTEGER NOT NULL,
-    error_type TEXT,
-    error_message TEXT,
-    payload_hash BLOB NOT NULL,
-    CHECK(ended_at >= started_at)
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    ended_at TEXT,
+    current_state TEXT NOT NULL,
+    current_phase TEXT,
+    last_committed_seq INTEGER NOT NULL DEFAULT 0
+        CHECK(last_committed_seq >= 0),
+    item_count INTEGER NOT NULL DEFAULT 0 CHECK(item_count >= 0),
+    last_committed_at TEXT,
+    context_hash BLOB NOT NULL,
+    event_chain_hash BLOB NOT NULL,
+    terminal_payload_hash BLOB,
+    succeeded_count INTEGER NOT NULL DEFAULT 0 CHECK(succeeded_count >= 0),
+    skipped_count INTEGER NOT NULL DEFAULT 0 CHECK(skipped_count >= 0),
+    failed_count INTEGER NOT NULL DEFAULT 0 CHECK(failed_count >= 0),
+    canceled_count INTEGER NOT NULL DEFAULT 0 CHECK(canceled_count >= 0),
+    deferred_count INTEGER NOT NULL DEFAULT 0 CHECK(deferred_count >= 0),
+    blocked_count INTEGER NOT NULL DEFAULT 0 CHECK(blocked_count >= 0),
+    filesystem_status TEXT,
+    recording_status TEXT,
+    audit_status TEXT,
+    disposition TEXT,
+    canceled INTEGER CHECK(canceled IN (0, 1)),
+    bytes_done INTEGER,
+    bytes_total INTEGER,
+    error_type TEXT CHECK(
+        error_type IS NULL
+        OR length(CAST(error_type AS BLOB)) <= {MAX_HISTORY_ERROR_TYPE_BYTES}
+    ),
+    error_message TEXT CHECK(
+        error_message IS NULL
+        OR length(CAST(error_message AS BLOB)) <= {MAX_HISTORY_ERROR_MESSAGE_BYTES}
+    ),
+    CHECK(ended_at IS NULL OR ended_at >= COALESCE(started_at, created_at)),
+    CHECK(
+        (
+            terminal_payload_hash IS NULL
+            AND ended_at IS NULL
+            AND filesystem_status IS NULL
+            AND recording_status IS NULL
+            AND audit_status IS NULL
+            AND disposition IS NULL
+            AND canceled IS NULL
+            AND bytes_done IS NULL
+            AND bytes_total IS NULL
+            AND error_type IS NULL
+            AND error_message IS NULL
+        )
+        OR
+        (
+            terminal_payload_hash IS NOT NULL
+            AND ended_at IS NOT NULL
+            AND filesystem_status IS NOT NULL
+            AND recording_status IS NOT NULL
+            AND audit_status IS NOT NULL
+            AND disposition IS NOT NULL
+            AND canceled IS NOT NULL
+            AND bytes_done IS NOT NULL
+            AND bytes_done >= 0
+            AND bytes_total IS NOT NULL
+            AND bytes_total >= 0
+            AND bytes_done <= bytes_total
+            AND ((error_type IS NULL) = (error_message IS NULL))
+        )
+    )
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS history_runs_started_idx
-ON history_runs(started_at DESC, id DESC);
+ON history_runs(COALESCE(started_at, created_at) DESC, id DESC);
 
-CREATE TABLE IF NOT EXISTS history_items (
+CREATE TABLE IF NOT EXISTS history_events (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
-    item_order INTEGER NOT NULL,
-    event_seq INTEGER,
-    item_type TEXT NOT NULL,
-    phase TEXT NOT NULL,
-    item_id TEXT NOT NULL,
+    event_seq INTEGER NOT NULL CHECK(event_seq > 0),
+    event_at TEXT NOT NULL,
+    schema_version INTEGER NOT NULL CHECK(schema_version > 0),
+    body_type TEXT NOT NULL CHECK(length(body_type) > 0),
+    envelope_json TEXT NOT NULL,
+    payload_hash BLOB NOT NULL,
+    item_order INTEGER CHECK(item_order IS NULL OR item_order > 0),
+    item_type TEXT,
+    phase TEXT,
+    item_id TEXT,
     kind TEXT,
-    path TEXT NOT NULL,
-    result TEXT NOT NULL,
+    path TEXT,
+    result TEXT,
     reason TEXT,
-    detail_json TEXT NOT NULL,
-    PRIMARY KEY(run_id, item_order),
+    PRIMARY KEY(run_id, event_seq),
+    UNIQUE(run_id, item_order),
     UNIQUE(run_id, item_type, item_id),
-    CHECK(length(item_type) > 0),
-    CHECK(length(phase) > 0),
-    CHECK(length(result) > 0)
+    CHECK(
+        (
+            item_order IS NULL
+            AND item_type IS NULL
+            AND phase IS NULL
+            AND item_id IS NULL
+            AND kind IS NULL
+            AND path IS NULL
+            AND result IS NULL
+            AND reason IS NULL
+        )
+        OR
+        (
+            item_order IS NOT NULL
+            AND item_type IS NOT NULL AND length(item_type) > 0
+            AND phase IS NOT NULL AND length(phase) > 0
+            AND item_id IS NOT NULL AND length(item_id) > 0
+            AND kind IS NOT NULL AND length(kind) > 0
+            AND path IS NOT NULL
+            AND result IS NOT NULL AND length(result) > 0
+        )
+    )
 ) STRICT;
+
+CREATE INDEX IF NOT EXISTS history_events_run_item_order_idx
+ON history_events(run_id, item_order)
+WHERE item_order IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS history_events_run_item_aggregate_idx
+ON history_events(run_id, item_type, phase, kind, result, reason)
+WHERE item_order IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS history_phases (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
-    phase_order INTEGER NOT NULL,
-    phase TEXT NOT NULL,
+    phase_order INTEGER NOT NULL CHECK(phase_order >= 0 AND phase_order < 256),
+    phase TEXT NOT NULL CHECK(
+        length(CAST(phase AS BLOB)) <= {MAX_HISTORY_PHASE_NAME_BYTES}
+    ),
     status TEXT NOT NULL,
     items_done INTEGER NOT NULL,
     items_total INTEGER,
     bytes_done INTEGER NOT NULL,
     bytes_total INTEGER,
-    error TEXT,
-    detail_json TEXT NOT NULL,
+    error TEXT CHECK(
+        error IS NULL
+        OR length(CAST(error AS BLOB)) <= {MAX_HISTORY_ERROR_MESSAGE_BYTES}
+    ),
     PRIMARY KEY(run_id, phase_order),
     UNIQUE(run_id, phase),
     CHECK(length(phase) > 0),
@@ -417,7 +502,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v2 and history v3. "
+        "NamiSync M1 requires ledger v2 and history v4. "
         "Close every NamiSync process, manually delete or otherwise reset both "
         "database files together, and restart."
     )
@@ -436,7 +521,7 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v2 and history v3 with the final "
+            "NamiSync M1 requires ledger v2 and history v4 with the final "
             "M1 contract. Close every NamiSync process, manually delete or "
             "otherwise reset both database files together, and restart."
         )

@@ -10,6 +10,7 @@ import namisync.db.repositories as repositories_module
 from namisync.db.connections import (
     DatabaseLocationError,
     connect_history_reader,
+    connect_history_writer,
     connect_ledger_reader,
     connect_ledger_writer,
     validate_database_path,
@@ -48,6 +49,28 @@ def test_ledger_connections_enforce_safety_pragmas_and_readonly(tmp_path: Path) 
         assert _pragma(reader, "query_only") == 1
         with pytest.raises(sqlite3.OperationalError):
             reader.execute("INSERT INTO hosts(host_key, display_name, first_seen_at, last_seen_at) VALUES ('x', 'x', '2026-01-01T00:00:00.000000Z', '2026-01-01T00:00:00.000000Z')")
+    finally:
+        reader.close()
+        writer.close()
+
+
+def test_history_connections_enforce_wal_foreign_keys_and_readonly(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "history.db"
+    initialize_history(path, busy_timeout_ms=2_750)
+
+    writer = connect_history_writer(path, busy_timeout_ms=2_750)
+    reader = connect_history_reader(path, busy_timeout_ms=2_750)
+    try:
+        assert _pragma(writer, "foreign_keys") == 1
+        assert _pragma(writer, "journal_mode") == "wal"
+        assert _pragma(writer, "busy_timeout") == 2_750
+        assert _pragma(reader, "foreign_keys") == 1
+        assert _pragma(reader, "journal_mode") == "wal"
+        assert _pragma(reader, "query_only") == 1
+        with pytest.raises(sqlite3.OperationalError):
+            reader.execute("DELETE FROM history_runs")
     finally:
         reader.close()
         writer.close()
@@ -191,8 +214,8 @@ def _seed_schema_version(path: Path, version: int) -> None:
         connection.close()
 
 
-@pytest.mark.parametrize("version", [1, 2])
-def test_history_v1_and_v2_are_refused_without_mutation(
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_history_v1_through_v3_are_refused_without_mutation(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / f"history-v{version}.db"
@@ -257,7 +280,7 @@ def test_ledger_v1_is_refused_without_mutation(tmp_path: Path) -> None:
         check.close()
 
 
-def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
+def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
     tmp_path: Path,
 ) -> None:
     ledger = tmp_path / "ledger.db"
@@ -300,8 +323,11 @@ def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             )
         }
-        item_columns = {
-            row[1] for row in history_reader.execute("PRAGMA table_info(history_items)")
+        run_columns = {
+            row[1] for row in history_reader.execute("PRAGMA table_info(history_runs)")
+        }
+        event_columns = {
+            row[1] for row in history_reader.execute("PRAGMA table_info(history_events)")
         }
         phase_columns = {
             row[1] for row in history_reader.execute("PRAGMA table_info(history_phases)")
@@ -314,7 +340,7 @@ def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
         ledger_reader.close()
 
     assert ledger_version == LEDGER_SCHEMA_VERSION == 2
-    assert history_version == HISTORY_SCHEMA_VERSION == 3
+    assert history_version == HISTORY_SCHEMA_VERSION == 4
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
@@ -323,12 +349,38 @@ def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
     assert (
         history_contract
         == HISTORY_CONTRACT_ID
-        == "m1-history-generic-items-phases-v1"
+        == "m1-history-windowed-events-v1"
     )
     assert not ledger.with_name(ledger.name + "-journal").exists()
     assert not history.with_name(history.name + "-journal").exists()
-    assert {"history_items", "history_phases"} <= history_tables
-    assert {"item_type", "phase", "item_id", "result", "detail_json"} <= item_columns
+    assert {"history_runs", "history_events", "history_phases"} <= history_tables
+    assert "history_items" not in history_tables
+    assert {
+        "created_at",
+        "started_at",
+        "ended_at",
+        "current_state",
+        "current_phase",
+        "last_committed_seq",
+        "item_count",
+        "last_committed_at",
+        "context_hash",
+        "event_chain_hash",
+        "terminal_payload_hash",
+    } <= run_columns
+    assert {
+        "event_seq",
+        "event_at",
+        "schema_version",
+        "body_type",
+        "envelope_json",
+        "payload_hash",
+        "item_order",
+        "item_type",
+        "phase",
+        "item_id",
+        "result",
+    } <= event_columns
     assert {
         "phase_order",
         "phase",
@@ -338,7 +390,6 @@ def test_xv_17_coordinated_reset_recreates_final_m1_schema_shapes(
         "bytes_done",
         "bytes_total",
         "error",
-        "detail_json",
     } <= phase_columns
     assert phase_count == 0
 

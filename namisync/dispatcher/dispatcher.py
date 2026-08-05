@@ -93,6 +93,9 @@ class _DegradedAuditObserver:
     def on_event(self, envelope) -> None:
         raise RuntimeError("audit observer is unavailable") from self._failure
 
+    def flush(self) -> None:
+        pass
+
     def finalize(self, result: OperationResult) -> None:
         raise RuntimeError("audit observer is unavailable") from self._failure
 
@@ -116,6 +119,7 @@ class Dispatcher:
         audit_capacity: int = 64,
         audit_timeout: float = 5.0,
         audit_offer_timeout: float = 5.0,
+        audit_flush_interval: float = 1.0,
     ) -> None:
         self._registry = dict(registry)
         self._store = store if store is not None else InMemorySessionStore()
@@ -129,12 +133,14 @@ class Dispatcher:
         self._audit_capacity = audit_capacity
         self._audit_timeout = audit_timeout
         self._audit_offer_timeout = audit_offer_timeout
+        self._audit_flush_interval = audit_flush_interval
 
         self._condition = Condition()
         self._records: dict[SessionId, SessionRecord] = {}
         self._controls: dict[SessionId, _Control] = {}
         self._hubs: dict[SessionId, EventHub] = {}
         self._state_publication_locks: dict[SessionId, Lock] = {}
+        self._closing: set[SessionId] = set()
         self._item_events: dict[SessionId, list[ResultItem]] = {}
         self._pending: deque[SessionId] = deque()
         self._reserved: set[ResourceId] = set()
@@ -202,6 +208,7 @@ class Dispatcher:
             audit_capacity=self._audit_capacity,
             audit_timeout=self._audit_timeout,
             audit_offer_timeout=self._audit_offer_timeout,
+            audit_flush_interval=self._audit_flush_interval,
         )
         try:
             self._store.put(record)
@@ -252,10 +259,22 @@ class Dispatcher:
         self, session_id: SessionId, from_seq: int | None = None
     ) -> EventStream:
         with self._condition:
-            hub = self._hubs.get(session_id)
-            if hub is None:
+            if session_id in self._closing:
                 raise SessionNotFound(str(session_id))
-            return hub.subscribe(from_seq)
+            publication_lock = self._state_publication_locks.get(session_id)
+            if publication_lock is None:
+                raise SessionNotFound(str(session_id))
+        with publication_lock:
+            with self._condition:
+                if session_id in self._closing:
+                    raise SessionNotFound(str(session_id))
+                hub = self._hubs.get(session_id)
+                if hub is None:
+                    raise SessionNotFound(str(session_id))
+            try:
+                return hub.subscribe(from_seq)
+            except RuntimeError as error:
+                raise SessionNotFound(str(session_id)) from error
 
     def pause(self, session_id: SessionId) -> ControlResult:
         publication_lock = self._publication_lock_for(session_id)
@@ -325,25 +344,129 @@ class Dispatcher:
         if publication_lock is None:
             return self._missing_control(session_id)
         with publication_lock:
-            with self._condition:
+            return self._cancel_with_publication_lock(session_id)
+
+    def _cancel_with_publication_lock(
+        self,
+        session_id: SessionId,
+        *,
+        audit_offer_timeout: float | None = None,
+    ) -> ControlResult:
+        with self._condition:
+            record = self._records.get(session_id)
+            if record is None:
+                return self._missing_control(session_id)
+            if control_decision(
+                ControlAction.CANCEL, record.state, record.supports_pause
+            ) is not ControlCode.ACCEPTED:
+                return self._illegal_control(record, "cancel")
+            control = self._controls[session_id]
+            control.request_cancel()
+            if record.state is SessionState.PAUSING:
+                return ControlResult(
+                    ControlCode.ACCEPTED,
+                    session_id,
+                    record.state,
+                    record.state,
+                    "cancel will settle after the in-progress pause drain",
+                )
+            updated, hub = self._transition_locked(
+                session_id, SessionState.CANCELING
+            )
+            if record.state in (
+                SessionState.PENDING,
+                SessionState.PAUSED,
+                SessionState.INTERRUPTED,
+            ) and session_id not in self._pending:
+                self._pending.append(session_id)
+            self._condition.notify_all()
+        changed = StateChanged(updated.state)
+        if audit_offer_timeout is None:
+            hub.emit(changed)
+        else:
+            hub.emit(changed, audit_offer_timeout=audit_offer_timeout)
+        return ControlResult(
+            ControlCode.ACCEPTED,
+            session_id,
+            record.state,
+            updated.state,
+            "cancellation requested",
+        )
+
+    def _cancel_before_deadline(
+        self,
+        session_id: SessionId,
+        deadline: float,
+        *,
+        wait: bool,
+    ) -> bool:
+        """Cancel while the caller owns the session publication lock.
+
+        Shutdown cannot first persist ``CANCELING`` and then wait without a
+        bound for the hub lock needed to publish its matching reliable event.
+        Reserve both sides before changing state so expiry leaves the session
+        unchanged and retryable.
+        """
+
+        hub = None
+        publication_reserved = False
+        changed: StateChanged | None = None
+        try:
+            remaining = deadline - monotonic()
+            if wait:
+                condition_acquired = (
+                    remaining > 0
+                    and self._condition.acquire(timeout=remaining)
+                )
+            else:
+                condition_acquired = self._condition.acquire(blocking=False)
+            if not condition_acquired:
+                return False
+            try:
                 record = self._records.get(session_id)
                 if record is None:
-                    return self._missing_control(session_id)
+                    return True
                 if control_decision(
                     ControlAction.CANCEL, record.state, record.supports_pause
                 ) is not ControlCode.ACCEPTED:
-                    return self._illegal_control(record, "cancel")
+                    return True
+                hub = self._hubs.get(session_id)
+                if hub is None:
+                    return True
+            finally:
+                self._condition.release()
+
+            remaining = deadline - monotonic()
+            hub_timeout = max(0.0, remaining) if wait else 0.0
+            if (wait and remaining <= 0) or not hub._reserve_publication(
+                hub_timeout
+            ):
+                return False
+            publication_reserved = True
+
+            remaining = deadline - monotonic()
+            if wait:
+                condition_acquired = (
+                    remaining > 0
+                    and self._condition.acquire(timeout=remaining)
+                )
+            else:
+                condition_acquired = self._condition.acquire(blocking=False)
+            if not condition_acquired:
+                return False
+            try:
+                record = self._records.get(session_id)
+                if record is None or self._hubs.get(session_id) is not hub:
+                    return True
+                if control_decision(
+                    ControlAction.CANCEL, record.state, record.supports_pause
+                ) is not ControlCode.ACCEPTED:
+                    return True
                 control = self._controls[session_id]
                 control.request_cancel()
                 if record.state is SessionState.PAUSING:
-                    return ControlResult(
-                        ControlCode.ACCEPTED,
-                        session_id,
-                        record.state,
-                        record.state,
-                        "cancel will settle after the in-progress pause drain",
-                    )
-                updated, hub = self._transition_locked(
+                    return True
+                updated, _ = self._transition_locked(
                     session_id, SessionState.CANCELING
                 )
                 if record.state in (
@@ -353,30 +476,42 @@ class Dispatcher:
                 ) and session_id not in self._pending:
                     self._pending.append(session_id)
                 self._condition.notify_all()
-            hub.emit(StateChanged(updated.state))
-        return ControlResult(
-            ControlCode.ACCEPTED,
-            session_id,
-            record.state,
-            updated.state,
-            "cancellation requested",
-        )
+                changed = StateChanged(updated.state)
+            finally:
+                self._condition.release()
+            if changed is not None:
+                hub._emit_reserved(changed, audit_offer_timeout=0.0)
+            return True
+        finally:
+            if publication_reserved:
+                assert hub is not None
+                hub._release_publication()
 
     def close(self, session_id: SessionId) -> None:
-        with self._condition:
-            record = self._records.get(session_id)
-            if record is None:
-                raise SessionNotFound(str(session_id))
-            if not self._is_settled(record):
-                raise SessionNotTerminal(str(session_id))
-        self._store.drop(session_id)
-        with self._condition:
-            hub = self._hubs.pop(session_id)
-            self._records.pop(session_id, None)
-            self._controls.pop(session_id, None)
-            self._state_publication_locks.pop(session_id, None)
-            self._item_events.pop(session_id, None)
-        hub.close(self._audit_timeout)
+        publication_lock = self._publication_lock_for(session_id)
+        if publication_lock is None:
+            raise SessionNotFound(str(session_id))
+        with publication_lock:
+            with self._condition:
+                record = self._records.get(session_id)
+                if record is None:
+                    raise SessionNotFound(str(session_id))
+                if not self._is_settled(record):
+                    raise SessionNotTerminal(str(session_id))
+                self._closing.add(session_id)
+                hub = self._hubs[session_id]
+            if not hub.close(self._audit_timeout):
+                raise TimeoutError(
+                    f"session audit cleanup did not finish: {session_id}"
+                )
+            self._store.drop(session_id)
+            with self._condition:
+                self._hubs.pop(session_id)
+                self._records.pop(session_id, None)
+                self._controls.pop(session_id, None)
+                self._state_publication_locks.pop(session_id, None)
+                self._closing.discard(session_id)
+                self._item_events.pop(session_id, None)
 
     def shutdown(self, timeout: float = 10.0) -> ShutdownResult:
         if timeout < 0:
@@ -385,13 +520,47 @@ class Dispatcher:
         with self._condition:
             self._accepting = False
             candidates = tuple(
-                record.session_id
+                (
+                    record.session_id,
+                    self._state_publication_locks.get(record.session_id),
+                )
                 for record in self._records.values()
                 if not is_terminal(record.state)
             )
             self._condition.notify_all()
-        for session_id in candidates:
-            self.cancel(session_id)
+        blocked: list[tuple[SessionId, Lock]] = []
+        for session_id, publication_lock in candidates:
+            if monotonic() >= deadline:
+                break
+            if publication_lock is None:
+                continue
+            if not publication_lock.acquire(blocking=False):
+                blocked.append((session_id, publication_lock))
+                continue
+            try:
+                canceled = self._cancel_before_deadline(
+                    session_id,
+                    deadline,
+                    wait=False,
+                )
+            finally:
+                publication_lock.release()
+            if not canceled:
+                blocked.append((session_id, publication_lock))
+        for session_id, publication_lock in blocked:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                break
+            if not publication_lock.acquire(timeout=remaining):
+                break
+            try:
+                self._cancel_before_deadline(
+                    session_id,
+                    deadline,
+                    wait=True,
+                )
+            finally:
+                publication_lock.release()
 
         with self._condition:
             while True:
@@ -416,21 +585,46 @@ class Dispatcher:
         remaining = max(0.0, deadline - monotonic())
         self._scheduler.join(remaining)
         observer_incomplete: list[SessionId] = []
-        terminal_hubs = tuple(
-            (session_id, self._hubs[session_id])
-            for session_id, record in self._records.items()
-            if self._is_settled(record)
-        )
-        for session_id, hub in terminal_hubs:
-            remaining = max(0.0, deadline - monotonic())
-            if not hub.close(remaining):
+        with self._condition:
+            terminal_hubs = tuple(
+                (
+                    session_id,
+                    self._hubs.get(session_id),
+                    self._state_publication_locks.get(session_id),
+                )
+                for session_id, record in self._records.items()
+                if self._is_settled(record)
+            )
+            self._closing.update(session_id for session_id, _, _ in terminal_hubs)
+        for session_id, hub, publication_lock in terminal_hubs:
+            if hub is None or publication_lock is None:
                 observer_incomplete.append(session_id)
+                continue
+            remaining = max(0.0, deadline - monotonic())
+            if not publication_lock.acquire(timeout=remaining):
+                observer_incomplete.append(session_id)
+                continue
+            try:
+                with self._condition:
+                    still_owned = (
+                        self._hubs.get(session_id) is hub
+                        and self._records.get(session_id) is not None
+                    )
+                if not still_owned:
+                    continue
+                remaining = max(0.0, deadline - monotonic())
+                if not hub.close(remaining):
+                    observer_incomplete.append(session_id)
+            finally:
+                publication_lock.release()
         all_unfinished = tuple(dict.fromkeys((*unfinished, *observer_incomplete)))
+        with self._condition:
+            admitting = self._admitting
         complete = (
             not all_unfinished
             and custody_released
             and not self._scheduler.is_alive()
-            and self._admitting == 0
+            and admitting == 0
         )
         return ShutdownResult(complete, all_unfinished, custody_released)
 

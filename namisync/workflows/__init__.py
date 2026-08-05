@@ -13,7 +13,10 @@ from namisync.workflows.inventory import (
 from namisync.workflows.models import (
     ExecutionDetails,
     ExecutionRequest,
-    HistoryRunView,
+    HistoryEventPageView,
+    HistoryItemPageView,
+    HistoryItemView,
+    HistoryRunSummaryView,
     PlanRequest,
     PlanReview,
 )
@@ -62,7 +65,10 @@ __all__ = [
     "EXECUTION_KIND",
     "ExecutionDetails",
     "ExecutionRequest",
-    "HistoryRunView",
+    "HistoryEventPageView",
+    "HistoryItemPageView",
+    "HistoryItemView",
+    "HistoryRunSummaryView",
     "INVENTORY_KIND",
     "IntegrityRequest",
     "InventoryDetails",

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
-from queue import Full, Queue
+from queue import Empty, Full, Queue
 from threading import Condition, Event, Lock, Thread
 from time import monotonic
 from typing import Callable
@@ -124,6 +124,14 @@ class EventStream:
         if callback is not None:
             callback(self)
 
+    def _close_from_hub(self) -> None:
+        """Close after the owning hub has already detached this stream."""
+
+        with self._condition:
+            self._closed = True
+            self._on_close = None
+            self._condition.notify_all()
+
     def __iter__(self):
         return self
 
@@ -136,6 +144,7 @@ class _Finalize:
     result: OperationResult
     complete: Event
     succeeded: bool = False
+    recording: RecordingStatus = RecordingStatus.DEGRADED
     _lock: Lock = field(default_factory=Lock, repr=False)
     _decided: bool = False
     _timed_out: bool = False
@@ -160,8 +169,17 @@ class _Stop:
     pass
 
 
+@dataclass(slots=True)
+class _Flush:
+    complete: Event
+    succeeded: bool = False
+
+
 class _NullAuditObserver:
     def on_event(self, envelope: Envelope) -> None:
+        pass
+
+    def flush(self) -> None:
         pass
 
     def finalize(self, result: OperationResult) -> None:
@@ -172,13 +190,27 @@ class _NullAuditObserver:
 
 
 class _AuditPump:
-    def __init__(self, observer: AuditObserver | None, capacity: int) -> None:
+    def __init__(
+        self,
+        observer: AuditObserver | None,
+        capacity: int,
+        flush_interval: float,
+    ) -> None:
         if capacity < 1:
             raise ValueError("audit capacity must be positive")
+        if flush_interval <= 0:
+            raise ValueError("audit flush interval must be positive")
         self._observer = observer or _NullAuditObserver()
-        self._queue: Queue[Envelope | _Finalize | _Stop] = Queue(maxsize=capacity)
+        self._queue: Queue[Envelope | _Flush | _Finalize | _Stop] = Queue(
+            maxsize=capacity
+        )
+        self._flush_interval = flush_interval
         self._degraded = Event()
+        self._prefix_broken = Event()
         self._closed = Event()
+        self._submission_condition = Condition()
+        self._accepting = True
+        self._active_submissions = 0
         self._thread = Thread(target=self._run, name="namisync-audit", daemon=True)
         self._thread.start()
 
@@ -189,23 +221,18 @@ class _AuditPump:
     def offer(self, envelope: Envelope, timeout: float) -> None:
         if self.degraded:
             return
-        try:
-            self._queue.put(envelope, timeout=timeout)
-        except Full:
-            self._degraded.set()
+        accepted, full = self._enqueue(envelope, timeout)
+        if not accepted and full:
+            self._break_prefix()
 
     def finalize(self, result: OperationResult, timeout: float) -> RecordingStatus:
         if self.degraded:
-            try:
-                self._queue.put_nowait(_Stop())
-            except Full:
-                pass
+            self._enqueue(_Stop(), 0.0)
             return RecordingStatus.DEGRADED
         command = _Finalize(result=result, complete=Event())
         deadline = monotonic() + timeout
-        try:
-            self._queue.put(command, timeout=timeout)
-        except Full:
+        accepted, _ = self._enqueue(command, timeout)
+        if not accepted:
             self._degraded.set()
             return RecordingStatus.DEGRADED
         remaining = deadline - monotonic()
@@ -218,64 +245,185 @@ class _AuditPump:
         command.complete.wait()
         return self._final_status(command)
 
-    def _final_status(self, command: _Finalize) -> RecordingStatus:
-        if not command.succeeded or self.degraded:
+    def flush(self, timeout: float) -> RecordingStatus:
+        if self.degraded:
             return RecordingStatus.DEGRADED
-        return RecordingStatus.OK
+        command = _Flush(complete=Event())
+        deadline = monotonic() + timeout
+        accepted, full = self._enqueue(command, timeout)
+        if not accepted:
+            self._degraded.set()
+            if full:
+                self._break_prefix()
+            return RecordingStatus.DEGRADED
+        remaining = deadline - monotonic()
+        if remaining > 0 and command.complete.wait(remaining):
+            return (
+                RecordingStatus.OK
+                if command.succeeded
+                else RecordingStatus.DEGRADED
+            )
+        self._break_prefix()
+        return RecordingStatus.DEGRADED
+
+    def _final_status(self, command: _Finalize) -> RecordingStatus:
+        if not command.succeeded:
+            return RecordingStatus.DEGRADED
+        return command.recording
 
     def close(self, timeout: float) -> bool:
         if self._closed.is_set():
             return True
         deadline = monotonic() + timeout
-        try:
-            remaining = max(0.0, deadline - monotonic())
-            self._queue.put(_Stop(), timeout=remaining)
-        except Full:
+        remaining = max(0.0, deadline - monotonic())
+        accepted, full = self._enqueue(_Stop(), remaining)
+        if not accepted and full:
             self._degraded.set()
-            return False
         remaining = max(0.0, deadline - monotonic())
         self._thread.join(remaining)
         return not self._thread.is_alive()
 
-    def _run(self) -> None:
-        while True:
-            command = self._queue.get()
+    def _enqueue(
+        self,
+        command: Envelope | _Flush | _Finalize | _Stop,
+        timeout: float,
+    ) -> tuple[bool, bool]:
+        """Return ``(accepted, queue_full)`` under the close/admission gate."""
+
+        with self._submission_condition:
+            if not self._accepting:
+                return False, False
+            self._active_submissions += 1
+        try:
             try:
-                if isinstance(command, _Stop):
-                    try:
-                        self._observer.close()
-                    except BaseException:
-                        self._degraded.set()
-                    self._closed.set()
-                    return
-                if isinstance(command, _Finalize):
-                    result = command.result
-                    pump_owned = command.claim(timed_out=False)
-                    if pump_owned and self.degraded:
-                        command.complete.set()
-                        self._closed.set()
+                self._queue.put(command, timeout=timeout)
+            except Full:
+                return False, True
+            return True, False
+        finally:
+            with self._submission_condition:
+                self._active_submissions -= 1
+                self._submission_condition.notify_all()
+
+    def _break_prefix(self) -> None:
+        self._degraded.set()
+        self._prefix_broken.set()
+        # The worker may have passed its last prefix check just as the caller
+        # detected overflow/timeout. Wake an otherwise idle Queue.get; if the
+        # queue is full, its existing command provides the same wakeup.
+        self._enqueue(_Stop(), 0.0)
+
+    def _run(self) -> None:
+        flush_deadline: float | None = None
+        try:
+            while True:
+                timeout = None
+                if flush_deadline is not None:
+                    timeout = max(0.0, flush_deadline - monotonic())
+                try:
+                    command = self._queue.get(timeout=timeout)
+                except Empty:
+                    if not self._flush():
                         return
-                    if not pump_owned:
-                        if command.timed_out:
-                            result = replace(
-                                result, audit=RecordingStatus.DEGRADED
-                            )
-                    try:
-                        self._observer.finalize(result)
-                        self._observer.close()
-                        command.succeeded = True
-                    except BaseException:
-                        self._degraded.set()
-                    command.complete.set()
-                    self._closed.set()
-                    return
-                if not self.degraded:
+                    flush_deadline = None
+                    continue
+                try:
+                    if isinstance(command, _Stop):
+                        if not self._prefix_broken.is_set():
+                            self._flush()
+                        return
+                    if isinstance(command, _Finalize):
+                        self._finalize(command)
+                        return
+                    if isinstance(command, _Flush):
+                        if self._prefix_broken.is_set():
+                            command.complete.set()
+                            return
+                        command.succeeded = self._flush()
+                        command.complete.set()
+                        flush_deadline = None
+                        if (
+                            not command.succeeded
+                            or self._prefix_broken.is_set()
+                        ):
+                            return
+                        continue
+                    if self._prefix_broken.is_set():
+                        return
+                    if (
+                        flush_deadline is not None
+                        and monotonic() >= flush_deadline
+                    ):
+                        if not self._flush():
+                            return
+                        flush_deadline = None
+                    if flush_deadline is None:
+                        flush_deadline = monotonic() + self._flush_interval
                     try:
                         self._observer.on_event(command)
                     except BaseException:
                         self._degraded.set()
+                        self._prefix_broken.set()
+                        return
+                    if self._prefix_broken.is_set():
+                        return
+                    if monotonic() >= flush_deadline:
+                        if not self._flush():
+                            return
+                        flush_deadline = None
+                finally:
+                    self._queue.task_done()
+        finally:
+            with self._submission_condition:
+                self._accepting = False
+                while self._active_submissions:
+                    self._drain_queue()
+                    self._submission_condition.wait()
+                self._drain_queue()
+            try:
+                self._observer.close()
+            except BaseException:
+                self._degraded.set()
+            finally:
+                self._closed.set()
+
+    def _drain_queue(self) -> None:
+        while True:
+            try:
+                command = self._queue.get_nowait()
+            except Empty:
+                return
+            try:
+                if isinstance(command, (_Flush, _Finalize)):
+                    command.complete.set()
             finally:
                 self._queue.task_done()
+
+    def _flush(self) -> bool:
+        try:
+            self._observer.flush()
+        except BaseException:
+            self._degraded.set()
+            self._prefix_broken.set()
+            return False
+        return True
+
+    def _finalize(self, command: _Finalize) -> None:
+        result = command.result
+        pump_owned = command.claim(timed_out=False)
+        if self._prefix_broken.is_set():
+            command.complete.set()
+            return
+        if not pump_owned and command.timed_out:
+            result = replace(result, audit=RecordingStatus.DEGRADED)
+        try:
+            self._observer.finalize(result)
+        except BaseException:
+            self._degraded.set()
+        else:
+            command.recording = result.audit
+            command.succeeded = True
+        command.complete.set()
 
 
 class EventHub:
@@ -293,6 +441,7 @@ class EventHub:
         audit_capacity: int,
         audit_timeout: float,
         audit_offer_timeout: float,
+        audit_flush_interval: float = 1.0,
     ) -> None:
         if replay_capacity < 1:
             raise ValueError("replay capacity must be positive")
@@ -302,6 +451,8 @@ class EventHub:
             raise ValueError("audit timeout must be positive")
         if audit_offer_timeout <= 0:
             raise ValueError("audit offer timeout must be positive")
+        if audit_flush_interval <= 0:
+            raise ValueError("audit flush interval must be positive")
         self._session_id = session_id
         self._state = initial_state
         self._clock = clock
@@ -313,52 +464,95 @@ class EventHub:
         self._subscribers: list[EventStream] = []
         self._seq = 0
         self._lock = Lock()
-        self._audit = _AuditPump(observer, audit_capacity)
+        self._subscriptions_closed = False
+        self._audit = _AuditPump(observer, audit_capacity, audit_flush_interval)
 
     @property
     def audit_degraded(self) -> bool:
         return self._audit.degraded
 
-    def emit(self, body: object) -> Envelope:
+    def emit(
+        self,
+        body: object,
+        *,
+        audit_offer_timeout: float | None = None,
+    ) -> Envelope:
+        if audit_offer_timeout is not None and audit_offer_timeout < 0:
+            raise ValueError("audit offer timeout cannot be negative")
         with self._lock:
-            self._seq += 1
-            envelope = Envelope(
-                session_id=self._session_id,
-                seq=self._seq,
-                at=self._clock.now(),
-                schema_version=SCHEMA_VERSION,
-                body=body,
+            return self._emit_reserved(
+                body,
+                audit_offer_timeout=audit_offer_timeout,
             )
-            if isinstance(body, StateChanged):
-                self._state = body.state
-            if isinstance(body, Progress):
-                for index in range(len(self._replay) - 1, -1, -1):
-                    if isinstance(self._replay[index].body, Progress):
-                        del self._replay[index]
-                        break
-            self._replay.append(envelope)
+
+    def _reserve_publication(self, timeout: float) -> bool:
+        if timeout < 0:
+            raise ValueError("publication timeout cannot be negative")
+        return self._lock.acquire(timeout=timeout)
+
+    def _release_publication(self) -> None:
+        self._lock.release()
+
+    def _emit_reserved(
+        self,
+        body: object,
+        *,
+        audit_offer_timeout: float | None = None,
+    ) -> Envelope:
+        """Emit while the caller owns the hub publication reservation."""
+
+        if audit_offer_timeout is not None and audit_offer_timeout < 0:
+            raise ValueError("audit offer timeout cannot be negative")
+        self._seq += 1
+        envelope = Envelope(
+            session_id=self._session_id,
+            seq=self._seq,
+            at=self._clock.now(),
+            schema_version=SCHEMA_VERSION,
+            body=body,
+        )
+        if isinstance(body, StateChanged):
+            self._state = body.state
+        if isinstance(body, Progress):
+            for index in range(len(self._replay) - 1, -1, -1):
+                if isinstance(self._replay[index].body, Progress):
+                    del self._replay[index]
+                    break
+        self._replay.append(envelope)
+        if (
+            delivery_class(body) is DeliveryClass.RELIABLE
+            and not isinstance(body, Terminal)
+        ):
+            # Producer backpressure, not durable finalization: this bound
+            # exists only to stop a wedged audit writer from stalling the
+            # emitting workflow thread, so it is deliberately independent
+            # of the finalization cutoff that must outlast a writer retry.
+            offer_timeout = (
+                self._audit_offer_timeout
+                if audit_offer_timeout is None
+                else min(self._audit_offer_timeout, audit_offer_timeout)
+            )
+            self._audit.offer(envelope, offer_timeout)
             if (
-                delivery_class(body) is DeliveryClass.RELIABLE
-                and not isinstance(body, Terminal)
+                isinstance(body, StateChanged)
+                and body.state is SessionState.PAUSED
             ):
-                # Producer backpressure, not durable finalization: this bound
-                # exists only to stop a wedged audit writer from stalling the
-                # emitting workflow thread, so it is deliberately independent
-                # of the finalization cutoff that must outlast a writer retry.
-                self._audit.offer(envelope, self._audit_offer_timeout)
-            live: list[EventStream] = []
-            for stream in self._subscribers:
-                stream._offer(envelope)
-                if not stream.ejected:
-                    live.append(stream)
-            self._subscribers = live
-            return envelope
+                self._audit.flush(self._audit_timeout)
+        live: list[EventStream] = []
+        for stream in self._subscribers:
+            stream._offer(envelope)
+            if not stream.ejected:
+                live.append(stream)
+        self._subscribers = live
+        return envelope
 
     def subscribe(self, from_seq: int | None = None) -> EventStream:
         requested = 1 if from_seq is None else from_seq
         if requested < 1:
             raise ValueError("from_seq must be positive")
         with self._lock:
+            if self._subscriptions_closed:
+                raise RuntimeError("event hub is closed")
             selected = [event for event in self._replay if event.seq >= requested]
             gap_needed = self._seq >= requested and (
                 not selected or selected[0].seq > requested
@@ -403,9 +597,20 @@ class EventHub:
         return self._audit.finalize(result, self._audit_timeout)
 
     def close(self, timeout: float) -> bool:
-        with self._lock:
+        if timeout < 0:
+            raise ValueError("close timeout cannot be negative")
+        deadline = monotonic() + timeout
+        remaining = max(0.0, deadline - monotonic())
+        if not self._lock.acquire(timeout=remaining):
+            return False
+        try:
+            self._subscriptions_closed = True
             subscribers = tuple(self._subscribers)
             self._subscribers.clear()
-        for stream in subscribers:
-            stream.close()
-        return self._audit.close(timeout)
+            self._replay.clear()
+            for stream in subscribers:
+                stream._close_from_hub()
+        finally:
+            self._lock.release()
+        remaining = max(0.0, deadline - monotonic())
+        return self._audit.close(remaining)

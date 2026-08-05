@@ -1,61 +1,68 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-04
+Date: 2026-08-05
 Branch: `milestone1`
 
 ## Session Outcome
 
-Completed the remaining simplifications from the review that produced the
-minimal post-publication retry guard in `4655317`.
+Delivered bounded, incrementally durable history recording and bounded
+readback under reset-only history schema v4.
 
-- COPY, UPDATE, and MOVE_UPDATE now share one published-operation completion
-  helper. It owns the resumed-target guard, target metadata/stat, size guard,
-  operation-safe attestation/filesystem ordering, directory durability,
-  recording, and `PublishedCopyEvidence` construction. MOVE_UPDATE attests
-  before its destructive old-to-trash finish; COPY/UPDATE attest after their
-  completion/durability work.
-- UPDATE now has explicit backup creation and repaired-version evidence for
-  hardlink and copy backups. Copied-backup metadata must finish before target
-  replacement; hardlink metadata finishes after replacement. Retry preserves
-  the pre-backup live-target stat, accounts only for NamiSync's hardlink-count
-  increment, and rejects an external swap instead of rebinding to it.
-- Cancellation validates retained backup evidence, reports
-  `retained|changed|absent|unverified`, uses target-root-relative backup/trash
-  paths, and no longer implies that a cleaned temp remains durable. Running
-  execute cancellation returns a typed result in both verification modes with
-  complete plan-ordered items and the executor's recording axis intact.
-- Serialized database contention spends one monotonic budget across the local
-  writer lock, SQLite busy waits, and retry sleep. Audit-pump close likewise
-  spends one deadline across stop enqueue and thread join.
-- History sequence admission retains one highest-sequence scalar instead of
-  rescanning the event hash map for every envelope.
-- WebView2 availability and refusal diagnosis now come from one typed,
-  read-only probe snapshot. Missing .NET/WebView2 and malformed or unreadable
-  detection state remain distinct without a second .NET registry read.
+- Reliable preterminal events now commit in append-only windows at 256 events,
+  1 MiB, one second, pause, clean close, or finalization. A failed window leaves
+  the prior committed prefix and watermark intact; restarted nonterminal rows
+  are reported as `incomplete`, not guessed to be interrupted or resumable.
+- Admission remains constant-time without retaining all prior event hashes.
+  Durable duplicate lookup, event-chain hashing, dense item order, rolling
+  counts, context validation, terminal validation, and finalization replay are
+  transactional and detect conflicting or tampered state.
+- Summary listing uses a fixed query count and fixed-size workflow aggregates
+  without decoding event JSON. Item and reliable-event detail use stable
+  keyset pages with a hard 256-row maximum. Service views expose summary,
+  item-page, and event-page methods; CLI detail rendering streams pages.
+- The audit pump flushes on the first event's age deadline even under
+  continuous traffic, makes `PAUSED` durability a barrier, drains a broken
+  prefix without retaining queued payloads, and closes its observer exactly
+  once. History failure still cannot rewrite filesystem or ledger truth.
+- Shutdown and explicit close retain retryable ownership until cleanup
+  succeeds. Cancellation reserves lifecycle and hub publication consistently,
+  spends one shared deadline without cross-session head-of-line blocking,
+  gates subscriptions, and clears subscriber plus replay state before audit
+  cleanup.
+- Final adversarial corrections bound terminal phase/error text in Python and
+  SQLite, verify stored context and terminal payload hashes on read and replay,
+  include every committed event timestamp in the durability watermark, keep
+  queued `UNRUN` start time null, and prevent free-form summary classifications
+  from expanding with item cardinality.
 
-`BUGS.md`, the focused component documents, the README changelog, and this
-handoff describe the repaired behavior and remaining threat boundaries.
+The matching database, history, dispatcher, interface, architecture, feature,
+bug, bridge, command-line, README, and benchmark documentation is current.
 
 ## Verification
 
-- Combined focused regression suite: `287 passed in 10.65s`.
-- Complete test suite: `912 passed in 29.18s`.
+- Complete pytest suite: `979 passed in 53.91s`.
+- Final focused history/schema/dispatcher set: `141 passed in 6.79s`.
+- Integrated history/schema/service/workflow set: `151 passed in 8.50s`.
 - Import linter: `8 kept, 0 broken`.
-- Independent adversarial review caught and drove corrections for canceled-item
-  completeness, copied-backup repair ordering, MOVE_UPDATE failure consequence,
-  hardlink-backup repair ordering, and pre-backup live-evidence rebinding.
-- `git diff --check` is clean.
+- Package and test compile gate: clean.
+- Independent final adversarial review: no actionable findings remain.
+- `git diff --check`: clean apart from Git's existing LF-to-CRLF notices.
+- Opt-in 50-run/1,000,000-item benchmark passed every release threshold:
+  0.984 s cold summary, 0.652 s warm summary, 17.746 ms item-page p95,
+  13.995 ms event-page p95, 104.301 ms maximum window commit, and a measured
+  peak of 256 pending events / 79,360 serialized bytes.
 
 ## Immediate Next Context
 
-No blocker remains in the requested simplification scope. The concurrent-drift
-contract is still evidence-based rather than adversarial exclusion: an
-identity-weak same-kind/same-size substitution before repaired evidence is
-cached, or a path swap after the final guard, remains outside the claim.
-
-Two pre-existing audit lifecycle seams were observed but deliberately not
-changed here: a queued finalization that reaches an already-degraded pump exits
-without calling the observer's `close()`, and an observer-close failure shares
-the same degraded result path as durable-finalization failure. The current
-history observer's close is only an in-memory state transition, but those
-protocol semantics should be decided before a resource-owning observer is added.
+- History v1-v3 and mismatched contract markers require the documented
+  coordinated manual ledger/history reset. No migration or automatic deletion
+  exists.
+- A crash can lose only the final uncommitted history window. Committed
+  nonterminal history is queryable as `incomplete`; durable process/session
+  custody and automatic interruption classification remain M2 work.
+- This delivery provides the backend recovery contract and service APIs, not
+  the future WebView history frontend.
+- Session-wide `OperationResult.items` and dispatcher item accumulation remain
+  intentionally out of scope; history writer and readback memory are bounded.
+- The window policy has one tuning point in `docs/HISTORY.md`; do not change its
+  defaults without rerunning the documented million-item benchmark.

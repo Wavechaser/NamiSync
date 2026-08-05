@@ -177,6 +177,72 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
+- MODERATE - FIXED (2026-08-05). A broken audit prefix stopped the pump without
+  draining its bounded command queue. Each degraded terminal hub could therefore
+  retain a full queue of large reliable envelopes; a timed-out flush that later
+  succeeded could instead leave the degraded pump alive and idle forever. Fixed
+  with an atomic queue-admission/close gate, pre-cleanup command draining with
+  waiter completion and balanced task accounting, and a post-flush broken-prefix
+  check plus a best-effort stop wakeup for the timeout-boundary race.
+  Full-capacity blocking-cleanup, idle-wakeup, and late-flush regressions cover
+  these exits.
+- MODERATE - FIXED (2026-08-05). Explicit close could discard the terminal
+  session record, store row, hub owner, and cleanup lock before audit-observer
+  cleanup finished, then ignore the hub timeout; shutdown could consequently
+  report complete while the only cleanup worker was still blocked. A concurrent
+  close could also remove a hub between shutdown's record and hub snapshots.
+  Fixed by serializing close/shutdown per session, closing the hub before
+  ownership removal, retaining timed-out cleanup for retry, and snapshotting
+  hub/lock pairs under the dispatcher condition.
+- MODERATE - FIXED (2026-08-05). Shutdown's shared deadline stopped at the
+  session publication gate: cancellation could persist `CANCELING` and then
+  wait the full audit-offer timeout for a hub lock held by another reliable
+  event, while hub cleanup itself waited without a bound for that same lock.
+  Closed hubs also retained their replay tail. Fixed by reserving the hub
+  within the remaining shutdown deadline before changing lifecycle state,
+  using a nonblocking audit offer for the paired cancellation event, spending
+  one close deadline across hub-lock and observer cleanup, and clearing replay
+  with subscribers under the hub lock. Blocked-offer, lock-deadline, and
+  replay-cleanup regressions cover the boundary.
+- MODERATE - FIXED (2026-08-05). Concurrent history observers could advance the
+  committed sequence while regressing `last_committed_at`. Cause: commit time
+  was sampled before serialized writer ownership, and wall-clock rollback was
+  accepted verbatim; the first commit could also precede its RUNNING event.
+  Fixed by sampling inside the owned transaction and clamping the logical commit
+  timestamp to prior durability, admission, and actual start; tail finalization
+  uses that same effective time.
+- MODERATE - FIXED (2026-08-05). Finalized queued cancellations fabricated an
+  execution start at admission time even though their disposition was `UNRUN`.
+  Cause: finalization replaced a missing observed start with `created_at`, and
+  the v4 terminal constraint required every final row to have `started_at`.
+  Fixed by retaining the nullable actual-start field, checking an unstarted
+  terminal end against `created_at`, and returning an exact reopened terminal
+  replay before validating any newly sampled end time. Queued cancellation and
+  regressed-clock replay are both covered.
+- MODERATE - FIXED (2026-08-05). Fixed-query history summaries could still
+  allocate one Python aggregate object for every distinct free-form item kind
+  and reason, so a valid run could defeat the readback memory bound without
+  decoding event JSON. Cause: the third summary query grouped all projection
+  strings. Fixed with one conditional aggregate fact object per selected run;
+  workflows supply finite selection/no-op predicates and retain classification
+  policy while SQL returns only bounded primitive counts.
+- SEVERE - FIXED (2026-08-05). History claimed a bounded crash window while
+  retaining every reliable-event hash and result item until terminal
+  finalization. A long run or paused process therefore had unbounded history
+  memory and could lose its entire audit on a crash, leaving no durable prefix
+  for UI recovery. Cause: the bounded dispatcher queue limited delivery
+  pressure, not observer retention or transaction scope. Fixed by history v4's
+  append-only reliable-event journal, 256-event/1-MiB/one-second windows,
+  pause/close/finalization flushes, rolling hashes/counts and watermarks, and
+  explicit `incomplete` restart views. Oversized events and failed windows
+  degrade audit without changing domain or ledger truth.
+- MODERATE - FIXED (2026-08-05). History readback was bounded only after
+  materialization. `list_recent()` invoked the full-run getter once per run,
+  and that getter selected and decoded every item, making a 50-run summary an
+  N+1 query path with work and memory proportional to all selected detail.
+  Fixed with fixed-query-count primitive summaries, shared live/retained fact
+  classification, 1..256-row keyset item/event pages under captured durable
+  watermarks, and streamed CLI detail. The unbounded full-run API was removed.
 - MODERATE - FIXED (2026-08-04). Audit-pump close could spend the complete
   caller timeout waiting to enqueue its stop command and then spend the complete
   timeout again joining the worker, so the advertised shutdown allowance was

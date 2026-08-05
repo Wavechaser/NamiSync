@@ -441,11 +441,28 @@ def _run_history(
     try:
         if namespace.run:
             try:
-                run = service.get_history(namespace.run)
+                run = service.get_history_summary(namespace.run)
             except KeyError:
-                print(f"No retained history run named {_safe(namespace.run)}.", file=stderr)
+                print(
+                    f"No retained history run named {_safe(namespace.run)}.",
+                    file=stderr,
+                )
                 return EXIT_USAGE
             _render_history_run(run, stdout)
+            after_order = 0
+            through_order = run.item_count
+            while True:
+                page = service.get_history_items(
+                    namespace.run,
+                    after_order=after_order,
+                    through_order=through_order,
+                    limit=256,
+                )
+                for retained in page.items:
+                    _render_history_item(retained.item, stdout)
+                if not page.has_more:
+                    break
+                after_order = page.next_after_order
             return EXIT_SUCCESS
 
         runs = service.list_history(namespace.limit)
@@ -453,31 +470,31 @@ def _run_history(
             print("No retained history runs.", file=stdout)
             return EXIT_SUCCESS
         for run in runs:
-            exception_counts = Counter(
-                item.result
-                for item in run.items
-                if item.item_type == "operation"
-                and item.result in {"blocked", "deferred"}
-            )
             exceptions = (
                 ""
-                if not exception_counts
+                if not run.blocked_count and not run.deferred_count
                 else "  exceptions="
-                f"blocked:{exception_counts['blocked']},"
-                f"deferred:{exception_counts['deferred']}"
+                f"blocked:{run.blocked_count},"
+                f"deferred:{run.deferred_count}"
             )
             context = (
                 f"{_safe(run.subject_kind)}={_safe(run.subject_id)}"
                 if run.subject_id is not None
                 else f"{_safe(run.source_context)} -> {_safe(run.target_context)}"
             )
-            print(
-                f"{run.run_token}  {run.started_at.isoformat()}  "
-                f"{run.activity_kind}  {run.headline}  "
-                f"filesystem={run.filesystem_status} "
+            occurred_at = run.started_at or run.created_at
+            axes = (
+                f"state={run.current_state} completion=incomplete"
+                if run.completion_status == "incomplete"
+                else f"filesystem={run.filesystem_status} "
                 f"integrity={run.integrity_status} "
                 f"ledger={run.recording_status} "
-                f"audit={run.audit_status}  {context}{exceptions}",
+                f"audit={run.audit_status}"
+            )
+            print(
+                f"{run.run_token}  {occurred_at.isoformat()}  "
+                f"{run.activity_kind}  {run.headline}  "
+                f"{axes}  {context}{exceptions}",
                 file=stdout,
             )
         return EXIT_SUCCESS
@@ -915,16 +932,33 @@ def _render_history_run(run, output: TextIO) -> None:
     else:
         print(f"Source: {_safe(run.source_context)}", file=output)
         print(f"Target: {_safe(run.target_context)}", file=output)
-    print(f"Started: {run.started_at.isoformat()}", file=output)
-    print(f"Ended: {run.ended_at.isoformat()}", file=output)
+    print(f"Created: {run.created_at.isoformat()}", file=output)
     print(
-        f"Result: filesystem={run.filesystem_status}; ledger={run.recording_status}; "
-        f"audit={run.audit_status}; integrity={run.integrity_status}; "
-        f"headline={run.headline}; disposition={run.disposition}; "
-        f"canceled={str(run.canceled).lower()}; "
-        f"bytes={run.bytes_done}/{run.bytes_total}",
+        "Started: "
+        + ("not started" if run.started_at is None else run.started_at.isoformat()),
         file=output,
     )
+    if run.completion_status == "incomplete":
+        phase = "none" if run.current_phase is None else _safe(run.current_phase)
+        print("Ended: incomplete", file=output)
+        print(
+            f"Result: incomplete; state={run.current_state}; phase={phase}; "
+            f"committed-through={run.last_committed_seq}; items={run.item_count}",
+            file=output,
+        )
+    else:
+        if run.ended_at is None:
+            raise ValueError("finalized history is missing its end time")
+        print(f"Ended: {run.ended_at.isoformat()}", file=output)
+        print(
+            f"Result: filesystem={run.filesystem_status}; "
+            f"ledger={run.recording_status}; audit={run.audit_status}; "
+            f"integrity={run.integrity_status}; headline={run.headline}; "
+            f"disposition={run.disposition}; "
+            f"canceled={str(run.canceled).lower()}; "
+            f"bytes={run.bytes_done}/{run.bytes_total}",
+            file=output,
+        )
     for phase in run.phases:
         items_total = (
             "?" if phase.items_total is None else str(phase.items_total)
@@ -939,15 +973,17 @@ def _render_history_run(run, output: TextIO) -> None:
             f"bytes={phase.bytes_done}/{bytes_total}{error}",
             file=output,
         )
-    for item in run.items:
-        reason = "" if item.reason is None else f" ({_safe(item.reason)})"
-        print(
-            f"  {item.phase}/{item.item_type}/{item.kind} "
-            f"{_safe(item.path)}: {item.result}{reason}",
-            file=output,
-        )
     if run.error:
         print(f"Error: {_safe(run.error)}", file=output)
+
+
+def _render_history_item(item, output: TextIO) -> None:
+    reason = "" if item.reason is None else f" ({_safe(item.reason)})"
+    print(
+        f"  {item.phase}/{item.item_type}/{item.kind} "
+        f"{_safe(item.path)}: {item.result}{reason}",
+        file=output,
+    )
 
 
 def _render_terminal_error(
@@ -1002,8 +1038,10 @@ def _safe(value: object) -> str:
 
 def _positive_limit(value: str) -> int:
     parsed = int(value)
-    if parsed < 1:
-        raise argparse.ArgumentTypeError("history limit must be positive")
+    if not 1 <= parsed <= 256:
+        raise argparse.ArgumentTypeError(
+            "history limit must be between 1 and 256"
+        )
     return parsed
 
 

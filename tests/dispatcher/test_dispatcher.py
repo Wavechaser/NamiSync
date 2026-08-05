@@ -24,6 +24,7 @@ from namisync.dispatcher import (
     Dispatcher,
     InProcessResourceLockProvider,
     PreparedSession,
+    SessionNotFound,
     SessionNotTerminal,
     WorkflowRegistration,
 )
@@ -227,6 +228,80 @@ def test_pause_releases_custody_and_resume_reopens_snapshotted_payload() -> None
     wait_for(dispatcher, session_id, SessionState.COMPLETED)
     assert opened == [b"initial", b"continued"]
     assert dispatcher.shutdown().custody_released
+
+
+def test_pause_settlement_and_live_event_wait_for_durable_audit_attempt() -> None:
+    entered = Event()
+    paused_seen = Event()
+    flush_entered = Event()
+    release_flush = Event()
+
+    class Audit:
+        def on_event(self, envelope):
+            if (
+                isinstance(envelope.body, StateChanged)
+                and envelope.body.state is SessionState.PAUSED
+            ):
+                paused_seen.set()
+
+        def flush(self):
+            if paused_seen.is_set():
+                flush_entered.set()
+                assert release_flush.wait(2)
+
+        def finalize(self, result):
+            pass
+
+        def close(self):
+            pass
+
+    def pauseable(context):
+        entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                lambda payload: pauseable,
+                supports_pause=True,
+            )
+        },
+        audit_observer_factory=lambda record: Audit(),
+        audit_flush_interval=30.0,
+        audit_timeout=1.0,
+    )
+    session_id = dispatcher.submit("pausable", b"payload")
+    stream = dispatcher.subscribe(session_id)
+    assert entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    assert flush_entered.wait(2)
+
+    # Domain state leads the best-effort audit, but settlement and the live
+    # PAUSED publication remain behind the durable-attempt barrier.
+    assert dispatcher.get(session_id).state is SessionState.PAUSED
+    assert session_id in dispatcher._workers
+    visible_states = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except TimeoutError:
+            break
+        if isinstance(envelope.body, StateChanged):
+            visible_states.append(envelope.body.state)
+    assert SessionState.PAUSED not in visible_states
+
+    release_flush.set()
+    deadline = monotonic() + 2
+    while session_id in dispatcher._workers and monotonic() < deadline:
+        sleep(0.005)
+    assert session_id not in dispatcher._workers
+    assert stream.next(0.5).body == StateChanged(SessionState.PAUSED)
+
+    assert dispatcher.cancel(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.CANCELED)
+    assert dispatcher.shutdown().complete
 
 
 def test_state_change_publication_cannot_fall_behind_a_later_transition(
@@ -998,6 +1073,121 @@ def test_subscribe_and_terminal_close_cannot_leave_an_orphan_stream(
     assert dispatcher.shutdown().complete
 
 
+def test_terminal_close_retains_ownership_until_audit_cleanup_finishes() -> None:
+    close_entered = Event()
+    release_close = Event()
+    close_count = 0
+
+    class BlockingCloseObserver:
+        def on_event(self, envelope):
+            pass
+
+        def flush(self):
+            pass
+
+        def finalize(self, result):
+            pass
+
+        def close(self):
+            nonlocal close_count
+            close_count += 1
+            close_entered.set()
+            assert release_close.wait(2)
+
+    store = InMemorySessionStore()
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        store=store,
+        audit_observer_factory=lambda record: BlockingCloseObserver(),
+        audit_timeout=0.05,
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    retained = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert close_entered.wait(2)
+
+    try:
+        with pytest.raises(
+            TimeoutError, match="session audit cleanup did not finish"
+        ):
+            dispatcher.close(session_id)
+
+        assert dispatcher.get(session_id) is retained
+        assert session_id in dispatcher._hubs
+        assert session_id in dispatcher._controls
+        assert session_id in dispatcher._state_publication_locks
+        assert [record.session_id for record in store.snapshot()] == [session_id]
+        with pytest.raises(SessionNotFound):
+            dispatcher.subscribe(session_id)
+    finally:
+        release_close.set()
+
+    assert dispatcher._hubs[session_id]._audit._closed.wait(2)
+    dispatcher.close(session_id)
+    with pytest.raises(SessionNotFound):
+        dispatcher.get(session_id)
+    assert store.snapshot() == ()
+    assert close_count == 1
+    assert dispatcher.shutdown().complete
+
+
+def test_concurrent_terminal_close_and_shutdown_share_cleanup_ownership() -> None:
+    drop_entered = Event()
+    release_drop = Event()
+
+    class BlockingDropStore(InMemorySessionStore):
+        def drop(self, session_id):
+            drop_entered.set()
+            assert release_drop.wait(2)
+            super().drop(session_id)
+
+    store = BlockingDropStore()
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        store=store,
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    close_errors = []
+    shutdown_errors = []
+    shutdown_results = []
+    shutdown_done = Event()
+
+    def close_session() -> None:
+        try:
+            dispatcher.close(session_id)
+        except BaseException as error:
+            close_errors.append(error)
+
+    def shutdown() -> None:
+        try:
+            shutdown_results.append(dispatcher.shutdown(timeout=1.0))
+        except BaseException as error:
+            shutdown_errors.append(error)
+        finally:
+            shutdown_done.set()
+
+    close_thread = Thread(target=close_session)
+    shutdown_thread = Thread(target=shutdown)
+    close_thread.start()
+    assert drop_entered.wait(2)
+    shutdown_thread.start()
+    try:
+        assert not shutdown_done.wait(0.05)
+    finally:
+        release_drop.set()
+    close_thread.join(2)
+    shutdown_thread.join(2)
+
+    assert not close_thread.is_alive()
+    assert not shutdown_thread.is_alive()
+    assert close_errors == []
+    assert shutdown_errors == []
+    assert len(shutdown_results) == 1
+    assert shutdown_results[0].complete
+    assert dispatcher.list() == ()
+    assert store.snapshot() == ()
+
+
 def test_control_rejections_do_not_change_state() -> None:
     release = Event()
     entered = Event()
@@ -1287,6 +1477,9 @@ def test_queued_discard_is_finalized_by_audit_before_explicit_close() -> None:
         def on_event(self, envelope):
             pass
 
+        def flush(self):
+            pass
+
         def finalize(self, result):
             observed_results.append(result)
             finalized.set()
@@ -1334,6 +1527,9 @@ def test_observer_failure_degrades_audit_without_rewriting_filesystem_status() -
         def on_event(self, envelope):
             raise RuntimeError("history unavailable")
 
+        def flush(self):
+            raise RuntimeError("history unavailable")
+
         def finalize(self, result):
             raise RuntimeError("history unavailable")
 
@@ -1368,6 +1564,9 @@ def test_late_history_after_caller_timeout_matches_live_degraded_axis() -> None:
             del envelope
             event_entered.set()
             assert release_event.wait(2)
+
+        def flush(self):
+            pass
 
         def finalize(self, result):
             retained_results.append(result)
@@ -1423,6 +1622,9 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
         def on_event(self, envelope):
             pass
 
+        def flush(self):
+            pass
+
         def finalize(self, result):
             finalize_entered.set()
             assert release_finalize.wait(2)
@@ -1448,6 +1650,193 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     assert final.result.audit is RecordingStatus.OK
     dispatcher.close(session_id)
     assert dispatcher.shutdown().complete
+
+
+def test_shutdown_deadline_does_not_wait_for_a_blocked_publication_lock() -> None:
+    entered = Event()
+    release_work = Event()
+
+    def run(context):
+        del context
+        entered.set()
+        assert release_work.wait(2)
+        return OperationResult(SessionState.COMPLETED)
+
+    dispatcher = Dispatcher({"blocked": registration(lambda payload: run)})
+    session_id = dispatcher.submit("blocked", b"payload")
+    assert entered.wait(2)
+    publication_lock = dispatcher._state_publication_locks[session_id]
+    assert publication_lock.acquire(timeout=1)
+    results = []
+    failures = []
+    stopped = Event()
+
+    def shutdown() -> None:
+        try:
+            results.append(dispatcher.shutdown(timeout=0.05))
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            stopped.set()
+
+    thread = Thread(target=shutdown)
+    thread.start()
+    try:
+        assert stopped.wait(0.5)
+    finally:
+        publication_lock.release()
+        release_work.set()
+        thread.join(2)
+
+    assert not thread.is_alive()
+    assert failures == []
+    assert len(results) == 1
+    assert not results[0].complete
+    assert results[0].unfinished == (session_id,)
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert dispatcher.shutdown(timeout=2).complete
+
+
+def test_shutdown_deadline_includes_a_hub_blocked_on_audit_delivery() -> None:
+    audit_entered = Event()
+    release_audit = Event()
+    workflow_emit_started = Event()
+
+    class BlockingAudit:
+        def on_event(self, envelope) -> None:
+            del envelope
+            audit_entered.set()
+            assert release_audit.wait(2)
+
+        def flush(self) -> None:
+            pass
+
+        def finalize(self, result) -> None:
+            del result
+
+        def close(self) -> None:
+            pass
+
+    def run(context):
+        workflow_emit_started.set()
+        context.emit(PhaseChanged("blocked-offer"))
+        return OperationResult(SessionState.COMPLETED)
+
+    dispatcher = Dispatcher(
+        {"blocked-audit": registration(lambda payload: run)},
+        audit_observer_factory=lambda record: BlockingAudit(),
+        audit_capacity=1,
+        audit_offer_timeout=1.0,
+    )
+    session_id = dispatcher.submit("blocked-audit", b"payload")
+    assert audit_entered.wait(2)
+    assert workflow_emit_started.wait(2)
+    hub = dispatcher._hubs[session_id]
+    unexpectedly_reserved = hub._reserve_publication(0.05)
+    if unexpectedly_reserved:
+        hub._release_publication()
+    assert not unexpectedly_reserved
+
+    started = monotonic()
+    result = dispatcher.shutdown(timeout=0.05)
+    elapsed = monotonic() - started
+
+    assert not result.complete
+    assert result.unfinished == (session_id,)
+    assert elapsed < 0.5
+
+    release_audit.set()
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert dispatcher.shutdown(timeout=2).complete
+
+
+def test_shutdown_cancels_other_sessions_before_waiting_on_a_blocked_hub() -> None:
+    first_entered = Event()
+    second_entered = Event()
+    release_first = Event()
+
+    def run_first(context):
+        del context
+        first_entered.set()
+        assert release_first.wait(2)
+        return OperationResult(SessionState.COMPLETED)
+
+    def run_second(context):
+        second_entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    dispatcher = Dispatcher(
+        {
+            "first": registration(lambda payload: run_first),
+            "second": registration(lambda payload: run_second),
+        }
+    )
+    first = dispatcher.submit("first", b"first")
+    second = dispatcher.submit("second", b"second")
+    assert first_entered.wait(2)
+    assert second_entered.wait(2)
+    first_hub = dispatcher._hubs[first]
+    assert first_hub._reserve_publication(1.0)
+    try:
+        started = monotonic()
+        result = dispatcher.shutdown(timeout=0.1)
+        assert monotonic() - started < 0.5
+    finally:
+        first_hub._release_publication()
+
+    assert not result.complete
+    wait_for(dispatcher, second, SessionState.CANCELED)
+    release_first.set()
+    wait_for(dispatcher, first, SessionState.COMPLETED)
+    assert dispatcher.shutdown(timeout=2).complete
+
+
+def test_shutdown_gates_subscriptions_before_terminal_hub_cleanup(
+    monkeypatch,
+) -> None:
+    dispatcher = Dispatcher({"short": registration(lambda payload: completed)})
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    hub = dispatcher._hubs[session_id]
+    original_close = hub.close
+    close_entered = Event()
+    release_close = Event()
+    stopped = Event()
+    results = []
+    failures = []
+
+    def blocking_close(timeout: float) -> bool:
+        close_entered.set()
+        assert release_close.wait(2)
+        return original_close(timeout)
+
+    def shutdown() -> None:
+        try:
+            results.append(dispatcher.shutdown(timeout=1.0))
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            stopped.set()
+
+    monkeypatch.setattr(hub, "close", blocking_close)
+    thread = Thread(target=shutdown)
+    thread.start()
+    assert close_entered.wait(2)
+    try:
+        with pytest.raises(SessionNotFound):
+            dispatcher.subscribe(session_id)
+        assert hub._subscribers == []
+    finally:
+        release_close.set()
+        thread.join(2)
+
+    assert not thread.is_alive()
+    assert stopped.is_set()
+    assert failures == []
+    assert len(results) == 1
+    assert results[0].complete
 
 
 def test_orderly_shutdown_cancels_and_releases() -> None:

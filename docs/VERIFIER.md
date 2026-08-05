@@ -4,7 +4,8 @@ Status: the verifier operation module and M1 Stage 3 location-centric
 inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
-all four headless kinds and history v3 retains standalone and compound detail.
+all four headless kinds and windowed-event history v4 commits standalone and
+compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
 actions remain Stage 6.
@@ -159,9 +160,10 @@ after resume.
 - `COPY_ATTESTED` may provide a baseline digest but never advances
   `last_verified_at`; only an honest verifier read does.
 - Dispatcher/session runner supplies custody, checkpoint, and one terminal.
-- History observes every preterminal item, including refusal and unexpected
-  error, then acknowledges finalization before the runner releases `Terminal`
-  to ordinary subscribers; history does not consume that terminal itself.
+- History incrementally commits every reliable preterminal item, including
+  refusal and unexpected error, in bounded windows, then acknowledges terminal
+  finalization before the runner releases `Terminal` to ordinary subscribers;
+  history does not consume that terminal itself.
 - UI consumes typed results and updates inventory rows, not plan rows by loose
   path matching.
 - Ledger `recording` and history `audit` degradation are surfaced independently

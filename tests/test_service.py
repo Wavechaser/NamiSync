@@ -17,10 +17,13 @@ import namisync.interfaces.service as service_module
 from namisync.core.events import (
     Envelope,
     Gap,
+    ItemOutcome,
     PhaseChanged,
     SCHEMA_VERSION,
     Terminal,
 )
+from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.integrity import IntegrityOutcome, IntegrityResult
 from namisync.core.models import VolumeId
 from namisync.core.planning import OperationKind
 from namisync.core.session import (
@@ -30,6 +33,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.dispatcher import SessionNotFound
+from namisync.db.history import HistoryContext, HistoryStore
 from namisync.db.writer import DEFAULT_RETRY_TIMEOUT_SECONDS
 from namisync.interfaces import main as package_main
 from namisync.interfaces.service import (
@@ -56,7 +60,7 @@ from namisync.workflows.inventory import (
 )
 from namisync.workflows.views import operation_result_view
 
-from _db_fixtures import NOW, operation, plan
+from _db_fixtures import FakeClock, NOW, operation, plan
 
 
 def _record(
@@ -176,6 +180,302 @@ def test_interfaces_package_preserves_lazy_main_entry_point() -> None:
 
     assert result == 2
     assert "usage:" in stderr.getvalue()
+
+
+def test_history_facade_exposes_only_bounded_summary_and_page_reads() -> None:
+    calls: list[tuple[object, ...]] = []
+    summaries = (object(),)
+    summary = object()
+    item_page = object()
+    event_page = object()
+
+    class Runtime:
+        def list_history(self, limit: int):
+            calls.append(("list", limit))
+            return summaries
+
+        def get_history_summary(self, run_token: str):
+            calls.append(("summary", run_token))
+            return summary
+
+        def get_history_items(self, run_token: str, **options):
+            calls.append(("items", run_token, options))
+            return item_page
+
+        def get_history_events(self, run_token: str, **options):
+            calls.append(("events", run_token, options))
+            return event_page
+
+    service = object.__new__(NamiSyncService)
+    service._runtime = Runtime()
+
+    assert service.list_history(7) is summaries
+    assert service.get_history_summary("run") is summary
+    assert service.get_history_items(
+        "run", after_order=4, through_order=12, limit=8
+    ) is item_page
+    assert service.get_history_events(
+        "run", after_seq=9, through_seq=30, limit=16
+    ) is event_page
+    assert not hasattr(service, "get_history")
+    assert calls == [
+        ("list", 7),
+        ("summary", "run"),
+        (
+            "items",
+            "run",
+            {"after_order": 4, "through_order": 12, "limit": 8},
+        ),
+        (
+            "events",
+            "run",
+            {"after_seq": 9, "through_seq": 30, "limit": 16},
+        ),
+    ]
+
+
+def test_history_service_repairs_a_gap_through_one_fixed_durable_watermark(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / "history.db"
+    ledger = tmp_path / "ledger.db"
+    record = SessionRecord(
+        SessionId("recovery-session"),
+        "inventory",
+        SessionState.RUNNING,
+        (),
+        b"payload",
+        False,
+        0,
+        NOW,
+        started_at=NOW,
+    )
+    with HistoryStore(history, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(
+                "recovery-run",
+                "host",
+                activity_kind="inventory",
+                subject_kind="location",
+                subject_id="7",
+            ),
+        )
+        # Odd sequence numbers stand in for lossy Progress events, which are
+        # deliberately absent from durable history.
+        for sequence in range(2, 602, 2):
+            observer.on_event(
+                Envelope(
+                    record.session_id,
+                    sequence,
+                    NOW,
+                    SCHEMA_VERSION,
+                    PhaseChanged("inventory"),
+                )
+            )
+        observer.finalize(OperationResult(SessionState.COMPLETED))
+
+    with NamiSyncService(ledger, history) as service:
+        events_by_sequence: dict[int, SessionEventView] = {}
+        after_seq = 0
+        through_seq = None
+        page_count = 0
+        while True:
+            page = service.get_history_events(
+                "recovery-run",
+                after_seq=after_seq,
+                through_seq=through_seq,
+                limit=128,
+            )
+            page_count += 1
+            if through_seq is None:
+                through_seq = page.through_seq
+                # The catch-up consumer may overlap live replay with the first
+                # durable page; keyed application makes that replay harmless.
+                for event in page.events:
+                    events_by_sequence[event.sequence] = event
+            for event in page.events:
+                events_by_sequence[event.sequence] = event
+            if not page.has_more:
+                break
+            after_seq = page.next_after_seq
+
+        summary = service.get_history_summary("recovery-run")
+
+    assert page_count == 3
+    assert through_seq == 600
+    assert tuple(events_by_sequence) == tuple(range(2, 602, 2))
+    assert all(
+        event.body_type != "Terminal" for event in events_by_sequence.values()
+    )
+    assert summary.completion_status == "finalized"
+    assert summary.current_state == "completed"
+    assert summary.filesystem_status == "completed"
+    assert summary.headline == "success"
+
+
+def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / "history.db"
+    record = SessionRecord(
+        SessionId("incomplete-session"),
+        "inventory",
+        SessionState.RUNNING,
+        (),
+        b"payload",
+        False,
+        0,
+        NOW,
+        started_at=NOW,
+    )
+    with HistoryStore(history, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(
+                "incomplete-run",
+                "host",
+                activity_kind="inventory",
+                subject_kind="location",
+                subject_id="7",
+            ),
+        )
+        observer.on_event(
+            Envelope(
+                record.session_id,
+                3,
+                NOW,
+                SCHEMA_VERSION,
+                PhaseChanged("inventory"),
+            )
+        )
+        observer.close()
+
+    with NamiSyncService(tmp_path / "ledger.db", history) as service:
+        summary = service.get_history_summary("incomplete-run")
+
+    assert summary.completion_status == "incomplete"
+    assert summary.headline == "incomplete"
+    assert summary.current_state == "running"
+    assert summary.current_phase == "inventory"
+    assert summary.last_committed_seq == 3
+    assert summary.filesystem_status is None
+    assert summary.ended_at is None
+
+
+@pytest.mark.parametrize(
+    ("run_token", "result"),
+    [
+        (
+            "retained-canceled",
+            OperationResult(SessionState.CANCELED, canceled=True),
+        ),
+        (
+            "retained-mismatch",
+            OperationResult(
+                SessionState.COMPLETED,
+                items=(
+                    IntegrityOutcome(
+                        "mismatch",
+                        None,
+                        None,
+                        "mismatch.bin",
+                        IntegrityResult.MISMATCHED,
+                    ),
+                ),
+            ),
+        ),
+        (
+            "retained-partial-degraded",
+            OperationResult(
+                SessionState.COMPLETED,
+                audit=RecordingStatus.DEGRADED,
+                items=(
+                    ItemOutcome(
+                        "blocked",
+                        OperationKind.NOOP.value,
+                        "blocked.bin",
+                        Outcome.BLOCKED,
+                    ),
+                ),
+            ),
+        ),
+        (
+            "retained-all-noop",
+            OperationResult(
+                SessionState.COMPLETED,
+                items=(
+                    ItemOutcome(
+                        "selected-noop",
+                        OperationKind.NOOP.value,
+                        "selected.bin",
+                        Outcome.SKIPPED,
+                    ),
+                ),
+            ),
+        ),
+        (
+            "retained-deselected-noop",
+            OperationResult(
+                SessionState.COMPLETED,
+                items=(
+                    ItemOutcome(
+                        "deselected-noop",
+                        OperationKind.NOOP.value,
+                        "deselected.bin",
+                        Outcome.SKIPPED,
+                        reason="user-deselected",
+                    ),
+                ),
+            ),
+        ),
+    ],
+)
+def test_retained_summary_classification_matches_live_result(
+    tmp_path: Path, run_token: str, result: OperationResult
+) -> None:
+    history = tmp_path / f"{run_token}.db"
+    ledger = tmp_path / f"{run_token}-ledger.db"
+    record = SessionRecord(
+        SessionId(run_token),
+        "sync-execution",
+        SessionState.RUNNING,
+        (),
+        b"payload",
+        True,
+        0,
+        NOW,
+        started_at=NOW,
+    )
+    with HistoryStore(history, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(
+                run_token,
+                "host",
+                activity_kind="sync",
+                source_context="source",
+                target_context="target",
+            ),
+        )
+        for sequence, item in enumerate(result.items, start=1):
+            observer.on_event(
+                Envelope(
+                    record.session_id,
+                    sequence,
+                    NOW,
+                    SCHEMA_VERSION,
+                    item,
+                )
+            )
+        observer.finalize(result)
+
+    live = operation_result_view(result)
+    with NamiSyncService(ledger, history) as service:
+        retained = service.get_history_summary(run_token)
+
+    assert retained.integrity_status == live.integrity
+    assert retained.headline == live.headline
 
 
 def test_interface_views_are_recursive_json_primitives_without_duck_typing() -> None:
@@ -577,6 +877,7 @@ def test_service_composition_passes_derived_audit_timeout(
 
     monkeypatch.setattr(service_module, "Dispatcher", dispatcher)
     runtime = Mock()
+    runtime.history_window_policy.max_age_seconds = 0.75
 
     service_module._dispatcher(runtime)
 
@@ -586,6 +887,7 @@ def test_service_composition_passes_derived_audit_timeout(
     assert captured["audit_offer_timeout"] == (
         service_module.AUDIT_OFFER_TIMEOUT_SECONDS
     )
+    assert captured["audit_flush_interval"] == 0.75
     assert captured["clock"] is runtime.clock
     assert captured["audit_observer_factory"] is runtime.audit_observer
 

@@ -45,10 +45,19 @@ audit/Terminal/custody path. Registrations without the callback retain the
 generic canceled result. A callback failure is an explicit adapter failure and
 terminals `FAILED`; it is never masked as clean cancellation.
 
-`close()` is distinct from cancellation: it removes only an already-terminal
-live record and closes its subscribers. `shutdown()` stops admission, requests
-cooperative cancellation, waits to its deadline, and returns explicit
-`complete`, `unfinished`, and `custody_released` facts.
+`close()` is distinct from cancellation: it accepts only an already-terminal
+record, blocks new subscriptions, and waits for audit/subscriber cleanup before
+dropping the session-store row or any in-memory ownership. If cleanup exceeds
+the injected audit timeout it raises `TimeoutError` and retains the record, hub,
+controls, and publication lock for a safe retry. `shutdown()` stops admission,
+attempts cancellation first for every session whose publication and hub gates
+are immediately available, then spends only its remaining shared deadline on
+deferred gates and cleanup. Shutdown reserves the hub before persisting
+`CANCELING`, then offers the matching audit event without waiting on queue
+capacity; expiry therefore leaves lifecycle state unchanged and retryable
+instead of separating it from its reliable event. It returns explicit
+`complete`, `unfinished`, and `custody_released` facts. Explicit close and
+shutdown serialize per-session hub cleanup through that publication lock.
 
 ## State And Runner Ownership
 
@@ -62,10 +71,14 @@ Pause is accepted only when the registered kind declares a continuation:
 execution in M0 and verify/baseline item-list sessions in M1. Scan and plan
 refuse pause without changing state and remain cancelable. An
 accepted pause raises `PauseRequested`, unwinds after workflow continuation
-state is retained, and reports `PAUSED` only after custody is released. Resume
-re-enters admission at the back of every required volume queue, never preempts a
-running session, and starts with the workflow's fresh guard. Cancel requests are
-cooperative but terminal cleanup/release is unconditional.
+state is retained, and reports `PAUSED` only after custody is released. The
+domain transition remains authoritative, but worker settlement and live
+`PAUSED` event publication wait for a queued audit-flush barrier. Direct
+`get()`/`list()` polling may briefly see the domain state first; a failed or
+timed-out barrier degrades audit without rolling back `PAUSED` or retaining
+custody. Resume re-enters admission at the back of every required volume queue,
+never preempts a running session, and starts with the workflow's fresh guard.
+Cancel requests are cooperative but terminal cleanup/release is unconditional.
 
 Execution may deliberately remain `PAUSING` while one durable retry operation
 settles from process-local staged state. That module-owned drain does not alter
@@ -126,37 +139,56 @@ A per-session publication gate spans each persisted lifecycle transition and
 its matching reliable `StateChanged`. Later transitions cannot publish first or
 make the hub's current-state replay regress, while unrelated sessions remain
 independent. Dispatcher also serializes hub subscription registration with
-terminal `close()`: if subscribe wins, close shuts that stream; if close wins,
-subscribe returns `SessionNotFound`. A closed session cannot retain a newly
-orphaned stream.
+terminal `close()` and shutdown cleanup: if subscribe wins, cleanup shuts that
+stream; once cleanup claims the session, subscribe returns `SessionNotFound`.
+A closed session cannot retain a newly orphaned stream.
 
 An ordinary `EventStream.close()` is an immediate unsubscribe as well as a
 reader wakeup. The stream invokes its hub-removal callback once, outside the
 stream condition, so explicit interface unsubscribe does not leave closed
 subscriber objects retained until a later emit or session shutdown. Hub
-shutdown clears its subscriber set under the hub lock and closes the detached
-streams afterward; ejected streams remain removed by the emitting path.
+shutdown spends one deadline acquiring that lock and closing audit, clears both
+replay and its subscriber set while publication is excluded, and closes the
+detached streams before observer cleanup; ejected streams remain removed by the
+emitting path.
 
 History attaches at admission before workflow events. Subscriber exceptions and
 timeouts are isolated and surfaced through `OperationResult.audit`; they do not
 rewrite filesystem or ledger truth. Dispatcher must not substitute an unbounded
-queue or silent loss. Before terminal fanout, the runner drains history and
-requests finalization through an atomic ownership latch. A caller that wins the
-production cutoff settles degraded, and any row the late pump commits carries
-that same axis. A pump that wins makes the caller wait for its actual outcome:
+queue or silent loss. The audit pump starts one monotonic flush deadline when
+the observer receives the first event in a window. Continuous delivery does not
+postpone that deadline; an idle queue wakes at the same deadline and calls the
+observer's idempotent `flush()`. Production supplies the history window policy's
+one-second age as the interval. A clean nonterminal stop forces one last flush,
+while a failed/timed-out flush marks the reliable prefix broken, stops accepting
+later audit events, and never finalizes a noncontiguous tail. Before terminal
+fanout, the runner drains history and requests finalization through an atomic
+ownership latch. A caller that wins the production cutoff settles degraded,
+and any row the late pump commits carries that same axis. A pump that wins
+makes the caller wait for its actual outcome:
 commit success settles OK, while failure settles degraded with no
 contradictory row. The immutable Terminal is then sent to ordinary subscribers,
 never used as history's own finalization input.
 
+Durable finalization success is latched before observer cleanup. The pump closes
+the observer exactly once on every exit path; a later `close()` exception marks
+pump health degraded but cannot rewrite an already-committed terminal row or
+change the delivered terminal audit axis.
+Before cleanup it closes the queue-admission gate, completes discarded waiters,
+and drains every queued command. Observer cleanup may still be visibly pending,
+but a broken prefix cannot leave large envelope payloads retained by a terminal
+hub.
+
 The production composition derives that cutoff as six seconds from the history
 writer's five-second retry bound. History retries for strictly less than the
 generic serialized-writer bound: it is an independently degradable axis, so
-exhausting it costs one audit row and an honest `audit=DEGRADED`, and every
-audit and shutdown bound scales from it. Service shutdown allows twelve
-seconds: the cutoff plus a complete pump-owned writer retry and one second of
-margin. Tests pin the strict inequalities so changing any constituent bound
-cannot silently make ordinary late finalization outlive shutdown, and pin the
-shutdown ceiling so it cannot grow back into a visible hang.
+exhausting it leaves the committed prefix incomplete and reports an honest
+`audit=DEGRADED`; every audit and shutdown bound scales from it. Service
+shutdown allows twelve seconds: the cutoff plus a complete pump-owned writer
+retry and one second of margin. Tests pin the strict inequalities so changing
+any constituent bound cannot silently make ordinary late finalization outlive
+shutdown, and pin the shutdown ceiling so it cannot grow back into a visible
+hang.
 
 The audit *offer* bound is separate and does not scale with finalization.
 Finalization must outlast a writer retry so a late but legitimate commit is not
@@ -166,8 +198,9 @@ full. Sharing one knob made raising the former silently multiply the latter, so
 the two are now independent constructor arguments with their own regression.
 
 The implemented observer seam is structural and core-typed, so `db` need not
-import dispatcher: `on_event(Envelope)`, `finalize(OperationResult)`, and
-`close()`. The composition root supplies an observer factory. The pump invokes
+import dispatcher: `on_event(Envelope)`, idempotent `flush()`,
+`finalize(OperationResult)`, and `close()`. The composition root supplies an
+observer factory. The pump invokes
 these methods on a bounded daemon worker, catches observer exceptions, and
 stops producer backpressure after the injected timeout by setting
 `audit=DEGRADED`. Failure while the composition root constructs or opens the
@@ -269,11 +302,16 @@ duplicate terminal paths from being reinvented by each interface.
   loudly, repeated cancel is rejected, and same-resource followers prove
   custody release.
 - Paused session holds no volume lock/open workflow stack and resume starts with
-  fresh preflight at the back of the volume queue.
+  fresh preflight at the back of the volume queue; successful pause settlement
+  and live `PAUSED` publication follow the durable audit-flush attempt.
 - Progress flood remains bounded/coalesced; history delivery backpressures only
   at a safe boundary until timeout, then degrades `audit`; an overrun
   non-history reliable subscriber gets `Gap` and ejection rather than silent
   loss.
+- Audit windows flush on the original age deadline even under continuous
+  events; clean stop flushes once, flush failure retains only the committed
+  prefix, and observer cleanup runs exactly once without rewriting successful
+  finalization.
 - Late subscription returns current state/tail and exposes sequence gaps.
 - Opaque blobs round-trip through store without dispatcher deserialization.
 - M0 process restart loses in-memory sessions honestly and requires rescan.
@@ -282,7 +320,8 @@ duplicate terminal paths from being reinvented by each interface.
   remains independent from volume locks.
 - Orderly teardown completes without UI-thread deadlock and reports any session
   that could not drain within policy.
-- Terminal records survive until explicit close; queued discard is observed as
+- Terminal records survive until explicit close; a timed-out audit cleanup
+  retains hub/store ownership for retry. Queued discard is observed as
   `CANCELED+UNRUN` before `drop()` and never requires a dispatcher-to-history
   import or string parsing.
 

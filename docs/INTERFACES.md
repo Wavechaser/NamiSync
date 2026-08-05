@@ -76,12 +76,14 @@ new artifact. Folder gestures expand only toggleable descendants; a
 safety-disabled row remains disabled without making selectable siblings inert.
 Only the execution registration supplies
 `settle_canceled=runtime.settle_canceled_execution`; the service does not decode
-continuations or decide cancellation policy. Retained `HistoryRunView` exposes
-primitive filesystem/integrity/recording/audit axes, disposition, cancellation,
-headline, ordered items, and ordered phases, using the same workflow
-classification source as live result views.
+continuations or decide cancellation policy. Retained `HistoryRunSummaryView`
+exposes primitive lifecycle/watermark fields, filesystem/integrity/recording/
+audit axes, disposition, cancellation, headline, counts, and bounded phases,
+using the same workflow classification source as live result views. Ordered
+items and reliable envelopes are separate bounded page views; all detail
+readback remains page-bounded.
 
-The current public start/settings surface is:
+The current public service surface includes:
 
 ```python
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
@@ -114,7 +116,30 @@ restore_inventory(command_id, location_id, row_ids, *, changed_at)
     -> tuple[InventoryDispositionView, ...]
 read_semantic_settings() -> SemanticSettingsView
 commit_semantic_settings(patch: SemanticSettingsPatchView) -> SemanticSettingsView
+list_history(limit=50) -> tuple[HistoryRunSummaryView, ...]
+get_history_summary(run_token) -> HistoryRunSummaryView
+get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
+    -> HistoryItemPageView
+get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
+    -> HistoryEventPageView
 ```
+
+History summary/page limits are `1..256`. Omitting `through_order` or
+`through_seq` captures the current durable watermark in the read transaction;
+callers reuse that returned watermark on later pages for a stable prefix while
+recording continues. Summaries decode no event payloads and may represent a
+nonterminal run as `completion_status="incomplete"`, with nullable terminal
+axes plus its current state, phase, committed sequence, item count, and commit
+time. After a restart the service exposes that committed prefix as incomplete;
+it does not infer `INTERRUPTED` or claim execution resumability without M2
+custody.
+
+Reliable-event pages are the catch-up source after an ordinary subscriber
+reports `Gap`: fetch through one fixed committed sequence, apply returned
+envelopes by sequence, consult the summary for terminal truth, then resubscribe
+after the watermark, repeating if live replay has advanced again. Missing
+sequence numbers may be lossy `Progress` events, which history deliberately
+does not retain, and are not themselves durable history loss.
 
 Location starts bind the five-state resolution synchronously before dispatcher
 admission and return a primitive `LocationSession`. An unresolved binding raises
@@ -321,9 +346,10 @@ canceled-navigation discrepancy above.
   call modules directly.
 - Read current session records and observe through the service's sink API.
 - Treat progress as a replaceable snapshot. Handle bounded state/item/terminal
-  delivery, including `Gap` plus resubscription for an ejected/late ordinary
-subscriber; history has timeout-bounded admission delivery and an atomic
-finalization ownership cutoff that keeps live and retained audit axes equal.
+  delivery, including `Gap`, durable reliable-event page catch-up through a
+  fixed watermark, and resubscription for an ejected/late ordinary subscriber;
+  history has timeout-bounded admission delivery and an atomic finalization
+  ownership cutoff that keeps live and retained audit axes equal.
 - Present refusal, cancellation, partial failure, recording-behind, history
   failure, integrity mismatch, and verification-incomplete as distinct states.
 - Keep plan, inventory, and history presentation models orthogonal.
@@ -424,6 +450,9 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
 - A ledger override selects its sibling `settings.json`; malformed settings
   refuse planning before dispatcher submission.
 - Read-only history remains usable during an active mutating session.
+- History summaries avoid event decoding; item/event pages enforce the
+  256-record ceiling and stable-watermark traversal, and incomplete rows never
+  render as terminal or resumable work.
 - The security spike forces Edge Chromium, attaches both native navigation
   guards, rejects a dispatch after hostile navigation, and exposes only the
   versioned allowlisted structured endpoint.

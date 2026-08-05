@@ -28,7 +28,8 @@ desktop implementation and retains no console window.
 - `nami-sync sync SOURCE TARGET`: run the plan session, render complete review,
   collect explicit commitment between sessions, then submit execution and render
   item/summary results.
-- `nami-sync history [RUN]`: list envelopes or render typed retained detail.
+- `nami-sync history [RUN]`: list retained run summaries or render one summary
+  and stream its typed item detail in bounded database pages.
 
 Recent-run listings include blocked/deferred exception counts so a filesystem-
 completed safe subset is not mistaken for a clean full sync; run detail shows
@@ -41,7 +42,8 @@ explicit override replaces only that plan's deletion policy and does not
 change its filters, trash-on-update, preservation, or casing settings.
 `--verify-after-copy` keeps successfully published copy/update/move-update
 files under the same session and volume custody for immediate readback.
-`history` accepts `--limit N` and `--history-database PATH`. For `sync`, both
+`history` accepts `--limit N` for `1..256` summaries and
+`--history-database PATH`. For `sync`, both
 database files must be distinct and outside the managed roots; defaults are
 the local
 `%LOCALAPPDATA%\NamiSync\ledger.db` and
@@ -49,13 +51,20 @@ the local
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 
-At the final M1 pre-migrator boundary, opening an older-version database or a
-transitional ledger-v2/history-v3 database without the exact final contract
-marker fails before schema mutation with an instruction to close NamiSync and
-manually delete **both** local database files, then rerun the command. A
-mismatched marker is refused identically. Startup does not delete, migrate, or
-backfill either database automatically. This is development-state recovery, not
-a migration or preservation promise.
+At the final M1 pre-migrator boundary, ledger v2 and windowed-event history v4
+require their exact contract markers. Opening an older ledger, any history
+v1-v3 database, or a current-version file with a missing/mismatched marker fails
+before schema mutation with an instruction to close NamiSync and manually
+delete **both** local database files, then rerun the command. Startup does not
+delete, migrate, or backfill either database automatically. This is
+development-state recovery, not a migration or preservation promise.
+
+History listing reads summary rows without decoding event detail. `history RUN`
+prints terminal axes when finalized or an explicit incomplete state/phase and
+committed watermark when no terminal row exists, then requests
+item pages of at most 256 rows through the summary's fixed item-count watermark.
+Detail memory remains page-bounded, and an incomplete history row does not
+claim that filesystem execution can resume.
 
 For noninteractive use, mandatory review cannot be waived by a casual `--yes`.
 The command surface may expose a separate queue-release flag that executes only
@@ -225,8 +234,8 @@ transport replacement behind the same command adapter in M2.
 - Rebaseline requires explicit selected paths and current-evidence intent;
   baseline and rebaseline filter only the first admitted candidate set, while
   a resumed activity retains its frozen selection.
-- History prints sync operations and integrity detail by activity kind,
-  including pruned-detail explanation.
+- History prints finalized or incomplete summaries and streams sync/integrity
+  item detail by activity kind in bounded pages.
 - Invalid path, permission, volume ambiguity, stale plan, and capacity refusal
   messages each state the next user action.
 - `python -O` retains all runtime guards and behavior.

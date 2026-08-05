@@ -741,6 +741,116 @@ def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> No
     assert stderr.getvalue() == ""
 
 
+def test_history_detail_streams_fixed_watermark_item_pages(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    item_one = SimpleNamespace(
+        phase="execute",
+        item_type="operation",
+        kind="copy",
+        path="one.bin",
+        result="succeeded",
+        reason=None,
+    )
+    item_two = SimpleNamespace(
+        phase="execute",
+        item_type="operation",
+        kind="copy",
+        path="two.bin",
+        result="succeeded",
+        reason=None,
+    )
+    summary = SimpleNamespace(
+        run_token="paged-run",
+        activity_kind="sync",
+        subject_kind=None,
+        subject_id=None,
+        source_context="source",
+        target_context="target",
+        created_at=NOW,
+        started_at=NOW,
+        ended_at=NOW,
+        completion_status="finalized",
+        current_state="completed",
+        current_phase="execute",
+        last_committed_seq=8,
+        item_count=2,
+        filesystem_status="completed",
+        recording_status="ok",
+        audit_status="ok",
+        integrity_status="not-run",
+        headline="success",
+        disposition="ran",
+        canceled=False,
+        bytes_done=2,
+        bytes_total=2,
+        phases=(),
+        error=None,
+    )
+    calls: list[tuple[int, int | None, int]] = []
+
+    class Service:
+        def __init__(self, _ledger: Path, _history: Path) -> None:
+            pass
+
+        def get_history_summary(self, run_token: str):
+            assert run_token == "paged-run"
+            return summary
+
+        def get_history_items(
+            self,
+            run_token: str,
+            *,
+            after_order: int,
+            through_order: int | None,
+            limit: int,
+        ):
+            assert run_token == "paged-run"
+            calls.append((after_order, through_order, limit))
+            if after_order == 0:
+                return SimpleNamespace(
+                    through_order=2,
+                    next_after_order=1,
+                    has_more=True,
+                    items=(SimpleNamespace(item=item_one),),
+                )
+            return SimpleNamespace(
+                through_order=2,
+                next_after_order=2,
+                has_more=False,
+                items=(SimpleNamespace(item=item_two),),
+            )
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(cli_module, "NamiSyncService", Service)
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        [
+            "history",
+            "paged-run",
+            "--history-database",
+            str(tmp_path / "history.db"),
+        ],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS
+    assert calls == [(0, 2, 256), (1, 2, 256)]
+    assert "one.bin" in stdout.getvalue()
+    assert "two.bin" in stdout.getvalue()
+    assert stderr.getvalue() == ""
+
+
+def test_history_list_rejects_an_unbounded_limit() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["history", "--limit", "257"])
+
+
 def test_declined_plan_mutates_neither_files_nor_databases(tmp_path: Path) -> None:
     source = tmp_path / "source"
     target = tmp_path / "target"

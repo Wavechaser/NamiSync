@@ -43,6 +43,22 @@ class ResultCategory(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ResultClassificationFacts:
+    """Primitive facts shared by live and retained result classification."""
+
+    filesystem: str
+    recording: str
+    audit: str
+    canceled: bool
+    operation_results: frozenset[str]
+    selected_operation_count: int
+    selected_other_operation_count: int
+    integrity_results: frozenset[str]
+    verify_phase_status: str | None
+    verify_phase_baseline: bool
+
+
+@dataclass(frozen=True, slots=True)
 class OperationItemView:
     item_type: str
     phase: str
@@ -275,9 +291,11 @@ def result_item_view(item: ResultItem) -> ResultItemView:
 
 def operation_result_view(result: OperationResult) -> OperationResultView:
     items = tuple(result_item_view(item) for item in result.items)
-    integrity = _integrity_axis(result.items, result.phases)
+    integrity, headline = classify_result_facts(
+        _result_classification_facts(result)
+    )
     return OperationResultView(
-        headline=_headline(result, integrity).value,
+        headline=headline.value,
         filesystem=result.status.value,
         integrity=integrity,
         recording=result.recording.value,
@@ -372,84 +390,116 @@ def inventory_row_view(row: InventorySnapshot) -> InventoryRowView:
     )
 
 
-def _integrity_axis(
-    items: tuple[ResultItem, ...],
-    phases: tuple[PhaseResult, ...],
-) -> str:
-    results = [
-        item.result for item in items if isinstance(item, IntegrityOutcome)
-    ]
-    verify_phase = next(
-        (phase for phase in phases if phase.phase == IntegrityMode.VERIFY.value),
-        None,
-    )
-    if IntegrityResult.MISMATCHED in results:
-        return "mismatch"
-    if verify_phase is not None and verify_phase.status in {
-        PhaseStatus.FAILED,
-        PhaseStatus.CANCELED,
-        PhaseStatus.INCOMPLETE,
-    }:
-        return "incomplete"
-    if not results:
-        return "not-run"
-    if any(
-        value
-        in {
-            IntegrityResult.ERROR,
-            IntegrityResult.CANCELED,
-            IntegrityResult.UNSUPPORTED,
-        }
-        for value in results
-    ):
-        return "incomplete"
-    if IntegrityResult.MODIFIED in results:
-        return "modified"
-    if IntegrityResult.MISSING in results:
-        return "missing"
-    if IntegrityResult.BASELINED in results:
-        return "baselined"
-    return "verified"
-
-
-def _headline(result: OperationResult, integrity: str) -> ResultCategory:
-    operation_items = [
+def _result_classification_facts(
+    result: OperationResult,
+) -> ResultClassificationFacts:
+    operation_items = tuple(
         item for item in result.items if isinstance(item, ItemOutcome)
-    ]
-    operation_outcomes = [item.outcome for item in operation_items]
-    verify_phase_baseline = any(
-        isinstance(item, IntegrityOutcome)
-        and item.phase == IntegrityMode.VERIFY.value
-        and item.result is IntegrityResult.BASELINED
-        for item in result.items
     )
-    if result.status.value == "failed":
-        return ResultCategory.FAILED
-    if any(
-        value in {Outcome.FAILED, Outcome.BLOCKED, Outcome.DEFERRED}
-        for value in operation_outcomes
-    ):
-        return ResultCategory.PARTIAL
-    if result.status.value == "refused":
-        return ResultCategory.REFUSED
-    if integrity == "mismatch":
-        return ResultCategory.MISMATCH
-    if result.canceled:
-        return ResultCategory.CANCELED
-    if integrity in {"incomplete", "modified", "missing"} or verify_phase_baseline:
-        return ResultCategory.VERIFICATION_INCOMPLETE
-    if (
-        result.recording is RecordingStatus.DEGRADED
-        or result.audit is RecordingStatus.DEGRADED
-    ):
-        return ResultCategory.DEGRADED
-    selected_kinds = [
-        item.kind
+    integrity_items = tuple(
+        item for item in result.items if isinstance(item, IntegrityOutcome)
+    )
+    selected_operation_items = tuple(
+        item
         for item in operation_items
         if item.reason not in SELECTION_EXCLUSION_REASONS
-    ]
-    if selected_kinds and all(
-        kind == OperationKind.NOOP.value for kind in selected_kinds
+    )
+    verify_phase = next(
+        (
+            phase
+            for phase in result.phases
+            if phase.phase == IntegrityMode.VERIFY.value
+        ),
+        None,
+    )
+    return ResultClassificationFacts(
+        filesystem=result.status.value,
+        recording=result.recording.value,
+        audit=result.audit.value,
+        canceled=result.canceled,
+        operation_results=frozenset(
+            item.outcome.value for item in operation_items
+        ),
+        selected_operation_count=len(selected_operation_items),
+        selected_other_operation_count=sum(
+            item.kind != OperationKind.NOOP.value
+            for item in selected_operation_items
+        ),
+        integrity_results=frozenset(
+            item.result.value for item in integrity_items
+        ),
+        verify_phase_status=(
+            None if verify_phase is None else verify_phase.status.value
+        ),
+        verify_phase_baseline=any(
+            item.phase == IntegrityMode.VERIFY.value
+            and item.result is IntegrityResult.BASELINED
+            for item in integrity_items
+        ),
+    )
+
+
+def classify_result_facts(
+    facts: ResultClassificationFacts,
+) -> tuple[str, ResultCategory]:
+    """Derive the shared integrity axis and single headline from facts."""
+
+    results = facts.integrity_results
+    if IntegrityResult.MISMATCHED.value in results:
+        integrity = "mismatch"
+    elif facts.verify_phase_status in {
+        PhaseStatus.FAILED.value,
+        PhaseStatus.CANCELED.value,
+        PhaseStatus.INCOMPLETE.value,
+    }:
+        integrity = "incomplete"
+    elif not results:
+        integrity = "not-run"
+    elif results & {
+        IntegrityResult.ERROR.value,
+        IntegrityResult.CANCELED.value,
+        IntegrityResult.UNSUPPORTED.value,
+    }:
+        integrity = "incomplete"
+    elif IntegrityResult.MODIFIED.value in results:
+        integrity = "modified"
+    elif IntegrityResult.MISSING.value in results:
+        integrity = "missing"
+    elif IntegrityResult.BASELINED.value in results:
+        integrity = "baselined"
+    else:
+        integrity = "verified"
+
+    operation_results = facts.operation_results
+    if facts.filesystem == "failed":
+        headline = ResultCategory.FAILED
+    elif operation_results & {
+        Outcome.FAILED.value,
+        Outcome.BLOCKED.value,
+        Outcome.DEFERRED.value,
+    }:
+        headline = ResultCategory.PARTIAL
+    elif facts.filesystem == "refused":
+        headline = ResultCategory.REFUSED
+    elif integrity == "mismatch":
+        headline = ResultCategory.MISMATCH
+    elif facts.canceled:
+        headline = ResultCategory.CANCELED
+    elif (
+        integrity in {"incomplete", "modified", "missing"}
+        or facts.verify_phase_baseline
     ):
-        return ResultCategory.ALL_NOOP
-    return ResultCategory.SUCCESS
+        headline = ResultCategory.VERIFICATION_INCOMPLETE
+    elif (
+        facts.recording == RecordingStatus.DEGRADED.value
+        or facts.audit == RecordingStatus.DEGRADED.value
+    ):
+        headline = ResultCategory.DEGRADED
+    elif (
+        facts.selected_operation_count > 0
+        and facts.selected_other_operation_count == 0
+    ):
+        headline = ResultCategory.ALL_NOOP
+    else:
+        headline = ResultCategory.SUCCESS
+    return integrity, headline

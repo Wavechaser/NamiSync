@@ -18,6 +18,7 @@ from namisync.workflows.views import (
     PhaseResultView,
     ResultItemView,
     SemanticSettingsView,
+    SessionEventView,
 )
 
 
@@ -288,27 +289,65 @@ class ExecutionDetails:
 
 
 @dataclass(frozen=True, slots=True)
-class HistoryRunView:
+class HistoryRunSummaryView:
     run_token: str
+    session_id: str
     activity_kind: str
     subject_kind: str | None
     subject_id: str | None
     source_context: str | None
     target_context: str | None
-    started_at: datetime
-    ended_at: datetime
-    filesystem_status: str
-    recording_status: str
-    audit_status: str
-    disposition: str
-    canceled: bool
+    created_at: datetime
+    started_at: datetime | None
+    ended_at: datetime | None
+    completion_status: str
+    current_state: str
+    current_phase: str | None
+    last_committed_seq: int
+    item_count: int
+    last_committed_at: datetime | None
+    filesystem_status: str | None
+    recording_status: str | None
+    audit_status: str | None
+    disposition: str | None
+    canceled: bool | None
     integrity_status: str
     headline: str
-    bytes_done: int
-    bytes_total: int
-    items: tuple[ResultItemView, ...]
+    bytes_done: int | None
+    bytes_total: int | None
+    succeeded_count: int
+    skipped_count: int
+    failed_count: int
+    canceled_count: int
+    deferred_count: int
+    blocked_count: int
     phases: tuple[PhaseResultView, ...]
     error: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryItemView:
+    item_order: int
+    event_seq: int
+    item: ResultItemView
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryItemPageView:
+    run_token: str
+    through_order: int
+    next_after_order: int
+    has_more: bool
+    items: tuple[HistoryItemView, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryEventPageView:
+    run_token: str
+    through_seq: int
+    next_after_seq: int
+    has_more: bool
+    events: tuple[SessionEventView, ...]
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,6 +28,7 @@ from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
     MappingSnapshot,
+    OperationKind,
     Plan,
     PreservationPolicy,
     SyncOptions,
@@ -45,17 +46,22 @@ from namisync.core.recording import (
 )
 from namisync.core.session import (
     Disposition,
-    FailureDetail,
     OperationResult,
     PauseRequested,
+    PhaseResult,
     SessionRecord,
     SessionState,
 )
 from namisync.db.connections import validate_database_path
 from namisync.db.history import (
+    DEFAULT_HISTORY_WINDOW_POLICY,
+    HistoryClassificationQuery,
     HistoryContext,
+    HistoryEventPage,
+    HistoryItemPage,
     HistoryObserver,
     HistoryRepository,
+    HistoryRunSummary,
     HistoryStore,
 )
 from namisync.db.recorder import LedgerRecorder, SyncRunRecorder
@@ -105,7 +111,10 @@ from .models import (
     ExecuteContinuation,
     ExecutionDetails,
     ExecutionRequest,
-    HistoryRunView,
+    HistoryEventPageView,
+    HistoryItemPageView,
+    HistoryItemView,
+    HistoryRunSummaryView,
     PlanArtifact,
     PlanOperationView,
     PlanRequest,
@@ -126,14 +135,16 @@ from .sync import (
     settle_canceled_execution as settle_canceled_sync_execution,
 )
 from .node_tree import NodeTree, NodeTreeKind, NodeTreeMember, build_node_tree
-from .selection import derive_execution_selection
+from .selection import SELECTION_EXCLUSION_REASONS, derive_execution_selection
 from .views import (
     PreservationSettingsView,
+    ResultClassificationFacts,
     SemanticSettingsPatchView,
     SemanticSettingsView,
-    operation_result_view,
+    classify_result_facts,
     phase_result_view,
     result_item_view,
+    session_event_view,
 )
 
 
@@ -147,6 +158,12 @@ if HISTORY_WRITER_RETRY_TIMEOUT_SECONDS > DEFAULT_RETRY_TIMEOUT_SECONDS:
     raise AssertionError(
         "history retry must not exceed the generic serialized-writer bound"
     )
+
+
+_HISTORY_CLASSIFICATION_QUERY = HistoryClassificationQuery(
+    excluded_operation_reasons=tuple(sorted(SELECTION_EXCLUSION_REASONS)),
+    noop_operation_kind=OperationKind.NOOP.value,
+)
 
 
 PLAN_KIND = "sync-plan"
@@ -225,6 +242,7 @@ class LocalWorkflowRuntime:
             )
         self._settings_store = SemanticSettingsStore(self.settings_path)
         self.clock = clock or SystemClock()
+        self.history_window_policy = DEFAULT_HISTORY_WINDOW_POLICY
         detected_host = platform.node().strip() or "unknown-host"
         self.host_key = host_key or detected_host
         self.host_name = host_name or detected_host
@@ -723,17 +741,66 @@ class LocalWorkflowRuntime:
             changed_at=at,
         )
 
-    def list_history(self, limit: int = 50) -> tuple[HistoryRunView, ...]:
+    def list_history(self, limit: int = 50) -> tuple[HistoryRunSummaryView, ...]:
         if not self.history_path.exists():
             return ()
-        with HistoryRepository(self.history_path) as repository:
-            return tuple(_history_view(item) for item in repository.list_recent(limit))
+        with HistoryRepository(
+            self.history_path,
+            classification_query=_HISTORY_CLASSIFICATION_QUERY,
+        ) as repository:
+            return tuple(
+                _history_summary_view(item)
+                for item in repository.list_summaries(limit)
+            )
 
-    def get_history(self, run_token: str) -> HistoryRunView:
+    def get_history_summary(self, run_token: str) -> HistoryRunSummaryView:
+        if not self.history_path.exists():
+            raise KeyError(run_token)
+        with HistoryRepository(
+            self.history_path,
+            classification_query=_HISTORY_CLASSIFICATION_QUERY,
+        ) as repository:
+            return _history_summary_view(repository.get_summary(run_token))
+
+    def get_history_items(
+        self,
+        run_token: str,
+        *,
+        after_order: int = 0,
+        through_order: int | None = None,
+        limit: int = 256,
+    ) -> HistoryItemPageView:
         if not self.history_path.exists():
             raise KeyError(run_token)
         with HistoryRepository(self.history_path) as repository:
-            return _history_view(repository.get(run_token))
+            return _history_item_page_view(
+                repository.get_item_page(
+                    run_token,
+                    after_order=after_order,
+                    through_order=through_order,
+                    limit=limit,
+                )
+            )
+
+    def get_history_events(
+        self,
+        run_token: str,
+        *,
+        after_seq: int = 0,
+        through_seq: int | None = None,
+        limit: int = 256,
+    ) -> HistoryEventPageView:
+        if not self.history_path.exists():
+            raise KeyError(run_token)
+        with HistoryRepository(self.history_path) as repository:
+            return _history_event_page_view(
+                repository.get_event_page(
+                    run_token,
+                    after_seq=after_seq,
+                    through_seq=through_seq,
+                    limit=limit,
+                )
+            )
 
     def close(self) -> None:
         with self._close_lock:
@@ -971,6 +1038,7 @@ class LocalWorkflowRuntime:
                 self._history_store = HistoryStore(
                     self.history_path,
                     clock=self.clock,
+                    window_policy=self.history_window_policy,
                     retry_timeout_seconds=HISTORY_WRITER_RETRY_TIMEOUT_SECONDS,
                     managed_roots=managed_roots,
                 )
@@ -1231,51 +1299,139 @@ class _LedgerRunRecording:
         self._owner.close()
 
 
-def _history_view(value) -> HistoryRunView:
-    items = tuple(snapshot.item for snapshot in value.items)
+def _history_summary_view(value: HistoryRunSummary) -> HistoryRunSummaryView:
+    terminal_values = (
+        value.ended_at,
+        value.filesystem_status,
+        value.recording,
+        value.audit,
+        value.disposition,
+        value.canceled,
+        value.bytes_done,
+        value.bytes_total,
+    )
+    if value.finalized and any(item is None for item in terminal_values):
+        raise ValueError("finalized history has incomplete terminal fields")
+    if not value.finalized and any(item is not None for item in terminal_values):
+        raise ValueError("incomplete history exposes terminal fields")
     phases = tuple(snapshot.phase for snapshot in value.phases)
-    error = (
-        None
-        if value.error_type is None
-        else FailureDetail(value.error_type, value.error_message or "")
+    integrity, terminal_headline = classify_result_facts(
+        _history_classification_facts(value, phases)
     )
-    result_view = operation_result_view(
-        OperationResult(
-            status=value.filesystem_status,
-            recording=value.recording,
-            audit=value.audit,
-            disposition=Disposition(value.disposition),
-            canceled=value.canceled,
-            items=items,
-            phases=phases,
-            bytes_done=value.bytes_done,
-            bytes_total=value.bytes_total,
-            error=error,
-        )
+    headline = (
+        terminal_headline.value
+        if value.finalized
+        else "incomplete"
     )
-    return HistoryRunView(
+    return HistoryRunSummaryView(
         run_token=value.run_token,
+        session_id=value.session_id,
         activity_kind=value.activity_kind,
         subject_kind=value.subject_kind,
         subject_id=value.subject_id,
         source_context=value.source_context,
         target_context=value.target_context,
+        created_at=value.created_at,
         started_at=value.started_at,
         ended_at=value.ended_at,
-        filesystem_status=value.filesystem_status.value,
-        recording_status=value.recording.value,
-        audit_status=value.audit.value,
+        completion_status="finalized" if value.finalized else "incomplete",
+        current_state=value.current_state.value,
+        current_phase=value.current_phase,
+        last_committed_seq=value.last_committed_seq,
+        item_count=value.item_count,
+        last_committed_at=value.last_committed_at,
+        filesystem_status=(
+            None
+            if value.filesystem_status is None
+            else value.filesystem_status.value
+        ),
+        recording_status=(
+            None if value.recording is None else value.recording.value
+        ),
+        audit_status=None if value.audit is None else value.audit.value,
         disposition=value.disposition,
         canceled=value.canceled,
-        integrity_status=result_view.integrity,
-        headline=result_view.headline,
+        integrity_status=integrity,
+        headline=headline,
         bytes_done=value.bytes_done,
         bytes_total=value.bytes_total,
-        items=tuple(result_item_view(item) for item in items),
+        succeeded_count=value.succeeded_count,
+        skipped_count=value.skipped_count,
+        failed_count=value.failed_count,
+        canceled_count=value.canceled_count,
+        deferred_count=value.deferred_count,
+        blocked_count=value.blocked_count,
         phases=tuple(phase_result_view(phase) for phase in phases),
         error=None
         if value.error_type is None
         else f"{value.error_type}: {value.error_message or ''}".rstrip(),
+    )
+
+
+def _history_item_page_view(value: HistoryItemPage) -> HistoryItemPageView:
+    return HistoryItemPageView(
+        run_token=value.run_token,
+        through_order=value.through_order,
+        next_after_order=value.next_after_order,
+        has_more=value.has_more,
+        items=tuple(
+            HistoryItemView(
+                item_order=snapshot.item_order,
+                event_seq=snapshot.event_seq,
+                item=result_item_view(snapshot.item),
+            )
+            for snapshot in value.items
+        ),
+    )
+
+
+def _history_event_page_view(value: HistoryEventPage) -> HistoryEventPageView:
+    return HistoryEventPageView(
+        run_token=value.run_token,
+        through_seq=value.through_seq,
+        next_after_seq=value.next_after_seq,
+        has_more=value.has_more,
+        events=tuple(
+            session_event_view(snapshot.envelope) for snapshot in value.events
+        ),
+    )
+
+
+def _history_classification_facts(
+    value: HistoryRunSummary, phases: tuple[PhaseResult, ...]
+) -> ResultClassificationFacts:
+    aggregate = value.classification
+    verify_phase = next(
+        (phase for phase in phases if phase.phase == IntegrityMode.VERIFY.value),
+        None,
+    )
+    return ResultClassificationFacts(
+        filesystem=(
+            value.current_state.value
+            if value.filesystem_status is None
+            else value.filesystem_status.value
+        ),
+        recording=(
+            RecordingStatus.OK.value
+            if value.recording is None
+            else value.recording.value
+        ),
+        audit=(
+            RecordingStatus.OK.value
+            if value.audit is None
+            else value.audit.value
+        ),
+        canceled=bool(value.canceled),
+        operation_results=aggregate.operation_results,
+        selected_operation_count=aggregate.selected_operation_count,
+        selected_other_operation_count=(
+            aggregate.selected_other_operation_count
+        ),
+        integrity_results=aggregate.integrity_results,
+        verify_phase_status=(
+            None if verify_phase is None else verify_phase.status.value
+        ),
+        verify_phase_baseline=aggregate.verify_phase_baseline,
     )
 
 

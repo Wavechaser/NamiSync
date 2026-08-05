@@ -23,6 +23,9 @@ from namisync.dispatcher import (
 from namisync.workflows import (
     BASELINE_KIND,
     EXECUTION_KIND,
+    HistoryEventPageView,
+    HistoryItemPageView,
+    HistoryRunSummaryView,
     INVENTORY_KIND,
     PLAN_KIND,
     REBASELINE_KIND,
@@ -1087,13 +1090,47 @@ class NamiSyncService:
             changed_at,
         )
 
-    def list_history(self, limit: int = 50):
+    def list_history(
+        self, limit: int = 50
+    ) -> tuple[HistoryRunSummaryView, ...]:
         self._require_open()
         return self._runtime.list_history(limit)
 
-    def get_history(self, run_token: str):
+    def get_history_summary(self, run_token: str) -> HistoryRunSummaryView:
         self._require_open()
-        return self._runtime.get_history(run_token)
+        return self._runtime.get_history_summary(run_token)
+
+    def get_history_items(
+        self,
+        run_token: str,
+        *,
+        after_order: int = 0,
+        through_order: int | None = None,
+        limit: int = 256,
+    ) -> HistoryItemPageView:
+        self._require_open()
+        return self._runtime.get_history_items(
+            run_token,
+            after_order=after_order,
+            through_order=through_order,
+            limit=limit,
+        )
+
+    def get_history_events(
+        self,
+        run_token: str,
+        *,
+        after_seq: int = 0,
+        through_seq: int | None = None,
+        limit: int = 256,
+    ) -> HistoryEventPageView:
+        self._require_open()
+        return self._runtime.get_history_events(
+            run_token,
+            after_seq=after_seq,
+            through_seq=through_seq,
+            limit=limit,
+        )
 
     def close(self, timeout: float = SERVICE_CLOSE_TIMEOUT_SECONDS) -> ShutdownView:
         close_lock = getattr(self, "_close_lock", None)
@@ -1557,6 +1594,7 @@ def _dispatcher(runtime: LocalWorkflowRuntime) -> Dispatcher:
         audit_observer_factory=runtime.audit_observer,
         audit_timeout=AUDIT_FINALIZATION_TIMEOUT_SECONDS,
         audit_offer_timeout=AUDIT_OFFER_TIMEOUT_SECONDS,
+        audit_flush_interval=runtime.history_window_policy.max_age_seconds,
     )
 
 

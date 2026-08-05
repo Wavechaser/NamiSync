@@ -1202,15 +1202,16 @@ admitted execution never rereads it. Runtime defaults this file beside the
 selected ledger and translates it to primitive service views; interfaces never
 import database settings types.
 
-**Implementation status (2026-07-24).** Ledger v2 and history v3 are active.
+**Implementation status (2026-08-05).** Ledger v2 and history v4 are active.
 Their safe writer/read-only connection factories, canonical UTC codec,
 serialized retrying writer, run-bound sync recorder, batched inventory
 reconciliation, conditional baseline/verify/rebaseline writes, typed ledger
-repositories, and minimal sync history observer/repository are implemented.
-The sync observer stores blocked/deferred operation items through history v3's
-generic item table; compound Stage 4 runs also write the reserved phase-summary
-rows, while standalone producers write none. Ledger
-v1 and history v1/v2 are refused without mutation; the temporary pre-migrator
+repositories, and bounded history observer/repository are implemented. The
+history observer appends canonical reliable envelopes in atomic windows,
+projects typed result items for dense paging and fixed conditional aggregates,
+and writes terminal
+axes plus bounded phase summaries only during finalization. Ledger v1 and
+history v1-v3 are refused without mutation; the temporary pre-migrator
 recovery is manual deletion of both local databases or the explicit
 development reset helper, never automatic startup deletion. `settings.py`
 implements named-mutex-serialized partial semantic-settings commits. M0
@@ -1237,12 +1238,11 @@ enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 `history` command. The observer is cheap precisely because it is only an event
 subscriber; nothing calls it.
 Conditional verify/baseline/rebaseline recording landed early with the isolated
-verifier during M0 construction. **Flesh — implemented through M1 Stage 3.**
-History stores ordered generic `ResultItem` detail for standalone integrity,
-including retained issue fields; the coordinated ledger-v2/history-v3 reset
-reserves compound `PhaseResult` storage but Stage 3 writes no phase rows.
-Stage 4 consumes that unchanged storage for compound phase summaries and
-linked-verification history.
+verifier during M0 construction. **Flesh — implemented through current M1.**
+History v4 stores reliable lifecycle, phase, and ordered generic `ResultItem`
+envelopes for sync, standalone integrity, and linked verification. Compound
+terminal results add bounded `PhaseResult` summaries; standalone producers
+leave that table empty.
 Semantic-settings commits hold a named cross-process mutex only across
 read-current → modify-owned-keys → temp-write → atomic-replace, so concurrent
 GUI/CLI writers cannot lose one another's updates. The Stage 5 facade reads the
@@ -1263,11 +1263,30 @@ literal range
 are valid hostile-name characters. Acknowledgement/restore recording is
 idempotent per gesture and row with a caller-supplied timestamp.
 
-History browsing obtains summaries from grouped primitive item
-kind/outcome/reason aggregates and pages detail at the database in
-`item_order`; it never decodes an entire run merely to classify or window it.
-Phase summaries remain whole. These are query/recorder changes only—ledger v2
-and history v3 schemas and markers do not change.
+History commits reliable events by a shared `HistoryWindowPolicy`: at 256
+events, 1 MiB of serialized data, one second from the first event, pause,
+clean close, or finalization. The dispatcher owns the monotonic age deadline
+and pause barrier; the observer owns canonical bytes and transactions. Each
+committed prefix remains independently queryable under WAL. A restarted
+nonterminal row is `incomplete`, never inferred to be interrupted or resumable.
+Summary classification remains bounded even when item kinds and reasons are
+free-form: the database returns one conditional-aggregate fact object per run,
+using finite predicates supplied by workflows, and workflows retain all
+headline and integrity interpretation. Finalized sessions that never ran keep
+`started_at` null rather than fabricating `created_at` as an execution start.
+Terminal summary text is bounded at the history boundary: phase/failure type
+names permit 256 UTF-8 bytes and phase/failure messages permit 4,096. Stored
+terminal axes and ordered phases are rehashed on summary reads and repeated
+finalization, so a terminal-marker blob cannot authenticate altered columns.
+Window commit time is never earlier than any envelope newly committed in that
+window, including phase and result-item events during wall-clock rollback.
+
+History browsing obtains summaries with a fixed query count from run rows,
+bounded phase summaries, and grouped primitive item facts. It never selects
+event JSON for classification. Item and reliable-event detail use database
+keyset pages of at most 256 rows under a fixed durable watermark captured in
+the first page's read transaction. The service has separate summary, item-page,
+and event-page methods; the unbounded full-run path is removed.
 **Flesh — deferred.** History retention waits for a maintenance session with
 cross-process history-writer custody; no M1 retention setting, facade action, or
 direct UI SQL exists. Also deferred: general migration module; legacy import;
@@ -1814,8 +1833,9 @@ desktop surfaces, and other interfaces behind the same facade.
      security contracts;
   2. executor refactor — first the complete adaptive pipeline and Windows
      IO/finalization reductions from `HASH_REFACTOR.md` Track 1, then the
-     coordinated executor+verifier XXH3-128 replacement and ledger-v2/
-     history-v3 reset from Track 2;
+     coordinated executor+verifier XXH3-128 replacement and the ledger-v2
+     reset from Track 2; history has since advanced to the reset-only v4
+     windowed-event contract;
   3. role-free inventory plus standalone baseline/verify/rebaseline workflows;
   4. in-session post-execution verification as one vertical integration slice;
   5. shared facade and CLI expansion;

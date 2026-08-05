@@ -1400,7 +1400,8 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
 
     reopened = LocalWorkflowRuntime(ledger_path, history_path)
     try:
-        retained = reopened.get_history(run_id)
+        retained = reopened.get_history_summary(run_id)
+        retained_items = reopened.get_history_items(run_id)
         listed = reopened.list_history()
     finally:
         reopened.close()
@@ -1409,8 +1410,12 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
     assert retained.integrity_status == live.integrity
     assert retained.headline == live.headline
     assert [
-        (item.item_type, item.phase, item.result)
-        for item in retained.items
+        (
+            item.item.item_type,
+            item.item.phase,
+            item.item.result,
+        )
+        for item in retained_items.items
     ] == [
         ("operation", "execute", "succeeded"),
         ("integrity", "verify", "verified"),
@@ -1432,7 +1437,7 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
     ]
     assert [item.run_token for item in listed] == [run_id]
     assert listed[0].phases == retained.phases
-    assert listed[0].items == retained.items
+    assert listed[0].item_count == retained.item_count == 2
 
 
 @pytest.mark.parametrize(
@@ -2104,7 +2109,7 @@ def test_dispatcher_paused_verify_cancel_uses_runtime_compound_settlement(
         tmp_path / "history.db",
     )
     try:
-        history = reopened.get_history("2" * 32)
+        history = reopened.get_history_summary("2" * 32)
     finally:
         reopened.close()
     assert history.filesystem_status == SessionState.COMPLETED.value

@@ -16,12 +16,16 @@ separate facts.
 
 M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
 history, dispatcher, and service/CLI surfaces are usable; M1 Stage 6, the
-headed local WebView2 desktop, is next. The desktop's service facade and bridge
-security foundation already exist, but no GUI host has shipped.
+headed local WebView2 desktop, is next. History now commits bounded reliable
+event windows during a run and exposes bounded summary/item/event reads for the
+future UI. The desktop's service facade and bridge security foundation already
+exist, but no GUI host has shipped.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
-an application restart. The active database boundary is ledger v2 plus history
-v3. Older, missing, transitional, or mismatched databases are refused; close
+an application restart. Committed nonterminal history survives restart as
+`incomplete`, but is not classified as interrupted or executable. The active
+database boundary is ledger v2 plus history v4. Older, missing, transitional,
+or mismatched databases are refused; close
 NamiSync and reset both local database files together before creating a fresh
 matching pair.
 
@@ -115,6 +119,14 @@ never hides the other result axes in rendered output.
 
 ### M1
 
+- Replaced terminal-only history retention with the reset-only history v4
+  reliable-event journal. History now commits at 256 events, 1 MiB, one second,
+  pause, clean close, or finalization; restart exposes committed nonterminal
+  prefixes as incomplete, and audit failure remains isolated from filesystem
+  and ledger truth. Summary reads use a fixed query count without event
+  decoding, item/event detail is keyset-paged at a hard 256-row maximum, the
+  service and CLI no longer materialize whole runs, and durable pages can repair
+  subscriber loss before returning to live delivery.
 - Completed the post-review simplification pass: COPY/UPDATE/MOVE_UPDATE now
   share one ordered published-completion path; UPDATE backup metadata and
   identity evidence are explicit across hardlink/copy methods; cancellation
@@ -168,9 +180,9 @@ never hides the other result axes in rendered output.
   - **Interfaces:** added the shared service facade, explicit location CLI
     commands, semantic-settings views, typed result classification, and the
     WebView2 bridge-security foundation.
-  - **Persistence:** established the reset-only ledger v2/history v3 boundary
-    under the `m1-ledger-xxh3-128` ledger contract and separated semantic
-    settings from cosmetic UI state.
+  - **Persistence:** established the reset-only ledger v2 boundary (history has
+    since advanced to v4) under the `m1-ledger-xxh3-128` ledger contract and
+    separated semantic settings from cosmetic UI state.
 
 ### M0 Hardening
 

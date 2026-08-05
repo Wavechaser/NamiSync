@@ -1406,68 +1406,38 @@ or it leaks memory and serves torn reads.
 
 #### DR-BR-16.2 — History is paged at the database, not after it
 
-The common window shape promises paged history, but the data path defeats it.
-`HistoryRepository.get()` loads and decodes **every** retained item for a run,
-and `list_recent()` calls that full method once per listed run — so rendering
-a 50-run list decodes every item of all 50. Slicing afterward bounds the
-bridge payload and nothing else: not the query, not memory, not decoding.
+The old path loaded and decoded every item for one run, and the list path called
+that full getter once per listed run. A 50-run list therefore performed N+1
+query sets and materialized every selected item before the bridge could discard
+all but one window.
 
-**Resolution:**
+**Resolution (implemented with history v4):**
 
-- A **summary query** first selects the requested `history_runs` rows and uses
-  their persisted operation counts, which are operation-only —
-  `Counter(item.outcome … if isinstance(item, ItemOutcome))` where it is
-  written. Those counts still supply failed/partial/skipped outcome facts, but
-  DR-BR-01's corrected `all-noop` predicate needs more: both a genuine `NOOP`
-  and a user-deselected COPY settle as `SKIPPED`, so counts alone cannot tell
-  them apart.
+- `list_summaries(limit)` uses one run query plus fixed phase and aggregate
+  queries. It never selects or decodes canonical event JSON. The repository
+  returns one fixed-size conditional fact object per run; free-form item kinds
+  and reasons cannot expand Python object retention. Workflow code supplies the
+  finite selection/no-op predicates and owns selection, integrity, and headline
+  interpretation, preserving the `db → workflows` import prohibition.
+- `get_item_page(...)` keyset-pages dense immutable `item_order`, and
+  `get_event_page(...)` keyset-pages reliable `event_seq`. Both reject limits
+  outside 1..256. The first page captures a committed `through_*` watermark in
+  the same read transaction; subsequent pages reuse it while new history
+  windows continue committing.
+- Terminal phase summaries have an explicit 256-row recording ceiling and may
+  therefore load with the summary. Item/event detail never does.
+- The service exposes summary, item-page, and event-page methods and removes the
+  unbounded full-run getter. CLI detail rendering consumes item pages directly.
+- `history_events_run_item_order_idx` serves item windows, the composite primary
+  key serves event catch-up, and `history_events_run_item_aggregate_idx` serves
+  typed summary facts. Query-plan regressions pin those seeks.
 
-  One grouped aggregate over the typed `history_items` columns therefore
-  supplies two narrow additions. First, grouped operation
-  `(kind, result, reason, count)` facts let the workflow classifier reconstruct
-  the effective selection by excluding rows carrying one of the stable
-  `ExclusionReason` values:
-  `blocked-correspondence`, `blocked-dependency`, `incomplete-scan`, or
-  DR-BR-01's named `user-deselected`. The resulting selected set must be
-  nonempty and every selected `kind` must be `noop`; the aggregate never
-  equates `result = 'skipped'` with selection. That predicate is consumed at
-  the existing headline precedence point, after failure and partial facts, so
-  a failed selected `NOOP` cannot acquire an `all-noop` headline merely because
-  its kind matches. Second, integrity phase/result facts supply
-  `_integrity_axis` and the verify-phase-baseline check. The query never
-  selects or decodes `detail_json`, constructs per-item Python objects, or
-  loops over `get()`.
-
-  The repository returns those grouped primitive facts; it does not import
-  `workflows.selection.ExclusionReason` or assign a headline. `db → workflows`
-  would violate the import law. Interpretation remains in `workflows`, which
-  already owns selection and presentation classification, so the stable reason
-  vocabulary has one semantic owner rather than being reimplemented in SQL.
-
-  The existing `UNIQUE(run_id, item_type, item_id)` constraint gives an index
-  led by `(run_id, item_type)`, so each item-type range is a seek rather than a
-  full table scan. The operation range must nevertheless visit the retained
-  operation items for those runs; the schema has no persisted selected-kind
-  count, and inventing one inside M1 is rejected below.
-- A **paged detail query** for one run's items, ordered by the immutable
-  `item_order` column the schema already stores — so windows are stable and
-  offsets mean something.
-- **Phases load whole.** Phase count is bounded by the phases a session can
-  enter, so paging them would add machinery for no benefit.
-- The list's Python work and payload are bounded by the run limit. Its indexed
-  aggregate database work remains proportional to the operation plus integrity
-  items in those runs, so history timing joins the scale gate on runs with
-  genuinely large item counts rather than only a large run count.
-
-Persisting terminal selected-kind or integrity summary facts on `history_runs`
-is **not an M1 fallback**. It would make list work proportional only to the run
-limit, but it costs three things: a change to a history schema already frozen
-under a contract marker, a matching change to the recording contract, and a
-second source of truth that can disagree with the items it summarizes —
-structurally the same defect as the mapping-filter projection this project
-already removed. If the indexed query misses the gate, M1 documents the
-measured supported ceiling; persisted summaries can be reconsidered only in a
-later schema version with their own migration/reset decision.
+This change deliberately advances the reset-only history contract to v4 rather
+than pretending the v3 terminal-only rows could recover discarded state and
+phase events. It also makes committed reliable pages the backend recovery path
+for a live subscriber gap. Missing lossy `Progress` sequence numbers remain
+valid; a finalized summary supplies terminal truth if the live `Terminal` was
+lost.
 
 ### DR-BR-17 — Selection is server-side state; the DOM is disposable
 
@@ -2707,19 +2677,19 @@ because its local tests are easier.
   satisfied by* a generic warning chip, a descendant count predicted before
   mode selection, or a default view that still contains acknowledged rows.
 - **BR-G-40 — History work is paged before object decoding and preserves
-  classification.** The recent-run query is bounded by its run limit and never
-  calls full `get()` per row. Its indexed primitive aggregate reads
-  `(kind, result, reason, count)` and integrity facts without selecting or
-  decoding `detail_json`; workflow code, not `db`, interprets them. A run's
-  detail query pages by immutable `item_order`, phases load whole, adjacent
-  headline precedence remains XV-10 exact, and retained `all-noop` matches the
-  live kind/reason classifier including `USER_DESELECTED`. `EXPLAIN QUERY PLAN`
-  proves the aggregate seeks the `(run_id, item_type, item_id)` index range, and
-  query-count/decode-spy assertions prove the list path constructs no item
-  objects. A 256-row detail request succeeds and 257 is refused rather than
-  truncated.
-  *Not satisfied by* slicing after `HistoryRepository.get()` or by matching only
-  the final headline of an uncomplicated run.
+  classification.** The summary query count is fixed and its indexed primitive
+  aggregate produces one fixed-size fact object per run without selecting or
+  decoding canonical event JSON; free-form kind/reason values cannot expand
+  summary retention, and workflow code, not `db`, interprets those facts. Item
+  and reliable-event detail use immutable keyset
+  order and one captured committed watermark, terminal phases have an explicit
+  256-row ceiling, adjacent headline precedence remains XV-10 exact, and
+  retained `all-noop` matches the live kind/reason classifier including
+  `USER_DESELECTED`. `EXPLAIN QUERY PLAN`, query-count, and decode-spy
+  assertions pin the bounded path. Limits 1 and 256 succeed; 0 and 257 are
+  refused rather than truncated.
+  *Not satisfied by* a compatibility getter that materializes a whole run, or
+  by matching only the final headline of an uncomplicated run.
 - **BR-G-41 — Task and process lifecycle lose neither work nor authority.** A
   reviewed task exists without a session; a plan session closes after terminal
   delivery while its artifact survives until task close; compound phases remain
@@ -2852,7 +2822,7 @@ lands.
 | `XV-13` scope completeness and recorder branch | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py tests/test_recorder_inventory_integrity.py` | `SUBTREES` must not alter exact `PATHS` or fall through to `FULL`; incomplete scans infer no missing rows / B |
 | `XV-14` five volume states and `XV-15` wakeup re-resolution | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py` | Folder expansion and reshaped details must preserve five distinct states and re-resolve on resumed/woken integrity work / B, D |
 | `XV-16` shared hash factory and production composition | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor.py tests/test_inventory_runtime.py tests/test_db_repositories.py tests/test_package.py tests/modules/test_verifier.py` | Payload/runtime edits must not fork verifier construction, diverge copy from verify encoding, or import a second hash implementation / B, C |
-| `XV-17` history-v3 reservation | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | No schema change, ALTER, or second version bump is permitted; the reserved generic item/phase shapes remain exact / B, C, Stage 6 slice 7 |
+| `XV-17` history-v4 window contract | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | Reset-only v4, append-only reliable events, atomic window/terminal visibility, incomplete restart views, and 1..256-row summary/detail bounds remain exact / B, C, Stage 6 slice 7 |
 | `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
 | `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_transport.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → production `textContent` round trip and NamiSync-owned sink scan become executable across slices 2, 5, and 6; all three files are required because transport alone cannot prove production DOM sinks / slices 2, 5, 6 |
 | `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
