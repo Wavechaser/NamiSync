@@ -2070,6 +2070,42 @@ def _published_copy_stat(
     )
 
 
+def _guard_resumed_published_target(
+    continuation: (
+        _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
+    ),
+    xset: ExecutionSet,
+    fs: ExecutorFileSystem,
+) -> None:
+    stable_identity = xset.plan.target_profile.stable_file_identity
+    observed = fs.stat_path(continuation.prepared.target)
+    if observed is None:
+        raise OperationFailure(
+            ExecutionReason.TARGET_DRIFT,
+            "published target disappeared during retry",
+        )
+    if continuation.published_stat is None:
+        prepared = continuation.prepared_stat
+        matches = (
+            observed.kind is prepared.kind
+            and observed.size == prepared.size
+            and (
+                not stable_identity
+                or prepared.file_identity is None
+                or observed.file_identity == prepared.file_identity
+            )
+        )
+    else:
+        expected = _profiled_stat(continuation.published_stat, stable_identity)
+        actual = _profiled_stat(observed, stable_identity)
+        matches = _same_file_version(actual, expected)
+    if not matches:
+        raise OperationFailure(
+            ExecutionReason.TARGET_DRIFT,
+            "published target drifted during retry",
+        )
+
+
 def _copy(
     operation: PlanOperation,
     xset: ExecutionSet,
@@ -2083,6 +2119,7 @@ def _copy(
     progress: _ProgressTracker,
 ) -> _Settled:
     existing = state.retry_continuations.get(operation.op_id)
+    resumed_published = existing is not None and existing.published
     if existing is None:
         prepared = _prepare_copy(
             operation,
@@ -2144,6 +2181,8 @@ def _copy(
             state.inflight_temp = None
             continuation.published = True
 
+    if resumed_published:
+        _guard_resumed_published_target(continuation, xset, fs)
     if continuation.published_stat is None:
         continuation.published_stat = _published_copy_stat(prepared, xset, fs)
     assert continuation.published_stat is not None
@@ -2187,6 +2226,7 @@ def _update(
             ExecutionReason.TARGET_MISSING, "update has no displaced target evidence"
         )
     existing = state.retry_continuations.get(operation.op_id)
+    resumed_published = existing is not None and existing.published
     if existing is None:
         prepared = _prepare_copy(
             operation,
@@ -2339,6 +2379,8 @@ def _update(
                         apply_readonly=True,
                     )
 
+    if resumed_published:
+        _guard_resumed_published_target(continuation, xset, fs)
     if (
         continuation.trash is not None
         and continuation.backup_stat is not None
@@ -2528,6 +2570,7 @@ def _move_update(
     progress: _ProgressTracker,
 ) -> _Settled:
     existing = state.retry_continuations.get(operation.op_id)
+    resumed_published = existing is not None and existing.published
     if existing is None:
         old_rel, old_expected = _prior_target(operation)
         _guard_present(
@@ -2611,15 +2654,10 @@ def _move_update(
             state.inflight_temp = None
             continuation.published = True
 
+    if resumed_published:
+        _guard_resumed_published_target(continuation, xset, fs)
     if continuation.published_stat is None:
         continuation.published_stat = _published_copy_stat(prepared, xset, fs)
-    elif existing is not None:
-        published_actual = _require_stat_path(fs, prepared.target)
-        if not _same_file_version(published_actual, continuation.published_stat):
-            raise OperationFailure(
-                ExecutionReason.TARGET_DRIFT,
-                "published move-update target drifted before completion",
-            )
     assert continuation.published_stat is not None
     if continuation.attestation is None:
         continuation.attestation = _attestation(

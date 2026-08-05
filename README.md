@@ -136,8 +136,12 @@ never hides the other result axes in rendered output.
   immediate-cancel precedence, and report retained backups or partial publishes
   honestly without false success evidence. An intact owned temp prevents a
   foreign target write from being misreported as NamiSync publication, and
-  policy-stop status settlement remains cancelable. The Stage 6 desktop shell
-  remains next.
+  every retry attempt that enters with an already-published continuation now
+  re-stats the target before metadata, durability, attestation, or recording so
+  an identity-detectable concurrent replacement fails as drift without false
+  evidence or a steady-state performance cost, while repairable metadata
+  remains retryable. Policy-stop status settlement remains cancelable. The
+  Stage 6 desktop shell remains next.
 - Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
   ids, recursive inventory scope with bounded missing inference, revisioned
   user selection with payload-safe provenance, concurrent retry-safe facade

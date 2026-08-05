@@ -28,6 +28,22 @@ to a global chronological list.
 
 ### M1 executor refactor
 
+- MODERATE - FIXED (2026-08-04). A post-publication sharing retry could record
+  COPY, UPDATE, or MOVE_UPDATE success for a same-size/same-mtime file that
+  replaced NamiSync's target during backoff. Cause: a resumed continuation
+  reused its prepared or cached published stat without uniformly re-statting
+  the current target before metadata, durability, attestation, and recording;
+  MOVE_UPDATE covered only the cached-stat case. Fixed with one shared guard at
+  the start of every attempt that entered with an already-published
+  continuation. It compares the cached published version when available; before
+  that stat is cached it binds kind/size plus stable identity when available
+  while allowing publication-damaged mtime to be repaired. Missing or
+  identity-detectable replacements settle as `target-drift` with no ledger or
+  published evidence.
+  Normal first-pass execution performs no additional stat. This is ordinary
+  concurrent-drift detection, not adversarial locking: a same-size replacement
+  before the stat cache on an identity-weak volume, and mutation after the
+  guard, remain outside the safety claim.
 - SEVERE - FIXED (2026-08-03). Cancel after a failed UPDATE replace could claim
   `canceled-after-publish` for a foreign write made by the process that held the
   target lock during backoff; COPY had the same false-credit shape if a foreign

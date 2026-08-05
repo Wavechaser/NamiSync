@@ -1024,10 +1024,14 @@ and process-local retry continuations covering COPY plus committed
 update/move-update sub-steps. They revalidate exact prepared/published and
 backup/trash evidence before resuming and latch a retry-backoff pause until
 operation settlement rather than unwinding into the executor's own prior
-mutation. Cancellation instead derives the current item's outcome from that
-state immediately: retained UPDATE backups remain visible,
-published-but-unfinished work is failed with a typed reason and degraded
-recording, and no rollback or false success evidence is attempted.
+mutation. An attempt that enters with an already-published continuation performs
+one target stat before remaining post-publish work, binding the cached published
+version when available or kind/size plus available stable identity while mtime
+is still repairable; normal first-pass execution adds no stat, and the check is
+drift detection rather than an adversarial path lock. Cancellation instead derives
+the current item's outcome from that state immediately: retained UPDATE backups
+remain visible, published-but-unfinished work is failed with a typed reason and
+degraded recording, and no rollback or false success evidence is attempted.
 
 **Flesh — now.** copy/update/recase/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails

@@ -3493,6 +3493,181 @@ class CopyMetadataSharingOnceFileSystem(NativeFileSystem):
         return super().ensure_published_metadata(path, *args, **kwargs)
 
 
+class PublishedRetrySharingOnceFileSystem(NativeFileSystem):
+    def __init__(self, published_target: Path, *, before_stat_cache: bool) -> None:
+        self.published_target = published_target
+        self.before_stat_cache = before_stat_cache
+        self.published_metadata_observed = False
+        self.metadata_attempts = 0
+        self.flush_attempts = 0
+        self.source_opens = 0
+
+    def open_source(self, path: Path):
+        self.source_opens += 1
+        return super().open_source(path)
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        if path == self.published_target:
+            self.metadata_attempts += 1
+            if self.before_stat_cache and self.metadata_attempts == 1:
+                native = path.stat(follow_symlinks=False)
+                os.utime(
+                    path,
+                    ns=(native.st_atime_ns, native.st_mtime_ns + 2_000_000_000),
+                )
+                error = OSError("sharing violation before published stat")
+                error.winerror = 32  # type: ignore[attr-defined]
+                raise error
+        observed = super().ensure_published_metadata(path, *args, **kwargs)
+        if path == self.published_target:
+            self.published_metadata_observed = True
+        return observed
+
+    def flush_directory(self, path: Path) -> bool:
+        if not self.before_stat_cache and self.published_metadata_observed:
+            self.flush_attempts += 1
+            if self.flush_attempts == 1:
+                error = OSError("sharing violation after published stat")
+                error.winerror = 32  # type: ignore[attr-defined]
+                raise error
+        return super().flush_directory(path)
+
+
+def _published_retry_operation(
+    kind: OperationKind,
+    source: Path,
+    target: Path,
+    fs: NativeFileSystem,
+) -> tuple[PlanOperation, Path]:
+    target_rel_path = (
+        "renamed.bin" if kind is OperationKind.MOVE_UPDATE else "file.bin"
+    )
+    (source / target_rel_path).write_bytes(b"new-version")
+    source_stat = fs.stat(source, target_rel_path)
+    assert source_stat is not None
+
+    target_expected = None
+    prior_target_rel_path = None
+    prior_target_expected = None
+    if kind is OperationKind.UPDATE:
+        (target / target_rel_path).write_bytes(b"old-version")
+        target_expected = fs.stat(target, target_rel_path)
+        assert target_expected is not None
+    elif kind is OperationKind.MOVE_UPDATE:
+        prior_target_rel_path = "old.bin"
+        (target / prior_target_rel_path).write_bytes(b"old-version")
+        prior_target_expected = fs.stat(target, prior_target_rel_path)
+        assert prior_target_expected is not None
+
+    return (
+        _operation(
+            1,
+            kind,
+            source_rel_path=target_rel_path,
+            target_rel_path=target_rel_path,
+            source_expected=source_stat,
+            target_expected=target_expected,
+            intended=source_stat,
+            prior_target_rel_path=prior_target_rel_path,
+            prior_target_expected=prior_target_expected,
+        ),
+        target / target_rel_path,
+    )
+
+
+def _replace_published_target(path: Path, fs: NativeFileSystem) -> None:
+    published = fs.stat_path(path)
+    assert published is not None
+    replacement = path.with_name(f".{path.name}.foreign")
+    replacement.write_bytes(b"bad-version")
+    os.utime(
+        replacement,
+        ns=(replacement.stat().st_atime_ns, published.mtime_ns),
+    )
+    replacement_stat = fs.stat_path(replacement)
+    assert replacement_stat is not None
+    assert replacement_stat.size == published.size
+    assert replacement_stat.mtime_ns == published.mtime_ns
+    assert replacement_stat.file_identity != published.file_identity
+    os.replace(replacement, path)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE),
+)
+@pytest.mark.parametrize(
+    "before_stat_cache",
+    (
+        pytest.param(True, id="before-stat-cache"),
+        pytest.param(False, id="after-stat-cache"),
+    ),
+)
+def test_retry_rejects_replaced_published_target(
+    tmp_path: Path,
+    kind: OperationKind,
+    before_stat_cache: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    published_target = target / (
+        "renamed.bin" if kind is OperationKind.MOVE_UPDATE else "file.bin"
+    )
+    fs = PublishedRetrySharingOnceFileSystem(
+        published_target,
+        before_stat_cache=before_stat_cache,
+    )
+    operation, published_target = _published_retry_operation(
+        kind, source, target, fs
+    )
+
+    xset = _xset(_plan(source, target, (operation,), hardlinks=False))
+    result, events, recorder = _run(
+        xset,
+        fs=fs,
+        policies=_policies(
+            sleep=lambda _delay: _replace_published_target(published_target, fs)
+        ),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "target-drift"
+    assert fs.metadata_attempts == 1
+    assert fs.flush_attempts == (0 if before_stat_cache else 1)
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert published_target.read_bytes() == b"bad-version"
+
+
+def test_metadata_retry_repairs_published_mtime_without_recopy(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    published_target = target / "file.bin"
+    fs = PublishedRetrySharingOnceFileSystem(
+        published_target,
+        before_stat_cache=True,
+    )
+    operation, _ = _published_retry_operation(
+        OperationKind.COPY, source, target, fs
+    )
+
+    result, _, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+    )
+
+    published = fs.stat_path(published_target)
+    assert published is not None
+    assert operation.source_expected is not None
+    assert result.status is SessionState.COMPLETED
+    assert published.mtime_ns == operation.source_expected.mtime_ns
+    assert fs.metadata_attempts == 2
+    assert fs.source_opens == 1
+    assert [call[0] for call in recorder.calls] == ["copied"]
+
+
 def test_pause_during_published_copy_retry_settles_without_recopy(
     tmp_path: Path,
 ) -> None:

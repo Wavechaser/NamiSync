@@ -283,6 +283,17 @@ exact committed state if an injected/native boundary reports failure after the
 syscall took effect. No guarded retry recopies the main payload, and UPDATE's
 copy-backup continuation is installed only after that backup exists.
 
+Every retry attempt that begins with an already-published continuation performs
+one target stat before any remaining metadata repair, durability, attestation,
+or recording. The current profiled file version must match the cached published
+stat. Before that stat exists, kind/size and stable identity bind the prepared
+publication when identity is available, while mtime remains repairable
+metadata. A missing or identity-detectable replacement fails as `target-drift`
+with no recorder call or published evidence. Normal first-pass execution
+performs no extra stat. On
+an identity-weak profile, the pre-cache guard cannot distinguish a same-size
+replacement; this is neither a byte reread nor an adversarial path lock.
+
 Pause observed at a retry-backoff checkpoint while such a continuation is live
 is latched until that operation settles, then raised at the ordinary operation
 boundary. Cancellation is never latched and preempts a pending pause. If the
@@ -485,6 +496,10 @@ chunk bands remain private constants, not settings.
   move-update old-to-trash failures after an earlier sub-step committed;
   persistent locks fail with actionable `sharing-violation` rather than false
   drift/occupancy and do not hang the session.
+- COPY/UPDATE/MOVE_UPDATE metadata and durability retry faults reject a
+  same-size/same-mtime replacement of an already-published stable-identity
+  target as `target-drift`, retain the foreign bytes, and record no false
+  success evidence.
 - Copy-stream evidence is tagged `copy`, target identity comes from post-publish
   stat, and `last_verified_at` remains unchanged until real verification.
 - Recorder failure test preserves the successful filesystem result, reports the
