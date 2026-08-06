@@ -30,8 +30,14 @@ dead history state removed.
   the pipeline settled, and the test then demanded all three samples agree. The
   sampler now requires three consecutive samples at the same read count and
   restarts the run whenever the reader moves, which is what "plateaus" was
-  meant to assert. No product behavior was involved: the item-cap assertions on
-  both queues passed every time. Eight pinned full runs are clean.
+  meant to assert. The assertion side reads those samples once into a snapshot
+  and bounds it from below rather than at an exact length: the coordinator
+  keeps sampling every poll interval after it signals, and a woken waiter is
+  not guaranteed to run before the next retry, so pinning the count exactly was
+  a second race — a 50 ms main-thread delay after the wait failed it
+  deterministically at six samples. Verified with injected delays of 0, 50,
+  200, and 500 ms, then six clean pinned full runs. No product behavior was
+  involved: the item-cap assertions on both queues passed every time.
 - CLEANUP: `HistoryObserver._event_chain_hash` was write-only state; the
   authoritative chain is always re-read inside the owning transaction. Removed
   it along with the `_ExistingRun` field and the reader column that fed only
@@ -46,7 +52,8 @@ and verify runs render correctly through `history` list and detail.
 
 ## Verification
 
-- Complete pytest suite: `980 passed in 29.54s` (979 prior plus one regression).
+- Complete pytest suite: `980 passed` (979 prior plus one regression), run six
+  times consecutively under core pinning with no failure.
 - Focused dispatcher set: `72 passed in 3.54s`.
 - Import linter: `8 kept, 0 broken`.
 - Package and test compile gate: clean.

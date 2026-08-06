@@ -615,12 +615,18 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
     try:
         assert target.writer_started.wait(_WAIT_SECONDS)
         assert hash_fifo_blocked.wait(_WAIT_SECONDS)
+        # The coordinator keeps sampling every poll interval after signaling,
+        # and a woken waiter is not guaranteed to run before its next retry.
+        # Read the samples once and bound them from below: a longer run is the
+        # same plateau observed more times, while a reader that moved again
+        # would have cleared the run back to one entry.
+        plateau = list(plateau_reads)
         assert len(queues) == 2
         assert queues[0].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
         assert queues[1].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
-        assert len(plateau_reads) == 3
-        assert len(set(plateau_reads)) == 1
-        assert source.reads == plateau_reads[-1]
+        assert len(plateau) >= 3
+        assert len(set(plateau)) == 1
+        assert source.reads == plateau[-1]
         assert source.reads < chunk_count
         assert not source.eof_read.is_set()
         assert not call.done.is_set()

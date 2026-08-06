@@ -28,7 +28,7 @@ to a global chronological list.
 
 ### M1 executor refactor
 
-- MINOR - FIXED (2026-08-05). Regression-gate reliability.
+- MINOR - FIXED (2026-08-06). Regression-gate reliability.
   `test_b2_hash_fifo_independently_plateaus_at_32_items` failed roughly one full
   suite run in three once the interpreter was pinned to one core, so the
   executor pipeline's item-cap gate reported false failures. Cause: the test's
@@ -38,9 +38,14 @@ to a global chronological list.
   its put; the first sample could therefore land two reads before the reader
   settled (`plateau_reads = [65, 67, 67]`) while the test demanded all three
   samples agree. Fixed by requiring three consecutive samples at the same read
-  count and restarting the run whenever the reader moves, which is the plateau
-  the test names. Product behavior was never implicated: the 32-item assertions
-  on both queues passed on every failing run.
+  count, restarting the run whenever the reader moves, and reading the samples
+  once into a snapshot bounded from below rather than at an exact length: the
+  coordinator keeps sampling every poll interval after it signals, and a woken
+  waiter is not guaranteed to run before the next retry, so an exact-length
+  assertion is itself a race — a 50 ms main-thread delay after the wait failed
+  it deterministically at six samples. Verified with injected delays of 0, 50,
+  200, and 500 ms. Product behavior was never implicated: the 32-item
+  assertions on both queues passed on every failing run.
 - SEVERE - FIXED (2026-08-04). An external replacement of the live UPDATE
   target while NamiSync created its backup could become the continuation's new
   baseline and then be overwritten, even though the owned trash entry preserved
