@@ -3,16 +3,17 @@
 Substantive defects with real behavioral consequences. Cosmetic and style-only
 issues are excluded.
 
-Each entry records `SEVERITY - STATUS (YYYY-MM-DD)`, then a failure-specific
+Each entry records `SEVERITY - STATUS (YYYY-MM-DD)`, a failure-specific
 category, the observed behavior and consequence, `Cause: why`, and, when fixed,
-the corrective change. The behavior and fix are written in natural prose rather
-than as separate labels.
+the corrective change. Write it as one compact paragraph rather than labels for
+symptom, cause, and fix.
 
 - **Severity:** SEVERE (data loss, hangs, crashes, or a core feature dead) ·
   MODERATE (disruptive but bounded, or actively misleading) · MINOR (cosmetic
   or no functional harm).
 - **Status** reflects the last direct verification of the entry.
-- **Category** names the failure boundary, not a broad outcome such as
+- **Category** names the causal failure boundary (for example, `TOCTOU sampling
+  race`), not a milestone, review gate, test outcome, or broad result such as
   availability or convergence.
 
 Entries are module/function-first, not a project-wide timeline: `##` headings
@@ -20,34 +21,26 @@ are owning modules or feature boundaries, and `###` headings are their
 functional scope or delivery phase. Add an entry under the module/function that
 owns the behavior, retain its relevant subheading, and keep entries newest first
 within that section. Do not add date-based sections or append unrelated entries
-to a global chronological list.
+to a global chronological list. Target 6–12 rendered lines per entry; include
+only the test conditions or residual threat boundary needed to explain the
+defect, and move implementation-level test choreography out of the log.
 
 ---
 
 ## EXECUTOR
 
-### M1 executor refactor
+### M1 Hardening
 
-- MINOR - FIXED (2026-08-06). Regression-gate reliability.
-  `test_b2_hash_fifo_independently_plateaus_at_32_items` failed roughly one full
-  suite run in three once the interpreter was pinned to one core, so the
-  executor pipeline's item-cap gate reported false failures. Cause: the test's
-  checkpoint sampled `source.reads` whenever both pipeline FIFOs read as full,
-  but the two queues are sampled separately while the hasher and writer run, so
-  both can read as full during fill-up with a worker sitting between its get and
-  its put; the first sample could therefore land two reads before the reader
-  settled (`plateau_reads = [65, 67, 67]`) while the test demanded all three
-  samples agree. Fixed first by requiring three consecutive full samples at the
-  same read count, then completed by freezing the accepted three-sample tuple
-  before signaling and comparing the live reader count with that immutable
-  evidence after two later coordinator checkpoints. The second checkpoint
-  proves one complete blocked enqueue retry elapsed, so waiter scheduling
-  cannot replace the evidence or hide a post-signal reader advance. Verified
-  with 0, 50, 200, and 500 ms waiter delays, 200 repetitions, and an injected
-  hidden read during the first later retry. Product behavior was never
-  implicated: the 32-item assertions on both queues passed on every failing
-  run.
-- SEVERE - FIXED (2026-08-04). An external replacement of the live UPDATE
+- MINOR - FIXED (2026-08-06). TOCTOU sampling race. The one-core
+  `test_b2_hash_fifo_independently_plateaus_at_32_items` intermittently failed
+  although both FIFOs remained capped at 32 items. Cause: separately sampled
+  full queues can momentarily straddle a worker's get/put, letting the first
+  sample precede reader quiescence. Fixed by freezing three stable full samples
+  before signaling and proving no reader advance after two blocked-enqueue
+  checkpoints. Delay stress and an injected hidden read validate the gate;
+  production queue-cap behavior passed throughout.
+- SEVERE - FIXED (2026-08-04). UPDATE target replacement TOCTOU. An external
+  replacement of the live UPDATE
   target while NamiSync created its backup could become the continuation's new
   baseline and then be overwritten, even though the owned trash entry preserved
   only the reviewed older version. Cause: executor refreshed `live_stat` after
@@ -57,7 +50,8 @@ to a global chronological list.
   copied-backup repair and target replacement. An external swap after the final
   guard but before the path-based replace remains the documented non-atomic
   threat boundary.
-- MODERATE - FIXED (2026-08-04). UPDATE cancellation called any file present at
+- MODERATE - FIXED (2026-08-04). Backup ownership verification. UPDATE
+  cancellation called any file present at
   its planned backup path `retained`, even if another process replaced the owned
   backup during retry, and exposed a machine-specific absolute path in durable
   result detail. Cause: cancellation kept only the path and tested existence.
@@ -67,7 +61,8 @@ to a global chronological list.
   Before repaired evidence is cached, stable identity binds the backup when the
   target profile supplies it; an identity-weak same-kind/same-size replacement
   remains outside the evidence available to this minimal guard.
-- MODERATE - FIXED (2026-08-04). A copied UPDATE backup whose atomic publish
+- MODERATE - FIXED (2026-08-04). Copied-backup repair retry. A copied UPDATE
+  backup whose atomic publish
   succeeded but post-publish metadata repair hit a sharing violation could
   resume past that repair and leave the recovery copy with publication-damaged
   metadata. Cause: copy-backup metadata completion lived inside the copy helper,
@@ -78,23 +73,17 @@ to a global chronological list.
   second attempt restores the displaced target metadata before replacing the
   live target. Hardlink repair remains after replacement because its backup
   still shares the displaced live inode until then.
-- MODERATE - FIXED (2026-08-04). A post-publication sharing retry could record
-  COPY, UPDATE, or MOVE_UPDATE success for a same-size/same-mtime file that
-  replaced NamiSync's target during backoff. Cause: a resumed continuation
-  reused its prepared or cached published stat without uniformly re-statting
-  the current target before metadata, durability, attestation, and recording;
-  MOVE_UPDATE covered only the cached-stat case. Fixed with one shared guard at
-  the start of every attempt that entered with an already-published
-  continuation. It compares the cached published version when available; before
-  that stat is cached it binds kind/size plus stable identity when available
-  while allowing publication-damaged mtime to be repaired. Missing or
-  identity-detectable replacements settle as `target-drift` with no ledger or
-  published evidence.
-  Normal first-pass execution performs no additional stat. This is ordinary
-  concurrent-drift detection, not adversarial locking: a same-size replacement
-  before the stat cache on an identity-weak volume, and mutation after the
-  guard, remain outside the safety claim.
-- SEVERE - FIXED (2026-08-03). Cancel after a failed UPDATE replace could claim
+- MODERATE - FIXED (2026-08-04). Post-publication target drift. A sharing retry
+  could record COPY, UPDATE, or MOVE_UPDATE success for a same-size/same-mtime
+  target replaced during backoff. Cause: resumed continuations reused prepared
+  or cached stats before metadata, durability, attestation, and recording.
+  Fixed with one entry guard that re-stats the target, compares cached evidence
+  when available, otherwise binds kind/size and stable identity, and settles
+  detectable replacement or absence as `target-drift` without success evidence.
+  First-pass execution adds no stat; replacement after the guard, or before a
+  cache on an identity-weak volume, remains outside this non-locking guarantee.
+- SEVERE - FIXED (2026-08-03). Cancellation publication attribution. Cancel
+  after a failed UPDATE replace could claim
   `canceled-after-publish` for a foreign write made by the process that held the
   target lock during backoff; COPY had the same false-credit shape if a foreign
   destination appeared. Cause: cancellation required the target still match
@@ -105,7 +94,8 @@ to a global chronological list.
   preferring the continuation's synchronous/cached publish evidence, and
   keeping genuinely unverified state failed under its drift/I/O reason without
   degrading recording or claiming publication.
-- SEVERE - FIXED (2026-08-03). Cancellation after a published byte operation
+- SEVERE - FIXED (2026-08-03). Canceled-publish settlement. Cancellation after
+  a published byte operation
   could label COPY or UPDATE `CANCELED` even though the new target was already
   live, omit the mutation from item detail, and leave recording falsely `OK`.
   Cause: the blanket cancel unwind never consulted operation-local retry state;
@@ -113,14 +103,16 @@ to a global chronological list.
   settling a published-but-unfinished operation `FAILED` with the typed
   `canceled-after-publish` reason and explicit durable-state detail, degrading
   recording, and never attaching success-only `PublishedCopyEvidence`.
-- SEVERE - FIXED (2026-08-03). Cancellation during MOVE_UPDATE's durable retry
+- SEVERE - FIXED (2026-08-03). MOVE_UPDATE cancellation settlement. Cancellation
+  during MOVE_UPDATE's durable retry
   could report `CANCELED` after the new target published, whether the old target
   was still live or had already reached trash. Cause: cancel settlement ignored
   the composite continuation; fixed by reporting the observed `new-and-old` or
   `new-and-trash` state, settling the unfinished operation `FAILED` with
   `canceled-after-publish`, degrading recording, and leaving the next reviewed
   scan/plan to converge without rollback.
-- MODERATE - FIXED (2026-08-03). Cancellation after UPDATE created its durable
+- MODERATE - FIXED (2026-08-03). Cancellation backup disclosure. Cancellation
+  after UPDATE created its durable
   backup but before replacement hid that retained old version from the canceled
   item's detail. Cause: cleanup considered only the staged temp and the blanket
   outcome carried no continuation facts; fixed by retaining the backup, removing
@@ -128,21 +120,15 @@ to a global chronological list.
   M1 still has no trash purge: reclamation remains with the deferred
   maintenance-session retention workflow, and cancellation never deletes the
   only recoverable old version.
-- SEVERE - FIXED (2026-08-03). Pause after a durable retry sub-step. UPDATE could
-  pause after creating its backup but before a retried publish, MOVE_UPDATE
-  could pause after publishing the new target but before trashing the old one,
-  and post-publish COPY metadata retry had the same collision shape; resume then
-  restarted from scan-time guards and rejected the executor's own mutation.
-  Cause: retry state was process-local while checkpoints unwound it. Fixed by
-  installing validated COPY/UPDATE/MOVE_UPDATE stage continuations at the first
-  owned durable boundary, latching pause at retry-backoff checkpoints, reusing
-  already-staged bytes through natural settlement, and only then raising
-  `PauseRequested`. Cancellation still propagates immediately; policy `Stop`
-  suppresses a latched pause and settles later operations `policy-stop`, while
-  cancel-only checkpoints keep that status-emission sweep interruptible.
-  Production retry sleeps total at most 350 ms (50 + 100 + 200); further latency
-  is uncapped I/O on already-staged data, not another file copy.
-- MODERATE - FIXED (2026-07-30). Pure-move recording within timestamp
+- SEVERE - FIXED (2026-08-03). Retry-continuation pause. Pausing UPDATE after a
+  backup, MOVE_UPDATE after publication, or COPY during metadata retry made
+  resume reapply scan-time guards and reject NamiSync's own durable state.
+  Cause: checkpoints unwound process-local retry state. Fixed by installing
+  validated COPY/UPDATE/MOVE_UPDATE continuations at the first owned durable
+  boundary, latching pause through settlement, and reusing staged bytes before
+  raising `PauseRequested`. Cancellation remains immediate; policy `Stop`
+  suppresses a latched pause and settles later operations as `policy-stop`.
+- MODERATE - FIXED (2026-07-30). Pure-move attestation. Pure-move recording within timestamp
   granularity. A valid MOVE could rename the reviewed target and then degrade
   recording when its timestamp differed exactly from the source while still
   falling within the target volume's equality granularity. Cause: the recorder
@@ -150,7 +136,8 @@ to a global chronological list.
   checking the reviewed old-target version; fixed by making
   `prior_target_expected` the complete pure MOVE/RECASE attestation while
   retaining intended-content validation for MOVE_UPDATE.
-- SEVERE - FIXED (2026-07-30). Pure rename and directory source revalidation.
+- SEVERE - FIXED (2026-07-30). Source and rename revalidation. Pure rename and
+  directory source revalidation.
   MOVE could rename a reviewed old target after the corresponding source
   subject vanished, MKDIR could create a target for a vanished source
   directory, and MOVE/RECASE recording could bless a substituted post-rename
@@ -158,7 +145,8 @@ to a global chronological list.
   source point-of-touch guard and accepted intended metadata without binding the
   rename result to the reviewed old target identity; fixed with source guards,
   post-rename version checks, and the same defensive recorder check.
-- MODERATE - FIXED (2026-07-25). Post-publish metadata repair. On volumes with
+- MODERATE - FIXED (2026-07-25). Access-time metadata policy. Post-publish
+  metadata repair on volumes with
   last-access updates enabled, observing a renamed file could change its access
   time and force the otherwise conditional second metadata rewrite and flush on
   every copy. Cause: executor normalized and compared access time as managed
@@ -167,7 +155,7 @@ to a global chronological list.
 
 ### M0 hardening
 
-- MODERATE - FIXED (2026-07-20). Orphaned temporary-file recovery. Temps left
+- MODERATE - FIXED (2026-07-20). Crash-temp recovery. Temps left
   by killed or crashed runs accumulated permanently while preflight counted
   their bytes as reclaimable, leaking target capacity and potentially stranding
   a nearly-full sync. Cause: executor removed only the current run's exact
@@ -175,18 +163,18 @@ to a global chronological list.
   ignores owned temps; fixed with one post-preflight, pre-copy exact-grammar
   sweep over preflight's touched target parents, excluding current-run files and
   `.synctrash`.
-- MODERATE - FIXED (2026-07-20). Metadata state validation. Cleanup of a
+- MODERATE - FIXED (2026-07-20). Directory cleanup revalidation. Cleanup of a
   directory emptied by same-run moves or trash operations was rejected as target
   drift, preventing folder rename/removal in one run. Cause: the final guard
   compared scan-time mtime and link count that planned child removal changes;
   fixed with a cleanup matcher that validates stable metadata and treats absent
   reviewed identity as absent evidence before atomic empty-directory removal.
-- MODERATE - FIXED (2026-07-20). Platform API permission. Every Windows
+- MODERATE - FIXED (2026-07-20). Windows directory-flush access. Every Windows
   parent-directory flush failed and warned despite successful mutations. Cause:
   `CreateFileW` requested `GENERIC_READ`, while `FlushFileBuffers` requires
   write access; fixed by requesting `GENERIC_WRITE` on the existing directory
   handle.
-- MODERATE - FIXED (2026-07-19). Idempotency failure. A transient sharing
+- MODERATE - FIXED (2026-07-19). Durable retry continuation. A transient sharing
   violation after update backup or publish restarted against the operation's own
   mutation, causing false target drift or destination occupancy. Cause: generic
   retry assumed every operation could restart; fixed by validated continuation
@@ -194,9 +182,10 @@ to a global chronological list.
 
 ## DISPATCHER AND HISTORY
 
-### M1 integrated adversarial review
+### M1 Hardening
 
-- MODERATE - FIXED (2026-08-06). Event-page repair rejected two valid recovery
+- MODERATE - FIXED (2026-08-06). Sparse reliable-event pagination. Event-page
+  repair rejected two valid recovery
   states: a live subscriber cursor ahead of the last committed history window,
   and a caller-supplied inclusive watermark that landed on an omitted lossy
   `Progress` sequence. The first stopped catch-up before durability could
@@ -207,7 +196,8 @@ to a global chronological list.
   traversal, sparse fixed bounds, indexed verification of the official durable
   maximum on every request, and a raw `limit + 1` lookahead that decodes only
   the requested rows.
-- MODERATE - FIXED (2026-08-06). A terminal close that timed out before it
+- MODERATE - FIXED (2026-08-06). Hub-close state ownership. A terminal close
+  that timed out before it
   acquired the hub publication gate left the session in `_closing`, so attach
   reported a nonexistent session even though its replay and subscriptions were
   still intact. The same state was truthful after subscriptions had already
@@ -217,7 +207,8 @@ to a global chronological list.
   keeps its global claim, irreversible cleanup and store-drop failures retain
   ownership for retry, and attach reports typed `SessionCleanupPending` rather
   than `SessionNotFound`.
-- MINOR - FIXED (2026-08-05). Subscribing to a hub whose retained replay was
+- MINOR - FIXED (2026-08-05). Subscriber replay capacity. Subscribing to a hub
+  whose retained replay was
   longer than one subscriber's bound produced a stream holding
   `subscriber_capacity + 1` envelopes, so the next reliable event ejected a
   consumer that had not been given a chance to drain. Cause: the truncation
@@ -227,7 +218,8 @@ to a global chronological list.
   session that has emitted more events than the subscriber bound. Fixed by
   recomputing the allowance once truncation forces the gap; a regression pins
   the initial buffer at the bound.
-- MODERATE - FIXED (2026-08-05). A broken audit prefix stopped the pump without
+- MODERATE - FIXED (2026-08-05). Broken audit-pump cleanup. A broken audit
+  prefix stopped the pump without
   draining its bounded command queue. Each degraded terminal hub could therefore
   retain a full queue of large reliable envelopes; a timed-out flush that later
   succeeded could instead leave the degraded pump alive and idle forever. Fixed
@@ -236,7 +228,8 @@ to a global chronological list.
   check plus a best-effort stop wakeup for the timeout-boundary race.
   Full-capacity blocking-cleanup, idle-wakeup, and late-flush regressions cover
   these exits.
-- MODERATE - FIXED (2026-08-05). Explicit close could discard the terminal
+- MODERATE - FIXED (2026-08-05). Terminal cleanup ownership. Explicit close
+  could discard the terminal
   session record, store row, hub owner, and cleanup lock before audit-observer
   cleanup finished, then ignore the hub timeout; shutdown could consequently
   report complete while the only cleanup worker was still blocked. A concurrent
@@ -244,7 +237,8 @@ to a global chronological list.
   Fixed by serializing close/shutdown per session, closing the hub before
   ownership removal, retaining timed-out cleanup for retry, and snapshotting
   hub/lock pairs under the dispatcher condition.
-- MODERATE - FIXED (2026-08-05). Shutdown's shared deadline stopped at the
+- MODERATE - FIXED (2026-08-05). Shutdown deadline budgeting. Shutdown's shared
+  deadline stopped at the
   session publication gate: cancellation could persist `CANCELING` and then
   wait the full audit-offer timeout for a hub lock held by another reliable
   event, while hub cleanup itself waited without a bound for that same lock.
@@ -254,14 +248,16 @@ to a global chronological list.
   one close deadline across hub-lock and observer cleanup, and clearing replay
   with subscribers under the hub lock. Blocked-offer, lock-deadline, and
   replay-cleanup regressions cover the boundary.
-- MODERATE - FIXED (2026-08-05). Concurrent history observers could advance the
+- MODERATE - FIXED (2026-08-05). Monotonic history commit time. Concurrent
+  history observers could advance the
   committed sequence while regressing `last_committed_at`. Cause: commit time
   was sampled before serialized writer ownership, and wall-clock rollback was
   accepted verbatim; the first commit could also precede its RUNNING event.
   Fixed by sampling inside the owned transaction and clamping the logical commit
   timestamp to prior durability, admission, and actual start; tail finalization
   uses that same effective time.
-- MODERATE - FIXED (2026-08-05). Finalized queued cancellations fabricated an
+- MODERATE - FIXED (2026-08-05). Unstarted terminal timing. Finalized queued
+  cancellations fabricated an
   execution start at admission time even though their disposition was `UNRUN`.
   Cause: finalization replaced a missing observed start with `created_at`, and
   the v4 terminal constraint required every final row to have `started_at`.
@@ -269,14 +265,16 @@ to a global chronological list.
   terminal end against `created_at`, and returning an exact reopened terminal
   replay before validating any newly sampled end time. Queued cancellation and
   regressed-clock replay are both covered.
-- MODERATE - FIXED (2026-08-05). Fixed-query history summaries could still
+- MODERATE - FIXED (2026-08-05). Summary aggregation bounds. Fixed-query
+  history summaries could still
   allocate one Python aggregate object for every distinct free-form item kind
   and reason, so a valid run could defeat the readback memory bound without
   decoding event JSON. Cause: the third summary query grouped all projection
   strings. Fixed with one conditional aggregate fact object per selected run;
   workflows supply finite selection/no-op predicates and retain classification
   policy while SQL returns only bounded primitive counts.
-- SEVERE - FIXED (2026-08-05). History claimed a bounded crash window while
+- SEVERE - FIXED (2026-08-05). History crash-window retention. History claimed
+  a bounded crash window while
   retaining every reliable-event hash and result item until terminal
   finalization. A long run or paused process therefore had unbounded history
   memory and could lose its entire audit on a crash, leaving no durable prefix
@@ -286,26 +284,29 @@ to a global chronological list.
   pause/close/finalization flushes, rolling hashes/counts and watermarks, and
   explicit `incomplete` restart views. Oversized events and failed windows
   degrade audit without changing domain or ledger truth.
-- MODERATE - FIXED (2026-08-05). History readback was bounded only after
+- MODERATE - FIXED (2026-08-05). History readback bounds. History readback was
+  bounded only after
   materialization. `list_recent()` invoked the full-run getter once per run,
   and that getter selected and decoded every item, making a 50-run summary an
   N+1 query path with work and memory proportional to all selected detail.
   Fixed with fixed-query-count primitive summaries, shared live/retained fact
   classification, 1..256-row keyset item/event pages under captured durable
   watermarks, and streamed CLI detail. The unbounded full-run API was removed.
-- MODERATE - FIXED (2026-08-04). Audit-pump close could spend the complete
+- MODERATE - FIXED (2026-08-04). Audit-pump close budget. Audit-pump close
+  could spend the complete
   caller timeout waiting to enqueue its stop command and then spend the complete
   timeout again joining the worker, so the advertised shutdown allowance was
   not an end-to-end bound. Cause: queue and thread APIs each received the
   original duration. Fixed with one monotonic close deadline and recomputed
   remaining time for enqueue and join.
-- MODERATE - FIXED (2026-08-04). History event admission recalculated
+- MODERATE - FIXED (2026-08-04). Event-admission complexity. History event admission recalculated
   `max(event_hashes)` for every new reliable envelope, making a large result
   stream quadratic before finalization and increasing audit-backpressure risk.
   Cause: the duplicate hash map was also used as an ordered-sequence index.
   Fixed by retaining one highest-accepted-sequence scalar while preserving exact
   duplicate idempotency and conflicting/out-of-order rejection.
-- MODERATE - FIXED (2026-08-03). Audit backpressure coupled to finalization.
+- MODERATE - FIXED (2026-08-03). Audit-offer isolation. Audit backpressure
+  coupled to finalization.
   One `audit_timeout` fed three unrelated bounds — the finalization cutoff, the
   per-envelope `offer` enqueue wait, and hub close — so deriving a longer
   finalization cutoff from the writer's retry bound silently multiplied how
@@ -316,7 +317,8 @@ to a global chronological list.
   `Dispatcher`/`EventHub`, a service constant that must not scale with the
   history writer, and a regression that emits under a long finalization cutoff
   and asserts the producer still degrades promptly.
-- MODERATE - FIXED (2026-08-03). Shutdown allowance visibly long. Deriving
+- MODERATE - FIXED (2026-08-03). History retry budget. Shutdown allowance was
+  visibly long: deriving
   every audit bound from the generic ten-second serialized-writer retry made
   worst-case service close twenty-two seconds, long enough to read as an
   unresponsive window once Stage 6 calls it during teardown. Cause: history
@@ -325,20 +327,15 @@ to a global chronological list.
   or integrity truth. Fixed by giving history its own five-second retry bound,
   which carries the derived cutoff to six seconds and service close to twelve,
   with tests pinning both the ordering and a shutdown ceiling.
-- MODERATE - FIXED (2026-08-02). Audit timeout parity. A history finalization
-  that commits after the audit acknowledgement deadline leaves the delivered
-  immutable terminal at `audit=degraded` while the retained history row says
-  `audit=ok`. Cause: `HistoryObserver.finalize` persists the provisional OK
-  value before the audit pump knows whether acknowledgement met its deadline.
-  Fixed with one atomic decision latch on the finalization command: the caller
-  wins an expired cutoff and any late row carries that degraded axis, while a
-  pump that claimed ownership first makes the caller wait for its actual
-  success or failure. History now persists the decided `result.audit` value
-  inside the existing immutable payload and transaction; no schema, version, or
-  corrective write was added. The 2026-08-03 hardening derives the production
-  audit cutoff and the service-close allowance from the history writer's retry
-  bound rather than from independent literals, with tests pinning the ordering.
-- SEVERE - FIXED (2026-07-30). Resumed pre-invocation cancellation. Canceling a
+- MODERATE - FIXED (2026-08-02). Finalization timeout ownership. A finalization
+  that committed after its audit acknowledgement deadline delivered
+  `audit=degraded` but retained `audit=ok`. Cause: the observer persisted a
+  provisional result before the pump knew who owned the deadline. Fixed with an
+  atomic finalization decision latch: an expired caller wins degraded truth, or
+  a pump owner determines the final result. The immutable payload and its
+  existing transaction now persist the decided audit axis; derived writer,
+  audit, and close bounds are regression-tested in order.
+- SEVERE - FIXED (2026-07-30). Pre-invocation cancellation settlement. Canceling a
   paused execution just after resume published RUNNING but before
   `invocation.run()` produced a generic canceled terminal while leaving runtime
   custody and the ledger run unfinished. Cause: the dispatcher's initial
@@ -351,13 +348,13 @@ to a global chronological list.
   history is an independent axis. Cause: admission isolated observer delivery
   failures but not factory/open failures; fixed with a degraded-audit sentinel
   that preserves admission and yields `audit=degraded`.
-- MODERATE - FIXED (2026-07-30). Lifecycle event ordering. A delayed
+- MODERATE - FIXED (2026-07-30). Lifecycle publication ordering. A delayed
   `StateChanged(PAUSING)` publication could be overtaken by persisted
   `PAUSED`, leaving existing and late subscribers with a regressed current
   state. Cause: record transitions were locked but their reliable events were
   emitted after releasing the transition lock; fixed with a per-session
   publication gate spanning each transition and matching state event.
-- MODERATE - FIXED (2026-07-30). Subscribe/close stream orphan. Subscription
+- MODERATE - FIXED (2026-07-30). Subscribe-close linearization. Subscription
   could capture a terminal session hub, lose a race with explicit close, and
   then append a stream to the already-closed hub; after replay drained, the
   stream never closed. Cause: hub lookup and subscription registration were
@@ -366,93 +363,70 @@ to a global chronological list.
 
 ## INTERFACES
 
-### M1 Stage 6 host reality spike
+### M1 Hardening
 
-- MINOR - FIXED (2026-08-03). Prerequisite misdiagnosis and an overstated
-  parity claim. An absent .NET Framework release key made the host report that
-  Microsoft Edge WebView2 Runtime needed installing, when the actual missing
-  prerequisite was .NET 4.6.2; the same state is also the one place the
-  side-effect-free mirror deliberately diverges from pywebview 6.2.1, whose
-  `_is_chromium` raises `UnboundLocalError` from a `finally` that closes a
-  never-bound `net_key`. Cause: the detector reported one boolean, and the
-  parity tests covered an outdated .NET release but never an absent key. The
-  initial fix added a second prerequisite query and its own install message.
-  The 2026-08-04 follow-up replaces those two registry snapshots with one typed
-  probe carrying availability plus .NET, WebView2, or detection-failure reason;
-  unreadable and malformed values now recommend repair instead of being
-  mislabeled as missing. Regressions pin the single .NET read, the divergence,
-  and each refusal message. Windows 11 ships .NET Framework 4.8 in-box, so the
-  absent-key state is not reachable on a supported installation.
-- MODERATE - FIXED (2026-08-01). Missing-WebView2 refusal changed the user's
-  registry before reporting that the required renderer was unavailable.
-  Pywebview selected its Windows backend during `webview.start()` and imported
-  MSHTML as its fallback; the MSHTML module then created and wrote Internet
-  Explorer feature-control keys before NamiSync's `initialized` renderer check
-  could run. Fixed with a read-only WebView2 runtime registry preflight that the
-  host must run before `create_window` and that `start_edge_chromium` repeats
-  before pywebview initialization. The 2026-08-03 hardening moves the complete
-  pywebview-compatible registry plan into one side-effect-free module and
-  behavior-checks it against the pinned upstream detector, including x86's
-  plain HKLM path and the upstream version helper's real behavior. The
-  `86.0.622.0` argument is preserved because it is pywebview 6.2.1's WinForms
-  compatibility gate, not as a NamiSync security-patch minimum. A configured
-  fixed runtime bypasses the registry probe, while the synchronous renderer
-  check remains defense in depth and gates the host initialization callback.
-- SEVERE - FIXED (2026-07-30). Off-thread native-control deadlock.
-  `CoreWebView2` access from pywebview's setup worker could hang instead of
-  raising a cross-thread error, preventing host startup. Cause: the initial
-  mock treated the managed WinForms control like an ordinary Python object;
-  fixed by registering one idempotent synchronous `before_load` callback that
-  reaches the native control and subscribes its events only on the WinForms UI
-  thread before application calls are exposed.
-- SEVERE - FIXED (2026-07-30). Trusted-page bridge lockout after canceled
-  navigation. WebView2 retained the packaged document after canceling an
-  off-origin request, but pywebview's managed `Source` and
-  `get_current_url()` reported the rejected target, so the independent origin
-  check would reject the still-trusted page indefinitely. Cause: the bridge
-  treated wrapper navigation intent as committed native document authority;
-  fixed with a lock-protected snapshot of native `CoreWebView2.Source` updated
-  on the UI thread and read without marshaling by concurrent dispatch workers.
-- SEVERE - FIXED (2026-07-31). Invisible native-guard attachment failure.
-  Pywebview logs and swallows exceptions from synchronous event handlers, so a
-  failed `before_load` installer left dispatch closed but gave the host no
-  actionable state and could retry after a partial subscription. Fixed with
-  explicit pending/attached/failed state, one sticky attachment attempt,
-  attachment-specific fail-closed dispatch, and host-visible error state.
-- SEVERE - FIXED (2026-07-31). New-window system-browser escape. Pywebview's
-  own `NewWindowRequested` handler is subscribed before NamiSync's and opened
-  attacker-chosen URLs in the user's default browser before the later native
-  handler could mark the request handled. Fixed by pinning
+- MINOR - FIXED (2026-08-03). WebView2 prerequisite diagnosis. A missing .NET
+  Framework release key was reported as missing WebView2, obscuring the actual
+  .NET 4.6.2 prerequisite. Cause: the side-effect-free detector returned one
+  boolean and tests omitted the absent-key state, where pywebview 6.2.1 itself
+  raises `UnboundLocalError`. Fixed with one typed registry probe that reports
+  .NET, WebView2, or detection-failure reasons; malformed/unreadable values
+  recommend repair. Tests pin the single read, intentional upstream divergence,
+  and refusal messages. Windows 11 includes .NET Framework 4.8, so this state
+  is unsupported-installation diagnostics rather than a normal user path.
+- MODERATE - FIXED (2026-08-01). Renderer preflight side effects. Refusing a
+  missing WebView2 runtime wrote Internet Explorer feature-control keys first:
+  `webview.start()` imported pywebview's MSHTML fallback before NamiSync's
+  renderer check. Fixed with a read-only, pywebview-compatible registry preflight
+  before `create_window`, repeated before initialization, and behavior-tested
+  against the pinned upstream detector. A configured fixed runtime bypasses the
+  probe; the synchronous Edge Chromium check remains defense in depth. The
+  `86.0.622.0` argument is pywebview's WinForms compatibility gate, not a
+  NamiSync security-patch minimum.
+- SEVERE - FIXED (2026-07-31). Native-guard attachment state. Pywebview swallowed
+  synchronous event-handler failures, so a failed `before_load` installer left
+  dispatch closed without actionable host state and could retry after a partial
+  subscription. Fixed with explicit pending/attached/failed state, one sticky
+  attachment attempt, attachment-specific fail-closed dispatch, and a
+  host-visible error state.
+- SEVERE - FIXED (2026-07-31). New-window browser escape. Pywebview's earlier
+  `NewWindowRequested` handler opened attacker-chosen URLs in the default
+  browser before NamiSync could handle them. Fixed by pinning
   `OPEN_EXTERNAL_LINKS_IN_BROWSER=False` before native startup, alongside
-  disabled file URLs, downloads, remote debugging, and debug mode; the native
-  popup and navigation guards remain defense in depth. The composed handler
-  order is covered: pywebview's redirect into the current view reaches the
-  native navigation guard, which cancels it while the packaged document and
-  bridge remain usable.
-- MODERATE - FIXED (2026-07-31). Frame navigation depended only on document
-  CSP. Top-level `NavigationStarting` does not observe iframe navigation, so a
-  weakened or late CSP would leave no native frame control. Fixed by attaching
-  `FrameNavigationStarting` and canceling every frame navigation, while
-  retaining first-in-`head` `frame-src 'none'` for initial parsing.
-- MINOR - FIXED (2026-07-31). Renderer startup misdiagnosis and fragile asset
-  origin derivation. Every exception merely named `WebViewException` was
-  rewritten as a missing-WebView2 error even though pywebview silently falls
-  back to MSHTML when the runtime is absent; future host code was also likely
-  to trim `window.real_url` incorrectly. Fixed by explicitly refusing a
-  non-Edge-Chromium renderer during `initialized`, preserving unrelated
-  startup exceptions, and deriving the exact origin from the complete URL with
-  `urlsplit`.
+  disabled file URLs, downloads, remote debugging, and debug mode; native popup
+  and navigation guards remain defense in depth.
+- MODERATE - FIXED (2026-07-31). Frame navigation containment. Top-level
+  `NavigationStarting` does not observe iframes, so weakened or late CSP left no
+  native frame control. Fixed by attaching `FrameNavigationStarting` and
+  canceling every frame navigation while retaining first-in-`head`
+  `frame-src 'none'` for initial parsing.
+- MINOR - FIXED (2026-07-31). Renderer failure classification. Broad
+  `WebViewException` handling mislabeled unrelated startup failures as missing
+  WebView2, despite pywebview's silent MSHTML fallback; asset-origin code could
+  also trim `window.real_url` incorrectly. Fixed by refusing non-Edge-Chromium
+  during `initialized`, preserving unrelated exceptions, and deriving origin
+  from the complete URL with `urlsplit`.
+- SEVERE - FIXED (2026-07-30). UI-thread native-control access. `CoreWebView2`
+  access from pywebview's setup worker could hang rather than raise a
+  cross-thread error, preventing host startup. Cause: the initial mock treated
+  the managed WinForms control as an ordinary Python object. Fixed with one
+  idempotent synchronous `before_load` callback that accesses and subscribes
+  native events only on the WinForms UI thread before exposing application calls.
+- SEVERE - FIXED (2026-07-30). Native navigation authority. After canceling an
+  off-origin request, WebView2 retained the packaged document but pywebview
+  reported the rejected URL, indefinitely locking out the trusted-page bridge.
+  Cause: the bridge treated wrapper navigation intent as committed document
+  authority. Fixed with a lock-protected native `CoreWebView2.Source` snapshot,
+  updated on the UI thread and read by dispatch workers without marshaling.
 
-### M1 integrated adversarial review
-
-- MODERATE - FIXED (2026-07-30). Observer-close retry. A blocked sink that
+- MODERATE - FIXED (2026-07-30). Observer shutdown retry. A blocked sink that
   exceeded the observer join timeout was removed from retained observation
   state; after the first service close raised, the next close returned cached
   success while that observer thread could still be alive. Cause: both observer
   and service treated a failed join as an irreversible first attempt; fixed by
   retaining unjoined observations and retrying their close before the service
   may return cached success.
-- MODERATE - FIXED (2026-07-30). Dependency-close retry. Once dispatcher
+- MODERATE - FIXED (2026-07-30). Dependency shutdown retry. Once dispatcher
   shutdown completed, a runtime/history close exception made every later
   service close fail immediately; the runtime also discarded the store whose
   writer close failed. Cause: dispatcher completion and dependency closure
@@ -460,20 +434,20 @@ to a global chronological list.
   dependency succeeded; fixed by caching dispatcher completion separately,
   serializing close attempts, retrying only runtime closure, and retaining the
   store/open state after a failed close.
-- MODERATE - FIXED (2026-07-30). Session-receipt lifetime races. A retry could
+- MODERATE - FIXED (2026-07-30). Session-receipt lifecycle race. A retry could
   replay a session after dispatcher close but before receipt removal, while the
   inverse admit/close interleaving could publish a receipt for an already
   closed session. Cause: dispatcher retention and service receipt
   lookup/publication/removal had separate synchronization; fixed with one
   lifecycle gate and retained-session checks around all three transitions.
-- MODERATE - FIXED (2026-07-30). Closed-facade boundary. After an incomplete
+- MODERATE - FIXED (2026-07-30). Closed-facade admission. After an incomplete
   shutdown correctly kept runtime dependencies alive for a later close retry,
   public plan, settings, inventory, integrity, history, and observation calls
   could still reach those dependencies and recreate cleared process state.
   Cause: `_closed` guarded receipt-bearing commands but not the complete domain
   facade; fixed with a shared open check while retaining only session
   status/control and shutdown cleanup after closure begins.
-- MODERATE - FIXED (2026-07-30). Incomplete service shutdown. A shutdown
+- MODERATE - FIXED (2026-07-30). Incomplete service-shutdown retry. A shutdown
   deadline permanently cached `complete=False` and still closed runtime/history,
   so non-cooperative workers could finalize through closed dependencies and a
   later `close()` could not recover. Cause: admission closure, dependency
@@ -483,9 +457,10 @@ to a global chronological list.
 
 ## DATABASE AND INVENTORY
 
-### M1 integrated adversarial review
+### M1 Hardening
 
-- MODERATE - FIXED (2026-08-04). Serialized database contention could outlive
+- MODERATE - FIXED (2026-08-04). SQLite contention deadline. Serialized database
+  contention could outlive
   its configured retry bound: waiting for the in-process writer lock was
   unbounded, each SQLite attempt retained the full busy timeout, and retry sleep
   was not capped to the remaining allowance. Cause: only the outer retry loop
@@ -494,18 +469,19 @@ to a global chronological list.
   explicit zero-budget single immediate attempt and no positive-budget attempt
   after expiry. Transaction work after acquiring the write lock remains outside
   this contention budget.
-- SEVERE - FIXED (2026-07-30). Non-authoritative full integrity verification.
+- SEVERE - FIXED (2026-07-30). Incomplete-scan verification authority. Non-authoritative
+  full integrity verification.
   A full or stale-scope refresh with a global enumeration failure still entered
   the verifier and returned completed. Cause: the incomplete-scan refusal was
   conditional on exact selected paths; fixed by refusing every incomplete
   unbounded refresh and retaining only the fully explained exact-subject
   exception.
-- MODERATE - FIXED (2026-07-30). Torn multi-batch inventory read. Selecting
+- MODERATE - FIXED (2026-07-30). Multi-batch read snapshot. Selecting
   more than 400 canonical keys could observe old rows in one batch and a newer
   concurrent commit in the next, producing a state that never existed. Cause:
   each bounded SELECT ran in its own autocommit snapshot; fixed with one explicit
   read transaction spanning all batches.
-- MODERATE - FIXED (2026-07-30). Unsupported-row reconciliation. A completed
+- MODERATE - FIXED (2026-07-30). Unsupported inventory reconciliation. A completed
   exact PATHS refresh did not mark an absent prior unsupported row missing, and
   missing-to-unsupported reappearance failed to set `reappeared_at`. Cause: the
   exact absent update filtered only `present` and unsupported upsert lacked the
@@ -514,15 +490,15 @@ to a global chronological list.
 
 ## CORE AND SECURITY PROTOCOLS
 
-### M1 integrated adversarial review
+### M1 Hardening
 
-- MODERATE - FIXED (2026-07-30). Coercive event decoding. Schema and sequence
+- MODERATE - FIXED (2026-07-30). Event JSON type coercion. Schema and sequence
   floats were truncated, scalar fields were stringified, and terminal
   `canceled="false"` became true. Cause: the versioned event decoder used
   Python conversion constructors instead of validating transported JSON types;
   fixed with exact integer/boolean/string decoding across envelopes, terminal
   results, phases, and nominal items.
-- MODERATE - FIXED (2026-07-30). Bridge JSON ambiguity. The security spike
+- MODERATE - FIXED (2026-07-30). Bridge JSON parsing ambiguity. The security spike
   accepted boolean/float schema 1, duplicate keys, exponent-overflow infinity,
   and escaped lone surrogates; a handler could run on the last two before output
   validation noticed them. Cause: validation covered JSON syntax and top-level
@@ -532,25 +508,31 @@ to a global chronological list.
 
 ## WORKFLOW AND CLI
 
-### M1 cleanup visibility
+### M1 Hardening
 
-- MODERATE - FIXED (2026-08-06). CLI terminal cleanup and final shutdown could
-  fail without any visible indication. Cause: `_close_terminal` swallowed every
-  exception and all three command paths discarded the service shutdown result.
-  Fixed by reporting expected cleanup-pending timeouts and unexpected failures
-  to stderr, inspecting every final `ShutdownView`, and preserving the already
-  settled typed workflow result and exit classification.
+- MODERATE - FIXED (2026-08-06). Terminal cleanup observability. CLI terminal
+  cleanup and final shutdown could fail without any visible indication. Cause:
+  `_close_terminal` swallowed every exception and all three command paths
+  discarded the service shutdown result. Fixed by reporting expected
+  cleanup-pending timeouts and unexpected failures to stderr, inspecting every
+  final `ShutdownView`, and preserving the settled typed result and exit class.
+- MODERATE - FIXED (2026-08-04). Cancellation result projection. Cancellation
+  without post-copy verification re-raised `Canceled` after ledger settlement,
+  so the generic runner replaced degraded recording truth with `recording=OK`
+  and both modes could omit unexecuted-plan exclusions. Cause: only the compound
+  path normalized cancellation and neither branch merged executor output with
+  exclusions. Fixed by returning one typed canceled result in both modes,
+  preserving `ExecutionSet` recording, merging the complete ordered item stream,
+  and omitting the execute phase only when verification was not requested.
 
-### M1 Stage 5.5 adversarial closure
-
-- SEVERE - FIXED (2026-07-30). Canceled-settlement custody release. A failed
+- SEVERE - FIXED (2026-07-30). Run-token custody release. A failed
   ledger open or final write while settling a paused or just-resumed execution
   left its exact run token permanently claimed in
   `LocalWorkflowRuntime._execution_started`, even though dispatcher made the
   session terminal. Cause: only successful recorder finish removed the
   process-local claim; fixed by releasing the validated exact start claim in a
   settlement `finally`, including thrown-open and degraded-finish regressions.
-- MODERATE - FIXED (2026-07-30). Concurrent workflow-runtime close. One caller
+- MODERATE - FIXED (2026-07-30). Runtime-close linearization. One caller
   could mark the runtime closed and block in history-store close; a second
   caller then returned success before the first failed and reopened the runtime.
   Cause: the state lock protected flags but not the dependency-close attempt;
@@ -564,7 +546,7 @@ to a global chronological list.
   fixed with a custody-bound finish-existing-run dependency, strict
   same-runtime start-token validation, and real dispatcher plus real-ledger
   pause/resume regressions.
-- SEVERE - FIXED (2026-07-30). Replan intent ABA. Replacing a plan reset its
+- SEVERE - FIXED (2026-07-30). Replan generation ABA. Replacing a plan reset its
   selection revision to zero and discarded mutation receipts, so a lost
   checkbox response, Execute, or destructive confirmation formed against the
   old artifact could apply to a new artifact with identical deterministic
@@ -573,7 +555,7 @@ to a global chronological list.
   did not survive replacement; fixed by monotonically advancing revisions,
   retaining recognized gesture tombstones, checking the current artifact after
   mutation, and returning the new preview as a conflict.
-- SEVERE - FIXED (2026-07-30). Irreversible-update CLI admission. With
+- SEVERE - FIXED (2026-07-30). Irreversible-update confirmation. With
   trash-on-update disabled, typing `execute` returned a
   `confirmation-required` view that the CLI treated as an execution session,
   then crashed with `AttributeError` without updating the target. Cause: the
@@ -581,7 +563,7 @@ to a global chronological list.
   CLI confirmation; fixed by rendering the exact irreversible-update warning,
   forwarding the typed response as an exact boolean acknowledgement, and
   handling every named admission view defensively.
-- MODERATE - FIXED (2026-07-30). Concurrent retry admission. Two simultaneous
+- MODERATE - FIXED (2026-07-30). Command idempotency race. Two simultaneous
   first deliveries with one plan/inventory/integrity command id could both pass
   receipt lookup and submit separate sessions; the initial closure left
   execution outside that guard, and a plan retry revalidated paths before
@@ -590,25 +572,26 @@ to a global chronological list.
   families; fixed with bounded command-id single-flight guards around every
   family, raw gesture signatures checked before mutable validation, and
   shutdown-safe receipt publication.
-- MODERATE - FIXED (2026-07-30). Mixed folder selection. A single
+- MODERATE - FIXED (2026-07-30). Folder selection isolation. A single
   safety-disabled operation beneath a folder made the entire folder toggle
   raise, leaving otherwise selectable siblings inert. Cause: node expansion
   passed every descendant into the direct-operation safety validator; fixed by
   expanding folder gestures to toggleable descendants while retaining refusal
   for a disabled operation named directly.
-- MODERATE - FIXED (2026-07-30). Inventory workflow version strictness.
+- MODERATE - FIXED (2026-07-30). Payload-version type coercion. Inventory
+  workflow version strictness.
   Inventory `2.9` and integrity `"1"` payload versions were accepted as current
   schemas. Cause: the shared decoder coerced version values with `int()`; fixed
   by requiring an exact JSON integer and the exact kind-specific version,
   including float, string, and boolean rejection coverage.
-- MODERATE - FIXED (2026-07-30). Workflow and settings JSON coercion. Inventory
+- MODERATE - FIXED (2026-07-30). Workflow/settings JSON coercion. Inventory
   and integrity continuation fields converted strings, floats, booleans, and
   nulls with `str()`/`int()`/`bool()`, while settings accepted boolean/float
   schema version 1 and duplicate keys used last-key-wins semantics. Cause:
   version checks were hardened without applying the same rule to the remaining
   persisted shape; fixed with exact field/type validation and duplicate-key
   rejection at both boundaries.
-- MODERATE - FIXED (2026-07-30). Pre-recording execution custody. Opening a
+- MODERATE - FIXED (2026-07-30). Execution custody timing. Opening a
   fresh execution claimed its run token before the dispatcher entered workflow
   work, and fresh commitment/preflight refusal or exception never released it;
   pausing at the runner-entry checkpoint also failed to snapshot `started_at`,
@@ -616,22 +599,7 @@ to a global chronological list.
   decode rather than actual/snapshotted start; fixed with lazy claim, terminal
   cleanup, and entry-checkpoint pause snapshotting.
 
-### M1 post-execution integration
-
-- MODERATE - FIXED (2026-08-04). Running execution cancellation without
-  post-copy verification re-raised `Canceled` after the workflow had already
-  finished its ledger run, causing the generic runner to construct a fresh
-  cancellation result with default `recording=OK`. A cancel-after-publish path
-  could therefore deliver a terminal that hid the executor's degraded recording
-  truth, while both modes could omit non-executed plan exclusions from the
-  cancellation result. Cause: only the compound execute-to-verify path
-  normalized execution cancellation into a typed workflow result, and neither
-  cancellation branch merged executor emissions with exclusions. Fixed by
-  returning the same typed canceled result in both modes, preserving the
-  `ExecutionSet` recording axis, emitting and merging the complete ordered item
-  stream, and omitting the execute phase only when no compound verification was
-  requested.
-- SEVERE - FIXED (2026-07-25). Compound ledger-run settlement. Exceptions
+- SEVERE - FIXED (2026-07-25). Compound run settlement. Exceptions
   during execute-result projection, continuation publication, verify phase
   entry/context creation, or verifier-result aggregation could escape after the
   recorder opened, leaving the logical ledger run unfinished; a resumed
@@ -640,14 +608,14 @@ to a global chronological list.
   runtime discarded whether `started_at` came from a resumed payload; fixed
   with an explicit resumed bit, phase-aware exception results, and one guarded
   finish-once path for every post-entry terminal.
-- MODERATE - FIXED (2026-07-25). Retained compound history projection. Reading
+- MODERATE - FIXED (2026-07-25). Retained history projection. Reading
   a retained phase passed its `HistoryPhaseSnapshot` wrapper to the phase view
   and raised `AttributeError`; even without phases, the view omitted persisted
   cancellation and derived integrity/headline truth. Cause: the runtime
   projected repository wrappers as domain values and exposed an incomplete run
   view; fixed by unwrapping ordered snapshots, reconstructing the typed result,
   and routing retained classification through the same live result classifier.
-- MODERATE - FIXED (2026-07-25). Canceled-settlement adapter failure. A malformed
+- MODERATE - FIXED (2026-07-25). Adapter failure precedence. A malformed
   registration callback could be converted into a clean canceled terminal.
   Cause: dispatcher checked the already-requested cancel checkpoint before
   raising the captured adapter failure; fixed by giving the detected failure
@@ -655,50 +623,51 @@ to a global chronological list.
 
 ### M0 integration
 
-- MODERATE - FIXED (2026-07-21). Rename plan presentation. Recase rows rendered
+- MODERATE - FIXED (2026-07-21). Rename review presentation. Recase rows rendered
   the source and destination as the same spelling, and move/move-update rows
   likewise omitted the old target path, so review hid the filesystem rename a
   user was approving. Cause: `PlanOperationView` discarded
   `prior_target_rel_path` and the CLI always used the source path as the
   displayed origin; fixed by retaining `prior_target_path` in the workflow read
   model and preferring it as the left side for rename-shaped operations.
-- MODERATE - FIXED (2026-07-21). Fingerprinted option decoding. A plan-request
+- MODERATE - FIXED (2026-07-21). Plan option canonicalization. A plan-request
   payload that omitted `propagate_source_casing` decoded as false and then
   re-encoded with the field present, so one accepted payload did not have a
   byte-stable semantic round trip for an input to `policy_fingerprint`. Cause:
   the newly added flag alone used `.get(..., False)` while every neighboring
   semantic option was required; fixed by requiring the field during decode and
   retaining explicit round-trip coverage.
-- SEVERE - FIXED (2026-07-20). Safe partial execution. One blocked item or an
+- SEVERE - FIXED (2026-07-20). Partial-execution safety. One blocked item or an
   incomplete scan refused the whole sync, while simply omitting blockers could
   expose target-only deletion from incomplete source evidence. Cause: workflow
   selected every operation and preflight gated the whole run; fixed with
   commitment-bound safe-subset selection, dependency quarantine, additive-only
   incomplete-scan fallback, and preflight enforcement.
-- MODERATE - FIXED (2026-07-20). Execution outcome reporting. Blocked plan
+- MODERATE - FIXED (2026-07-20). Plan-outcome reporting. Blocked plan
   items were absent from results and history because only selected operations
   emitted outcomes. Cause: the outcome model had no blocker state and workflow
   emitted no exclusions; fixed with `BLOCKED`, reasoned `DEFERRED` exclusions,
   itemized history rows, and a version-2 blocked summary count.
-- SEVERE - FIXED (2026-07-19). Result presentation crash. Every real execution
+- SEVERE - FIXED (2026-07-19). Result formatter shadowing. Every real execution
   crashed while presenting fresh-preflight results, before mutation began.
   Cause: local `refusal_views` shadowed the formatter; fixed by using a distinct
   result variable.
-- MODERATE - FIXED (2026-07-19). Plan integrity validation. A decoded plan's
+- MODERATE - FIXED (2026-07-19). Plan commitment validation. A decoded plan's
   carried fingerprint was compared with its commitment without recomputing the
   content hash, allowing altered payloads to appear authorized. Cause: two
   transported fields were treated as independently derived; fixed by recomputing
   the fingerprint before commitment validation.
-- MODERATE - FIXED (2026-07-19). Configuration preflight validation. Identical
+- MODERATE - FIXED (2026-07-19). Location preflight validation. Identical
   database paths or overrides inside a managed root were rejected only after
   planning and confirmation. Cause: location validation lived only on the
   execution adapter; fixed by applying it before plan admission.
 
 ## SCANNER AND PREFLIGHT
 
-### M1 Stage 5.5 recursive scope
+### M1 Hardening
 
-- SEVERE - FIXED (2026-07-30). Multi-root scope admission cost. Normalizing
+- SEVERE - FIXED (2026-07-30). Recursive-scope normalization complexity.
+  Normalizing
   sibling recursive roots compared every root with every retained root and then
   every exact path with every root; 1,000 sibling roots took about 17 seconds
   and 2,000 took about 69 seconds before dispatcher admission. Cause: repeated
@@ -709,7 +678,7 @@ to a global chronological list.
 
 ### M0 integration
 
-- MINOR - FIXED (2026-07-21). Defensive JSON encoding consistency. Path
+- MINOR - FIXED (2026-07-21). Defensive JSON encoding. Path
   validation prevented unpaired surrogates from reaching ledger/history
   records, but ledger idempotency hashing, history hashing/detail storage, and
   opaque workflow payload encoding would still raise if a malformed code unit
@@ -734,7 +703,7 @@ to a global chronological list.
 
 ### M0 hardening
 
-- MODERATE - FIXED (2026-07-21). Opt-in casing propagation cost. A
+- MODERATE - FIXED (2026-07-21). Case-propagation operation cost. A
   metadata-equal case-only filename change was represented as `update`, causing
   a full source-content rewrite, capacity charge, and trash backup merely to
   change directory-entry spelling. Cause: the first propagation seam reused the
@@ -742,7 +711,7 @@ to a global chronological list.
   explicit zero-byte `recase` operation that carries old/new spellings, uses a
   same-volume non-replacing rename, preserves identity/metadata, records updated
   correspondence, and creates no trash entry.
-- MODERATE - FIXED (2026-07-21). Filename-form advisory execution. A
+- MODERATE - FIXED (2026-07-21). Filename-form advisory classification. A
   case-only source/target filename pair blocked even when source metadata had
   changed, suppressing the required update; canonically equivalent NFC/NFD
   spellings were instead misclassified as unrelated copy/removal work with no
@@ -760,7 +729,7 @@ to a global chronological list.
   spelling before no-op classification; initially made visible with a typed
   `case_mismatch` blocker. The 2026-07-21 follow-up above retains that typed
   visibility without suppressing content work.
-- MODERATE - FIXED (2026-07-19). File attribute reconciliation. A readonly,
+- MODERATE - FIXED (2026-07-19). Standard-attribute reconciliation. A readonly,
   hidden, or system attribute change with unchanged size and mtime planned as
   `noop`, leaving the target stale. Cause: equality checked only size and
   timestamp; fixed by including standard attributes and verifying native

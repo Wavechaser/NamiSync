@@ -125,6 +125,19 @@ their contract, and update the matching tests and documentation when it does.
   concise summary of its user-meaningful changes. Intermediate slice commits do
   not each add fragmented changelog entries.
 
+## Documentation Maintenance
+
+- Keep README changelog sections compact and newest-first: use one milestone
+  synopsis followed by specific nested bullets for the owning modules, including
+  tests. Keep each module bullet to about three rendered lines.
+- Record post-delivery fixes in a separate hardening section above the relevant
+  milestone delivery section; do not append hardening detail to the original
+  feature-delivery synopsis.
+- Keep `docs/BUGS.md` as a concise module-first defect ledger. Categories name
+  the causal failure boundary, never a milestone, review gate, test outcome, or
+  broad consequence. Target 6–12 rendered lines per entry, retaining only the
+  consequence, cause, fix, and essential residual boundary or test context.
+
 ## Cleanup
 
 - Remove only unused imports, variables, files, or generated artifacts created

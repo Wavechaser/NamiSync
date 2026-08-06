@@ -117,77 +117,54 @@ never hides the other result axes in rendered output.
 
 ## Changelog
 
+### M1 Hardening
+
+- Resolved M1 integration and adversarial-review findings without weakening the
+  reviewed-plan safety model or making history/audit failures alter sync truth.
+  - **Executor:** shared ordered publication settlement across COPY, UPDATE, and
+    MOVE_UPDATE; retries preserve owned state, pause safely, and disclose only
+    validated backups, partial publishes, and target drift.
+  - **Dispatcher and history:** bounded writer, audit, and close budgets; made
+    terminal cleanup retryable; and kept live and retained audit results,
+    sparse-page traversal, subscriptions, and lifecycle order consistent.
+  - **Workflows and CLI:** closed custody, replan-generation, idempotent-command,
+    cancellation-projection, confirmation, and shutdown-reporting races across
+    the service facade and command-line surface.
+  - **Database, inventory, and protocols:** bounded SQLite contention, preserved
+    read snapshots and incomplete-scan authority, and rejected coercive persisted
+    event, workflow, settings, and bridge JSON.
+  - **Interface host:** constrained native WebView2 access to the UI thread,
+    failed closed on guard attachment, and closed navigation, frame, popup, and
+    fallback-renderer escape paths.
+  - **Tests:** pinned temporal, concurrency, recovery, and bounded-work
+    regressions, including retry/delay stress cases and independent pipeline
+    queue-capacity checks.
+
 ### M1
 
-- Replaced terminal-only history retention with the reset-only history v4
-  reliable-event journal. History now commits at 256 events, 1 MiB, one second,
-  pause, clean close, or finalization; restart exposes committed nonterminal
-  prefixes as incomplete, and audit failure remains isolated from filesystem
-  and ledger truth. Summary reads use a fixed query count without event
-  decoding, item/event detail is keyset-paged at a hard 256-row maximum, the
-  service and CLI no longer materialize whole runs, and durable pages can repair
-  subscriber loss before returning to live delivery. Reliable-event catch-up
-  now accepts sparse fixed bounds and ends a live-ahead traversal cleanly while
-  verifying the official durable maximum on every page. Terminal cleanup also
-  distinguishes a reversible hub-gate timeout from already-detached cleanup;
-  pending cleanup stays retryable and CLI shutdown warnings are no longer
-  swallowed.
-- Completed the post-review simplification pass: COPY/UPDATE/MOVE_UPDATE now
-  share one ordered published-completion path; UPDATE backup metadata and
-  identity evidence are explicit across hardlink/copy methods; cancellation
-  preserves degraded recording and reports only validated, root-relative
-  recovery artifacts. Persistence and audit shutdown spend single monotonic
-  contention/close budgets, history sequence admission is constant-time, and
-  WebView2 prerequisite availability plus diagnosis comes from one typed,
-  read-only registry snapshot.
-- Completed the Stage 6 pywebview reality spike on CPython 3.13.14 and
-  pywebview 6.2.1: native guards now attach only on the WinForms UI thread,
-  dispatch authorization follows native WebView2 document state across
-  canceled navigation, attachment failures are observable, frame navigation
-  and popup/browser escape paths are closed, hardened settings and the actual
-  Edge Chromium renderer are verified, WebView2 absence is refused through a
-  read-only pre-window compatibility detector behavior-checked against pinned
-  pywebview before it can import its mutating MSHTML fallback, full asset URLs
-  derive exact origins, and the security-relevant
-  host dependency is pinned. The headed desktop itself remains unshipped.
-- Completed the integrated M1 adversarial review across execution,
-  inventory/integrity, persistence, dispatcher/history, facade concurrency,
-  and strict persisted/bridge protocols. Straightforward invariant violations
-  are closed with permanent regressions; an atomic history-finalization
-  ownership decision now keeps timeout audit truth identical live and after
-  reopen, with writer, audit, and shutdown timeouts derived in strict order.
-  Durable COPY/UPDATE/MOVE_UPDATE retries now latch pause until the owned
-  operation settles without recopying staged payloads, preserve policy-stop and
-  immediate-cancel precedence, and report retained backups or partial publishes
-  honestly without false success evidence. An intact owned temp prevents a
-  foreign target write from being misreported as NamiSync publication, and
-  every retry attempt that enters with an already-published continuation now
-  re-stats the target before metadata, durability, attestation, or recording so
-  an identity-detectable concurrent replacement fails as drift without false
-  evidence or a steady-state performance cost, while repairable metadata
-  remains retryable. Policy-stop status settlement remains cancelable. The
-  Stage 6 desktop shell remains next.
-- Landed the Stage 5.5 facade bridge: deterministic workflow trees and opaque
-  ids, recursive inventory scope with bounded missing inference, revisioned
-  user selection with payload-safe provenance, concurrent retry-safe facade
-  commands, typed scan warnings, and folder-scoped integrity that continues
-  visibly past unreadable subjects. The integrated bridge also closes stale
-  replan intent, resumed-ledger settlement, and irreversible-update
-  confirmation failures. Stage 6 presentation paging and the desktop host
-  remain next.
-- Delivered Stages 1–5 of the integrity product and executor refactor; the
-  WebView2 desktop shell remains M1 Stage 6.
-  - **Executor:** switched content evidence to XXH3-128 and added the bounded
-    reader/hasher/writer pipeline, adaptive chunks, conditional preallocation,
-    and leaner Windows publish/finalization paths.
-  - **Workflows:** added role-free inventory, standalone baseline/verify/
-    rebaseline, and optional in-session execute-to-verify readback.
-  - **Interfaces:** added the shared service facade, explicit location CLI
-    commands, semantic-settings views, typed result classification, and the
-    WebView2 bridge-security foundation.
-  - **Persistence:** established the reset-only ledger v2 boundary (history has
-    since advanced to v4) under the `m1-ledger-xxh3-128` ledger contract and
-    separated semantic settings from cosmetic UI state.
+- Delivered M1 Stages 1–5.5 as a headless integrity and reviewed-sync product;
+  Stage 6's headed WebView2 desktop remains unshipped.
+  - **Executor:** moved content evidence to XXH3-128 and added a bounded
+    reader/hasher/writer pipeline, adaptive chunks, preallocation, and leaner
+    Windows publication and finalization paths.
+  - **Scanner and preflight:** added recursive multi-root inventory scope,
+    bounded missing inference, typed scan warnings, and folder-scoped integrity
+    that continues visibly past unreadable subjects.
+  - **Workflows and CLI:** added role-free inventory, baseline/verify/rebaseline,
+    optional execute-to-verify readback, deterministic workflow trees, opaque
+    identifiers, revisioned selection, and typed result views.
+  - **Dispatcher and history:** added retry-safe facade commands and the
+    reset-only history v4 journal with committed nonterminal recovery, fixed-cost
+    summaries, bounded keyset detail, and live reliable-event repair.
+  - **Database:** established the `m1-ledger-xxh3-128` ledger v2 boundary,
+    separated semantic settings from cosmetic UI state, and preserved local
+    history as an independent audit axis.
+  - **Interfaces and security:** added the shared service facade and location
+    CLI commands, plus a WebView2 bridge/host foundation with a read-only runtime
+    probe, hardened renderer settings, and exact packaged-asset origins.
+  - **Tests:** added focused integration coverage for scoped inventory,
+    selection/replan provenance, retry-safe commands, durable history pages, and
+    the WebView2 host foundation.
 
 ### M0 Hardening
 
