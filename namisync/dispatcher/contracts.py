@@ -160,3 +160,7 @@ class SessionNotFound(KeyError):
 
 class SessionNotTerminal(RuntimeError):
     pass
+
+
+class SessionCleanupPending(RuntimeError):
+    """A terminal session is settled but its owned cleanup is unfinished."""

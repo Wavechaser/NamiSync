@@ -821,8 +821,12 @@ def test_history_detail_streams_fixed_watermark_item_pages(
                 items=(SimpleNamespace(item=item_two),),
             )
 
-        def close(self) -> None:
-            pass
+        def close(self):
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
 
     monkeypatch.setattr(cli_module, "NamiSyncService", Service)
     stdout = io.StringIO()
@@ -844,6 +848,78 @@ def test_history_detail_streams_fixed_watermark_item_pages(
     assert "one.bin" in stdout.getvalue()
     assert "two.bin" in stdout.getvalue()
     assert stderr.getvalue() == ""
+
+
+def test_terminal_cleanup_timeout_is_visible_without_raising() -> None:
+    class Service:
+        def get_session(self, session_id: str):
+            assert session_id == "settled"
+            return SimpleNamespace(result=object())
+
+        def close_session(self, session_id: str) -> None:
+            assert session_id == "settled"
+            raise TimeoutError("only audit cleanup remains pending")
+
+    stderr = io.StringIO()
+
+    cli_module._close_terminal(Service(), "settled", stderr)
+
+    warning = stderr.getvalue()
+    assert "terminal result and history outcome are already settled" in warning
+    assert "final shutdown will retry" in warning
+    assert "only audit cleanup remains pending" in warning
+
+
+def test_unexpected_terminal_cleanup_failure_is_visible_without_raising() -> None:
+    class Service:
+        def get_session(self, session_id: str):
+            return SimpleNamespace(result=object())
+
+        def close_session(self, session_id: str) -> None:
+            raise RuntimeError("store drop failed")
+
+    stderr = io.StringIO()
+
+    cli_module._close_terminal(Service(), "settled", stderr)
+
+    warning = stderr.getvalue()
+    assert "terminal result and history outcome are already settled" in warning
+    assert "failed unexpectedly" in warning
+    assert "RuntimeError: store drop failed" in warning
+
+
+def test_incomplete_final_service_cleanup_is_reported_without_raising() -> None:
+    class Service:
+        def close(self):
+            return SimpleNamespace(
+                complete=False,
+                unfinished=("session-a", "session-b"),
+                custody_released=False,
+            )
+
+    stderr = io.StringIO()
+
+    cli_module._close_service(Service(), stderr)
+
+    warning = stderr.getvalue()
+    assert "final cleanup is incomplete" in warning
+    assert "command result remains unchanged" in warning
+    assert "session-a, session-b" in warning
+    assert "custody: still held" in warning
+
+
+def test_unexpected_final_service_cleanup_failure_is_visible() -> None:
+    class Service:
+        def close(self):
+            raise RuntimeError("shutdown failed")
+
+    stderr = io.StringIO()
+
+    cli_module._close_service(Service(), stderr)
+
+    warning = stderr.getvalue()
+    assert "final cleanup failed unexpectedly" in warning
+    assert "RuntimeError: shutdown failed" in warning
 
 
 def test_history_list_rejects_an_unbounded_limit() -> None:

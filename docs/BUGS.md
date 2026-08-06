@@ -37,15 +37,16 @@ to a global chronological list.
   both can read as full during fill-up with a worker sitting between its get and
   its put; the first sample could therefore land two reads before the reader
   settled (`plateau_reads = [65, 67, 67]`) while the test demanded all three
-  samples agree. Fixed by requiring three consecutive samples at the same read
-  count, restarting the run whenever the reader moves, and reading the samples
-  once into a snapshot bounded from below rather than at an exact length: the
-  coordinator keeps sampling every poll interval after it signals, and a woken
-  waiter is not guaranteed to run before the next retry, so an exact-length
-  assertion is itself a race — a 50 ms main-thread delay after the wait failed
-  it deterministically at six samples. Verified with injected delays of 0, 50,
-  200, and 500 ms. Product behavior was never implicated: the 32-item
-  assertions on both queues passed on every failing run.
+  samples agree. Fixed first by requiring three consecutive full samples at the
+  same read count, then completed by freezing the accepted three-sample tuple
+  before signaling and comparing the live reader count with that immutable
+  evidence after two later coordinator checkpoints. The second checkpoint
+  proves one complete blocked enqueue retry elapsed, so waiter scheduling
+  cannot replace the evidence or hide a post-signal reader advance. Verified
+  with 0, 50, 200, and 500 ms waiter delays, 200 repetitions, and an injected
+  hidden read during the first later retry. Product behavior was never
+  implicated: the 32-item assertions on both queues passed on every failing
+  run.
 - SEVERE - FIXED (2026-08-04). An external replacement of the live UPDATE
   target while NamiSync created its backup could become the continuation's new
   baseline and then be overwritten, even though the owned trash entry preserved
@@ -195,6 +196,27 @@ to a global chronological list.
 
 ### M1 integrated adversarial review
 
+- MODERATE - FIXED (2026-08-06). Event-page repair rejected two valid recovery
+  states: a live subscriber cursor ahead of the last committed history window,
+  and a caller-supplied inclusive watermark that landed on an omitted lossy
+  `Progress` sequence. The first stopped catch-up before durability could
+  advance; the second mislabeled a sparse reliable-event interval as history
+  corruption. Cause: one dense-page helper treated the watermark as a required
+  row and the initial validator required every cursor to be at or below current
+  durability. Fixed with the specified empty terminal page for fresh live-ahead
+  traversal, sparse fixed bounds, indexed verification of the official durable
+  maximum on every request, and a raw `limit + 1` lookahead that decodes only
+  the requested rows.
+- MODERATE - FIXED (2026-08-06). A terminal close that timed out before it
+  acquired the hub publication gate left the session in `_closing`, so attach
+  reported a nonexistent session even though its replay and subscriptions were
+  still intact. The same state was truthful after subscriptions had already
+  been detached, but the boolean hub result could not distinguish those stages.
+  Fixed with explicit complete/publication-timeout/audit-cleanup-pending
+  outcomes: ordinary close releases only a reversible pre-gate claim, shutdown
+  keeps its global claim, irreversible cleanup and store-drop failures retain
+  ownership for retry, and attach reports typed `SessionCleanupPending` rather
+  than `SessionNotFound`.
 - MINOR - FIXED (2026-08-05). Subscribing to a hub whose retained replay was
   longer than one subscriber's bound produced a stream holding
   `subscriber_capacity + 1` envelopes, so the next reliable event ejected a
@@ -509,6 +531,15 @@ to a global chronological list.
   recursive finite JSON validation before handler dispatch.
 
 ## WORKFLOW AND CLI
+
+### M1 cleanup visibility
+
+- MODERATE - FIXED (2026-08-06). CLI terminal cleanup and final shutdown could
+  fail without any visible indication. Cause: `_close_terminal` swallowed every
+  exception and all three command paths discarded the service shutdown result.
+  Fixed by reporting expected cleanup-pending timeouts and unexpected failures
+  to stderr, inspecting every final `ShutdownView`, and preserving the already
+  settled typed workflow result and exit classification.
 
 ### M1 Stage 5.5 adversarial closure
 

@@ -24,6 +24,7 @@ from namisync.dispatcher import (
     Dispatcher,
     InProcessResourceLockProvider,
     PreparedSession,
+    SessionCleanupPending,
     SessionNotFound,
     SessionNotTerminal,
     WorkflowRegistration,
@@ -1107,7 +1108,8 @@ def test_terminal_close_retains_ownership_until_audit_cleanup_finishes() -> None
 
     try:
         with pytest.raises(
-            TimeoutError, match="session audit cleanup did not finish"
+            TimeoutError,
+            match="terminal settlement is complete; subscriptions are closed and only cleanup remains pending",
         ):
             dispatcher.close(session_id)
 
@@ -1116,17 +1118,252 @@ def test_terminal_close_retains_ownership_until_audit_cleanup_finishes() -> None
         assert session_id in dispatcher._controls
         assert session_id in dispatcher._state_publication_locks
         assert [record.session_id for record in store.snapshot()] == [session_id]
-        with pytest.raises(SessionNotFound):
+        with pytest.raises(
+            SessionCleanupPending,
+            match="terminal settlement is complete; only cleanup remains pending",
+        ):
             dispatcher.subscribe(session_id)
     finally:
         release_close.set()
 
     assert dispatcher._hubs[session_id]._audit._closed.wait(2)
+    hub = dispatcher._hubs[session_id]
+    assert hub._reserve_publication(0.1)
+    try:
+        with pytest.raises(
+            TimeoutError,
+            match="terminal settlement is complete; subscriptions are closed and only cleanup remains pending",
+        ):
+            dispatcher.close(session_id)
+        with pytest.raises(SessionCleanupPending):
+            dispatcher.subscribe(session_id)
+    finally:
+        hub._release_publication()
     dispatcher.close(session_id)
     with pytest.raises(SessionNotFound):
         dispatcher.get(session_id)
     assert store.snapshot() == ()
     assert close_count == 1
+    assert dispatcher.shutdown().complete
+
+
+def test_terminal_close_publication_timeout_reopens_subscriptions() -> None:
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        audit_timeout=0.05,
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    hub = dispatcher._hubs[session_id]
+    assert hub._reserve_publication(0.1)
+    try:
+        with pytest.raises(
+            TimeoutError,
+            match="terminal settlement is complete; event publication did not quiesce",
+        ):
+            dispatcher.close(session_id)
+        assert session_id not in dispatcher._closing
+    finally:
+        hub._release_publication()
+
+    stream = dispatcher.subscribe(session_id)
+    stream.close()
+    dispatcher.close(session_id)
+    assert dispatcher.shutdown().complete
+
+
+def test_subscribe_waits_for_a_tentative_close_to_release_its_claim() -> None:
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        audit_timeout=0.1,
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    hub = dispatcher._hubs[session_id]
+    assert hub._reserve_publication(0.1)
+    close_done = Event()
+    subscribe_done = Event()
+    close_errors: list[BaseException] = []
+    subscribe_errors: list[BaseException] = []
+    streams = []
+
+    def close_session() -> None:
+        try:
+            dispatcher.close(session_id)
+        except BaseException as error:
+            close_errors.append(error)
+        finally:
+            close_done.set()
+
+    def subscribe() -> None:
+        try:
+            streams.append(dispatcher.subscribe(session_id))
+        except BaseException as error:
+            subscribe_errors.append(error)
+        finally:
+            subscribe_done.set()
+
+    close_thread = Thread(target=close_session)
+    close_thread.start()
+    subscribe_thread = Thread(target=subscribe)
+    subscribe_started = False
+    try:
+        deadline = monotonic() + 1
+        while session_id not in dispatcher._closing and monotonic() < deadline:
+            sleep(0.001)
+        assert session_id in dispatcher._closing
+
+        subscribe_thread.start()
+        subscribe_started = True
+        assert not subscribe_done.wait(0.05)
+        assert close_done.wait(1)
+        assert len(close_errors) == 1
+        assert isinstance(close_errors[0], TimeoutError)
+        assert session_id not in dispatcher._closing
+        assert not subscribe_done.is_set()
+    finally:
+        hub._release_publication()
+        if subscribe_started:
+            subscribe_thread.join(2)
+        close_thread.join(2)
+
+    assert not subscribe_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert subscribe_errors == []
+    assert len(streams) == 1
+    streams[0].close()
+
+    dispatcher.close(session_id)
+    assert dispatcher.shutdown().complete
+
+
+def test_publication_timeout_preserves_an_orderly_shutdown_close_claim() -> None:
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        audit_timeout=0.05,
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    hub = dispatcher._hubs[session_id]
+    assert hub._reserve_publication(0.1)
+    with dispatcher._condition:
+        dispatcher._accepting = False
+        dispatcher._condition.notify_all()
+    try:
+        with pytest.raises(TimeoutError, match="cleanup did not start"):
+            dispatcher.close(session_id)
+        assert session_id in dispatcher._closing
+        with pytest.raises(SessionCleanupPending):
+            dispatcher.subscribe(session_id)
+    finally:
+        hub._release_publication()
+
+    assert dispatcher.shutdown(timeout=2).complete
+
+
+def test_terminal_close_store_failure_stays_cleanup_pending_for_retry() -> None:
+    class FailOnceDropStore(InMemorySessionStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.failed = False
+
+        def drop(self, session_id):
+            if not self.failed:
+                self.failed = True
+                raise RuntimeError("store drop failed")
+            super().drop(session_id)
+
+    store = FailOnceDropStore()
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        store=store,
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
+    with pytest.raises(RuntimeError, match="store drop failed"):
+        dispatcher.close(session_id)
+    with pytest.raises(
+        SessionCleanupPending,
+        match="terminal settlement is complete; only cleanup remains pending",
+    ):
+        dispatcher.subscribe(session_id)
+
+    dispatcher.close(session_id)
+    assert store.snapshot() == ()
+    assert dispatcher.shutdown().complete
+
+
+def test_subscribe_rejects_immediately_while_detached_store_drop_blocks() -> None:
+    drop_entered = Event()
+    release_drop = Event()
+
+    class BlockingDropStore(InMemorySessionStore):
+        def drop(self, session_id):
+            drop_entered.set()
+            assert release_drop.wait(2)
+            super().drop(session_id)
+
+    dispatcher = Dispatcher(
+        {"short": registration(lambda payload: completed)},
+        store=BlockingDropStore(),
+    )
+    session_id = dispatcher.submit("short", b"payload")
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    hub = dispatcher._hubs[session_id]
+    assert hub._reserve_publication(0.1)
+    hub_reserved = True
+    close_errors: list[BaseException] = []
+    subscribe_errors: list[BaseException] = []
+    subscribe_done = Event()
+
+    def close_session() -> None:
+        try:
+            dispatcher.close(session_id)
+        except BaseException as error:
+            close_errors.append(error)
+
+    def subscribe() -> None:
+        try:
+            dispatcher.subscribe(session_id)
+        except BaseException as error:
+            subscribe_errors.append(error)
+        finally:
+            subscribe_done.set()
+
+    close_thread = Thread(target=close_session)
+    subscribe_thread = Thread(target=subscribe)
+    subscribe_started = False
+    close_thread.start()
+    try:
+        deadline = monotonic() + 1
+        while session_id not in dispatcher._closing and monotonic() < deadline:
+            sleep(0.001)
+        assert session_id in dispatcher._closing
+
+        subscribe_thread.start()
+        subscribe_started = True
+        assert not subscribe_done.wait(0.05)
+        hub._release_publication()
+        hub_reserved = False
+        assert drop_entered.wait(2)
+        assert hub.detached
+        assert subscribe_done.wait(0.5)
+        assert len(subscribe_errors) == 1
+        assert isinstance(subscribe_errors[0], SessionCleanupPending)
+    finally:
+        if hub_reserved:
+            hub._release_publication()
+        release_drop.set()
+        if subscribe_started:
+            subscribe_thread.join(2)
+        close_thread.join(2)
+
+    assert not subscribe_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert close_errors == []
+    with pytest.raises(SessionNotFound):
+        dispatcher.get(session_id)
     assert dispatcher.shutdown().complete
 
 
@@ -1807,7 +2044,7 @@ def test_shutdown_gates_subscriptions_before_terminal_hub_cleanup(
     results = []
     failures = []
 
-    def blocking_close(timeout: float) -> bool:
+    def blocking_close(timeout: float):
         close_entered.set()
         assert release_close.wait(2)
         return original_close(timeout)
@@ -1825,7 +2062,7 @@ def test_shutdown_gates_subscriptions_before_terminal_hub_cleanup(
     thread.start()
     assert close_entered.wait(2)
     try:
-        with pytest.raises(SessionNotFound):
+        with pytest.raises(SessionCleanupPending):
             dispatcher.subscribe(session_id)
         assert hub._subscribers == []
     finally:

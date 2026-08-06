@@ -167,9 +167,15 @@ kind rather than rendering every activity as source-to-target. History list and
 summary reads use a fixed query count and one primitive indexed fact row per
 run; workflow-supplied predicates preserve workflow ownership of selection and
 headline interpretation. Item and reliable-event reads use keyset pages with a
-hard 256-row ceiling and a fixed
-watermark captured in the same read transaction as the first page. No public
-repository method materializes all detail for a run.
+hard 256-row decoded/returned ceiling and a fixed watermark captured in the
+same read transaction as the first page. Reliable sequences are sparse, so a
+caller-supplied event watermark is an inclusive upper bound rather than a
+promise that its sequence has a retained row. Event reads use one indexed
+lookahead row for continuation and separately verify the run's official maximum
+event sequence on every request. A fresh event traversal already ahead of that
+maximum ends empty and must omit its watermark again when it later checks for
+newly committed history. No public repository method materializes all detail
+for a run.
 
 ## Integrity Constraints
 
@@ -285,7 +291,10 @@ rather than current implementation claims.
   they are not additional database columns.
 - Summary reads use a fixed query count and no event JSON decoding. Item and
   event pages reject limits outside 1..256, concatenate without overlap, and
-  retain a stable captured watermark while newer windows commit.
+  retain a stable captured watermark while newer windows commit. Event pages
+  decode at most the requested limit, use one indexed lookahead row across
+  legitimate sequence gaps, and reject an official durable maximum that does
+  not match its event rows.
 - Ledger v1, history v1-v3, and current-number transitional schemas lacking the
   exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.

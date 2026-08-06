@@ -10,7 +10,7 @@ import namisync.dispatcher.event_bus as event_bus
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import Gap, PhaseChanged, Progress, StateChanged, Terminal
 from namisync.core.session import OperationResult, SessionId, SessionState
-from namisync.dispatcher.event_bus import EventHub
+from namisync.dispatcher.event_bus import EventHub, EventHubCloseStatus
 
 
 class FixedClock:
@@ -640,14 +640,17 @@ def test_close_deadline_includes_waiting_for_the_publication_lock() -> None:
     assert hub._reserve_publication(0.1)
     try:
         started = monotonic()
-        assert not hub.close(0.05)
+        assert (
+            hub.close(0.05)
+            is EventHubCloseStatus.PUBLICATION_TIMEOUT
+        )
         assert monotonic() - started < 0.5
         assert hub._replay
         assert hub._subscribers == [stream]
     finally:
         hub._release_publication()
 
-    assert hub.close(0.5)
+    assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
     assert not hub._replay
     assert not hub._subscribers
     assert stream._closed
@@ -666,7 +669,7 @@ def test_close_detaches_replay_and_subscribers_before_observer_cleanup() -> None
     hub = make_hub(observer=BlockingClose(), audit_timeout=1.0)
     stream = hub.subscribe()
     hub.emit(PhaseChanged("durable"))
-    results: list[bool] = []
+    results: list[EventHubCloseStatus] = []
     thread = Thread(target=lambda: results.append(hub.close(1.0)))
     thread.start()
     assert close_entered.wait(2)
@@ -681,7 +684,44 @@ def test_close_detaches_replay_and_subscribers_before_observer_cleanup() -> None
         thread.join(2)
 
     assert not thread.is_alive()
-    assert results == [True]
+    assert results == [EventHubCloseStatus.COMPLETE]
+
+
+def test_close_reports_pending_audit_after_irreversible_hub_cleanup() -> None:
+    close_entered = Event()
+    release_close = Event()
+
+    class BlockingClose(Observer):
+        def close(self) -> None:
+            close_entered.set()
+            assert release_close.wait(2)
+            super().close()
+
+    hub = make_hub(observer=BlockingClose(), audit_timeout=1.0)
+    stream = hub.subscribe()
+    hub.emit(PhaseChanged("durable"))
+
+    status = hub.close(0.05)
+
+    assert close_entered.is_set()
+    assert status is EventHubCloseStatus.AUDIT_CLEANUP_PENDING
+    assert not hub._replay
+    assert not hub._subscribers
+    assert stream._closed
+    with pytest.raises(RuntimeError, match="event hub is closed"):
+        hub.subscribe()
+
+    release_close.set()
+    assert hub._audit._closed.wait(2)
+    assert hub._reserve_publication(0.1)
+    try:
+        assert (
+            hub.close(0.05)
+            is EventHubCloseStatus.AUDIT_CLEANUP_PENDING
+        )
+    finally:
+        hub._release_publication()
+    assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
 
 
 def test_audit_close_spends_one_deadline_across_enqueue_and_join(

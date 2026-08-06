@@ -34,6 +34,7 @@ from namisync.dispatcher.contracts import (
     ControlAction,
     ControlResult,
     Registry,
+    SessionCleanupPending,
     SessionNotFound,
     SessionNotTerminal,
     ShutdownResult,
@@ -47,7 +48,12 @@ from namisync.dispatcher.custody import (
     ResourceLockProvider,
     default_lock_provider,
 )
-from namisync.dispatcher.event_bus import EventHub, EventStream, UtcClock
+from namisync.dispatcher.event_bus import (
+    EventHub,
+    EventHubCloseStatus,
+    EventStream,
+    UtcClock,
+)
 from namisync.dispatcher.store import InMemorySessionStore
 
 
@@ -141,6 +147,7 @@ class Dispatcher:
         self._hubs: dict[SessionId, EventHub] = {}
         self._state_publication_locks: dict[SessionId, Lock] = {}
         self._closing: set[SessionId] = set()
+        self._cleanup_irreversible: set[SessionId] = set()
         self._item_events: dict[SessionId, list[ResultItem]] = {}
         self._pending: deque[SessionId] = deque()
         self._reserved: set[ResourceId] = set()
@@ -259,15 +266,21 @@ class Dispatcher:
         self, session_id: SessionId, from_seq: int | None = None
     ) -> EventStream:
         with self._condition:
+            while (
+                session_id in self._closing
+                and self._accepting
+                and session_id not in self._cleanup_irreversible
+            ):
+                self._condition.wait()
             if session_id in self._closing:
-                raise SessionNotFound(str(session_id))
+                raise self._cleanup_pending(session_id)
             publication_lock = self._state_publication_locks.get(session_id)
             if publication_lock is None:
                 raise SessionNotFound(str(session_id))
         with publication_lock:
             with self._condition:
                 if session_id in self._closing:
-                    raise SessionNotFound(str(session_id))
+                    raise self._cleanup_pending(session_id)
                 hub = self._hubs.get(session_id)
                 if hub is None:
                     raise SessionNotFound(str(session_id))
@@ -500,10 +513,30 @@ class Dispatcher:
                     raise SessionNotTerminal(str(session_id))
                 self._closing.add(session_id)
                 hub = self._hubs[session_id]
-            if not hub.close(self._audit_timeout):
+            close_status = hub.close(self._audit_timeout)
+            if close_status is EventHubCloseStatus.PUBLICATION_TIMEOUT:
+                with self._condition:
+                    # Shutdown owns its close claim once admission stops.
+                    if self._accepting:
+                        self._closing.discard(session_id)
+                        self._cleanup_irreversible.discard(session_id)
+                    self._condition.notify_all()
                 raise TimeoutError(
-                    f"session audit cleanup did not finish: {session_id}"
+                    "session terminal settlement is complete; event "
+                    "publication did not quiesce, so cleanup did not "
+                    f"start: {session_id}"
                 )
+            if close_status is EventHubCloseStatus.AUDIT_CLEANUP_PENDING:
+                with self._condition:
+                    self._cleanup_irreversible.add(session_id)
+                    self._condition.notify_all()
+                raise TimeoutError(
+                    "session terminal settlement is complete; subscriptions "
+                    f"are closed and only cleanup remains pending: {session_id}"
+                )
+            with self._condition:
+                self._cleanup_irreversible.add(session_id)
+                self._condition.notify_all()
             self._store.drop(session_id)
             with self._condition:
                 self._hubs.pop(session_id)
@@ -511,7 +544,9 @@ class Dispatcher:
                 self._controls.pop(session_id, None)
                 self._state_publication_locks.pop(session_id, None)
                 self._closing.discard(session_id)
+                self._cleanup_irreversible.discard(session_id)
                 self._item_events.pop(session_id, None)
+                self._condition.notify_all()
 
     def shutdown(self, timeout: float = 10.0) -> ShutdownResult:
         if timeout < 0:
@@ -613,7 +648,7 @@ class Dispatcher:
                 if not still_owned:
                     continue
                 remaining = max(0.0, deadline - monotonic())
-                if not hub.close(remaining):
+                if hub.close(remaining) is not EventHubCloseStatus.COMPLETE:
                     observer_incomplete.append(session_id)
             finally:
                 publication_lock.release()
@@ -992,6 +1027,13 @@ class Dispatcher:
             None,
             None,
             "session does not exist",
+        )
+
+    @staticmethod
+    def _cleanup_pending(session_id: SessionId) -> SessionCleanupPending:
+        return SessionCleanupPending(
+            "session terminal settlement is complete; only cleanup remains "
+            f"pending: {session_id}"
         )
 
     @staticmethod

@@ -1423,7 +1423,15 @@ all but one window.
   `get_event_page(...)` keyset-pages reliable `event_seq`. Both reject limits
   outside 1..256. The first page captures a committed `through_*` watermark in
   the same read transaction; subsequent pages reuse it while new history
-  windows continue committing.
+  windows continue committing. Caller-supplied event watermarks are inclusive
+  sparse bounds and need not name a retained row. Every request verifies the
+  official durable maximum through the composite primary-key index, fetches one
+  raw lookahead row, and decodes no more than the requested limit.
+- A fresh event traversal whose last successfully applied non-`Gap` cursor is
+  ahead of durability returns one empty terminal page. That traversal ends;
+  the next repair attempt omits `through_seq` and captures a new committed
+  prefix. Echoing the older watermark with the preserved cursor is an invalid
+  reversed fixed interval.
 - Terminal phase summaries have an explicit 256-row recording ceiling and may
   therefore load with the summary. Item/event detail never does.
 - The service exposes summary, item-page, and event-page methods and removes the
@@ -1641,6 +1649,14 @@ record out from under that lookup, and the observer thread takes
 `SessionNotFound`. Cleanup therefore triggers on receiving a
 `SessionRecordView` whose `result` is not `None`, which the observer emits
 once the record is safely read.
+
+Terminal cleanup remains caller-owned. A timeout before the hub gate changes no
+stream state and releases the close claim, so an attachment can still succeed
+before the adapter retries. Once subscriptions are detached, attach raises
+typed `SessionCleanupPending` while `get`/`list` continue to expose the settled
+record; the card remains closing until the caller or orderly shutdown retries
+cleanup. There is no background reaper, and neither failure path rewrites the
+terminal result or its settled history outcome.
 
 If the control is refused or unsupported, the card stays open and says why.
 A transient progress flag is never treated as completion. Application

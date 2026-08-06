@@ -1063,7 +1063,7 @@ class HistoryRepository:
             )
             items = tuple(_history_item(row) for row in rows)
             next_after = after_order if not items else items[-1].item_order
-            has_more = _page_has_more(
+            has_more = _dense_page_has_more(
                 len(items), limit, next_after, through, "item"
             )
             return HistoryItemPage(
@@ -1095,27 +1095,43 @@ class HistoryRepository:
             if run is None:
                 raise KeyError(run_token)
             durable = int(run["last_committed_seq"])
+            latest = self._connection.execute(
+                """SELECT event_seq FROM history_events
+                    WHERE run_id = ?
+                    ORDER BY event_seq DESC LIMIT 1""",
+                (run["id"],),
+            ).fetchone()
+            actual_durable = 0 if latest is None else int(latest["event_seq"])
+            if actual_durable != durable:
+                raise HistoryIntegrityError(
+                    "history event watermark disagrees with durable rows"
+                )
             through = durable if through_seq is None else through_seq
+            if through_seq is None and after_seq > durable:
+                return HistoryEventPage(
+                    run_token=run_token,
+                    through_seq=durable,
+                    events=(),
+                    next_after_seq=after_seq,
+                    has_more=False,
+                )
             _validate_watermark(after_seq, through, durable, "event")
             rows = tuple(
                 self._connection.execute(
                     """SELECT * FROM history_events
                         WHERE run_id = ? AND event_seq > ? AND event_seq <= ?
                         ORDER BY event_seq LIMIT ?""",
-                    (run["id"], after_seq, through, limit),
+                    (run["id"], after_seq, through, limit + 1),
                 )
             )
-            events = tuple(_history_event(row) for row in rows)
+            events = tuple(_history_event(row) for row in rows[:limit])
             next_after = after_seq if not events else events[-1].event_seq
-            has_more = _page_has_more(
-                len(events), limit, next_after, through, "event"
-            )
             return HistoryEventPage(
                 run_token=run_token,
                 through_seq=through,
                 events=events,
                 next_after_seq=next_after,
-                has_more=has_more,
+                has_more=len(rows) > limit,
             )
         finally:
             self._end_read()
@@ -1602,7 +1618,7 @@ def _validate_watermark(after: int, through: int, durable: int, kind: str) -> No
         raise ValueError(f"history {kind} cursor exceeds its fixed watermark")
 
 
-def _page_has_more(
+def _dense_page_has_more(
     row_count: int, limit: int, next_after: int, through: int, kind: str
 ) -> bool:
     if next_after >= through:

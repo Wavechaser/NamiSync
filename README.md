@@ -126,7 +126,12 @@ never hides the other result axes in rendered output.
   and ledger truth. Summary reads use a fixed query count without event
   decoding, item/event detail is keyset-paged at a hard 256-row maximum, the
   service and CLI no longer materialize whole runs, and durable pages can repair
-  subscriber loss before returning to live delivery.
+  subscriber loss before returning to live delivery. Reliable-event catch-up
+  now accepts sparse fixed bounds and ends a live-ahead traversal cleanly while
+  verifying the official durable maximum on every page. Terminal cleanup also
+  distinguishes a reversible hub-gate timeout from already-detached cleanup;
+  pending cleanup stays retryable and CLI shutdown warnings are no longer
+  swallowed.
 - Completed the post-review simplification pass: COPY/UPDATE/MOVE_UPDATE now
   share one ordered published-completion path; UPDATE backup metadata and
   identity evidence are explicit across hardlink/copy methods; cancellation

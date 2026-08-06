@@ -32,7 +32,7 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
-from namisync.dispatcher import SessionNotFound
+from namisync.dispatcher import SessionCleanupPending, SessionNotFound
 from namisync.db.history import HistoryContext, HistoryStore
 from namisync.db.writer import DEFAULT_RETRY_TIMEOUT_SECONDS
 from namisync.interfaces import main as package_main
@@ -314,6 +314,56 @@ def test_history_service_repairs_a_gap_through_one_fixed_durable_watermark(
     assert summary.headline == "success"
 
 
+def test_history_service_ends_a_fresh_traversal_ahead_of_durability(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / "history.db"
+    ledger = tmp_path / "ledger.db"
+    record = SessionRecord(
+        SessionId("recovery-ahead-session"),
+        "inventory",
+        SessionState.RUNNING,
+        (),
+        b"payload",
+        False,
+        0,
+        NOW,
+        started_at=NOW,
+    )
+    with HistoryStore(history, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(
+                "recovery-ahead-run",
+                "host",
+                activity_kind="inventory",
+                subject_kind="location",
+                subject_id="7",
+            ),
+        )
+        observer.on_event(
+            Envelope(
+                record.session_id,
+                1,
+                NOW,
+                SCHEMA_VERSION,
+                PhaseChanged("inventory"),
+            )
+        )
+        observer.flush()
+
+    with NamiSyncService(ledger, history) as service:
+        page = service.get_history_events(
+            "recovery-ahead-run",
+            after_seq=2,
+        )
+
+    assert page.through_seq == 1
+    assert page.next_after_seq == 2
+    assert page.events == ()
+    assert not page.has_more
+
+
 def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
     tmp_path: Path,
 ) -> None:
@@ -564,7 +614,13 @@ def test_interface_views_are_recursive_json_primitives_without_duck_typing() -> 
     )
 
 
-def test_finish_between_get_and_subscribe_returns_terminal_record() -> None:
+@pytest.mark.parametrize(
+    "subscribe_error",
+    (SessionNotFound("raced"), SessionCleanupPending("cleanup pending")),
+)
+def test_finish_between_get_and_subscribe_returns_terminal_record(
+    subscribe_error: Exception,
+) -> None:
     class Dispatcher:
         def __init__(self) -> None:
             self.get_count = 0
@@ -574,7 +630,7 @@ def test_finish_between_get_and_subscribe_returns_terminal_record() -> None:
             return _record(session_id, terminal=self.get_count > 1)
 
         def subscribe(self, session_id: str, from_seq=None):
-            raise SessionNotFound(session_id)
+            raise subscribe_error
 
     observer = SessionObserver(Dispatcher())
 

@@ -1,144 +1,78 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-05
+Date: 2026-08-06
 Branch: `milestone1`
 
 ## Session Outcome
 
-Adversarial review of the bounded durable history delivery (`93e7b94`) plus the
-older dispatcher code it exercises. The history windowing, admission,
-finalization, and bounded-readback contracts held under review. One older
-dispatcher defect and one racy executor test were corrected, and one piece of
-dead history state removed.
+Closed the four follow-up questions from the bounded-history and dispatcher
+review.
 
-- FIXED: `EventHub.subscribe()` handed a new stream `subscriber_capacity + 1`
-  envelopes whenever the retained replay was longer than one subscriber's
-  bound. The truncation branch reserved a slot for the leading `Gap` only when
-  a gap was already required before truncating, never when truncation itself
-  created it. Production sizing (128-event replay, 64-event subscriber bound)
-  reaches this on any session that has emitted more events than the subscriber
-  bound, and the over-full stream was then ejected by the next reliable event
-  before its consumer could drain. The allowance is now recomputed once
-  truncation forces the gap, and a regression pins the initial buffer at the
-  bound.
-- FIXED: `test_b2_hash_fifo_independently_plateaus_at_32_items` was racy and
-  failed roughly one full run in three under core pinning. Its checkpoint
-  sampled `source.reads` whenever both FIFOs read as full, but the two queues
-  are sampled separately while workers run, so both can read as full during
-  fill-up with a worker between its get and its put. Captured locals showed
-  `plateau_reads = [65, 67, 67]`: the first sample was taken two reads before
-  the pipeline settled, and the test then demanded all three samples agree. The
-  sampler now requires three consecutive samples at the same read count and
-  restarts the run whenever the reader moves, which is what "plateaus" was
-  meant to assert. The assertion side reads those samples once into a snapshot
-  and bounds it from below rather than at an exact length: the coordinator
-  keeps sampling every poll interval after it signals, and a woken waiter is
-  not guaranteed to run before the next retry, so pinning the count exactly was
-  a second race — a 50 ms main-thread delay after the wait failed it
-  deterministically at six samples. Verified with injected delays of 0, 50,
-  200, and 500 ms, then six clean pinned full runs. No product behavior was
-  involved: the item-cap assertions on both queues passed every time.
-- CLEANUP: `HistoryObserver._event_chain_hash` was write-only state; the
-  authoritative chain is always re-read inside the owning transaction. Removed
-  it along with the `_ExistingRun` field and the reader column that fed only
-  it, so no reader can mistake the in-memory copy for durable truth.
+- Reliable-event pages now treat caller-supplied `through_seq` as a sparse
+  inclusive bound. Every request verifies the run's official durable maximum
+  through the indexed event tail, reads `limit + 1` raw rows, and decodes at
+  most the requested limit.
+- A fresh event traversal whose live cursor is ahead of durability returns the
+  agreed empty terminal page: durable `through_seq`, unchanged
+  `next_after_seq`, and `has_more=False`. That traversal ends; a later repair
+  omits `through_seq` and captures a new committed prefix. An explicit reversed
+  fixed interval remains invalid.
+- Terminal cleanup now distinguishes a reversible timeout before the hub gate
+  from irreversible stream detachment. Subscribers wait while an accepting
+  explicit close is tentative, attach after a reversible timeout, and receive
+  typed `SessionCleanupPending` after detachment or a store-drop failure.
+  Shutdown claims remain immediate, all session ownership survives retryable
+  failures, and there is no background reaper.
+- CLI terminal cleanup no longer swallows errors, and all command paths inspect
+  final service shutdown. Warnings state that the terminal result and history
+  outcome are already settled; cleanup does not rewrite the command result or
+  exit classification.
+- The executor plateau regression now freezes the accepted three-sample
+  evidence before signaling, waits for two later coordinator checkpoints so one
+  complete blocked retry has elapsed, and compares the live reader count with
+  that immutable evidence. It tolerates waiter delay but detects a hidden read
+  during the first later retry.
+- Replay headroom remains unchanged by decision, not omission. No finite slot
+  reserve guarantees burst survival when a producer can outrun an ordinary
+  sink for an arbitrary reliable run. With the current 128/64 replay/subscriber
+  capacities, another ejection is visible and replay-recoverable churn rather
+  than silent loss. A future continuity guarantee needs a readiness handshake
+  or subscription before workflow start; `docs/DISPATCHER.md` owns the policy.
 
-Verified by inspection and by direct probes, not only by the suite: query plans
-for the summary/item/event reads use the intended indexes; a real end-to-end
-CLI sync records and renders finalized history; and hand-built incomplete sync
-and verify runs render correctly through `history` list and detail.
-
-`docs/BUGS.md` and `docs/DISPATCHER.md` carry the matching updates.
+The event-bus truncation fix in `3cba6fb` remains clean. The initial plateau
+changes in `4ca9e13` and `870dc94` removed the observed false failure but did
+not freeze post-signal evidence; the regression above completes that gate.
 
 ## Verification
 
-- Complete pytest suite: `980 passed` (979 prior plus one regression), run six
-  times consecutively under core pinning with no failure.
-- Focused dispatcher set: `72 passed in 3.54s`.
+- Focused schema/history/event-bus/dispatcher/service/CLI/executor suite:
+  `293 passed`.
+- Complete pytest suite: `995 passed in 55.73s`.
 - Import linter: `8 kept, 0 broken`.
 - Package and test compile gate: clean.
-- Dispatcher/history/service set run six times consecutively with no flake.
-- Roughly one full-suite run in six aborted on this machine with a hardware
-  fault, not a test or product failure. See "Development machine instability"
-  below before reading anything into an aborted run.
+- Plateau probes: 0/50/200/500 ms waiter delays, 200 repetitions, and an
+  injected post-signal hidden read all behaved as required.
+- Independent adversarial reviews found and then closed the plateau
+  single-retry observation gap and the close/subscribe tentative-stage and
+  blocking-store-drop races. Final page and close reviews found no remaining
+  actionable defects.
+- The documented 50-run/1,000,000-item history benchmark passed every gate:
+  0.409-second fresh summary; 7.486/6.163 ms item/event p95 pages;
+  14.382 ms p95 and 204.203 ms maximum window commits; retained peak remained
+  256 events and 79,360 bytes.
 
 ## Immediate Next Context
 
-- History v1-v3 and mismatched contract markers require the documented
-  coordinated manual ledger/history reset. No migration or automatic deletion
-  exists.
+- History v1-v3 and mismatched contract markers still require the documented
+  coordinated manual ledger/history reset; startup never migrates or deletes
+  automatically.
 - A crash can lose only the final uncommitted history window. Committed
-  nonterminal history is queryable as `incomplete`; durable process/session
+  nonterminal history remains queryable as `incomplete`; durable process/session
   custody and automatic interruption classification remain M2 work.
-- This delivery provides the backend recovery contract and service APIs, not
-  the future WebView history frontend.
+- The backend recovery contract and service APIs are ready for the future
+  WebView consumer. No frontend was added here.
 - Session-wide `OperationResult.items` and dispatcher item accumulation remain
   intentionally out of scope; history writer and readback memory are bounded.
-- The window policy has one tuning point in `docs/HISTORY.md`; do not change its
-  defaults without rerunning the documented million-item benchmark.
-
-### Development machine instability — not a product defect
-
-The development CPU produces intermittent hardware faults once it has been
-powered on for a long stretch; the maintainer has identified this and it is not
-a NamiSync bug. Do not spend a session hunting it in the code. Recorded here
-only so the next session recognizes the signature instead of re-investigating:
-
-- Roughly one full pytest run in six aborts with
-  `Windows fatal exception: access violation`. It reproduces identically on
-  unmodified `93e7b94`, so it tracks the machine rather than any commit.
-- The signature moves between unrelated tests and presents in two ways: a
-  faulthandler stack whose top frame is `Garbage-collecting` reached from an
-  ordinary allocation, and an impossible Python-level error such as a
-  `TypeError` on `len(str)` in
-  `namisync/core/pathing.py::_uppercase_one_codepoint` accompanied by
-  `<invalid frame>` in the traceback. Observed victims so far are
-  `tests/test_recorder_inventory_integrity.py` and
-  `tests/test_bridge_scan_scope.py`; both pass in isolation and on a re-run.
-- Any test that allocates heavily surfaces it more often simply because it
-  spends more time in the allocator and GC. That is exposure, not cause.
-- Not everything intermittent is this. The pipeline plateau flake fixed in this
-  session initially looked like the same signature and was not: it reproduced
-  under core pinning with a normal `AssertionError` and a coherent traceback.
-  A real Python-level assertion with an intact stack is a real defect; the
-  machine fault shows up as an abort or an impossible error.
-- Mitigation while the machine cannot be underclocked: pin the interpreter to
-  one core so threads do not migrate between them. This exact form is verified
-  to run the suite from PowerShell and to return its exit status:
-
-  ```
-  cmd /c "start /affinity 1 /wait /b .\.venv\Scripts\python.exe -m pytest -q"
-  ```
-
-  `/affinity` takes a hex CPU mask, so `1` is core 0 and `2` is core 1; `/wait`
-  and `/b` keep it synchronous and in the same console. Measured at 28.7 s
-  against roughly 28 s unpinned, so the whole suite costs nothing meaningful to
-  run this way. Pinning reduces the fault rate; it does not eliminate it.
-- Practical rule: an aborted or impossible-looking failure is a machine event.
-  Re-run it. A reproducible failure that survives a re-run and an isolated run
-  is a real defect and should be treated normally.
-
-### Open questions raised by this review (no code change made)
-
-- A late subscriber whose replay was truncated still starts at exactly its
-  bound, so the next reliable event ejects it unless the consumer drains first.
-  That is now the documented bound rather than a violation of it, but whether
-  `subscribe()` should hand out headroom instead of a full buffer is a policy
-  decision, not a defect.
-- `get_event_page()` rejects `after_seq` greater than the durable watermark with
-  `ValueError`. `docs/HISTORY.md` § Subscriber Repair describes a repairing
-  subscriber that "keeps its last applied sequence", and a live sequence can
-  legitimately exceed the last committed window. Either the repair contract
-  should say the cursor is clamped to the captured watermark, or the page should
-  return an empty result for a cursor past durability. `tests/test_service.py`
-  currently exercises repair from sequence zero, so nothing in the tree hits it.
-- `get_event_page()` also raises `HistoryIntegrityError` when a caller supplies
-  a `through_seq` that falls inside a reliable-sequence gap. That is correct as
-  tamper detection for a watermark the repository itself captured, but it makes
-  arbitrary caller-chosen watermarks an integrity failure rather than an
-  argument error. Worth deciding before the WebView history frontend chooses
-  its paging cursors.
-- `Dispatcher.close()` leaves a session in `_closing` when hub cleanup times
-  out, so `subscribe()` reports `SessionNotFound` for that settled session until
-  a `close()` retry succeeds. This matches "retain timed-out cleanup for retry",
-  but nothing forces the retry.
+- Do not change the 256-event/1-MiB/one-second history policy or invent replay
+  headroom from a convenient constant. Re-run the documented scale fixture or
+  collect UI/load evidence before changing either decision.

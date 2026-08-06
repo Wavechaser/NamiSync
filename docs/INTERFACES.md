@@ -125,21 +125,34 @@ get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
 ```
 
 History summary/page limits are `1..256`. Omitting `through_order` or
-`through_seq` captures the current durable watermark in the read transaction;
-callers reuse that returned watermark on later pages for a stable prefix while
-recording continues. Summaries decode no event payloads and may represent a
-nonterminal run as `completion_status="incomplete"`, with nullable terminal
-axes plus its current state, phase, committed sequence, item count, and commit
-time. After a restart the service exposes that committed prefix as incomplete;
-it does not infer `INTERRUPTED` or claim execution resumability without M2
-custody.
+`through_seq` starts a fresh traversal and captures the current durable
+watermark in the read transaction; callers reuse that returned watermark on
+later pages for a stable prefix while recording continues. Caller-supplied event
+watermarks are inclusive upper bounds in a sequence space where omitted lossy
+events create legitimate gaps. Pages decode and return at most the requested
+limit; an indexed lookahead decides whether more reliable events exist.
+Summaries decode no event payloads and may represent a nonterminal run as
+`completion_status="incomplete"`, with nullable terminal axes plus its current
+state, phase, committed sequence, item count, and commit time. After a restart
+the service exposes that committed prefix as incomplete; it does not infer
+`INTERRUPTED` or claim execution resumability without M2 custody.
+
+If a fresh event traversal's `after_seq` is ahead of the durable window, its
+empty page reports the durable `through_seq`, preserves the supplied cursor as
+`next_after_seq`, and sets `has_more=False`. That traversal is complete; a later
+check omits `through_seq` again rather than combining the older watermark with
+the preserved cursor. Explicitly supplying a watermark below `after_seq`
+remains invalid. Every request also verifies the run's official maximum event
+sequence, even when traversing an older fixed watermark.
 
 Reliable-event pages are the catch-up source after an ordinary subscriber
-reports `Gap`: fetch through one fixed committed sequence, apply returned
-envelopes by sequence, consult the summary for terminal truth, then resubscribe
-after the watermark, repeating if live replay has advanced again. Missing
-sequence numbers may be lossy `Progress` events, which history deliberately
-does not retain, and are not themselves durable history loss.
+reports `Gap`: retain the last successfully applied non-`Gap` sequence rather
+than the synthetic `Gap` envelope's sequence, fetch through one fixed committed
+sequence, apply returned envelopes by sequence, consult the summary for
+terminal truth, then resubscribe after the watermark, repeating with a fresh
+traversal if live replay or durability advanced again. Missing sequence numbers
+may be lossy `Progress` events, which history deliberately does not retain, and
+are not themselves durable history loss.
 
 Location starts bind the five-state resolution synchronously before dispatcher
 admission and return a primitive `LocationSession`. An unresolved binding raises
@@ -451,8 +464,9 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
   refuse planning before dispatcher submission.
 - Read-only history remains usable during an active mutating session.
 - History summaries avoid event decoding; item/event pages enforce the
-  256-record ceiling and stable-watermark traversal, and incomplete rows never
-  render as terminal or resumable work.
+  256-record decoded/returned ceiling and stable-watermark traversal, sparse
+  event bounds use one indexed lookahead, and incomplete rows never render as
+  terminal or resumable work.
 - The security spike forces Edge Chromium, attaches both native navigation
   guards, rejects a dispatch after hostile navigation, and exposes only the
   versioned allowlisted structured endpoint.

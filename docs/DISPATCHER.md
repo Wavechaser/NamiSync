@@ -47,10 +47,18 @@ terminals `FAILED`; it is never masked as clean cancellation.
 
 `close()` is distinct from cancellation: it accepts only an already-terminal
 record, blocks new subscriptions, and waits for audit/subscriber cleanup before
-dropping the session-store row or any in-memory ownership. If cleanup exceeds
-the injected audit timeout it raises `TimeoutError` and retains the record, hub,
-controls, and publication lock for a safe retry. `shutdown()` stops admission,
-attempts cancellation first for every session whose publication and hub gates
+dropping the session-store row or any in-memory ownership. Hub cleanup reports
+whether it completed, timed out before acquiring the hub publication gate, or
+closed subscriptions but still has audit cleanup pending. A pre-gate timeout
+changes no hub state, removes the temporary close claim, and allows subscription
+or a later close retry. An attachment racing that tentative explicit close
+waits for its bounded outcome; it does not receive a cleanup-pending error
+unless the close crosses the irreversible boundary. Once subscriptions are
+closed, `close()` raises a `TimeoutError` that identifies cleanup as pending
+and retains the record, hub, controls, publication lock, and close claim for a
+safe caller-owned retry. A store-drop failure retains that same irreversible
+cleanup state. `shutdown()` stops admission, attempts cancellation first for
+every session whose publication and hub gates
 are immediately available, then spends only its remaining shared deadline on
 deferred gates and cleanup. Shutdown reserves the hub before persisting
 `CANCELING`, then offers the matching audit event without waiting on queue
@@ -138,13 +146,29 @@ is longer than one subscriber's bound, the truncation itself is what creates
 that gap, so the leading `Gap` occupies a slot inside the bound: a new stream
 never starts with more buffered envelopes than its capacity.
 
+That full initial buffer is deliberate for now. No finite number of reserved
+slots is a contract-derived burst tolerance: a workflow can emit an arbitrarily
+long reliable run before an ordinary sink drains once, so one spare slot is
+only a one-event courtesy and a larger constant merely moves the same boundary.
+With the production 128-envelope replay and 64-envelope subscriber capacities,
+an immediate later ejection is visible, and resubscription from
+`first_missed_seq` can replay the dropped tail; its cost is duplicate work and a
+stuttering consumer, not silent data loss. NamiSync therefore keeps the full
+replay tail until UI/load evidence establishes a useful reserve. A consumer
+that requires guaranteed continuity needs a readiness handshake or must attach
+before workflow start; a magic headroom constant cannot provide that guarantee.
+
 A per-session publication gate spans each persisted lifecycle transition and
 its matching reliable `StateChanged`. Later transitions cannot publish first or
 make the hub's current-state replay regress, while unrelated sessions remain
 independent. Dispatcher also serializes hub subscription registration with
 terminal `close()` and shutdown cleanup: if subscribe wins, cleanup shuts that
-stream; once cleanup claims the session, subscribe returns `SessionNotFound`.
-A closed session cannot retain a newly orphaned stream.
+stream; once irreversible cleanup claims the session, subscribe raises typed
+`SessionCleanupPending`, stating that terminal settlement is complete and only
+cleanup remains. A pre-publication timeout releases that claim because no hub
+state changed. A closed session cannot retain a newly orphaned stream. Retry is
+owned by the caller or orderly shutdown for hub/audit cleanup and by the caller
+for a failed store drop; dispatcher runs no background reaper.
 
 An ordinary `EventStream.close()` is an immediate unsubscribe as well as a
 reader wakeup. The stream invokes its hub-removal callback once, outside the
@@ -323,8 +347,9 @@ duplicate terminal paths from being reinvented by each interface.
   remains independent from volume locks.
 - Orderly teardown completes without UI-thread deadlock and reports any session
   that could not drain within policy.
-- Terminal records survive until explicit close; a timed-out audit cleanup
-  retains hub/store ownership for retry. Queued discard is observed as
+- Terminal records survive until explicit close; a timed-out audit cleanup or
+  store drop retains hub/store ownership for retry, while a timeout before the
+  hub gate leaves subscriptions available. Queued discard is observed as
   `CANCELED+UNRUN` before `drop()` and never requires a dispatcher-to-history
   import or string parsing.
 

@@ -576,33 +576,44 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
     chunk_count = 96
     release_writer = threading.Event()
     hash_fifo_blocked = threading.Event()
+    post_signal_checkpoint = threading.Event()
+    post_signal_checkpoints = 0
     plateau_reads: list[int] = []
+    accepted_plateau: tuple[int, ...] | None = None
     source = _ItemCapSource(chunk_count, chunk_size)
     target = _DiscardingBlockedTarget(release_writer)
     backend = _backend(collect_metrics=True)
 
     def checkpoint() -> None:
+        nonlocal accepted_plateau, post_signal_checkpoints
         frame = inspect.currentframe()
         caller = None if frame is None else frame.f_back
-        if (
-            caller is not None
-            and caller.f_code.co_name == "put_coordinator"
-            and len(queues) == 2
-            and queues[0].full()
-            and queues[1].full()
-        ):
-            # The two FIFOs are sampled separately and workers run
-            # concurrently, so both can read as full while the pipeline is
-            # still filling and a worker sits between its get and its put.
-            # Three samples that merely happen to agree are therefore not
-            # evidence of a plateau; require three consecutive samples at the
-            # same read count and restart the run whenever the reader moves.
-            reads = source.reads
-            if plateau_reads and plateau_reads[-1] != reads:
-                plateau_reads.clear()
-            plateau_reads.append(reads)
-            if len(plateau_reads) >= 3:
-                hash_fifo_blocked.set()
+        coordinator_put = (
+            caller is not None and caller.f_code.co_name == "put_coordinator"
+        )
+        if hash_fifo_blocked.is_set():
+            if coordinator_put:
+                post_signal_checkpoints += 1
+                if post_signal_checkpoints == 2:
+                    post_signal_checkpoint.set()
+            return
+        if not coordinator_put or len(queues) != 2:
+            return
+        if not queues[0].full() or not queues[1].full():
+            plateau_reads.clear()
+            return
+        # The two FIFOs are sampled separately and workers run concurrently,
+        # so both can read as full while the pipeline is still filling and a
+        # worker sits between its get and its put. Require three consecutive
+        # full samples at the same read count, restarting the run whenever
+        # either condition changes.
+        reads = source.reads
+        if plateau_reads and plateau_reads[-1] != reads:
+            plateau_reads.clear()
+        plateau_reads.append(reads)
+        if len(plateau_reads) == 3:
+            accepted_plateau = tuple(plateau_reads)
+            hash_fifo_blocked.set()
 
     call = _start_copy(
         backend,
@@ -615,16 +626,17 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
     try:
         assert target.writer_started.wait(_WAIT_SECONDS)
         assert hash_fifo_blocked.wait(_WAIT_SECONDS)
-        # The coordinator keeps sampling every poll interval after signaling,
-        # and a woken waiter is not guaranteed to run before its next retry.
-        # Read the samples once and bound them from below: a longer run is the
-        # same plateau observed more times, while a reader that moved again
-        # would have cleared the run back to one entry.
-        plateau = list(plateau_reads)
+        # Wait for two later coordinator checkpoints, proving that one complete
+        # enqueue retry elapsed after signaling. The accepted evidence is
+        # immutable, so waiter scheduling cannot grow or replace the run, and
+        # reader movement during that retry remains visible against it.
+        assert post_signal_checkpoint.wait(_WAIT_SECONDS)
+        assert accepted_plateau is not None
+        plateau = accepted_plateau
         assert len(queues) == 2
         assert queues[0].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
         assert queues[1].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
-        assert len(plateau) >= 3
+        assert len(plateau) == 3
         assert len(set(plateau)) == 1
         assert source.reads == plateau[-1]
         assert source.reads < chunk_count

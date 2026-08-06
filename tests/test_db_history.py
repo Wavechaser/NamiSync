@@ -700,6 +700,39 @@ def test_item_and_event_pages_use_fixed_keyset_watermarks(tmp_path: Path) -> Non
     assert latest.items[-1].item_order == 6
 
 
+def test_fresh_event_traversal_can_start_ahead_of_durability(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+        observer.on_event(_envelope(record, 1, PhaseChanged("scan")))
+        observer.flush()
+
+        with HistoryRepository(store.path) as repository:
+            ahead = repository.get_event_page("run-1", after_seq=2)
+
+            observer.on_event(_envelope(record, 3, PhaseChanged("execute")))
+            observer.flush()
+
+            caught_up = repository.get_event_page("run-1", after_seq=2)
+            with pytest.raises(ValueError, match="cursor exceeds"):
+                repository.get_event_page(
+                    "run-1",
+                    after_seq=ahead.next_after_seq,
+                    through_seq=ahead.through_seq,
+                )
+
+    assert ahead.through_seq == 1
+    assert ahead.next_after_seq == 2
+    assert ahead.events == ()
+    assert not ahead.has_more
+    assert caught_up.through_seq == 3
+    assert caught_up.next_after_seq == 3
+    assert [event.event_seq for event in caught_up.events] == [3]
+    assert not caught_up.has_more
+
+
 @pytest.mark.parametrize("limit", [0, 257])
 def test_read_limits_reject_unbounded_requests(tmp_path: Path, limit: int) -> None:
     record = _record()
@@ -758,6 +791,7 @@ def test_pages_decode_no_more_than_the_requested_limit(
             event_page = repository.get_event_page("run-1", limit=2)
             assert len(event_page.events) == 2
             assert len(decoded) == 2
+            assert event_page.has_more
 
 
 def test_summary_listing_uses_fixed_queries_and_never_decodes_event_json(
@@ -803,8 +837,31 @@ def test_event_pages_round_trip_nonitem_reliable_events_and_sequence_gaps(
         observer.flush()
         with HistoryRepository(store.path) as repository:
             page = repository.get_event_page("run-1")
+            first = repository.get_event_page(
+                "run-1", through_seq=4, limit=1
+            )
+            second = repository.get_event_page(
+                "run-1",
+                after_seq=first.next_after_seq,
+                through_seq=first.through_seq,
+                limit=1,
+            )
+            before_history = repository.get_event_page(
+                "run-1", through_seq=0
+            )
     assert [event.event_seq for event in page.events] == list(sequences)
     assert [event.envelope.body for event in page.events] == list(bodies)
+    assert [event.event_seq for event in first.events] == [1]
+    assert first.through_seq == 4
+    assert first.has_more
+    assert [event.event_seq for event in second.events] == [3]
+    assert second.next_after_seq == 3
+    assert second.through_seq == 4
+    assert not second.has_more
+    assert before_history.events == ()
+    assert before_history.next_after_seq == 0
+    assert before_history.through_seq == 0
+    assert not before_history.has_more
 
 
 def test_event_readback_detects_payload_tampering(tmp_path: Path) -> None:
@@ -849,6 +906,47 @@ def test_page_readback_rejects_a_watermark_past_its_durable_rows(
             repository.get_item_page("run-1")
         with pytest.raises(HistoryIntegrityError, match="event watermark"):
             repository.get_event_page("run-1")
+        with pytest.raises(HistoryIntegrityError, match="event watermark"):
+            repository.get_event_page("run-1", through_seq=1)
+        with pytest.raises(HistoryIntegrityError, match="event watermark"):
+            repository.get_event_page("run-1", after_seq=3)
+
+
+def test_event_page_rejects_rows_past_an_official_zero_watermark(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    with HistoryStore(path, clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+        observer.on_event(_envelope(record, 1, PhaseChanged("scan")))
+        observer.flush()
+    connection = connect_history_writer(path)
+    try:
+        connection.execute(
+            """UPDATE history_runs SET last_committed_seq = 0
+                WHERE run_token = 'run-1'"""
+        )
+    finally:
+        connection.close()
+
+    with HistoryRepository(path) as repository:
+        with pytest.raises(HistoryIntegrityError, match="event watermark"):
+            repository.get_event_page("run-1")
+
+
+def test_event_page_accepts_an_official_zero_watermark(tmp_path: Path) -> None:
+    record = _record()
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+        observer.finalize(OperationResult(SessionState.COMPLETED))
+        with HistoryRepository(store.path) as repository:
+            page = repository.get_event_page("run-1")
+
+    assert page.through_seq == 0
+    assert page.next_after_seq == 0
+    assert page.events == ()
+    assert not page.has_more
 
 
 def test_history_sequence_admission_does_not_scan_prior_hashes(tmp_path: Path) -> None:
@@ -1268,7 +1366,16 @@ def test_history_page_queries_use_paging_and_aggregate_indexes(tmp_path: Path) -
             for row in connection.execute(
                 """EXPLAIN QUERY PLAN SELECT * FROM history_events
                     WHERE run_id = 1 AND event_seq > 0 AND event_seq <= 10
-                    ORDER BY event_seq LIMIT 10"""
+                    ORDER BY event_seq LIMIT 11"""
+            )
+            for column in row
+        )
+        event_watermark_plan = " ".join(
+            str(column)
+            for row in connection.execute(
+                """EXPLAIN QUERY PLAN SELECT event_seq FROM history_events
+                    WHERE run_id = 1
+                    ORDER BY event_seq DESC LIMIT 1"""
             )
             for column in row
         )
@@ -1290,6 +1397,7 @@ def test_history_page_queries_use_paging_and_aggregate_indexes(tmp_path: Path) -
         connection.close()
     assert "history_events_run_item_order_idx" in item_plan
     assert "sqlite_autoindex_history_events_1" in event_plan
+    assert "sqlite_autoindex_history_events_1" in event_watermark_plan
     assert "history_events_run_item_aggregate_idx" in aggregate_plan
 
 

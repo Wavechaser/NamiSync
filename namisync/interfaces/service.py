@@ -17,6 +17,7 @@ from namisync.dispatcher import (
     Dispatcher,
     EventStream,
     PreparedSession,
+    SessionCleanupPending,
     SessionNotFound,
     WorkflowRegistration,
 )
@@ -281,7 +282,7 @@ class SessionObserver:
 
         try:
             stream = self._dispatcher.subscribe(session_id)
-        except SessionNotFound:
+        except (SessionCleanupPending, SessionNotFound):
             finished = session_record_view(self._dispatcher.get(session_id))
             if finished.result is None:
                 raise

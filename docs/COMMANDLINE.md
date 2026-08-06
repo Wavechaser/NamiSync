@@ -160,6 +160,15 @@ Exit status derives from typed result, not log text or byte count.
 Ledger degradation tells the user to fix ledger path/access and rerun the
 activity; an inventory-only rescan is not presented as evidence repair.
 
+Terminal session cleanup is best-effort and never rewrites an already-settled
+workflow result or its exit classification. A timeout says that terminal
+result and history outcome are already settled, identifies cleanup as the only
+pending work, and notes that final service shutdown will retry. Unexpected
+per-session cleanup errors are printed rather than swallowed. Every command
+inspects final service shutdown; an incomplete shutdown prints the unfinished
+session ids and whether resource custody remains held while preserving the
+command's domain result.
+
 ## Concurrency And Control
 
 Mutating commands submit to dispatcher and obey cross-process physical-volume

@@ -1285,8 +1285,14 @@ History browsing obtains summaries with a fixed query count from run rows,
 bounded phase summaries, and grouped primitive item facts. It never selects
 event JSON for classification. Item and reliable-event detail use database
 keyset pages of at most 256 rows under a fixed durable watermark captured in
-the first page's read transaction. The service has separate summary, item-page,
-and event-page methods; the unbounded full-run path is removed.
+the first page's read transaction. Reliable-event sequence space is sparse:
+caller-supplied inclusive bounds may land on omitted lossy progress, while each
+request independently verifies that the run's official durable watermark equals
+the indexed maximum retained reliable event. Event pages fetch one raw lookahead
+row but decode only the requested limit. A fresh traversal whose live cursor is
+ahead of durability ends empty; its next attempt omits the fixed watermark and
+captures a new prefix. The service has separate summary, item-page, and
+event-page methods; the unbounded full-run path is removed.
 **Flesh — deferred.** History retention waits for a maintenance session with
 cross-process history-writer custody; no M1 retention setting, facade action, or
 direct UI SQL exists. Also deferred: general migration module; legacy import;
@@ -1363,7 +1369,11 @@ history is the durable trail. Session identity is not desktop task identity:
 the M1 adapter may retain a reviewed plan in a task while no session exists,
 and closes each plan or execution session only after consuming its terminal
 record. A queued session discarded before running writes its history entry
-first.
+first. Close distinguishes a reversible timeout before the hub gate from
+irreversible stream detachment followed by pending audit/store cleanup. Only the
+former reopens attachment; the latter retains all ownership for caller or
+shutdown retry and reports typed `SessionCleanupPending` rather than pretending
+the still-listed terminal session does not exist.
 
 **Flesh — deferred (M2).** `SqliteSessionStore` — the durable implementation
 behind the same protocol; reload on launch; startup reconciliation (dead-process

@@ -222,7 +222,7 @@ def _run_sync(
             return EXIT_FAILED
         finally:
             if plan_session is not None:
-                _close_terminal(service, plan_session.session_id)
+                _close_terminal(service, plan_session.session_id, stderr)
 
         if (
             plan_record.result is None
@@ -287,7 +287,7 @@ def _run_sync(
             return EXIT_FAILED
         finally:
             if execution_session is not None:
-                _close_terminal(service, execution_session.session_id)
+                _close_terminal(service, execution_session.session_id, stderr)
 
         _render_execution(
             execution_record,
@@ -297,7 +297,7 @@ def _run_sync(
         )
         return _exit_for_record(execution_record)
     finally:
-        service.close()
+        _close_service(service, stderr)
 
 
 def _run_location_workflow(
@@ -390,7 +390,7 @@ def _run_location_workflow(
                 )
                 return EXIT_FAILED
         finally:
-            _close_terminal(service, session.session_id)
+            _close_terminal(service, session.session_id, stderr)
 
         details = None
         try:
@@ -416,7 +416,7 @@ def _run_location_workflow(
             )
         return _exit_for_record(record)
     finally:
-        service.close()
+        _close_service(service, stderr)
 
 
 def _run_history(
@@ -502,7 +502,7 @@ def _run_history(
         print(f"History could not be read: {_safe(error)}", file=stderr)
         return EXIT_FAILED
     finally:
-        service.close()
+        _close_service(service, stderr)
 
 
 def _wait_for_result(
@@ -1016,12 +1016,60 @@ def _exit_for_record(record: SessionRecordView) -> int:
     }.get(category.headline, EXIT_FAILED)
 
 
-def _close_terminal(service: NamiSyncService, session_id: str) -> None:
+def _close_terminal(
+    service: NamiSyncService,
+    session_id: str,
+    stderr: TextIO,
+) -> None:
     try:
-        if service.get_session(session_id).result is not None:
-            service.close_session(session_id)
-    except Exception:
-        pass
+        record = service.get_session(session_id)
+    except Exception as error:
+        print(
+            "Session cleanup check failed unexpectedly; final shutdown will "
+            f"retry: {type(error).__name__}: {_safe(error)}",
+            file=stderr,
+        )
+        return
+    if record.result is None:
+        return
+    try:
+        service.close_session(session_id)
+    except TimeoutError as error:
+        print(
+            "The terminal result and history outcome are already settled; "
+            "cleanup remains pending and final shutdown will retry: "
+            f"{_safe(error)}",
+            file=stderr,
+        )
+    except Exception as error:
+        print(
+            "The terminal result and history outcome are already settled, but "
+            "session cleanup failed unexpectedly; "
+            "final shutdown will continue best-effort cleanup: "
+            f"{type(error).__name__}: {_safe(error)}",
+            file=stderr,
+        )
+
+
+def _close_service(service: NamiSyncService, stderr: TextIO) -> None:
+    try:
+        shutdown = service.close()
+    except Exception as error:
+        print(
+            "NamiSync final cleanup failed unexpectedly; the command result "
+            f"remains unchanged: {type(error).__name__}: {_safe(error)}",
+            file=stderr,
+        )
+        return
+    if shutdown.complete:
+        return
+    unfinished = ", ".join(shutdown.unfinished) or "none reported"
+    custody = "released" if shutdown.custody_released else "still held"
+    print(
+        "NamiSync final cleanup is incomplete; the command result remains "
+        f"unchanged. Unfinished sessions: {unfinished}; custody: {custody}.",
+        file=stderr,
+    )
 
 
 def _safe(value: object) -> str:

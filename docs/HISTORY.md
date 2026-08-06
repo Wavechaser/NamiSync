@@ -152,11 +152,26 @@ lease. Durable custody and automatic interruption classification belong to M2.
 
 Read limits are explicit and bounded at 256; invalid limits are rejected rather
 than truncated. When a page omits `through_order` or `through_seq`, the
-repository captures the corresponding durable watermark in the same SQLite
-read transaction as the page. Callers reuse that watermark for later pages, so
-one traversal sees a stable committed prefix even while a writer commits newer
-windows. Each request ends its read transaction, allowing the same WAL reader
-to observe the next committed window on its next request.
+repository starts a fresh traversal by capturing the corresponding durable
+watermark in the same SQLite read transaction as the page. Callers reuse that
+watermark for later pages, so one traversal sees a stable committed prefix even
+while a writer commits newer windows. A caller-supplied event watermark is an
+inclusive sequence bound and may fall on an omitted lossy `Progress` sequence.
+Event reads fetch one indexed lookahead row to determine `has_more`, but return
+and decode no more than the requested limit.
+
+Every event-page request verifies that `history_runs.last_committed_seq` is the
+actual maximum durable event sequence in the same read snapshot, including
+requests traversing an older caller-supplied watermark. A missing, trailing, or
+otherwise mismatched official row is history corruption, not an ordinary
+sequence gap. If a fresh traversal's `after_seq` is ahead of current durability,
+the repository returns an empty terminal page with the captured durable
+`through_seq`, the unchanged `after_seq` as `next_after_seq`, and
+`has_more=False`. That page ends the traversal; a later attempt omits
+`through_seq` again to capture newly committed history. An explicit fixed
+watermark below `after_seq` remains an invalid interval. Each request ends its
+read transaction, allowing the same WAL reader to observe the next committed
+window on its next request.
 
 Workflow code supplies the finite selection-exclusion/no-op predicates and,
 not SQL, interprets the resulting primitive counts into integrity and headline
@@ -167,13 +182,17 @@ prints the summary and streams item pages without assembling a complete run.
 
 ## Subscriber Repair
 
-A subscriber that receives `Gap` keeps its last applied sequence, requests
-durable event pages through one captured committed watermark, and applies the
-available reliable envelopes in order while deduplicating by sequence. Missing
+A subscriber that receives `Gap` keeps the sequence of its last successfully
+applied non-`Gap` envelope, not the sequence carried by the synthetic `Gap`
+itself, requests durable event pages through one captured committed watermark,
+and applies the available reliable envelopes in order while deduplicating by
+sequence. Missing
 lossy-progress sequence numbers are expected and are not reported as history
-loss. It then reads the summary to recover finalized terminal truth if the live
-terminal was missed, resubscribes after the committed watermark, and repeats if
-live replay advanced again during repair.
+loss. A live cursor ahead of the committed window produces the empty fresh page
+described above; the next repair attempt starts a new traversal. The subscriber
+then reads the summary to recover finalized terminal truth if the live terminal
+was missed, resubscribes after the committed watermark, and repeats if live
+replay advanced again during repair.
 
 Only the committed prefix can be repaired. If audit degraded before an event
 became durable, history correctly makes no claim that it can recover that tail.
@@ -225,6 +244,16 @@ p50, 17.746 ms p95, and 37.898 ms maximum, while event pages were 9.800 ms p50,
 13.995 ms p95, and 22.100 ms maximum. “Fresh reader”
 means a new SQLite connection after fixture creation, not a forced cold OS
 filesystem cache. All locked gates passed.
+
+The 2026-08-06 rerun after sparse event-bound and official-watermark validation
+used the same environment, fixture, and policy. Recording took 48.826 seconds
+over 3,919 transactions; commit latency was 3.676 ms p50, 14.382 ms p95, and
+204.203 ms maximum, with the same 256-event/79,360-byte retained peak. Summary
+readback took 0.409 seconds on a fresh reader and 0.516 seconds immediately
+afterward. Fresh-reader item/event pages took 3.650/5.092 ms; warm item pages
+were 3.927 ms p50, 7.486 ms p95, and 8.861 ms maximum, while event pages were
+3.614 ms p50, 6.163 ms p95, and 6.752 ms maximum. All locked gates passed; no
+window-policy default changed.
 
 Increasing a threshold trades crash exposure, memory, and write latency for
 fewer transactions. Decreasing one does the reverse. The one-second maximum

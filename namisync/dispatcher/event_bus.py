@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from enum import StrEnum
 from queue import Empty, Full, Queue
 from threading import Condition, Event, Lock, Thread
 from time import monotonic
@@ -28,6 +29,19 @@ from namisync.dispatcher.contracts import AuditObserver
 class UtcClock:
     def now(self) -> datetime:
         return datetime.now(timezone.utc)
+
+
+class EventHubCloseStatus(StrEnum):
+    """Progress made by one bounded EventHub cleanup attempt."""
+
+    COMPLETE = "complete"
+    PUBLICATION_TIMEOUT = "publication-timeout"
+    AUDIT_CLEANUP_PENDING = "audit-cleanup-pending"
+
+    def __bool__(self) -> bool:
+        """Preserve the former completed/not-completed close check."""
+
+        return self is EventHubCloseStatus.COMPLETE
 
 
 class EventStream:
@@ -465,11 +479,18 @@ class EventHub:
         self._seq = 0
         self._lock = Lock()
         self._subscriptions_closed = False
+        self._detached = Event()
         self._audit = _AuditPump(observer, audit_capacity, audit_flush_interval)
 
     @property
     def audit_degraded(self) -> bool:
         return self._audit.degraded
+
+    @property
+    def detached(self) -> bool:
+        """Whether stream/replay cleanup crossed its irreversible boundary."""
+
+        return self._detached.is_set()
 
     def emit(
         self,
@@ -600,21 +621,30 @@ class EventHub:
     def finalize_audit(self, result: OperationResult) -> RecordingStatus:
         return self._audit.finalize(result, self._audit_timeout)
 
-    def close(self, timeout: float) -> bool:
+    def close(self, timeout: float) -> EventHubCloseStatus:
         if timeout < 0:
             raise ValueError("close timeout cannot be negative")
         deadline = monotonic() + timeout
         remaining = max(0.0, deadline - monotonic())
         if not self._lock.acquire(timeout=remaining):
-            return False
+            if self.detached:
+                return EventHubCloseStatus.AUDIT_CLEANUP_PENDING
+            return EventHubCloseStatus.PUBLICATION_TIMEOUT
         try:
-            self._subscriptions_closed = True
             subscribers = tuple(self._subscribers)
             self._subscribers.clear()
             self._replay.clear()
             for stream in subscribers:
                 stream._close_from_hub()
+            self._subscriptions_closed = True
+            self._detached.set()
         finally:
             self._lock.release()
+
+        return self._finish_audit_close(deadline)
+
+    def _finish_audit_close(self, deadline: float) -> EventHubCloseStatus:
         remaining = max(0.0, deadline - monotonic())
-        return self._audit.close(remaining)
+        if self._audit.close(remaining):
+            return EventHubCloseStatus.COMPLETE
+        return EventHubCloseStatus.AUDIT_CLEANUP_PENDING
