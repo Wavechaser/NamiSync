@@ -114,6 +114,8 @@ never hides the other result axes in rendered output.
   [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
   [Handoff](docs/HANDOFF.md) — present and future scope, known issues, and session context.
+- [Module rig](docs/RIG.md) — `tools/rig`, the development harness for executor
+  and verifier benchmarking.
 
 ## Changelog
 
