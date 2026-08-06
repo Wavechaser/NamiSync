@@ -1,6 +1,8 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04): implementation plan for the remaining M1 desktop shell.
+Status (2026-08-04, revised 2026-08-06): implementation plan for the remaining
+M1 desktop shell. The revision folds in the bounded-history and
+terminal-cleanup outcomes recorded in `docs/HANDOFF.md` and adds sections 5-8.
 Stages 1-5.5 and the WebView2 reality spike are complete; no product window or
 packaged frontend has shipped. NamiSync remains version `0.1.0` until M1 is
 complete. Finishing M1 makes the product beta-ready; any later version change
@@ -291,6 +293,14 @@ third-party notices, signing, or a WebView2 bootstrapper.
    A second launch finds the exact product window title, restores it, attempts
    `SetForegroundWindow`, reports activation failure visibly, and exits zero.
    No IPC or `AllowSetForegroundWindow` protocol is introduced.
+8. Give database contract refusal a visible surface. Service construction or
+   first dispatch against ledger/history contract markers that mismatch the
+   supported versions fails with the documented coordinated manual reset
+   direction. The GUI presents that refusal actionably — a native message box
+   before window creation or an error document inside the window — and never
+   exits silently, because the GUI-subsystem process has no console. Startup
+   never migrates or deletes automatically; after refusal every database file
+   is byte-identical.
 
 Slice 1 closes the revised BR-G-19 and BR-G-31 host clauses. It proves wheel
 installation, not yet the final PyInstaller artifact.
@@ -331,6 +341,14 @@ Fault-inject lost reliable and terminal responses and repeat
 `pywebviewready` while a drain is outstanding. This closes BR-G-33 and retains
 XV-18 shutdown behavior.
 
+The GUI is a recovery consumer, not a continuity consumer, but the normal path
+must not lean on recovery: the task observation attaches before execution
+admission starts the workflow, so an ordinary run inside the BR-G-42 envelope
+sees no `Gap` with the production 128/64 replay/subscriber capacities.
+`docs/DISPATCHER.md` still owns the continuity policy; bursts beyond that
+envelope remain visible, replay-recoverable churn through the
+`Gap`/resubscribe path rather than a reason to invent replay headroom.
+
 ### Slice 4 - Presentation core and shell frame
 
 Implement `visible_sequence.py` plus the minimal rail/panel/tree frontend.
@@ -361,6 +379,14 @@ Land database-paged history, semantic-settings UI, cosmetic `ui-state.json`,
 task close sequencing, shutdown retry/incomplete presentation, and normal
 single-instance activation behavior. Close BR-G-40, BR-G-41, and the history
 portion of BR-G-42.
+
+History paging follows the bounded readback contract exactly. A fresh event
+traversal whose live cursor is ahead of durability returns the empty terminal
+page — durable `through_seq`, unchanged `next_after_seq`, `has_more=False` —
+and `history.js` treats that page as the end of that traversal, not a
+retryable error. A later repair issues a fresh read that omits `through_seq`
+and captures the new committed prefix; an explicit reversed fixed interval
+remains invalid.
 
 ### Slice 8 - Beta packaging and release closure
 
@@ -418,8 +444,8 @@ git diff --check
 ```
 
 On the supported Windows profile, missing WebView2 fails headed verification
-actionably; it is not a skip or xfail. Every `test_br_g_*` test is collected by
-the release command.
+actionably; it is not a skip or xfail. Every `test_br_g_*` and `test_sh_g_*`
+test is collected by the release command.
 
 ## 4. Explicit Deferrals
 
@@ -436,3 +462,205 @@ first beta release as stated above:
 Durable sessions/plans, cross-process task visibility, retention, general
 schema migration, unattended execution, and a remote API remain outside M1 as
 specified by the existing milestone documents.
+
+## 5. Shell Acceptance Gates
+
+`M1_BRIDGE.md`'s BR-G contract remains the primary acceptance authority; the
+slice-to-gate mapping in section 2 is unchanged. The SH-G gates below pin only
+decisions this file owns. Each is written so that the least-effort
+implementation that satisfies it is still a correct shell: every gate names an
+observable behavior, a counterexample or fault injection, and the shortcut
+that does not count. Headless SH-G tests join the ordinary suite; headed ones
+carry the `headed` marker; all are collected by the release command.
+
+- **SH-G-1 — Entry points are classified by the operating system, not by
+  intent.** From a built wheel installed into a clean venv: `nami-sync` with
+  no subcommand prints usage naming `nami-sync-gui` and exits with the
+  existing usage status; a subprocess probe proves no `webview` or `webview.*`
+  module is loaded after a real explicit CLI command; `python -m namisync`
+  behaves identically; and the generated `nami-sync-gui` executable's PE
+  header declares the Windows GUI subsystem. *Not satisfied by* calling
+  launcher functions in-process, patching `sys.modules`, or asserting on a
+  source checkout where console scripts were never generated.
+- **SH-G-2 — One root owns every GUI artifact.** With an injected isolated
+  root, the ledger, history, settings, ui-state, log, and `webview2`
+  artifacts all resolve beneath it; a headed `--data-dir` run leaves the real
+  per-user directory untouched, proven by probing that directory rather than
+  by trust; a relative `--data-dir` is refused before any directory is
+  created. A static scan proves no module other than `paths.py` reads
+  `LOCALAPPDATA` or composes the product directory name. *Not satisfied by*
+  unit-testing the resolver while another component builds its own path.
+- **SH-G-3 — Logging is proven by emitted records.** Configuring twice yields
+  one handler set; a real child GUI-path process shows pywebview records in
+  the file and nothing on the console; rotation is exercised across the 5 MiB
+  boundary; injected thread-level and process-level exceptions both appear;
+  and a dispatched hostile command leaves no raw body or filesystem path in
+  the emitted file. *Not satisfied by* asserting handler configuration
+  without records or by logging only from the test process.
+- **SH-G-4 — One version, three witnesses.** `namisync.version.VERSION`,
+  installed distribution metadata, and the startup log record agree, with the
+  metadata read from the installed distribution. *Not satisfied by* comparing
+  the constant to itself.
+- **SH-G-5 — Database contract refusal has a visible GUI surface.**
+  Fault-injecting mismatched ledger/history contract markers into an isolated
+  root produces the documented coordinated-manual-reset direction on a
+  visible GUI surface, leaves every database file byte-identical, and does
+  not exit silently. *Not satisfied by* a log-only refusal or by testing the
+  service exception without the GUI surface.
+- **SH-G-6 — The wheel is the artifact under test.** The built wheel contains
+  every packaged asset, `importlib.resources` resolves `index.html` from the
+  installed wheel in a clean venv, and the headed smoke scenario loads that
+  resolved page. *Not satisfied by* resolving from the source tree.
+- **SH-G-7 — Static frontend invariants scan the shipped file set.** Over the
+  exact asset set the wheel ships: `window.pywebview` appears only in
+  `bridge.js`; the CSP meta element is the first element of `head`; no inline
+  script or event attribute exists; and the CSS/JS row-height declarations
+  are integer-equal, with the headed hostile-row measurement matching
+  `ROW_H`. *Not satisfied by* scanning a hand-maintained file list that is
+  not derived from the packaged asset set.
+- **SH-G-8 — The drain attaches before work starts.** A test proves the task
+  observation is subscribed before execution admission starts the workflow,
+  and no `Gap` occurs inside the BR-G-42 normal envelope; a fault-injected
+  burst beyond that envelope recovers through the existing `Gap`/resubscribe
+  path. *Not satisfied by* attaching after start and relying on replay.
+- **SH-G-9 — The history pager terminates on the empty terminal page.** A
+  fault-injected traversal whose live cursor is ahead of durability renders
+  the committed prefix and stops on the empty terminal page; a later repair
+  captures the new committed prefix through a fresh read that omits
+  `through_seq`; a request counter proves no retry loop. *Not satisfied by*
+  treating the empty terminal page as an error or by testing only a fully
+  durable run.
+- **SH-G-10 — The gate ledger is executable.** A meta-test reads the closed
+  BR-G and SH-G ids for every slice this file marks complete and fails when a
+  collected test named for one of them is missing or deselected; the release
+  command collects every such test. *Not satisfied by* a checklist, a marker
+  file, or a skipped test.
+
+The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
+`tests/interfaces/web/test_paths.py` (SH-G-2),
+`tests/interfaces/web/test_logging_config.py` (SH-G-3),
+`tests/test_version.py` (SH-G-4), `tests/interfaces/web/test_startup_refusal.py`
+(SH-G-5), `tests/interfaces/web/test_wheel_assets.py` (SH-G-6),
+`tests/interfaces/web/test_frontend_static.py` (SH-G-7),
+`tests/interfaces/web/test_drain.py` (SH-G-8),
+`tests/interfaces/web/test_history_pager.py` (SH-G-9), and
+`tests/test_gate_ledger.py` (SH-G-10). A gate test may live elsewhere only if
+the ledger meta-test still finds it by name.
+
+## 6. Contract and Policy Watchlist
+
+Each row names a policy that must not drift silently, the authority that owns
+it, and the action any change requires. "Rerun" means the named gates run
+against the changed configuration before the change lands.
+
+| Policy | Authority | On change |
+| --- | --- | --- |
+| 256-event/1-MiB/one-second history window policy | `docs/HISTORY.md`, reaffirmed in `docs/HANDOFF.md` | Rerun the documented 50-run/1,000,000-item benchmark and all its gates |
+| 128/64 replay/subscriber capacities; no invented replay headroom | `docs/DISPATCHER.md` | UI/load evidence or a readiness-handshake design, never a constant bump |
+| `pywebview==6.2.1`, `pythonnet==3.1.0`, `clr_loader`, Bottle floor, return transport | Section 1.2 | Rerun the native reality and hostile-text gates (BR-G-30/31/32 family) |
+| Windows `netfx` runtime path and `PYTHONNET_RUNTIME` conflict refusal | `docs/DESKTOP_UI.md` | Re-probe and update the shared prerequisite check |
+| CSP, exact-origin, and navigation/popup guards | `docs/M1_BRIDGE.md` | Rerun BR-G-31/BR-G-32 headed scenarios |
+| `private_mode=True` with explicit `storage_path` | Section 1.3 | Headed retest of the storage branch on any pywebview upgrade |
+| `BridgeDispatcher` exposes only `dispatch` | Section 1.8 | Underscore the new member and keep the static test passing |
+| Two-declaration `ROW_H` equality | Section 1.7 | Keep the parse test and headed measurement passing |
+| Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
+| Reliable readback semantics: sparse inclusive `through_seq`, empty terminal page | `interfaces/service.py`, `docs/HISTORY.md` | Rerun SH-G-9 and the service page tests |
+| Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
+
+The 256-row visible-window cap and the 256-event history retention cap are
+independent constants that happen to share a value. No shared constant may
+unify them, and changing one is never a reason to change the other.
+
+## 7. Parallel Delivery Lanes
+
+Serial delivery in section 2's order remains valid. When capacity allows, the
+sequence decomposes into lanes that share no production files, the same way
+`M1_BRIDGE.md` decomposed Stage 5.5:
+
+| Lane | Owns | Contains | Depends on |
+| --- | --- | --- | --- |
+| **H — Host and transport** | `launcher.py`, `paths.py`, `logging_config.py`, `host.py`, `bridge.py`, `commands.py`, `slots.py`, `drain.py`, `bridge.js`, harness assets | Phase 0, Slices 1-3, in order | nothing |
+| **P — Presentation core** | `visible_sequence.py`, `tree.js`, `rail.js`, `panels.js`, `app.css` geometry | Slice 4's pure logic and frame | Stage 5.5 arrays (done); its headed geometry check waits for Lane H's Slice 2 harness |
+| **S — Sync surface** | plan renderer, overlays, follow mode | Slice 5 | H and P |
+| **I — Inventory surface** | inventory projections, `view_id` lifecycle, inventory renderer | Slice 6 | H and P; parallel with S |
+| **L — Lifecycle and history** | `history.js`, settings UI, `ui-state.json`, close sequencing | Slice 7 | H (Slices 2-3) and P's frame; parallel with S and I |
+| **R — Release** | PyInstaller spec, lockfile, CI, notices, as-built docs | Slice 8 | everything above |
+
+Phase 0's six items are mutually independent and may land in any order. Lane P
+can start immediately: `visible_sequence.py` is pure over workflow-owned
+arrays, and the JavaScript modules are authorable and unit-testable before a
+window exists; only their headed checks queue behind the harness.
+
+Two boundary rules make S ∥ I ∥ L safe. First, no two lanes edit one file.
+After Slice 4 lands, the frame skeleton belongs to Lane P; if S and I run
+concurrently, plan- and inventory-specific panel rendering split into
+`plan.js` and `inventory.js`, and rail task-lifecycle presentation passes to
+Lane L, amending section 1.6's target layout accordingly. Serial delivery may
+keep the smaller listed set. Second, each surface adds its own hostile-text
+headed scenario to the shared harness rather than editing another lane's
+scenario.
+
+## 8. Atomicity, Idempotency, and Orthogonality Rules
+
+The spec already implies most of these; this section makes them normative so
+they are reviewable and testable.
+
+### 8.1 Atomicity
+
+- Every numbered Phase 0 item and slice step is one revertible change landing
+  with its tests. A step whose tests cannot land with it is mis-sliced.
+- Slice 1 steps 5 and 6 are separate atoms: the startup order and the close
+  state machine land as distinct changes even though both live in `host.py`.
+  The step 1 rename is behavior-free and lands alone.
+- Slice 2's command table, pre-handler refusal layer, `slots.py`, and the
+  headed harness are four atoms.
+- `settings.json` and `ui-state.json` writes go through write-to-temp and
+  atomic replace in the destination directory. BR-G-41's corruption recovery
+  remains the read-side guard; replace is the write-side guard, and the GUI
+  never half-writes either file.
+
+### 8.2 Idempotency
+
+Already required, restated here as one list: logging configuration
+(section 1.4); host preparation, which the start wrapper repeats
+(`docs/DESKTOP_UI.md`); the synchronous `before_load` installer; teardown,
+which runs once while the later programmatic close passes through
+(Slice 1 step 6); repeated `pywebviewready` handling with at most one drain
+per task (section 1.8); and mutation retry under one `command_id`
+(section 1.8).
+
+Added by this section:
+
+- `AppPaths` directory creation is create-if-absent and safe to repeat.
+- The single-instance mutex is acquired once and held for the host lifetime;
+  re-acquisition by the same process is not attempted.
+- A second user close gesture during visible closing joins the in-flight
+  teardown. `NamiSyncService.close(timeout)` already returns its settled
+  `ShutdownView` on repeat calls; the host relies on that rather than
+  guarding it again.
+- History repair reads are idempotent by construction: a repair is a fresh
+  traversal, never a mutation of pager state.
+
+### 8.3 Orthogonality
+
+One owner per decision; intentional couplings are named.
+
+- `paths.py` owns root resolution and creation; `logging_config.py` consumes
+  an `AppPaths` value and composes no path of its own.
+- `host.py` owns sequencing; `pywebview_runtime.py` owns pywebview
+  primitives; `bridge.py` owns dispatch security. No file duplicates
+  another's checks.
+- `visible_sequence.py` alone owns windowing and the 256-row cap; `tree.js`
+  renders what it is given and re-validates nothing.
+- `request_id` (one transport attempt) and `command_id` (one user gesture)
+  remain orthogonal identities; neither is derived from the other.
+- `--data-dir` is application-composition input, never session authority.
+- `version.py` is the single version source with three witnesses (SH-G-4).
+- The named constants 28 (`ROW_H`), 256 (visible window), 256 (history
+  events), 5 MiB (log budget), and 128/64 (replay/subscriber capacities) are
+  independent decisions; no shared constant, helper, or "cleanup" may unify
+  any pair.
+- One intentional coupling: the read-only .NET Framework probe serves as both
+  the pywebview WinForms prerequisite check and the pythonnet runtime check
+  (section 1.2). That is a decision, not an accident, and it stays a single
+  probe.
