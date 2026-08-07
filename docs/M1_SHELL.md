@@ -115,31 +115,81 @@ documented web-data reset.
 ### 1.4 Logging
 
 The GUI configures logging before importing pywebview. The logger is
-standard-library-only and writes UTF-8 rotating files under
-`%LOCALAPPDATA%\NamiSync\logs` (or the injected isolated root). The initial
-budget is one 5 MiB active file plus five backups.
+standard-library-only. It eagerly opens `<root>/logs/namisync.log` in append
+mode through `RotatingFileHandler(delay=False, maxBytes=5 * 1024 * 1024,
+backupCount=5, encoding="utf-8", errors="backslashreplace")`. Rotation retains
+the active file plus `namisync.log.1` through `namisync.log.5`; there is no BOM
+or time-based rotation. Eager opening makes an unusable log destination a
+startup refusal rather than a delayed surprise, while `backslashreplace` keeps
+a malformed surrogate from disabling diagnostics.
 
-The same handler is attached to the `namisync` and `pywebview` loggers before
-pywebview import. This prevents pywebview 6.2.1 from adding its default console
-handler and retains swallowed event-handler and native-host failures. Records
-include UTC time, process, thread, level, and logger. Startup records the
-NamiSync, Python, OS, pywebview, pythonnet, `clr_loader`, Bottle, and observed
-WebView2 versions. Process- and thread-level unhandled exceptions are retained.
-Raw bridge command bodies and returned filesystem data are not logged.
+The same handler object is attached to the `namisync` and `pywebview` loggers
+before pywebview import. Both loggers and the handler use level `INFO`, both
+loggers set `propagate=False`, and configuration neither adds a root handler
+nor mutates the root logger. This prevents pywebview 6.2.1 from adding its
+default console handler and retains swallowed event-handler and native-host
+failures without duplicate console or ancestor output. M1 has no log-level
+option and does not treat `PYWEBVIEW_LOG` as a product configuration surface.
 
-Logging configuration is idempotent. Failure to create the application data
-or log directory is an actionable pre-window startup failure rather than a
-silent no-logging mode. Normal exit calls `logging.shutdown()` after the GUI
-loop ends.
+Every record begins with this stable text header and uses uppercase level names:
+
+```text
+YYYY-MM-DDTHH:MM:SS.mmmZ LEVEL pid=<decimal> thread=<thread-name> logger=<name>: <message>
+```
+
+The timestamp is UTC with millisecond precision. Exception tracebacks follow
+the header as standard formatter continuation lines. This is a human-readable
+local diagnostic format, not a versioned interchange schema; individual
+message prose is not a compatibility contract.
+
+Immediately after configuration, `startup.begin` records the NamiSync, Python,
+and OS versions. `platform.python_version()` and `platform.platform()` supply
+the interpreter and OS values. After the lazy imports,
+`startup.dependencies` records the installed pywebview, pythonnet, `clr_loader`,
+and Bottle distribution versions from `importlib.metadata`; logging
+configuration does not import those packages merely to discover metadata. The
+registry preflight is availability evidence, not selected-runtime identity.
+During native guard attachment on the WinForms UI thread, `startup.renderer`
+records the value read from
+`CoreWebView2.Environment.BrowserVersionString`; a prerequisite refusal records
+its typed reason instead because no renderer exists. Idempotently installed
+`sys.excepthook` and
+`threading.excepthook` wrappers record an unhandled exception once with its
+traceback and then delegate once to the hooks they replaced.
+
+NamiSync-authored diagnostic calls may retain stable event names, opaque ids,
+counts, durations, versions, and exception types. They do not format or retain
+raw bridge bodies, returned view/domain objects, settings contents, filenames,
+or filesystem paths. Tracebacks and OS- or dependency-supplied error text may
+incidentally contain Python source or filesystem paths; the local log is
+therefore diagnostic data that must be reviewed before sharing, not a promised
+path-free artifact. Logging is never the ledger or history audit authority.
+
+Logging configuration is idempotent: repeating it preserves exactly one shared
+NamiSync-owned handler and one wrapper per exception hook. Failure to create or
+open the application data/log directory is an actionable pre-window startup
+failure rather than a silent no-logging mode. A later write failure cannot
+change sync, ledger, history, or shutdown truth. Normal exit emits its final
+record and calls `logging.shutdown()` after the GUI loop ends.
 
 ### 1.5 Product version and license metadata
 
-`namisync/version.py` contains the single `VERSION` constant. Setuptools reads
-it through `[project] dynamic = ["version"]` and
+`namisync/version.py` is dependency-free and contains the single product and
+distribution `VERSION` constant. Setuptools reads it through
+`[project] dynamic = ["version"]` and
 `[tool.setuptools.dynamic] version = {attr = "namisync.version.VERSION"}`.
 Runtime/About/logging expose the same value, and a test compares it with
 installed distribution metadata. The value stays `0.1.0` throughout M1; this
 plan does not preselect the next version or a suffix.
+
+Database schemas, settings, event envelopes, workflow payloads, bridge
+messages, semantic policies, contract markers, dependency constraints, and
+native-runtime floors keep independent versions beside the contracts that own
+them. They are neither stored in nor derived from `version.py`, and changing
+one does not mechanically select a product version. A future support view may
+aggregate owner-supplied values at the composition root, but it must not copy
+them into a second registry. The Python and JavaScript bridge declarations are
+the intentional two-language exception and require an agreement test.
 
 The existing GPLv3 `LICENSE` is declared as
 `license-files = ["LICENSE"]` in `[project]` during Phase 0. Third-party
@@ -247,15 +297,19 @@ walks and reads public attributes during injection.
 Phase 0 contains host-shaping prerequisites and small packaging corrections.
 It creates no WebView window.
 
-1. Add the single runtime version source and retarget project metadata to it;
-   keep `0.1.0` and land the installed-metadata agreement test with it.
+1. Add the single product/distribution version source and retarget project
+   metadata to it; keep `0.1.0`, keep contract/schema versions with their
+   owners, and land the installed-metadata agreement test with it.
 2. Add GUI `AppPaths` resolution and an injectable isolated data root, with
    path/isolation tests that prove importing it loads no `webview` module.
 3. Declare the exact pythonnet dependency and Bottle floor; document and guard
    the tested Windows `netfx` runtime, and pin those declarations with tests.
 4. After items 1-3, add bounded file logging and pywebview logger capture, with
-   configuration callable before pywebview import. Land rotation, idempotence,
-   emitted-record, privacy, and no-`webview`-import tests with it.
+   configuration callable before pywebview import. Land exact-header, UTF-8
+   fallback, ownership/level, rotation, idempotence, emitted-record,
+   exception-hook, safe-startup-record, and no-`webview`-import tests with it.
+   Slice 2's real bridge child adds the hostile-body privacy scenario and
+   closes SH-G-3; Phase 0 does not pretend dispatch exists yet.
 5. Declare `LICENSE` through `license-files` and prove it in built-wheel
    metadata.
 
@@ -296,7 +350,8 @@ third-party notices, signing, or a WebView2 bootstrapper.
                    -> ExactOrigin.from_url(window.real_url)
                    -> bind pending document origin exactly once
                    -> register synchronous before_load installer
-       before_load -> UI thread -> attach native guards
+       before_load -> UI thread -> record BrowserVersionString
+                                -> attach native guards
        loaded      -> verify attached/no attachment_error
    ```
 
@@ -530,17 +585,30 @@ carry the `headed` marker; all are collected by the release command.
   unit-testing the GUI resolver while another GUI component builds its own
   path.
 - **SH-G-3 — Logging is proven by emitted records.** Configuring twice yields
-  one handler set; a real child GUI-path process shows pywebview records in
-  the file and nothing on the console; rotation is exercised across the 5 MiB
-  boundary; injected thread-level and process-level exceptions both appear;
-  and a dispatched hostile command containing a unique synthetic path sentinel
-  leaves neither its raw body nor that sentinel in the emitted file. *Not
-  satisfied by* asserting handler configuration without records or by logging
-  only from the test process.
-- **SH-G-4 — One version, three witnesses.** `namisync.version.VERSION`,
+  one shared handler, one wrapper per exception hook, no root mutation, and the
+  exact levels and propagation policy from section 1.4. An ordinary successful
+  child GUI-path process eagerly creates `namisync.log`, emits a parseable UTC
+  header with the required fields, captures pywebview records in the file, and
+  writes nothing to the console. Its startup records contain the specified
+  product/interpreter/OS and installed dependency versions; the headed scenario
+  records the selected renderer's native `BrowserVersionString`, not a registry
+  guess. ASCII fixtures cross the configured 5 MiB rollover threshold and
+  create the numbered backup; separately, valid non-ASCII text remains UTF-8
+  and a malformed surrogate is backslash-escaped without an internal logging
+  failure. Separate injected
+  thread-level and process-level exception scenarios each log once and delegate
+  once. A dispatched hostile command containing a unique synthetic path
+  sentinel leaves neither its raw body nor that sentinel in the emitted file.
+  *Not satisfied by* asserting handler configuration without records or by
+  logging only from the test process.
+- **SH-G-4 — One product version, three witnesses.**
+  `namisync.version.VERSION`,
   installed distribution metadata, and the startup log record agree, with the
-  metadata read from the installed distribution. *Not satisfied by* comparing
-  the constant to itself.
+  metadata read from the installed distribution. Importing
+  `namisync.version` in a fresh subprocess loads no other NamiSync submodule.
+  *Not satisfied by* comparing the constant to itself, importing an owning
+  layer through `version.py`, or treating a schema/protocol version as a fourth
+  witness.
 - **SH-G-5 — Database contract refusal has a visible GUI surface.**
   Fault-injecting mismatched ledger/history contract markers into an isolated
   root produces the documented coordinated-manual-reset direction on a
@@ -616,6 +684,8 @@ against the changed configuration before the change lands.
 | Windows `netfx` runtime path and `PYTHONNET_RUNTIME` conflict refusal | `docs/DESKTOP_UI.md` | Re-probe and update the shared prerequisite check |
 | CSP, exact-origin, and navigation/popup guards | `docs/M1_BRIDGE.md` | Rerun BR-G-31/BR-G-32 headed scenarios |
 | `private_mode=True` with explicit `storage_path` | Section 1.3 | Headed retest of the storage branch on any pywebview upgrade |
+| `namisync.log` header, level/propagation ownership, rotation, Unicode fallback, and privacy boundary | Section 1.4 | Rerun SH-G-3 and its child-process tests |
+| Product/distribution version remains independent of schema, protocol, policy, contract, dependency, and runtime versions | Section 1.5 and each owning module | Bump and test only the affected owner; never create a central version registry |
 | `BridgeDispatcher` exposes only `dispatch` | Section 1.8 | Underscore the new member and keep the static test passing |
 | Two-declaration `ROW_H` equality | Section 1.7 | Keep the parse test and headed measurement passing |
 | Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
@@ -713,7 +783,10 @@ One owner per decision; intentional couplings are named.
 - `request_id` (one transport attempt) and `command_id` (one user gesture)
   remain orthogonal identities; neither is derived from the other.
 - `--data-dir` is application-composition input, never session authority.
-- `version.py` is the single version source with three witnesses (SH-G-4).
+- `version.py` is the single product/distribution version source with three
+  witnesses (SH-G-4). Every schema, protocol, policy, contract, dependency,
+  and runtime version remains with its owning layer and is never derived from
+  the product version.
 - The named constants 28 (`ROW_H`), 256 (visible window), 256 (history
   events), 5 MiB (log budget), and 128/64 (replay/subscriber capacities) are
   independent decisions; no shared constant, helper, or "cleanup" may unify

@@ -686,16 +686,19 @@ them. Retrofitting identity is the worst migration there is.
 
 M1 is one deliberate pre-release schema boundary, not an incremental migration:
 the ledger advances to v2 for canonical XXH3-128 content evidence and history
-advances to v3 for nominal phase-tagged result items plus reserved compound
-phase summaries. The versions are qualified by immutable final-contract markers:
-ledger `m1-ledger-xxh3-128` and history
-`m1-history-generic-items-phases-v1`. A nonempty database is checked read-only
-for its numeric version and then exact marker before any writer or schema script
-is opened. Older versions and missing/mismatched markers are refused with one
-actionable reset posture, and development setup deletes/recreates both databases
-together. The existing narrow history v1→v2 migrator must not stamp a v3
-database. Settings files survive this reset. A general migration framework
-remains later work.
+advances to v4 for the bounded, incrementally durable reliable-event journal,
+typed item projections and rolling aggregates, and terminal-only phase
+summaries and result axes. The versions are qualified by immutable
+final-contract markers: ledger
+`m1-ledger-xxh3-128` and history `m1-history-windowed-events-v1`. A nonempty
+database is checked read-only for its numeric version and then exact marker
+before any writer or schema script is opened. Ledger v1, history v1-v3, and
+missing/mismatched markers are refused with one actionable reset posture, and
+development setup deletes/recreates both databases together. There is no
+v3-to-v4 history migration because v3 lacks the reliable state and phase events
+needed to reconstruct the journal. Settings files survive this reset. A general
+migration framework remains later work.
+
 - **Schema-version stamp** on both databases; the migration module is separate
   from the sync path but the stamp is present from row zero.
 
