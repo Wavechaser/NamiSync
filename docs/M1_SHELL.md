@@ -416,20 +416,43 @@ third-party notices, signing, or a WebView2 bootstrapper.
    `window.destroy()` fall straight through to the bounded finalizer. Slice 1
    supplies empty wake/subscription hooks for later slices rather than blocking
    the UI thread.
-7. Add a per-interactive-session named mutex retained for the host lifetime.
-   One builder function derives both the `Local\`-namespaced mutex name and the
-   exact product window title from a single stable per-interactive-session
-   base, so the instance that sets the title and the instance that searches for
-   it cannot drift apart; a test asserts the pair is stable. Single instance is
-   intentionally global: one GUI per interactive Windows session regardless of
-   `--data-dir`, so two data roots still exclude each other. A second launch
-   finds that exact window title, restores it, attempts `SetForegroundWindow`,
-   reports activation failure visibly, and exits zero. No IPC or
-   `AllowSetForegroundWindow` protocol is introduced. A test-only switch can
-   disable the guard so isolated or parallel headed tests — and a developer's
-   already-running instance — do not collide; that switch is a
-   construction/environment test affordance only, never an argv, bridge, or page
-   input, and is not a product configuration surface.
+7. Add a per-logon-session single instance built on one injected
+   `DesktopInstanceIdentity(mutex_name, window_title)`. The production launcher
+   always constructs the fixed, version-independent pair
+   `DesktopInstanceIdentity(mutex_name=r"Local\NamiSync.Desktop",
+   window_title="NamiSync")`. The `Local\` namespace is deliberate — one
+   instance per Windows logon session, not one across all users: a `Global\`
+   mutex would make separately signed-in users fight over one instance, and
+   cross-session activation could not work anyway. The name carries no product
+   version, `AppPaths`, or `--data-dir` component; a version component would let
+   an old and a new install run at once, and a data-root component would be an
+   undocumented multi-instance switch.
+
+   Both sides consume the same immutable object rather than re-deriving a
+   string, so there is nothing to keep in agreement (both consumers are Python;
+   unlike `ROW_H`, this needs no cross-language parse test). The first instance
+   holds `identity.mutex_name` for the host lifetime and passes
+   `identity.window_title` to `create_window`; a losing launch probes that same
+   mutex, calls `FindWindowW` with that same title, restores the window,
+   attempts `SetForegroundWindow`, reports activation failure visibly, and exits
+   zero. No IPC or `AllowSetForegroundWindow` protocol is introduced. The
+   production title stays fixed for the window lifetime — task name and status
+   live inside the page, because retitling the window would break activation
+   discovery.
+
+   The mutex is authoritative; the title is only a discovery mechanism. A second
+   launch can lose the mutex while the first instance is still creating its
+   window, and the existing "activation failure is visible and non-error" rule
+   already covers that startup race without adding IPC.
+
+   Tests receive an injected identity through Python construction only —
+   `test_instance_identity(unique_token)` deriving a private pair such as
+   `Local\NamiSync.Test.<token>` / `NamiSync Test <token>` — so concurrent
+   headed hosts get independent mutexes and can never find or activate a real
+   user window. The instance namespace is never selectable through argv,
+   environment, bridge command, or page content: the production launcher always
+   supplies the fixed production identity, and only the headed harness supplies
+   a test identity, directly at host construction.
 8. Give database state a coordinated preflight with a visible refusal surface.
    Add the service facade's read-only `validate_database_contracts()` preflight
    and call it before window creation and before any command admission. It
@@ -731,6 +754,18 @@ carry the `headed` marker; all are collected by the release command.
   `through_seq`; a request counter proves no retry loop. *Not satisfied by*
   treating the empty terminal page as an error or by testing only a fully
   durable run.
+- **SH-G-10 — Single-instance identity is one fixed contract, injected for
+  tests.** The production launcher always constructs the fixed
+  `DesktopInstanceIdentity` (`Local\NamiSync.Desktop`, title `NamiSync`), and
+  changing `AppPaths` or `--data-dir` leaves both values unchanged. Two launches
+  on the production identity collide on the mutex; two headed hosts built with
+  distinct injected test identities coexist. The title passed to `create_window`
+  and the title the activator passes to `FindWindowW` both come from the one
+  injected object, and a test identity never searches for or activates the
+  production title. No production entry point — argv, environment, bridge, or
+  page — exposes an instance-namespace override. *Not satisfied by* asserting a
+  constant equals itself, deriving identity from the data root, or a test that
+  shares the production namespace.
 
 The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
 `tests/interfaces/web/test_paths.py` (SH-G-2),
@@ -739,7 +774,8 @@ The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
 (SH-G-5), `tests/interfaces/web/test_wheel_assets.py` (SH-G-6),
 `tests/interfaces/web/test_frontend_static.py` (SH-G-7),
 `tests/interfaces/web/test_drain.py` (SH-G-8),
-and `tests/interfaces/web/test_history_pager.py` (SH-G-9). A gate test may live
+`tests/interfaces/web/test_history_pager.py` (SH-G-9), and
+`tests/interfaces/web/test_single_instance.py` (SH-G-10). A gate test may live
 elsewhere only when the owning slice updates this list in the same change.
 Release evidence records the collected `test_sh_g_*` node ids alongside the
 BR-G ids; the cleared-`addopts` release command, not the default headless suite,
@@ -751,7 +787,7 @@ clause lands:
 | Final closure | Shell gates |
 | --- | --- |
 | Phase 0 | SH-G-4 |
-| Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6 |
+| Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
 | Slice 3 | SH-G-8 |
 | Slice 4 | SH-G-7 |
@@ -778,7 +814,7 @@ against the changed configuration before the change lands.
 | Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
 | Reliable readback semantics: sparse inclusive `through_seq`, empty terminal page | `namisync/interfaces/service.py`, `docs/HISTORY.md` | Rerun SH-G-9 and the service page tests |
 | Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
-| Single-instance identity: one builder for the `Local\` mutex name and window title; global per interactive session | Slice 1 step 7 | Keep the one builder and the stable-pair/activation tests; the disable switch stays test-only |
+| Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
 
 The 256-row visible-window cap and the 256-event history retention cap are
@@ -878,9 +914,10 @@ One owner per decision; intentional couplings are named.
   renders what it is given and re-validates nothing.
 - `request_id` (one transport attempt) and `command_id` (one user gesture)
   remain orthogonal identities; neither is derived from the other.
-- Single-instance identity is one pair from one builder, deliberately keyed to
-  the interactive session rather than the data root: single instance is global
-  by design, and `--data-dir` never scopes it.
+- Single-instance identity is one immutable `DesktopInstanceIdentity` object,
+  passed to both the holder and the activator rather than re-derived, and keyed
+  to the logon session — never to product version, `AppPaths`, or `--data-dir`.
+  Only the headed harness injects an alternate (test) identity, at construction.
 - Command allowlisting is constructor-only: `commands.py` owns the production
   mapping, the host passes it, and only the harness composes
   `production + test_report`. No runtime, argv, environment, or bridge
