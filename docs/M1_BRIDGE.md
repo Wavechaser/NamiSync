@@ -1766,6 +1766,22 @@ pywebview 6.2.1 internally constructs JavaScript for exposed-function returns,
 so its serializer/escaper is audited on every version change and covered by
 the real-browser hostile-name round trip.
 
+**The document security policy is normative and fixed.** The packaged
+`index.html` carries exactly one Content-Security-Policy `<meta>` element, the
+first element in `head`, whose raw ASCII content value is byte-for-byte:
+
+```text
+default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'
+```
+
+Both `default-src` and `connect-src` stay `'none'`: the bridge is the only
+channel and needs no browser fetch, while the explicit
+`script-src`/`style-src`/`img-src 'self'` directives authorize the same-origin
+packaged assets. The authored `index.html`, this normative string, and the
+static test's expected literal are the three witnesses — no generated HTML and
+no production Python constant restate it. `M1_SHELL.md`'s SH-G-7 asserts the
+wheel-shipped file equals this policy byte-for-byte.
+
 The Stage 6 reality run refines how that posture is implemented. A pre-window
 preparation step hardens pywebview and probes the WebView2 runtime through one
 read-only compatibility module behavior-checked against the pinned pywebview

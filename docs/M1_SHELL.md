@@ -1,9 +1,11 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, revised 2026-08-06): implementation plan for the remaining
-M1 desktop shell. The revision folds in the bounded-history and
-terminal-cleanup contracts now recorded in `HISTORY.md` and `DISPATCHER.md`
-and adds sections 5-8.
+Status (2026-08-04, revised 2026-08-07): implementation plan for the remaining
+M1 desktop shell. The 2026-08-06 revision folded in the bounded-history and
+terminal-cleanup contracts now recorded in `HISTORY.md` and `DISPATCHER.md` and
+added sections 5-8; the 2026-08-07 revision settles single-instance identity,
+the database file-pair matrix, in-loop startup teardown, the normative CSP
+gate, the GUI argument grammar, and constructor-only command composition.
 Stages 1-5.5 and the WebView2 reality spike are complete; no product window or
 packaged frontend has shipped. NamiSync remains version `0.1.0` until M1 is
 complete. Finishing M1 makes the product beta-ready; any later version change
@@ -64,6 +66,14 @@ prerequisite, database-contract, and second-instance activation failures use
 that reporter and never rely on stderr. Failures are logged once logging is
 available; activation failure remains the already-settled non-error case.
 
+`gui_main` accepts a closed argument grammar: either no arguments, or exactly
+one `--data-dir PATH` (the `--data-dir=PATH` equals spelling is accepted). The
+GUI-subsystem executable installs no implicit `-h`/`--help` console output.
+Unknown flags, positional arguments, a repeated `--data-dir`, a missing value,
+and a relative or non-local path are refused before any directory creation,
+mutex acquisition, logging configuration, or pywebview import; the native
+startup-error reporter shows the reason and the process exits nonzero.
+
 ### 1.2 Runtime dependencies
 
 The reality-tested native host stack is part of the product contract:
@@ -101,7 +111,8 @@ NamiSync/
 
 A GUI-only `--data-dir PATH` override supplies this application-composition
 input for tests and isolated runs. The value must resolve to an absolute local
-path; it is never browser-supplied and never persisted as session authority. A
+path, enforced by the §1.1 argument grammar before any side effect; it is never
+browser-supplied and never persisted as session authority. A
 headed test must pass an isolated root and must not touch the real per-user
 directory.
 
@@ -340,7 +351,9 @@ third-party notices, signing, or a WebView2 bootstrapper.
    import webview
    prepare_pywebview_host(webview)
    construct NamiSyncService from AppPaths
-   service.validate_database_contracts() -> read-only existing-file check
+   validate_database_contracts() -> fresh | ready | refused
+       fresh   -> coordinated database initialization
+       refused -> native reporter, run finalizer, exit nonzero
    create pending NativeDocumentState
    create BridgeDispatcher(document=pending_state)
    create_window(local index path, js_api=dispatcher)
@@ -357,12 +370,33 @@ third-party notices, signing, or a WebView2 bootstrapper.
 
    Dispatch remains closed while document authority is pending or failed.
    Pywebview private window fields are not mutated to solve construction order.
-   A failure before the GUI loop unwinds acquired state in reverse: close the
-   service if constructed, shut logging down if configured, release the mutex,
-   then show the original failure through the native reporter and exit nonzero.
-   Cleanup failures are added to the log when it is available but do not replace
-   the actionable startup refusal. The losing second instance never configures
-   the rotating logger, so two GUI processes cannot rotate the same file.
+
+   A failure before `start_edge_chromium` unwinds acquired state through one
+   bounded finalizer: close the service if constructed, log any cleanup failure
+   without replacing the original startup failure, shut logging down if
+   configured, release the mutex, show the failure through the native reporter,
+   and exit nonzero. The losing second instance never configures the rotating
+   logger, so two GUI processes cannot rotate the same file.
+
+   Two failures happen *inside* `start_edge_chromium` and converge on that same
+   finalizer, because pywebview swallows event-handler exceptions and its
+   decorated close can wait ~20 seconds for a window that was never shown:
+
+   - **Initialized failure** (renderer or origin, which pywebview invokes
+     *before* it creates the native window): record the renderer/origin
+     failure, return `False` to abort creation, let `start_edge_chromium`
+     return, and do **not** call `window.destroy()` — no native window exists.
+   - **Guard or loaded failure** (native attachment on the UI thread): store the
+     sticky failure, mark the host startup-refused, and call `window.destroy()`
+     exactly once. The `loaded` watchdog stores state and destroys rather than
+     raising. Destruction happens first here, to escape the GUI loop.
+
+   After `start_edge_chromium` returns, both in-loop paths run the finalizer
+   above. Because dispatch never opened, `service.close()` should return a
+   complete shutdown view; an incomplete result or exception is logged, but
+   there is no Retry Close affordance and startup still terminates nonzero.
+   Tests cover both the pre-native initialized failure and the post-native
+   guard-attachment failure.
 6. Implement the host close state machine now: user close is vetoed on the UI
    thread, closing becomes visible, one teardown attempt starts off-thread, and
    the later programmatic close is allowed through without recursively starting
@@ -376,19 +410,60 @@ third-party notices, signing, or a WebView2 bootstrapper.
    close that observer twice. At most one teardown attempt runs at a time. An
    incomplete result or teardown exception leaves the window open with the
    unfinished state and a Retry Close action; retry starts another off-thread
-   attempt, and there is no force-destroy path. Slice 1 supplies empty
-   wake/subscription hooks for later slices rather than blocking the UI thread.
+   attempt, and there is no force-destroy path. The startup-refused phase from
+   step 5 is the one exception: its closing handler recognizes that phase and
+   bypasses this veto/Retry machine entirely, letting the single startup
+   `window.destroy()` fall straight through to the bounded finalizer. Slice 1
+   supplies empty wake/subscription hooks for later slices rather than blocking
+   the UI thread.
 7. Add a per-interactive-session named mutex retained for the host lifetime.
-   A second launch finds the exact product window title, restores it, attempts
-   `SetForegroundWindow`, reports activation failure visibly, and exits zero.
-   No IPC or `AllowSetForegroundWindow` protocol is introduced.
-8. Give database contract refusal a visible surface. Add the service facade's
-   read-only `validate_database_contracts()` preflight for existing ledger and
-   history files and call it before window creation. A mismatch uses the
-   launcher's native startup-error reporter with the documented coordinated
-   manual reset direction. The GUI never exits silently, migrates, deletes, or
-   creates the missing peer as part of validation; after refusal every existing
-   database file is byte-identical.
+   One builder function derives both the `Local\`-namespaced mutex name and the
+   exact product window title from a single stable per-interactive-session
+   base, so the instance that sets the title and the instance that searches for
+   it cannot drift apart; a test asserts the pair is stable. Single instance is
+   intentionally global: one GUI per interactive Windows session regardless of
+   `--data-dir`, so two data roots still exclude each other. A second launch
+   finds that exact window title, restores it, attempts `SetForegroundWindow`,
+   reports activation failure visibly, and exits zero. No IPC or
+   `AllowSetForegroundWindow` protocol is introduced. A test-only switch can
+   disable the guard so isolated or parallel headed tests — and a developer's
+   already-running instance — do not collide; that switch is a
+   construction/environment test affordance only, never an argv, bridge, or page
+   input, and is not a product configuration surface.
+8. Give database state a coordinated preflight with a visible refusal surface.
+   Add the service facade's read-only `validate_database_contracts()` preflight
+   and call it before window creation and before any command admission. It
+   reads the existing ledger/history main files, their role-specific version
+   and contract markers (ledger and history carry intentionally different
+   marker values), and their WAL/SHM/journal sidecars, and returns a pair state
+   — `fresh`, `ready`, or `refused` — without mutating anything:
+
+   | State | Result |
+   | --- | --- |
+   | Both main files and all sidecars absent | `fresh`: coordinated initialization before window creation or command admission |
+   | Both main present, each matching its own expected version and contract marker | `ready` |
+   | Both present, but either is empty, unversioned, outdated, or wrong-marker | `refused`: read-only coordinated-reset direction |
+   | Exactly one main file present | `refused`: typed inconsistent-pair; the missing peer is not created |
+   | A main file absent but its WAL/SHM/journal sidecar present | `refused`: inconsistent-pair, not fresh initialization |
+
+   Fresh initialization is a **separate** operation from the read-only
+   preflight, so validation itself never writes. A caught partial
+   fresh-initialization failure removes only the artifacts that attempt created
+   and never deletes a pre-existing file; a crash between the two publications
+   is recovered by the exactly-one-present refusal on the next launch. On
+   `refused`, the launcher's native startup-error reporter shows the documented
+   coordinated manual reset direction, the GUI never exits silently, migrates,
+   or deletes, and every existing database file is byte-identical afterward.
+
+   This is a service-facade contract, not a GUI-only guard. Every composition
+   that can mutate both databases — the GUI and the CLI
+   sync/inventory/integrity paths — runs the preflight and coordinated
+   initialization, closing the existing hole where audit observation could
+   initialize history before execution recording initializes the ledger. A
+   deliberately standalone read-only history command may remain exempt. The
+   matrix proves a consistent present pair, not common provenance; proving two
+   files came from one installation would need a shared pair UUID and schema
+   bump, which is out of scope for M1.
 
 Slice 1 closes the revised BR-G-19 and BR-G-31 host clauses. It proves wheel
 installation, not yet the final PyInstaller artifact.
@@ -406,8 +481,17 @@ installation, not yet the final PyInstaller artifact.
 4. Add the reusable headed harness. Test HTML and JavaScript live outside the
    package, are combined with production assets in an isolated temporary root,
    and run through the production host, server, origin guards, bridge wrapper,
-   and render functions. Test-only report handlers are injected only into the
-   harness and are asserted absent from production commands and build output.
+   and render functions. Command composition is constructor-only, matching the
+   spike's dispatcher, which privately snapshots its handler mapping:
+   `commands.py` builds the immutable production command-spec mapping; the
+   production host passes exactly that mapping; the harness builds a new
+   immutable `production + test_report` mapping and passes it to the same
+   dispatcher. There is no registration method and no `extra_commands` input
+   from argv, environment, page data, or bridge traffic, and the `test_report`
+   handler and its implementation stay outside package data. The existing
+   production-table and build-output scan remains as defense in depth, but
+   constructor-only composition makes the isolation structural rather than
+   scan-enforced.
 5. Each headed scenario runs in a child process with a hard parent timeout.
    JavaScript reports observed values through `dispatch("test_report")`; Python
    performs the assertion and destroys the window. NamiSync test code uses no
@@ -624,11 +708,14 @@ carry the `headed` marker; all are collected by the release command.
   resolved page. *Not satisfied by* resolving from the source tree.
 - **SH-G-7 — Static frontend invariants scan the shipped file set.** Over the
   exact asset set the wheel ships: `window.pywebview` appears only in
-  `bridge.js`; the CSP meta element is the first element of `head`; no inline
-  script or event attribute exists; and the CSS/JS row-height declarations
-  are integer-equal, with the headed hostile-row measurement matching
-  `ROW_H`. *Not satisfied by* scanning a hand-maintained file list that is
-  not derived from the packaged asset set.
+  `bridge.js`; `index.html` carries exactly one Content-Security-Policy `<meta>`
+  element, the first element of `head`, whose raw ASCII content value equals
+  `M1_BRIDGE.md`'s normative policy string byte-for-byte (the expected literal
+  lives in the test); no inline script or event attribute exists; and the
+  CSS/JS row-height declarations are integer-equal, with the headed hostile-row
+  measurement matching `ROW_H`. *Not satisfied by* scanning a hand-maintained
+  file list that is not derived from the packaged asset set, or by asserting the
+  meta element's presence without its exact content value.
 - **SH-G-8 — The drain attaches before work starts.** A test proves the task
   observation is subscribed before execution admission starts the workflow,
   and no `Gap` occurs inside the BR-G-42 normal envelope; a fault-injected
@@ -682,7 +769,7 @@ against the changed configuration before the change lands.
 | 128/64 replay/subscriber capacities; no invented replay headroom | `docs/DISPATCHER.md` | UI/load evidence or a readiness-handshake design, never a constant bump |
 | `pywebview==6.2.1`, `pythonnet==3.1.0`, `clr_loader`, Bottle floor, return transport | Section 1.2 | Rerun the native reality and hostile-text gates (BR-G-30/31/32 family) |
 | Windows `netfx` runtime path and `PYTHONNET_RUNTIME` conflict refusal | `docs/DESKTOP_UI.md` | Re-probe and update the shared prerequisite check |
-| CSP, exact-origin, and navigation/popup guards | `docs/M1_BRIDGE.md` | Rerun BR-G-31/BR-G-32 headed scenarios |
+| CSP normative directive string (byte-for-byte), exact-origin, and navigation/popup guards | `docs/M1_BRIDGE.md` | Change the normative string and SH-G-7's expected literal together; rerun BR-G-31/BR-G-32 headed scenarios |
 | `private_mode=True` with explicit `storage_path` | Section 1.3 | Headed retest of the storage branch on any pywebview upgrade |
 | `namisync.log` header, level/propagation ownership, rotation, Unicode fallback, and privacy boundary | Section 1.4 | Rerun SH-G-3 and its child-process tests |
 | Product/distribution version remains independent of schema, protocol, policy, contract, dependency, and runtime versions | Section 1.5 and each owning module | Bump and test only the affected owner; never create a central version registry |
@@ -691,6 +778,8 @@ against the changed configuration before the change lands.
 | Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
 | Reliable readback semantics: sparse inclusive `through_seq`, empty terminal page | `namisync/interfaces/service.py`, `docs/HISTORY.md` | Rerun SH-G-9 and the service page tests |
 | Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
+| Single-instance identity: one builder for the `Local\` mutex name and window title; global per interactive session | Slice 1 step 7 | Keep the one builder and the stable-pair/activation tests; the disable switch stays test-only |
+| Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
 
 The 256-row visible-window cap and the 256-event history retention cap are
 independent constants that happen to share a value. No shared constant may
@@ -745,6 +834,11 @@ they are reviewable and testable.
   atomic replace in the destination directory. BR-G-41's corruption recovery
   remains the read-side guard; replace is the write-side guard, and the GUI
   never half-writes either file.
+- Coordinated fresh database initialization (Slice 1 step 8) is atomic in
+  effect: a caught partial failure removes only what that attempt created and
+  never a pre-existing file, and a crash between the ledger and history
+  publications is recovered by the exactly-one-present refusal on the next
+  launch.
 
 ### 8.2 Idempotency
 
@@ -768,6 +862,8 @@ Added by this section:
   settlement; the host owns the one-at-a-time UI state.
 - History repair reads are idempotent by construction: a repair is a fresh
   traversal, never a mutation of pager state.
+- `validate_database_contracts()` is read-only and repeatable: re-running it
+  never changes pair state or touches a file.
 
 ### 8.3 Orthogonality
 
@@ -782,6 +878,17 @@ One owner per decision; intentional couplings are named.
   renders what it is given and re-validates nothing.
 - `request_id` (one transport attempt) and `command_id` (one user gesture)
   remain orthogonal identities; neither is derived from the other.
+- Single-instance identity is one pair from one builder, deliberately keyed to
+  the interactive session rather than the data root: single instance is global
+  by design, and `--data-dir` never scopes it.
+- Command allowlisting is constructor-only: `commands.py` owns the production
+  mapping, the host passes it, and only the harness composes
+  `production + test_report`. No runtime, argv, environment, or bridge
+  registration path exists.
+- The document CSP has exactly three witnesses — the authored `index.html`,
+  `M1_BRIDGE.md`'s normative string, and SH-G-7's expected literal — and no
+  fourth: there is no production Python CSP constant, because the HTML is
+  authored, not generated.
 - `--data-dir` is application-composition input, never session authority.
 - `version.py` is the single product/distribution version source with three
   witnesses (SH-G-4). Every schema, protocol, policy, contract, dependency,
