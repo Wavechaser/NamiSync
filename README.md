@@ -176,6 +176,8 @@ never hides the other result axes in rendered output.
   - **Interfaces and security:** added the shared service facade and location
     CLI commands, plus a WebView2 bridge/host foundation with a read-only runtime
     probe, hardened renderer settings, and exact packaged-asset origins.
+  - **Development tools:** added executor/verifier measurement harness and corpus
+    generator, with owned-workspace safety and strict benchmark-result validation.
   - **Tests:** added focused integration coverage for scoped inventory,
     selection/replan provenance, retry-safe commands, durable history pages, and
     the WebView2 host foundation.
