@@ -114,10 +114,22 @@ never hides the other result axes in rendered output.
   [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
   [Handoff](docs/HANDOFF.md) — present and future scope, known issues, and session context.
-- [Module rig](docs/RIG.md) — `tools/rig`, the development harness for executor
-  and verifier benchmarking.
+- [Development tools](docs/TOOLS.md) — the `tools` executor/verifier measurement
+  harness and deterministic corpus generator.
 
 ## Changelog
+
+### Development Tooling
+
+- Flattened the executor/verifier measurement harness into `tools/` and made
+  unsafe or semantically mixed benchmark samples fail instead of reporting
+  plausible throughput.
+  - **Safety and evidence:** bound owned workspaces to directory identity under
+    an exclusive lease, made corpus regeneration deterministic, isolated report
+    artifacts, and made sidecar schemas, bound identity, and writes strict.
+  - **Measurements and tests:** retained diagnostics-on tool defaults with a
+    complete opt-out, disclosed empty correspondence, validated execution and
+    readback coverage, and added focused corpus, verifier, sidecar, and CLI tests.
 
 ### M1 Hardening
 

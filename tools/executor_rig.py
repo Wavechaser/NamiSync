@@ -1,8 +1,8 @@
 """Drive ``modules.executor.execute`` over real roots without the ledger.
 
 Inputs come from the real scanner and planner rather than hand-built
-operations, so the measured operation mix, dependencies, and blocked flags are
-the ones the product would actually produce.
+operations. Correspondence is deliberately empty, so this measures a
+first-run/no-history plan and does not produce MOVE or MOVE_UPDATE operations.
 """
 
 from __future__ import annotations
@@ -15,8 +15,7 @@ from uuid import uuid4
 
 from xxhash import xxh3_128
 
-from namisync.core.evidence import Outcome
-from namisync.core.events import ItemOutcome, Progress
+from namisync.core.events import ItemOutcome
 from namisync.core.execution import ExecutionSet, RunId, validated_run_id
 from namisync.core.models import IgnoreSet, Root, ScanResult
 from namisync.core.planning import (
@@ -37,6 +36,7 @@ from namisync.modules.preflight import LocalObservationFileSystem, observe, pref
 from namisync.modules.scanner import scan as scan_root
 from namisync.workflows.selection import derive_execution_selection
 
+from .corpus import WorkspaceClaim
 from .seams import CopySample, LedgerlessRecorder, RigClock, Tape, TappedCopyBackend
 
 
@@ -63,13 +63,14 @@ class ExecutorRun:
 
     @property
     def bytes_done(self) -> int:
-        progress = self.tape.of_type(Progress)
-        return progress[-1][1].bytes_done if progress else 0
+        return self.result.bytes_done
 
     @property
     def outcomes(self) -> dict[str, int]:
         counts: dict[str, int] = {}
-        for _, event in self.tape.of_type(ItemOutcome):
+        for event in self.result.items:
+            if not isinstance(event, ItemOutcome):  # pragma: no cover - contract guard
+                continue
             counts[event.outcome.value] = counts.get(event.outcome.value, 0) + 1
         return counts
 
@@ -86,13 +87,6 @@ class ExecutorRun:
         if self.execute_seconds <= 0:
             return 0.0
         return self.bytes_done / (1024**2) / self.execute_seconds
-
-    @property
-    def succeeded(self) -> bool:
-        return all(
-            outcome is Outcome.SUCCEEDED
-            for outcome in self.execution_set.status.values()
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +110,7 @@ def build_execution_set(
     tape: Tape | None = None,
     run_id: RunId | None = None,
 ) -> PreparedExecution:
-    """Scan both roots and derive the same safe subset the workflow would."""
+    """Scan both roots and derive a safe first-run/no-history selection."""
 
     tape = tape or Tape()
     context = tape.context()
@@ -127,6 +121,8 @@ def build_execution_set(
     source_scan = scan_root(Root(str(Path(source).resolve()), "source"), ignore_set, context)
     target_scan = scan_root(Root(str(Path(target).resolve()), "target"), ignore_set, context)
     scan_seconds = perf_counter() - started
+    _require_complete_scan("source", source_scan)
+    _require_complete_scan("target", target_scan)
 
     started = perf_counter()
     correspondence = MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id)
@@ -134,6 +130,14 @@ def build_execution_set(
         source_scan, target_scan, correspondence, sync_options, Scope.everything()
     )
     selection = derive_execution_selection(plan)
+    if selection.exclusions:
+        reasons = ", ".join(
+            sorted({exclusion.reason for exclusion in selection.exclusions})
+        )
+        raise ExecutorRigError(
+            "the reviewed plan contains safety exclusions and is not a complete "
+            f"benchmark sample: {reasons}"
+        )
     execution_set = ExecutionSet(
         plan, selection.selection, run_id or validated_run_id(uuid4().hex)
     )
@@ -145,7 +149,7 @@ def build_execution_set(
 
 def run_executor(
     source: Path,
-    target: Path,
+    workspace: WorkspaceClaim,
     *,
     options: SyncOptions | None = None,
     ignores: IgnoreSet | None = None,
@@ -156,10 +160,18 @@ def run_executor(
 ) -> ExecutorRun:
     """Execute one plan against real roots and return the measured run.
 
-    A supplied ``policies`` keeps its own pacing and failure policy, but its
-    copy backend is wrapped so per-operation diagnostics are still sampled.
+    A supplied ``policies`` keeps its own pacing and failure policy. Diagnostics
+    wrap its copy backend only when ``collect_metrics`` is true.
     """
 
+    source = Path(source).resolve()
+    target = workspace.validate()
+    if (
+        source == target
+        or source.is_relative_to(target)
+        or target.is_relative_to(source)
+    ):
+        raise ExecutorRigError("source and target workspaces must not overlap")
     tape = Tape()
     prepared = build_execution_set(
         source, target, options=options, ignores=ignores, tape=tape
@@ -181,7 +193,7 @@ def run_executor(
         if policies is None
         else policies.copy_backend
     )
-    backend = TappedCopyBackend(inner_backend)
+    backend = TappedCopyBackend(inner_backend) if collect_metrics else inner_backend
     run_policies = (
         ExecutorPolicies(copy_backend=backend, clock=RigClock())
         if policies is None
@@ -207,11 +219,23 @@ def run_executor(
         target_scan=prepared.target_scan,
         tape=tape,
         recorder=recorder,
-        copy_samples=tuple(backend.samples),
+        copy_samples=(
+            tuple(backend.samples) if isinstance(backend, TappedCopyBackend) else ()
+        ),
         scan_seconds=prepared.scan_seconds,
         plan_seconds=prepared.plan_seconds,
         preflight_seconds=preflight_seconds,
         execute_seconds=execute_seconds,
+    )
+
+
+def _require_complete_scan(label: str, result: ScanResult) -> None:
+    if result.complete and not result.unsupported:
+        return
+    warning_codes = sorted({warning.code.value for warning in result.warnings})
+    detail = ", ".join(warning_codes) if warning_codes else "unsupported entries"
+    raise ExecutorRigError(
+        f"{label} scan is not a complete regular-file benchmark corpus: {detail}"
     )
 
 

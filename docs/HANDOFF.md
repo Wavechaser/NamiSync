@@ -5,74 +5,56 @@ Branch: `milestone1`
 
 ## Session Outcome
 
-Closed the four follow-up questions from the bounded-history and dispatcher
-review.
+Hardened and flattened the development-only executor/verifier harness introduced
+in `134f235`.
 
-- Reliable-event pages now treat caller-supplied `through_seq` as a sparse
-  inclusive bound. Every request verifies the run's official durable maximum
-  through the indexed event tail, reads `limit + 1` raw rows, and decodes at
-  most the requested limit.
-- A fresh event traversal whose live cursor is ahead of durability returns the
-  agreed empty terminal page: durable `through_seq`, unchanged
-  `next_after_seq`, and `has_more=False`. That traversal ends; a later repair
-  omits `through_seq` and captures a new committed prefix. An explicit reversed
-  fixed interval remains invalid.
-- Terminal cleanup now distinguishes a reversible timeout before the hub gate
-  from irreversible stream detachment. Subscribers wait while an accepting
-  explicit close is tentative, attach after a reversible timeout, and receive
-  typed `SessionCleanupPending` after detachment or a store-drop failure.
-  Shutdown claims remain immediate, all session ownership survives retryable
-  failures, and there is no background reaper.
-- CLI terminal cleanup no longer swallows errors, and all command paths inspect
-  final service shutdown. Warnings state that the terminal result and history
-  outcome are already settled; cleanup does not rewrite the command result or
-  exit classification.
-- The executor plateau regression now freezes the accepted three-sample
-  evidence before signaling, waits for two later coordinator checkpoints so one
-  complete blocked retry has elapsed, and compares the live reader count with
-  that immutable evidence. It tolerates waiter delay but detects a hidden read
-  during the first later retry.
-- Replay headroom remains unchanged by decision, not omission. No finite slot
-  reserve guarantees burst survival when a producer can outrun an ordinary
-  sink for an arbitrary reliable run. With the current 128/64 replay/subscriber
-  capacities, another ejection is visible and replay-recoverable churn rather
-  than silent loss. A future continuity guarantee needs a readiness handshake
-  or subscription before workflow start; `docs/DISPATCHER.md` owns the policy.
-
-The event-bus truncation fix in `3cba6fb` remains clean. The initial plateau
-changes in `4ca9e13` and `870dc94` removed the observed false failure but did
-not freeze post-signal evidence; the regression above completes that gate.
+- Moved the package from `tools/rig/` to `tools/`; the entry point is now
+  `python -m tools`, and the focused guide is `docs/TOOLS.md`.
+- Bound destructive corpus operations to a live directory-identity claim with
+  a signed exclusive lease. Nonempty unowned roots, stale or malformed
+  authority, directory replacement/reparse aliases, overlapping roots, and
+  unrecognized lease artifacts are refused. Generation now replaces the owned
+  corpus deterministically.
+- Enforced output isolation before writes. Reports and sidecars stay outside
+  measured/materialized roots, cannot collide with ownership artifacts or each
+  other, and cannot reuse an existing multi-link file.
+- Made sidecar writes atomic and reads schema-strict, including exact fields,
+  duplicate-member refusal, supported algorithms, bound-identity completeness,
+  and fresh whole-corpus validation.
+- Rejects incomplete scans, safety-excluded executor plans, inconsistent
+  terminal/result/evidence state, partial verifier priming, mixed integrity
+  outcomes, and incomplete item or byte coverage before reporting a sample.
+  Synthetic verifier mismatches remain an intentional accepted measurement.
+- Executor diagnostics are on by default only in the tools. `--no-metrics`
+  disables both production-backend diagnostics and the per-copy timing wrapper;
+  `namisync/modules/executor.py` was not changed.
+- Executor reports disclose empty correspondence and therefore represent
+  first-run/no-history plans without MOVE or MOVE_UPDATE. Optional readback is
+  always visible and must exactly verify all published candidates.
 
 ## Verification
 
-- Focused schema/history/event-bus/dispatcher/service/CLI/executor suite:
-  `293 passed`.
-- Complete pytest suite: `995 passed in 55.73s`.
+- Complete pytest suite: `1091 passed, 1 skipped in 40.87s`. The skip is the
+  optional real directory-symlink substitution test on a host without symlink
+  privilege; the same guard also has a deterministic non-skipped test.
+- Focused tools plus production executor/planner/preflight/verifier regression
+  suite: `422 passed, 1 skipped in 10.51s`.
+- Final tools-only suite after bounded marker/lease reads: `96 passed, 1
+  skipped in 1.33s`.
 - Import linter: `8 kept, 0 broken`.
-- Package and test compile gate: clean.
-- Plateau probes: 0/50/200/500 ms waiter delays, 200 repetitions, and an
-  injected post-signal hidden read all behaved as required.
-- Independent adversarial reviews found and then closed the plateau
-  single-retry observation gap and the close/subscribe tentative-stage and
-  blocking-store-drop races. Final page and close reviews found no remaining
-  actionable defects.
-- The documented 50-run/1,000,000-item history benchmark passed every gate:
-  0.409-second fresh summary; 7.486/6.163 ms item/event p95 pages;
-  14.382 ms p95 and 204.203 ms maximum window commits; retained peak remained
-  256 events and 79,360 bytes.
+- Real CLI smoke: generated a three-file corpus, completed two primed verifier
+  passes with three `VERIFIED` results each, executed four successful operations
+  with diagnostics enabled, verified all three readback candidates, and removed
+  both owned workspaces.
 
 ## Immediate Next Context
 
-- History v1-v3 and mismatched contract markers still require the documented
-  coordinated manual ledger/history reset; startup never migrates or deletes
-  automatically.
-- A crash can lose only the final uncommitted history window. Committed
-  nonterminal history remains queryable as `incomplete`; durable process/session
-  custody and automatic interruption classification remain M2 work.
-- The backend recovery contract and service APIs are ready for the future
-  WebView consumer. No frontend was added here.
-- Session-wide `OperationResult.items` and dispatcher item accumulation remain
-  intentionally out of scope; history writer and readback memory are bounded.
-- Do not change the 256-event/1-MiB/one-second history policy or invent replay
-  headroom from a convenient constant. Re-run the documented scale fixture or
-  collect UI/load evidence before changing either decision.
+- No logger integration was added. `docs/M1_SHELL.md` places future logging in
+  the GUI host under `interfaces/web`, with GUI paths and pywebview sequencing;
+  importing it into measurement tools would invert the boundary and perturb
+  timings.
+- Keep `python -m tools` separate from the shipped `nami-sync` CLI. If the rig
+  later needs distribution, add a distinct development entry point only after
+  an explicit packaging and destructive-workspace safety review.
+- A future MOVE/MOVE_UPDATE benchmark needs an explicit retained-correspondence
+  input. Do not synthesize mapping state and present it as production history.

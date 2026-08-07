@@ -19,11 +19,13 @@ from namisync.core.evidence import (
     ContentEvidence,
     HasherFactory,
     Provenance,
+    RecordingStatus,
 )
 from namisync.core.events import Progress
 from namisync.core.execution import PublishedCopyEvidence
 from namisync.core.integrity import (
     IntegrityMode,
+    IntegrityResult,
     IntegrityRunResult,
     IntegritySelection,
     IntegritySelectionItem,
@@ -31,9 +33,10 @@ from namisync.core.integrity import (
     PostCopyCandidate,
     PostCopyRecordIdentity,
     PostCopySelection,
+    RecordDisposition,
     VerifierContext,
 )
-from namisync.core.models import FileStat, IgnoreSet, Root
+from namisync.core.models import FileStat, IgnoreSet, Root, ScanWarningCode
 from namisync.core.pathing import normalize_relative_path
 from namisync.modules.scanner import scan as scan_root
 from namisync.modules.verifier import (
@@ -80,12 +83,17 @@ class VerifierRun:
     read_samples: tuple[ReadSample, ...]
     scan_seconds: float
     run_seconds: float
-    items: int
+    expected_item_ids: frozenset[str]
+    expected_bytes: int
+
+    @property
+    def items(self) -> int:
+        return len(self.expected_item_ids)
 
     @property
     def bytes_done(self) -> int:
         progress = self.tape.of_type(Progress)
-        return progress[-1][1].bytes_done if progress else 0
+        return progress[-1].bytes_done if progress else 0
 
     @property
     def results(self) -> dict[str, int]:
@@ -123,8 +131,31 @@ def scan_stats(
         Root(str(Path(root).resolve()), "corpus"), ignores or IgnoreSet(), tape.context()
     )
     seconds = perf_counter() - started
+    if result.unsupported:
+        raise VerifierRigError(
+            f"the corpus scan found {len(result.unsupported)} unsupported entries"
+        )
+    collisions = tuple(
+        warning
+        for warning in result.warnings
+        if warning.code is ScanWarningCode.CASE_COLLISION
+    )
+    if collisions:
+        raise VerifierRigError(
+            f"the corpus scan found {len(collisions)} canonical path collisions"
+        )
+    if not result.complete:
+        raise VerifierRigError("the corpus scan was incomplete")
     stats = {record.rel_path_key: record.stat for record in result.files}
     display = {record.rel_path_key: record.rel_path for record in result.files}
+    if (
+        len(stats) != len(result.files)
+        or len(display) != len(result.files)
+        or stats.keys() != display.keys()
+    ):
+        raise VerifierRigError(
+            "the corpus scan did not preserve one canonical key per file"
+        )
     return stats, display, seconds
 
 
@@ -220,7 +251,8 @@ def run_verifier(
         read_samples=tuple(reader.samples) if isinstance(reader, TappedReader) else (),
         scan_seconds=scan_seconds,
         run_seconds=run_seconds,
-        items=len(selection.items),
+        expected_item_ids=frozenset(item.item_id for item in selection.items),
+        expected_bytes=sum(item.expected_stat.size for item in selection.items),
     )
 
 
@@ -242,9 +274,43 @@ def prime_baselines(
         tap_reader=False,
     )
     evidence = run.attestations()
-    if not evidence:
+    outcomes = run.result.outcomes
+    commands = run.recorder.commands
+    successful = tuple(
+        outcome
+        for outcome in outcomes
+        if outcome.result is IntegrityResult.BASELINED
+        and outcome.record_disposition is RecordDisposition.APPLIED
+        and outcome.recording is RecordingStatus.OK
+    )
+    outcome_ids = {outcome.item_id for outcome in outcomes}
+    command_ids = {command.item_id for command in commands}
+    command_keys = {command.rel_path_key for command in commands}
+    expected = run.items
+    progress = run.tape.of_type(Progress)
+    complete_progress = bool(progress) and (
+        progress[-1].items_done == expected
+        and progress[-1].items_total == expected
+        and progress[-1].bytes_done == run.expected_bytes
+        and progress[-1].bytes_total == run.expected_bytes
+    )
+    if not (
+        expected > 0
+        and run.result.recording is RecordingStatus.OK
+        and complete_progress
+        and len(outcomes) == expected
+        and outcome_ids == run.expected_item_ids
+        and len(successful) == expected
+        and len(commands) == expected
+        and command_ids == run.expected_item_ids
+        and len(evidence) == len(command_keys) == expected
+        and set(evidence) == command_keys
+    ):
         raise VerifierRigError(
-            "the baseline pass recorded no evidence; the corpus may be unreadable"
+            "the baseline pass did not record one applied attestation per scanned "
+            f"file (expected {expected}, outcomes {len(outcomes)}, "
+            f"applied {len(successful)}, commands {len(commands)}, "
+            f"evidence {len(evidence)})"
         )
     return evidence
 
@@ -255,7 +321,7 @@ def load_baselines(
     """Load sidecar evidence and refuse anything that no longer fits."""
 
     attestations, report = sidecar.load_validated(path, stats)
-    return sidecar.restrict(attestations, stats), report
+    return attestations, report
 
 
 def post_copy_selection(
@@ -323,7 +389,12 @@ def run_post_copy(
         read_samples=tuple(reader.samples) if isinstance(reader, TappedReader) else (),
         scan_seconds=0.0,
         run_seconds=run_seconds,
-        items=len(selection.candidates),
+        expected_item_ids=frozenset(
+            candidate.item_id for candidate in selection.candidates
+        ),
+        expected_bytes=sum(
+            candidate.expected_stat.size for candidate in selection.candidates
+        ),
     )
 
 

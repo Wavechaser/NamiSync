@@ -1,4 +1,4 @@
-"""Ledger-free collaborators and measurement taps for the module rig.
+"""Ledger-free collaborators and measurement taps for the module tools.
 
 Nothing here implements domain policy. Each class either satisfies a seam the
 product normally fills from ``db``/``workflows``, or decorates a real
@@ -40,14 +40,14 @@ class RigClock:
 
 
 class Tape:
-    """Timestamped event sink standing in for the dispatcher's fan-out."""
+    """In-memory event sink standing in for the dispatcher's fan-out."""
 
     def __init__(self) -> None:
-        self.events: list[tuple[float, object]] = []
+        self.events: list[object] = []
         self.checkpoints = 0
 
     def emit(self, event: object) -> None:
-        self.events.append((perf_counter(), event))
+        self.events.append(event)
 
     def checkpoint(self) -> None:
         self.checkpoints += 1
@@ -55,12 +55,8 @@ class Tape:
     def context(self) -> RunContext:
         return RunContext(self.emit, self.checkpoint)
 
-    def of_type(self, event_type: type) -> tuple[tuple[float, object], ...]:
-        return tuple(
-            (stamp, event)
-            for stamp, event in self.events
-            if isinstance(event, event_type)
-        )
+    def of_type(self, event_type: type) -> tuple[object, ...]:
+        return tuple(event for event in self.events if isinstance(event, event_type))
 
 
 class LedgerlessRecorder:

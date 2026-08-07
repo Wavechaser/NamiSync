@@ -15,8 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 import json
+import os
 from pathlib import Path
-from typing import Iterable, Mapping
+import tempfile
+from typing import Mapping
 
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
@@ -28,6 +30,24 @@ PORTABLE: IdentityMode = "portable"
 IDENTITY_MODES = (BOUND, PORTABLE)
 
 FORMAT = "namisync-rig-baseline-1"
+_HEADER_FIELDS = frozenset({"format", "identity_mode"})
+_ROW_FIELDS = frozenset(
+    {
+        "key",
+        "kind",
+        "size",
+        "mtime_ns",
+        "nlink",
+        "attributes",
+        "created_ns",
+        "volume_serial",
+        "file_index",
+        "algorithm",
+        "digest",
+        "provenance",
+        "observed_at",
+    }
+)
 
 
 def sidecar_path_for(root: Path) -> Path:
@@ -79,25 +99,59 @@ def write(
 ) -> int:
     """Write one row per canonical path key; return the row count.
 
-    NTFS file identity is always recorded; the header's identity mode decides
-    whether a later load enforces it. ``portable`` drops identity on read so
-    the corpus survives being moved or restored, at the cost of one tuple
-    comparison of fidelity against production.
+    ``bound`` requires and preserves NTFS file identity. ``portable`` drops
+    identity on read so the corpus survives being moved or restored, at the
+    cost of one tuple comparison of fidelity against production.
     """
 
     if identity_mode not in IDENTITY_MODES:
         raise ValueError(f"unknown identity mode: {identity_mode!r}")
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    rows = 0
-    with path.open("w", encoding="utf-8", newline="\n") as handle:
-        handle.write(
-            json.dumps({"format": FORMAT, "identity_mode": identity_mode}) + "\n"
+    encoded: list[str] = []
+    for key in sorted(attestations):
+        attestation = attestations[key]
+        if identity_mode == BOUND and attestation.subject.file_identity is None:
+            raise SidecarError(
+                f"cannot write bound sidecar {path}: {key!r} has no file identity"
+            )
+        encoded.append(json.dumps(_encode(key, attestation)))
+
+    temporary: Path | None = None
+    descriptor: int | None = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
         )
-        for key in sorted(attestations):
-            handle.write(json.dumps(_encode(key, attestations[key])) + "\n")
-            rows += 1
-    return rows
+        temporary = Path(temporary_name)
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            descriptor = None
+            handle.write(
+                json.dumps({"format": FORMAT, "identity_mode": identity_mode})
+                + "\n"
+            )
+            for row in encoded:
+                handle.write(row + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    except OSError as error:
+        raise SidecarError(f"cannot write sidecar {path}: {error}") from error
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary is not None:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return len(encoded)
 
 
 def read(path: Path) -> tuple[dict[str, Attestation], IdentityMode]:
@@ -106,28 +160,37 @@ def read(path: Path) -> tuple[dict[str, Attestation], IdentityMode]:
     path = Path(path)
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as error:
+    except (OSError, UnicodeError) as error:
         raise SidecarError(f"cannot read sidecar {path}: {error}") from error
     if not lines:
         raise SidecarError(f"sidecar {path} is empty")
     try:
-        header = json.loads(lines[0])
-    except json.JSONDecodeError as error:
+        header = json.loads(lines[0], object_pairs_hook=_strict_object)
+    except (json.JSONDecodeError, ValueError) as error:
         raise SidecarError(f"sidecar {path} has no header: {error}") from error
-    if header.get("format") != FORMAT:
+    if not isinstance(header, dict):
+        raise SidecarError(f"sidecar {path} header must be a JSON object")
+    if set(header) != _HEADER_FIELDS:
         raise SidecarError(
-            f"sidecar {path} has format {header.get('format')!r}, expected {FORMAT!r}"
+            f"sidecar {path} header must contain only format and identity_mode"
         )
-    identity_mode = header.get("identity_mode", PORTABLE)
+    if header["format"] != FORMAT:
+        raise SidecarError(
+            f"sidecar {path} has format {header['format']!r}, expected {FORMAT!r}"
+        )
+    identity_mode = header["identity_mode"]
     if identity_mode not in IDENTITY_MODES:
         raise SidecarError(f"sidecar {path} has unknown identity mode {identity_mode!r}")
 
     attestations: dict[str, Attestation] = {}
     for number, line in enumerate(lines[1:], start=2):
         if not line.strip():
-            continue
+            raise SidecarError(f"sidecar {path} line {number}: row is empty")
         try:
-            key, attestation = _decode(json.loads(line), identity_mode)
+            row = json.loads(line, object_pairs_hook=_strict_object)
+            if not isinstance(row, dict):
+                raise TypeError("row must be a JSON object")
+            key, attestation = _decode(row, identity_mode)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
             raise SidecarError(f"sidecar {path} line {number}: {error}") from error
         if key in attestations:
@@ -177,15 +240,6 @@ def load_validated(
     return attestations, report
 
 
-def restrict(
-    attestations: Mapping[str, Attestation], keys: Iterable[str]
-) -> dict[str, Attestation]:
-    """Return the subset of evidence covering the given canonical keys."""
-
-    wanted = set(keys)
-    return {key: value for key, value in attestations.items() if key in wanted}
-
-
 def _subject_matches(expected: FileStat, actual: FileStat) -> bool:
     # Mirrors verifier._matches_expected_stat: identity participates only when
     # the stored subject carries one.
@@ -217,31 +271,84 @@ def _encode(key: str, attestation: Attestation) -> dict[str, object]:
     }
 
 
-def _decode(row: Mapping[str, object], identity_mode: IdentityMode) -> tuple[str, Attestation]:
-    key = str(row["key"])
-    serial = row.get("volume_serial")
-    index = row.get("file_index")
-    identity = (
-        FileIdentity(str(serial), int(index))
-        if identity_mode == BOUND and serial is not None and index is not None
-        else None
+def _decode(
+    row: Mapping[str, object], identity_mode: IdentityMode
+) -> tuple[str, Attestation]:
+    if set(row) != _ROW_FIELDS:
+        raise ValueError("row fields do not match the sidecar schema")
+    key = _string(row, "key")
+    if not key:
+        raise ValueError("key must be non-empty")
+    serial = _optional_string(row, "volume_serial")
+    index = _optional_int(row, "file_index")
+    if (serial is None) != (index is None):
+        raise ValueError("file identity must include both volume_serial and file_index")
+    if identity_mode == BOUND and serial is None:
+        raise ValueError("bound evidence requires file identity")
+    stored_identity = (
+        None if serial is None or index is None else FileIdentity(serial, index)
     )
+    identity = stored_identity if identity_mode == BOUND else None
     subject = FileStat(
-        kind=EntryKind(str(row["kind"])),
-        size=int(row["size"]),
-        mtime_ns=int(row["mtime_ns"]),
+        kind=EntryKind(_string(row, "kind")),
+        size=_integer(row, "size"),
+        mtime_ns=_integer(row, "mtime_ns"),
         file_identity=identity,
-        nlink=int(row["nlink"]),
+        nlink=_integer(row, "nlink"),
         metadata=MetadataSnapshot(
-            attributes=int(row["attributes"]),
-            created_ns=None if row.get("created_ns") is None else int(row["created_ns"]),
+            attributes=_integer(row, "attributes"),
+            created_ns=_optional_int(row, "created_ns"),
         ),
     )
+    algorithm = _string(row, "algorithm")
+    if algorithm != "xxh3_128":
+        raise ValueError(f"unsupported content algorithm {algorithm!r}")
     content = ContentEvidence(
-        algorithm="xxh3_128",
-        digest=bytes.fromhex(str(row["digest"])),
+        algorithm=algorithm,
+        digest=bytes.fromhex(_string(row, "digest")),
         size=subject.size,
-        provenance=Provenance(str(row["provenance"])),
-        observed_at=datetime.fromisoformat(str(row["observed_at"])),
+        provenance=Provenance(_string(row, "provenance")),
+        observed_at=datetime.fromisoformat(_string(row, "observed_at")),
     )
     return key, Attestation(content=content, subject=subject)
+
+
+def _string(row: Mapping[str, object], field: str) -> str:
+    value = row[field]
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string")
+    return value
+
+
+def _integer(row: Mapping[str, object], field: str) -> int:
+    value = row[field]
+    if type(value) is not int:
+        raise TypeError(f"{field} must be an integer")
+    return value
+
+
+def _optional_string(row: Mapping[str, object], field: str) -> str | None:
+    value = row[field]
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{field} must be a string or null")
+    return value
+
+
+def _optional_int(row: Mapping[str, object], field: str) -> int | None:
+    value = row[field]
+    if value is None:
+        return None
+    if type(value) is not int:
+        raise TypeError(f"{field} must be an integer or null")
+    return value
+
+
+def _strict_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON field {key!r}")
+        value[key] = item
+    return value

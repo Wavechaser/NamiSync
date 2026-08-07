@@ -27,6 +27,35 @@ defect, and move implementation-level test choreography out of the log.
 
 ---
 
+## DEVELOPMENT TOOLS
+
+### Workspace and measurement integrity
+
+- SEVERE - FIXED (2026-08-06). Unbound destructive workspace authority. Corpus
+  generation could overwrite matching files in any existing directory and
+  retain stale files, while executor teardown trusted only the existence of a
+  fixed sibling marker. Cause: neither path was bound to a directory instance
+  or exclusive run, and generator reuse had no owned reset boundary. Fixed with
+  schema-checked path/device/inode markers, nonblocking exclusive leases,
+  signed lease artifacts, live-claim-only mutators, deterministic owned
+  regeneration, and refusal of nonempty unowned roots, replacement/reparse
+  aliases, overlap, and partial template walks.
+- MODERATE - FIXED (2026-08-06). Measurement artifact self-contamination.
+  Sidecar or JSON paths could overwrite corpus content, alter later repeats,
+  collide with ownership state, or disappear with target teardown. Cause: the
+  CLI documented external artifact placement without enforcing resolved
+  containment and file-identity alias rules. Fixed by validating every used
+  artifact before claiming or writing, refusing existing multi-link outputs,
+  reserving ownership/default-sidecar paths, and testing corpus-file
+  preservation, repeat bounds, template overlap, and path aliases.
+- MODERATE - FIXED (2026-08-06). Invalid benchmark sample acceptance. Partial
+  scans and priming, failed execution, mixed verifier outcomes, degraded
+  recording, and readback mismatches could still report throughput and exit 0;
+  empty correspondence also made the documented operation mix overbroad. Fixed
+  with complete scan/evidence/result/progress validation, explicit accepted
+  outcome matrices, visible readback settlement, diagnostics opt-out that
+  removes its timing tap, and first-run/no-history correspondence disclosure.
+
 ## EXECUTOR
 
 ### M1 Hardening
