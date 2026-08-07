@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "defaultShell": "powershell",
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Edit",
+      "PowerShell(.venv\\Scripts\\python.exe -m pytest*)",
+      "PowerShell(.venv\\Scripts\\lint-imports.exe*)",
+      "PowerShell(.venv\\Scripts\\python.exe -m tools*)",
+      "PowerShell(.venv\\Scripts\\python.exe -m pip install*)",
+      "PowerShell(git status*)",
+      "PowerShell(git diff*)",
+      "PowerShell(git log*)",
+      "PowerShell(git show*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)"
+    ]
+  }
+}
