@@ -1,5 +1,13 @@
 @AGENTS.md
 
+## Working Style
+
+- Default to discussion, not changes. Treat questions, reviews, plan critiques,
+  and thinking-out-loud as requests for assessment: report findings and stop.
+  Make file edits, commits, or other side-effectful actions only when the user
+  explicitly asks to edit/implement/commit (or the request plainly implies it).
+  When in doubt, propose and ask rather than apply.
+
 ## Claude Code Notes
 
 - This repo is Windows/PowerShell-only (see AGENTS.md "Windows Rules"). Use the
