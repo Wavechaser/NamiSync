@@ -1,8 +1,8 @@
 # Database Module
 
 Status: schema bones, safe connection factories, the M0 ledger/repositories,
-inventory reconciliation, bounded event-journal history, and M1's
-ledger-v2/history-v4 coordinated reset boundary and semantic settings store are
+inventory reconciliation, bounded receipt-journal history, and M1's
+ledger-v3/history-v5 coordinated reset boundary and semantic settings store are
 implemented. General migrations, retention, and backup/protection workflows
 remain later work.
 
@@ -21,7 +21,7 @@ state is interface-owned and never shares this file.
 
 ## Implemented Foundation
 
-`schema.py` creates a version-2 ledger and version-4 history schema. The ledger
+`schema.py` creates a version-3 ledger and version-5 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
 correspondence, run/operation tokens, generic annotations, and nullable hardlink
@@ -33,8 +33,11 @@ read repositories open SQLite in `mode=ro` and enable `query_only`. Before
 exposing a retained reader, both repository constructors validate the numeric
 schema version and exact contract marker through that read-only connection;
 every refusal closes the reader and leaves the database plus WAL/SHM/journal
-sidecars byte-for-byte unchanged. Live paths can be validated against managed
-roots before creation. `timestamps.py` is the single fixed-width aware-UTC
+sidecars byte-for-byte unchanged. Live database paths can be validated against
+managed roots before creation; that containment resolver converts long managed
+roots only at the native I/O boundary and compares ordinary logical spellings.
+This is not a claim that SQLite database files themselves may use overlong
+paths. `timestamps.py` is the single fixed-width aware-UTC
 representation used by both schemas.
 
 The M1 desktop shell (service facade) composes these per-file checks into one
@@ -45,32 +48,57 @@ cannot be initialized without the ledger. `M1_SHELL.md` Slice 1 step 8 owns that
 contract; it is planned, not yet implemented.
 
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
-values. Canonical path selections are queried in bounded 400-key chunks inside
-one read transaction, so a concurrent commit cannot split one selection across
-different database snapshots.
+values. Canonical path and canonical positive-decimal row-ID selections are
+queried in bounded 400-key chunks inside one read transaction, so a concurrent
+commit cannot split one selection across different database snapshots. Row-ID
+lookups are location-scoped, deduplicate in first-requested order, and omit
+malformed or missing identifiers rather than broadening the query.
 
-History version 4 creates a provisional `history_runs` row at the first durable
-window and appends canonical reliable envelopes to `history_events`. Typed item
-projection columns and dense one-based `item_order` support bounded item pages
-and fixed-size conditional summary aggregates without decoding event JSON.
-Free-form kind/reason values never create one summary object per group. Rolling
-outcome counts,
-state, phase, hashes, and watermarks advance in the same transaction as each
-window. Terminal axes and bounded execute/verify phase summaries remain null
-until finalization commits its tail and terminal marker atomically.
+History version 5 creates a provisional `history_runs` row at the first durable
+window and appends disposition-bound reliable receipts to `history_events`.
+Canonical and exact-duplicate rows retain their envelopes; a supported
+oversized event retains only bounded metadata, reason, and its original payload
+hash; an oversized result item additionally retains fixed-size identity and
+semantic hashes. Typed canonical-item projection columns are derived by the
+writer from retained envelope JSON, become immutable with the receipt row, and
+are checked against decoded envelopes on detail reads. The strict composite-key event
+table is `WITHOUT ROWID`; official writers require recursive triggers, while
+insert/update/delete and run-finality guards make committed receipts and runs
+append-only. Dense one-based `item_order` supports bounded item pages and fixed-size
+conditional summary aggregates without decoding event JSON. Exact semantic
+duplicates advance sequence and the receipt chain without allocating item
+order or outcome counts; changed item identity remains corruption even when
+the first occurrence was rejected for size. Free-form kind/reason values never
+create one summary object per group. Receipt hashes bind retained event
+metadata, disposition, item hashes/link/reason, and item order. Rolling outcome
+and duplicate/rejection counts, state, phase, hashes, and watermarks advance in
+the same transaction as each window. Terminal axes and bounded execute/verify
+phase summaries remain null until finalization commits its tail and terminal
+marker atomically.
+Each identity has one indexed recorded or unlinked-rejected representative.
+Later exact oversized copies remain rejected and increment the rejection count,
+but link to that representative; a bulk bounded lookup never scans the linked
+history for that identity.
 Commit time is sampled under serialized transaction ownership and remains
 logically nondecreasing across wall-clock rollback, never preceding admission
 or any newly committed event timestamp. Terminal phase names and failure type
 names are capped at 256 UTF-8 bytes; phase and terminal error messages are
 capped at 4,096 UTF-8 bytes in both observer validation and schema checks.
-Summary reads and repeat finalization recompute the terminal hash from stored
-axes and ordered phase rows before accepting finalized truth. They first
-recompute the context hash from the fixed immutable run-context columns, so a
-modified nullable or required context value is not returned as trusted truth.
+Each window also stores a prefix-projection hash over context/receipt-chain
+hashes, lifecycle timestamps/state/phase, watermarks, and every rolling count.
+Summary reads validate it for incomplete and finalized runs. Repeat
+finalization and finalized reads additionally recompute the terminal hash from
+that prefix, stored terminal axes, and ordered phase rows before accepting
+finalized truth. A modified context, projection, counter, or ordering value is
+therefore not returned as trusted truth.
+Indexed physical event/item tails are compared with the official watermarks in
+summary/page reads, observer reopen, and writer admission, so an out-of-band
+tail cannot affect classification or reopen a committed prefix.
 
 `HistoryWindowPolicy` bounds one pending window to 256 reliable events and
-1 MiB of canonical serialized data, rejects an individual event over 1 MiB,
-and supplies the one-second age used by the dispatcher flush scheduler. Count,
+1 MiB of canonical serialized data, replaces an individual supported event
+over 1 MiB with a durable hash-only rejection receipt, and supplies the
+one-second age used by the dispatcher flush scheduler. Count,
 byte, pause, age, clean-close, and finalization boundaries all commit; a crash
 can lose only the last uncommitted window. A nonterminal committed row is
 readable as `incomplete` after restart and is not classified as interrupted or
@@ -78,14 +106,15 @@ resumable without future durable custody.
 
 The current schemas carry immutable whole-contract metadata: ledger
 `contract_id=m1-ledger-xxh3-128-invalidation-v1` and history
-`contract_id=m1-history-windowed-events-v1`. Opening ledger v1, history v1-v3,
-or a transitional ledger-v3/history-v4 database with a missing/mismatched
+`contract_id=m1-history-windowed-receipts-v1`. Opening ledger v1-v2, history
+v1-v4, or a current database with a missing/mismatched
 marker raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete
-both local database files before restarting. History version 3 cannot be
-migrated into the reliable journal because it never stored state and phase
-envelopes.
+both local database files before restarting. History version 4 cannot be
+migrated into the receipt journal because it lacks the disposition,
+semantic-duplicate link, rejection row, and receipt-chain facts required by
+version 5.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
 database/WAL/SHM artifacts and recreates both current schemas; normal startup
@@ -300,11 +329,13 @@ rather than current implementation claims.
 - Large mapping/inventory selections use bounded query counts demonstrated by
   instrumentation benchmarks.
 - Every history window is atomically visible or absent; its event/item
-  watermark, chain hash, rolling counts, and typed rows advance together.
+  watermark, receipt-chain hash, rolling outcome/receipt counts, and typed rows
+  advance together.
   Failed finalization preserves earlier windows and exposes the run only as
   incomplete.
-- History integrity detail, sync operations, subject-only activities, and
-  reliable lifecycle/phase events round-trip through bounded typed pages.
+- History integrity detail, sync operations, subject-only activities, reliable
+  lifecycle/phase events, exact duplicate receipts, and hash-only oversized
+  rejection receipts round-trip through bounded typed pages.
   Terminal axes, cancellation, `Disposition`, and compound phases appear only
   with the terminal payload marker. Integrity and headline are reconstructed
   from typed primitive aggregates through the same classifier as live results;
@@ -315,10 +346,10 @@ rather than current implementation claims.
   decode at most the requested limit, use one indexed lookahead row across
   legitimate sequence gaps, and reject an official durable maximum that does
   not match its event rows.
-- Ledger v1-v2, history v1-v3, and current-number transitional schemas lacking the
+- Ledger v1-v2, history v1-v4, and current-number transitional schemas lacking the
   exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.
-- The explicit coordinated development reset recreates ledger v3/history v4;
+- The explicit coordinated development reset recreates ledger v3/history v5;
   normal startup never deletes either database.
 - Concurrent semantic-settings patches preserve unrelated fields because the
   read-modify-replace cycle is serialized across processes.

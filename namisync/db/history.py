@@ -6,9 +6,10 @@ import hashlib
 import json
 import math
 import sqlite3
-from dataclasses import dataclass, fields, is_dataclass
+import time
+from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
@@ -72,6 +73,15 @@ class HistoryIntegrityError(RecordingError):
     """The reliable event stream was duplicated or reordered inconsistently."""
 
 
+class HistoryEventDisposition(StrEnum):
+    RECORDED = "recorded"
+    DUPLICATE = "duplicate"
+    REJECTED = "rejected"
+
+
+EVENT_TOO_LARGE = "event-too-large"
+
+
 @dataclass(frozen=True, slots=True)
 class HistoryWindowPolicy:
     """Hard bounds and the dispatcher-facing age target for one window."""
@@ -110,8 +120,24 @@ class HistoryContext:
     target_context: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.run_token, str) or not isinstance(
+            self.host_key, str
+        ):
+            raise TypeError("history run token and host key must be strings")
         if not self.run_token or not self.host_key:
             raise ValueError("history run token and host key are required")
+        for field_name in (
+            "activity_kind",
+            "subject_kind",
+            "subject_id",
+            "source_context",
+            "target_context",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, str):
+                raise TypeError(f"history {field_name} must be text or None")
+        if self.activity_kind == "":
+            raise ValueError("history activity kind must be non-empty")
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,8 +150,15 @@ class HistoryItemSnapshot:
 @dataclass(frozen=True, slots=True)
 class HistoryEventSnapshot:
     event_seq: int
-    envelope: Envelope
+    event_at: datetime
+    schema_version: int
+    body_type: str
+    disposition: HistoryEventDisposition
+    envelope: Envelope | None
     payload_hash: bytes
+    receipt_hash: bytes
+    duplicate_of_seq: int | None = None
+    rejection_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +230,8 @@ class HistoryRunSummary:
     current_phase: str | None
     last_committed_seq: int
     item_count: int
+    duplicate_item_count: int
+    rejected_event_count: int
     last_committed_at: datetime | None
     finalized: bool
     filesystem_status: SessionState | None
@@ -230,6 +265,7 @@ class HistoryItemPage:
 @dataclass(frozen=True, slots=True)
 class HistoryEventPage:
     run_token: str
+    session_id: str
     through_seq: int
     events: tuple[HistoryEventSnapshot, ...]
     next_after_seq: int
@@ -271,8 +307,80 @@ def _hash(value: object) -> bytes:
     return hashlib.sha256(_json_bytes(value)).digest()
 
 
-def _advance_event_chain(chain: bytes, payload_hash: bytes) -> bytes:
-    return hashlib.sha256(chain + payload_hash).digest()
+def _sqlite_busy(error: sqlite3.OperationalError) -> bool:
+    message = str(error).lower()
+    return "locked" in message or "busy" in message
+
+
+def _advance_event_chain(chain: bytes, receipt_hash: bytes) -> bytes:
+    return hashlib.sha256(chain + receipt_hash).digest()
+
+
+def _receipt_hash(
+    *,
+    event_seq: int,
+    event_at: str,
+    schema_version: int,
+    body_type: str,
+    disposition: HistoryEventDisposition,
+    payload_hash: bytes,
+    item_identity_hash: bytes | None = None,
+    item_payload_hash: bytes | None = None,
+    duplicate_of_seq: int | None = None,
+    rejection_reason: str | None = None,
+    item_order: int | None = None,
+) -> bytes:
+    return _hash(
+        {
+            "event_seq": event_seq,
+            "event_at": event_at,
+            "schema_version": schema_version,
+            "body_type": body_type,
+            "disposition": disposition.value,
+            "payload_hash": payload_hash,
+            "item_identity_hash": item_identity_hash,
+            "item_payload_hash": item_payload_hash,
+            "duplicate_of_seq": duplicate_of_seq,
+            "rejection_reason": rejection_reason,
+            "item_order": item_order,
+        }
+    )
+
+
+def _rejection_receipt_size(
+    envelope: Envelope,
+    payload_hash: bytes,
+    reason: str,
+    item_identity_hash: bytes | None,
+    item_payload_hash: bytes | None,
+) -> int:
+    receipt_hash = _receipt_hash(
+        event_seq=envelope.seq,
+        event_at=encode_utc(envelope.at),
+        schema_version=envelope.schema_version,
+        body_type=type(envelope.body).__name__,
+        disposition=HistoryEventDisposition.REJECTED,
+        payload_hash=payload_hash,
+        item_identity_hash=item_identity_hash,
+        item_payload_hash=item_payload_hash,
+        rejection_reason=reason,
+    )
+    return len(
+        _json_bytes(
+            {
+                "event_seq": envelope.seq,
+                "event_at": envelope.at,
+                "schema_version": envelope.schema_version,
+                "body_type": type(envelope.body).__name__,
+                "disposition": HistoryEventDisposition.REJECTED,
+                "payload_hash": payload_hash,
+                "receipt_hash": receipt_hash,
+                "item_identity_hash": item_identity_hash,
+                "item_payload_hash": item_payload_hash,
+                "rejection_reason": reason,
+            }
+        )
+    )
 
 
 def _context_payload(
@@ -312,13 +420,60 @@ def _terminal_result_payload(result: OperationResult) -> dict[str, object]:
     }
 
 
-def _terminal_payload_hash(
-    context_hash: bytes, event_chain_hash: bytes, result: OperationResult
+def _prefix_projection_hash(
+    context_hash: bytes,
+    event_chain_hash: bytes,
+    *,
+    started_at: datetime | None,
+    current_state: str,
+    current_phase: str | None,
+    last_committed_seq: int,
+    item_count: int,
+    last_committed_at: datetime | None,
+    duplicate_item_count: int,
+    rejected_event_count: int,
+    succeeded_count: int,
+    skipped_count: int,
+    failed_count: int,
+    canceled_count: int,
+    deferred_count: int,
+    blocked_count: int,
 ) -> bytes:
     return _hash(
         {
             "context_hash": context_hash,
             "event_chain_hash": event_chain_hash,
+            "started_at": started_at,
+            "current_state": current_state,
+            "current_phase": current_phase,
+            "last_committed_seq": last_committed_seq,
+            "item_count": item_count,
+            "last_committed_at": last_committed_at,
+            "duplicate_item_count": duplicate_item_count,
+            "rejected_event_count": rejected_event_count,
+            "outcome_counts": {
+                Outcome.SUCCEEDED.value: succeeded_count,
+                Outcome.SKIPPED.value: skipped_count,
+                Outcome.FAILED.value: failed_count,
+                Outcome.CANCELED.value: canceled_count,
+                Outcome.DEFERRED.value: deferred_count,
+                Outcome.BLOCKED.value: blocked_count,
+            },
+        }
+    )
+
+
+def _terminal_payload_hash(
+    context_hash: bytes,
+    prefix_projection_hash: bytes,
+    ended_at: datetime,
+    result: OperationResult,
+) -> bytes:
+    return _hash(
+        {
+            "context_hash": context_hash,
+            "prefix_projection_hash": prefix_projection_hash,
+            "ended_at": ended_at,
             "result": _terminal_result_payload(result),
         }
     )
@@ -367,18 +522,51 @@ class _ExistingRun:
 
 @dataclass(frozen=True, slots=True)
 class _PendingEvent:
-    envelope: Envelope
-    envelope_json: str
+    event_seq: int
+    event_at: datetime
+    schema_version: int
+    body_type: str
+    envelope: Envelope | None
+    envelope_json: str | None
     encoded_size: int
     payload_hash: bytes
+    item_identity_hash: bytes | None
+    item_payload_hash: bytes | None
+    rejection_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class _AppendResult:
     event_chain_hash: bytes
+    prefix_projection_hash: bytes
     started_at: datetime | None
     committed_at: datetime
     terminal_payload_hash: bytes | None
+    duplicate_item_count: int
+    rejected_event_count: int
+
+
+@dataclass(slots=True)
+class _CanonicalItemIndex:
+    by_identity: dict[tuple[str, str], tuple[int, bytes]]
+    by_identity_hash: dict[bytes, tuple[int, bytes]]
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidatedReceipt:
+    event_seq: int
+    event_at_text: str
+    event_at: datetime
+    schema_version: int
+    body_type: str
+    disposition: HistoryEventDisposition
+    payload_hash: bytes
+    receipt_hash: bytes
+    item_identity_hash: bytes | None
+    item_payload_hash: bytes | None
+    duplicate_of_seq: int | None
+    rejection_reason: str | None
+    item_order: int | None
 
 
 class HistoryStore:
@@ -402,6 +590,8 @@ class HistoryStore:
             raise TypeError("window_policy must be HistoryWindowPolicy")
         self._clock = clock
         self._busy_timeout_ms = busy_timeout_ms
+        self._retry_timeout_seconds = retry_timeout_seconds
+        self._retry_interval_seconds = retry_interval_seconds
         self._window_policy = window_policy
         self._writer = SerializedWriter(
             self.path,
@@ -431,13 +621,34 @@ class HistoryStore:
                 self.path, busy_timeout_ms=self._busy_timeout_ms
             )
             try:
+                connection.execute("BEGIN")
                 row = connection.execute(
-                    """SELECT context_hash, last_committed_seq,
-                              terminal_payload_hash
-                         FROM history_runs WHERE run_token = ?""",
+                    """SELECT run.*,
+                              COALESCE((
+                                  SELECT tail.event_seq
+                                    FROM history_events AS tail
+                                   WHERE tail.run_id = run.id
+                                   ORDER BY tail.event_seq DESC LIMIT 1
+                              ), 0) AS actual_last_event_seq,
+                              COALESCE((
+                                  SELECT tail.item_order
+                                    FROM history_events AS tail
+                                   WHERE tail.run_id = run.id
+                                     AND tail.item_order IS NOT NULL
+                                   ORDER BY tail.item_order DESC LIMIT 1
+                              ), 0) AS actual_last_item_order
+                         FROM history_runs AS run
+                        WHERE run.run_token = ?""",
                     (run_token,),
                 ).fetchone()
+                if row is not None:
+                    run_id = int(row["id"])
+                    phases = _load_phase_snapshots(connection, (run_id,))[run_id]
+                    _validate_terminal_snapshot(row, tuple(phases))
+                    _validate_physical_watermarks(row)
             finally:
+                if connection.in_transaction:
+                    connection.rollback()
                 connection.close()
         except sqlite3.Error as error:
             raise RecordingError(str(error)) from error
@@ -453,24 +664,65 @@ class HistoryStore:
             ),
         )
 
-    def _load_event_hash(self, run_token: str, event_seq: int) -> bytes | None:
-        try:
-            connection = connect_history_reader(
-                self.path, busy_timeout_ms=self._busy_timeout_ms
-            )
+    def _load_event_receipt(
+        self, run_token: str, event_seq: int
+    ) -> tuple[bytes, HistoryEventDisposition] | None:
+        deadline = time.monotonic() + self._retry_timeout_seconds
+        attempted = False
+        last_busy: sqlite3.OperationalError | None = None
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 and (
+                attempted or self._retry_timeout_seconds > 0
+            ):
+                raise RecordingError(
+                    "history replay lookup remained busy for "
+                    f"{self._retry_timeout_seconds:.3f}s"
+                ) from last_busy
+            connection: sqlite3.Connection | None = None
             try:
+                connection = connect_history_reader(
+                    self.path,
+                    busy_timeout_ms=min(
+                        self._busy_timeout_ms,
+                        max(0, int(max(remaining, 0.0) * 1_000)),
+                    ),
+                )
                 row = connection.execute(
-                    """SELECT event.payload_hash
+                    """SELECT event.*
                          FROM history_events AS event
                          JOIN history_runs AS run ON run.id = event.run_id
                         WHERE run.run_token = ? AND event.event_seq = ?""",
                     (run_token, event_seq),
                 ).fetchone()
+                if row is None:
+                    return None
+                receipt = _validated_receipt(row)
+                return (
+                    receipt.payload_hash,
+                    receipt.disposition,
+                )
+            except sqlite3.OperationalError as error:
+                if not _sqlite_busy(error):
+                    raise RecordingError(str(error)) from error
+                attempted = True
+                last_busy = error
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RecordingError(
+                        "history replay lookup remained busy for "
+                        f"{self._retry_timeout_seconds:.3f}s"
+                    ) from error
+                time.sleep(min(self._retry_interval_seconds, remaining))
+            except (TypeError, ValueError) as error:
+                raise HistoryIntegrityError(
+                    "history replay receipt is invalid"
+                ) from error
+            except sqlite3.Error as error:
+                raise RecordingError(str(error)) from error
             finally:
-                connection.close()
-        except sqlite3.Error as error:
-            raise RecordingError(str(error)) from error
-        return None if row is None else bytes(row["payload_hash"])
+                if connection is not None:
+                    connection.close()
 
     def close(self) -> None:
         self._writer.close()
@@ -509,6 +761,7 @@ class HistoryObserver:
             None if existing is None else existing.terminal_payload_hash
         )
         self._pending: list[_PendingEvent] = []
+        self._pending_rejections: set[int] = set()
         self._pending_bytes = 0
         self._closed = False
         self._failed = False
@@ -522,15 +775,15 @@ class HistoryObserver:
     def pending_bytes(self) -> int:
         return self._pending_bytes
 
-    def on_event(self, envelope: Envelope) -> None:
+    def on_event(self, envelope: Envelope) -> RecordingStatus:
         self._require_accepting()
         try:
-            self._admit(envelope)
+            return self._admit(envelope)
         except BaseException:
             self._failed = True
             raise
 
-    def _admit(self, envelope: Envelope) -> None:
+    def _admit(self, envelope: Envelope) -> RecordingStatus:
         if str(envelope.session_id) != str(self._record.session_id):
             raise HistoryIntegrityError("event belongs to another session")
         if isinstance(envelope.body, (Terminal, Progress)):
@@ -546,60 +799,111 @@ class HistoryObserver:
 
         encoded = _json_bytes(envelope_to_dict(envelope))
         encoded_size = len(encoded)
-        if encoded_size > self._policy.max_event_bytes:
-            raise HistoryIntegrityError(
-                "reliable history event exceeds the per-event byte bound"
-            )
         digest = hashlib.sha256(encoded).digest()
+        item_identity_hash = (
+            None
+            if not isinstance(envelope.body, ResultItem)
+            else _item_identity_hash(envelope.body)
+        )
+        item_payload_hash = (
+            None
+            if not isinstance(envelope.body, ResultItem)
+            else _hash(result_item_to_dict(envelope.body))
+        )
         prior = self._event_hashes.get(envelope.seq)
         if prior is not None:
             if prior != digest:
                 raise HistoryIntegrityError(
                     "event sequence was reused with another payload"
                 )
-            return
+            return (
+                RecordingStatus.DEGRADED
+                if envelope.seq in self._pending_rejections
+                else RecordingStatus.OK
+            )
         if (
             self._highest_event_seq is not None
             and envelope.seq <= self._highest_event_seq
         ):
-            durable = self._store._load_event_hash(
+            durable = self._store._load_event_receipt(
                 self._context.run_token, envelope.seq
             )
             if durable is None:
                 raise HistoryIntegrityError("reliable events arrived out of order")
-            if durable != digest:
+            durable_hash, disposition = durable
+            if durable_hash != digest:
                 raise HistoryIntegrityError(
                     "event sequence was reused with another payload"
                 )
-            return
+            return (
+                RecordingStatus.DEGRADED
+                if disposition is HistoryEventDisposition.REJECTED
+                else RecordingStatus.OK
+            )
         if self._existing_terminal_hash is not None:
             raise HistoryIntegrityError("finalized history cannot accept new events")
 
+        rejection_reason = (
+            EVENT_TOO_LARGE
+            if encoded_size > self._policy.max_event_bytes
+            else None
+        )
+        retained_size = (
+            encoded_size
+            if rejection_reason is None
+            else _rejection_receipt_size(
+                envelope,
+                digest,
+                rejection_reason,
+                item_identity_hash,
+                item_payload_hash,
+            )
+        )
+
         if self._pending and (
             len(self._pending) + 1 > self._policy.max_events
-            or self._pending_bytes + encoded_size > self._policy.max_bytes
+            or self._pending_bytes + retained_size > self._policy.max_bytes
         ):
             self.flush()
 
         pending = _PendingEvent(
-            envelope=envelope,
-            envelope_json=encoded.decode("utf-8"),
-            encoded_size=encoded_size,
+            event_seq=envelope.seq,
+            event_at=envelope.at,
+            schema_version=envelope.schema_version,
+            body_type=type(envelope.body).__name__,
+            envelope=None if rejection_reason is not None else envelope,
+            envelope_json=(
+                None
+                if rejection_reason is not None
+                else encoded.decode("utf-8")
+            ),
+            encoded_size=retained_size,
             payload_hash=digest,
+            item_identity_hash=item_identity_hash,
+            item_payload_hash=item_payload_hash,
+            rejection_reason=rejection_reason,
         )
         self._pending.append(pending)
-        self._pending_bytes += encoded_size
+        self._pending_bytes += retained_size
         self._event_hashes[envelope.seq] = digest
+        if rejection_reason is not None:
+            self._pending_rejections.add(envelope.seq)
         self._highest_event_seq = envelope.seq
         if (
             len(self._pending) >= self._policy.max_events
             or self._pending_bytes >= self._policy.max_bytes
+            or rejection_reason is not None
             or (
                 isinstance(envelope.body, StateChanged)
                 and envelope.body.state is SessionState.PAUSED
             )
         ):
             self.flush()
+        return (
+            RecordingStatus.DEGRADED
+            if rejection_reason is not None
+            else RecordingStatus.OK
+        )
 
     def flush(self) -> None:
         """Commit the current window once; repeated empty flushes are no-ops."""
@@ -617,7 +921,7 @@ class HistoryObserver:
             raise
         self._accept_commit()
 
-    def finalize(self, result: OperationResult) -> None:
+    def finalize(self, result: OperationResult) -> RecordingStatus:
         if self._closed:
             raise HistoryIntegrityError("history observer is closed")
         if self._failed:
@@ -633,22 +937,25 @@ class HistoryObserver:
             self._failed = True
             raise
         try:
-            _, payload_hash = self._commit_window(result)
+            _, payload_hash, audit = self._commit_window(result)
         except BaseException:
             self._failed = True
             raise
         self._accept_commit()
         self._existing_terminal_hash = payload_hash
         self._finalized = True
+        if audit is None:
+            raise HistoryIntegrityError("history terminal audit status is missing")
+        return audit
 
     def _commit_window(
         self, result: OperationResult | None
-    ) -> tuple[_AppendResult, bytes | None]:
+    ) -> tuple[_AppendResult, bytes | None, RecordingStatus | None]:
         pending = tuple(self._pending)
 
         def apply(
             connection: sqlite3.Connection,
-        ) -> tuple[_AppendResult, bytes | None]:
+        ) -> tuple[_AppendResult, bytes | None, RecordingStatus | None]:
             # Sample only after SerializedWriter owns BEGIN IMMEDIATE. Sampling
             # before writer admission lets a later transaction carry an older
             # timestamp than the watermark it advances.
@@ -658,23 +965,40 @@ class HistoryObserver:
                 connection, run_id, pending, sampled_at
             )
             if result is None:
-                return append, None
+                return append, None, None
+            durable_result = (
+                replace(result, audit=RecordingStatus.DEGRADED)
+                if append.rejected_event_count > 0
+                else result
+            )
+            terminal_state = result_terminal_state(durable_result).value
+            projection_row = connection.execute(
+                "SELECT * FROM history_runs WHERE id = ?", (run_id,)
+            ).fetchone()
+            ended_at = (
+                decode_utc(projection_row["ended_at"])
+                if append.terminal_payload_hash is not None
+                else append.committed_at
+            )
+            terminal_prefix_hash = _prefix_projection_hash_from_row(
+                projection_row,
+                current_state=terminal_state,
+            )
             payload_hash = _terminal_payload_hash(
-                self._context_hash, append.event_chain_hash, result
+                self._context_hash,
+                terminal_prefix_hash,
+                ended_at,
+                durable_result,
             )
             if append.terminal_payload_hash is not None:
-                stored_row = connection.execute(
-                    "SELECT * FROM history_runs WHERE id = ?", (run_id,)
-                ).fetchone()
                 stored_phases = _load_phase_snapshots(connection, (run_id,))[run_id]
                 _validate_terminal_snapshot(
-                    stored_row,
+                    projection_row,
                     tuple(stored_phases),
                 )
                 if append.terminal_payload_hash != payload_hash:
                     raise TokenConflictError("history run token payload changed")
-                return append, payload_hash
-            ended_at = append.committed_at
+                return append, payload_hash, durable_result.audit
             started_at = append.started_at
             if ended_at < (started_at or self._record.created_at):
                 raise RecordingError("history end precedes actual start")
@@ -696,7 +1020,7 @@ class HistoryObserver:
                         phase.bytes_total,
                         phase.error,
                     )
-                    for order, phase in enumerate(result.phases)
+                    for order, phase in enumerate(durable_result.phases)
                 ),
             )
             connection.execute(
@@ -705,21 +1029,31 @@ class HistoryObserver:
                           filesystem_status = ?, recording_status = ?,
                           audit_status = ?, disposition = ?, canceled = ?,
                           bytes_done = ?, bytes_total = ?, error_type = ?,
-                          error_message = ?, terminal_payload_hash = ?
+                          error_message = ?, prefix_projection_hash = ?,
+                          terminal_payload_hash = ?
                     WHERE id = ?""",
                 (
                     None if started_at is None else encode_utc(started_at),
                     encode_utc(ended_at),
-                    result_terminal_state(result).value,
-                    result.status.value,
-                    result.recording.value,
-                    result.audit.value,
-                    result.disposition.value,
-                    int(result.canceled),
-                    result.bytes_done,
-                    result.bytes_total,
-                    None if result.error is None else result.error.type_name,
-                    None if result.error is None else result.error.message,
+                    terminal_state,
+                    durable_result.status.value,
+                    durable_result.recording.value,
+                    durable_result.audit.value,
+                    durable_result.disposition.value,
+                    int(durable_result.canceled),
+                    durable_result.bytes_done,
+                    durable_result.bytes_total,
+                    (
+                        None
+                        if durable_result.error is None
+                        else durable_result.error.type_name
+                    ),
+                    (
+                        None
+                        if durable_result.error is None
+                        else durable_result.error.message
+                    ),
+                    terminal_prefix_hash,
                     payload_hash,
                     run_id,
                 ),
@@ -730,19 +1064,40 @@ class HistoryObserver:
                     started_at=started_at,
                     committed_at=append.committed_at,
                     terminal_payload_hash=payload_hash,
+                    prefix_projection_hash=terminal_prefix_hash,
+                    duplicate_item_count=append.duplicate_item_count,
+                    rejected_event_count=append.rejected_event_count,
                 ),
                 payload_hash,
+                durable_result.audit,
             )
 
         return self._store._writer.transact(apply)
 
     def _ensure_run(self, connection: sqlite3.Connection) -> int:
         row = connection.execute(
-            "SELECT * FROM history_runs WHERE run_token = ?",
+            """SELECT run.*,
+                      COALESCE((
+                          SELECT tail.event_seq
+                            FROM history_events AS tail
+                           WHERE tail.run_id = run.id
+                           ORDER BY tail.event_seq DESC LIMIT 1
+                      ), 0) AS actual_last_event_seq,
+                      COALESCE((
+                          SELECT tail.item_order
+                            FROM history_events AS tail
+                           WHERE tail.run_id = run.id
+                             AND tail.item_order IS NOT NULL
+                           ORDER BY tail.item_order DESC LIMIT 1
+                      ), 0) AS actual_last_item_order
+                 FROM history_runs AS run
+                WHERE run.run_token = ?""",
             (self._context.run_token,),
         ).fetchone()
         if row is not None:
             _validate_context_snapshot(row)
+            _validate_prefix_snapshot(row)
+            _validate_physical_watermarks(row)
             if bytes(row["context_hash"]) != self._context_hash:
                 raise TokenConflictError("history run token context changed")
             if (
@@ -753,6 +1108,24 @@ class HistoryObserver:
                 raise TokenConflictError("history run start changed")
             return int(row["id"])
         context = self._context
+        prefix_projection_hash = _prefix_projection_hash(
+            self._context_hash,
+            _EMPTY_EVENT_CHAIN,
+            started_at=self._record.started_at,
+            current_state=self._record.state.value,
+            current_phase=None,
+            last_committed_seq=0,
+            item_count=0,
+            last_committed_at=None,
+            duplicate_item_count=0,
+            rejected_event_count=0,
+            succeeded_count=0,
+            skipped_count=0,
+            failed_count=0,
+            canceled_count=0,
+            deferred_count=0,
+            blocked_count=0,
+        )
         return int(
             connection.execute(
                 """INSERT INTO history_runs(
@@ -760,9 +1133,9 @@ class HistoryObserver:
                        subject_kind, subject_id, source_context, target_context,
                        created_at, started_at, current_state, current_phase,
                        last_committed_seq, item_count, last_committed_at,
-                       context_hash, event_chain_hash
+                       context_hash, event_chain_hash, prefix_projection_hash
                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, NULL,
-                             ?, ?) RETURNING id""",
+                             ?, ?, ?) RETURNING id""",
                 (
                     context.run_token,
                     str(self._record.session_id),
@@ -781,6 +1154,7 @@ class HistoryObserver:
                     self._record.state.value,
                     self._context_hash,
                     _EMPTY_EVENT_CHAIN,
+                    prefix_projection_hash,
                 ),
             ).fetchone()["id"]
         )
@@ -793,13 +1167,16 @@ class HistoryObserver:
         committed_at: datetime,
     ) -> _AppendResult:
         row = connection.execute(
-            """SELECT last_committed_seq, item_count, event_chain_hash,
+            """SELECT context_hash, last_committed_seq, item_count,
+                      event_chain_hash, prefix_projection_hash,
                       started_at, current_state, current_phase, last_committed_at,
                       terminal_payload_hash, succeeded_count, skipped_count,
-                      failed_count, canceled_count, deferred_count, blocked_count
+                      failed_count, canceled_count, deferred_count, blocked_count,
+                      duplicate_item_count, rejected_event_count
                  FROM history_runs WHERE id = ?""",
             (run_id,),
         ).fetchone()
+        _validate_prefix_snapshot(row)
         last_seq = int(row["last_committed_seq"])
         item_count = int(row["item_count"])
         chain = bytes(row["event_chain_hash"])
@@ -807,6 +1184,8 @@ class HistoryObserver:
         prior_committed_at = _optional_utc(row["last_committed_at"])
         current_state = str(row["current_state"])
         current_phase = row["current_phase"]
+        duplicate_item_count = int(row["duplicate_item_count"])
+        rejected_event_count = int(row["rejected_event_count"])
         terminal_hash = (
             None
             if row["terminal_payload_hash"] is None
@@ -822,13 +1201,15 @@ class HistoryObserver:
         }
         inserted = False
         latest_inserted_at: datetime | None = None
+        canonical_items = _canonical_items_for_window(
+            connection, run_id, last_seq, pending
+        )
         for event in pending:
-            envelope = event.envelope
-            if envelope.seq <= last_seq:
+            if event.event_seq <= last_seq:
                 prior = connection.execute(
                     """SELECT payload_hash FROM history_events
                         WHERE run_id = ? AND event_seq = ?""",
-                    (run_id, envelope.seq),
+                    (run_id, event.event_seq),
                 ).fetchone()
                 if prior is None:
                     raise HistoryIntegrityError(
@@ -842,25 +1223,112 @@ class HistoryObserver:
             if terminal_hash is not None:
                 raise TokenConflictError("finalized history cannot accept new events")
 
-            projection = _item_projection(envelope.body)
+            envelope = event.envelope
+            projection = (
+                None if envelope is None else _item_projection(envelope.body)
+            )
             item_order = None
-            if projection is not None:
-                item_count += 1
-                item_order = item_count
+            item_identity_hash = event.item_identity_hash
+            item_payload_hash = event.item_payload_hash
+            duplicate_of_seq = None
+            disposition = HistoryEventDisposition.RECORDED
+            if item_identity_hash is not None:
+                if item_payload_hash is None:
+                    raise HistoryIntegrityError(
+                        "history item semantic hash is missing"
+                    )
+                prior_receipt = canonical_items.by_identity_hash.get(
+                    item_identity_hash
+                )
+                if prior_receipt is not None:
+                    _, prior_item_hash = prior_receipt
+                    if item_payload_hash != prior_item_hash:
+                        raise HistoryIntegrityError(
+                            "result item identity was reused with another payload"
+                        )
+            if event.rejection_reason is not None:
+                disposition = HistoryEventDisposition.REJECTED
+                rejected_event_count += 1
+                if item_identity_hash is not None:
+                    if prior_receipt is None:
+                        canonical_items.by_identity_hash[item_identity_hash] = (
+                            event.event_seq,
+                            item_payload_hash,
+                        )
+                    else:
+                        duplicate_of_seq, _ = prior_receipt
+            elif projection is not None:
+                if item_identity_hash is None or item_payload_hash is None:
+                    raise HistoryIntegrityError(
+                        "history canonical item hashes are missing"
+                    )
+                identity = (
+                    str(projection["item_type"]),
+                    str(projection["item_id"]),
+                )
+                prior_item = canonical_items.by_identity.get(identity)
+                if prior_item is None:
+                    prior_receipt = canonical_items.by_identity_hash.get(
+                        item_identity_hash
+                    )
+                    if prior_receipt is None:
+                        item_count += 1
+                        item_order = item_count
+                        value = (event.event_seq, item_payload_hash)
+                        canonical_items.by_identity[identity] = value
+                        canonical_items.by_identity_hash[item_identity_hash] = value
+                    else:
+                        duplicate_of_seq, _ = prior_receipt
+                        disposition = HistoryEventDisposition.DUPLICATE
+                        duplicate_item_count += 1
+                else:
+                    prior_seq, prior_item_hash = prior_item
+                    if item_payload_hash != prior_item_hash:
+                        raise HistoryIntegrityError(
+                            "result item identity was reused with another payload"
+                        )
+                    disposition = HistoryEventDisposition.DUPLICATE
+                    duplicate_of_seq = prior_seq
+                    duplicate_item_count += 1
+            stored_identity_hash = item_identity_hash
+            stored_item_payload_hash = item_payload_hash
+            event_at_text = encode_utc(event.event_at)
+            receipt_hash = _receipt_hash(
+                event_seq=event.event_seq,
+                event_at=event_at_text,
+                schema_version=event.schema_version,
+                body_type=event.body_type,
+                disposition=disposition,
+                payload_hash=event.payload_hash,
+                item_identity_hash=stored_identity_hash,
+                item_payload_hash=stored_item_payload_hash,
+                duplicate_of_seq=duplicate_of_seq,
+                rejection_reason=event.rejection_reason,
+                item_order=item_order,
+            )
             connection.execute(
                 """INSERT INTO history_events(
                        run_id, event_seq, event_at, schema_version, body_type,
-                       envelope_json, payload_hash, item_order, item_type, phase,
-                       item_id, kind, path, result, reason
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       event_disposition, envelope_json, payload_hash,
+                       receipt_hash, item_identity_hash, item_payload_hash,
+                       duplicate_of_seq, rejection_reason, item_order,
+                       item_type, phase, item_id, kind, path, result, reason
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                             ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     run_id,
-                    envelope.seq,
-                    encode_utc(envelope.at),
-                    envelope.schema_version,
-                    type(envelope.body).__name__,
+                    event.event_seq,
+                    event_at_text,
+                    event.schema_version,
+                    event.body_type,
+                    disposition.value,
                     event.envelope_json,
                     event.payload_hash,
+                    receipt_hash,
+                    stored_identity_hash,
+                    stored_item_payload_hash,
+                    duplicate_of_seq,
+                    event.rejection_reason,
                     item_order,
                     None if projection is None else projection["item_type"],
                     None if projection is None else projection["phase"],
@@ -871,23 +1339,27 @@ class HistoryObserver:
                     None if projection is None else projection["reason"],
                 ),
             )
-            if isinstance(envelope.body, ItemOutcome):
+            if (
+                disposition is HistoryEventDisposition.RECORDED
+                and envelope is not None
+                and isinstance(envelope.body, ItemOutcome)
+            ):
                 counts[envelope.body.outcome.value] += 1
-            elif isinstance(envelope.body, StateChanged):
+            elif envelope is not None and isinstance(envelope.body, StateChanged):
                 current_state = envelope.body.state.value
                 if (
                     envelope.body.state is SessionState.RUNNING
                     and started_at is None
                 ):
-                    started_at = envelope.at
-            elif isinstance(envelope.body, PhaseChanged):
+                    started_at = event.event_at
+            elif envelope is not None and isinstance(envelope.body, PhaseChanged):
                 current_phase = envelope.body.phase
-            last_seq = envelope.seq
-            chain = _advance_event_chain(chain, event.payload_hash)
+            last_seq = event.event_seq
+            chain = _advance_event_chain(chain, receipt_hash)
             inserted = True
             latest_inserted_at = max(
                 value
-                for value in (latest_inserted_at, envelope.at)
+                for value in (latest_inserted_at, event.event_at)
                 if value is not None
             )
 
@@ -907,6 +1379,29 @@ class HistoryObserver:
             if value is not None
         )
 
+        prefix_projection_hash = _prefix_projection_hash(
+            bytes(row["context_hash"]),
+            chain,
+            started_at=started_at,
+            current_state=current_state,
+            current_phase=(
+                None if current_phase is None else str(current_phase)
+            ),
+            last_committed_seq=last_seq,
+            item_count=item_count,
+            last_committed_at=(
+                effective_committed_at if inserted else prior_committed_at
+            ),
+            duplicate_item_count=duplicate_item_count,
+            rejected_event_count=rejected_event_count,
+            succeeded_count=counts[Outcome.SUCCEEDED.value],
+            skipped_count=counts[Outcome.SKIPPED.value],
+            failed_count=counts[Outcome.FAILED.value],
+            canceled_count=counts[Outcome.CANCELED.value],
+            deferred_count=counts[Outcome.DEFERRED.value],
+            blocked_count=counts[Outcome.BLOCKED.value],
+        )
+
         if inserted:
             connection.execute(
                 """UPDATE history_runs
@@ -915,7 +1410,9 @@ class HistoryObserver:
                           last_committed_at = ?, event_chain_hash = ?,
                           succeeded_count = ?, skipped_count = ?,
                           failed_count = ?, canceled_count = ?,
-                          deferred_count = ?, blocked_count = ?
+                          deferred_count = ?, blocked_count = ?,
+                          duplicate_item_count = ?, rejected_event_count = ?,
+                          prefix_projection_hash = ?
                     WHERE id = ?""",
                 (
                     None if started_at is None else encode_utc(started_at),
@@ -931,14 +1428,20 @@ class HistoryObserver:
                     counts[Outcome.CANCELED.value],
                     counts[Outcome.DEFERRED.value],
                     counts[Outcome.BLOCKED.value],
+                    duplicate_item_count,
+                    rejected_event_count,
+                    prefix_projection_hash,
                     run_id,
                 ),
             )
         return _AppendResult(
             event_chain_hash=chain,
+            prefix_projection_hash=prefix_projection_hash,
             started_at=started_at,
             committed_at=effective_committed_at,
             terminal_payload_hash=terminal_hash,
+            duplicate_item_count=duplicate_item_count,
+            rejected_event_count=rejected_event_count,
         )
 
     def _accept_commit(self) -> None:
@@ -946,6 +1449,7 @@ class HistoryObserver:
 
         self._pending.clear()
         self._event_hashes.clear()
+        self._pending_rejections.clear()
         self._pending_bytes = 0
 
     def close(self) -> None:
@@ -1011,9 +1515,45 @@ class HistoryRepository:
         try:
             rows = tuple(
                 self._connection.execute(
-                    """SELECT * FROM history_runs
-                        ORDER BY COALESCE(started_at, created_at) DESC, id DESC
-                        LIMIT ?""",
+                    """WITH selected AS (
+                           SELECT * FROM history_runs
+                            ORDER BY COALESCE(started_at, created_at) DESC, id DESC
+                            LIMIT ?
+                       )
+                       SELECT selected.*,
+                              COALESCE((
+                                  SELECT tail.event_seq
+                                    FROM history_events AS tail
+                                   WHERE tail.run_id = selected.id
+                                   ORDER BY tail.event_seq DESC LIMIT 1
+                              ), 0) AS actual_last_event_seq,
+                              COALESCE((
+                                  SELECT tail.item_order
+                                    FROM history_events AS tail
+                                   WHERE tail.run_id = selected.id
+                                     AND tail.item_order IS NOT NULL
+                                   ORDER BY tail.item_order DESC LIMIT 1
+                              ), 0) AS actual_last_item_order,
+                              CASE WHEN selected.terminal_payload_hash IS NOT NULL
+                                   THEN selected.duplicate_item_count
+                                   ELSE COALESCE(SUM(CASE
+                                       WHEN event.event_disposition = 'duplicate'
+                                       THEN 1 ELSE 0 END), 0) END
+                                  AS durable_duplicate_item_count,
+                              CASE WHEN selected.terminal_payload_hash IS NOT NULL
+                                   THEN selected.rejected_event_count
+                                   ELSE COALESCE(SUM(CASE
+                                       WHEN event.event_disposition = 'rejected'
+                                       THEN 1 ELSE 0 END), 0) END
+                                  AS durable_rejected_event_count
+                         FROM selected
+                         LEFT JOIN history_events AS event
+                           ON event.run_id = selected.id
+                          AND selected.terminal_payload_hash IS NULL
+                          AND event.event_seq <= selected.last_committed_seq
+                        GROUP BY selected.id
+                        ORDER BY COALESCE(selected.started_at, selected.created_at)
+                                 DESC, selected.id DESC""",
                     (limit,),
                 )
             )
@@ -1025,7 +1565,40 @@ class HistoryRepository:
         self._begin_read()
         try:
             row = self._connection.execute(
-                "SELECT * FROM history_runs WHERE run_token = ?", (run_token,)
+                """SELECT run.*,
+                          COALESCE((
+                              SELECT tail.event_seq
+                                FROM history_events AS tail
+                               WHERE tail.run_id = run.id
+                               ORDER BY tail.event_seq DESC LIMIT 1
+                          ), 0) AS actual_last_event_seq,
+                          COALESCE((
+                              SELECT tail.item_order
+                                FROM history_events AS tail
+                               WHERE tail.run_id = run.id
+                                 AND tail.item_order IS NOT NULL
+                               ORDER BY tail.item_order DESC LIMIT 1
+                          ), 0) AS actual_last_item_order,
+                          CASE WHEN run.terminal_payload_hash IS NOT NULL
+                               THEN run.duplicate_item_count
+                               ELSE COALESCE(SUM(CASE
+                                   WHEN event.event_disposition = 'duplicate'
+                                   THEN 1 ELSE 0 END), 0) END
+                              AS durable_duplicate_item_count,
+                          CASE WHEN run.terminal_payload_hash IS NOT NULL
+                               THEN run.rejected_event_count
+                               ELSE COALESCE(SUM(CASE
+                                   WHEN event.event_disposition = 'rejected'
+                                   THEN 1 ELSE 0 END), 0) END
+                              AS durable_rejected_event_count
+                     FROM history_runs AS run
+                     LEFT JOIN history_events AS event
+                       ON event.run_id = run.id
+                      AND run.terminal_payload_hash IS NULL
+                      AND event.event_seq <= run.last_committed_seq
+                    WHERE run.run_token = ?
+                    GROUP BY run.id""",
+                (run_token,),
             ).fetchone()
             if row is None:
                 raise KeyError(run_token)
@@ -1045,11 +1618,30 @@ class HistoryRepository:
         self._begin_read()
         try:
             run = self._connection.execute(
-                "SELECT id, item_count FROM history_runs WHERE run_token = ?",
+                """SELECT run.*,
+                          COALESCE((
+                              SELECT tail.event_seq
+                                FROM history_events AS tail
+                               WHERE tail.run_id = run.id
+                               ORDER BY tail.event_seq DESC LIMIT 1
+                          ), 0) AS actual_last_event_seq,
+                          COALESCE((
+                              SELECT tail.item_order
+                                FROM history_events AS tail
+                               WHERE tail.run_id = run.id
+                                 AND tail.item_order IS NOT NULL
+                               ORDER BY tail.item_order DESC LIMIT 1
+                          ), 0) AS actual_last_item_order
+                     FROM history_runs AS run
+                    WHERE run.run_token = ?""",
                 (run_token,),
             ).fetchone()
             if run is None:
                 raise KeyError(run_token)
+            _validate_context_snapshot(run)
+            _validate_prefix_snapshot(run)
+            _validate_physical_watermarks(run)
+            session_id = str(run["session_id"])
             durable = int(run["item_count"])
             through = durable if through_order is None else through_order
             _validate_watermark(after_order, through, durable, "item")
@@ -1061,7 +1653,7 @@ class HistoryRepository:
                     (run["id"], after_order, through, limit),
                 )
             )
-            items = tuple(_history_item(row) for row in rows)
+            items = tuple(_history_item(row, session_id) for row in rows)
             next_after = after_order if not items else items[-1].item_order
             has_more = _dense_page_has_more(
                 len(items), limit, next_after, through, "item"
@@ -1088,28 +1680,36 @@ class HistoryRepository:
         self._begin_read()
         try:
             run = self._connection.execute(
-                """SELECT id, last_committed_seq FROM history_runs
-                    WHERE run_token = ?""",
+                """SELECT run.*,
+                          COALESCE((
+                              SELECT tail.event_seq
+                                FROM history_events AS tail
+                               WHERE tail.run_id = run.id
+                               ORDER BY tail.event_seq DESC LIMIT 1
+                          ), 0) AS actual_last_event_seq,
+                          COALESCE((
+                              SELECT tail.item_order
+                                FROM history_events AS tail
+                               WHERE tail.run_id = run.id
+                                 AND tail.item_order IS NOT NULL
+                               ORDER BY tail.item_order DESC LIMIT 1
+                          ), 0) AS actual_last_item_order
+                     FROM history_runs AS run
+                    WHERE run.run_token = ?""",
                 (run_token,),
             ).fetchone()
             if run is None:
                 raise KeyError(run_token)
+            _validate_context_snapshot(run)
+            _validate_prefix_snapshot(run)
+            _validate_physical_watermarks(run)
+            session_id = str(run["session_id"])
             durable = int(run["last_committed_seq"])
-            latest = self._connection.execute(
-                """SELECT event_seq FROM history_events
-                    WHERE run_id = ?
-                    ORDER BY event_seq DESC LIMIT 1""",
-                (run["id"],),
-            ).fetchone()
-            actual_durable = 0 if latest is None else int(latest["event_seq"])
-            if actual_durable != durable:
-                raise HistoryIntegrityError(
-                    "history event watermark disagrees with durable rows"
-                )
             through = durable if through_seq is None else through_seq
             if through_seq is None and after_seq > durable:
                 return HistoryEventPage(
                     run_token=run_token,
+                    session_id=session_id,
                     through_seq=durable,
                     events=(),
                     next_after_seq=after_seq,
@@ -1118,16 +1718,45 @@ class HistoryRepository:
             _validate_watermark(after_seq, through, durable, "event")
             rows = tuple(
                 self._connection.execute(
-                    """SELECT * FROM history_events
-                        WHERE run_id = ? AND event_seq > ? AND event_seq <= ?
-                        ORDER BY event_seq LIMIT ?""",
+                    """SELECT event.*,
+                              canonical.event_disposition
+                                  AS canonical_disposition,
+                              canonical.event_seq AS canonical_event_seq,
+                              canonical.event_at AS canonical_event_at,
+                              canonical.schema_version
+                                  AS canonical_schema_version,
+                              canonical.body_type AS canonical_body_type,
+                              canonical.payload_hash AS canonical_payload_hash,
+                              canonical.receipt_hash AS canonical_receipt_hash,
+                              canonical.duplicate_of_seq
+                                  AS canonical_duplicate_of_seq,
+                              canonical.rejection_reason
+                                  AS canonical_rejection_reason,
+                              canonical.item_order AS canonical_item_order,
+                              canonical.item_type AS canonical_item_type,
+                              canonical.item_id AS canonical_item_id,
+                              canonical.item_identity_hash
+                                  AS canonical_item_identity_hash,
+                              canonical.item_payload_hash
+                                  AS canonical_item_payload_hash
+                         FROM history_events AS event
+                         LEFT JOIN history_events AS canonical
+                           ON canonical.run_id = event.run_id
+                          AND canonical.event_seq = event.duplicate_of_seq
+                        WHERE event.run_id = ? AND event.event_seq > ?
+                          AND event.event_seq <= ?
+                        ORDER BY event.event_seq LIMIT ?""",
                     (run["id"], after_seq, through, limit + 1),
                 )
             )
-            events = tuple(_history_event(row) for row in rows[:limit])
+            events = tuple(
+                _history_event_with_duplicate_link(row, session_id)
+                for row in rows[:limit]
+            )
             next_after = after_seq if not events else events[-1].event_seq
             return HistoryEventPage(
                 run_token=run_token,
+                session_id=session_id,
                 through_seq=through,
                 events=events,
                 next_after_seq=next_after,
@@ -1150,6 +1779,10 @@ class HistoryRepository:
                 row,
                 tuple(phases[int(row["id"])]),
                 aggregates[int(row["id"])],
+                (
+                    int(row["durable_duplicate_item_count"]),
+                    int(row["durable_rejected_event_count"]),
+                ),
             )
             for row in rows
         )
@@ -1163,29 +1796,34 @@ class HistoryRepository:
         if reasons:
             reason_placeholders = ",".join("?" for _ in reasons)
             reason_predicate = (
-                f" AND (reason IS NULL OR reason NOT IN ({reason_placeholders}))"
+                " AND (event.reason IS NULL OR event.reason NOT IN "
+                f"({reason_placeholders}))"
             )
-        selected = f"item_type = 'operation'{reason_predicate}"
+        selected = f"event.item_type = 'operation'{reason_predicate}"
         integrity_results = tuple(result.value for result in IntegrityResult)
         integrity_columns = ",\n".join(
-            f"SUM(CASE WHEN item_type = 'integrity' AND result = ? "
+            f"SUM(CASE WHEN event.item_type = 'integrity' AND event.result = ? "
             f"THEN 1 ELSE 0 END) AS integrity_{index}"
             for index, _ in enumerate(integrity_results)
         )
         rows = self._connection.execute(
-            f"""SELECT run_id,
+            f"""SELECT event.run_id,
                        SUM(CASE WHEN {selected} THEN 1 ELSE 0 END)
                            AS selected_operation_count,
-                       SUM(CASE WHEN {selected} AND kind <> ? THEN 1 ELSE 0 END)
+                       SUM(CASE WHEN {selected} AND event.kind <> ? THEN 1 ELSE 0 END)
                            AS selected_other_operation_count,
                        {integrity_columns},
-                       SUM(CASE WHEN item_type = 'integrity'
-                                     AND phase = ? AND result = ?
+                       SUM(CASE WHEN event.item_type = 'integrity'
+                                     AND event.phase = ? AND event.result = ?
                                 THEN 1 ELSE 0 END) AS verify_phase_baseline_count
-                  FROM history_events
+                  FROM history_events AS event
                        INDEXED BY history_events_run_item_aggregate_idx
-                 WHERE run_id IN ({placeholders}) AND item_order IS NOT NULL
-                 GROUP BY run_id""",
+                  JOIN history_runs AS run ON run.id = event.run_id
+                 WHERE event.run_id IN ({placeholders})
+                   AND event.item_order IS NOT NULL
+                   AND event.event_seq <= run.last_committed_seq
+                   AND event.item_order <= run.item_count
+                 GROUP BY event.run_id""",
             (
                 *reasons,
                 *reasons,
@@ -1238,6 +1876,15 @@ class HistoryRepository:
         self.close()
 
 
+def _item_identity_hash(item: ResultItem) -> bytes:
+    return _hash(
+        {
+            "item_type": item.item_type,
+            "item_id": item.item_id,
+        }
+    )
+
+
 def _item_projection(body: object) -> dict[str, object] | None:
     if not isinstance(body, ResultItem):
         return None
@@ -1251,6 +1898,90 @@ def _item_projection(body: object) -> dict[str, object] | None:
         "result": str(data["result"]),
         "reason": None if data["reason"] is None else str(data["reason"]),
     }
+
+
+def _canonical_items_for_window(
+    connection: sqlite3.Connection,
+    run_id: int,
+    through_seq: int,
+    pending: tuple[_PendingEvent, ...],
+) -> _CanonicalItemIndex:
+    identity_hashes = tuple(
+        dict.fromkeys(
+            event.item_identity_hash
+            for event in pending
+            if event.item_identity_hash is not None
+        )
+    )
+    by_identity: dict[tuple[str, str], tuple[int, bytes]] = {}
+    by_identity_hash: dict[bytes, tuple[int, bytes]] = {}
+    for offset in range(0, len(identity_hashes), 400):
+        chunk = identity_hashes[offset : offset + 400]
+        requested = ",".join("?" for _ in chunk)
+        for row in connection.execute(
+            f"""SELECT event_seq AS first_seq,
+                       event_disposition AS first_disposition,
+                       item_order AS first_item_order,
+                       item_type AS first_item_type,
+                       item_id AS first_item_id,
+                       item_identity_hash,
+                       item_payload_hash AS first_item_payload_hash
+                  FROM history_events
+                       INDEXED BY history_events_run_identity_hash_idx
+                 WHERE run_id = ?
+                   AND item_identity_hash IN ({requested})
+                   AND (
+                       event_disposition = 'recorded'
+                       OR (
+                           event_disposition = 'rejected'
+                           AND duplicate_of_seq IS NULL
+                       )
+                   )
+                   AND event_seq <= ?""",
+            (run_id, *chunk, through_seq),
+        ):
+            first_seq = int(row["first_seq"])
+            stored_identity_hash = bytes(row["item_identity_hash"])
+            item_hash = row["first_item_payload_hash"]
+            if item_hash is None:
+                raise HistoryIntegrityError(
+                    "history canonical item hashes are missing"
+                )
+            value = (first_seq, bytes(item_hash))
+            by_identity_hash[stored_identity_hash] = value
+            try:
+                disposition = HistoryEventDisposition(
+                    str(row["first_disposition"])
+                )
+            except ValueError as error:
+                raise HistoryIntegrityError(
+                    "history item receipt disposition is invalid"
+                ) from error
+            if disposition is HistoryEventDisposition.RECORDED:
+                if row["first_item_order"] is None:
+                    raise HistoryIntegrityError(
+                        "history canonical item order is missing"
+                    )
+                identity = (
+                    str(row["first_item_type"]),
+                    str(row["first_item_id"]),
+                )
+                if stored_identity_hash != _hash(
+                    {"item_type": identity[0], "item_id": identity[1]}
+                ):
+                    raise HistoryIntegrityError(
+                        "history canonical item identity hash disagrees"
+                    )
+                if identity in by_identity:
+                    raise HistoryIntegrityError(
+                        "history contains repeated canonical item identities"
+                    )
+                by_identity[identity] = value
+            elif disposition is not HistoryEventDisposition.REJECTED:
+                raise HistoryIntegrityError(
+                    "history item representative disposition is invalid"
+                )
+    return _CanonicalItemIndex(by_identity, by_identity_hash)
 
 
 def _load_phase_snapshots(
@@ -1282,10 +2013,176 @@ def _load_phase_snapshots(
     return phases
 
 
-def _history_event(row: sqlite3.Row) -> HistoryEventSnapshot:
+def _validated_receipt(row: sqlite3.Row) -> _ValidatedReceipt:
+    try:
+        disposition = HistoryEventDisposition(str(row["event_disposition"]))
+        event_seq = int(row["event_seq"])
+        event_at_text = str(row["event_at"])
+        event_at = decode_utc(event_at_text)
+        schema_version = int(row["schema_version"])
+        body_type = str(row["body_type"])
+        payload_hash = bytes(row["payload_hash"])
+        receipt_hash = bytes(row["receipt_hash"])
+        item_identity_hash = (
+            None
+            if row["item_identity_hash"] is None
+            else bytes(row["item_identity_hash"])
+        )
+        item_payload_hash = (
+            None
+            if row["item_payload_hash"] is None
+            else bytes(row["item_payload_hash"])
+        )
+        duplicate_of_seq = (
+            None
+            if row["duplicate_of_seq"] is None
+            else int(row["duplicate_of_seq"])
+        )
+        rejection_reason = (
+            None
+            if row["rejection_reason"] is None
+            else str(row["rejection_reason"])
+        )
+        item_order = (
+            None if row["item_order"] is None else int(row["item_order"])
+        )
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history event receipt metadata is invalid"
+        ) from error
+    expected_receipt_hash = _receipt_hash(
+        event_seq=event_seq,
+        event_at=event_at_text,
+        schema_version=schema_version,
+        body_type=body_type,
+        disposition=disposition,
+        payload_hash=payload_hash,
+        item_identity_hash=item_identity_hash,
+        item_payload_hash=item_payload_hash,
+        duplicate_of_seq=duplicate_of_seq,
+        rejection_reason=rejection_reason,
+        item_order=item_order,
+    )
+    if receipt_hash != expected_receipt_hash:
+        raise HistoryIntegrityError("history event receipt hash disagrees")
+    return _ValidatedReceipt(
+        event_seq=event_seq,
+        event_at_text=event_at_text,
+        event_at=event_at,
+        schema_version=schema_version,
+        body_type=body_type,
+        disposition=disposition,
+        payload_hash=payload_hash,
+        receipt_hash=receipt_hash,
+        item_identity_hash=item_identity_hash,
+        item_payload_hash=item_payload_hash,
+        duplicate_of_seq=duplicate_of_seq,
+        rejection_reason=rejection_reason,
+        item_order=item_order,
+    )
+
+
+def _history_event_with_duplicate_link(
+    row: sqlite3.Row,
+    expected_session_id: str,
+) -> HistoryEventSnapshot:
+    disposition = HistoryEventDisposition(str(row["event_disposition"]))
+    linked_rejected = (
+        disposition is HistoryEventDisposition.REJECTED
+        and row["duplicate_of_seq"] is not None
+    )
+    if disposition is HistoryEventDisposition.DUPLICATE or linked_rejected:
+        canonical = _validated_receipt(
+            {
+                "event_seq": row["canonical_event_seq"],
+                "event_at": row["canonical_event_at"],
+                "schema_version": row["canonical_schema_version"],
+                "body_type": row["canonical_body_type"],
+                "event_disposition": row["canonical_disposition"],
+                "payload_hash": row["canonical_payload_hash"],
+                "receipt_hash": row["canonical_receipt_hash"],
+                "item_identity_hash": row["canonical_item_identity_hash"],
+                "item_payload_hash": row["canonical_item_payload_hash"],
+                "duplicate_of_seq": row["canonical_duplicate_of_seq"],
+                "rejection_reason": row["canonical_rejection_reason"],
+                "item_order": row["canonical_item_order"],
+            }
+        )
+        recorded_link = (
+            canonical.disposition is HistoryEventDisposition.RECORDED
+            and canonical.item_order is not None
+            and canonical.duplicate_of_seq is None
+            and canonical.rejection_reason is None
+            and (
+                linked_rejected
+                or (
+                    str(row["canonical_item_type"]) == str(row["item_type"])
+                    and str(row["canonical_item_id"]) == str(row["item_id"])
+                )
+            )
+        )
+        rejected_link = (
+            canonical.disposition is HistoryEventDisposition.REJECTED
+            and canonical.item_order is None
+            and canonical.duplicate_of_seq is None
+            and canonical.rejection_reason == EVENT_TOO_LARGE
+        )
+        if (
+            not (recorded_link or rejected_link)
+            or canonical.item_identity_hash is None
+            or canonical.item_identity_hash
+            != bytes(row["item_identity_hash"])
+            or canonical.item_payload_hash is None
+            or canonical.item_payload_hash
+            != bytes(row["item_payload_hash"])
+        ):
+            raise HistoryIntegrityError(
+                "history duplicate receipt link disagrees with canonical item"
+            )
+    return _history_event(row, expected_session_id)
+
+
+def _history_event(
+    row: sqlite3.Row,
+    expected_session_id: str,
+) -> HistoryEventSnapshot:
+    receipt = _validated_receipt(row)
+    disposition = receipt.disposition
+    payload_hash = receipt.payload_hash
+    item_identity_hash = receipt.item_identity_hash
+    item_payload_hash = receipt.item_payload_hash
+    duplicate_of_seq = receipt.duplicate_of_seq
+    rejection_reason = receipt.rejection_reason
+    receipt_hash = receipt.receipt_hash
+    event_seq = receipt.event_seq
+    event_at = receipt.event_at
+    body_type = receipt.body_type
+    if disposition is HistoryEventDisposition.REJECTED:
+        if row["envelope_json"] is not None:
+            raise HistoryIntegrityError(
+                "history rejected receipt retained an envelope"
+            )
+        if rejection_reason != EVENT_TOO_LARGE:
+            raise HistoryIntegrityError(
+                "history rejected receipt reason is invalid"
+            )
+        return HistoryEventSnapshot(
+            event_seq=event_seq,
+            event_at=event_at,
+            schema_version=receipt.schema_version,
+            body_type=body_type,
+            disposition=disposition,
+            envelope=None,
+            payload_hash=payload_hash,
+            receipt_hash=receipt_hash,
+            duplicate_of_seq=duplicate_of_seq,
+            rejection_reason=rejection_reason,
+        )
+
+    if row["envelope_json"] is None:
+        raise HistoryIntegrityError("history event envelope is missing")
     envelope_text = str(row["envelope_json"])
-    payload_hash = hashlib.sha256(envelope_text.encode("utf-8")).digest()
-    if payload_hash != bytes(row["payload_hash"]):
+    if hashlib.sha256(envelope_text.encode("utf-8")).digest() != payload_hash:
         raise HistoryIntegrityError("history event payload hash disagrees")
     try:
         raw = json.loads(envelope_text)
@@ -1298,17 +2195,16 @@ def _history_event(row: sqlite3.Row) -> HistoryEventSnapshot:
     except (KeyError, TypeError, ValueError) as error:
         raise HistoryIntegrityError("history event payload is invalid") from error
     if (
-        envelope.seq != int(row["event_seq"])
-        or envelope.schema_version != int(row["schema_version"])
+        str(envelope.session_id) != expected_session_id
+        or envelope.seq != event_seq
+        or envelope.schema_version != receipt.schema_version
         or type(envelope.body).__name__ != str(row["body_type"])
-        or envelope.at != decode_utc(row["event_at"])
+        or envelope.at != event_at
     ):
         raise HistoryIntegrityError("history event columns disagree with payload")
     projection = _item_projection(envelope.body)
     expected = (
-        None
-        if row["item_order"] is None
-        else {
+        {
             "item_type": row["item_type"],
             "phase": row["phase"],
             "item_id": row["item_id"],
@@ -1317,15 +2213,61 @@ def _history_event(row: sqlite3.Row) -> HistoryEventSnapshot:
             "result": row["result"],
             "reason": row["reason"],
         }
+        if row["item_type"] is not None
+        else None
     )
     if projection != expected:
         raise HistoryIntegrityError("history item columns disagree with payload")
-    return HistoryEventSnapshot(envelope.seq, envelope, payload_hash)
+    expected_item_hash = (
+        None
+        if not isinstance(envelope.body, ResultItem)
+        else _hash(result_item_to_dict(envelope.body))
+    )
+    if item_payload_hash != expected_item_hash:
+        raise HistoryIntegrityError("history item payload hash disagrees")
+    expected_identity_hash = (
+        None
+        if not isinstance(envelope.body, ResultItem)
+        else _item_identity_hash(envelope.body)
+    )
+    if item_identity_hash != expected_identity_hash:
+        raise HistoryIntegrityError("history item identity hash disagrees")
+    if disposition is HistoryEventDisposition.RECORDED:
+        if (projection is None) != (row["item_order"] is None):
+            raise HistoryIntegrityError(
+                "history canonical item order disagrees with payload"
+            )
+        if duplicate_of_seq is not None or rejection_reason is not None:
+            raise HistoryIntegrityError("history recorded receipt metadata disagrees")
+    else:
+        if (
+            disposition is not HistoryEventDisposition.DUPLICATE
+            or projection is None
+            or row["item_order"] is not None
+            or duplicate_of_seq is None
+            or duplicate_of_seq >= event_seq
+            or rejection_reason is not None
+        ):
+            raise HistoryIntegrityError("history duplicate receipt metadata disagrees")
+    return HistoryEventSnapshot(
+        event_seq=event_seq,
+        event_at=event_at,
+        schema_version=receipt.schema_version,
+        body_type=body_type,
+        disposition=disposition,
+        envelope=envelope,
+        payload_hash=payload_hash,
+        receipt_hash=receipt_hash,
+        duplicate_of_seq=duplicate_of_seq,
+    )
 
 
-def _history_item(row: sqlite3.Row) -> HistoryItemSnapshot:
-    event = _history_event(row)
-    if not isinstance(event.envelope.body, ResultItem):
+def _history_item(
+    row: sqlite3.Row,
+    expected_session_id: str,
+) -> HistoryItemSnapshot:
+    event = _history_event(row, expected_session_id)
+    if event.envelope is None or not isinstance(event.envelope.body, ResultItem):
         raise HistoryIntegrityError("history item row does not contain a result item")
     if row["item_order"] is None:
         raise HistoryIntegrityError("history item order is missing")
@@ -1340,9 +2282,18 @@ def _history_summary(
     row: sqlite3.Row,
     phases: tuple[HistoryPhaseSnapshot, ...],
     aggregate: _ClassificationCounts,
+    receipt_counts: tuple[int, int],
 ) -> HistoryRunSummary:
     finalized = row["terminal_payload_hash"] is not None
     _validate_terminal_snapshot(row, phases)
+    _validate_physical_watermarks(row)
+    if receipt_counts != (
+        int(row["duplicate_item_count"]),
+        int(row["rejected_event_count"]),
+    ):
+        raise HistoryIntegrityError(
+            "history receipt counts disagree with durable rows"
+        )
     return HistoryRunSummary(
         run_token=str(row["run_token"]),
         session_id=str(row["session_id"]),
@@ -1371,6 +2322,8 @@ def _history_summary(
         ),
         last_committed_seq=int(row["last_committed_seq"]),
         item_count=int(row["item_count"]),
+        duplicate_item_count=int(row["duplicate_item_count"]),
+        rejected_event_count=int(row["rejected_event_count"]),
         last_committed_at=_optional_utc(row["last_committed_at"]),
         finalized=finalized,
         filesystem_status=(
@@ -1452,6 +2405,7 @@ def _validate_terminal_snapshot(
     phases: tuple[HistoryPhaseSnapshot, ...],
 ) -> None:
     _validate_context_snapshot(row)
+    _validate_prefix_snapshot(row)
     stored_hash = row["terminal_payload_hash"]
     if stored_hash is None:
         if phases:
@@ -1497,6 +2451,13 @@ def _validate_terminal_snapshot(
             bytes_total=int(row["bytes_total"]),
             error=error,
         )
+        if (
+            int(row["rejected_event_count"]) > 0
+            and result.audit is not RecordingStatus.DEGRADED
+        ):
+            raise HistoryIntegrityError(
+                "history rejected receipts require degraded audit status"
+            )
         _validate_terminal_text(result)
         if result_terminal_state(result) is not SessionState(
             str(row["current_state"])
@@ -1506,7 +2467,8 @@ def _validate_terminal_snapshot(
             )
         expected_hash = _terminal_payload_hash(
             bytes(row["context_hash"]),
-            bytes(row["event_chain_hash"]),
+            bytes(row["prefix_projection_hash"]),
+            decode_utc(row["ended_at"]),
             result,
         )
         if expected_hash != bytes(stored_hash):
@@ -1518,6 +2480,71 @@ def _validate_terminal_snapshot(
     except (TypeError, ValueError) as error:
         raise HistoryIntegrityError(
             "history terminal summary is invalid"
+        ) from error
+
+
+def _prefix_projection_hash_from_row(
+    row: sqlite3.Row,
+    *,
+    current_state: str | None = None,
+) -> bytes:
+    return _prefix_projection_hash(
+        bytes(row["context_hash"]),
+        bytes(row["event_chain_hash"]),
+        started_at=_optional_utc(row["started_at"]),
+        current_state=(
+            str(row["current_state"])
+            if current_state is None
+            else current_state
+        ),
+        current_phase=(
+            None if row["current_phase"] is None else str(row["current_phase"])
+        ),
+        last_committed_seq=int(row["last_committed_seq"]),
+        item_count=int(row["item_count"]),
+        last_committed_at=_optional_utc(row["last_committed_at"]),
+        duplicate_item_count=int(row["duplicate_item_count"]),
+        rejected_event_count=int(row["rejected_event_count"]),
+        succeeded_count=int(row["succeeded_count"]),
+        skipped_count=int(row["skipped_count"]),
+        failed_count=int(row["failed_count"]),
+        canceled_count=int(row["canceled_count"]),
+        deferred_count=int(row["deferred_count"]),
+        blocked_count=int(row["blocked_count"]),
+    )
+
+
+def _validate_prefix_snapshot(row: sqlite3.Row) -> None:
+    try:
+        expected_hash = _prefix_projection_hash_from_row(row)
+        if expected_hash != bytes(row["prefix_projection_hash"]):
+            raise HistoryIntegrityError(
+                "history prefix projection hash disagrees with stored summary"
+            )
+    except HistoryIntegrityError:
+        raise
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history prefix projection is invalid"
+        ) from error
+
+
+def _validate_physical_watermarks(row: sqlite3.Row) -> None:
+    try:
+        if (
+            int(row["actual_last_event_seq"])
+            != int(row["last_committed_seq"])
+            or int(row["actual_last_item_order"]) != int(row["item_count"])
+        ):
+            raise HistoryIntegrityError(
+                "history event watermark and item watermark disagree "
+                "with durable rows"
+            )
+    except HistoryIntegrityError:
+        raise
+    except (IndexError, TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history durable watermarks are invalid"
         ) from error
 
 

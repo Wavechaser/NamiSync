@@ -34,7 +34,11 @@ from namisync.core.models import (
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import normalize_relative_path
+from namisync.core.pathing import (
+    from_extended_length_path,
+    normalize_relative_path,
+    to_extended_length_path,
+)
 from namisync.core.planning import OperationKind
 from namisync.core.recording import InventoryCommand
 from namisync.core.session import RunContext
@@ -95,11 +99,13 @@ def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
     payload = b"NamiSync copy-to-verify XXH3 round trip"
     source_path.write_bytes(payload)
     source_open_flags: list[int] = []
+    source_open_paths: list[str] = []
     real_open = executor_module.os.open
 
     def recording_open(path_value, flags, *args):
-        if Path(path_value) == source_path:
+        if Path(from_extended_length_path(str(path_value))) == source_path:
             source_open_flags.append(flags)
+            source_open_paths.append(str(path_value))
         return real_open(path_value, flags, *args)
 
     monkeypatch.setattr(executor_module.os, "open", recording_open)
@@ -134,6 +140,7 @@ def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
     )
     filesystem.flush_directory(target_root)
     assert source_open_flags and source_open_flags[0] & os.O_SEQUENTIAL
+    assert source_open_paths == [to_extended_length_path(str(source_path))]
 
     copy_operation = operation(
         OperationKind.COPY,

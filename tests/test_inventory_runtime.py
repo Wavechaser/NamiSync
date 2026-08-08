@@ -11,6 +11,7 @@ import pytest
 from xxhash import xxh3_128
 
 import namisync.modules.executor as executor_module
+import namisync.workflows.inventory as inventory_workflow
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -50,6 +51,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.db.recorder import LedgerRecorder
+from namisync.db.repositories import LedgerRepository
 from namisync.dispatcher import (
     Dispatcher,
     InProcessResourceLockProvider,
@@ -743,6 +745,80 @@ def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
 
         assert result.status is SessionState.COMPLETED
         assert selections == [(frozen, {frozen[0]: 7}, 7)]
+    finally:
+        runtime.close()
+
+
+def test_resumed_integrity_runtime_queries_only_frozen_row_ids(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selections: list[tuple[str, ...]] = []
+
+    def runner(selection, context, recorder):
+        del context, recorder
+        selections.append(tuple(item.item_id for item in selection.items))
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {IntegrityMode.VERIFY: runner},
+    )
+    try:
+        rows = runtime.list_inventory(location_id)
+        frozen = tuple(
+            f"{row.location_id}:{row.row_id}" for row in reversed(rows)
+        )
+        prepared = runtime.prepare_verify(
+            IntegrityRequest(
+                "bounded-resume-binding",
+                IntegrityMode.VERIFY,
+                location_id=location_id,
+            )
+        )
+        binding = decode_integrity_request(prepared.payload).binding
+        full_reads: list[int] = []
+        row_id_reads: list[tuple[int, tuple[str, ...]]] = []
+
+        class TrackingRepository(LedgerRepository):
+            def get_inventory(self, selected_location_id, path_keys=None):
+                if path_keys is None:
+                    full_reads.append(selected_location_id)
+                return super().get_inventory(selected_location_id, path_keys)
+
+            def get_inventory_by_row_ids(self, selected_location_id, row_ids):
+                requested = tuple(row_ids)
+                row_id_reads.append((selected_location_id, requested))
+                return super().get_inventory_by_row_ids(
+                    selected_location_id, requested
+                )
+
+        monkeypatch.setattr(
+            inventory_workflow,
+            "LedgerRepository",
+            TrackingRepository,
+        )
+        request = IntegrityWorkflowRequest(
+            request_id="bounded-resume",
+            binding=binding,
+            mode=IntegrityMode.VERIFY,
+            selection_item_ids=frozen,
+            refresh_generation=1,
+        )
+
+        result = runtime.open_verify(encode_integrity_request(request)).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+
+        assert result.status is SessionState.COMPLETED
+        assert selections == [frozen]
+        assert full_reads == []
+        assert row_id_reads == [
+            (
+                location_id,
+                tuple(item_id.split(":", 1)[1] for item_id in frozen),
+            )
+        ]
     finally:
         runtime.close()
 

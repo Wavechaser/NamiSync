@@ -13,6 +13,7 @@ class PathValidationError(ValueError):
 
 _DRIVE_PREFIX = re.compile(r"^[A-Za-z]:")
 _DEVICE_PREFIXES = ("\\\\?\\", "\\\\.\\", "\\??\\")
+_INVALID_ABSOLUTE_COMPONENT_CHARACTERS = frozenset('<>"/\\|?*')
 _RESERVED_BASENAMES = {
     "CON",
     "PRN",
@@ -155,12 +156,144 @@ def join_under_root(root: str, relative_path: str) -> str:
     return candidate
 
 
+def _validate_absolute_path_spelling(path: str) -> None:
+    """Require an absolute drive/UNC path with stable ordinary components."""
+
+    canonical = path.replace("/", "\\")
+    upper = canonical.upper()
+    if upper.startswith(("\\\\?\\", "\\\\.\\", "\\??\\", "\\\\??\\")):
+        raise PathValidationError("path uses a device namespace")
+    if canonical.startswith("\\\\"):
+        pieces = canonical[2:].rstrip("\\").split("\\")
+        if len(pieces) < 2 or not pieces[0] or not pieces[1]:
+            raise PathValidationError("UNC path is incomplete")
+        components = pieces
+    elif (
+        _DRIVE_PREFIX.match(canonical)
+        and len(canonical) >= 3
+        and canonical[2] == "\\"
+    ):
+        tail = canonical[3:].rstrip("\\")
+        components = [] if not tail else tail.split("\\")
+    else:
+        raise PathValidationError("path is not an absolute drive or UNC path")
+
+    for component in components:
+        if not component:
+            raise PathValidationError("absolute path has an empty component")
+        if any(
+            character in _INVALID_ABSOLUTE_COMPONENT_CHARACTERS
+            for character in component
+        ):
+            raise PathValidationError(
+                "absolute path has an invalid Windows component"
+            )
+        validate_relative_path(component)
+
+
+def _display_extended_length_path(path: str) -> str | None:
+    """Strip a recognized native prefix for diagnostics, not path identity."""
+
+    upper = path.upper()
+    if upper.startswith("\\\\?\\UNC\\"):
+        logical = "\\\\" + path[8:]
+    elif upper.startswith("\\\\?\\"):
+        logical = path[4:]
+    else:
+        return None
+    if logical.upper().startswith(("\\\\.\\", "\\??\\", "\\\\??\\")):
+        return "<unsupported-device-path>"
+    return logical
+
+
+def from_extended_length_path(path: str) -> str:
+    """Return the ordinary drive/UNC spelling for one filesystem path.
+
+    NamiSync uses ordinary absolute paths for domain identity, persistence, and
+    display.  Extended-length spellings belong only at the native Windows I/O
+    boundary.  Other device namespaces are deliberately not filesystem roots
+    and are refused instead of being reinterpreted as UNC paths.
+    """
+
+    raw = os.fspath(path)
+    if not isinstance(raw, str):
+        raise TypeError("path must be a string")
+    if "\x00" in raw:
+        raise PathValidationError("path contains NUL")
+    upper = raw.upper()
+    if upper.startswith(("\\\\.\\", "\\??\\", "\\\\??\\")):
+        raise PathValidationError("path uses a device namespace")
+    if upper.startswith("\\\\?\\") and "/" in raw[4:]:
+        raise PathValidationError(
+            "extended path uses a non-native separator"
+        )
+    if upper.startswith("\\\\?\\UNC\\"):
+        unc_parts = raw[8:].replace("/", "\\").split("\\")
+        logical = "\\\\" + raw[8:]
+        if (
+            len(unc_parts) < 2
+            or not unc_parts[0]
+            or not unc_parts[1]
+            or not PureWindowsPath(logical).is_absolute()
+        ):
+            raise PathValidationError("extended UNC path is incomplete")
+        _validate_absolute_path_spelling(logical)
+        return logical
+    if upper.startswith("\\\\?\\"):
+        logical = raw[4:]
+        if not (
+            _DRIVE_PREFIX.match(logical)
+            and len(logical) >= 3
+            and logical[2] in {"\\", "/"}
+        ):
+            raise PathValidationError("unsupported extended device namespace")
+        _validate_absolute_path_spelling(logical)
+        return logical
+    return raw
+
+
 def to_extended_length_path(path: str) -> str:
     """Return a Windows extended-length spelling without changing identity."""
 
-    absolute = os.path.abspath(path)
-    if os.name != "nt" or absolute.startswith("\\\\?\\"):
+    raw = os.fspath(path)
+    logical = from_extended_length_path(raw)
+    if logical != raw:
+        # A valid extended drive/UNC spelling is already at the native boundary.
+        return raw
+    if os.name == "nt" and PureWindowsPath(logical).is_absolute():
+        # Validate before ``abspath`` can normalize an ambiguous Win32 spelling
+        # onto a different ordinary filesystem object.
+        _validate_absolute_path_spelling(logical)
+    absolute = os.path.abspath(logical)
+    if os.name != "nt":
         return absolute
+    _validate_absolute_path_spelling(absolute)
     if absolute.startswith("\\\\"):
         return "\\\\?\\UNC\\" + absolute[2:]
     return "\\\\?\\" + absolute
+
+
+def logical_error_text(error: BaseException) -> str:
+    """Render an exception without leaking native extended path spelling.
+
+    Only exact ``OSError`` filename fields are replaced. Arbitrary message text
+    is left untouched, so a diagnostic that merely discusses ``\\\\?\\`` is not
+    reinterpreted as filesystem identity.
+    """
+
+    detail = str(error)
+    for attribute in ("filename", "filename2"):
+        filename = getattr(error, attribute, None)
+        if not isinstance(filename, str):
+            continue
+        try:
+            logical = from_extended_length_path(filename)
+        except PathValidationError:
+            logical = _display_extended_length_path(filename)
+            if logical is None:
+                continue
+        if logical == filename:
+            continue
+        detail = detail.replace(repr(filename), repr(logical))
+        detail = detail.replace(filename, logical)
+    return detail

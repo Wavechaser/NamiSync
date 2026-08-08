@@ -10,6 +10,7 @@ from time import monotonic
 from typing import Callable
 from uuid import uuid4
 
+from namisync.core.evidence import RecordingStatus
 from namisync.core.events import StateChanged
 from namisync.core.session import (
     Canceled,
@@ -96,13 +97,13 @@ class _DegradedAuditObserver:
     def __init__(self, failure: BaseException) -> None:
         self._failure = failure
 
-    def on_event(self, envelope) -> None:
+    def on_event(self, envelope) -> RecordingStatus:
         raise RuntimeError("audit observer is unavailable") from self._failure
 
     def flush(self) -> None:
         pass
 
-    def finalize(self, result: OperationResult) -> None:
+    def finalize(self, result: OperationResult) -> RecordingStatus:
         raise RuntimeError("audit observer is unavailable") from self._failure
 
     def close(self) -> None:

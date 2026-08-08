@@ -13,6 +13,7 @@ from namisync.workflows.inventory import (
 from namisync.workflows.models import (
     ExecutionDetails,
     ExecutionRequest,
+    HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
     HistoryItemView,
@@ -30,7 +31,12 @@ from namisync.workflows.runtime import (
     LocalWorkflowRuntime,
     default_database_paths,
 )
-from namisync.workflows.sync import SyncDependencies, run_execution, run_plan
+from namisync.workflows.sync import (
+    SyncDependencies,
+    run_execution,
+    run_plan,
+    validate_sync_paths,
+)
 
 
 def sync_options(deletion_policy: str) -> SyncOptions:
@@ -66,6 +72,7 @@ __all__ = [
     "ExecutionDetails",
     "ExecutionRequest",
     "HistoryEventPageView",
+    "HistoryEventView",
     "HistoryItemPageView",
     "HistoryItemView",
     "HistoryRunSummaryView",
@@ -88,4 +95,5 @@ __all__ = [
     "run_execution",
     "run_plan",
     "sync_options",
+    "validate_sync_paths",
 ]

@@ -3,7 +3,7 @@
 Supersession note (2026-08-08): this document's ledger-v2/history-v3 reset
 describes the hash-transition boundary at the time it landed. Active databases
 are reset-only ledger v3 under `m1-ledger-xxh3-128-invalidation-v1` and history
-v4 under `m1-history-windowed-events-v1`; `DATABASE.md` governs those later
+v5 under `m1-history-windowed-receipts-v1`; `DATABASE.md` governs those later
 changes. The XXH3-128 evidence decision remains current; v2 references below
 are historical delivery context.
 

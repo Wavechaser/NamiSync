@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import ClassVar, TypeAlias
+from typing import ClassVar, Mapping, TypeAlias
 
 from namisync.core.execution import ExecutionSet
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -18,7 +18,6 @@ from namisync.workflows.views import (
     PhaseResultView,
     ResultItemView,
     SemanticSettingsView,
-    SessionEventView,
 )
 
 
@@ -305,6 +304,8 @@ class HistoryRunSummaryView:
     current_phase: str | None
     last_committed_seq: int
     item_count: int
+    duplicate_item_count: int
+    rejected_event_count: int
     last_committed_at: datetime | None
     filesystem_status: str | None
     recording_status: str | None
@@ -342,12 +343,27 @@ class HistoryItemPageView:
 
 
 @dataclass(frozen=True, slots=True)
+class HistoryEventView:
+    session_id: str
+    sequence: int
+    at: str
+    schema_version: int
+    body_type: str
+    disposition: str
+    body: Mapping[str, object] | None
+    payload_hash: str
+    receipt_hash: str
+    duplicate_of_seq: int | None
+    rejection_reason: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class HistoryEventPageView:
     run_token: str
     through_seq: int
     next_after_seq: int
     has_more: bool
-    events: tuple[SessionEventView, ...]
+    events: tuple[HistoryEventView, ...]
 
 
 @dataclass(frozen=True, slots=True)

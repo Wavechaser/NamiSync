@@ -6,7 +6,7 @@ import os
 import stat as stat_module
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 from typing import Iterator, Protocol
 
 from namisync.core.models import (
@@ -31,7 +31,9 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import (
     PathValidationError,
+    from_extended_length_path,
     join_under_root,
+    logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
     validate_relative_path,
@@ -95,15 +97,18 @@ class NativeScannerBackend:
     """Native Windows metadata backend; it never opens ordinary file content."""
 
     def resolve_root(self, path: str) -> str:
-        resolved = os.path.abspath(path)
-        native = to_extended_length_path(resolved)
+        native = to_extended_length_path(path)
         if not os.path.isdir(native):
-            raise FileNotFoundError(resolved)
-        return resolved
+            raise FileNotFoundError(from_extended_length_path(native))
+        try:
+            resolved = Path(native).resolve(strict=True)
+        except OSError as error:
+            raise OSError(logical_error_text(error)) from error
+        return from_extended_length_path(str(resolved))
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot:
         if os.name != "nt":
-            stat = os.stat(root, follow_symlinks=False)
+            stat = os.stat(to_extended_length_path(root), follow_symlinks=False)
             serial = f"{stat.st_dev:x}"
             fs_type = "UNKNOWN"
             return VolumeSnapshot(
@@ -117,7 +122,10 @@ class NativeScannerBackend:
 
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         volume_path = ctypes.create_unicode_buffer(32768)
-        if not kernel32.GetVolumePathNameW(root, volume_path, len(volume_path)):
+        native_root = to_extended_length_path(root)
+        if not kernel32.GetVolumePathNameW(
+            native_root, volume_path, len(volume_path)
+        ):
             raise OSError(ctypes.get_last_error(), "GetVolumePathNameW failed", root)
 
         label = ctypes.create_unicode_buffer(261)
@@ -141,7 +149,10 @@ class NativeScannerBackend:
         volume_id = VolumeId(f"{serial.value:08X}", fs_type)
         return VolumeSnapshot(
             volume_id,
-            VolumeEvidence(label.value or None, volume_path.value),
+            VolumeEvidence(
+                label.value or None,
+                from_extended_length_path(volume_path.value),
+            ),
             CapabilityProfile(
                 fs_type=fs_type,
                 mtime_granularity_ns=_granularity_for(fs_type),
@@ -352,7 +363,7 @@ class WalkingScanner:
                         ScanWarning(
                             ScanWarningCode.DISAPPEARED,
                             relative_start,
-                            str(error),
+                            logical_error_text(error),
                         )
                     )
                 else:
@@ -360,7 +371,7 @@ class WalkingScanner:
                         ScanWarning(
                             ScanWarningCode.ROOT_UNAVAILABLE,
                             None,
-                            str(error),
+                            logical_error_text(error),
                         )
                     )
                     complete = False
@@ -370,7 +381,7 @@ class WalkingScanner:
                     ScanWarning(
                         ScanWarningCode.ROOT_UNAVAILABLE,
                         relative_start or None,
-                        str(error),
+                        logical_error_text(error),
                     )
                 )
                 complete = False
@@ -544,7 +555,13 @@ class WalkingScanner:
                 try:
                     is_directory = entry.is_dir(follow_symlinks=False)
                 except (OSError, PermissionError) as error:
-                    warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                    warnings.append(
+                        ScanWarning(
+                            self._error_code(error),
+                            rel_path,
+                            logical_error_text(error),
+                        )
+                    )
                     unsupported.append(
                         UnsupportedRecord(rel_path, normalize_relative_path(rel_path), self._unsupported_error(error))
                     )
@@ -574,7 +591,13 @@ class WalkingScanner:
                     ):
                         stat = self._backend.lstat(entry.path)
                 except (OSError, PermissionError) as error:
-                    warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                    warnings.append(
+                        ScanWarning(
+                            self._error_code(error),
+                            rel_path,
+                            logical_error_text(error),
+                        )
+                    )
                     unsupported.append(
                         UnsupportedRecord(
                             rel_path,
@@ -639,7 +662,13 @@ class WalkingScanner:
                 try:
                     is_file = entry.is_file(follow_symlinks=False)
                 except (OSError, PermissionError) as error:
-                    warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                    warnings.append(
+                        ScanWarning(
+                            self._error_code(error),
+                            rel_path,
+                            logical_error_text(error),
+                        )
+                    )
                     is_file = False
                 if is_file:
                     snapshot = _to_stat(stat, EntryKind.FILE, volume)
@@ -684,11 +713,21 @@ class WalkingScanner:
                 stat = self._backend.lstat(absolute)
             except FileNotFoundError as error:
                 warnings.append(
-                    ScanWarning(ScanWarningCode.DISAPPEARED, rel_path, str(error))
+                    ScanWarning(
+                        ScanWarningCode.DISAPPEARED,
+                        rel_path,
+                        logical_error_text(error),
+                    )
                 )
                 continue
             except (OSError, PermissionError) as error:
-                warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                warnings.append(
+                    ScanWarning(
+                        self._error_code(error),
+                        rel_path,
+                        logical_error_text(error),
+                    )
+                )
                 unsupported.append(
                     UnsupportedRecord(rel_path, normalize_relative_path(rel_path), self._unsupported_error(error))
                 )
@@ -804,7 +843,7 @@ class WalkingScanner:
             files=(),
             directories=(),
             unsupported=(),
-            warnings=(ScanWarning(code, None, str(error)),),
+            warnings=(ScanWarning(code, None, logical_error_text(error)),),
             scope=scope,
             complete=False,
         )

@@ -775,6 +775,8 @@ def test_history_detail_streams_fixed_watermark_item_pages(
         current_phase="execute",
         last_committed_seq=8,
         item_count=2,
+        duplicate_item_count=3,
+        rejected_event_count=1,
         filesystem_status="completed",
         recording_status="ok",
         audit_status="ok",
@@ -847,6 +849,7 @@ def test_history_detail_streams_fixed_watermark_item_pages(
     assert calls == [(0, 2, 256), (1, 2, 256)]
     assert "one.bin" in stdout.getvalue()
     assert "two.bin" in stdout.getvalue()
+    assert "Audit receipts: duplicates=3; rejected=1" in stdout.getvalue()
     assert stderr.getvalue() == ""
 
 

@@ -48,6 +48,11 @@ operation-boundary cleanup.
   required absence/occupancy, root containment, and directory emptiness where
   relevant. Drift fails that operation without guessing.
 - Validate paths lexically and by resolved handle; use long-path-safe APIs.
+- Keep plan, continuation, recorder, diagnostic, and returned `Path` values in
+  ordinary absolute drive/UNC spelling. `NativeFileSystem` introduces the
+  extended-length prefix only at Windows resolution, observation, stream,
+  mutation, metadata, volume, and flush calls; containment comparisons use the
+  logical spelling on both sides.
 - Use operation-matched conditional primitives where Windows provides them:
   `CREATE_NEW` for temps, non-replacing rename when destination absence is a
   precondition, and `RemoveDirectory` for atomic nonempty refusal. Never follow

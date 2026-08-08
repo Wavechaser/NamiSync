@@ -255,6 +255,52 @@ class LedgerRepository:
                     self._connection.rollback()
         return tuple(_inventory_snapshot(row) for row in rows)
 
+    def get_inventory_by_row_ids(
+        self, location_id: int, row_ids: Iterable[str]
+    ) -> tuple[InventorySnapshot, ...]:
+        """Return location-owned rows in first-requested canonical ID order."""
+
+        requested: list[str] = []
+        seen: set[str] = set()
+        for row_id in row_ids:
+            if (
+                not isinstance(row_id, str)
+                or not row_id.isascii()
+                or not row_id.isdecimal()
+                or row_id.startswith("0")
+                or row_id in seen
+            ):
+                continue
+            seen.add(row_id)
+            requested.append(row_id)
+
+        rows_by_id: dict[str, sqlite3.Row] = {}
+        if requested:
+            self._connection.execute("BEGIN")
+            try:
+                for start in range(0, len(requested), 400):
+                    chunk = requested[start : start + 400]
+                    placeholders = ",".join("?" for _ in chunk)
+                    rows_by_id.update(
+                        (
+                            str(row["id"]),
+                            row,
+                        )
+                        for row in self._connection.execute(
+                            f"""SELECT * FROM inventory
+                                  WHERE location_id = ?
+                                    AND id IN ({placeholders})""",
+                            (location_id, *chunk),
+                        ).fetchall()
+                    )
+            finally:
+                self._connection.rollback()
+        return tuple(
+            _inventory_snapshot(rows_by_id[row_id])
+            for row_id in requested
+            if row_id in rows_by_id
+        )
+
     def get_location(self, location_id: int) -> LocationSnapshot:
         row = self._connection.execute(
             """SELECT location.id, location.volume_relative_path,

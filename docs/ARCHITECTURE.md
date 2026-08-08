@@ -272,7 +272,10 @@ Invariants (bones):
   stall — and the wait is capped by a generous injected timeout: a writer that
   stalls past it or fails outright degrades that session's `audit` axis loudly
   and blocking stops, so delivery is guaranteed *unless the result says
-  otherwise*, never silently absent. Any
+  otherwise*, never silently absent. The observer's explicit status may also
+  report a contained durable rejection: that degrades audit while the pump
+  remains accepting. Only an exception/timeout breaks the authenticated prefix.
+  Any
   *other* reliable subscriber that overruns its bounded queue is ejected with
   an explicit `Gap` event rather than silently thinned. The replay buffer is
   bounded per session; a late subscriber gets current state plus a bounded
@@ -684,21 +687,23 @@ them. Retrofitting identity is the worst migration there is.
   collide with early ad-hoc labels.
 - **Nullable file-identity group** — room for future hardlink grouping.
 
-M1 is one deliberate pre-release schema boundary, not an incremental migration:
+M1 uses deliberate pre-release schema boundaries, not incremental migrations:
 the ledger advances to v3 for canonical XXH3-128 content evidence plus durable
 verification invalidation, and history
-advances to v4 for the bounded, incrementally durable reliable-event journal,
-typed item projections and rolling aggregates, and terminal-only phase
-summaries and result axes. The versions are qualified by immutable
+advances to v5 for the bounded, incrementally durable reliable-receipt journal,
+typed canonical item projections, semantic duplicate/rejection receipts and
+rolling aggregates, and terminal-only phase summaries and result axes. The
+versions are qualified by immutable
 final-contract markers: ledger
 `m1-ledger-xxh3-128-invalidation-v1` and history
-`m1-history-windowed-events-v1`. A nonempty
+`m1-history-windowed-receipts-v1`. A nonempty
 database is checked read-only for its numeric version and then exact marker
-before any writer or schema script is opened. Ledger v1-v2, history v1-v3, and
+before any writer or schema script is opened. Ledger v1-v2, history v1-v4, and
 missing/mismatched markers are refused with one actionable reset posture, and
 development setup deletes/recreates both databases together. There is no
-v3-to-v4 history migration because v3 lacks the reliable state and phase events
-needed to reconstruct the journal. Settings files survive this reset. A general
+v4-to-v5 history migration because v4 lacks the disposition, semantic link,
+hash-only rejection, and receipt-chain facts needed to reconstruct v5. Settings
+files survive this reset. A general
 migration framework remains later work.
 
 - **Schema-version stamp** on both databases; the migration module is separate
@@ -729,6 +734,12 @@ failure; path validation still rejects malformed path spellings upstream.
 Pure relative-path parent/depth/descendant and suffix helpers also live here so
 planner, workflow node trees, and scope validation share one lexical contract.
 Absolute root containment remains a separate filesystem-safety operation.
+Domain and persisted absolute paths use resolved ordinary drive/UNC spelling;
+shared inverse helpers add `\\?\` only at native I/O and strip it from native
+results. They refuse NT/device namespaces and any absolute component that cannot
+round-trip without Windows retargeting (including trailing dot/space and
+reserved DOS names). Native error filename fields are normalized before
+warnings, evidence, history, or interface rendering.
 
 **Flesh.** None. Core is all bones by definition.
 
@@ -738,8 +749,9 @@ Absolute root containment remains a separate filesystem-safety operation.
 - `normalize_relative_path` keeps NTFS-distinct names distinct across a Unicode
   special-casing corpus (`ß`, Turkish `İ/ı`, fullwidth forms).
 - Path validation rejects every escape form and non-scalar surrogate while
-  accepting every contract-legitimate root-relative path; canonical JSON never
-  raises while encoding malformed free-form Unicode.
+  accepting every contract-legitimate root-relative path; absolute drive/UNC
+  conversion round-trips without prefix leakage or ambiguous-name retargeting;
+  canonical JSON never raises while encoding malformed free-form Unicode.
 - Event `seq` is gap-free and monotonic per session under concurrent emit.
 
 ### 4.2 scanner
@@ -1240,17 +1252,18 @@ admitted execution never rereads it. Runtime defaults this file beside the
 selected ledger and translates it to primitive service views; interfaces never
 import database settings types.
 
-**Implementation status (2026-08-08).** Ledger v3 and history v4 are active.
+**Implementation status (2026-08-08).** Ledger v3 and history v5 are active.
 Their safe writer/read-only connection factories, canonical UTC codec,
 serialized retrying writer, run-bound sync recorder, batched inventory
 reconciliation, conditional baseline/verify/rebaseline/invalidation writes,
 typed ledger
 repositories, and bounded history observer/repository are implemented. The
-history observer appends canonical reliable envelopes in atomic windows,
-projects typed result items for dense paging and fixed conditional aggregates,
-and writes terminal
+history observer appends disposition-bound reliable receipts in atomic windows,
+projects typed canonical result items through writer-derived immutable columns for
+dense paging and fixed conditional aggregates, keeps strict composite-key
+receipt rows append-only without a hidden SQLite `rowid`, and writes terminal
 axes plus bounded phase summaries only during finalization. Ledger v1-v2 and
-history v1-v3 are refused without mutation; the temporary pre-migrator
+history v1-v4 are refused without mutation; the temporary pre-migrator
 recovery is manual deletion of both local databases or the explicit
 development reset helper, never automatic startup deletion. `settings.py`
 implements named-mutex-serialized partial semantic-settings commits. M0
@@ -1278,8 +1291,13 @@ enough to satisfy *every explicit sync is history-worthy* and to back the CLI's
 subscriber; nothing calls it.
 Conditional verify/baseline/rebaseline recording landed early with the isolated
 verifier during M0 construction. **Flesh — implemented through current M1.**
-History v4 stores reliable lifecycle, phase, and ordered generic `ResultItem`
-envelopes for sync, standalone integrity, and linked verification. Compound
+History v5 stores reliable lifecycle, phase, and ordered generic `ResultItem`
+receipts for sync, standalone integrity, and linked verification. Exact
+semantic duplicates retain full non-counting envelopes; supported oversized
+events retain bounded hash-only rejection receipts and degrade audit without
+stopping later history. Oversized result-item receipts retain only fixed-size
+identity/semantic hashes, preserving changed-identity fail-stop semantics.
+Compound
 terminal results add bounded `PhaseResult` summaries; standalone producers
 leave that table empty.
 Semantic-settings commits hold a named cross-process mutex only across
@@ -1302,8 +1320,8 @@ literal range
 are valid hostile-name characters. Acknowledgement/restore recording is
 idempotent per gesture and row with a caller-supplied timestamp.
 
-History commits reliable events by a shared `HistoryWindowPolicy`: at 256
-events, 1 MiB of serialized data, one second from the first event, pause,
+History commits reliable receipts by a shared `HistoryWindowPolicy`: at 256
+receipts, 1 MiB of retained serialized data, one second from the first event, pause,
 clean close, or finalization. The dispatcher owns the monotonic age deadline
 and pause barrier; the observer owns canonical bytes and transactions. Each
 committed prefix remains independently queryable under WAL. A restarted
@@ -1314,9 +1332,19 @@ using finite predicates supplied by workflows, and workflows retain all
 headline and integrity interpretation. Finalized sessions that never ran keep
 `started_at` null rather than fabricating `created_at` as an execution start.
 Terminal summary text is bounded at the history boundary: phase/failure type
-names permit 256 UTF-8 bytes and phase/failure messages permit 4,096. Stored
-terminal axes and ordered phases are rehashed on summary reads and repeated
-finalization, so a terminal-marker blob cannot authenticate altered columns.
+names permit 256 UTF-8 bytes and phase/failure messages permit 4,096. Each
+receipt hash authenticates retained metadata, disposition, item
+identity/semantics/link or rejection, and canonical order. Each run's prefix
+projection binds context and receipt-chain hashes to lifecycle projections,
+watermarks, timestamps, and every rolling count. Incomplete and finalized
+summary reads validate that prefix; finalized reads and repeated finalization
+also bind terminal axes and ordered phases. Writer-derived projections are
+checked against decoded envelopes on detail reads, while append-only receipt
+rows keep fixed-query classification aligned with the authenticated envelope.
+Indexed physical event/item tails must equal the
+official watermarks on summary/page reads, observer reopen, and writer
+admission; finalized run rows are immutable and committed runs cannot be
+deleted or replaced.
 Window commit time is never earlier than any envelope newly committed in that
 window, including phase and result-item events during wall-clock rollback.
 
@@ -1327,8 +1355,10 @@ keyset pages of at most 256 rows under a fixed durable watermark captured in
 the first page's read transaction. Reliable-event sequence space is sparse:
 caller-supplied inclusive bounds may land on omitted lossy progress, while each
 request independently verifies that the run's official durable watermark equals
-the indexed maximum retained reliable event. Event pages fetch one raw lookahead
-row but decode only the requested limit. A fresh traversal whose live cursor is
+the indexed maximum retained reliable event. Event pages fetch one raw
+lookahead row but decode only the requested limit; recorded/duplicate receipts
+expose envelopes and rejected receipts expose only their validated
+metadata/hash/reason. A fresh traversal whose live cursor is
 ahead of durability ends empty; its next attempt omits the fixed watermark and
 captures a new prefix. The service has separate summary, item-page, and
 event-page methods; the unbounded full-run path is removed.
@@ -1897,8 +1927,8 @@ desktop surfaces, and other interfaces behind the same facade.
   2. executor refactor — first the complete adaptive pipeline and Windows
      IO/finalization reductions from `HASH_REFACTOR.md` Track 1, then the
      coordinated executor+verifier XXH3-128 replacement and the ledger-v2
-     reset from Track 2; history has since advanced to the reset-only v4
-     windowed-event contract;
+     reset from Track 2; history has since advanced to the reset-only v5
+     receipt-journal contract;
   3. role-free inventory plus standalone baseline/verify/rebaseline workflows;
   4. in-session post-execution verification as one vertical integration slice;
   5. shared facade and CLI expansion;

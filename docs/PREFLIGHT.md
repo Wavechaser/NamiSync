@@ -59,6 +59,13 @@ from the current execution, in touched target parents outside trash on the
 target volume. `ObservedWorld` retains that identical parent set for the
 post-verdict recovery sweep. Observation never deletes those files.
 
+`Root`, `Subject`, and `ObservedWorld` paths retain ordinary absolute drive or
+UNC spelling. `LocalObservationFileSystem` converts roots, subjects, trash, and
+temp-parent paths to extended-length spelling only at Windows I/O calls, then
+converts resolved evidence back before containment checks or return. The
+capability profile's `max_path` remains a separate reviewed limit; native access
+does not silently override it.
+
 An observation failure is evidence, not an exception that silently skips a
 check. The snapshot records unknown/unavailable state so pure judgment refuses
 the affected operation.

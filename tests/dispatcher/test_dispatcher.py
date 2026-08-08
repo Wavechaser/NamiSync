@@ -328,20 +328,21 @@ def test_pause_settlement_and_live_event_wait_for_durable_audit_attempt() -> Non
     release_flush = Event()
 
     class Audit:
-        def on_event(self, envelope):
+        def on_event(self, envelope) -> RecordingStatus:
             if (
                 isinstance(envelope.body, StateChanged)
                 and envelope.body.state is SessionState.PAUSED
             ):
                 paused_seen.set()
+            return RecordingStatus.OK
 
         def flush(self):
             if paused_seen.is_set():
                 flush_entered.set()
                 assert release_flush.wait(2)
 
-        def finalize(self, result):
-            pass
+        def finalize(self, result) -> RecordingStatus:
+            return RecordingStatus.OK
 
         def close(self):
             pass
@@ -1583,8 +1584,8 @@ def test_terminal_close_retains_ownership_until_audit_cleanup_finishes() -> None
     close_count = 0
 
     class BlockingCloseObserver:
-        def on_event(self, envelope):
-            pass
+        def on_event(self, envelope) -> RecordingStatus:
+            return RecordingStatus.OK
 
         def flush(self):
             pass
@@ -2214,15 +2215,16 @@ def test_queued_discard_is_finalized_by_audit_before_explicit_close() -> None:
     observed_results = []
 
     class Audit:
-        def on_event(self, envelope):
-            pass
+        def on_event(self, envelope) -> RecordingStatus:
+            return RecordingStatus.OK
 
         def flush(self):
             pass
 
-        def finalize(self, result):
+        def finalize(self, result) -> RecordingStatus:
             observed_results.append(result)
             finalized.set()
+            return RecordingStatus.OK
 
         def close(self):
             pass
@@ -2300,17 +2302,19 @@ def test_late_history_after_caller_timeout_matches_live_degraded_axis() -> None:
     retained_results = []
 
     class LateObserver:
-        def on_event(self, envelope):
+        def on_event(self, envelope) -> RecordingStatus:
             del envelope
             event_entered.set()
             assert release_event.wait(2)
+            return RecordingStatus.OK
 
         def flush(self):
             pass
 
-        def finalize(self, result):
+        def finalize(self, result) -> RecordingStatus:
             retained_results.append(result)
             finalized.set()
+            return RecordingStatus.OK
 
         def close(self):
             pass
@@ -2359,15 +2363,16 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     release_finalize = Event()
 
     class DelayedObserver:
-        def on_event(self, envelope):
-            pass
+        def on_event(self, envelope) -> RecordingStatus:
+            return RecordingStatus.OK
 
         def flush(self):
             pass
 
-        def finalize(self, result):
+        def finalize(self, result) -> RecordingStatus:
             finalize_entered.set()
             assert release_finalize.wait(2)
+            return RecordingStatus.OK
 
         def close(self):
             pass

@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
 from namisync.core.models import IgnoreSet
-from namisync.core.pathing import PathValidationError, normalize_relative_path, validate_relative_path
+from namisync.core.pathing import (
+    PathValidationError,
+    from_extended_length_path,
+    logical_error_text,
+    normalize_relative_path,
+    to_extended_length_path,
+    validate_relative_path,
+)
 from namisync.core.planning import canonical_json_bytes
 
 
@@ -41,6 +49,87 @@ def test_long_relative_path_is_valid() -> None:
     path = "\\".join(["directory" * 10] * 4 + ["file.bin"])
     assert len(path) > 260
     assert validate_relative_path(path) == path
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows native path spelling")
+@pytest.mark.parametrize(
+    ("logical", "native"),
+    [
+        (r"C:\folder\file.bin", r"\\?\C:\folder\file.bin"),
+        (
+            r"\\server\share\folder\file.bin",
+            r"\\?\UNC\server\share\folder\file.bin",
+        ),
+    ],
+)
+def test_extended_length_path_round_trips_without_changing_logical_identity(
+    logical: str,
+    native: str,
+) -> None:
+    assert to_extended_length_path(logical) == native
+    assert to_extended_length_path(native) == native
+    assert from_extended_length_path(native) == logical
+    assert from_extended_length_path(logical) == logical
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        r"\\.\C:\folder\file.bin",
+        r"\??\C:\folder\file.bin",
+        r"\\??\C:\folder\file.bin",
+        r"\\?\GLOBALROOT\Device\HarddiskVolume1\file.bin",
+        r"\\?\UNC\server",
+    ],
+)
+def test_extended_length_conversion_refuses_non_filesystem_device_namespaces(
+    path: str,
+) -> None:
+    with pytest.raises(PathValidationError):
+        to_extended_length_path(path)
+
+
+def test_os_error_rendering_rewrites_only_exact_extended_filename_fields() -> None:
+    native = r"\\?\C:\deep\payload.bin"
+    error = FileNotFoundError(2, "missing", native)
+    rendered = logical_error_text(error)
+    assert repr(r"C:\deep\payload.bin") in rendered
+    assert "\\\\?\\" not in rendered
+
+    arbitrary = RuntimeError(r"documentation mentions \\?\C:\deep\payload.bin")
+    assert logical_error_text(arbitrary) == str(arbitrary)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        r"\\?\C:\safe\root.",
+        r"\\?\UNC\.\C$\folder",
+        r"\\?\UNC\?\C$\folder",
+        r"\\?\C:\safe/folder",
+        r"\\?\UNC\server/share\folder",
+    ],
+)
+def test_extended_conversion_refuses_ambiguous_absolute_components(
+    path: str,
+) -> None:
+    with pytest.raises(PathValidationError):
+        to_extended_length_path(path)
+    if path.startswith("\\\\?\\"):
+        with pytest.raises(PathValidationError):
+            from_extended_length_path(path)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows absolute path rules")
+@pytest.mark.parametrize(
+    "path",
+    [r"C:\safe\root.", r"C:\safe\root ", r"C:\safe\CON"],
+)
+def test_native_conversion_refuses_ambiguous_ordinary_absolute_components(
+    path: str,
+) -> None:
+    with pytest.raises(PathValidationError):
+        to_extended_length_path(path)
 
 
 def test_canonical_json_preserves_valid_unicode_and_safely_escapes_lone_surrogates() -> None:

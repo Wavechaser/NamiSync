@@ -62,6 +62,13 @@ views. Runtime plan storage remains the existing process-local dictionary behind
 named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
 does not survive process exit.
 
+`start_plan` delegates root resolution to the shared workflow gate before
+admission. That gate performs directory I/O with extended-length native
+spelling but returns ordinary logical paths; the service neither imports core
+path policy nor leaks `\\?\` through a plan, view, or missing-root diagnostic.
+Distinct/nonnested validation therefore matches direct workflow callers even
+when either absolute root exceeds the legacy Windows path limit.
+
 `start_execution(request_id, *, verify_after_execute=False,
 expected_revision=None, destructive_acknowledged=False, command_id=None)`
 preserves the untouched M0/CLI default and opts into the Stage 4
@@ -80,8 +87,11 @@ continuations or decide cancellation policy. Retained `HistoryRunSummaryView`
 exposes primitive lifecycle/watermark fields, filesystem/integrity/recording/
 audit axes, disposition, cancellation, headline, counts, and bounded phases,
 using the same workflow classification source as live result views. Ordered
-items and reliable envelopes are separate bounded page views; all detail
-readback remains page-bounded.
+canonical items and reliable receipts are separate bounded page views; a
+`HistoryEventView` exposes sequence/time/schema/body type,
+disposition/hash/link/rejection metadata, and an optional body rather than
+fabricating a live session event for a hash-only receipt. All detail readback
+remains page-bounded.
 
 The current public service surface includes:
 
@@ -148,7 +158,8 @@ sequence, even when traversing an older fixed watermark.
 Reliable-event pages are the catch-up source after an ordinary subscriber
 reports `Gap`: retain the last successfully applied non-`Gap` sequence rather
 than the synthetic `Gap` envelope's sequence, fetch through one fixed committed
-sequence, apply returned envelopes by sequence, consult the summary for
+sequence, apply available recorded/duplicate envelopes by sequence, report any
+hash-only rejection receipt, consult the summary for
 terminal truth, then resubscribe after the watermark, repeating with a fresh
 traversal if live replay or durability advanced again. Missing sequence numbers
 may be lossy `Progress` events, which history deliberately does not retain, and

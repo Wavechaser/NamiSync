@@ -5,10 +5,13 @@ from __future__ import annotations
 import copy
 from dataclasses import replace
 from datetime import datetime, timezone
+import os
 from pathlib import Path, PureWindowsPath
 import inspect
 
 import pytest
+
+import namisync.modules.preflight as preflight_module
 
 from namisync.core.evidence import Outcome
 from namisync.core.execution import ExecutionSet, validated_run_id
@@ -27,7 +30,7 @@ from namisync.core.models import (
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import normalize_relative_path
+from namisync.core.pathing import normalize_relative_path, to_extended_length_path
 from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
@@ -598,6 +601,71 @@ def test_local_reclaimable_temp_count_is_exact_and_excludes_synctrash(
         frozenset({"folder", ".synctrash", "off-volume"}),
         "c" * 32,
     ) == 5
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_local_observation_uses_native_spelling_but_reports_logical_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root_path = tmp_path / "root"
+    root_path.mkdir()
+    subject = root_path / "payload.bin"
+    subject.write_bytes(b"payload")
+    observed_paths: list[str] = []
+    real_stat = preflight_module.os.stat
+
+    def recording_stat(path, *args, **kwargs):
+        observed_paths.append(str(path))
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(preflight_module.os, "stat", recording_stat)
+    filesystem = LocalObservationFileSystem()
+    root = Root(str(root_path), "source")
+    root_observation = filesystem.observe_root(root)
+    stat_observation = filesystem.stat(root, "payload.bin", PROFILE)
+
+    assert root_observation.resolved_path == str(root_path.resolve())
+    assert not root_observation.resolved_path.startswith("\\\\?\\")
+    assert stat_observation.stat is not None
+    assert stat_observation.representable
+    assert to_extended_length_path(str(subject)) in observed_paths
+
+    short_profile = replace(PROFILE, max_path=len(str(subject)) - 1)
+    assert not filesystem.stat(
+        root, "payload.bin", short_profile
+    ).representable
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_deep_observation_failure_reports_logical_path_spelling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root_path = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90)
+    assert len(str(root_path)) > 260
+    os.makedirs(to_extended_length_path(str(root_path)))
+    native_subject = to_extended_length_path(
+        str(root_path / "blocked.bin")
+    )
+    real_stat = preflight_module.os.stat
+
+    def denied_stat(path, *args, **kwargs):
+        if str(path) == native_subject:
+            raise PermissionError(13, "denied", native_subject)
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(preflight_module.os, "stat", denied_stat)
+    observation = LocalObservationFileSystem().stat(
+        Root(str(root_path), "source"),
+        "blocked.bin",
+        PROFILE,
+    )
+
+    assert observation.stat is None
+    assert observation.error is not None
+    assert "blocked.bin" in observation.error
+    assert "\\\\?\\" not in observation.error
 
 
 def test_required_existing_parent_disappearance_or_type_change_refuses() -> None:

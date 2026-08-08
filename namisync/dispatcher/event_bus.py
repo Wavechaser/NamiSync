@@ -190,14 +190,14 @@ class _Flush:
 
 
 class _NullAuditObserver:
-    def on_event(self, envelope: Envelope) -> None:
-        pass
+    def on_event(self, envelope: Envelope) -> RecordingStatus:
+        return RecordingStatus.OK
 
     def flush(self) -> None:
         pass
 
-    def finalize(self, result: OperationResult) -> None:
-        pass
+    def finalize(self, result: OperationResult) -> RecordingStatus:
+        return result.audit
 
     def close(self) -> None:
         pass
@@ -233,14 +233,14 @@ class _AuditPump:
         return self._degraded.is_set()
 
     def offer(self, envelope: Envelope, timeout: float) -> None:
-        if self.degraded:
+        if self._prefix_broken.is_set():
             return
         accepted, full = self._enqueue(envelope, timeout)
         if not accepted and full:
             self._break_prefix()
 
     def finalize(self, result: OperationResult, timeout: float) -> RecordingStatus:
-        if self.degraded:
+        if self._prefix_broken.is_set():
             self._enqueue(_Stop(), 0.0)
             return RecordingStatus.DEGRADED
         command = _Finalize(result=result, complete=Event())
@@ -260,7 +260,7 @@ class _AuditPump:
         return self._final_status(command)
 
     def flush(self, timeout: float) -> RecordingStatus:
-        if self.degraded:
+        if self._prefix_broken.is_set():
             return RecordingStatus.DEGRADED
         command = _Flush(complete=Event())
         deadline = monotonic() + timeout
@@ -274,7 +274,7 @@ class _AuditPump:
         if remaining > 0 and command.complete.wait(remaining):
             return (
                 RecordingStatus.OK
-                if command.succeeded
+                if command.succeeded and not self.degraded
                 else RecordingStatus.DEGRADED
             )
         self._break_prefix()
@@ -374,11 +374,17 @@ class _AuditPump:
                     if flush_deadline is None:
                         flush_deadline = monotonic() + self._flush_interval
                     try:
-                        self._observer.on_event(command)
+                        status = self._observer.on_event(command)
+                        if not isinstance(status, RecordingStatus):
+                            raise TypeError(
+                                "audit observer returned an invalid status"
+                            )
                     except BaseException:
                         self._degraded.set()
                         self._prefix_broken.set()
                         return
+                    if status is RecordingStatus.DEGRADED:
+                        self._degraded.set()
                     if self._prefix_broken.is_set():
                         return
                     if monotonic() >= flush_deadline:
@@ -428,14 +434,23 @@ class _AuditPump:
         if self._prefix_broken.is_set():
             command.complete.set()
             return
-        if not pump_owned and command.timed_out:
+        if self.degraded or (not pump_owned and command.timed_out):
             result = replace(result, audit=RecordingStatus.DEGRADED)
         try:
-            self._observer.finalize(result)
+            status = self._observer.finalize(result)
+            if not isinstance(status, RecordingStatus):
+                raise TypeError("audit observer returned an invalid status")
         except BaseException:
             self._degraded.set()
+            self._prefix_broken.set()
         else:
-            command.recording = result.audit
+            command.recording = (
+                RecordingStatus.DEGRADED
+                if RecordingStatus.DEGRADED in (result.audit, status)
+                else RecordingStatus.OK
+            )
+            if command.recording is RecordingStatus.DEGRADED:
+                self._degraded.set()
             command.succeeded = True
         command.complete.set()
 

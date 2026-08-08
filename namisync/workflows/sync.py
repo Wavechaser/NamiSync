@@ -28,6 +28,11 @@ from namisync.core.integrity import (
     VerifierContext,
 )
 from namisync.core.models import IgnoreSet, Root, ScanResult
+from namisync.core.pathing import (
+    from_extended_length_path,
+    logical_error_text,
+    to_extended_length_path,
+)
 from namisync.core.planning import (
     MappingSnapshot,
     OperationKind,
@@ -187,7 +192,7 @@ def run_execution(
         except (TypeError, ValueError) as error:
             commitment_error = (
                 "reviewed selection provenance is invalid: "
-                f"{type(error).__name__}: {error}"
+                f"{type(error).__name__}: {logical_error_text(error)}"
             )
             exclusion_items = ()
         else:
@@ -202,14 +207,18 @@ def run_execution(
             return _settle_verify_incomplete(
                 current,
                 deps,
-                FailureDetail(type(error).__name__, str(error)),
+                FailureDetail(
+                    type(error).__name__, logical_error_text(error)
+                ),
             )
         if resumed:
             return _settle_execute_resume_failure(
                 current,
                 ctx,
                 deps,
-                FailureDetail(type(error).__name__, str(error)),
+                FailureDetail(
+                    type(error).__name__, logical_error_text(error)
+                ),
                 (),
             )
         raise
@@ -226,14 +235,18 @@ def run_execution(
                 return _settle_verify_incomplete(
                     current,
                     deps,
-                    FailureDetail(type(error).__name__, str(error)),
+                    FailureDetail(
+                        type(error).__name__, logical_error_text(error)
+                    ),
                 )
             if resumed:
                 return _settle_execute_resume_failure(
                     current,
                     ctx,
                     deps,
-                    FailureDetail(type(error).__name__, str(error)),
+                    FailureDetail(
+                        type(error).__name__, logical_error_text(error)
+                    ),
                     exclusion_items,
                 )
             raise
@@ -273,14 +286,18 @@ def run_execution(
             return _settle_verify_incomplete(
                 current,
                 deps,
-                FailureDetail(type(error).__name__, str(error)),
+                FailureDetail(
+                    type(error).__name__, logical_error_text(error)
+                ),
             )
         if resumed:
             return _settle_execute_resume_failure(
                 current,
                 ctx,
                 deps,
-                FailureDetail(type(error).__name__, str(error)),
+                FailureDetail(
+                    type(error).__name__, logical_error_text(error)
+                ),
                 exclusion_items,
             )
         raise
@@ -439,7 +456,10 @@ def run_execution(
                 phase = _execute_continuation_phase(
                     xset,
                     PhaseStatus.FAILED,
-                    f"{type(error).__name__}: {error}",
+                    (
+                        f"{type(error).__name__}: "
+                        f"{logical_error_text(error)}"
+                    ),
                 )
                 return OperationResult(
                     status=SessionState.FAILED,
@@ -449,7 +469,9 @@ def run_execution(
                     phases=(phase,),
                     bytes_done=phase.bytes_done,
                     bytes_total=phase.bytes_total or phase.bytes_done,
-                    error=FailureDetail(type(error).__name__, str(error)),
+                    error=FailureDetail(
+                        type(error).__name__, logical_error_text(error)
+                    ),
                 )
 
         observed_recording = [current.recording]
@@ -560,7 +582,10 @@ def run_execution(
             verify_phase = _verify_phase(
                 current,
                 incomplete=True,
-                error=f"{type(error).__name__}: {error}",
+                error=(
+                    f"{type(error).__name__}: "
+                    f"{logical_error_text(error)}"
+                ),
             )
             recording_status = finish_once(
                 current.filesystem_status,
@@ -578,7 +603,9 @@ def run_execution(
                     if current.execute_phase.bytes_total is not None
                     else current.execute_phase.bytes_done
                 ),
-                error=FailureDetail(type(error).__name__, str(error)),
+                error=FailureDetail(
+                    type(error).__name__, logical_error_text(error)
+                ),
             )
 
 
@@ -998,12 +1025,26 @@ def _commitment_error(xset: ExecutionSet) -> str | None:
     return None
 
 
-def _validated_roots(source_path: str, target_path: str) -> tuple[Root, Root]:
-    source = Path(source_path).resolve(strict=True)
-    target = Path(target_path).resolve(strict=True)
-    if not source.is_dir():
+def _resolved_logical_root(path: str) -> Path:
+    native = Path(to_extended_length_path(path))
+    try:
+        resolved = native.resolve(strict=True)
+    except OSError as error:
+        raise ValueError(logical_error_text(error)) from error
+    return Path(from_extended_length_path(str(resolved)))
+
+
+def validate_sync_paths(
+    source_path: str,
+    target_path: str,
+) -> tuple[Path, Path]:
+    """Resolve one interface path pair without exposing native path spelling."""
+
+    source = _resolved_logical_root(source_path)
+    target = _resolved_logical_root(target_path)
+    if not os.path.isdir(to_extended_length_path(str(source))):
         raise NotADirectoryError(f"source is not a directory: {source}")
-    if not target.is_dir():
+    if not os.path.isdir(to_extended_length_path(str(target))):
         raise NotADirectoryError(f"target is not a directory: {target}")
     source_key = os.path.normcase(str(source))
     target_key = os.path.normcase(str(target))
@@ -1013,4 +1054,9 @@ def _validated_roots(source_path: str, target_path: str) -> tuple[Root, Root]:
         common = ""
     if common in {source_key, target_key}:
         raise ValueError("source and target must be distinct, non-nested directories")
+    return source, target
+
+
+def _validated_roots(source_path: str, target_path: str) -> tuple[Root, Root]:
+    source, target = validate_sync_paths(source_path, target_path)
     return Root(str(source), "source"), Root(str(target), "target")

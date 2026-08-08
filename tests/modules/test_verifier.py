@@ -1397,6 +1397,22 @@ def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback
     assert outcome.read_strategy is ReadStrategy.WINDOWS_UNBUFFERED
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_verifier_error_detail_does_not_expose_native_prefix(
+    tmp_path: Path,
+) -> None:
+    logical = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90) / "file.bin"
+    assert len(str(logical)) > 260
+    native = verifier_module._extended_path(logical)
+    detail = verifier_module._error_detail(
+        PermissionError(13, "denied", native)
+    )
+
+    assert detail.startswith("PermissionError:")
+    assert "file.bin" in detail
+    assert "\\\\?\\" not in detail
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
 @pytest.mark.parametrize("rejection", ["reparse", "alignment", "containment"])
 def test_windows_reader_safety_rejections_classify_unsupported_never_verified(

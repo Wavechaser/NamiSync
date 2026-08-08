@@ -2852,6 +2852,7 @@ def test_explicit_directory_chain_supports_long_destination_path(tmp_path: Path)
     first_rel = first_name
     second_rel = f"{first_name}\\{second_name}"
     file_rel = f"{second_rel}\\file.bin"
+    assert len(str(target / first_name / second_name / "file.bin")) > 260
     fs = NativeFileSystem()
     first_stat = fs.stat(source, first_rel)
     second_stat = fs.stat(source, second_rel)
@@ -2891,6 +2892,22 @@ def test_explicit_directory_chain_supports_long_destination_path(tmp_path: Path)
 
     assert result.status is SessionState.COMPLETED
     assert (target / first_name / second_name / "file.bin").read_bytes() == b"long-path"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_executor_failure_detail_does_not_expose_native_prefix(
+    tmp_path: Path,
+) -> None:
+    logical = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90) / "file.bin"
+    assert len(str(logical)) > 260
+    native = executor_module._win32_path(logical)
+    reason, detail = executor_module._failure_reason_and_message(
+        PermissionError(13, "denied", native)
+    )
+
+    assert reason is executor_module.ExecutionReason.IO_ERROR
+    assert "file.bin" in detail
+    assert "\\\\?\\" not in detail
 
 
 def test_nonempty_directory_delete_refuses_without_recursive_removal(tmp_path: Path) -> None:

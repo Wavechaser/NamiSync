@@ -33,7 +33,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.dispatcher import SessionCleanupPending, SessionNotFound
-from namisync.db.history import HistoryContext, HistoryStore
+from namisync.db.history import HistoryContext, HistoryStore, HistoryWindowPolicy
 from namisync.db.writer import DEFAULT_RETRY_TIMEOUT_SECONDS
 from namisync.interfaces import main as package_main
 from namisync.interfaces.service import (
@@ -362,6 +362,62 @@ def test_history_service_ends_a_fresh_traversal_ahead_of_durability(
     assert page.next_after_seq == 2
     assert page.events == ()
     assert not page.has_more
+
+
+def test_history_service_exposes_receipts_and_degradation_counts(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / "history.db"
+    ledger = tmp_path / "ledger.db"
+    record = _record("receipt-session")
+    oversized = ItemOutcome(
+        "receipt-item",
+        "copy",
+        "large.bin",
+        Outcome.SUCCEEDED,
+        detail={"message": "x" * 2_000},
+    )
+    with HistoryStore(
+        history,
+        clock=FakeClock(),
+        window_policy=HistoryWindowPolicy(
+            max_bytes=512,
+            max_event_bytes=512,
+        ),
+    ) as store:
+        observer = store.observer(
+            record,
+            HistoryContext("receipt-run", "host"),
+        )
+        assert (
+            observer.on_event(
+                Envelope(
+                    record.session_id,
+                    1,
+                    NOW,
+                    SCHEMA_VERSION,
+                    oversized,
+                )
+            )
+            is RecordingStatus.DEGRADED
+        )
+        observer.finalize(OperationResult(SessionState.COMPLETED))
+
+    with NamiSyncService(ledger, history) as service:
+        summary = service.get_history_summary("receipt-run")
+        page = service.get_history_events("receipt-run")
+
+    assert summary.item_count == 0
+    assert summary.duplicate_item_count == 0
+    assert summary.rejected_event_count == 1
+    assert summary.audit_status == RecordingStatus.DEGRADED.value
+    assert page.events[0].session_id == "receipt-session"
+    assert page.events[0].schema_version == SCHEMA_VERSION
+    assert page.events[0].disposition == "rejected"
+    assert page.events[0].body is None
+    assert page.events[0].rejection_reason == "event-too-large"
+    assert len(page.events[0].payload_hash) == 64
+    assert len(page.events[0].receipt_hash) == 64
 
 
 def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(

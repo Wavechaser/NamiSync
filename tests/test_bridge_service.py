@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -10,8 +11,10 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.workflows.sync as sync_workflow_module
 from namisync.core.integrity import RecordDisposition
 from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+from namisync.core.pathing import to_extended_length_path
 from namisync.core.planning import BlockedReason, OperationKind, OperationReason
 from namisync.core.session import SessionState
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
@@ -20,6 +23,7 @@ from namisync.interfaces.service import (
     ExecutionAdmissionView,
     ExecutionSession,
     NamiSyncService,
+    SyncPathInputError,
 )
 from namisync.workflows.node_tree import (
     NodeTreeKind,
@@ -282,6 +286,89 @@ def test_br_g_11_service_executes_nonempty_noop_plan_as_all_noop(
         assert completed.result.items
     finally:
         service.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_service_plan_entry_accepts_deep_roots_and_retains_logical_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source-root" / ("s" * 90) / ("t" * 90)
+    target = tmp_path / "target-root" / ("u" * 90) / ("v" * 90)
+    assert len(str(source)) > 260
+    assert len(str(target)) > 260
+    os.makedirs(to_extended_length_path(str(source)))
+    os.makedirs(to_extended_length_path(str(target)))
+    with open(
+        to_extended_length_path(str(source / "payload.bin")), "wb"
+    ) as stream:
+        stream.write(b"service entry long path")
+    converted: list[str] = []
+    real_convert = sync_workflow_module.to_extended_length_path
+
+    def recording_convert(path: str) -> str:
+        native = real_convert(path)
+        converted.append(native)
+        return native
+
+    monkeypatch.setattr(
+        sync_workflow_module,
+        "to_extended_length_path",
+        recording_convert,
+    )
+
+    service = NamiSyncService(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    try:
+        planned = service.start_plan(str(source), str(target))
+        deadline = monotonic() + 3
+        while monotonic() < deadline:
+            record = service.get_session(planned.session_id)
+            if record.result is not None:
+                break
+            sleep(0.01)
+        else:
+            raise AssertionError("plan session did not finish")
+
+        assert record.state == "completed"
+        artifact = service._runtime.get_plan(planned.request_id)
+        assert artifact is not None
+        assert artifact.plan.source_root.path == str(source)
+        assert artifact.plan.target_root.path == str(target)
+        assert not artifact.plan.source_root.path.startswith("\\\\?\\")
+        assert not artifact.plan.target_root.path.startswith("\\\\?\\")
+        assert to_extended_length_path(str(source)) in converted
+        assert to_extended_length_path(str(target)) in converted
+    finally:
+        service.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_service_missing_deep_root_error_does_not_expose_native_prefix(
+    tmp_path: Path,
+) -> None:
+    source = (
+        tmp_path / "missing-source" / ("s" * 90) / ("t" * 90)
+    )
+    target = tmp_path / "target-root" / ("u" * 90) / ("v" * 90)
+    assert len(str(source)) > 260
+    assert len(str(target)) > 260
+    os.makedirs(to_extended_length_path(str(target)))
+    service = NamiSyncService(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    try:
+        with pytest.raises(SyncPathInputError) as captured:
+            service.start_plan(str(source), str(target))
+    finally:
+        service.close()
+
+    detail = str(captured.value)
+    assert "missing-source" in detail
+    assert "\\\\?\\" not in detail
 
 
 def test_br_g_11_service_refuses_an_all_skipped_selection_before_admission() -> None:

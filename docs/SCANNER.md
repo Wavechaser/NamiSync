@@ -93,6 +93,16 @@ canonically equivalent source/target pair without changing either name.
     text escapes hostile code units rather than inserting them into path-bearing
     records, serialized plans, or terminal output.
 
+Root identity and scan evidence always use ordinary absolute drive or UNC
+spelling. The native backend adds the Windows extended-length prefix only for
+root probes, volume calls, stat, and enumeration, and strips it before returning
+the resolved `Root` or `VolumeEvidence`. Non-filesystem device namespaces are
+refused rather than reinterpreted as managed roots. Extended roots whose
+components cannot be represented stably without the prefixâ€”including trailing
+dot/space and reserved DOS device namesâ€”are also refused, preventing a reviewed
+root from normalizing onto a different sibling. Native error filename fields
+are converted back to logical spelling before entering scan warnings.
+
 Built-in ignores use exact names or exact generated-name grammar. `.synctrash`
 is excluded as an owned root; a user filename merely containing `.synctmp-`,
 ending in `.db`, or resembling a checksum sidecar is not excluded.

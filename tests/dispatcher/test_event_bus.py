@@ -26,14 +26,16 @@ class Observer:
         self.closed = False
         self.close_count = 0
 
-    def on_event(self, envelope) -> None:
+    def on_event(self, envelope) -> RecordingStatus:
         self.events.append(envelope)
+        return RecordingStatus.OK
 
     def flush(self) -> None:
         self.flushes += 1
 
-    def finalize(self, result) -> None:
+    def finalize(self, result) -> RecordingStatus:
         self.results.append(result)
+        return result.audit
 
     def close(self) -> None:
         self.closed = True
@@ -169,6 +171,67 @@ def test_audit_observer_receives_reliable_preterminal_events_and_finalizes() -> 
     assert [type(envelope.body) for envelope in observer.events] == [PhaseChanged]
     assert observer.results == [result]
     assert observer.flushes == 0
+    assert hub.close(0.5)
+
+
+def test_recoverable_audit_degradation_keeps_accepting_and_finalizes_tail() -> None:
+    class RecoverableObserver(Observer):
+        def on_event(self, envelope) -> RecordingStatus:
+            self.events.append(envelope)
+            return (
+                RecordingStatus.DEGRADED
+                if len(self.events) == 1
+                else RecordingStatus.OK
+            )
+
+    observer = RecoverableObserver()
+    hub = make_hub(observer=observer)
+    hub.emit(PhaseChanged("oversized-receipt"))
+    hub.emit(PhaseChanged("later-valid-event"))
+
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+    assert [event.body.phase for event in observer.events] == [
+        "oversized-receipt",
+        "later-valid-event",
+    ]
+    assert observer.results[0].audit is RecordingStatus.DEGRADED
+
+
+def test_none_audit_event_status_breaks_the_prefix() -> None:
+    class MissingStatus(Observer):
+        def on_event(self, envelope):
+            self.events.append(envelope)
+            return None
+
+    observer = MissingStatus()
+    hub = make_hub(observer=observer)
+    hub.emit(PhaseChanged("execute"))
+
+    assert hub._audit._closed.wait(1)
+    assert hub.audit_degraded
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+
+
+def test_none_audit_finalize_status_is_a_failed_finalization() -> None:
+    class MissingStatus(Observer):
+        def finalize(self, result):
+            self.results.append(result)
+            return None
+
+    observer = MissingStatus()
+    hub = make_hub(observer=observer)
+
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+    assert hub.audit_degraded
     assert hub.close(0.5)
 
 
@@ -398,14 +461,15 @@ def test_caller_timeout_wins_and_pump_conforms_persisted_result() -> None:
     finalized = Event()
 
     class DelayedEvent(Observer):
-        def on_event(self, envelope) -> None:
+        def on_event(self, envelope) -> RecordingStatus:
             event_entered.set()
             assert release_event.wait(2)
-            super().on_event(envelope)
+            return super().on_event(envelope)
 
-        def finalize(self, result) -> None:
-            super().finalize(result)
+        def finalize(self, result) -> RecordingStatus:
+            status = super().finalize(result)
             finalized.set()
+            return status
 
     observer = DelayedEvent()
     hub = make_hub(observer=observer, audit_timeout=0.05)
@@ -516,10 +580,10 @@ def test_pump_claim_before_deadline_waits_for_late_success() -> None:
     statuses: list[RecordingStatus] = []
 
     class DelayedFinalize(Observer):
-        def finalize(self, result) -> None:
+        def finalize(self, result) -> RecordingStatus:
             finalize_entered.set()
             assert release_finalize.wait(2)
-            super().finalize(result)
+            return super().finalize(result)
 
     observer = DelayedFinalize()
     hub = make_hub(observer=observer, audit_timeout=0.05)

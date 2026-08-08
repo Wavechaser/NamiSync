@@ -240,6 +240,127 @@ def test_selected_inventory_reconciles_only_its_complete_scope(tmp_path: Path) -
         setup.recorder.close()
 
 
+def test_inventory_row_id_lookup_is_bounded_ordered_and_location_scoped(
+    tmp_path: Path,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    records = tuple(
+        _file(f"folder\\file-{index:04d}.bin", index)
+        for index in range(1, 1_002)
+    )
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, records),
+                "row-id-seed",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            rows = repository.get_inventory(setup.source_location_id)
+        valid_ids = tuple(row.row_id for row in reversed(rows))
+        requested = (
+            valid_ids[0],
+            "0",
+            "01",
+            "+1",
+            " 1",
+            valid_ids[0],
+            *valid_ids[1:],
+            "999999999999999999999999999999999999",
+        )
+        trace: list[str] = []
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=trace.append
+        ) as repository:
+            selected = repository.get_inventory_by_row_ids(
+                setup.source_location_id, requested
+            )
+            bounded_selects = [
+                statement
+                for statement in trace
+                if "SELECT * FROM inventory" in statement
+                and "AND id IN" in statement
+            ]
+            assert tuple(row.row_id for row in selected) == valid_ids
+            assert len(bounded_selects) == 3
+            assert any(statement == "BEGIN" for statement in trace)
+            assert any(statement == "ROLLBACK" for statement in trace)
+            assert repository.get_inventory_by_row_ids(
+                setup.target_location_id, (valid_ids[0],)
+            ) == ()
+            assert repository.get_inventory_by_row_ids(
+                setup.source_location_id, ("0", "01", "+1", " 1")
+            ) == ()
+    finally:
+        setup.recorder.close()
+
+
+def test_inventory_row_id_chunks_share_one_read_snapshot(tmp_path: Path) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    records = tuple(_file(f"file-{index:03d}.bin", index) for index in range(1, 402))
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, records),
+                "snapshot-old",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            row_ids = tuple(
+                row.row_id
+                for row in repository.get_inventory(setup.source_location_id)
+            )
+
+        select_count = 0
+        refreshed = False
+
+        def trace(statement: str) -> None:
+            nonlocal select_count, refreshed
+            if (
+                "SELECT * FROM inventory" not in statement
+                or "AND id IN" not in statement
+            ):
+                return
+            select_count += 1
+            if select_count == 2:
+                setup.recorder.record_inventory(
+                    InventoryCommand(
+                        setup.source_location_id,
+                        setup.host_id,
+                        _scan(setup, records),
+                        "snapshot-new",
+                        NOW,
+                    )
+                )
+                refreshed = True
+
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=trace
+        ) as repository:
+            selected = repository.get_inventory_by_row_ids(
+                setup.source_location_id, row_ids
+            )
+
+        assert select_count == 2
+        assert refreshed is True
+        assert {row.scope_token for row in selected} == {"snapshot-old"}
+        with LedgerRepository(setup.recorder.path) as repository:
+            assert {
+                row.scope_token
+                for row in repository.get_inventory_by_row_ids(
+                    setup.source_location_id, (row_ids[-1],)
+                )
+            } == {"snapshot-new"}
+    finally:
+        setup.recorder.close()
+
+
 def test_exact_inventory_marks_absent_unsupported_subject_missing(
     tmp_path: Path,
 ) -> None:

@@ -158,8 +158,10 @@ strings.
 History is attached at admission as the distinguished reliable audit
 subscriber. Its bounded queue may apply producer backpressure only at a safe
 checkpoint boundary and only until an injected generous timeout. Drain within
-the timeout guarantees delivery; writer failure or timeout degrades the
-session's audit axis loudly and ends backpressure. Other reliable subscribers
+the timeout guarantees delivery. The observer returns `RecordingStatus` from
+event admission and finalization: a contained status degradation keeps the
+prefix accepting, while an exception, writer failure, or timeout breaks the
+prefix and degrades the session's audit axis loudly. Other reliable subscribers
 that overrun their bounded queue are ejected; the first thing they observe is a
 typed `Gap(first_missed_seq)`. Late subscribers receive current state plus a
 bounded tail and use sequence numbers to detect omitted history. Progress alone
@@ -195,6 +197,18 @@ any path whose resolved handle escapes its root through a reparse point.
 Lexical validation and handle-based containment are separate checks: lexical
 validation is pure and always available; filesystem containment belongs in
 observation/preflight. Long-path conversion happens only after validation.
+
+Absolute managed roots have two spellings with one identity contract.
+`Root.path`, plans, continuations, evidence, history, and interface views carry
+resolved ordinary drive/UNC paths without `\\?\`; native backends add the
+extended-length prefix only to the operand passed to Windows I/O and strip it
+from returned paths. The inverse conversion accepts only drive and complete UNC
+filesystem namespaces that round-trip to a stable ordinary spelling. Device/NT
+namespaces, malformed extended UNC anchors, trailing-dot/space or reserved DOS
+components, and other ordinary-ambiguous absolute names are refused rather
+than normalized onto another tree. Native `OSError` filename fields are
+rendered back into logical spelling before entering warnings, durable detail,
+or user-facing diagnostics.
 
 `rel_path_key` follows Windows/NTFS one-codepoint case mapping, not
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code
@@ -326,7 +340,9 @@ logic; no scanner role or inventory representation is added.
 - Unicode corpus tests preserve NTFS-distinct paths and normalize separator and
   ordinary case variants identically.
 - Path tests reject drive, UNC, device, traversal, NUL, mixed-separator escape,
-  and reparse-root escape cases while accepting valid long relative paths.
+  ambiguous absolute components, and reparse-root escape cases while accepting
+  valid long relative paths. Drive/UNC logical-native round trips and logical
+  error rendering are pinned separately.
 - Scan-scope tests prove exact-only, recursive-subtree, and full shapes are
   canonical, segment-aware, and reject malformed direct construction.
 - UTC/DST boundary tests prove all core timestamps are aware UTC values.

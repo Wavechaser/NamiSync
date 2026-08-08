@@ -43,7 +43,11 @@ Stage 6 concerns rather than tree-builder policy.
 
 ### Plan session
 
-1. Validate distinct non-nested roots and request semantics.
+1. Resolve and validate distinct non-nested roots and request semantics. The
+   shared service/workflow gate uses extended spelling only for native
+   resolution and directory probes, returns ordinary logical `Path` values,
+   refuses device or ordinary-ambiguous root names, and never persists or
+   displays a `\\?\` prefix.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
 3. Scan both roots with the same role-free observation contract.
@@ -260,6 +264,14 @@ appeared row. Inventory and plan register pause unsupported and remain
 cooperatively cancelable. The production interface registry contains all six
 current workflow kinds, and the CLI reaches each through the shared service.
 
+Frozen resume selection does not materialize the location's complete inventory:
+the workflow extracts canonical location-owned row IDs and asks the repository
+for 400-ID chunks under one read snapshot, then restores the original admitted
+order. Malformed, foreign-location, or missing saved IDs refuse resume instead
+of broadening it. A stale-before run consumes the repository's stale query
+directly and fetches only exact already-completed rows needed for settlement.
+Explicit selected-path and intentional full Verify All behavior are unchanged.
+
 Candidate filtering happens only while freezing a new integrity selection.
 Baseline admits eligible non-directory rows with no attestation; rebaseline
 admits eligible rows that already have an attestation; verify retains both,
@@ -291,7 +303,10 @@ already-earned item/filesystem results, and lets the generic session runner
 produce terminal. Filesystem, integrity, ledger `recording`, and history
 `audit` statuses are independent. A verify-phase mismatch or exception never
 rewrites successful execution; a ledger failure never suppresses byte
-classification; a history failure/timeout degrades only `audit`. The runner
+classification; a history failure/timeout degrades only `audit`. A contained
+history receipt rejection also degrades audit while the observer continues to
+record later events and terminal truth; an observer exception breaks the
+prefix. The runner
 drains and finalizes history first, settles the audit axis through the atomic
 caller/pump ownership decision and actual pump outcome, and only then releases
 the immutable Terminal.

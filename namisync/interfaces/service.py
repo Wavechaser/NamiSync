@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from contextlib import nullcontext
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -36,6 +35,7 @@ from namisync.workflows import (
     VolumeResolutionRequired,
     default_database_paths,
     integrity_request,
+    validate_sync_paths,
 )
 from namisync.workflows.node_tree import (
     NodeTree,
@@ -502,7 +502,7 @@ class NamiSyncService:
             if replay is not None:
                 return PlanSession(replay.request_id, replay.session_id)
             try:
-                source_path, target_path = _validated_paths(source, target)
+                source_path, target_path = validate_sync_paths(source, target)
             except (OSError, ValueError) as error:
                 raise SyncPathInputError(str(error)) from error
             request = self._runtime.create_plan_request(
@@ -1716,24 +1716,6 @@ def _location_resolution_view(resolution) -> LocationResolutionView:
         candidates=tuple(resolution.candidates),
         detail=resolution.detail,
     )
-
-
-def _validated_paths(source: str, target: str) -> tuple[Path, Path]:
-    source_path = Path(source).resolve(strict=True)
-    target_path = Path(target).resolve(strict=True)
-    if not source_path.is_dir():
-        raise NotADirectoryError(f"source is not a directory: {source_path}")
-    if not target_path.is_dir():
-        raise NotADirectoryError(f"target is not a directory: {target_path}")
-    source_key = os.path.normcase(str(source_path))
-    target_key = os.path.normcase(str(target_path))
-    try:
-        common = os.path.normcase(os.path.commonpath((source_key, target_key)))
-    except ValueError:
-        common = ""
-    if common in {source_key, target_key}:
-        raise ValueError("source and target overlap")
-    return source_path, target_path
 
 
 __all__ = [

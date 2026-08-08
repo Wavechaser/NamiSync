@@ -52,7 +52,13 @@ from namisync.core.models import (
     MetadataSnapshot,
     owned_temp_run_id,
 )
-from namisync.core.pathing import normalize_relative_path, validate_relative_path
+from namisync.core.pathing import (
+    from_extended_length_path,
+    logical_error_text,
+    normalize_relative_path,
+    to_extended_length_path,
+    validate_relative_path,
+)
 from namisync.core.planning import OpId, OperationKind, OperationReason, PlanOperation
 from namisync.core.session import (
     Canceled,
@@ -718,15 +724,16 @@ class NativeFileSystem:
 
     def resolve(self, root: Path, relative_path: str, *, must_exist: bool) -> Path:
         canonical = validate_relative_path(relative_path)
-        root_path = root.resolve(strict=True)
+        root_path = _resolved_logical_path(root, strict=True)
         self._reject_reparse(root_path)
         candidate = root_path.joinpath(*PureWindowsPath(canonical).parts)
         self._validate_existing_chain(root_path, candidate)
-        if must_exist and not os.path.lexists(candidate):
+        if must_exist and not os.path.lexists(_win32_path(candidate)):
             raise FileNotFoundError(candidate)
-        resolved = candidate.resolve(strict=must_exist)
+        resolved = _resolved_logical_path(candidate, strict=must_exist)
         try:
-            if os.path.commonpath((root_path, resolved)) != str(root_path):
+            common = os.path.commonpath((str(root_path), str(resolved)))
+            if os.path.normcase(common) != os.path.normcase(str(root_path)):
                 raise UnsafeExecutionPath(f"path escapes reviewed root: {relative_path}")
         except ValueError as error:
             raise UnsafeExecutionPath(
@@ -742,10 +749,11 @@ class NativeFileSystem:
         return self._stat_path(path)
 
     def _stat_path(self, path: Path) -> FileStat | None:
-        if not os.path.lexists(path):
+        native = Path(_win32_path(path))
+        if not os.path.lexists(native):
             return None
         self._reject_reparse(path)
-        info = path.stat(follow_symlinks=False)
+        info = native.stat(follow_symlinks=False)
         if stat_module.S_ISREG(info.st_mode):
             kind = EntryKind.FILE
             size = info.st_size
@@ -779,7 +787,7 @@ class NativeFileSystem:
 
     def remove_owned_temp(self, path: Path) -> None:
         try:
-            path.unlink()
+            Path(_win32_path(path)).unlink()
         except FileNotFoundError:
             return
 
@@ -792,7 +800,7 @@ class NativeFileSystem:
         """Remove exact prior-run temps from preflight's touched parents."""
 
         current = str(current_run_id)
-        target_root = target_root.resolve(strict=True)
+        target_root = _resolved_logical_path(target_root, strict=True)
         target_volume = self._volume_serial(target_root)
         for relative in sorted(
             parent_paths,
@@ -806,17 +814,17 @@ class NativeFileSystem:
                 continue
             if relative:
                 parent = self.resolve(target_root, relative, must_exist=False)
-                if not os.path.lexists(parent):
+                if not os.path.lexists(_win32_path(parent)):
                     continue
                 self._reject_reparse(parent)
-                if not parent.is_dir():
+                if not Path(_win32_path(parent)).is_dir():
                     continue
             else:
                 parent = target_root
                 self._reject_reparse(parent)
             if self._volume_serial(parent) != target_volume:
                 continue
-            with os.scandir(parent) as entries:
+            with os.scandir(_win32_path(parent)) as entries:
                 for entry in entries:
                     owner = owned_temp_run_id(entry.name)
                     if (
@@ -824,13 +832,15 @@ class NativeFileSystem:
                         and owner != current
                         and entry.is_file(follow_symlinks=False)
                     ):
-                        self.remove_owned_temp(Path(entry.path))
+                        self.remove_owned_temp(
+                            Path(from_extended_length_path(entry.path))
+                        )
 
     def open_source(self, path: Path) -> BinaryIO:
         flags = os.O_RDONLY
         if os.name == "nt":
             flags |= os.O_BINARY | os.O_SEQUENTIAL
-        descriptor = os.open(path, flags)
+        descriptor = os.open(_win32_path(path), flags)
         try:
             return cast(BinaryIO, os.fdopen(descriptor, "rb", buffering=0))
         except BaseException:
@@ -845,7 +855,7 @@ class NativeFileSystem:
         flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
         if os.name == "nt":
             flags |= os.O_BINARY
-        descriptor = os.open(path, flags, 0o666)
+        descriptor = os.open(_win32_path(path), flags, 0o666)
         try:
             stream = cast(BinaryIO, os.fdopen(descriptor, "w+b", buffering=0))
         except BaseException:
@@ -876,7 +886,7 @@ class NativeFileSystem:
         os.fsync(stream.fileno())
 
     def flush_path(self, path: Path) -> None:
-        with path.open("r+b", buffering=0) as stream:
+        with Path(_win32_path(path)).open("r+b", buffering=0) as stream:
             os.fsync(stream.fileno())
 
     def apply_metadata(
@@ -901,10 +911,13 @@ class NativeFileSystem:
                 modified_ns=stat.mtime_ns,
             )
         else:
-            observed_access_ns = path.stat(
+            observed_access_ns = Path(_win32_path(path)).stat(
                 follow_symlinks=False
             ).st_atime_ns
-            os.utime(path, ns=(observed_access_ns, stat.mtime_ns))
+            os.utime(
+                _win32_path(path),
+                ns=(observed_access_ns, stat.mtime_ns),
+            )
         desired = stat.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
         if not apply_readonly:
             desired &= ~_READONLY
@@ -912,7 +925,11 @@ class NativeFileSystem:
 
     def copy_security(self, source: Path, target: Path) -> None:
         if os.name != "nt":
-            shutil.copystat(source, target, follow_symlinks=False)
+            shutil.copystat(
+                _win32_path(source),
+                _win32_path(target),
+                follow_symlinks=False,
+            )
             return
         assert _WINDOWS is not None
         security_information = 0x1 | 0x2 | 0x4
@@ -951,12 +968,14 @@ class NativeFileSystem:
         """Apply final temp metadata and issue its sole durability flush."""
 
         if os.name != "nt":
-            with path.open("r+b", buffering=0) as held:
+            with Path(_win32_path(path)).open("r+b", buffering=0) as held:
                 if acl_source is not None:
                     try:
                         self.copy_security(acl_source, path)
                     except Exception as error:
-                        raise _SecurityCopyFailure(str(error)) from error
+                        raise _SecurityCopyFailure(
+                            logical_error_text(error)
+                        ) from error
                 self.apply_metadata(
                     path,
                     intended,
@@ -975,7 +994,9 @@ class NativeFileSystem:
                 try:
                     self.copy_security(acl_source, path)
                 except Exception as error:
-                    raise _SecurityCopyFailure(str(error)) from error
+                    raise _SecurityCopyFailure(
+                        logical_error_text(error)
+                    ) from error
             current = self._basic_info(handle)
             desired_attributes = (
                 current.FileAttributes & ~_PRESERVED_ATTRIBUTE_MASK
@@ -1108,13 +1129,13 @@ class NativeFileSystem:
             return result
 
     def publish_new(self, temp: Path, target: Path) -> None:
-        os.rename(temp, target)
+        os.rename(_win32_path(temp), _win32_path(target))
 
     def replace(self, temp: Path, target: Path) -> None:
-        os.replace(temp, target)
+        os.replace(_win32_path(temp), _win32_path(target))
 
     def hardlink(self, source: Path, target: Path) -> None:
-        os.link(source, target)
+        os.link(_win32_path(source), _win32_path(target))
 
     def copy_backup(
         self,
@@ -1160,33 +1181,36 @@ class NativeFileSystem:
         self._set_attributes(path, current & ~_READONLY)
 
     def rename_new(self, source: Path, target: Path) -> None:
-        os.rename(source, target)
+        os.rename(_win32_path(source), _win32_path(target))
 
     def mkdir_new(self, path: Path) -> None:
-        os.mkdir(path)
+        os.mkdir(_win32_path(path))
 
     def remove_file(self, path: Path) -> None:
-        os.unlink(path)
+        os.unlink(_win32_path(path))
 
     def remove_directory(self, path: Path) -> None:
-        os.rmdir(path)
+        os.rmdir(_win32_path(path))
 
     def trash_destination(
         self, target_root: Path, run_id: RunId, relative_path: str
     ) -> Path:
         canonical = validate_relative_path(relative_path)
-        root = target_root.resolve(strict=True)
+        root = _resolved_logical_path(target_root, strict=True)
         self._reject_reparse(root)
         current = root
         for part in (".synctrash", str(run_id), *PureWindowsPath(canonical).parts[:-1]):
             current = current / part
             try:
-                os.mkdir(current)
+                os.mkdir(_win32_path(current))
             except FileExistsError:
-                if not current.is_dir():
+                if not Path(_win32_path(current)).is_dir():
                     raise UnsafeExecutionPath(f"trash parent is not a directory: {current}")
             self._reject_reparse(current)
-            if current.stat().st_dev != root.stat().st_dev:
+            if (
+                Path(_win32_path(current)).stat().st_dev
+                != Path(_win32_path(root)).stat().st_dev
+            ):
                 raise UnsafeExecutionPath("trash path leaves the target volume")
         destination = current / PureWindowsPath(canonical).name
         self._validate_existing_chain(root, destination)
@@ -1195,7 +1219,7 @@ class NativeFileSystem:
     def flush_directory(self, path: Path) -> bool:
         if os.name != "nt":
             try:
-                descriptor = os.open(path, os.O_RDONLY)
+                descriptor = os.open(_win32_path(path), os.O_RDONLY)
                 try:
                     os.fsync(descriptor)
                 finally:
@@ -1310,20 +1334,22 @@ class NativeFileSystem:
         current = root
         for part in relative.parts:
             current = current / part
-            if os.path.lexists(current):
+            if os.path.lexists(_win32_path(current)):
                 self._reject_reparse(current)
             else:
                 break
 
     def _reject_reparse(self, path: Path) -> None:
-        info = path.lstat()
+        info = Path(_win32_path(path)).lstat()
         attributes = int(getattr(info, "st_file_attributes", 0))
         if stat_module.S_ISLNK(info.st_mode) or attributes & _REPARSE_POINT:
             raise UnsafeExecutionPath(f"reparse points are not executable: {path}")
 
     def _get_attributes(self, path: Path) -> int:
         if os.name != "nt":
-            return _READONLY if not os.access(path, os.W_OK) else 0
+            return (
+                _READONLY if not os.access(_win32_path(path), os.W_OK) else 0
+            )
         assert _WINDOWS is not None
         value = _WINDOWS.get_attributes(_win32_path(path))
         if value == 0xFFFFFFFF:
@@ -1332,11 +1358,12 @@ class NativeFileSystem:
 
     def _set_attributes(self, path: Path, value: int) -> None:
         if os.name != "nt":
-            mode = path.stat().st_mode
+            native = Path(_win32_path(path))
+            mode = native.stat().st_mode
             if value & _READONLY:
-                path.chmod(mode & ~stat_module.S_IWUSR)
+                native.chmod(mode & ~stat_module.S_IWUSR)
             else:
-                path.chmod(mode | stat_module.S_IWUSR)
+                native.chmod(mode | stat_module.S_IWUSR)
             return
         assert _WINDOWS is not None
         if not _WINDOWS.set_attributes(_win32_path(path), value):
@@ -1369,7 +1396,11 @@ class NativeFileSystem:
             _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
             None,
             _OPEN_EXISTING,
-            _FILE_FLAG_BACKUP_SEMANTICS if path.is_dir() else _FILE_ATTRIBUTE_NORMAL,
+            (
+                _FILE_FLAG_BACKUP_SEMANTICS
+                if Path(_win32_path(path)).is_dir()
+                else _FILE_ATTRIBUTE_NORMAL
+            ),
             None,
         )
         if handle == _INVALID_HANDLE_VALUE:
@@ -1397,7 +1428,9 @@ class NativeFileSystem:
 
     def _volume_serial(self, path: Path) -> str:
         if os.name != "nt":
-            return f"{path.stat(follow_symlinks=False).st_dev:x}"
+            return (
+                f"{Path(_win32_path(path)).stat(follow_symlinks=False).st_dev:x}"
+            )
         assert _WINDOWS is not None
         volume_path = ctypes.create_unicode_buffer(32768)
         if not _WINDOWS.get_volume_path(
@@ -1435,13 +1468,13 @@ def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:
         view = view[written:]
 
 
-def _win32_path(path: Path) -> str:
-    raw = str(path)
-    if raw.startswith("\\\\?\\"):
-        return raw
-    if raw.startswith("\\\\"):
-        return "\\\\?\\UNC\\" + raw[2:]
-    return "\\\\?\\" + raw
+def _win32_path(path: Path | str) -> str:
+    return to_extended_length_path(str(path))
+
+
+def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
+    resolved = Path(_win32_path(path)).resolve(strict=strict)
+    return Path(from_extended_length_path(str(resolved)))
 
 
 def _windows_ticks(unix_ns: int) -> int:
@@ -3274,13 +3307,13 @@ def _failure_reason_and_message(
     if isinstance(error, OperationFailure):
         return error.reason, error.detail
     if isinstance(error, UnsafeExecutionPath):
-        return ExecutionReason.UNSAFE_PATH, str(error)
+        return ExecutionReason.UNSAFE_PATH, logical_error_text(error)
     reason = (
         ExecutionReason.SHARING_VIOLATION
         if _find_winerror(error) in _SHARING_VIOLATIONS
         else ExecutionReason.IO_ERROR
     )
-    return reason, str(error)
+    return reason, logical_error_text(error)
 
 
 def _failed_after_publish_settlement(
@@ -3320,7 +3353,7 @@ def _failed_after_publish_settlement(
         detail["publish_state"] = "unverified"
         detail["durable_state"] = "publication-unverified"
         detail["state_error_type"] = type(state_error).__name__
-        detail["state_error"] = str(state_error)
+        detail["state_error"] = logical_error_text(state_error)
         _mark_unrecorded_publish(
             state,
             detail,
@@ -3419,7 +3452,7 @@ def _canceled_durable_settlement(
     retry_error = state.retry_errors.get(operation.op_id)
     if retry_error is not None:
         detail["retry_error_type"] = type(retry_error).__name__
-        detail["retry_error"] = str(retry_error)
+        detail["retry_error"] = logical_error_text(retry_error)
 
     try:
         if isinstance(continuation, _UpdateContinuation):
@@ -3438,7 +3471,7 @@ def _canceled_durable_settlement(
         detail.setdefault("durable_state", "unverified")
         detail["publish_state"] = "unverified"
         detail["state_error_type"] = type(error).__name__
-        detail["state_error"] = str(error)
+        detail["state_error"] = logical_error_text(error)
         return _Settled(
             Outcome.FAILED,
             (
@@ -3588,7 +3621,9 @@ def _describe_published_target(
         actual = fs.stat_path(target)
     except Exception as error:
         detail["target_state"] = "unverified-after-publish"
-        detail["target_state_error"] = f"{type(error).__name__}: {error}"
+        detail["target_state_error"] = (
+            f"{type(error).__name__}: {logical_error_text(error)}"
+        )
         return
     if actual is None:
         detail["target_state"] = "missing-after-publish"
@@ -3630,7 +3665,9 @@ def _describe_retained_update_backup(
         actual = fs.stat_path(backup.path)
     except Exception as error:
         detail["backup_state"] = "unverified"
-        detail["backup_state_error"] = f"{type(error).__name__}: {error}"
+        detail["backup_state_error"] = (
+            f"{type(error).__name__}: {logical_error_text(error)}"
+        )
         return
     if actual is None:
         detail["backup_state"] = "absent"
@@ -3669,7 +3706,9 @@ def _describe_move_update_durable_state(
             old = fs.stat(target_root, continuation.old_relative_path)
         except Exception as error:
             detail["durable_state"] = "new-and-old-unverified"
-            detail["old_state_error"] = f"{type(error).__name__}: {error}"
+            detail["old_state_error"] = (
+                f"{type(error).__name__}: {logical_error_text(error)}"
+            )
             return
         detail["durable_state"] = (
             "new-and-old"
@@ -3686,7 +3725,9 @@ def _describe_move_update_durable_state(
         trash = fs.stat_path(continuation.trash)
     except Exception as error:
         detail["durable_state"] = "new-and-old-unverified"
-        detail["old_state_error"] = f"{type(error).__name__}: {error}"
+        detail["old_state_error"] = (
+            f"{type(error).__name__}: {logical_error_text(error)}"
+        )
         return
     if old is not None and _matches_expected(old, continuation.old_expected):
         detail["durable_state"] = (
@@ -3729,7 +3770,9 @@ def _guard_present(
     except Exception as error:
         if isinstance(error, UnsafeExecutionPath):
             raise OperationFailure(
-                ExecutionReason.UNSAFE_PATH, str(error), cause=error
+                ExecutionReason.UNSAFE_PATH,
+                logical_error_text(error),
+                cause=error,
             ) from error
         raise
     if actual is None:
@@ -3904,7 +3947,9 @@ def _record(
     except Exception as error:
         state.recording = RecordingStatus.DEGRADED
         detail["recording"] = RecordingStatus.DEGRADED.value
-        detail["recording_error"] = f"{type(error).__name__}: {error}"
+        detail["recording_error"] = (
+            f"{type(error).__name__}: {logical_error_text(error)}"
+        )
         return None
     return result if isinstance(result, RecordedCopyIdentity) else None
 

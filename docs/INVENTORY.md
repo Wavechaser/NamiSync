@@ -61,6 +61,12 @@ exact admitted inventory row ids plus completed ids/bytes. A resume always
 refreshes physical inventory but reconstructs the original ordered candidate
 set without reapplying those mode filters, so evidence drift cannot drop
 pending work and a newly appeared row cannot enter an admitted session.
+The reconstruction queries only canonical location-owned row IDs in 400-ID
+chunks under one repository read snapshot; it does not materialize the complete
+location. Foreign, malformed, or missing saved identifiers refuse rather than
+widening selection. Stale-before integrity consumes the stale repository query
+directly and fetches only exact completed rows needed to preserve settlement;
+selected-path and intentional full Verify All scope remain unchanged.
 
 Inventory continuation payloads are strict version 2 because they carry
 `subtree_roots` separately from exact `selected_paths`. Integrity continuations

@@ -57,7 +57,7 @@ from namisync.core.planning import (
     plan_fingerprint,
     selection_digest,
 )
-from namisync.core.pathing import normalize_relative_path
+from namisync.core.pathing import normalize_relative_path, to_extended_length_path
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
 from namisync.core.session import (
     Canceled,
@@ -1345,6 +1345,116 @@ def test_real_runtime_copy_readback_uses_one_finished_run(
     assert rows[0]["ended_at"] is not None
     assert rows[0]["filesystem_status"] == SessionState.COMPLETED.value
     assert rows[0]["recording_status"] == RecordingStatus.OK.value
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_long_path_plan_preflight_execute_verify_and_rerun_converge(
+    tmp_path: Path,
+) -> None:
+    source = (
+        tmp_path
+        / "source-root"
+        / ("s" * 90)
+        / ("t" * 90)
+    )
+    target = (
+        tmp_path
+        / "target-root"
+        / ("u" * 90)
+        / ("v" * 90)
+    )
+    assert len(str(source)) > 260
+    assert len(str(target)) > 260
+    os.makedirs(to_extended_length_path(str(source)))
+    os.makedirs(to_extended_length_path(str(target)))
+    source_payloads = {
+        "copied.bin": b"long-path plan to verified publication",
+        "updated.bin": b"new long-path update content",
+    }
+    for relative_path, payload in source_payloads.items():
+        with open(
+            to_extended_length_path(str(source / relative_path)), "wb"
+        ) as stream:
+            stream.write(payload)
+    target_payloads = {
+        "updated.bin": b"displaced update content",
+        "removed.bin": b"target-only trash content",
+    }
+    for relative_path, payload in target_payloads.items():
+        with open(
+            to_extended_length_path(str(target / relative_path)), "wb"
+        ) as stream:
+            stream.write(payload)
+
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    context = RunContext(lambda body: None, lambda: None)
+
+    def cycle(request_id: str, run_id: str):
+        request = PlanRequest(request_id, str(source), str(target))
+        planned = runtime.open_plan(
+            runtime.prepare_plan(request).payload
+        ).run(context)
+        assert planned.status is SessionState.COMPLETED
+        artifact = runtime.get_plan(request_id)
+        assert artifact is not None
+        execution = runtime.commit_plan(
+            request_id,
+            run_id=run_id,
+            committed_at=NOW,
+            verify_after_execute=True,
+        )
+        result = runtime.open_execution(
+            runtime.prepare_execution(execution).payload
+        ).run(context)
+        return artifact, runtime.get_plan_review(request_id), result
+
+    try:
+        artifact, review, result = cycle("1" * 32, "2" * 32)
+        rerun_artifact, rerun_review, rerun = cycle("3" * 32, "4" * 32)
+    finally:
+        runtime.close()
+
+    assert not artifact.plan.source_root.path.startswith("\\\\?\\")
+    assert not artifact.plan.target_root.path.startswith("\\\\?\\")
+    assert artifact.plan.trash_on_update
+    assert sorted(operation.kind for operation in review.operations) == [
+        "copy",
+        "trash",
+        "update",
+    ]
+    assert result.status is SessionState.COMPLETED
+    integrity = [
+        item for item in result.items if isinstance(item, IntegrityOutcome)
+    ]
+    assert len(integrity) == 2
+    assert all(item.result is IntegrityResult.VERIFIED for item in integrity)
+    for relative_path, payload in source_payloads.items():
+        destination = target / relative_path
+        assert len(str(destination)) > 260
+        with open(
+            to_extended_length_path(str(destination)), "rb"
+        ) as stream:
+            assert stream.read() == payload
+    assert not os.path.exists(
+        to_extended_length_path(str(target / "removed.bin"))
+    )
+    for relative_path, payload in target_payloads.items():
+        displaced = target / ".synctrash" / ("2" * 32) / relative_path
+        with open(
+            to_extended_length_path(str(displaced)), "rb"
+        ) as stream:
+            assert stream.read() == payload
+
+    assert not rerun_artifact.plan.source_root.path.startswith("\\\\?\\")
+    assert not rerun_artifact.plan.target_root.path.startswith("\\\\?\\")
+    assert {
+        operation.kind for operation in rerun_review.operations
+    } == {"noop"}
+    assert len(rerun_review.operations) == 2
+    assert rerun.status is SessionState.COMPLETED
 
 
 def test_xv_8_retained_compound_history_projects_phases_after_reopen(

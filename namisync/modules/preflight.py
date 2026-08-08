@@ -23,9 +23,12 @@ from namisync.core.models import (
     owned_temp_run_id,
 )
 from namisync.core.pathing import (
+    from_extended_length_path,
     is_path_below,
     join_under_root,
+    logical_error_text,
     normalize_relative_path,
+    to_extended_length_path,
     validate_relative_path,
 )
 from namisync.core.planning import (
@@ -65,9 +68,18 @@ class ObservationFileSystem(Protocol):
     def now_utc(self) -> datetime: ...
 
 
+def _native_path(path: str | Path) -> str:
+    return to_extended_length_path(str(path))
+
+
+def _resolved_logical_path(path: str | Path, *, strict: bool) -> str:
+    resolved = Path(_native_path(path)).resolve(strict=strict)
+    return from_extended_length_path(str(resolved))
+
+
 def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
     if os.name != "nt":
-        observed = os.stat(path, follow_symlinks=False)
+        observed = os.stat(_native_path(path), follow_symlinks=False)
         return VolumeId(f"{observed.st_dev:x}", "UNKNOWN"), VolumeEvidence(device_id=str(Path(path).anchor))
 
     import ctypes
@@ -75,7 +87,9 @@ def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     volume_path = ctypes.create_unicode_buffer(32768)
-    if not kernel32.GetVolumePathNameW(path, volume_path, len(volume_path)):
+    if not kernel32.GetVolumePathNameW(
+        _native_path(path), volume_path, len(volume_path)
+    ):
         raise OSError(ctypes.get_last_error(), "GetVolumePathNameW failed", path)
     label = ctypes.create_unicode_buffer(261)
     filesystem = ctypes.create_unicode_buffer(261)
@@ -94,7 +108,10 @@ def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
     ):
         raise OSError(ctypes.get_last_error(), "GetVolumeInformationW failed", path)
     fs_type = filesystem.value.upper() or "UNKNOWN"
-    return VolumeId(f"{serial.value:08X}", fs_type), VolumeEvidence(label.value or None, volume_path.value)
+    return VolumeId(f"{serial.value:08X}", fs_type), VolumeEvidence(
+        label.value or None,
+        from_extended_length_path(volume_path.value),
+    )
 
 
 class LocalObservationFileSystem:
@@ -102,26 +119,32 @@ class LocalObservationFileSystem:
 
     def observe_root(self, root: Root) -> RootObservation:
         try:
-            resolved = str(Path(root.path).resolve(strict=True))
-            if not Path(resolved).is_dir():
+            resolved = _resolved_logical_path(root.path, strict=True)
+            if not os.path.isdir(_native_path(resolved)):
                 raise NotADirectoryError(resolved)
             volume_id, evidence = _volume_observation(resolved)
             return RootObservation(resolved, volume_id, evidence)
-        except (OSError, PermissionError) as error:
-            return RootObservation(None, None, None, str(error))
+        except (OSError, PermissionError, ValueError) as error:
+            return RootObservation(
+                None, None, None, logical_error_text(error)
+            )
 
     def stat(self, root: Root, rel_path: str, profile: CapabilityProfile) -> StatObservation:
         try:
             canonical = validate_relative_path(rel_path)
             candidate = join_under_root(root.path, canonical)
-            resolved_root = str(Path(root.path).resolve(strict=True))
-            resolved_candidate = str(Path(candidate).resolve(strict=False))
+            resolved_root = _resolved_logical_path(root.path, strict=True)
+            resolved_candidate = _resolved_logical_path(
+                candidate, strict=False
+            )
             contained = is_path_below(resolved_candidate, resolved_root)
             representable = len(resolved_candidate) <= profile.max_path
             if not contained:
                 return StatObservation(None, "resolved path escapes root", False, representable)
             try:
-                observed = os.stat(candidate, follow_symlinks=False)
+                observed = os.stat(
+                    _native_path(candidate), follow_symlinks=False
+                )
             except FileNotFoundError:
                 return StatObservation(None, None, True, representable)
             if stat_module.S_ISREG(observed.st_mode):
@@ -152,10 +175,12 @@ class LocalObservationFileSystem:
             )
             return StatObservation(snapshot, None, True, representable)
         except (OSError, PermissionError, ValueError) as error:
-            return StatObservation(None, str(error), True, False)
+            return StatObservation(
+                None, logical_error_text(error), True, False
+            )
 
     def free_space(self, target: Root) -> int:
-        return int(shutil.disk_usage(target.path).free)
+        return int(shutil.disk_usage(_native_path(target.path)).free)
 
     def reclaimable_temp_bytes(
         self,
@@ -176,7 +201,7 @@ class LocalObservationFileSystem:
                 parent_volume, _ = _volume_observation(absolute)
                 if parent_volume != target_volume:
                     continue
-                with os.scandir(absolute) as entries:
+                with os.scandir(_native_path(absolute)) as entries:
                     for entry in entries:
                         owner = owned_temp_run_id(entry.name)
                         if (
@@ -192,24 +217,44 @@ class LocalObservationFileSystem:
     def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation:
         trash = os.path.join(target.path, ".synctrash")
         try:
-            root_resolved = str(Path(target.path).resolve(strict=True))
-            trash_path = Path(trash)
+            root_resolved = _resolved_logical_path(
+                target.path, strict=True
+            )
+            trash_path = Path(_native_path(trash))
             exists = trash_path.exists()
-            resolved = str(trash_path.resolve(strict=False))
+            resolved = from_extended_length_path(
+                str(trash_path.resolve(strict=False))
+            )
             contained = is_path_below(resolved, root_resolved)
             junction = bool(exists and hasattr(trash_path, "is_junction") and trash_path.is_junction())
-            attributes = int(getattr(os.lstat(trash), "st_file_attributes", 0)) if exists else 0
+            attributes = 0
+            if exists:
+                attributes = int(
+                    getattr(
+                        os.lstat(_native_path(trash)),
+                        "st_file_attributes",
+                        0,
+                    )
+                )
             reparse_safe = not exists or not (
                 trash_path.is_symlink() or junction or attributes & 0x00000400
             )
             available = not exists or trash_path.is_dir()
-            writable_path = trash if exists else target.path
+            writable_path = _native_path(trash if exists else target.path)
             writable = os.access(writable_path, os.W_OK)
             actual_volume, _ = _volume_observation(resolved if exists else target.path)
             same_volume = expected_volume is not None and actual_volume == expected_volume
             return TrashObservation(resolved, available, contained, same_volume, writable, reparse_safe)
         except (OSError, PermissionError) as error:
-            return TrashObservation(None, False, False, False, False, False, str(error))
+            return TrashObservation(
+                None,
+                False,
+                False,
+                False,
+                False,
+                False,
+                logical_error_text(error),
+            )
 
     def now_utc(self) -> datetime:
         return datetime.now(timezone.utc)
@@ -256,14 +301,18 @@ def observe(
         try:
             stats[subject] = fs.stat(root, rel_path, profile)
         except (OSError, PermissionError, ValueError) as error:
-            stats[subject] = StatObservation(None, str(error))
+            stats[subject] = StatObservation(
+                None, logical_error_text(error)
+            )
         paths[subject] = rel_path
     roots: dict[str, RootObservation] = {}
     for root in (xset.plan.source_root, xset.plan.target_root):
         try:
             roots[root.root_id] = fs.observe_root(root)
         except (OSError, PermissionError, ValueError) as error:
-            roots[root.root_id] = RootObservation(None, None, None, str(error))
+            roots[root.root_id] = RootObservation(
+                None, None, None, logical_error_text(error)
+            )
     try:
         free_space = fs.free_space(xset.plan.target_root)
     except (OSError, PermissionError):
@@ -289,7 +338,15 @@ def observe(
         try:
             trash = fs.observe_trash(xset.plan.target_root, xset.plan.target_volume_id)
         except (OSError, PermissionError, ValueError) as error:
-            trash = TrashObservation(None, False, False, False, False, False, str(error))
+            trash = TrashObservation(
+                None,
+                False,
+                False,
+                False,
+                False,
+                False,
+                logical_error_text(error),
+            )
     else:
         trash = None
     return ObservedWorld(

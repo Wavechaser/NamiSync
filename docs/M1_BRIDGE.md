@@ -1411,7 +1411,7 @@ that full getter once per listed run. A 50-run list therefore performed N+1
 query sets and materialized every selected item before the bridge could discard
 all but one window.
 
-**Resolution (implemented with history v4):**
+**Resolution (introduced in history v4 and retained by receipt-aware v5):**
 
 - `list_summaries(limit)` uses one run query plus fixed phase and aggregate
   queries. It never selects or decodes canonical event JSON. The repository

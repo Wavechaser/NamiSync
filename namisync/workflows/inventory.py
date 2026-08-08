@@ -33,6 +33,7 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import (
+    logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
     validate_relative_path,
@@ -434,7 +435,7 @@ def resolve_binding(
             root_path=root_path,
             evidence=selected.evidence,
             candidates=candidates,
-            detail=str(error),
+            detail=logical_error_text(error),
         )
     if not stat_module.S_ISDIR(root_stat.st_mode):
         return VolumeResolution(
@@ -454,7 +455,7 @@ def resolve_binding(
             root_path=root_path,
             evidence=selected.evidence,
             candidates=candidates,
-            detail=str(error),
+            detail=logical_error_text(error),
         )
     return VolumeResolution(
         VolumeResolutionState.RESOLVED,
@@ -927,9 +928,10 @@ def _integrity_rows(
     completed_item_ids: frozenset[str],
 ) -> tuple[InventorySnapshot, ...]:
     if selection_item_ids:
+        row_ids = _saved_inventory_row_ids(location_id, selection_item_ids)
         rows = {
             f"{row.location_id}:{row.row_id}": row
-            for row in repository.get_inventory(location_id)
+            for row in repository.get_inventory_by_row_ids(location_id, row_ids)
         }
         missing = [
             item_id for item_id in selection_item_ids if item_id not in rows
@@ -950,17 +952,29 @@ def _integrity_rows(
             )
         )
     elif stale_before is not None:
-        stale_ids = {
-            f"{row.location_id}:{row.row_id}"
+        rows = {
+            row.row_id: row
             for row in repository.get_stale_inventory(location_id, stale_before)
         }
-        candidates = tuple(
-            row
-            for row in repository.get_inventory(location_id)
-            if (
-                f"{row.location_id}:{row.row_id}" in stale_ids
-                or f"{row.location_id}:{row.row_id}" in completed_item_ids
+        if completed_item_ids:
+            completed_row_ids = _saved_inventory_row_ids(
+                location_id, tuple(completed_item_ids)
             )
+            rows.update(
+                (row.row_id, row)
+                for row in repository.get_inventory_by_row_ids(
+                    location_id, completed_row_ids
+                )
+            )
+            missing = [
+                row_id for row_id in completed_row_ids if row_id not in rows
+            ]
+            if missing:
+                raise RuntimeError(
+                    "saved integrity progress references missing inventory rows"
+                )
+        candidates = tuple(
+            sorted(rows.values(), key=lambda row: (row.rel_path_key, int(row.row_id)))
         )
     else:
         candidates = tuple(
@@ -977,6 +991,20 @@ def _integrity_rows(
     if mode is IntegrityMode.REBASELINE:
         return tuple(row for row in candidates if row.attestation is not None)
     return candidates
+
+
+def _saved_inventory_row_ids(
+    location_id: int, item_ids: tuple[str, ...]
+) -> tuple[str, ...]:
+    prefix = f"{location_id}:"
+    row_ids = tuple(
+        item_id[len(prefix) :] for item_id in item_ids if item_id.startswith(prefix)
+    )
+    if len(row_ids) != len(item_ids):
+        raise RuntimeError(
+            "saved integrity selection references another inventory location"
+        )
+    return row_ids
 
 
 def _integrity_selection(

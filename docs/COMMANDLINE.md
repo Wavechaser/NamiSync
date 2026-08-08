@@ -31,9 +31,10 @@ desktop implementation and retains no console window.
 - `nami-sync history [RUN]`: list retained run summaries or render one summary
   and stream its typed item detail in bounded database pages.
 
-Recent-run listings include blocked/deferred exception counts so a filesystem-
-completed safe subset is not mistaken for a clean full sync; run detail shows
-each path and reason.
+Recent-run listings include blocked/deferred exception counts and history
+duplicate/rejected receipt counts, so a filesystem-completed safe subset or a
+degraded audit is not mistaken for a clean full sync; run detail shows each
+canonical item path and reason.
 
 `sync` accepts a one-plan `--deletion-policy trash|additive` override,
 `--verify-after-copy`, `--database PATH`, and `--history-database PATH`.
@@ -51,9 +52,9 @@ the local
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 
-At the final M1 pre-migrator boundary, ledger v3 and windowed-event history v4
+At the final M1 pre-migrator boundary, ledger v3 and receipt-aware history v5
 require their exact contract markers. Opening a ledger v1-v2 database, any
-history v1-v3 database, or a current-version file with a missing/mismatched
+history v1-v4 database, or a current-version file with a missing/mismatched
 marker fails
 before schema mutation with an instruction to close NamiSync and manually
 delete **both** local database files, then rerun the command. Startup does not

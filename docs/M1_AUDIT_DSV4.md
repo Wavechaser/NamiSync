@@ -44,6 +44,54 @@ resolution and its coupled dispatcher findings landed as follows:
   cleanup is identity-scoped, and shutdown reports terminal-but-unretired or
   canceled-acquisition owners as unfinished.
 
+Selected MEDIUM findings were resolved in the next hardening delivery:
+
+- **M3/M15 — fixed together at history v5.** Exact same-item re-emission under
+  a new sequence now produces a full, authenticated, non-counting duplicate
+  receipt; changed semantics remain fatal producer corruption. A supported
+  oversized event produces a bounded hash-only receipt, degrades audit, and
+  permits the later stream and terminal row to persist. Storage/integrity
+  failures still break the prefix, while replay reads retry only bounded
+  SQLite BUSY/LOCKED failures. Receipt metadata/order, immutable item
+  projections, lifecycle/count projections, and terminal truth are
+  authenticated; oversized items retain bounded identity/semantic hashes so a
+  changed reuse cannot bypass the corruption check. Strict `WITHOUT ROWID`
+  receipts, append/finality guards, and physical-tail validation prevent
+  replacement, reopening, or unauthenticated summary rows.
+- **M6 — fixed across the complete native-I/O chain.** Service/workflow root
+  validation, managed-root containment, scanner, preflight, executor, verifier,
+  and inventory binding now add extended spelling at Windows I/O only and
+  return logical paths. Device/ambiguous absolute roots are refused rather than
+  normalized onto another tree, and native error filenames are sanitized
+  before durable or user-facing detail.
+- **M14 — fixed at its actual hot paths.** Explicit selected-path reads were
+  already bounded. Frozen resume now fetches only canonical location-owned row
+  IDs in 400-ID snapshot chunks, and stale-before selection consumes the stale
+  query directly plus exact completed rows. Full Verify All intentionally
+  remains proportional to the location.
+
+The following findings remain documented release gates, not current M1 work:
+
+- **M1:** require a typed not-ready history read or earlier visibility barrier
+  before exposing any poll-based paused-history consumer; event subscribers are
+  already ordered after the audit flush.
+- **M2:** bound late pump-owned finalization when interruptible writer/late
+  commit ownership semantics are designed; current persistence would need to be
+  genuinely wedged.
+- **M4:** add an age/liveness ownership guard before orphan-temp reclamation is
+  relied on under a broader same-root multiprocess contract; current GUI
+  single-instance behavior is not a GUI-versus-CLI or CLI-versus-CLI mutex.
+- **M7:** non-`EVERYTHING` scoped deletion must not ship until a vanished
+  subtree marks the scan incomplete and suppresses destructive inference.
+- **M11:** define and test persistence-failure semantics before replacing the
+  process-local session store with a durable M2 store.
+- **M12:** define the future-cursor `Gap` contract before exposing arbitrary
+  sequence-validating replay consumers.
+- **History cleanup visibility:** a close-only observer failure after durable
+  finalization cannot rewrite terminal truth and remains internal cleanup
+  health; define a public projection before a persistent dispatcher/store
+  makes that distinction user-actionable.
+
 Final verification after rename-race follow-up: `1125 passed, 1 skipped`;
 pytest treats unhandled worker thread exceptions as errors. Import-law
 verification kept all 8 contracts, and

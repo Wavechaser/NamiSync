@@ -17,14 +17,14 @@ separate facts.
 M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
 history, dispatcher, and service/CLI surfaces are usable; M1 Stage 6, the
 headed local WebView2 desktop, is next. History now commits bounded reliable
-event windows during a run and exposes bounded summary/item/event reads for the
+receipt windows during a run and exposes bounded summary/item/event reads for the
 future UI. The desktop's service facade and bridge security foundation already
 exist, but no GUI host has shipped.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
 `incomplete`, but is not classified as interrupted or executable. The active
-database boundary is ledger v3 plus history v4. Older, missing, transitional,
+database boundary is ledger v3 plus history v5. Older, missing, transitional,
 or mismatched databases are refused; close
 NamiSync and reset both local database files together before creating a fresh
 matching pair.
@@ -133,6 +133,20 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed the remaining selected medium audit findings without broadening
+  deferred feature scope.
+  - **Windows paths:** made service-to-verifier native I/O explicitly long-path
+    safe while keeping logical paths unprefixed and refusing ambiguous/device
+    roots instead of risking wrong-tree normalization.
+  - **History:** introduced reset-only history v5 receipts so exact duplicate
+    items are non-counting and one oversized valid event degrades audit without
+    discarding the later run or terminal truth; receipt/order and summary
+    projections are authenticated and indexed classification is append-only.
+  - **Inventory:** replaced full-location materialization for frozen resume and
+    stale integrity selection with location-scoped, snapshot-bounded row reads.
+  - **Tests:** added deep-root end-to-end mutation/verification, path-boundary
+    refusal/diagnostic, receipt state-machine/tamper, bounded selection, and
+    million-item history benchmark coverage.
 - Closed the planned M1 safety-audit findings while preserving full reviewed
   intent and executing only the derived safe selection.
   - **Planner and selection:** pinned blocked parent/type and unsupported-source

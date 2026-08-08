@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -72,7 +73,7 @@ from namisync.workflows.inventory import (
     run_inventory,
 )
 
-from _db_fixtures import FakeClock, plan, setup_recorder
+from _db_fixtures import FakeClock, attestation, plan, setup_recorder
 
 
 VOLUME_ID = VolumeId("inventory-volume", "NTFS")
@@ -214,6 +215,28 @@ def _dependencies(
 
 def _context() -> RunContext:
     return RunContext(lambda _body: None, lambda: None)
+
+
+class _IntegrityRepositorySpy:
+    def __init__(self, rows, *, stale=()) -> None:
+        self.rows = {row.row_id: row for row in rows}
+        self.stale = tuple(stale)
+        self.row_id_calls: list[tuple[int, tuple[str, ...]]] = []
+        self.stale_calls: list[tuple[int, datetime]] = []
+
+    def get_inventory(self, _location_id, _path_keys=None):
+        raise AssertionError("bounded integrity selection must not read all inventory")
+
+    def get_inventory_by_row_ids(self, location_id, row_ids):
+        requested = tuple(row_ids)
+        self.row_id_calls.append((location_id, requested))
+        return tuple(
+            self.rows[row_id] for row_id in requested if row_id in self.rows
+        )
+
+    def get_stale_inventory(self, location_id, stale_before):
+        self.stale_calls.append((location_id, stale_before))
+        return self.stale
 
 
 def test_resolve_binding_stats_extended_path_but_reports_logical_root(
@@ -430,6 +453,28 @@ def test_five_volume_states_are_distinct_and_only_resolved_reconciles(
         assert result.status is SessionState.REFUSED
         assert len(scanner.calls) == 1
         assert row.presence is InventoryPresence.PRESENT
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_root_unavailable_resolution_sanitizes_native_probe_filename(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    resolver = _Resolver(mount)
+    resolver.probe_error = PermissionError(
+        13,
+        "denied",
+        to_extended_length_path(str(root)),
+    )
+
+    resolution = resolve_binding(_binding(mount), resolver)
+
+    assert resolution.state is VolumeResolutionState.ROOT_UNAVAILABLE
+    assert resolution.detail is not None
+    assert "managed" in resolution.detail
+    assert "\\\\?\\" not in resolution.detail
 
 
 def test_integrity_wakeup_rechecks_clone_before_scan_or_hash(tmp_path: Path) -> None:
@@ -775,6 +820,193 @@ def test_integrity_resume_uses_a_new_inventory_refresh_receipt(tmp_path: Path) -
 
     assert resumed.status is SessionState.COMPLETED
     assert len(scanner.calls) == 3
+
+
+def test_saved_integrity_selection_uses_only_frozen_row_ids(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file("a.txt"), _file("b.txt")))
+    details: list[InventoryDetails] = []
+    deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=deps.resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    location_id = details[-1].location_id
+    assert location_id is not None
+    with LedgerRepository(deps.ledger_path) as repository:
+        rows = repository.get_inventory(location_id)
+    by_path = {row.rel_path: row for row in rows}
+    with LedgerRepository(deps.ledger_path) as repository:
+        for row_id in ("01", "abc"):
+            with pytest.raises(RuntimeError, match="missing inventory rows"):
+                inventory_workflow._integrity_rows(
+                    repository,
+                    location_id,
+                    IntegrityMode.VERIFY,
+                    (),
+                    None,
+                    (f"{location_id}:{row_id}",),
+                    frozenset(),
+                )
+    frozen = (
+        f"{location_id}:{by_path['b.txt'].row_id}",
+        f"{location_id}:{by_path['a.txt'].row_id}",
+    )
+    repository = _IntegrityRepositorySpy(rows)
+
+    selected = inventory_workflow._integrity_rows(
+        repository,
+        location_id,
+        IntegrityMode.VERIFY,
+        (),
+        None,
+        frozen,
+        frozenset(),
+    )
+
+    assert tuple(row.rel_path for row in selected) == ("b.txt", "a.txt")
+    assert repository.row_id_calls == [
+        (
+            location_id,
+            (by_path["b.txt"].row_id, by_path["a.txt"].row_id),
+        )
+    ]
+
+    with pytest.raises(RuntimeError, match="missing inventory rows"):
+        inventory_workflow._integrity_rows(
+            repository,
+            location_id,
+            IntegrityMode.VERIFY,
+            (),
+            None,
+            (f"{location_id}:999999",),
+            frozenset(),
+        )
+    with pytest.raises(RuntimeError, match="another inventory location"):
+        inventory_workflow._integrity_rows(
+            repository,
+            location_id,
+            IntegrityMode.VERIFY,
+            (),
+            None,
+            (f"{location_id + 1}:{by_path['a.txt'].row_id}",),
+            frozenset(),
+        )
+
+
+def test_stale_integrity_selection_never_materializes_full_inventory(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(
+        records=(_file("a.txt"), _file("b.txt"), _file("c.txt"))
+    )
+    details: list[InventoryDetails] = []
+    deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=deps.resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    location_id = details[-1].location_id
+    assert location_id is not None
+    with LedgerRepository(deps.ledger_path) as ledger:
+        rows = ledger.get_inventory(location_id)
+    by_path = {row.rel_path: row for row in rows}
+    stale_before = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    repository = _IntegrityRepositorySpy(
+        rows,
+        stale=(by_path["a.txt"], by_path["c.txt"]),
+    )
+    completed_id = f"{location_id}:{by_path['b.txt'].row_id}"
+
+    selected = inventory_workflow._integrity_rows(
+        repository,
+        location_id,
+        IntegrityMode.VERIFY,
+        (),
+        stale_before,
+        (),
+        frozenset((completed_id,)),
+    )
+
+    assert tuple(row.rel_path for row in selected) == (
+        "a.txt",
+        "b.txt",
+        "c.txt",
+    )
+    assert repository.stale_calls == [(location_id, stale_before)]
+    assert repository.row_id_calls == [
+        (location_id, (by_path["b.txt"].row_id,))
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_path"),
+    [
+        (IntegrityMode.BASELINE, "a.txt"),
+        (IntegrityMode.REBASELINE, "b.txt"),
+    ],
+)
+def test_stale_integrity_selection_preserves_mode_filtering(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    expected_path: str,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file("a.txt"), _file("b.txt")))
+    details: list[InventoryDetails] = []
+    deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=deps.resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    location_id = details[-1].location_id
+    assert location_id is not None
+    with LedgerRepository(deps.ledger_path) as ledger:
+        rows = ledger.get_inventory(location_id)
+    by_path = {row.rel_path: row for row in rows}
+    observed = by_path["b.txt"].observed
+    assert observed is not None
+    stale = (
+        by_path["a.txt"],
+        replace(by_path["b.txt"], attestation=attestation(observed)),
+    )
+    repository = _IntegrityRepositorySpy(stale, stale=stale)
+
+    selected = inventory_workflow._integrity_rows(
+        repository,
+        location_id,
+        mode,
+        (),
+        datetime(2027, 1, 1, tzinfo=timezone.utc),
+        (),
+        frozenset(),
+    )
+
+    assert tuple(row.rel_path for row in selected) == (expected_path,)
 
 
 def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:

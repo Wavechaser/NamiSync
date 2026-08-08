@@ -17,9 +17,9 @@ from .connections import (
 
 
 LEDGER_SCHEMA_VERSION = 3
-HISTORY_SCHEMA_VERSION = 4
+HISTORY_SCHEMA_VERSION = 5
 LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128-invalidation-v1"
-HISTORY_CONTRACT_ID = "m1-history-windowed-events-v1"
+HISTORY_CONTRACT_ID = "m1-history-windowed-receipts-v1"
 MAX_HISTORY_PHASE_NAME_BYTES = 256
 MAX_HISTORY_ERROR_TYPE_BYTES = 256
 MAX_HISTORY_ERROR_MESSAGE_BYTES = 4_096
@@ -321,9 +321,15 @@ CREATE TABLE IF NOT EXISTS history_runs (
     last_committed_seq INTEGER NOT NULL DEFAULT 0
         CHECK(last_committed_seq >= 0),
     item_count INTEGER NOT NULL DEFAULT 0 CHECK(item_count >= 0),
+    duplicate_item_count INTEGER NOT NULL DEFAULT 0
+        CHECK(duplicate_item_count >= 0),
+    rejected_event_count INTEGER NOT NULL DEFAULT 0
+        CHECK(rejected_event_count >= 0),
     last_committed_at TEXT,
     context_hash BLOB NOT NULL,
     event_chain_hash BLOB NOT NULL,
+    prefix_projection_hash BLOB NOT NULL
+        CHECK(length(prefix_projection_hash) = 32),
     terminal_payload_hash BLOB,
     succeeded_count INTEGER NOT NULL DEFAULT 0 CHECK(succeeded_count >= 0),
     skipped_count INTEGER NOT NULL DEFAULT 0 CHECK(skipped_count >= 0),
@@ -376,6 +382,7 @@ CREATE TABLE IF NOT EXISTS history_runs (
             AND bytes_total >= 0
             AND bytes_done <= bytes_total
             AND ((error_type IS NULL) = (error_message IS NULL))
+            AND (rejected_event_count = 0 OR audit_status = 'degraded')
         )
     )
 ) STRICT;
@@ -383,14 +390,59 @@ CREATE TABLE IF NOT EXISTS history_runs (
 CREATE INDEX IF NOT EXISTS history_runs_started_idx
 ON history_runs(COALESCE(started_at, created_at) DESC, id DESC);
 
+CREATE TRIGGER IF NOT EXISTS history_runs_finalized_update
+BEFORE UPDATE ON history_runs
+WHEN OLD.terminal_payload_hash IS NOT NULL
+BEGIN
+    SELECT RAISE(ABORT, 'finalized history runs are immutable');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_runs_update_identity_conflict
+BEFORE UPDATE OF id, run_token ON history_runs
+WHEN EXISTS (
+    SELECT 1 FROM history_runs AS existing
+     WHERE existing.id <> OLD.id
+       AND (existing.id = NEW.id OR existing.run_token = NEW.run_token)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'history runs cannot replace another run');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_runs_append_only_delete
+BEFORE DELETE ON history_runs
+BEGIN
+    SELECT RAISE(ABORT, 'history runs cannot be deleted');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_runs_append_only_replace
+BEFORE INSERT ON history_runs
+WHEN EXISTS (
+    SELECT 1 FROM history_runs AS existing
+     WHERE existing.id = NEW.id OR existing.run_token = NEW.run_token
+)
+BEGIN
+    SELECT RAISE(ABORT, 'history runs cannot be replaced');
+END;
+
 CREATE TABLE IF NOT EXISTS history_events (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
     event_seq INTEGER NOT NULL CHECK(event_seq > 0),
     event_at TEXT NOT NULL,
     schema_version INTEGER NOT NULL CHECK(schema_version > 0),
     body_type TEXT NOT NULL CHECK(length(body_type) > 0),
-    envelope_json TEXT NOT NULL,
-    payload_hash BLOB NOT NULL,
+    event_disposition TEXT NOT NULL
+        CHECK(event_disposition IN ('recorded', 'duplicate', 'rejected')),
+    envelope_json TEXT,
+    payload_hash BLOB NOT NULL CHECK(length(payload_hash) = 32),
+    receipt_hash BLOB NOT NULL CHECK(length(receipt_hash) = 32),
+    item_identity_hash BLOB CHECK(
+        item_identity_hash IS NULL OR length(item_identity_hash) = 32
+    ),
+    item_payload_hash BLOB CHECK(
+        item_payload_hash IS NULL OR length(item_payload_hash) = 32
+    ),
+    duplicate_of_seq INTEGER,
+    rejection_reason TEXT,
     item_order INTEGER CHECK(item_order IS NULL OR item_order > 0),
     item_type TEXT,
     phase TEXT,
@@ -401,10 +453,23 @@ CREATE TABLE IF NOT EXISTS history_events (
     reason TEXT,
     PRIMARY KEY(run_id, event_seq),
     UNIQUE(run_id, item_order),
-    UNIQUE(run_id, item_type, item_id),
+    FOREIGN KEY(run_id, duplicate_of_seq)
+        REFERENCES history_events(run_id, event_seq),
+    CHECK(
+        envelope_json IS NULL
+        OR CASE WHEN json_valid(envelope_json)
+                THEN json_type(envelope_json, '$') = 'object'
+                ELSE 0 END
+    ),
     CHECK(
         (
-            item_order IS NULL
+            event_disposition = 'recorded'
+            AND envelope_json IS NOT NULL
+            AND duplicate_of_seq IS NULL
+            AND rejection_reason IS NULL
+            AND item_identity_hash IS NULL
+            AND item_payload_hash IS NULL
+            AND item_order IS NULL
             AND item_type IS NULL
             AND phase IS NULL
             AND item_id IS NULL
@@ -415,7 +480,13 @@ CREATE TABLE IF NOT EXISTS history_events (
         )
         OR
         (
-            item_order IS NOT NULL
+            event_disposition = 'recorded'
+            AND envelope_json IS NOT NULL
+            AND duplicate_of_seq IS NULL
+            AND rejection_reason IS NULL
+            AND item_identity_hash IS NOT NULL
+            AND item_payload_hash IS NOT NULL
+            AND item_order IS NOT NULL
             AND item_type IS NOT NULL AND length(item_type) > 0
             AND phase IS NOT NULL AND length(phase) > 0
             AND item_id IS NOT NULL AND length(item_id) > 0
@@ -423,8 +494,234 @@ CREATE TABLE IF NOT EXISTS history_events (
             AND path IS NOT NULL
             AND result IS NOT NULL AND length(result) > 0
         )
+        OR
+        (
+            event_disposition = 'duplicate'
+            AND envelope_json IS NOT NULL
+            AND item_identity_hash IS NOT NULL
+            AND item_payload_hash IS NOT NULL
+            AND duplicate_of_seq IS NOT NULL
+            AND duplicate_of_seq > 0
+            AND duplicate_of_seq < event_seq
+            AND rejection_reason IS NULL
+            AND item_order IS NULL
+            AND item_type IS NOT NULL AND length(item_type) > 0
+            AND phase IS NOT NULL AND length(phase) > 0
+            AND item_id IS NOT NULL AND length(item_id) > 0
+            AND kind IS NOT NULL AND length(kind) > 0
+            AND path IS NOT NULL
+            AND result IS NOT NULL AND length(result) > 0
+        )
+        OR
+        (
+            event_disposition = 'rejected'
+            AND envelope_json IS NULL
+            AND (
+                (
+                    body_type IN ('ItemOutcome', 'IntegrityOutcome')
+                    AND item_identity_hash IS NOT NULL
+                    AND item_payload_hash IS NOT NULL
+                    AND (
+                        duplicate_of_seq IS NULL
+                        OR (
+                            duplicate_of_seq > 0
+                            AND duplicate_of_seq < event_seq
+                        )
+                    )
+                )
+                OR
+                (
+                    body_type NOT IN ('ItemOutcome', 'IntegrityOutcome')
+                    AND item_identity_hash IS NULL
+                    AND item_payload_hash IS NULL
+                    AND duplicate_of_seq IS NULL
+                )
+            )
+            AND rejection_reason = 'event-too-large'
+            AND item_order IS NULL
+            AND item_type IS NULL
+            AND phase IS NULL
+            AND item_id IS NULL
+            AND kind IS NULL
+            AND path IS NULL
+            AND result IS NULL
+            AND reason IS NULL
+        )
     )
-) STRICT;
+) STRICT, WITHOUT ROWID;
+
+CREATE UNIQUE INDEX IF NOT EXISTS history_events_run_canonical_item_uq
+ON history_events(run_id, item_type, item_id)
+WHERE event_disposition = 'recorded' AND item_order IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS history_events_run_identity_hash_idx
+ON history_events(run_id, item_identity_hash)
+WHERE (
+      event_disposition = 'recorded'
+      OR (event_disposition = 'rejected' AND duplicate_of_seq IS NULL)
+  )
+  AND item_identity_hash IS NOT NULL;
+
+CREATE TRIGGER IF NOT EXISTS history_events_append_insert
+BEFORE INSERT ON history_events
+WHEN EXISTS (
+    SELECT 1 FROM history_runs AS run
+     WHERE run.id = NEW.run_id
+       AND (
+           run.terminal_payload_hash IS NOT NULL
+           OR NEW.event_seq <= run.last_committed_seq
+           OR NEW.event_seq <= COALESCE((
+               SELECT tail.event_seq
+                 FROM history_events AS tail
+                WHERE tail.run_id = NEW.run_id
+                ORDER BY tail.event_seq DESC LIMIT 1
+           ), 0)
+           OR (
+               NEW.item_order IS NOT NULL
+               AND (
+                   NEW.item_order <= run.item_count
+                   OR NEW.item_order <= COALESCE((
+                       SELECT tail.item_order
+                         FROM history_events AS tail
+                        WHERE tail.run_id = NEW.run_id
+                          AND tail.item_order IS NOT NULL
+                        ORDER BY tail.item_order DESC LIMIT 1
+                   ), 0)
+               )
+           )
+           OR (
+               (
+                   (
+                       NEW.event_disposition = 'recorded'
+                       AND NEW.item_order IS NOT NULL
+                   )
+                   OR (
+                       NEW.event_disposition = 'rejected'
+                       AND NEW.duplicate_of_seq IS NULL
+                       AND NEW.item_identity_hash IS NOT NULL
+                   )
+               )
+               AND EXISTS (
+                   SELECT 1 FROM history_events AS representative
+                        INDEXED BY history_events_run_identity_hash_idx
+                    WHERE representative.run_id = NEW.run_id
+                      AND (
+                          representative.event_disposition = 'recorded'
+                          OR (
+                              representative.event_disposition = 'rejected'
+                              AND representative.duplicate_of_seq IS NULL
+                          )
+                      )
+                      AND representative.item_identity_hash
+                          = NEW.item_identity_hash
+               )
+           )
+           OR (
+               NEW.event_disposition = 'recorded'
+               AND NEW.item_order IS NOT NULL
+               AND (
+                   EXISTS (
+                       SELECT 1 FROM history_events AS canonical
+                            INDEXED BY history_events_run_canonical_item_uq
+                        WHERE canonical.run_id = NEW.run_id
+                          AND canonical.event_disposition = 'recorded'
+                          AND canonical.item_order IS NOT NULL
+                          AND canonical.item_type = NEW.item_type
+                          AND canonical.item_id = NEW.item_id
+                   )
+               )
+           )
+       )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'history event insert is outside the writable tail');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_events_duplicate_link_insert
+BEFORE INSERT ON history_events
+WHEN (
+        NEW.event_disposition = 'duplicate'
+        OR (
+            NEW.event_disposition = 'rejected'
+            AND NEW.duplicate_of_seq IS NOT NULL
+        )
+    )
+    AND NOT EXISTS (
+    SELECT 1 FROM history_events AS canonical
+     WHERE canonical.run_id = NEW.run_id
+       AND canonical.event_seq = NEW.duplicate_of_seq
+       AND canonical.item_identity_hash = NEW.item_identity_hash
+       AND canonical.item_payload_hash = NEW.item_payload_hash
+       AND (
+           (
+               canonical.event_disposition = 'recorded'
+               AND canonical.item_order IS NOT NULL
+               AND (
+                   NEW.event_disposition = 'rejected'
+                   OR (
+                       canonical.item_type = NEW.item_type
+                       AND canonical.item_id = NEW.item_id
+                   )
+               )
+           )
+           OR (
+               canonical.event_disposition = 'rejected'
+               AND canonical.duplicate_of_seq IS NULL
+           )
+       )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'duplicate receipt link mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_events_duplicate_link_update
+BEFORE UPDATE ON history_events
+WHEN (
+        NEW.event_disposition = 'duplicate'
+        OR (
+            NEW.event_disposition = 'rejected'
+            AND NEW.duplicate_of_seq IS NOT NULL
+        )
+    )
+    AND NOT EXISTS (
+    SELECT 1 FROM history_events AS canonical
+     WHERE canonical.run_id = NEW.run_id
+       AND canonical.event_seq = NEW.duplicate_of_seq
+       AND canonical.item_identity_hash = NEW.item_identity_hash
+       AND canonical.item_payload_hash = NEW.item_payload_hash
+       AND (
+           (
+               canonical.event_disposition = 'recorded'
+               AND canonical.item_order IS NOT NULL
+               AND (
+                   NEW.event_disposition = 'rejected'
+                   OR (
+                       canonical.item_type = NEW.item_type
+                       AND canonical.item_id = NEW.item_id
+                   )
+               )
+           )
+           OR (
+               canonical.event_disposition = 'rejected'
+               AND canonical.duplicate_of_seq IS NULL
+           )
+       )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'duplicate receipt link mismatch');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_events_append_only_update
+BEFORE UPDATE ON history_events
+BEGIN
+    SELECT RAISE(ABORT, 'history events are append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS history_events_append_only_delete
+BEFORE DELETE ON history_events
+BEGIN
+    SELECT RAISE(ABORT, 'history events are append-only');
+END;
 
 CREATE INDEX IF NOT EXISTS history_events_run_item_order_idx
 ON history_events(run_id, item_order)
@@ -537,7 +834,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v3 and history v4. "
+        "NamiSync M1 requires ledger v3 and history v5. "
         "Close every NamiSync process, manually delete or otherwise reset both "
         "database files together, and restart."
     )
@@ -556,7 +853,7 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v3 and history v4 with the final "
+            "NamiSync M1 requires ledger v3 and history v5 with the final "
             "M1 contract. Close every NamiSync process, manually delete or "
             "otherwise reset both database files together, and restart."
         )

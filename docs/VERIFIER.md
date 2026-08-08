@@ -4,7 +4,7 @@ Status: the verifier operation module and M1 Stage 3 location-centric
 inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
-all four headless kinds and windowed-event history v4 commits standalone and
+all four headless kinds and receipt-aware history v5 commits standalone and
 compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
@@ -67,6 +67,11 @@ degrades recording without rewriting a truthful content verdict.
 9. If stats are stable and digest differs, emit `mismatched`; preserve the old
    baseline, conditionally retain a hash-mismatch invalidation, and never
    auto-accept.
+
+Selection roots and display paths remain ordinary absolute drive/UNC spellings.
+The Windows reader resolves the root and checks every reparse component through
+extended-length native paths, and applies the same conversion to volume and
+handle opens. No native prefix is persisted in inventory or integrity evidence.
 
 Negative verification evidence is guarded by the same row/location/path/scope,
 current-stat, baseline, and expected-invalidation facts as a positive write. A

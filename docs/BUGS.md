@@ -240,6 +240,19 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-08). Audit-prefix failure containment. One
+  oversized valid event or exact repeated item could make the observer reject
+  its whole window, permanently discard every later event, and omit terminal
+  history. Cause: all admission/storage exceptions shared one poison flag and
+  item identity had only a table-wide uniqueness failure. Fixed at reset-only
+  history v5 with authenticated recorded/duplicate/rejected receipts,
+  non-counting semantic duplicates, bounded hash-only oversize rejection,
+  explicit degraded-but-accepting pump state, and bounded BUSY/LOCKED replay
+  reads. Receipt metadata/order, immutable item projections, rolling summary
+  state, and terminal truth are hash-bound; oversized items keep bounded
+  identity/semantic hashes so changed reuse remains fail-stop. Strict
+  `WITHOUT ROWID` receipt storage, append/finality guards, and physical-tail
+  checks prevent replacement, reopening, or unauthenticated summary rows.
 - SEVERE - FIXED (2026-08-08). Worker-generation custody. Canceling a session
   after scheduler dequeue but before RUNNING could launch a second worker; the
   losing worker could then settle twice or release the successor's reservation
@@ -523,6 +536,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-08). Integrity candidate materialization. Frozen
+  resume and stale-before integrity selection loaded every row for a location
+  and filtered in Python, making small checks O(location size). Cause: the
+  repository exposed canonical-path batching but no location-scoped row-ID
+  read, and the workflow reused the full-inventory getter. Fixed with ordered
+  canonical row-ID lookup in 400-ID chunks under one read snapshot, direct stale
+  rows plus exact completed-row fetches, and refusal of missing/foreign saved
+  identifiers. Intentional full Verify All remains a full-location operation.
 - SEVERE - FIXED (2026-08-08). Verification freshness invalidation. A verified
   file could change, be rescanned, and retain an apparently current
   `last_verified_at`; stale selection then omitted it and inventory presented a
@@ -565,6 +586,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-08). Native long-path spelling boundary. A managed
+  path over the legacy Windows limit could fail before execution because some
+  service, preflight, scanner, executor, or verifier calls used ordinary
+  spelling, while native-prefixed errors could leak into durable/user detail.
+  Cause: long-path conversion was local and incomplete rather than a shared
+  logical/native contract. Fixed end to end with ordinary domain paths,
+  conversion at every native I/O boundary, logical diagnostics, and refusal of
+  device or ordinary-ambiguous absolute components that could retarget a root.
+  SQLite database-file long paths and network-share coordination remain out of
+  scope.
 - MODERATE - FIXED (2026-07-30). Event JSON type coercion. Schema and sequence
   floats were truncated, scalar fields were stringified, and terminal
   `canceled="false"` became true. Cause: the versioned event decoder used

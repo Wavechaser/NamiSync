@@ -7,6 +7,11 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable
 
+from namisync.core.pathing import (
+    from_extended_length_path,
+    to_extended_length_path,
+)
+
 
 DEFAULT_BUSY_TIMEOUT_MS = 5_000
 
@@ -15,12 +20,17 @@ class DatabaseLocationError(ValueError):
     """A live database path overlaps user-managed data."""
 
 
+def _resolved_logical_path(path: str | Path) -> Path:
+    native = Path(to_extended_length_path(str(path)))
+    return Path(from_extended_length_path(str(native.resolve(strict=False))))
+
+
 def validate_database_path(
     path: str | Path, *, managed_roots: Iterable[str | Path] = ()
 ) -> Path:
-    resolved = Path(path).resolve()
+    resolved = _resolved_logical_path(path)
     for root in managed_roots:
-        managed = Path(root).resolve()
+        managed = _resolved_logical_path(root)
         try:
             common = Path(os.path.commonpath((resolved, managed)))
         except ValueError:
@@ -104,7 +114,9 @@ def connect_ledger_reader(
 def connect_history_writer(
     path: str | Path, *, busy_timeout_ms: int = DEFAULT_BUSY_TIMEOUT_MS
 ) -> sqlite3.Connection:
-    return _connect_writer(path, busy_timeout_ms=busy_timeout_ms)
+    connection = _connect_writer(path, busy_timeout_ms=busy_timeout_ms)
+    connection.execute("PRAGMA recursive_triggers = ON")
+    return connection
 
 
 def connect_history_reader(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pytest
 
 import namisync.db.history as history_module
 import namisync.db.repositories as repositories_module
+from namisync.core.pathing import to_extended_length_path
 from namisync.db.connections import (
     DatabaseLocationError,
     connect_history_reader,
@@ -66,6 +68,7 @@ def test_history_connections_enforce_wal_foreign_keys_and_readonly(
         assert _pragma(writer, "foreign_keys") == 1
         assert _pragma(writer, "journal_mode") == "wal"
         assert _pragma(writer, "busy_timeout") == 2_750
+        assert _pragma(writer, "recursive_triggers") == 1
         assert _pragma(reader, "foreign_keys") == 1
         assert _pragma(reader, "journal_mode") == "wal"
         assert _pragma(reader, "query_only") == 1
@@ -296,6 +299,25 @@ def test_database_path_is_refused_inside_managed_root(tmp_path: Path) -> None:
     assert validate_database_path(outside, managed_roots=(managed,)) == outside.resolve()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_database_guard_resolves_deep_managed_roots_without_prefix_leak(
+    tmp_path: Path,
+) -> None:
+    managed = tmp_path / ("m" * 90) / ("n" * 90) / ("o" * 90)
+    assert len(str(managed)) > 260
+    os.makedirs(to_extended_length_path(str(managed)))
+
+    with pytest.raises(DatabaseLocationError):
+        validate_database_path(
+            managed / "ledger.db", managed_roots=(managed,)
+        )
+
+    outside = tmp_path / "local" / "ledger.db"
+    resolved = validate_database_path(outside, managed_roots=(managed,))
+    assert resolved == outside.resolve()
+    assert not str(resolved).startswith("\\\\?\\")
+
+
 def _seed_schema_version(path: Path, version: int) -> None:
     connection = sqlite3.connect(path)
     try:
@@ -315,14 +337,17 @@ def _seed_schema_version(path: Path, version: int) -> None:
         connection.close()
 
 
-@pytest.mark.parametrize("version", [1, 2, 3])
-def test_history_v1_through_v3_are_refused_without_mutation(
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
+def test_history_v1_through_v4_are_refused_without_mutation(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / f"history-v{version}.db"
     _seed_schema_version(path, version)
 
-    with pytest.raises(SchemaResetRequired, match="reset both database files together"):
+    with pytest.raises(
+        SchemaResetRequired,
+        match="history v5.*reset both database files together",
+    ):
         initialize_history(path)
 
     connection = sqlite3.connect(path)
@@ -431,9 +456,10 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         run_columns = {
             row[1] for row in history_reader.execute("PRAGMA table_info(history_runs)")
         }
-        event_columns = {
-            row[1] for row in history_reader.execute("PRAGMA table_info(history_events)")
-        }
+        event_column_rows = tuple(
+            history_reader.execute("PRAGMA table_xinfo(history_events)")
+        )
+        event_columns = {row[1] for row in event_column_rows}
         phase_columns = {
             row[1] for row in history_reader.execute("PRAGMA table_info(history_phases)")
         }
@@ -445,7 +471,7 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         ledger_reader.close()
 
     assert ledger_version == LEDGER_SCHEMA_VERSION == 3
-    assert history_version == HISTORY_SCHEMA_VERSION == 4
+    assert history_version == HISTORY_SCHEMA_VERSION == 5
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
@@ -454,7 +480,7 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
     assert (
         history_contract
         == HISTORY_CONTRACT_ID
-        == "m1-history-windowed-events-v1"
+        == "m1-history-windowed-receipts-v1"
     )
     assert not ledger.with_name(ledger.name + "-journal").exists()
     assert not history.with_name(history.name + "-journal").exists()
@@ -468,9 +494,12 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         "current_phase",
         "last_committed_seq",
         "item_count",
+        "duplicate_item_count",
+        "rejected_event_count",
         "last_committed_at",
         "context_hash",
         "event_chain_hash",
+        "prefix_projection_hash",
         "terminal_payload_hash",
     } <= run_columns
     assert {
@@ -478,14 +507,24 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         "event_at",
         "schema_version",
         "body_type",
+        "event_disposition",
         "envelope_json",
         "payload_hash",
+        "receipt_hash",
+        "item_identity_hash",
+        "item_payload_hash",
+        "duplicate_of_seq",
+        "rejection_reason",
         "item_order",
         "item_type",
         "phase",
         "item_id",
         "result",
     } <= event_columns
+    generated_event_columns = {
+        row[1] for row in event_column_rows if int(row[6]) == 3
+    }
+    assert generated_event_columns == set()
     assert {
         "phase_order",
         "phase",

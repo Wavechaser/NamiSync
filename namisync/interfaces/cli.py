@@ -960,6 +960,11 @@ def _render_history_run(run, output: TextIO) -> None:
             f"bytes={run.bytes_done}/{run.bytes_total}",
             file=output,
         )
+    print(
+        f"Audit receipts: duplicates={run.duplicate_item_count}; "
+        f"rejected={run.rejected_event_count}",
+        file=output,
+    )
     for phase in run.phases:
         items_total = (
             "?" if phase.items_total is None else str(phase.items_total)

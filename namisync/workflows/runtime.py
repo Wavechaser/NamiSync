@@ -111,6 +111,7 @@ from .models import (
     ExecuteContinuation,
     ExecutionDetails,
     ExecutionRequest,
+    HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
     HistoryItemView,
@@ -1339,6 +1340,8 @@ def _history_summary_view(value: HistoryRunSummary) -> HistoryRunSummaryView:
         current_phase=value.current_phase,
         last_committed_seq=value.last_committed_seq,
         item_count=value.item_count,
+        duplicate_item_count=value.duplicate_item_count,
+        rejected_event_count=value.rejected_event_count,
         last_committed_at=value.last_committed_at,
         filesystem_status=(
             None
@@ -1392,7 +1395,24 @@ def _history_event_page_view(value: HistoryEventPage) -> HistoryEventPageView:
         next_after_seq=value.next_after_seq,
         has_more=value.has_more,
         events=tuple(
-            session_event_view(snapshot.envelope) for snapshot in value.events
+            HistoryEventView(
+                session_id=value.session_id,
+                sequence=snapshot.event_seq,
+                at=snapshot.event_at.isoformat(),
+                schema_version=snapshot.schema_version,
+                body_type=snapshot.body_type,
+                disposition=snapshot.disposition.value,
+                body=(
+                    None
+                    if snapshot.envelope is None
+                    else session_event_view(snapshot.envelope).body
+                ),
+                payload_hash=snapshot.payload_hash.hex(),
+                receipt_hash=snapshot.receipt_hash.hex(),
+                duplicate_of_seq=snapshot.duplicate_of_seq,
+                rejection_reason=snapshot.rejection_reason,
+            )
+            for snapshot in value.events
         ),
     )
 

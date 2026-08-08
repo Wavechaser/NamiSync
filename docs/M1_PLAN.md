@@ -2,7 +2,7 @@
 
 Supersession note (2026-08-08): ledger-v2, history-v3, and `HistoryRunView`
 references below record earlier milestone design. The implemented reset-only
-ledger v3 verification-invalidation boundary and history v4 window journal in
+ledger v3 verification-invalidation boundary and history v5 receipt journal in
 `DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
 unbounded history getter remains.
 

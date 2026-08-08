@@ -48,7 +48,13 @@ from namisync.core.integrity import (
     VerifierContext,
 )
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
-from namisync.core.pathing import normalize_relative_path, validate_relative_path
+from namisync.core.pathing import (
+    from_extended_length_path,
+    logical_error_text,
+    normalize_relative_path,
+    to_extended_length_path,
+    validate_relative_path,
+)
 from namisync.core.session import Canceled, PauseRequested
 
 
@@ -1081,7 +1087,7 @@ def _same_open_subject(before: FileStat, after: FileStat) -> bool:
 
 
 def _error_detail(exc: BaseException) -> str:
-    detail = str(exc)
+    detail = logical_error_text(exc)
     return f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
 
 
@@ -1101,7 +1107,10 @@ class WindowsUnbufferedReader:
             )
 
         normalized = validate_relative_path(relative_path)
-        root_path = root.resolve(strict=True)
+        native_root = Path(to_extended_length_path(str(root)))
+        root_path = Path(
+            from_extended_length_path(str(native_root.resolve(strict=True)))
+        )
         candidate = root_path.joinpath(*PureWindowsPath(normalized).parts)
         _reject_reparse_components(root_path, normalized)
 
@@ -1121,7 +1130,7 @@ def _reject_reparse_components(root: Path, normalized_path: str) -> None:
     current = root
     for component in PureWindowsPath(normalized_path).parts:
         current = current / component
-        stat_result = os.lstat(current)
+        stat_result = os.lstat(to_extended_length_path(str(current)))
         attributes = getattr(stat_result, "st_file_attributes", 0)
         if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
             raise UnsupportedVerification(
@@ -1406,9 +1415,4 @@ def _filetime_to_unix_ns(value: _FileTime) -> int:
 
 
 def _extended_path(path: Path) -> str:
-    raw = str(path)
-    if raw.startswith("\\\\?\\"):
-        return raw
-    if raw.startswith("\\\\"):
-        return "\\\\?\\UNC\\" + raw[2:]
-    return "\\\\?\\" + raw
+    return to_extended_length_path(str(path))

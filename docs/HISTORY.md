@@ -1,17 +1,19 @@
 # History Module
 
-Status: history schema v4 records reliable session events in bounded,
-incrementally durable windows and exposes bounded summary, item-page, and
-event-page reads. Retention, export, durable task custody, and execution resume
-remain later work.
+Status: history schema v5 records receipt-aware reliable session events in
+bounded, incrementally durable windows and exposes bounded summary, item-page,
+and event-page reads. Retention, export, durable task custody, and execution
+resume remain later work.
 
 ## Purpose And Boundary
 
 History is an independent audit of what NamiSync attempted and reported. It is
 not the filesystem ledger and never participates in a filesystem or ledger
-transaction. An unavailable, oversized, conflicting, or unwritable history
-stream degrades the result's `audit` axis; it must not change filesystem,
-integrity, or ledger-recording truth.
+transaction. An unavailable, conflicting, or unwritable history stream
+degrades the result's `audit` axis; it must not change filesystem, integrity,
+or ledger-recording truth. One otherwise valid oversized event is instead
+retained as a bounded hash-only rejection receipt: audit degrades, but later
+reliable events and terminal truth remain recordable.
 
 The dispatcher attaches one distinguished reliable observer at admission.
 Lossy `Progress` events are intentionally absent from durable history. Reliable
@@ -19,33 +21,63 @@ sequence numbers can therefore contain gaps without implying lost audit data.
 The live `Terminal` is also absent: terminal truth is the finalized
 `history_runs` row, written before that live terminal is released.
 
-## Schema V4 And Reset Boundary
+## Schema V5 And Reset Boundary
 
 The current exact marker is
-`contract_id=m1-history-windowed-events-v1` with
-`HISTORY_SCHEMA_VERSION = 4`. NamiSync refuses history v1-v3 and a v4 database
+`contract_id=m1-history-windowed-receipts-v1` with
+`HISTORY_SCHEMA_VERSION = 5`. NamiSync refuses history v1-v4 and a v5 database
 with a missing or mismatched marker through a read-only connection. Refusal
 must not alter the database or its WAL, SHM, or journal sidecars. This remains
 a pre-release reset-only boundary: close every NamiSync process and reset the
 ledger and history databases together. Startup never deletes either file and
-there is no v3-to-v4 migration because v3 did not retain the reliable state and
-phase events needed to reconstruct the journal.
+there is no v4-to-v5 migration because v4 has no receipt dispositions,
+semantic duplicate links, or hash-only rejection rows from which to
+reconstruct the v5 chain.
 
 `history_runs` is created provisionally by the first committed window. It holds
 immutable context, lifecycle and phase, the committed sequence and item
 watermarks, rolling outcome counts, a context hash, the rolling event-chain
-hash, and nullable terminal axes. `terminal_payload_hash IS NOT NULL` is the
-authoritative finalized marker. Terminal-only columns become populated as one
-checked group, so a committed prefix cannot impersonate a finalized run.
+hash, an authenticated prefix-projection hash, and nullable terminal axes.
+The prefix hash binds lifecycle timestamps/state/phase, both watermarks, and
+all item/outcome/duplicate/rejection counts to the context and receipt chain.
+`terminal_payload_hash IS NOT NULL` is the authoritative finalized marker.
+Terminal-only columns become populated as one checked group, so a committed
+prefix cannot impersonate a finalized run. A finalized run is immutable, and
+committed run rows cannot be deleted or replaced.
 `started_at` records an actual start only: a finalized queued cancellation with
 `disposition=unrun` keeps it null and validates its end against `created_at`.
 
-`history_events` is the append-only reliable-event journal. Its primary key is
-`(run_id, event_seq)`. Each row holds the canonical envelope JSON, timestamp,
-schema and body type, payload hash, and optional typed `ResultItem` projection.
-Result items receive a dense, immutable, one-based `item_order` and retain the
-unique `(run_id, item_type, item_id)` contract. Separate indexes serve event
-catch-up, item paging, and typed aggregates used by summary classification.
+`history_events` is the append-only reliable-event receipt journal. Its primary
+key is `(run_id, event_seq)`. Every row retains timestamp, schema/body type,
+the original payload hash, a disposition-bound receipt hash, and exactly one of
+three checked shapes:
+
+- `recorded` retains the canonical envelope and, for a result item, its typed
+  projection plus identity and semantic item hashes;
+- `duplicate` retains the repeated full envelope and links to an earlier
+  recorded or rejected identity receipt with the same identity and semantic
+  hash, but receives no item order and changes no outcome count;
+- `rejected` retains bounded metadata, payload hash, and reason but no
+  oversized envelope body; an oversized result item also retains only its
+  fixed-size identity and semantic hashes so changed reuse is still fatal.
+  Later exact oversized copies remain individually counted rejections and link
+  to the first recorded/rejected identity representative.
+
+Canonical result items receive a dense, immutable, one-based `item_order`; a
+partial unique index preserves one canonical `(run_id, item_type, item_id)`.
+The receipt hash binds sequence, timestamp, schema/body type, disposition,
+payload and item hashes, duplicate link/rejection reason, and canonical item
+order. Typed summary columns are writer-derived immutable projections of the
+retained canonical JSON and are rechecked when an envelope is decoded. The
+strict receipt table uses the composite primary key without
+a hidden SQLite `rowid`; guarded recursive-trigger writers and schema triggers
+make event rows append-only, so indexed classification cannot diverge from the
+authenticated envelope. Run rows separately count
+duplicate and rejected receipts. Separate indexes serve event catch-up, item
+paging, identity-conflict checks, and typed summary aggregates.
+A partial unique index admits exactly one recorded or unlinked-rejected
+representative per item identity; one bulk lookup per window therefore remains
+bounded even if that identity has many linked rejected receipts.
 
 `history_phases` remains a small terminal summary, not an event-detail store.
 Its explicit phase-count ceiling protects summary reads from hostile or broken
@@ -67,27 +99,32 @@ these defaults:
 - `max_age_seconds = 1.0`
 
 An observer serializes and hashes a reliable envelope before retaining it. An
-individual event over the per-event ceiling is rejected and audit degrades;
-the domain operation continues. Before accepting an event that would cross the
-window byte or count bound, the existing window is committed. Reaching either
-bound commits immediately. `StateChanged(PAUSED)` forces a commit after that
-event is admitted. The audit pump commits by the original one-second deadline
-from the first event even under continuous traffic, and performs a final clean
-flush at shutdown. Finalization commits its tail and terminal row together.
+individual supported event over the per-event ceiling becomes a bounded
+hash-only `event-too-large` receipt, commits immediately, and returns
+`audit=DEGRADED`; later events still enter the same run. Before accepting an
+event that would cross the window byte or count bound, the existing window is
+committed. Reaching either bound commits immediately. `StateChanged(PAUSED)`
+forces a commit after that event is admitted. The audit pump commits by the
+original one-second deadline from the first event even under continuous
+traffic, and performs a final clean flush at shutdown. Finalization commits its
+tail and terminal row together.
 
 Pending objects and their serialized-byte count are cleared only after the
 transaction commits. A failed transaction leaves the complete pending window
-and the previous durable watermark unchanged, then permanently degrades that
-observer. Earlier windows stay readable. A process crash can lose the final
-uncommitted window but cannot expose part of a window.
+and the previous durable watermark unchanged, then breaks that observer's
+prefix. Earlier windows stay readable. A contained rejection does not enter
+that fail-stop state. A process crash can lose the final uncommitted window but
+cannot expose part of a window.
 
-The generic dispatcher contract is `on_event(envelope)`, idempotent `flush()`,
-`finalize(result)`, and exactly-once `close()`. The dispatcher owns timing and
-backpressure; the database observer owns window contents and atomicity. A
-flush/write failure stops further audit admission and finalization so no tail
-after a broken prefix is recorded. Successful durable finalization is settled
-before cleanup, so a later close error cannot rewrite persisted or live
-terminal truth.
+The generic dispatcher contract is
+`on_event(envelope) -> RecordingStatus`, idempotent `flush()`,
+`finalize(result) -> RecordingStatus`, and exactly-once `close()`. The
+dispatcher owns timing and backpressure; the database observer owns window
+contents and atomicity. `DEGRADED` is a contained status and does not stop the
+pump. An observer exception or flush/write failure breaks the prefix and stops
+further admission/finalization so no unauthenticated tail is recorded.
+Successful durable finalization is settled before cleanup, so a later close
+error cannot rewrite persisted or live terminal truth.
 
 ## Admission, Idempotency, And Hashes
 
@@ -100,28 +137,43 @@ verified from that bounded map; an older sequence is resolved with an indexed
 - the same sequence with another hash is an integrity error;
 - an unseen lower sequence is an out-of-order integrity error.
 
+For a new sequence carrying a `ResultItem`, identity and content are separate
+contracts. The canonical hash covers the complete typed item payload while
+excluding envelope sequence, time, and session metadata. Re-emitting the same
+`(item_type, item_id)` with that same semantic hash produces a non-counting
+`duplicate` receipt. Reusing the identity with any changed item field is
+producer corruption and breaks the prefix. These rules apply both within one
+pending window and against an earlier durable window, including when the first
+occurrence was retained only as an oversized rejection receipt.
+
 Each window transaction creates or validates the provisional context, verifies
 any concurrent replay, appends new receipts and projections, advances dense
-item order and rolling counts, and atomically publishes the new event chain and
-watermark. Exact concurrent replay is harmless. A changed context, event, or
-terminal payload under the same run token raises a token conflict.
+canonical item order and rolling counts, and atomically publishes the new
+receipt chain and watermark. The chain advances over each disposition-bound
+receipt hash, including duplicates and rejected events. Exact concurrent replay
+is harmless. A changed context, event, or terminal payload under the same run
+token raises a token conflict.
 `last_committed_at` is sampled only after the serialized writer owns its
 transaction and is clamped to the prior durable value if wall time moves
 backward. Every commit is also clamped to the latest envelope timestamp newly
 made durable, as well as admission and any observed start, so a higher
 watermark never carries an older or impossible commit timestamp.
 
-Finalization hashes immutable context, the committed event-chain hash, and the
-terminal result without `result.items`. Item detail is already authenticated by
-the event chain; hashing the session-wide terminal tuple again would require
-retaining the whole run and defeat the window bound. Identical repeated
-finalization is a no-op. A changed repeat is rejected. Summary reads and
-identical repeated finalization reconstruct the bounded terminal result from
-the stored terminal columns and ordered phase rows, then recompute this hash.
-Before that check, the fixed set of loaded immutable run-context columns is
-rehash-checked against `context_hash`, for incomplete and finalized summaries
-alike. A mismatch is an integrity error; stored hash blobs cannot make modified
-context or terminal columns authoritative.
+Every window recomputes the prefix-projection hash from immutable context, the
+committed event-chain hash, lifecycle projections, watermarks, timestamps, and
+all rolling counts. Finalization binds that authenticated prefix, `ended_at`,
+and the terminal result without `result.items`. Item detail is already
+authenticated by the receipt chain; hashing the session-wide terminal tuple
+again would require retaining the whole run and defeat the window bound. A run
+with any rejected receipt finalizes with `audit=DEGRADED`. Identical repeated
+finalization is a no-op. A changed repeat is rejected. Incomplete and finalized
+summary reads validate the context and prefix hashes; finalized reads and
+repeated finalization additionally reconstruct bounded terminal truth from the
+stored axes and ordered phase rows and validate the terminal hash.
+Summary, item-page, event-page, observer-reopen, and writer-admission reads also
+compare the indexed physical event/item tails with the official watermarks in
+the same snapshot. A tail row outside the committed projection is therefore
+rejected rather than influencing classification or later admission.
 
 ## Incomplete Runs
 
@@ -148,7 +200,9 @@ lease. Durable custody and automatic interruption classification belong to M2.
 - `get_item_page(run_token, after_order, through_order, limit)` keyset-pages
   typed items by dense item order.
 - `get_event_page(run_token, after_seq, through_seq, limit)` keyset-pages
-  canonical reliable envelopes by sequence.
+  receipt-aware reliable events by sequence. Recorded and duplicate receipts
+  expose their validated envelope; rejected receipts expose bounded
+  metadata/hash/reason with `envelope=None`.
 
 Read limits are explicit and bounded at 256; invalid limits are rejected rather
 than truncated. When a page omits `through_order` or `through_seq`, the
@@ -158,7 +212,9 @@ watermark for later pages, so one traversal sees a stable committed prefix even
 while a writer commits newer windows. A caller-supplied event watermark is an
 inclusive sequence bound and may fall on an omitted lossy `Progress` sequence.
 Event reads fetch one indexed lookahead row to determine `has_more`, but return
-and decode no more than the requested limit.
+and decode no more than the requested limit. The service projects these rows as
+`HistoryEventView`; it does not synthesize a live `SessionEventView` for a
+hash-only rejection receipt.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including
@@ -185,8 +241,10 @@ prints the summary and streams item pages without assembling a complete run.
 A subscriber that receives `Gap` keeps the sequence of its last successfully
 applied non-`Gap` envelope, not the sequence carried by the synthetic `Gap`
 itself, requests durable event pages through one captured committed watermark,
-and applies the available reliable envelopes in order while deduplicating by
-sequence. Missing
+and applies the available recorded/duplicate envelopes in order while
+deduplicating by sequence. A rejected receipt advances authenticated history
+but has no body to replay; the consumer reports the receipt and uses the
+degraded terminal/summary truth rather than inventing an event. Missing
 lossy-progress sequence numbers are expected and are not reported as history
 loss. A live cursor ahead of the committed window produces the empty fresh page
 described above; the next repair attempt starts a new traversal. The subscriber
@@ -199,12 +257,25 @@ became durable, history correctly makes no claim that it can recover that tail.
 
 ## Failure Semantics
 
-Observer construction, canonical serialization, oversized events, ordering or
-token conflicts, SQLite contention exhaustion, window writes, terminal writes,
-and cleanup failures are audit failures only. They remain visible through
-system health and the terminal audit axis when a terminal can still be
-settled. They never roll back or reinterpret filesystem changes or ledger
-evidence.
+Observer construction, canonical serialization failure, wrong-session or
+illegal event bodies, ordering/token/item conflicts, SQLite contention
+exhaustion, window writes, and terminal writes are fatal to that audit prefix.
+They remain audit failures only: they never roll back or reinterpret filesystem
+changes or ledger evidence. Replay reads retry only
+SQLite `BUSY`/`LOCKED` within the existing bounded writer budget; exhaustion
+and every non-retryable storage error remain fail-stop.
+
+Observer cleanup occurs after durable finalization. A cleanup-only failure
+therefore cannot rewrite persisted or live terminal truth. The pump retains an
+internal degraded cleanup state, but that post-finalization state is not yet a
+public session-health axis; any future persistent dispatcher/store delivery
+must define and test that projection before it ships.
+
+A supported, canonically serializable event exceeding `max_event_bytes` is the
+single contained per-event failure. Its bounded durable receipt degrades audit,
+later events and finalization continue, and reopening/replay derives the same
+degraded result from durable rejection count. Exact replay of its sequence and
+payload hash is idempotent; a changed hash is fatal.
 
 Finalization remains a two-party ownership decision. If the caller reaches its
 cutoff before the pump owns finalization, both live and any late retained
@@ -255,6 +326,16 @@ were 3.927 ms p50, 7.486 ms p95, and 8.861 ms maximum, while event pages were
 3.614 ms p50, 6.163 ms p95, and 6.752 ms maximum. All locked gates passed; no
 window-policy default changed.
 
+The final 2026-08-08 history-v5 receipt rerun used the same million-item
+fixture and 256-event/1-MiB policy after receipt/projection hardening. Recording
+took 136.700 seconds over 3,919 transactions; commit latency was 20.899 ms p50,
+44.491 ms p95, and 121.026 ms maximum, with retained state peaking at 256
+events/79,360 bytes. Fresh and immediate-repeat 50-run summaries took
+1.670/1.605 seconds. Warm item pages were 12.386 ms p50, 15.156 ms p95, and
+16.256 ms maximum; event pages were 12.375 ms p50, 14.087 ms p95, and 14.818 ms
+maximum. Audit remained OK for the ordinary fixture and every locked gate
+passed; no window-policy default changed.
+
 Increasing a threshold trades crash exposure, memory, and write latency for
 fewer transactions. Decreasing one does the reverse. The one-second maximum
 age is a durability bound, not a debounce interval; continuous events must not
@@ -263,12 +344,14 @@ postpone it.
 ## Regression Contract
 
 Automated coverage pins count, byte, age, pause, close, and finalization
-flushes; oversized-event isolation; atomic visibility and rollback; committed
-prefix recovery; incomplete-versus-finalized visibility; duplicate/order/token
-conflicts; dense item order across pause/resume; bounded page limits and stable
-watermarks; fixed summary query count without event decoding; WAL reader
-visibility; streamed CLI output; subscriber repair; finalization parity; and
-the relevant query plans.
+flushes; durable oversized-event receipts and continued finalization; same- and
+cross-window duplicate/conflict semantics; atomic visibility and rollback;
+committed-prefix recovery; incomplete-versus-finalized visibility;
+order/token conflicts; dense canonical item order across pause/resume; bounded
+page limits and stable watermarks; receipt/link/hash/counter tamper detection;
+fixed summary query count without event decoding; WAL reader visibility;
+streamed CLI output; subscriber repair; finalization parity; and the relevant
+query plans.
 
 The structural sequence-admission test must continue to prove that adding an
 event cannot iterate all prior hashes. Wall-clock timing is not an acceptable

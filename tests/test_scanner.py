@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.modules.scanner as scanner_module
 from namisync.core.models import (
     CapabilityProfile,
     IgnoreSet,
@@ -22,7 +23,7 @@ from namisync.core.models import (
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import to_extended_length_path
+from namisync.core.pathing import PathValidationError, to_extended_length_path
 from namisync.core.session import Canceled, RunContext
 from namisync.modules.scanner import (
     FILE_ATTRIBUTE_OFFLINE,
@@ -390,6 +391,71 @@ def test_native_extended_path_trailing_dot_is_typed_not_fatal(tmp_path: Path) ->
         if item.code is ScanWarningCode.PATH_UNREPRESENTABLE
     )
     assert "trailingdot." in warning.detail
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires the Windows extended path namespace")
+def test_ambiguous_extended_root_is_refused_before_scanning_sibling(
+    tmp_path: Path,
+) -> None:
+    ordinary = tmp_path / "root"
+    ordinary.mkdir()
+    (ordinary / "ordinary.txt").write_bytes(b"ordinary")
+    ambiguous = to_extended_length_path(str(tmp_path)) + r"\root."
+    os.mkdir(ambiguous)
+    try:
+        assert os.path.isdir(ambiguous)
+        with pytest.raises(PathValidationError):
+            WalkingScanner().scan(
+                Root(ambiguous, "source"), IgnoreSet(), _ctx()
+            )
+        assert (ordinary / "ordinary.txt").read_bytes() == b"ordinary"
+    finally:
+        os.rmdir(ambiguous)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows native errors")
+def test_deep_selected_path_failure_warning_uses_logical_spelling(
+    tmp_path: Path,
+) -> None:
+    root_path = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90)
+    assert len(str(root_path)) > 260
+    os.makedirs(to_extended_length_path(str(root_path)))
+
+    result = WalkingScanner().scan(
+        Root(str(root_path), "source"),
+        IgnoreSet(),
+        _ctx(),
+        ScanScope.selected(("missing.bin",)),
+    )
+
+    warning = next(
+        item
+        for item in result.warnings
+        if item.code is ScanWarningCode.DISAPPEARED
+    )
+    assert "missing.bin" in warning.detail
+    assert "\\\\?\\" not in warning.detail
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+def test_native_root_resolution_error_is_sanitized_for_direct_callers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logical = r"C:\deep\root"
+    native = to_extended_length_path(logical)
+    monkeypatch.setattr(scanner_module.os.path, "isdir", lambda _path: True)
+
+    def denied_resolve(self, *, strict: bool):
+        assert str(self) == native
+        assert strict
+        raise PermissionError(13, "denied", native)
+
+    monkeypatch.setattr(scanner_module.Path, "resolve", denied_resolve)
+    with pytest.raises(OSError) as captured:
+        scanner_module.NativeScannerBackend().resolve_root(logical)
+
+    assert "deep" in str(captured.value)
+    assert "\\\\?\\" not in str(captured.value)
 
 
 @pytest.mark.parametrize(

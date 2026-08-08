@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Callable, Mapping, Protocol
 
 from namisync.core.events import Envelope
+from namisync.core.evidence import RecordingStatus
 from namisync.core.session import (
     Disposition,
     OperationResult,
@@ -71,13 +72,13 @@ Registry = Mapping[str, WorkflowRegistration]
 class AuditObserver(Protocol):
     """Admission-time reliable observer implemented outside dispatcher."""
 
-    def on_event(self, envelope: Envelope) -> None: ...
+    def on_event(self, envelope: Envelope) -> RecordingStatus: ...
 
     def flush(self) -> None:
         """Idempotently publish the currently buffered reliable-event prefix."""
         ...
 
-    def finalize(self, result: OperationResult) -> None: ...
+    def finalize(self, result: OperationResult) -> RecordingStatus: ...
 
     def close(self) -> None: ...
 
