@@ -60,14 +60,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-08). Rename durability-wait window. MOVE, RECASE,
-  MOVE_UPDATE old-path cleanup, and TRASH perform their recorder flush after a
-  path guard and before the non-replacing rename. An external writer can replace
-  the guarded source during that wait, causing NamiSync to relocate an
-  unreviewed occupant; trash-routed cases remain recoverable, but settlement can
-  describe the wrong version. Cause: these operation-specific barriers retain
-  the ordering removed from UPDATE/DELETE. A future hardening pass should move
-  each wait before its final source/destination guards and gate the interleaving.
+- MODERATE - FIXED (2026-08-08). Rename durability-wait window. MOVE, RECASE,
+  MOVE_UPDATE old-path cleanup, and TRASH performed their recorder flush after
+  a path guard and before the non-replacing rename. An external writer could
+  replace the guarded source during that wait, causing NamiSync to relocate an
+  unreviewed occupant and, for MOVE_UPDATE/TRASH, settlement could falsely report
+  success. Cause: these operation-specific barriers retained the ordering
+  removed from UPDATE/DELETE. Fixed by moving each wait before the final
+  source/destination guards, re-reading MOVE_UPDATE state after the wait, and
+  gating same-size/same-mtime foreign replacements across all four operations.
+  The smaller path-guard-to-rename external-writer boundary remains non-atomic.
 - SEVERE - FIXED (2026-08-08). Published-failure recording truth. COPY,
   UPDATE, or MOVE_UPDATE could publish its new target and then fail metadata
   repair or another completion step while reporting `recording=OK`, leaving a

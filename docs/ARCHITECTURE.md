@@ -1043,8 +1043,11 @@ drift detection rather than an adversarial path lock. Cancellation instead deriv
 the current item's outcome from that state immediately: retained UPDATE backups
 remain visible, published-but-unfinished work is failed with a typed reason and
 degraded recording, and no rollback or false success evidence is attempted.
-UPDATE and DELETE force prior recorder evidence durable before their final
-destructive guard, leaving no writer wait between that guard and mutation.
+UPDATE, DELETE, MOVE, RECASE, MOVE_UPDATE old-path cleanup, and TRASH force
+prior recorder evidence durable before their final destructive
+source/destination guards, leaving no writer wait between those guards and
+mutation. A MOVE_UPDATE retry that observes its old version already in owned
+trash has no remaining destructive mutation and skips the redundant barrier.
 Ordinary failure probes durable publish state before temp cleanup: if COPY,
 UPDATE, or MOVE_UPDATE committed and then raised, the operation reports the
 surviving target/backup/old-path state with `recording=DEGRADED` and never
@@ -1122,9 +1125,10 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
 - Source changed mid-copy ⇒ op `FAILED`, **no** attestation recorded (PoC gap).
 - A first blocked/failed operation never aborts later independent operations
   (the "walk away for hours" guarantee — the PoC's original SEVERE bug).
-- UPDATE and DELETE recorder contention happens before the final destructive
-  guard; a test replacement introduced during the flush fails that guard and is
-  not overwritten or deleted.
+- Recorder contention happens before every final destructive source/destination
+  guard; same-size/same-mtime foreign replacements introduced during the flush
+  are not overwritten, deleted, relocated, or falsely recorded by UPDATE,
+  DELETE, MOVE, RECASE, MOVE_UPDATE cleanup, or TRASH.
 - A publish primitive that commits then raises yields one truthful failed item
   with degraded recording and explicit durable-state detail for COPY, UPDATE,
   and MOVE_UPDATE.

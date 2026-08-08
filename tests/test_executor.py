@@ -5672,6 +5672,7 @@ def test_composite_move_update_publishes_new_then_trashes_old(tmp_path: Path) ->
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
     assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert recorder.flushes == 2
     assert set(xset.published_evidence) == {operation.op_id}
     assert xset.published_evidence[operation.op_id].copy_recorded
 
@@ -5974,6 +5975,7 @@ def test_move_update_retries_old_to_trash_without_republishing(tmp_path: Path) -
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
     assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert recorder.flushes == 3
 
 
 class MoveUpdateTrashSharingAfterCommitFileSystem(NativeFileSystem):
@@ -6020,6 +6022,7 @@ def test_move_update_retry_recognizes_committed_old_to_trash_rename(
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
     assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert recorder.flushes == 2
 
 
 def test_pause_during_move_update_retry_settles_then_resumes_without_collision(
@@ -6277,8 +6280,13 @@ class ReplacingFlushRecorder(FakeRecorder):
         super().flush()
         if self.flushes != 1:
             return
+        reviewed = self.target.stat(follow_symlinks=False)
         foreign = self.target.with_name(f".{self.target.name}.foreign")
         foreign.write_bytes(self.replacement)
+        os.utime(
+            foreign,
+            ns=(reviewed.st_atime_ns, reviewed.st_mtime_ns),
+        )
         os.replace(foreign, self.target)
 
 
@@ -6346,6 +6354,99 @@ def test_delete_final_guard_runs_after_recorder_barrier(tmp_path: Path) -> None:
     assert item.reason == "target-drift"
     assert live.read_bytes() == b"foreign-version"
     assert recorder.calls == []
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (
+        OperationKind.MOVE,
+        OperationKind.RECASE,
+        OperationKind.MOVE_UPDATE,
+        OperationKind.TRASH,
+    ),
+    ids=("move", "recase", "move-update", "trash"),
+)
+def test_rename_final_guards_run_after_recorder_barrier(
+    tmp_path: Path,
+    kind: OperationKind,
+) -> None:
+    source, target = _roots(tmp_path)
+    old_name = "keep.txt" if kind is OperationKind.RECASE else "old.bin"
+    new_name = "KEEP.txt" if kind is OperationKind.RECASE else "new.bin"
+    source_name = new_name
+    reviewed = target / old_name
+    reviewed.write_bytes(b"reviewed-version")
+    fs = NativeFileSystem()
+    old_stat = fs.stat(target, old_name)
+    assert old_stat is not None
+
+    if kind is OperationKind.TRASH:
+        operation = _operation(
+            1,
+            kind,
+            source_rel_path=None,
+            target_rel_path=old_name,
+            source_expected=None,
+            target_expected=old_stat,
+            intended=None,
+        )
+    else:
+        source_file = source / source_name
+        source_file.write_bytes(
+            b"changed-version!"
+            if kind is OperationKind.MOVE_UPDATE
+            else b"reviewed-version"
+        )
+        if kind is not OperationKind.MOVE_UPDATE:
+            os.utime(
+                source_file,
+                ns=(old_stat.mtime_ns, old_stat.mtime_ns),
+            )
+        source_stat = fs.stat(source, source_name)
+        assert source_stat is not None
+        operation = _operation(
+            1,
+            kind,
+            source_rel_path=source_name,
+            target_rel_path=new_name,
+            source_expected=source_stat,
+            target_expected=(
+                old_stat if kind is OperationKind.RECASE else None
+            ),
+            intended=(
+                old_stat if kind is OperationKind.RECASE else source_stat
+            ),
+            prior_target_rel_path=old_name,
+            prior_target_expected=old_stat,
+            reason=(
+                OperationReason.CASE_MISMATCH
+                if kind is OperationKind.RECASE
+                else OperationReason.IDENTITY_RENAME
+            ),
+        )
+
+    recorder = ReplacingFlushRecorder(reviewed, b"foreign!-version")
+    xset = _xset(_plan(source, target, (operation,)))
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert reviewed.read_bytes() == b"foreign!-version"
+    assert recorder.calls == []
+    assert recorder.flushes == 2
+    if kind is OperationKind.MOVE_UPDATE:
+        assert (target / new_name).read_bytes() == b"changed-version!"
+        assert result.recording is RecordingStatus.DEGRADED
+        assert xset.published_evidence == {}
+    elif kind is OperationKind.RECASE:
+        assert [path.name for path in target.iterdir()] == [old_name]
+        assert result.recording is RecordingStatus.OK
+    else:
+        assert not (target / new_name).exists()
+        assert result.recording is RecordingStatus.OK
+    trash = target / ".synctrash" / str(RUN_ID) / old_name
+    assert not trash.exists()
 
 
 class FailingReadonlyDeleteFileSystem(NativeFileSystem):

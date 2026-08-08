@@ -137,8 +137,8 @@ never hides the other result axes in rendered output.
   intent and executing only the derived safe selection.
   - **Planner and selection:** pinned blocked parent/type and unsupported-source
   cases as visible raw intent whose corresponding removals stay deferred.
-  - **Executor:** moved destructive flush waits before final UPDATE/DELETE
-    guards and made confirmed or unverified post-publish failures
+  - **Executor:** moved destructive flush waits before every final mutation
+    guard and made confirmed or unverified post-publish failures
     recording-degraded.
   - **Inventory and verifier:** introduced ledger v3 sticky verification
     invalidation with explicit four-state inventory projections.

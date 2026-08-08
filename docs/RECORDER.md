@@ -119,9 +119,10 @@ command. Recorder commits statements that were true at a known observation
 time; if the world has since drifted, conditional writes affect zero rows. The
 ledger may lag after a crash, but it must not lead reality.
 
-Before UPDATE and DELETE reach their final destructive guard, recorder flushes
-all prior earned evidence. Other operations retain their operation-specific
-durability boundary. Pause-drain and session terminal force flush. M0 may
+Before any operation reaches its final destructive source/destination guards,
+recorder flushes all prior earned evidence. A resumed MOVE_UPDATE whose old
+path is already in owned trash performs no new mutation and needs no redundant
+pre-mutation flush. Pause-drain and session terminal force flush. M0 may
 implement each command transactionally with a no-op batching abstraction, but
 the real protocol and flush points exist from day one.
 

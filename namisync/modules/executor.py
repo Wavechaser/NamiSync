@@ -2626,6 +2626,7 @@ def _move(
             "move operation lacks source evidence",
         )
     old_rel, old_expected = _prior_target(operation)
+    _flush_before_destructive(recorder, state)
     _guard_present(
         fs,
         source_root,
@@ -2645,7 +2646,6 @@ def _move(
     _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
-    _flush_before_destructive(recorder, state)
     try:
         fs.rename_new(old, new)
     except FileExistsError as error:
@@ -2693,6 +2693,7 @@ def _recase(
             ExecutionReason.UNSAFE_PATH,
             "recase paths must differ only by Windows filename casing",
         )
+    _flush_before_destructive(recorder, state)
     _guard_present(
         fs,
         source_root,
@@ -2711,7 +2712,6 @@ def _recase(
     )
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
-    _flush_before_destructive(recorder, state)
     try:
         fs.rename_new(old, new)
     except FileExistsError as error:
@@ -2762,6 +2762,10 @@ def _finish_move_update_filesystem(
     )
     old_actual = fs.stat(target_root, continuation.old_relative_path)
     trash_actual = fs.stat_path(trash)
+    if old_actual is not None:
+        _flush_before_destructive(recorder, state)
+        old_actual = fs.stat(target_root, continuation.old_relative_path)
+        trash_actual = fs.stat_path(trash)
     if old_actual is None:
         if trash_actual is None or not _matches_expected(
             trash_actual,
@@ -2783,7 +2787,6 @@ def _finish_move_update_filesystem(
                 ExecutionReason.TRASH_COLLISION,
                 f"move-update trash exists: {trash}",
             )
-        _flush_before_destructive(recorder, state)
         try:
             fs.rename_new(old, trash)
         except FileExistsError as error:
@@ -2927,6 +2930,10 @@ def _trash(
         raise OperationFailure(
             ExecutionReason.TARGET_MISSING, "trash operation has no target evidence"
         )
+    destination = fs.trash_destination(
+        target_root, xset.run_id, operation.target_rel_path
+    )
+    _flush_before_destructive(recorder, state)
     _guard_present(
         fs,
         target_root,
@@ -2936,14 +2943,10 @@ def _trash(
         drift=ExecutionReason.TARGET_DRIFT,
     )
     source = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
-    destination = fs.trash_destination(
-        target_root, xset.run_id, operation.target_rel_path
-    )
     if fs.stat_path(destination) is not None:
         raise OperationFailure(
             ExecutionReason.TRASH_COLLISION, f"trash destination exists: {destination}"
         )
-    _flush_before_destructive(recorder, state)
     try:
         fs.rename_new(source, destination)
     except FileExistsError as error:

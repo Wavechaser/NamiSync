@@ -21,10 +21,13 @@ resolution and its coupled dispatcher findings landed as follows:
   removal is deferred, and unrelated removal remains executable. Suppressing
   the raw row would weaken the review contract, so planner production code did
   not change.
-- **H3 — fixed.** UPDATE and DELETE now perform the recorder durability wait
-  before their final live guard. A replacement introduced during that wait is
-  detected and neither overwritten nor deleted. The smaller documented
-  path-stat-to-syscall external-writer boundary remains non-atomic.
+- **H3 — fixed and follow-up-completed.** UPDATE and DELETE perform the recorder
+  durability wait before their final live guard. The same ordering now covers
+  MOVE, RECASE, MOVE_UPDATE old-path cleanup, and TRASH after follow-up review
+  found their rename form of the race. A same-size/same-mtime replacement
+  introduced during that wait is detected rather than overwritten, deleted,
+  relocated, or falsely recorded. The smaller documented path-stat-to-syscall
+  external-writer boundary remains non-atomic.
 - **H4 — fixed and adversarially extended.** Ordinary failure now probes
   durable COPY/UPDATE/MOVE_UPDATE publication before temp cleanup, including a
   publish primitive that commits and then raises. Confirmed, drifted, missing,
@@ -41,8 +44,9 @@ resolution and its coupled dispatcher findings landed as follows:
   cleanup is identity-scoped, and shutdown reports terminal-but-unretired or
   canceled-acquisition owners as unfinished.
 
-Final verification: `1121 passed, 1 skipped`; pytest treats unhandled worker
-thread exceptions as errors. Import-law verification kept all 8 contracts, and
+Final verification after rename-race follow-up: `1125 passed, 1 skipped`;
+pytest treats unhandled worker thread exceptions as errors. Import-law
+verification kept all 8 contracts, and
 `git diff --check` was clean. Medium/LOW findings not coupled to this planned
 delivery remain recorded below rather than being silently swept into scope.
 

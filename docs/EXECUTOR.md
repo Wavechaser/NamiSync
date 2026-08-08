@@ -52,9 +52,9 @@ operation-boundary cleanup.
   `CREATE_NEW` for temps, non-replacing rename when destination absence is a
   precondition, and `RemoveDirectory` for atomic nonempty refusal. Never follow
   a reparse escape.
-- Flush recorder at each operation's configured durability boundary. UPDATE
-  and DELETE flush before their final destructive guard so recorder contention
-  cannot sit between that last guard and the destructive path mutation.
+- Flush recorder before every operation's final destructive guards so recorder
+  contention cannot sit between the last source/destination observation and
+  UPDATE, DELETE, MOVE, RECASE, MOVE_UPDATE cleanup, or TRASH mutation.
 - Record one final typed outcome per selected operation; dependencies of a
   failed operation become explicit canceled/deferred outcomes, while independent
   operations continue. Pause leaves completed status intact and unreached work
@@ -195,9 +195,9 @@ claim.
 
 ### Recase
 
-Validate the reviewed source and old target, require the old and requested paths
-to share one Windows path key while differing in exact spelling, flush pending
-recorder state, and perform the existing same-volume non-replacing rename. On
+Flush pending recorder state, validate the reviewed source and old target, and
+require the old and requested paths to share one Windows path key while
+differing in exact spelling before the same-volume non-replacing rename. On
 ordinary case-insensitive NTFS the destination aliases the source object and the rename
 updates only its directory-entry spelling. On a case-sensitive target a
 distinct occupied destination makes the primitive fail without overwrite. The
@@ -209,8 +209,9 @@ creates no trash entry, and never recases parent directories.
 
 ### Move
 
-Revalidate the reviewed source-tree subject, old target, and new destination;
-refuse occupancy; then perform a same-volume non-replacing atomic rename whose
+Flush pending recorder state, then revalidate the reviewed source-tree subject,
+old target, and new destination; refuse occupancy; and perform a same-volume
+non-replacing atomic rename whose
 primitive itself fails if the destination appeared. After best-effort
 parent-directory flushes, stat the result and require it to remain the reviewed
 old target version before recording correspondence. The recorder repeats that
@@ -222,8 +223,10 @@ mapping claim.
 
 ### Composite move-update
 
-Publish the changed content at the new path first, then trash the old path. One
-plan operation may have internal prepare/publish/trash stages, but only one
+Publish the changed content at the new path first, then flush pending recorder
+state and revalidate both the old and trash paths before trashing the old path.
+An already-completed retry needs no second pre-mutation flush. One plan
+operation may have internal prepare/publish/trash stages, but only one
 final outcome and ledger transition. A crash after any internal stage may leave
 both old and new versions, never neither, and leaves no completed mapping claim.
 
@@ -241,9 +244,10 @@ an all-directory `DirRecord`; executor never creates implicit parent paths.
 ### Trash
 
 Resolve trash under the target on the same physical volume, create guarded run
-parents, refuse reparse/off-volume paths, use a non-replacing rename that fails
-atomically on trash collision, and validate the source object at touch. Never
-degrade to copy-delete. Record only after the rename succeeds.
+parents, refuse reparse/off-volume paths, flush pending recorder state, and then
+validate the source and trash destination at touch. Use a non-replacing rename
+that fails atomically on trash collision. Never degrade to copy-delete. Record
+only after the rename succeeds.
 
 ### Delete and directory cleanup
 
