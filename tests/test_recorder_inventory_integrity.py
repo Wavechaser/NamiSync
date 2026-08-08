@@ -7,10 +7,13 @@ import pytest
 
 from namisync.core.evidence import Provenance
 from namisync.core.integrity import (
+    InventoryVerificationState,
     IntegrityMode,
     IntegrityRecordCommand,
     InventoryState,
     RecordDisposition,
+    VerificationInvalidationCommand,
+    VerificationInvalidationReason,
 )
 from namisync.core.models import (
     FileRecord,
@@ -28,6 +31,7 @@ from namisync.core.recording import (
 )
 from namisync.db.connections import connect_ledger_reader
 from namisync.db.repositories import LedgerRepository
+from namisync.workflows.views import inventory_row_view
 
 from _db_fixtures import NOW, attestation, file_stat, plan, setup_recorder
 
@@ -73,6 +77,18 @@ def _unsupported(path: str) -> UnsupportedRecord:
         path,
         normalize_relative_path(path),
         UnsupportedReason.ACCESS_DENIED,
+    )
+
+
+def _file_with_stat(path: str, stat) -> FileRecord:
+    return FileRecord(
+        path,
+        normalize_relative_path(path),
+        stat.size,
+        stat.mtime_ns,
+        stat.file_identity,
+        stat.nlink,
+        stat.metadata,
     )
 
 
@@ -469,6 +485,259 @@ def test_integrity_write_is_fully_conditional_and_advances_only_true_verificatio
             assert row["last_verified_at"] == "2026-01-02T03:04:05.123456Z"
         finally:
             connection.close()
+    finally:
+        setup.recorder.close()
+
+
+def test_verification_invalidation_is_sticky_until_guarded_positive_evidence(
+    tmp_path: Path,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    original = _file("a.txt", 1)
+    expected = original.stat
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (original,)),
+                "scope-1",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            row = repository.get_inventory(setup.source_location_id)[0]
+        baseline = attestation(
+            expected,
+            digest_byte=4,
+            provenance=Provenance.READBACK_ATTESTED,
+        )
+        setup.recorder.record_integrity(
+            IntegrityRecordCommand(
+                IntegrityMode.BASELINE,
+                "baseline",
+                row.row_id,
+                str(setup.source_location_id),
+                row.rel_path_key,
+                "scope-1",
+                InventoryState.PRESENT,
+                expected,
+                None,
+                baseline,
+                False,
+                False,
+            )
+        )
+        verified = attestation(
+            expected,
+            digest_byte=4,
+            provenance=Provenance.VERIFY_ATTESTED,
+        )
+        setup.recorder.record_integrity(
+            IntegrityRecordCommand(
+                IntegrityMode.VERIFY,
+                "verify-1",
+                row.row_id,
+                str(setup.source_location_id),
+                row.rel_path_key,
+                "scope-1",
+                InventoryState.PRESENT,
+                expected,
+                baseline,
+                verified,
+                True,
+                False,
+            )
+        )
+
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (original,)),
+                "scope-2",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            current = repository.get_inventory(setup.source_location_id)[0]
+            assert repository.get_stale_inventory(
+                setup.source_location_id, NOW
+            ) == ()
+        assert current.verification_state is InventoryVerificationState.VERIFIED
+        assert current.invalidation is None
+
+        mismatch = VerificationInvalidationCommand(
+            item_id="mismatch",
+            row_id=current.row_id,
+            location_id=str(setup.source_location_id),
+            rel_path_key=current.rel_path_key,
+            scope_token="scope-2",
+            expected_state=InventoryState.PRESENT,
+            expected_stat=expected,
+            expected_baseline=current.attestation,
+            expected_invalidation=None,
+            reason=VerificationInvalidationReason.HASH_MISMATCH,
+            invalidated_at=NOW,
+        )
+        assert (
+            setup.recorder.record_verification_invalidation(mismatch)
+            is RecordDisposition.APPLIED
+        )
+        assert (
+            setup.recorder.record_verification_invalidation(mismatch)
+            is RecordDisposition.NOOP
+        )
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (original,)),
+                "scope-3",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            mismatched = repository.get_inventory(setup.source_location_id)[0]
+            stale = repository.get_stale_inventory(setup.source_location_id, NOW)
+        assert mismatched.verification_state is InventoryVerificationState.MISMATCHED
+        assert stale == (mismatched,)
+        view = inventory_row_view(mismatched)
+        assert view.verification_state == "mismatched"
+        assert view.verification_invalidated_at == NOW.isoformat()
+        assert view.verification_invalidated_reason == "hash-mismatch"
+
+        drifted_stat = replace(expected, size=expected.size + 1)
+        drifted = _file_with_stat("a.txt", drifted_stat)
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (drifted,)),
+                "scope-4",
+                NOW,
+            )
+        )
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (original,)),
+                "scope-5",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            still_mismatched = repository.get_inventory(
+                setup.source_location_id
+            )[0]
+        assert (
+            still_mismatched.invalidation.reason
+            is VerificationInvalidationReason.HASH_MISMATCH
+        )
+        assert (
+            still_mismatched.verification_state
+            is InventoryVerificationState.MISMATCHED
+        )
+        downgrade = VerificationInvalidationCommand(
+            item_id="metadata-after-mismatch",
+            row_id=still_mismatched.row_id,
+            location_id=str(setup.source_location_id),
+            rel_path_key=still_mismatched.rel_path_key,
+            scope_token="scope-5",
+            expected_state=InventoryState.PRESENT,
+            expected_stat=expected,
+            expected_baseline=still_mismatched.attestation,
+            expected_invalidation=still_mismatched.invalidation,
+            reason=VerificationInvalidationReason.METADATA_DRIFT,
+            invalidated_at=NOW,
+        )
+        assert (
+            setup.recorder.record_verification_invalidation(downgrade)
+            is RecordDisposition.APPLIED
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            still_mismatched = repository.get_inventory(
+                setup.source_location_id
+            )[0]
+        assert (
+            still_mismatched.invalidation.reason
+            is VerificationInvalidationReason.HASH_MISMATCH
+        )
+
+        setup.recorder.record_integrity(
+            IntegrityRecordCommand(
+                IntegrityMode.VERIFY,
+                "verify-2",
+                still_mismatched.row_id,
+                str(setup.source_location_id),
+                still_mismatched.rel_path_key,
+                "scope-5",
+                InventoryState.PRESENT,
+                expected,
+                still_mismatched.attestation,
+                verified,
+                True,
+                False,
+                still_mismatched.invalidation,
+            )
+        )
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (drifted,)),
+                "scope-6",
+                NOW,
+            )
+        )
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (original,)),
+                "scope-7",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            restored = repository.get_inventory(setup.source_location_id)[0]
+            stale = repository.get_stale_inventory(setup.source_location_id, NOW)
+
+        assert restored.attestation == verified
+        assert restored.last_verified_at == NOW
+        assert restored.invalidation is not None
+        assert (
+            restored.invalidation.reason
+            is VerificationInvalidationReason.METADATA_DRIFT
+        )
+        assert restored.verification_state is InventoryVerificationState.MODIFIED
+        assert stale == (restored,)
+
+        upgrade = VerificationInvalidationCommand(
+            item_id="hash-after-metadata",
+            row_id=restored.row_id,
+            location_id=str(setup.source_location_id),
+            rel_path_key=restored.rel_path_key,
+            scope_token="scope-7",
+            expected_state=InventoryState.PRESENT,
+            expected_stat=expected,
+            expected_baseline=restored.attestation,
+            expected_invalidation=restored.invalidation,
+            reason=VerificationInvalidationReason.HASH_MISMATCH,
+            invalidated_at=NOW,
+        )
+        assert (
+            setup.recorder.record_verification_invalidation(upgrade)
+            is RecordDisposition.APPLIED
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            upgraded = repository.get_inventory(setup.source_location_id)[0]
+        assert upgraded.verification_state is InventoryVerificationState.MISMATCHED
+        assert (
+            upgraded.invalidation.reason
+            is VerificationInvalidationReason.HASH_MISMATCH
+        )
     finally:
         setup.recorder.close()
 

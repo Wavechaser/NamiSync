@@ -1,60 +1,66 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-06
+Date: 2026-08-08
 Branch: `milestone1`
 
 ## Session Outcome
 
-Hardened and flattened the development-only executor/verifier harness introduced
-in `134f235`.
+Implemented the planned M1 safety-audit hardening while preserving the
+"show full intent, execute only the safe selection" contract.
 
-- Moved the package from `tools/rig/` to `tools/`; the entry point is now
-  `python -m tools`, and the focused guide is `docs/TOOLS.md`.
-- Bound destructive corpus operations to a live directory-identity claim with
-  a signed exclusive lease. Nonempty unowned roots, stale or malformed
-  authority, directory replacement/reparse aliases, overlapping roots, and
-  unrecognized lease artifacts are refused. Generation now replaces the owned
-  corpus deterministically.
-- Enforced output isolation before writes. Reports and sidecars stay outside
-  measured/materialized roots, cannot collide with ownership artifacts or each
-  other, and cannot reuse an existing multi-link file.
-- Made sidecar writes atomic and reads schema-strict, including exact fields,
-  duplicate-member refusal, supported algorithms, bound-identity completeness,
-  and fresh whole-corpus validation.
-- Rejects incomplete scans, safety-excluded executor plans, inconsistent
-  terminal/result/evidence state, partial verifier priming, mixed integrity
-  outcomes, and incomplete item or byte coverage before reporting a sample.
-  Synthetic verifier mismatches remain an intentional accepted measurement.
-- Executor diagnostics are on by default only in the tools. `--no-metrics`
-  disables both production-backend diagnostics and the per-copy timing wrapper;
-  `namisync/modules/executor.py` was not changed.
-- Executor reports disclose empty correspondence and therefore represent
-  first-run/no-history plans without MOVE or MOVE_UPDATE. Optional readback is
-  always visible and must exactly verify all published candidates.
+- H1/H2 remain full-plan review behavior: blocked parent/type conflicts,
+  inherited blocked copies, unsupported source rows, and their policy removals
+  stay visible. Focused regressions prove the derived safe selection defers the
+  matching removal/dependencies under both `trash` and `mirror` while unrelated
+  safe removal remains executable. Planner production code did not change.
+- H3 moves UPDATE/DELETE recorder waits before their final destructive guard.
+  An external replacement introduced during the wait is detected and preserved;
+  the smaller path-stat-to-syscall external-writer boundary remains documented.
+- H4 settles post-publish COPY/UPDATE/MOVE_UPDATE failure from durable state
+  before temp cleanup, including commit-then-raise and failed state-probe cases.
+  It reports target/backup/old-path truth, degrades recording, and publishes no
+  success-only evidence.
+- H5 advances the reset-only ledger to v3 with constrained sticky verification
+  invalidation. Scan and verifier drift, including a disappearance after
+  refresh, conditionally invalidate; hash mismatch dominates metadata drift;
+  guarded replacement evidence clears the marker; stale queries, CLI output,
+  and four-state inventory projection consume it.
+- H6/M9/M10 give every dispatcher worker attempt a process-local generation
+  that owns its reservations and lease. One current attempt survives each
+  pause/resume/cancel retirement handoff, stale cleanup cannot touch a
+  successor, Windows lease release stays on the acquiring thread, and shutdown
+  reports canceled acquisitions or terminal-but-not-retired attempts.
+- Updated the active architecture, component, feature, command-line, database,
+  audit-resolution, README changelog, and defect-ledger documentation. The
+  historical hash/M1 plans now point to the active ledger-v3 boundary.
 
 ## Verification
 
-- Complete pytest suite: `1091 passed, 1 skipped in 40.87s`. The skip is the
+- Complete pytest suite: `1121 passed, 1 skipped in 35.78s`. The skip is the
   optional real directory-symlink substitution test on a host without symlink
-  privilege; the same guard also has a deterministic non-skipped test.
-- Focused tools plus production executor/planner/preflight/verifier regression
-  suite: `422 passed, 1 skipped in 10.51s`.
-- Final tools-only suite after bounded marker/lease reads: `96 passed, 1
-  skipped in 1.33s`.
-- Import linter: `8 kept, 0 broken`.
-- Real CLI smoke: generated a three-file corpus, completed two primed verifier
-  passes with three `VERIFIED` results each, executed four successful operations
-  with diagnostics enabled, verified all three readback candidates, and removed
-  both owned workspaces.
+  privilege; deterministic path-guard coverage remains active.
+- Pytest promotes `PytestUnhandledThreadExceptionWarning` to an error, guarding
+  the original duplicate-worker failure surface.
+- Import linter: `8 kept, 0 broken` across 50 files and 185 dependencies.
+- Focused final executor uncertainty regression: `3 passed` (including both
+  pre- and post-commit replace faults).
+- `git diff --check`: clean; only the repository's expected LF-to-CRLF notices
+  were emitted by later diff inspection.
 
-## Immediate Next Context
+## Adversarial Review And Next Context
 
-- No logger integration was added. `docs/M1_SHELL.md` places future logging in
-  the GUI host under `interfaces/web`, with GUI paths and pywebview sequencing;
-  importing it into measurement tools would invert the boundary and perturb
-  timings.
-- Keep `python -m tools` separate from the shipped `nami-sync` CLI. If the rig
-  later needs distribution, add a distinct development entry point only after
-  an explicit packaging and destructive-workspace safety review.
-- A future MOVE/MOVE_UPDATE benchmark needs an explicit retained-correspondence
-  input. Do not synthesize mapping state and present it as production history.
+- Separate planner/executor, integrity/schema, and dispatcher reviews were run.
+  They drove deterministic generation-handoff coverage, stricter schema and
+  negative-recording tests, hash-mismatch dominance, missing-after-refresh
+  invalidation, publish-then-raise probing before cleanup, and conservative
+  publication-unverified settlement.
+- One newly identified lower-severity residual is recorded OPEN in `BUGS.md`:
+  MOVE, RECASE, MOVE_UPDATE old-path cleanup, and TRASH still place their
+  operation-specific recorder wait between a path guard and non-replacing
+  rename. An external writer can therefore cause recoverable relocation or
+  wrong-version settlement. Do not generalize the UPDATE/DELETE guarantee until
+  those four barriers move before their final guards with gated regressions.
+- Ledger v3 is an intentional pre-migrator reset boundary. Ledger v1-v2 and
+  mismatched contract markers are refused without mutation; reset both local
+  databases together. There is no evidence migration in this stage.
+- M1 Stage 6 remains the next product delivery surface after this hardening.

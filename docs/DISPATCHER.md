@@ -75,6 +75,14 @@ resolution, and exactly-one terminal emission. Modules return typed opaque
 results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
+Each process-local runner attempt has a monotonically increasing private
+generation key. A session has at most one current generation; every resource
+reservation and acquired lease is owned by that exact key, and state/result/
+payload callbacks reject stale keys. Generations never enter public records,
+payloads, stores, or databases. This keeps the public lifecycle unchanged while
+preventing a retiring pause/cancel attempt from settling twice or releasing a
+resumed successor's custody.
+
 Pause is accepted only when the registered kind declares a continuation:
 execution in M0 and verify/baseline item-list sessions in M1. Scan and plan
 refuse pause without changing state and remain cancelable. An
@@ -86,6 +94,9 @@ domain transition remains authoritative, but worker settlement and live
 timed-out barrier degrades audit without rolling back `PAUSED` or retaining
 custody. Resume re-enters admission at the back of every required volume queue,
 never preempts a running session, and starts with the workflow's fresh guard.
+`PENDING` may therefore coexist briefly with its prior generation while that
+worker finishes audit publication and retirement; the scheduler waits for the
+current-generation handoff instead of launching an overlapping successor.
 Cancel requests are cooperative but terminal cleanup/release is unconditional.
 
 Execution may deliberately remain `PAUSING` while one durable retry operation
@@ -114,6 +125,13 @@ prevent deadlock. Sessions with disjoint required volumes may run concurrently;
 contenders queue. Planning sessions may release locks when complete; execution
 reacquires and revalidates volumes.
 
+Scheduler selection installs the current generation, its worker registration,
+and all reservations atomically before removing the pending entry or starting
+the thread. `CANCELING` never creates a second worker while an acquisition or
+pause generation is current. Worker retirement identity-checks again under the
+session publication lock, enqueues any surviving PENDING/CANCELING handoff, and
+only then exposes the session for a successor generation.
+
 Cross-process physical-volume exclusion is required before any M0 mutation,
 using a named OS mutex or lock file keyed deterministically by volume serial
 with abandoned-holder recovery proven. This is distinct from M2 durable queue
@@ -131,6 +149,9 @@ for non-Windows tests only and is not a substitute for Windows mutation safety.
 Custody has one owner: dispatcher/session runner. Executor never releases locks.
 Every terminal, pause-drain, admission failure, workflow exception, observer
 failure, and orderly teardown path releases exactly the acquired set.
+Lease release occurs on the same worker thread that acquired it; only that
+generation's lease and still-owned reservations are removed. A stale cleanup is
+idempotent and cannot touch successor ownership.
 
 ## Events And Subscription
 
@@ -275,7 +296,10 @@ Stop admission, request drain/cancel under policy, continue event delivery,
 flush session store/required observers, wait without blocking the presentation
 thread's terminal dispatch, and verify all locks released. A deadline produces
 an explicit incomplete-shutdown result; it never kills unrelated user Office or
-application processes.
+application processes. Terminal state alone is insufficient for a complete
+shutdown: every generation must also retire and both lease/reservation maps must
+be empty. A canceled noncooperative acquisition remains named in `unfinished`
+until its owning worker acknowledges control and retires.
 
 ## Expectations
 

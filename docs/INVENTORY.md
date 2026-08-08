@@ -86,6 +86,10 @@ Each row belongs to one physical location and has canonical/display relative
 path, present/missing/unsupported state, latest safe observation, optional hash
 and provenance, hash-observed/last-verified times, missing acknowledgement,
 reappearance marker, host provenance, and optional hardlink group.
+Rows with retained content evidence also carry an optional sticky verification
+invalidation (`metadata-drift` or `hash-mismatch`). The derived presentation
+state is `unverified`, `verified`, `modified`, or `mismatched`; it never infers
+current verification from a historical `last_verified_at` alone.
 
 Present files retain `MetadataSnapshot` attributes and creation time needed by
 reviewed preservation. Every walked directory has a `DirRecord`, and typed
@@ -100,7 +104,11 @@ source/target relationship evidence.
 Hashed rows preserve the stat unit that the hash attests. A later ordinary scan
 must not overwrite those baseline stats merely to reflect current modified
 content; current observation and retained attestation are distinct fields or
-records.
+records. If current kind/size/mtime or a known identity diverges, reconciliation
+sets a sticky invalidation marker while retaining the prior attestation for
+comparison and recovery. Later matching metadata does not clear that fact, and
+a known hash mismatch dominates metadata drift until a successful evidence
+write clears or replaces it.
 
 ## Reconciliation
 
@@ -108,7 +116,8 @@ records.
 
 - Upsert safely observed present/unsupported entries in batches.
 - Preserve established evidence unless a conditional evidence workflow changes
-  it.
+  it; mark evidence invalid when the new observation contradicts its attested
+  subject.
 - Mark previously present unseen rows missing only when the scan is complete for
   that location/ignore scope and the volume is online.
 - Preserve prior metadata/hash when marking missing.
@@ -168,9 +177,10 @@ perform no missing reconciliation and give state-specific recovery guidance.
 ## Evidence Staleness
 
 Staleness derives from injected UTC timestamps for observation, hash creation,
-and true verification. Queries can filter older-than cutoffs without changing
-rows. Selecting stale rows constructs a verifier selection; inventory itself
-does not hash in the background.
+and true verification, plus any durable invalidation or current/attested
+contradiction. Queries include invalidated rows regardless of verification age
+without changing them. Selecting stale rows constructs a verifier selection;
+inventory itself does not hash in the background.
 
 ## Latent Features
 

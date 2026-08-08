@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from threading import Condition, Lock, Thread
 from time import monotonic
@@ -109,6 +109,23 @@ class _DegradedAuditObserver:
         pass
 
 
+@dataclass(frozen=True, slots=True)
+class _WorkerKey:
+    session_id: SessionId
+    generation: int
+
+
+@dataclass(frozen=True, slots=True)
+class _WorkerAttempt:
+    key: _WorkerKey
+    resources: tuple[ResourceId, ...]
+    thread: Thread
+
+
+class _StaleWorkerAttempt(BaseException):
+    """Stop a superseded private worker without creating a second result."""
+
+
 class Dispatcher:
     """Schedule generic registered sessions by their required resources."""
 
@@ -150,9 +167,11 @@ class Dispatcher:
         self._cleanup_irreversible: set[SessionId] = set()
         self._item_events: dict[SessionId, list[ResultItem]] = {}
         self._pending: deque[SessionId] = deque()
-        self._reserved: set[ResourceId] = set()
-        self._leases: dict[SessionId, ResourceLease] = {}
-        self._workers: dict[SessionId, Thread] = {}
+        self._worker_generation = 0
+        self._reserved: dict[ResourceId, _WorkerKey] = {}
+        self._leases: dict[_WorkerKey, ResourceLease] = {}
+        self._workers: dict[_WorkerKey, _WorkerAttempt] = {}
+        self._current_workers: dict[SessionId, _WorkerKey] = {}
         self._admitting = 0
         self._admission_order = 0
         self._accepting = True
@@ -341,7 +360,7 @@ class Dispatcher:
                 updated, hub = self._transition_locked(
                     session_id, SessionState.PENDING
                 )
-                self._pending.append(session_id)
+                self._enqueue_once_locked(session_id)
                 self._condition.notify_all()
             hub.emit(StateChanged(updated.state))
         return ControlResult(
@@ -391,7 +410,7 @@ class Dispatcher:
                 SessionState.PAUSED,
                 SessionState.INTERRUPTED,
             ) and session_id not in self._pending:
-                self._pending.append(session_id)
+                self._enqueue_once_locked(session_id)
             self._condition.notify_all()
         changed = StateChanged(updated.state)
         if audit_offer_timeout is None:
@@ -486,8 +505,8 @@ class Dispatcher:
                     SessionState.PENDING,
                     SessionState.PAUSED,
                     SessionState.INTERRUPTED,
-                ) and session_id not in self._pending:
-                    self._pending.append(session_id)
+                ):
+                    self._enqueue_once_locked(session_id)
                 self._condition.notify_all()
                 changed = StateChanged(updated.state)
             finally:
@@ -611,10 +630,18 @@ class Dispatcher:
                     break
                 self._condition.wait(remaining)
             unfinished = tuple(
-                record.session_id
-                for record in self._records.values()
-                if not self._is_settled(record)
+                dict.fromkeys(
+                    (
+                        record.session_id
+                        for record in self._records.values()
+                        if not self._is_settled(record)
+                    ),
+                )
             )
+            worker_unfinished = tuple(
+                dict.fromkeys(key.session_id for key in self._workers)
+            )
+            unfinished = tuple(dict.fromkeys((*unfinished, *worker_unfinished)))
             custody_released = not self._leases and not self._reserved
 
         remaining = max(0.0, deadline - monotonic())
@@ -655,30 +682,82 @@ class Dispatcher:
         all_unfinished = tuple(dict.fromkeys((*unfinished, *observer_incomplete)))
         with self._condition:
             admitting = self._admitting
+            workers_retired = not self._workers and not self._current_workers
+            custody_released = not self._leases and not self._reserved
         complete = (
             not all_unfinished
             and custody_released
+            and workers_retired
             and not self._scheduler.is_alive()
             and admitting == 0
         )
         return ShutdownResult(complete, all_unfinished, custody_released)
 
+    def _enqueue_once_locked(self, session_id: SessionId) -> None:
+        if session_id not in self._pending:
+            self._pending.append(session_id)
+
+    def _is_current_worker_locked(self, key: _WorkerKey) -> bool:
+        return self._current_workers.get(key.session_id) == key
+
+    def _require_current_worker_locked(self, key: _WorkerKey) -> SessionRecord:
+        if not self._is_current_worker_locked(key):
+            raise _StaleWorkerAttempt()
+        record = self._records.get(key.session_id)
+        if record is None:
+            raise _StaleWorkerAttempt()
+        return record
+
+    def _register_attempt_locked(
+        self,
+        record: SessionRecord,
+        *,
+        reserve: bool,
+    ) -> _WorkerAttempt:
+        session_id = record.session_id
+        if session_id in self._current_workers:
+            raise RuntimeError("session already has a current worker generation")
+        self._worker_generation += 1
+        key = _WorkerKey(session_id, self._worker_generation)
+        thread = Thread(
+            target=self._run_worker,
+            args=(key, record.resources),
+            name=f"namisync-session-{session_id}-{key.generation}",
+            daemon=True,
+        )
+        attempt = _WorkerAttempt(key, record.resources, thread)
+        self._workers[key] = attempt
+        self._current_workers[session_id] = key
+        if reserve:
+            for resource in record.resources:
+                if resource in self._reserved:
+                    raise RuntimeError("dispatcher resource was reserved twice")
+                self._reserved[resource] = key
+        return attempt
+
     def _schedule(self) -> None:
         while True:
-            launches: list[Thread] = []
+            launches: list[_WorkerAttempt] = []
             with self._condition:
                 while not launches:
                     selected: list[SessionId] = []
                     waiting_resources: set[ResourceId] = set()
                     for session_id in tuple(self._pending):
                         record = self._records.get(session_id)
-                        if record is None:
+                        if record is None or record.state not in {
+                            SessionState.PENDING,
+                            SessionState.CANCELING,
+                        }:
                             selected.append(session_id)
+                            continue
+                        if session_id in self._current_workers:
+                            if record.state is SessionState.PENDING:
+                                waiting_resources.update(record.resources)
                             continue
                         if record.state is SessionState.CANCELING:
-                            selected.append(session_id)
-                            continue
-                        if record.state is not SessionState.PENDING:
+                            launches.append(
+                                self._register_attempt_locked(record, reserve=False)
+                            )
                             selected.append(session_id)
                             continue
                         if any(
@@ -688,53 +767,52 @@ class Dispatcher:
                         ):
                             waiting_resources.update(record.resources)
                             continue
-                        self._reserved.update(record.resources)
+                        launches.append(
+                            self._register_attempt_locked(record, reserve=True)
+                        )
                         selected.append(session_id)
                     if selected:
                         selected_set = set(selected)
                         self._pending = deque(
                             item for item in self._pending if item not in selected_set
                         )
-                        for session_id in selected:
-                            if session_id not in self._records:
-                                continue
-                            worker = Thread(
-                                target=self._run_worker,
-                                args=(session_id,),
-                                name=f"namisync-session-{session_id}",
-                                daemon=True,
-                            )
-                            self._workers[session_id] = worker
-                            launches.append(worker)
-                    elif not self._accepting and not self._pending and not self._workers:
+                    if launches:
+                        break
+                    if not self._accepting and not self._pending and not self._workers:
                         return
-                    else:
+                    if not selected:
                         self._condition.wait()
-            for worker in launches:
-                worker.start()
+            for attempt in launches:
+                attempt.thread.start()
 
-    def _run_worker(self, session_id: SessionId) -> None:
+    def _run_worker(
+        self,
+        key: _WorkerKey,
+        resources: tuple[ResourceId, ...],
+    ) -> None:
+        session_id = key.session_id
         try:
             with self._condition:
-                record = self._records[session_id]
+                record = self._require_current_worker_locked(key)
                 registration = self._registry[record.kind]
                 control = self._controls[session_id]
                 publication_lock = self._state_publication_locks[session_id]
             if record.state is SessionState.CANCELING:
-                self._run_canceled(session_id, registration, record)
+                self._run_canceled(key, registration, record)
                 return
             try:
                 lease = self._lock_provider.acquire(
-                    record.resources, control.cancel_requested
+                    resources, control.cancel_requested
                 )
             except Canceled:
                 with self._condition:
-                    current = self._records[session_id]
-                self._run_canceled(session_id, registration, current)
+                    current = self._require_current_worker_locked(key)
+                self._run_canceled(key, registration, current)
                 return
             except BaseException as error:
                 self._run_core(
-                    session_id,
+                    key,
+                    resources,
                     registration,
                     invocation=None,
                     disposition=Disposition.UNRUN,
@@ -742,16 +820,30 @@ class Dispatcher:
                 )
                 return
             with self._condition:
-                self._leases[session_id] = lease
-                current = self._records[session_id]
+                if self._is_current_worker_locked(key):
+                    self._leases[key] = lease
+                    current = self._require_current_worker_locked(key)
+                    stale = False
+                else:
+                    stale = True
+                    current = None
+            if stale:
+                try:
+                    lease.release()
+                except BaseException as error:
+                    with self._condition:
+                        self._custody_failures.append(error)
+                return
+            assert current is not None
             if current.state is SessionState.CANCELING:
-                self._run_canceled(session_id, registration, current)
+                self._run_canceled(key, registration, current)
                 return
             try:
                 invocation = registration.open(current.payload)
             except BaseException as error:
                 self._run_core(
-                    session_id,
+                    key,
+                    resources,
                     registration,
                     invocation=None,
                     disposition=Disposition.UNRUN,
@@ -761,7 +853,7 @@ class Dispatcher:
             resumed_attempt = current.started_at is not None
             with publication_lock:
                 with self._condition:
-                    current = self._records[session_id]
+                    current = self._require_current_worker_locked(key)
                     if current.state is not SessionState.CANCELING:
                         updated, hub = self._transition_locked(
                             session_id, SessionState.RUNNING
@@ -772,26 +864,32 @@ class Dispatcher:
                 if updated is not None and hub is not None:
                     hub.emit(StateChanged(updated.state))
             if updated is None:
-                self._run_canceled(session_id, registration, current)
+                self._run_canceled(key, registration, current)
                 return
             self._run_core(
-                session_id,
+                key,
+                resources,
                 registration,
                 invocation=invocation,
                 disposition=Disposition.RAN,
                 failure=None,
                 settle_pre_run_canceled=resumed_attempt,
             )
+        except _StaleWorkerAttempt:
+            return
         finally:
-            self._release_custody(session_id)
-            self._worker_done(session_id)
+            self._release_custody(key, resources)
+            self._worker_done(key)
 
     def _run_canceled(
         self,
-        session_id: SessionId,
+        key: _WorkerKey,
         registration: WorkflowRegistration,
         record: SessionRecord,
     ) -> None:
+        session_id = key.session_id
+        with self._condition:
+            self._require_current_worker_locked(key)
         disposition = self._disposition(record)
         failure = None
         try:
@@ -804,7 +902,8 @@ class Dispatcher:
             canceled_result = None
             failure = error
         self._run_core(
-            session_id,
+            key,
+            record.resources,
             registration,
             invocation=None,
             disposition=disposition,
@@ -814,7 +913,8 @@ class Dispatcher:
 
     def _run_core(
         self,
-        session_id: SessionId,
+        key: _WorkerKey,
+        resources: tuple[ResourceId, ...],
         registration: WorkflowRegistration,
         *,
         invocation: WorkflowInvocation | None,
@@ -823,7 +923,9 @@ class Dispatcher:
         canceled_result: OperationResult | None = None,
         settle_pre_run_canceled: bool = False,
     ) -> None:
+        session_id = key.session_id
         with self._condition:
+            self._require_current_worker_locked(key)
             control = self._controls[session_id]
             hub = self._hubs[session_id]
 
@@ -839,7 +941,7 @@ class Dispatcher:
                     if not settle_pre_run_canceled:
                         raise
                     with self._condition:
-                        current = self._records[session_id]
+                        current = self._require_current_worker_locked(key)
                     settled = self._settled_cancellation(
                         registration,
                         current,
@@ -856,19 +958,24 @@ class Dispatcher:
                     raise
                 if not registration.supports_pause:
                     raise RuntimeError("registered invocation paused without capability")
-                self._replace_payload(session_id, invocation.snapshot())
+                self._replace_payload(key, invocation.snapshot())
                 raise
 
-        outcome = run_session(
-            work,
-            emit=hub.emit,
-            checkpoint=control.checkpoint,
-            settle=lambda state, result: self._settle(session_id, state, result),
-            finalize_audit=hub.finalize_audit,
-            publish_result=lambda result: self._publish_result(session_id, result),
-            disposition=disposition,
-            item_accumulator=self._item_events[session_id],
-        )
+        try:
+            outcome = run_session(
+                work,
+                emit=hub.emit,
+                checkpoint=control.checkpoint,
+                settle=lambda state, result: self._settle(
+                    key, resources, state, result
+                ),
+                finalize_audit=hub.finalize_audit,
+                publish_result=lambda result: self._publish_result(key, result),
+                disposition=disposition,
+                item_accumulator=self._item_events[session_id],
+            )
+        except _StaleWorkerAttempt:
+            return
         if not outcome.paused:
             with self._condition:
                 self._item_events.pop(session_id, None)
@@ -888,47 +995,44 @@ class Dispatcher:
 
     def _settle(
         self,
-        session_id: SessionId,
+        key: _WorkerKey,
+        resources: tuple[ResourceId, ...],
         state: SessionState,
         result: OperationResult | None,
     ) -> None:
-        self._release_custody(session_id)
+        session_id = key.session_id
+        self._release_custody(key, resources)
         # The audit axis is not settled yet. A terminal record may be visible
         # briefly without a result, but it must never expose provisional
         # ``audit=OK`` before the observer acknowledges finalization.
         transition_result = None if is_terminal(state) else result
         publication_lock = self._publication_lock_for(session_id)
         if publication_lock is None:
-            raise SessionNotFound(str(session_id))
+            raise _StaleWorkerAttempt()
         with publication_lock:
-            updated, hub = self._transition(session_id, state, transition_result)
+            with self._condition:
+                self._require_current_worker_locked(key)
+                updated, hub = self._transition_locked(
+                    session_id, state, transition_result
+                )
             hub.emit(StateChanged(updated.state))
 
-    def _publish_result(self, session_id: SessionId, result: OperationResult) -> None:
+    def _publish_result(self, key: _WorkerKey, result: OperationResult) -> None:
         with self._condition:
-            record = self._records[session_id]
+            record = self._require_current_worker_locked(key)
             updated = replace(record, result=result)
-            self._records[session_id] = updated
+            self._records[key.session_id] = updated
             self._persist_locked(updated)
             self._condition.notify_all()
 
-    def _replace_payload(self, session_id: SessionId, payload: bytes) -> None:
+    def _replace_payload(self, key: _WorkerKey, payload: bytes) -> None:
         if not isinstance(payload, bytes):
             raise TypeError("workflow continuation snapshot must be bytes")
         with self._condition:
-            record = self._records[session_id]
+            record = self._require_current_worker_locked(key)
             updated = replace(record, payload=payload)
-            self._records[session_id] = updated
+            self._records[key.session_id] = updated
             self._persist_locked(updated)
-
-    def _transition(
-        self,
-        session_id: SessionId,
-        state: SessionState,
-        result: OperationResult | None = None,
-    ) -> tuple[SessionRecord, EventHub]:
-        with self._condition:
-            return self._transition_locked(session_id, state, result)
 
     def _transition_locked(
         self,
@@ -961,48 +1065,71 @@ class Dispatcher:
         except BaseException as error:
             self._store_failures.append(error)
 
-    def _release_custody(self, session_id: SessionId) -> None:
+    def _release_custody(
+        self,
+        key: _WorkerKey,
+        resources: tuple[ResourceId, ...],
+    ) -> None:
         with self._condition:
-            lease = self._leases.pop(session_id, None)
-            record = self._records.get(session_id)
-        if lease is not None:
-            try:
+            lease = self._leases.pop(key, None)
+        try:
+            if lease is not None:
                 lease.release()
-            except BaseException as error:
-                with self._condition:
-                    self._custody_failures.append(error)
-        with self._condition:
-            if record is not None:
-                self._reserved.difference_update(record.resources)
-            self._condition.notify_all()
+        except BaseException as error:
+            with self._condition:
+                self._custody_failures.append(error)
+        finally:
+            with self._condition:
+                for resource in resources:
+                    if self._reserved.get(resource) == key:
+                        del self._reserved[resource]
+                self._condition.notify_all()
 
-    def _worker_done(self, session_id: SessionId) -> None:
+    def _worker_done(self, key: _WorkerKey) -> None:
+        session_id = key.session_id
         publication_lock = self._publication_lock_for(session_id)
         if publication_lock is None:
             with self._condition:
-                self._workers.pop(session_id, None)
+                self._workers.pop(key, None)
+                if self._current_workers.get(session_id) == key:
+                    self._current_workers.pop(session_id, None)
                 self._condition.notify_all()
             return
         transition: tuple[SessionRecord, EventHub] | None = None
         with publication_lock:
-            with self._condition:
-                self._workers.pop(session_id, None)
-                record = self._records.get(session_id)
-                control = self._controls.get(session_id)
-                if (
-                    record is not None
-                    and control is not None
-                    and record.state is SessionState.PAUSED
-                    and control.cancel_requested()
-                ):
-                    transition = self._transition_locked(
-                        session_id, SessionState.CANCELING
-                    )
-                    self._pending.append(session_id)
-                self._condition.notify_all()
-            if transition is not None:
-                updated, hub = transition
-                hub.emit(StateChanged(updated.state))
+            try:
+                with self._condition:
+                    if not self._is_current_worker_locked(key):
+                        self._workers.pop(key, None)
+                        self._condition.notify_all()
+                        return
+                    record = self._records.get(session_id)
+                    control = self._controls.get(session_id)
+                    if (
+                        record is not None
+                        and control is not None
+                        and record.state is SessionState.PAUSED
+                        and control.cancel_requested()
+                    ):
+                        transition = self._transition_locked(
+                            session_id, SessionState.CANCELING
+                        )
+                        record = transition[0]
+                    if record is not None and record.state in {
+                        SessionState.PENDING,
+                        SessionState.CANCELING,
+                    }:
+                        self._enqueue_once_locked(session_id)
+                    self._condition.notify_all()
+                if transition is not None:
+                    updated, hub = transition
+                    hub.emit(StateChanged(updated.state))
+            finally:
+                with self._condition:
+                    if self._current_workers.get(session_id) == key:
+                        self._current_workers.pop(session_id, None)
+                    self._workers.pop(key, None)
+                    self._condition.notify_all()
 
     def _publication_lock_for(self, session_id: SessionId):
         # Never wait for a publication lock while holding ``_condition``.

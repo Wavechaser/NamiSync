@@ -564,6 +564,9 @@ def test_interface_views_are_recursive_json_primitives_without_duck_typing() -> 
             acknowledged_at=None,
             reappeared_at=None,
             unsupported_reason=None,
+            verification_state="verified",
+            verification_invalidated_at=None,
+            verification_invalidated_reason=None,
         ),
         SemanticSettingsView(
             filters=("*.tmp",),

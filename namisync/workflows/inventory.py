@@ -998,6 +998,7 @@ def _integrity_selection(
             baseline=row.attestation,
             scope_token=row.scope_token,
             reappeared_at=row.reappeared_at,
+            invalidation=row.invalidation,
         )
         for row in rows
     )

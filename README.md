@@ -24,7 +24,7 @@ exist, but no GUI host has shipped.
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
 `incomplete`, but is not classified as interrupted or executable. The active
-database boundary is ledger v2 plus history v4. Older, missing, transitional,
+database boundary is ledger v3 plus history v4. Older, missing, transitional,
 or mismatched databases are refused; close
 NamiSync and reset both local database files together before creating a fresh
 matching pair.
@@ -133,6 +133,19 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed the planned M1 safety-audit findings while preserving full reviewed
+  intent and executing only the derived safe selection.
+  - **Planner and selection:** pinned blocked parent/type and unsupported-source
+  cases as visible raw intent whose corresponding removals stay deferred.
+  - **Executor:** moved destructive flush waits before final UPDATE/DELETE
+    guards and made confirmed or unverified post-publish failures
+    recording-degraded.
+  - **Inventory and verifier:** introduced ledger v3 sticky verification
+    invalidation with explicit four-state inventory projections.
+  - **Dispatcher:** keyed workers, reservations, and leases by process-local
+    generation so cancel/resume handoffs cannot overlap or clean up successors.
+  - **Tests:** added adversarial planning, path-swap, published-failure,
+    invalidation, and dispatcher acquisition/shutdown race regressions.
 - Resolved M1 integration and adversarial-review findings without weakening the
   reviewed-plan safety model or making history/audit failures alter sync truth.
   - **Executor:** shared ordered publication settlement across COPY, UPDATE, and

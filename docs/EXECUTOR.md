@@ -52,8 +52,9 @@ operation-boundary cleanup.
   `CREATE_NEW` for temps, non-replacing rename when destination absence is a
   precondition, and `RemoveDirectory` for atomic nonempty refusal. Never follow
   a reparse escape.
-- Flush recorder before a destructive operation when required by the durability
-  window.
+- Flush recorder at each operation's configured durability boundary. UPDATE
+  and DELETE flush before their final destructive guard so recorder contention
+  cannot sit between that last guard and the destructive path mutation.
 - Record one final typed outcome per selected operation; dependencies of a
   failed operation become explicit canceled/deferred outcomes, while independent
   operations continue. Pause leaves completed status intact and unreached work
@@ -148,10 +149,11 @@ touches the current target. With trash-on-update enabled it then:
    metadata repair before any destructive change to the live target; retries
    validate that evidence, while a hardlink defers metadata repair because it
    still shares the live inode;
-4. clears readonly on the live target if Windows requires it for replacement;
-5. atomically publishes the prepared temp over the live path with `os.replace`;
-6. applies the new file's readonly bit and remaining post-publish metadata;
-7. validates and completes hardlink-backup metadata after the replacement, then
+4. flushes prior recorder evidence, then performs the final live-target guard;
+5. clears readonly on the live target if Windows requires it for replacement;
+6. atomically publishes the prepared temp over the live path with `os.replace`;
+7. applies the new file's readonly bit and remaining post-publish metadata;
+8. validates and completes hardlink-backup metadata after the replacement, then
    performs the best-effort parent flushes, constructs the attestation, and
    records success.
 
@@ -246,7 +248,8 @@ degrade to copy-delete. Record only after the rename succeeds.
 ### Delete and directory cleanup
 
 Mirror deletion remains internal/guarded. Re-stat type and identity immediately
-before deletion and use the strongest available handle-conditional delete.
+before deletion, after flushing prior recorder evidence, and use the strongest
+available handle-conditional delete.
 Only a dependency-complete `directory_cleanup` delete may ignore mtime and link
 count churn caused by removing its own planned children; it still requires exact
 kind, size, attributes, and creation time. A stable identity binds exactly when
@@ -291,6 +294,16 @@ abandons/reclaims an in-flight temp through exact-name recovery, preserves
 completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
 without terminal; dispatcher then releases custody. Resume queues at the back,
 freshly re-observes/preflights in workflow, and continues only unreached work.
+
+The same durable-state rule applies when a confirmed publish is followed by a
+non-cancellation failure such as metadata repair exhaustion. The item remains
+`FAILED` under its underlying typed reason, reports whether the target is still
+the published version plus any retained UPDATE backup or MOVE_UPDATE old/trash
+state, and sets `recording=DEGRADED` because no success ledger command
+completed. It never reports `recording=OK` for an unrecorded filesystem
+mutation and never promotes that failed operation to verification evidence. If
+the durable-state probe itself fails, publication is reported unverified and
+recording still degrades instead of claiming the ledger is current.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the

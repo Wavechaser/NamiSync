@@ -16,9 +16,9 @@ from .connections import (
 )
 
 
-LEDGER_SCHEMA_VERSION = 2
+LEDGER_SCHEMA_VERSION = 3
 HISTORY_SCHEMA_VERSION = 4
-LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128"
+LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128-invalidation-v1"
 HISTORY_CONTRACT_ID = "m1-history-windowed-events-v1"
 MAX_HISTORY_PHASE_NAME_BYTES = 256
 MAX_HISTORY_ERROR_TYPE_BYTES = 256
@@ -124,6 +124,11 @@ CREATE TABLE IF NOT EXISTS inventory (
     attested_attributes INTEGER,
     attested_created_ns INTEGER,
     last_verified_at TEXT,
+    verification_invalidated_at TEXT,
+    verification_invalidated_reason TEXT CHECK(
+        verification_invalidated_reason IS NULL
+        OR verification_invalidated_reason IN ('metadata-drift', 'hash-mismatch')
+    ),
 
     missing_since TEXT,
     acknowledged_at TEXT,
@@ -141,6 +146,36 @@ CREATE TABLE IF NOT EXISTS inventory (
          AND hash_provenance IS NOT NULL AND content_observed_at IS NOT NULL
          AND attested_kind IS NOT NULL AND attested_size IS NOT NULL AND attested_mtime_ns IS NOT NULL
          AND attested_nlink IS NOT NULL AND attested_attributes IS NOT NULL)
+    ),
+    CHECK(
+        (verification_invalidated_at IS NULL)
+        = (verification_invalidated_reason IS NULL)
+    ),
+    CHECK(
+        verification_invalidated_reason IS NULL OR content_algorithm IS NOT NULL
+    ),
+    CHECK(last_verified_at IS NULL OR content_algorithm IS NOT NULL),
+    CHECK(
+        content_algorithm IS NULL
+        OR verification_invalidated_at IS NOT NULL
+        OR (
+            presence = 'present'
+            AND entry_kind IS attested_kind
+            AND observed_size IS attested_size
+            AND observed_mtime_ns IS attested_mtime_ns
+            AND (
+                (
+                    attested_file_identity_volume_serial IS NULL
+                    AND attested_file_identity_file_index IS NULL
+                )
+                OR (
+                    file_identity_volume_serial
+                        IS attested_file_identity_volume_serial
+                    AND file_identity_file_index
+                        IS attested_file_identity_file_index
+                )
+            )
+        )
     )
 ) STRICT;
 
@@ -502,7 +537,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v2 and history v4. "
+        "NamiSync M1 requires ledger v3 and history v4. "
         "Close every NamiSync process, manually delete or otherwise reset both "
         "database files together, and restart."
     )
@@ -521,7 +556,7 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v2 and history v4 with the final "
+            "NamiSync M1 requires ledger v3 and history v4 with the final "
             "M1 contract. Close every NamiSync process, manually delete or "
             "otherwise reset both database files together, and restart."
         )

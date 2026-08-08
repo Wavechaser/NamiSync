@@ -60,6 +60,31 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-08). Rename durability-wait window. MOVE, RECASE,
+  MOVE_UPDATE old-path cleanup, and TRASH perform their recorder flush after a
+  path guard and before the non-replacing rename. An external writer can replace
+  the guarded source during that wait, causing NamiSync to relocate an
+  unreviewed occupant; trash-routed cases remain recoverable, but settlement can
+  describe the wrong version. Cause: these operation-specific barriers retain
+  the ordering removed from UPDATE/DELETE. A future hardening pass should move
+  each wait before its final source/destination guards and gate the interleaving.
+- SEVERE - FIXED (2026-08-08). Published-failure recording truth. COPY,
+  UPDATE, or MOVE_UPDATE could publish its new target and then fail metadata
+  repair or another completion step while reporting `recording=OK`, leaving a
+  real filesystem mutation without matching ledger evidence. Cause: ordinary
+  retry exhaustion ignored the continuation's confirmed publish state, unlike
+  cancellation settlement. Fixed by probing durable state before temp cleanup,
+  including a publish primitive that commits and then raises, retaining
+  target/backup/old-path drift detail, settling the item failed, and degrading
+  recording without inventing success-only published evidence. An unsuccessful
+  state probe degrades as publication-unverified rather than claiming OK.
+- SEVERE - FIXED (2026-08-08). Destructive flush window. UPDATE and DELETE
+  performed their recorder durability flush after the final target guard, so a
+  foreign replacement during that potentially long wait could be overwritten
+  or removed without another check. Cause: durability ordering placed blocking
+  recorder work inside the guard-to-mutation interval. Fixed by flushing before
+  the final live guard. The remaining path-based `stat`/readonly/syscall gap is
+  still non-atomic and remains the documented external-writer boundary.
 - MINOR - FIXED (2026-08-06). TOCTOU sampling race. The one-core
   `test_b2_hash_fifo_independently_plateaus_at_32_items` intermittently failed
   although both FIFOs remained capped at 32 items. Cause: separately sampled
@@ -213,6 +238,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-08). Worker-generation custody. Canceling a session
+  after scheduler dequeue but before RUNNING could launch a second worker; the
+  losing worker could then settle twice or release the successor's reservation
+  and lease. Resume had the same identity-free cleanup boundary. Cause: workers,
+  reservations, and leases were keyed only by session id. Fixed with one
+  process-local generation owner per session, generation-keyed custody, strict
+  stale-callback rejection, serialized retirement handoff, and shutdown that
+  reports terminal-but-not-retired attempts as unfinished.
 - MODERATE - FIXED (2026-08-06). Sparse reliable-event pagination. Event-page
   repair rejected two valid recovery
   states: a live subscriber cursor ahead of the last committed history window,
@@ -488,6 +521,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-08). Verification freshness invalidation. A verified
+  file could change, be rescanned, and retain an apparently current
+  `last_verified_at`; stale selection then omitted it and inventory presented a
+  false verified state. Cause: observation updates preserved attestation without
+  durably recording that current stat/identity contradicted it. Fixed in ledger
+  v3 with a sticky metadata-drift/hash-mismatch marker, schema constraints,
+  stale-query inclusion, negative verifier recording, and verified/modified/
+  mismatched projections. Hash mismatch dominates later metadata drift, and
+  only a successful guarded evidence write clears the marker.
 - MODERATE - FIXED (2026-08-04). SQLite contention deadline. Serialized database
   contention could outlive
   its configured retry bound: waiting for the in-process writer lock was

@@ -633,7 +633,8 @@ def _render_inventory(
         baseline = "baseline" if row.has_baseline else "no-baseline"
         print(
             f"  {row.presence:11} {_safe(row.path)} "
-            f"[{_safe(row.entry_kind)}; {baseline}]",
+            f"[{_safe(row.entry_kind)}; {baseline}; "
+            f"{_safe(row.verification_state)}]",
             file=output,
         )
     mappings = service.mapping_ids_for_location(details.location_id)

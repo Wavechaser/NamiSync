@@ -30,6 +30,34 @@ class InventoryState(StrEnum):
     UNSUPPORTED = "unsupported"
 
 
+class VerificationInvalidationReason(StrEnum):
+    """Why retained integrity evidence no longer describes current truth."""
+
+    METADATA_DRIFT = "metadata-drift"
+    HASH_MISMATCH = "hash-mismatch"
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationInvalidation:
+    at: datetime
+    reason: VerificationInvalidationReason
+
+    def __post_init__(self) -> None:
+        if self.at.tzinfo is None or self.at.utcoffset() is None:
+            raise ValueError("verification invalidation time must be timezone-aware")
+        if self.at.utcoffset().total_seconds() != 0:
+            raise ValueError("verification invalidation time must be UTC")
+        if not isinstance(self.reason, VerificationInvalidationReason):
+            raise TypeError("verification invalidation reason has the wrong type")
+
+
+class InventoryVerificationState(StrEnum):
+    UNVERIFIED = "unverified"
+    VERIFIED = "verified"
+    MODIFIED = "modified"
+    MISMATCHED = "mismatched"
+
+
 class IntegrityResult(StrEnum):
     """The integrity meaning of one selected inventory row."""
 
@@ -210,6 +238,7 @@ class IntegritySelectionItem:
     baseline: Attestation | None
     scope_token: str
     reappeared_at: datetime | None = None
+    invalidation: VerificationInvalidation | None = None
 
     def __post_init__(self) -> None:
         if not self.item_id or not self.row_id or not self.location_id:
@@ -230,6 +259,10 @@ class IntegritySelectionItem:
                 raise ValueError("reappearance time must be timezone-aware")
             if self.reappeared_at.utcoffset().total_seconds() != 0:
                 raise ValueError("reappearance time must be UTC")
+        if self.invalidation is not None and not isinstance(
+            self.invalidation, VerificationInvalidation
+        ):
+            raise TypeError("integrity selection invalidation has the wrong type")
 
 
 @dataclass
@@ -364,6 +397,7 @@ class IntegrityRecordCommand:
     attestation: Attestation
     advances_last_verified: bool
     clear_reappeared: bool
+    expected_invalidation: VerificationInvalidation | None = None
 
     def __post_init__(self) -> None:
         if self.expected_state is not InventoryState.PRESENT:
@@ -384,6 +418,47 @@ class IntegrityRecordCommand:
             raise ValueError("verification commands require established evidence")
         if self.advances_last_verified is not (self.mode is IntegrityMode.VERIFY):
             raise ValueError("only a prior-evidence verification match advances time")
+        if self.expected_invalidation is not None and not isinstance(
+            self.expected_invalidation, VerificationInvalidation
+        ):
+            raise TypeError("expected verification invalidation has the wrong type")
+
+
+@dataclass(frozen=True, slots=True)
+class VerificationInvalidationCommand:
+    """Conditionally retain a negative integrity finding for one row."""
+
+    item_id: str
+    row_id: str
+    location_id: str
+    rel_path_key: str
+    scope_token: str
+    expected_state: InventoryState
+    expected_stat: FileStat
+    expected_baseline: Attestation
+    expected_invalidation: VerificationInvalidation | None
+    reason: VerificationInvalidationReason
+    invalidated_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.expected_state is not InventoryState.PRESENT:
+            raise ValueError("verification invalidation requires a present row")
+        if not all(
+            isinstance(value, str) and value
+            for value in (
+                self.item_id,
+                self.row_id,
+                self.location_id,
+                self.rel_path_key,
+                self.scope_token,
+            )
+        ):
+            raise ValueError("verification invalidation identifiers must be non-empty")
+        if self.expected_invalidation is not None and not isinstance(
+            self.expected_invalidation, VerificationInvalidation
+        ):
+            raise TypeError("expected verification invalidation has the wrong type")
+        VerificationInvalidation(self.invalidated_at, self.reason)
 
 
 class IntegrityRecorder(Protocol):
@@ -391,6 +466,11 @@ class IntegrityRecorder(Protocol):
 
     def record_integrity(self, command: IntegrityRecordCommand) -> RecordDisposition:
         """Apply one conditional evidence command or report why it was not applied."""
+
+    def record_verification_invalidation(
+        self, command: VerificationInvalidationCommand
+    ) -> RecordDisposition:
+        """Conditionally retain a modified or mismatched verification result."""
 
 
 class Clock(Protocol):

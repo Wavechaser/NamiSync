@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
+from namisync.core.integrity import (
+    InventoryVerificationState,
+    VerificationInvalidation,
+    VerificationInvalidationReason,
+)
 from namisync.core.models import (
     EntryKind,
     FileIdentity,
@@ -49,6 +54,38 @@ class InventorySnapshot:
     reappeared_at: datetime | None
     unsupported_reason: str | None
     hardlink_group: str | None
+    invalidation: VerificationInvalidation | None = None
+
+    @property
+    def verification_state(self) -> InventoryVerificationState:
+        if (
+            self.presence is not InventoryPresence.PRESENT
+            or self.observed is None
+            or self.attestation is None
+        ):
+            return InventoryVerificationState.UNVERIFIED
+        baseline = self.attestation.subject
+        observed = self.observed
+        if (
+            baseline.kind is not observed.kind
+            or baseline.size != observed.size
+            or baseline.mtime_ns != observed.mtime_ns
+            or (
+                baseline.file_identity is not None
+                and baseline.file_identity != observed.file_identity
+            )
+        ):
+            return InventoryVerificationState.MODIFIED
+        if self.invalidation is not None:
+            if (
+                self.invalidation.reason
+                is VerificationInvalidationReason.HASH_MISMATCH
+            ):
+                return InventoryVerificationState.MISMATCHED
+            return InventoryVerificationState.MODIFIED
+        if self.last_verified_at is None:
+            return InventoryVerificationState.UNVERIFIED
+        return InventoryVerificationState.VERIFIED
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +190,16 @@ def _inventory_snapshot(row: sqlite3.Row) -> InventorySnapshot:
         reappeared_at=_optional_time(row["reappeared_at"]),
         unsupported_reason=row["unsupported_reason"],
         hardlink_group=row["hardlink_group"],
+        invalidation=(
+            None
+            if row["verification_invalidated_at"] is None
+            else VerificationInvalidation(
+                decode_utc(row["verification_invalidated_at"]),
+                VerificationInvalidationReason(
+                    row["verification_invalidated_reason"]
+                ),
+            )
+        ),
     )
 
 
@@ -256,8 +303,22 @@ class LedgerRepository:
                   AND presence = 'present'
                   AND entry_kind = 'file'
                   AND (
-                      last_verified_at IS NULL
+                      content_algorithm IS NULL
+                      OR last_verified_at IS NULL
                       OR last_verified_at < ?
+                      OR verification_invalidated_at IS NOT NULL
+                      OR attested_kind IS NOT entry_kind
+                      OR attested_size IS NOT observed_size
+                      OR attested_mtime_ns IS NOT observed_mtime_ns
+                      OR (
+                          attested_file_identity_volume_serial IS NOT NULL
+                          AND (
+                              attested_file_identity_volume_serial
+                                  IS NOT file_identity_volume_serial
+                              OR attested_file_identity_file_index
+                                  IS NOT file_identity_file_index
+                          )
+                      )
                   )
                 ORDER BY rel_path_key, id""",
             (location_id, encode_utc(verified_before)),

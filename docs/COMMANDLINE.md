@@ -51,9 +51,10 @@ the local
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 
-At the final M1 pre-migrator boundary, ledger v2 and windowed-event history v4
-require their exact contract markers. Opening an older ledger, any history
-v1-v3 database, or a current-version file with a missing/mismatched marker fails
+At the final M1 pre-migrator boundary, ledger v3 and windowed-event history v4
+require their exact contract markers. Opening a ledger v1-v2 database, any
+history v1-v3 database, or a current-version file with a missing/mismatched
+marker fails
 before schema mutation with an instruction to close NamiSync and manually
 delete **both** local database files, then rerun the command. Startup does not
 delete, migrate, or backfill either database automatically. This is
@@ -80,7 +81,8 @@ option denotes a retained location id. They accept repeatable
 `--mount MOUNT` to resolve one candidate from an ambiguous cloned-volume
 identity, and both `--database PATH` and `--history-database PATH`.
 
-- `inventory [ROOT | --location-id ID]`: refresh and print role-free inventory
+- `inventory [ROOT | --location-id ID]`: refresh and print role-free inventory,
+  its derived `unverified`/`verified`/`modified`/`mismatched` state,
   plus zero/one/many mapping guidance.
 - `baseline [ROOT | --location-id ID]`: refresh inventory and create evidence
   only for eligible non-directory rows that do not already have an

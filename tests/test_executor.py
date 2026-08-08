@@ -2580,6 +2580,22 @@ class ReplaceFaultFileSystem(NativeFileSystem):
         raise OSError("injected replace fault")
 
 
+class UnverifiableReplaceFaultFileSystem(NativeFileSystem):
+    def __init__(self, target: Path) -> None:
+        self.target = target
+        self.published = False
+
+    def replace(self, temp: Path, target: Path) -> None:
+        super().replace(temp, target)
+        self.published = True
+        raise OSError("injected replace fault")
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if self.published and path == self.target:
+            raise PermissionError("injected publication state probe failure")
+        return super().stat_path(path)
+
+
 @pytest.mark.parametrize("after", [False, True])
 def test_update_fault_never_leaves_live_target_absent(tmp_path: Path, after: bool) -> None:
     source, target = _roots(tmp_path)
@@ -2599,7 +2615,9 @@ def test_update_fault_never_leaves_live_target_absent(tmp_path: Path, after: boo
         intended=source_stat,
     )
 
-    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs
+    )
 
     assert result.status is SessionState.FAILED
     assert (target / "file.bin").read_bytes() == (
@@ -2607,6 +2625,48 @@ def test_update_fault_never_leaves_live_target_absent(tmp_path: Path, after: boo
     )
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
     assert recorder.calls == []
+    assert result.recording is (
+        RecordingStatus.DEGRADED if after else RecordingStatus.OK
+    )
+    if after:
+        item = next(event for event in events if isinstance(event, ItemOutcome))
+        assert item.detail["publish_state"] == "published"
+        assert item.detail["target_state"] == "published"
+        assert item.detail["durable_state"] == "target-published-with-backup"
+
+
+def test_unverifiable_publish_failure_degrades_recording(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    published_target = target / "file.bin"
+    published_target.write_bytes(b"old-version")
+    fs = UnverifiableReplaceFaultFileSystem(published_target)
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert published_target.read_bytes() == b"new-version"
+    assert recorder.calls == []
+    assert item.detail["publish_state"] == "unverified"
+    assert item.detail["durable_state"] == "publication-unverified"
+    assert item.detail["state_error_type"] == "PermissionError"
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
 
 
 class AclFailureFileSystem(NativeFileSystem):
@@ -3688,11 +3748,68 @@ def test_retry_rejects_replaced_published_target(
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
     assert item.reason == "target-drift"
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.detail["publish_state"] == "published"
+    assert item.detail["target_state"] == "changed-after-publish"
+    assert item.detail["durable_state"] == "target-changed-after-publish"
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
     assert fs.metadata_attempts == 1
     assert fs.flush_attempts == (0 if before_stat_cache else 1)
     assert recorder.calls == []
     assert xset.published_evidence == {}
     assert published_target.read_bytes() == b"bad-version"
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE),
+)
+def test_cancel_after_published_target_changes_reports_changed_durable_state(
+    tmp_path: Path,
+    kind: OperationKind,
+) -> None:
+    source, target = _roots(tmp_path)
+    published_target = target / (
+        "renamed.bin" if kind is OperationKind.MOVE_UPDATE else "file.bin"
+    )
+    fs = PublishedRetrySharingOnceFileSystem(
+        published_target,
+        before_stat_cache=True,
+    )
+    operation, published_target = _published_retry_operation(
+        kind, source, target, fs
+    )
+    xset = _xset(_plan(source, target, (operation,), hardlinks=False))
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep_for_retry(_delay: float) -> None:
+        nonlocal cancel_requested
+        _replace_published_target(published_target, fs)
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=sleep_for_retry),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "canceled-after-publish"
+    assert item.detail["publish_state"] == "published"
+    assert item.detail["target_state"] == "changed-after-publish"
+    assert item.detail["durable_state"] == "target-changed-after-publish"
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence == {}
 
 
 def test_metadata_retry_repairs_published_mtime_without_recopy(
@@ -3721,6 +3838,139 @@ def test_metadata_retry_repairs_published_mtime_without_recopy(
     assert fs.metadata_attempts == 2
     assert fs.source_opens == 1
     assert [call[0] for call in recorder.calls] == ["copied"]
+
+
+class PermanentPublishedMetadataFailureFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.metadata_attempts = 0
+        self.published_target: Path | None = None
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        if path != self.published_target:
+            return super().ensure_published_metadata(path, *args, **kwargs)
+        self.metadata_attempts += 1
+        error = OSError("persistent sharing violation after publish")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+
+class TerminalPublishAfterCommitFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.published_target: Path | None = None
+
+    def replace(self, temp: Path, target: Path) -> None:
+        super().replace(temp, target)
+        if target == self.published_target:
+            error = OSError("sharing report after committed publish")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        super().publish_new(temp, target)
+        if target == self.published_target:
+            error = OSError("sharing report after committed publish")
+            error.winerror = 32  # type: ignore[attr-defined]
+            raise error
+
+
+@pytest.mark.parametrize(
+    ("kind", "durable_state"),
+    [
+        (OperationKind.COPY, "target-published"),
+        (OperationKind.UPDATE, "target-published-with-backup"),
+        (OperationKind.MOVE_UPDATE, "new-and-old"),
+    ],
+)
+def test_terminal_post_publish_failure_degrades_recording_and_reports_durable_state(
+    tmp_path: Path,
+    kind: OperationKind,
+    durable_state: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = PermanentPublishedMetadataFailureFileSystem()
+    operation, published_target = _published_retry_operation(
+        kind,
+        source,
+        target,
+        fs,
+    )
+    fs.published_target = published_target
+    recorder = FakeRecorder()
+    xset = _xset(_plan(source, target, (operation,), hardlinks=False))
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "sharing-violation"
+    assert item.detail["publish_state"] == "published"
+    assert item.detail["target_state"] == "published"
+    assert item.detail["durable_state"] == durable_state
+    assert item.detail["published_path"] == operation.target_rel_path
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.detail["recording_error"] == (
+        "published filesystem mutation failed before ledger settlement"
+    )
+    assert published_target.read_bytes() == b"new-version"
+    assert fs.metadata_attempts == 3
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+
+    if kind is OperationKind.UPDATE:
+        backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
+        assert item.detail["backup_state"] == "retained"
+        assert backup.read_bytes() == b"old-version"
+    elif kind is OperationKind.MOVE_UPDATE:
+        assert item.detail["prior_path"] == "old.bin"
+        assert (target / "old.bin").read_bytes() == b"old-version"
+
+
+@pytest.mark.parametrize(
+    ("kind", "durable_state"),
+    [
+        (OperationKind.COPY, "target-published"),
+        (OperationKind.UPDATE, "target-published-with-backup"),
+        (OperationKind.MOVE_UPDATE, "new-and-old"),
+    ],
+)
+def test_terminal_publish_that_commits_before_error_degrades_recording(
+    tmp_path: Path,
+    kind: OperationKind,
+    durable_state: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = TerminalPublishAfterCommitFileSystem()
+    operation, published_target = _published_retry_operation(
+        kind,
+        source,
+        target,
+        fs,
+    )
+    fs.published_target = published_target
+    recorder = FakeRecorder()
+    xset = _xset(_plan(source, target, (operation,), hardlinks=False))
+
+    result, events, _ = _run(
+        xset,
+        fs=fs,
+        recorder=recorder,
+        policies=_policies(failure=BoundedFailurePolicy(retries=0)),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "sharing-violation"
+    assert item.detail["publish_state"] == "published"
+    assert item.detail["target_state"] == "published"
+    assert item.detail["durable_state"] == durable_state
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert published_target.read_bytes() == b"new-version"
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
 
 
 def test_pause_during_published_copy_retry_settles_without_recopy(
@@ -5664,11 +5914,22 @@ def test_a15_move_update_stage_faults_never_lose_both_versions_or_false_record(
         assert recorder.move_update_attempts == 1
     else:
         assert result.status is SessionState.FAILED
-        assert result.recording is RecordingStatus.OK
         assert item.outcome is Outcome.FAILED
         assert item.reason == "io-error"
-        assert "recording" not in item.detail
         assert recorder.move_update_attempts == 0
+        if stage in {
+            "publish",
+            "post-metadata",
+            "attestation",
+            "trash",
+            "directory-flush",
+        }:
+            assert result.recording is RecordingStatus.DEGRADED
+            assert item.detail["publish_state"] == "published"
+            assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+        else:
+            assert result.recording is RecordingStatus.OK
+            assert "recording" not in item.detail
 
 
 class MoveUpdateTrashSharingOnceFileSystem(NativeFileSystem):
@@ -6004,6 +6265,87 @@ def test_recorder_flush_failure_blocks_destructive_delete(tmp_path: Path) -> Non
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
     assert (target / "file.bin").read_bytes() == b"keep"
+
+
+class ReplacingFlushRecorder(FakeRecorder):
+    def __init__(self, target: Path, replacement: bytes) -> None:
+        super().__init__()
+        self.target = target
+        self.replacement = replacement
+
+    def flush(self) -> None:
+        super().flush()
+        if self.flushes != 1:
+            return
+        foreign = self.target.with_name(f".{self.target.name}.foreign")
+        foreign.write_bytes(self.replacement)
+        os.replace(foreign, self.target)
+
+
+def test_update_final_guard_runs_after_recorder_barrier(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"new-version")
+    live = target / "file.bin"
+    live.write_bytes(b"reviewed-version")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    recorder = ReplacingFlushRecorder(live, b"foreign-version")
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert item.reason == "target-drift"
+    assert live.read_bytes() == b"foreign-version"
+    assert backup.read_bytes() == b"reviewed-version"
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+
+
+def test_delete_final_guard_runs_after_recorder_barrier(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    live = target / "file.bin"
+    live.write_bytes(b"reviewed-version")
+    fs = NativeFileSystem()
+    target_stat = fs.stat(target, "file.bin")
+    assert target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.DELETE,
+        source_rel_path=None,
+        target_rel_path="file.bin",
+        source_expected=None,
+        target_expected=target_stat,
+        intended=None,
+    )
+    recorder = ReplacingFlushRecorder(live, b"foreign-version")
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        recorder=recorder,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert item.reason == "target-drift"
+    assert live.read_bytes() == b"foreign-version"
+    assert recorder.calls == []
 
 
 class FailingReadonlyDeleteFileSystem(NativeFileSystem):

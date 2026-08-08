@@ -84,6 +84,13 @@ commitment. Workflow derives M0's safe subset from the full plan: direct
 blockers stay `BLOCKED`, correspondence/dependency exclusions stay `DEFERRED`,
 and incomplete scans withhold destructive/identity operations. Planner itself
 continues to emit complete deterministic intent and does not hide those items.
+That split is deliberate: a blocked parent/type conflict or unsupported source
+row remains reviewable alongside the raw policy removal the target-only diff
+would otherwise request. `derive_execution_selection()` quarantines the
+same-correspondence removal and blocked dependencies before preflight/execution,
+while unrelated safe work remains selectable. Interfaces therefore show full
+intent but can execute only the derived safe selection; they must not treat raw
+`Plan.operations` as executable authority.
 
 ## Diffing And Operation Rules
 

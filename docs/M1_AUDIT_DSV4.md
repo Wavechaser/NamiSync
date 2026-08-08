@@ -7,6 +7,45 @@
 - **Method:** Four parallel code audits by functional area (executor/verifier, scanner/planner/preflight, database/history, workflows/dispatcher), followed by manual line-level verification of every high-severity finding and a full test run on an isolated worktree.
 - **Test baseline:** `1087 passed, 4 failed, 1 skipped`. Three failures are environmental (`nami-sync.exe` not installed — the editable install was not performed); one failure is a real defect, see M1.
 
+## Resolution (2026-08-08)
+
+This report remains the point-in-time audit at `417aab5`; the findings below
+are preserved rather than rewritten after implementation. The planned HIGH
+resolution and its coupled dispatcher findings landed as follows:
+
+- **H1/H2 — contract pinned, not hidden.** The findings treated the raw plan as
+  direct executable authority. NamiSync's safety contract instead preserves the
+  full review intent, including the policy removal, and derives a separate
+  dependency/correspondence-safe selection. Regressions now prove the blocked
+  COPY/NOOP and removal remain visible under `trash` and `mirror`, the matching
+  removal is deferred, and unrelated removal remains executable. Suppressing
+  the raw row would weaken the review contract, so planner production code did
+  not change.
+- **H3 — fixed.** UPDATE and DELETE now perform the recorder durability wait
+  before their final live guard. A replacement introduced during that wait is
+  detected and neither overwritten nor deleted. The smaller documented
+  path-stat-to-syscall external-writer boundary remains non-atomic.
+- **H4 — fixed and adversarially extended.** Ordinary failure now probes
+  durable COPY/UPDATE/MOVE_UPDATE publication before temp cleanup, including a
+  publish primitive that commits and then raises. Confirmed, drifted, missing,
+  or unverified publication settles failed with truthful durable-state detail
+  and degraded recording, without success evidence.
+- **H5 — fixed at a reset boundary.** Ledger v3 stores a constrained sticky
+  metadata-drift/hash-mismatch invalidation. Scans and negative verifier
+  evidence set it conditionally, mismatch dominates later metadata drift, the
+  stale query and four-state inventory projection honor it, and only guarded
+  replacement evidence clears it.
+- **H6/M9/M10 — fixed together.** Each dispatcher attempt has a process-local
+  generation key owning its worker, reservation, and lease. Scheduler state is
+  explicit, successor handoff waits for current-attempt retirement, stale
+  cleanup is identity-scoped, and shutdown reports terminal-but-unretired or
+  canceled-acquisition owners as unfinished.
+
+Final verification: `1121 passed, 1 skipped`; pytest treats unhandled worker
+thread exceptions as errors. Import-law verification kept all 8 contracts, and
+`git diff --check` was clean. Medium/LOW findings not coupled to this planned
+delivery remain recorded below rather than being silently swept into scope.
+
 ## Severity definitions
 
 | Level | Meaning |

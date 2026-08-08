@@ -685,14 +685,16 @@ them. Retrofitting identity is the worst migration there is.
 - **Nullable file-identity group** — room for future hardlink grouping.
 
 M1 is one deliberate pre-release schema boundary, not an incremental migration:
-the ledger advances to v2 for canonical XXH3-128 content evidence and history
+the ledger advances to v3 for canonical XXH3-128 content evidence plus durable
+verification invalidation, and history
 advances to v4 for the bounded, incrementally durable reliable-event journal,
 typed item projections and rolling aggregates, and terminal-only phase
 summaries and result axes. The versions are qualified by immutable
 final-contract markers: ledger
-`m1-ledger-xxh3-128` and history `m1-history-windowed-events-v1`. A nonempty
+`m1-ledger-xxh3-128-invalidation-v1` and history
+`m1-history-windowed-events-v1`. A nonempty
 database is checked read-only for its numeric version and then exact marker
-before any writer or schema script is opened. Ledger v1, history v1-v3, and
+before any writer or schema script is opened. Ledger v1-v2, history v1-v3, and
 missing/mismatched markers are refused with one actionable reset posture, and
 development setup deletes/recreates both databases together. There is no
 v3-to-v4 history migration because v3 lacks the reliable state and phase events
@@ -804,7 +806,9 @@ capacity function. Non-everything scopes and content evidence remain deferred.
 **Contract.**
 `plan(source: ScanResult, target: ScanResult, correspondence: MappingSnapshot,
 options, scope) -> Plan`. Pure — every input is an immutable snapshot; the
-workflow reads correspondence from repositories and passes it in.
+workflow reads correspondence from repositories and passes it in. The plan is
+the complete review artifact; blocked intent and corresponding removal rows
+remain present while workflow derives a separate executable safe selection.
 
 **Bones.** `Plan`/`PlanOperation`/`Scope`/`MappingSnapshot` shapes;
 deterministic op ids, dependency ordering, and the plan `fingerprint`; the
@@ -880,6 +884,10 @@ grouping) with enrichment metadata supplied by the workflow.
 - A renamed source folder decomposes into per-file moves, a full mkdir chain,
   and emptied-dir cleanup; the rerun converges to zero operations and the
   rename itself copies no content bytes.
+- A blocked COPY or unsupported source item does not erase the matching
+  target-side removal from the raw plan; safe selection excludes that removal
+  and every dependency/correspondence consequence while unrelated safe work
+  remains selectable.
 
 ### 4.4 preflight
 
@@ -959,7 +967,7 @@ resume remains continue-or-refuse).
 
 ### 4.5 executor
 
-**Implementation status (2026-07-21).** The M0 native single-worker executor
+**Implementation status (2026-08-08).** The M0 native single-worker executor
 and its core execution contracts are implemented for all nine operation kinds,
 with conditional publish, zero-byte non-replacing recase, guarded trash/delete,
 deferred directory metadata, continuation state, bounded retries, throttled
@@ -1035,6 +1043,14 @@ drift detection rather than an adversarial path lock. Cancellation instead deriv
 the current item's outcome from that state immediately: retained UPDATE backups
 remain visible, published-but-unfinished work is failed with a typed reason and
 degraded recording, and no rollback or false success evidence is attempted.
+UPDATE and DELETE force prior recorder evidence durable before their final
+destructive guard, leaving no writer wait between that guard and mutation.
+Ordinary failure probes durable publish state before temp cleanup: if COPY,
+UPDATE, or MOVE_UPDATE committed and then raised, the operation reports the
+surviving target/backup/old-path state with `recording=DEGRADED` and never
+manufactures success evidence. A changed or missing published target is named
+as such rather than contradicted by a `target-published` durability label; an
+unsuccessful state probe degrades recording as publication-unverified.
 
 **Flesh — now.** copy/update/recase/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
@@ -1106,6 +1122,12 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
 - Source changed mid-copy ⇒ op `FAILED`, **no** attestation recorded (PoC gap).
 - A first blocked/failed operation never aborts later independent operations
   (the "walk away for hours" guarantee — the PoC's original SEVERE bug).
+- UPDATE and DELETE recorder contention happens before the final destructive
+  guard; a test replacement introduced during the flush fails that guard and is
+  not overwritten or deleted.
+- A publish primitive that commits then raises yields one truthful failed item
+  with degraded recording and explicit durable-state detail for COPY, UPDATE,
+  and MOVE_UPDATE.
 - Temp recovery deletes only exact-shape, different-run regular files in the
   preflight-retained touched parents. Current-run temps, lookalikes, exact-name
   directories, untouched parents, off-volume mounts, and `.synctrash` survive;
@@ -1168,6 +1190,12 @@ durable matching row evidence may conditionally advance ledger verification
 state. Immediate
 readback is independent evidence against ordinary copy/IO/recording failures,
 not a defense against malicious in-process executor code.
+Baseline-backed `missing`/`modified` observations conditionally persist
+metadata-drift invalidation, while a stable digest mismatch persists
+hash-mismatch. The marker is sticky across ordinary matching scans, mismatch
+dominates later metadata drift, and only a guarded positive evidence write
+clears it; repositories derive inventory verification state from this marker
+and retained evidence rather than age alone.
 
 **Flesh — deferred.** Benchmark-justified multithreaded verification with
 per-volume safety policy (no worker-count setting is reserved);
@@ -1187,6 +1215,9 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
   casing/separator bug).
 - Every per-file write is conditional; a file that drifts between hash and write
   records nothing.
+- Negative missing/modified/mismatched evidence is conditional too; stale,
+  conflicting, or failed persistence degrades recording without changing the
+  content verdict.
 - Reads bypass the page cache (or defer past cache pressure) so a match attests
   the medium, not a just-written buffer.
 - A matching transient post-copy candidate is classified even when no ledger
@@ -1205,15 +1236,16 @@ admitted execution never rereads it. Runtime defaults this file beside the
 selected ledger and translates it to primitive service views; interfaces never
 import database settings types.
 
-**Implementation status (2026-08-05).** Ledger v2 and history v4 are active.
+**Implementation status (2026-08-08).** Ledger v3 and history v4 are active.
 Their safe writer/read-only connection factories, canonical UTC codec,
 serialized retrying writer, run-bound sync recorder, batched inventory
-reconciliation, conditional baseline/verify/rebaseline writes, typed ledger
+reconciliation, conditional baseline/verify/rebaseline/invalidation writes,
+typed ledger
 repositories, and bounded history observer/repository are implemented. The
 history observer appends canonical reliable envelopes in atomic windows,
 projects typed result items for dense paging and fixed conditional aggregates,
 and writes terminal
-axes plus bounded phase summaries only during finalization. Ledger v1 and
+axes plus bounded phase summaries only during finalization. Ledger v1-v2 and
 history v1-v3 are refused without mutation; the temporary pre-migrator
 recovery is manual deletion of both local databases or the explicit
 development reset helper, never automatic startup deletion. `settings.py`
@@ -1339,8 +1371,9 @@ declares generic per-kind capabilities (today: pause support) that the control
 plane enforces without learning a domain word.
 
 **Bones.** Generic session admission; volume-scoped concurrency (non-overlapping
-volume sets run in parallel, contenders queue); resource custody (locks acquired
-on start, released on terminal or pause-drain — one owner); the control plane
+volume sets run in parallel, contenders queue); generation-owned resource
+custody (each process-local worker attempt owns exactly its reservations and
+lease, and each session has one current attempt); the control plane
 over the transition table; event sequencing + fan-out; the **`SessionStore`
 protocol** and the serialized session-record shape (lifecycle fields + an
 **opaque** per-workflow blob the dispatcher never deserializes) — this store is
@@ -1367,6 +1400,12 @@ does not wait); pause/resume/cancel — resume re-enters admission at the back
 of its volumes' queue and never preempts a running session (FEATURES → *Resume
 Never Preempts*); a bounded per-session replay buffer (late subscribers get
 current state plus a bounded tail plus an explicit `Gap`).
+Pause/resume/cancel handoff may make PAUSED/CANCELING/PENDING visible while the
+prior attempt is retiring, but the scheduler does not install a successor until
+that generation relinquishes current ownership. Custody release and worker
+cleanup identity-check the generation, so stale teardown cannot release or
+remove a successor's lease/reservations. The generation is runtime-only and is
+never serialized into session payloads or stores.
 Terminal session records are retained until explicitly closed, then dropped;
 history is the durable trail. Session identity is not desktop task identity:
 the M1 adapter may retain a reviewed plan in a task while no session exists,
@@ -1390,6 +1429,10 @@ bounded live/replay buffers); local-pipe CLI-as-client.
   workflows (import-lint enforced).
 - Two sessions on disjoint volume sets run concurrently; two contending for one
   volume serialize.
+- Immediate resume and cancel-from-visible-PAUSED wait for the retiring current
+  generation; no second session worker overlaps it, and handoff settles once.
+- Stale generation cleanup cannot alter a successor's current key, lease, or
+  reservations; a lease is released on the same thread that acquired it.
 - Every ordinary `Exception`/cooperative-control path reaches one terminal and
   releases every lock; `BaseException` escapes unnormalized while teardown
   still releases custody.
@@ -1403,6 +1446,9 @@ bounded live/replay buffers); local-pipe CLI-as-client.
 - Two processes contending for one volume serialize through the OS-level lock;
   killing the holder mid-run releases it (abandoned-lock recovery proven by a
   process-kill test).
+- Shutdown remains incomplete and names a session whose canceled acquisition
+  has not retired; completion requires empty attempt, current-owner, lease, and
+  reservation maps as well as an exited scheduler.
 
 ### 4.9 workflows
 

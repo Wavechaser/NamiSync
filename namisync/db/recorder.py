@@ -18,6 +18,9 @@ from namisync.core.integrity import (
     IntegrityRecordCommand,
     InventoryState,
     RecordDisposition,
+    VerificationInvalidation,
+    VerificationInvalidationCommand,
+    VerificationInvalidationReason,
 )
 from namisync.core.models import (
     DirRecord,
@@ -86,6 +89,23 @@ class InventoryReconcileResult:
 _SUBTREE_DESCENDANT_PREDICATE = (
     "rel_path_key >= ? || '\\' AND rel_path_key < ? || ']'"
 )
+_OBSERVATION_MATCHES_ATTESTATION = """(
+    inventory.attested_kind IS excluded.entry_kind
+    AND inventory.attested_size IS excluded.observed_size
+    AND inventory.attested_mtime_ns IS excluded.observed_mtime_ns
+    AND (
+        (
+            inventory.attested_file_identity_volume_serial IS NULL
+            AND inventory.attested_file_identity_file_index IS NULL
+        )
+        OR (
+            inventory.attested_file_identity_volume_serial
+                IS excluded.file_identity_volume_serial
+            AND inventory.attested_file_identity_file_index
+                IS excluded.file_identity_file_index
+        )
+    )
+)"""
 
 
 def _primitive(value: object) -> object:
@@ -543,7 +563,7 @@ class LedgerRecorder:
             observed_keys.append(record.rel_path_key)
         for start in range(0, len(observation_rows), 400):
             connection.executemany(
-                """INSERT INTO inventory(
+                f"""INSERT INTO inventory(
                        location_id, rel_path, rel_path_key, entry_kind, presence,
                        observed_size, observed_mtime_ns, file_identity_volume_serial,
                        file_identity_file_index, observed_nlink, observed_attributes,
@@ -564,6 +584,22 @@ class LedgerRecorder:
                        last_observed_at = excluded.last_observed_at,
                        observation_host_id = excluded.observation_host_id,
                        scope_token = excluded.scope_token,
+                       verification_invalidated_at = CASE
+                           WHEN inventory.content_algorithm IS NOT NULL
+                                AND NOT {_OBSERVATION_MATCHES_ATTESTATION}
+                           THEN COALESCE(
+                               inventory.verification_invalidated_at,
+                               excluded.last_observed_at
+                           )
+                           ELSE inventory.verification_invalidated_at END,
+                       verification_invalidated_reason = CASE
+                           WHEN inventory.content_algorithm IS NOT NULL
+                                AND NOT {_OBSERVATION_MATCHES_ATTESTATION}
+                           THEN COALESCE(
+                               inventory.verification_invalidated_reason,
+                               'metadata-drift'
+                           )
+                           ELSE inventory.verification_invalidated_reason END,
                        reappeared_at = CASE
                            WHEN inventory.presence = 'missing' THEN excluded.last_observed_at
                            ELSE inventory.reappeared_at END,
@@ -603,6 +639,20 @@ class LedgerRecorder:
                        observation_host_id = excluded.observation_host_id,
                        scope_token = excluded.scope_token,
                        unsupported_reason = excluded.unsupported_reason,
+                       verification_invalidated_at = CASE
+                           WHEN inventory.content_algorithm IS NOT NULL
+                           THEN COALESCE(
+                               inventory.verification_invalidated_at,
+                               excluded.last_observed_at
+                           )
+                           ELSE inventory.verification_invalidated_at END,
+                       verification_invalidated_reason = CASE
+                           WHEN inventory.content_algorithm IS NOT NULL
+                           THEN COALESCE(
+                               inventory.verification_invalidated_reason,
+                               'metadata-drift'
+                           )
+                           ELSE inventory.verification_invalidated_reason END,
                        reappeared_at = CASE
                            WHEN inventory.presence = 'missing' THEN excluded.last_observed_at
                            ELSE inventory.reappeared_at END,
@@ -629,14 +679,25 @@ class LedgerRecorder:
                 """UPDATE inventory
                       SET presence = 'missing',
                           missing_since = COALESCE(missing_since, ?),
-                          scope_token = ?
+                          scope_token = ?,
+                          verification_invalidated_at = CASE
+                              WHEN content_algorithm IS NOT NULL
+                              THEN COALESCE(verification_invalidated_at, ?)
+                              ELSE verification_invalidated_at END,
+                          verification_invalidated_reason = CASE
+                              WHEN content_algorithm IS NOT NULL
+                              THEN COALESCE(
+                                  verification_invalidated_reason,
+                                  'metadata-drift'
+                              )
+                              ELSE verification_invalidated_reason END
                     WHERE location_id = ?
                       AND presence IN ('present', 'unsupported')
                       AND NOT EXISTS (
                           SELECT 1 FROM current_scan_keys
                            WHERE current_scan_keys.rel_path_key = inventory.rel_path_key
                       )""",
-                (at, command.scope_token, command.location_id),
+                (at, command.scope_token, at, command.location_id),
             )
             missing = cursor.rowcount
             connection.execute("DELETE FROM current_scan_keys")
@@ -654,10 +715,21 @@ class LedgerRecorder:
                     f"""UPDATE inventory
                            SET presence = 'missing',
                                missing_since = COALESCE(missing_since, ?),
-                               scope_token = ?
+                               scope_token = ?,
+                               verification_invalidated_at = CASE
+                                   WHEN content_algorithm IS NOT NULL
+                                   THEN COALESCE(verification_invalidated_at, ?)
+                                   ELSE verification_invalidated_at END,
+                               verification_invalidated_reason = CASE
+                                   WHEN content_algorithm IS NOT NULL
+                                   THEN COALESCE(
+                                       verification_invalidated_reason,
+                                       'metadata-drift'
+                                   )
+                                   ELSE verification_invalidated_reason END
                          WHERE location_id = ? AND rel_path_key IN ({placeholders})
                            AND presence IN ('present', 'unsupported')""",
-                    (at, command.scope_token, command.location_id, *chunk),
+                    (at, command.scope_token, at, command.location_id, *chunk),
                 )
                 missing += cursor.rowcount
         elif command.scan.complete and scope_kind is ScanScopeKind.SUBTREES:
@@ -674,11 +746,22 @@ class LedgerRecorder:
                     f"""UPDATE inventory
                            SET presence = 'missing',
                                missing_since = COALESCE(missing_since, ?),
-                               scope_token = ?
+                               scope_token = ?,
+                               verification_invalidated_at = CASE
+                                   WHEN content_algorithm IS NOT NULL
+                                   THEN COALESCE(verification_invalidated_at, ?)
+                                   ELSE verification_invalidated_at END,
+                               verification_invalidated_reason = CASE
+                                   WHEN content_algorithm IS NOT NULL
+                                   THEN COALESCE(
+                                       verification_invalidated_reason,
+                                       'metadata-drift'
+                                   )
+                                   ELSE verification_invalidated_reason END
                          WHERE location_id = ?
                            AND rel_path_key IN ({placeholders})
                            AND presence IN ('present', 'unsupported')""",
-                    (at, command.scope_token, command.location_id, *chunk),
+                    (at, command.scope_token, at, command.location_id, *chunk),
                 )
                 missing += cursor.rowcount
             for root in command.scan.scope.subtree_roots:
@@ -687,7 +770,18 @@ class LedgerRecorder:
                     """UPDATE inventory
                           SET presence = 'missing',
                               missing_since = COALESCE(missing_since, ?),
-                              scope_token = ?
+                              scope_token = ?,
+                              verification_invalidated_at = CASE
+                                  WHEN content_algorithm IS NOT NULL
+                                  THEN COALESCE(verification_invalidated_at, ?)
+                                  ELSE verification_invalidated_at END,
+                              verification_invalidated_reason = CASE
+                                  WHEN content_algorithm IS NOT NULL
+                                  THEN COALESCE(
+                                      verification_invalidated_reason,
+                                      'metadata-drift'
+                                  )
+                                  ELSE verification_invalidated_reason END
                         WHERE location_id = ?
                           AND presence IN ('present', 'unsupported')
                           AND rel_path_key = ?
@@ -699,6 +793,7 @@ class LedgerRecorder:
                     (
                         at,
                         command.scope_token,
+                        at,
                         command.location_id,
                         root_key,
                     ),
@@ -708,7 +803,18 @@ class LedgerRecorder:
                     f"""UPDATE inventory
                            SET presence = 'missing',
                                missing_since = COALESCE(missing_since, ?),
-                               scope_token = ?
+                               scope_token = ?,
+                               verification_invalidated_at = CASE
+                                   WHEN content_algorithm IS NOT NULL
+                                   THEN COALESCE(verification_invalidated_at, ?)
+                                   ELSE verification_invalidated_at END,
+                               verification_invalidated_reason = CASE
+                                   WHEN content_algorithm IS NOT NULL
+                                   THEN COALESCE(
+                                       verification_invalidated_reason,
+                                       'metadata-drift'
+                                   )
+                                   ELSE verification_invalidated_reason END
                          WHERE location_id = ?
                            AND presence IN ('present', 'unsupported')
                            AND {_SUBTREE_DESCENDANT_PREDICATE}
@@ -720,6 +826,7 @@ class LedgerRecorder:
                     (
                         at,
                         command.scope_token,
+                        at,
                         command.location_id,
                         root_key,
                         root_key,
@@ -750,6 +857,31 @@ class LedgerRecorder:
 
         return self._writer.transact(apply)
 
+    def record_verification_invalidation(
+        self, command: VerificationInvalidationCommand
+    ) -> RecordDisposition:
+        command_key = (
+            f"verification-invalidation:{command.scope_token}:{command.item_id}"
+        )
+        payload_hash = _payload_hash(command)
+
+        def apply(connection: sqlite3.Connection) -> RecordDisposition:
+            prior = self._command_receipt(connection, command_key, payload_hash)
+            if prior is not None:
+                return prior
+            disposition = self._apply_verification_invalidation(connection, command)
+            self._store_command_receipt(
+                connection,
+                command_key,
+                "verification-invalidation",
+                payload_hash,
+                disposition,
+                command.invalidated_at,
+            )
+            return disposition
+
+        return self._writer.transact(apply)
+
     def _apply_integrity(
         self, connection: sqlite3.Connection, command: IntegrityRecordCommand
     ) -> RecordDisposition:
@@ -765,6 +897,9 @@ class LedgerRecorder:
             or row["scope_token"] != command.scope_token
             or not self._row_matches_stat(row, command.expected_stat)
             or not self._row_matches_attestation(row, command.expected_baseline)
+            or not self._row_matches_invalidation(
+                row, command.expected_invalidation
+            )
         ):
             return RecordDisposition.STALE
         subject = command.attestation.subject
@@ -786,7 +921,8 @@ class LedgerRecorder:
         )
         verified_ok = row["last_verified_at"] == desired_verified_at
         reappeared_ok = not command.clear_reappeared or row["reappeared_at"] is None
-        if already and verified_ok and reappeared_ok:
+        invalidation_cleared = row["verification_invalidated_at"] is None
+        if already and verified_ok and reappeared_ok and invalidation_cleared:
             return RecordDisposition.NOOP
 
         subject = desired.subject
@@ -800,6 +936,8 @@ class LedgerRecorder:
                       attested_file_identity_file_index = ?, attested_nlink = ?,
                       attested_attributes = ?, attested_created_ns = ?,
                       last_verified_at = ?,
+                      verification_invalidated_at = NULL,
+                      verification_invalidated_reason = NULL,
                       reappeared_at = CASE WHEN ? THEN NULL ELSE reappeared_at END
                 WHERE id = ?""",
             (
@@ -818,6 +956,46 @@ class LedgerRecorder:
                 subject.metadata.created_ns,
                 desired_verified_at,
                 command.clear_reappeared,
+                command.row_id,
+            ),
+        )
+        return RecordDisposition.APPLIED
+
+    def _apply_verification_invalidation(
+        self,
+        connection: sqlite3.Connection,
+        command: VerificationInvalidationCommand,
+    ) -> RecordDisposition:
+        row = connection.execute(
+            "SELECT * FROM inventory WHERE id = ?", (command.row_id,)
+        ).fetchone()
+        if row is None:
+            return RecordDisposition.STALE
+        if (
+            str(row["location_id"]) != command.location_id
+            or row["rel_path_key"] != command.rel_path_key
+            or row["presence"] != command.expected_state.value
+            or row["scope_token"] != command.scope_token
+            or not self._row_matches_stat(row, command.expected_stat)
+            or not self._row_matches_attestation(row, command.expected_baseline)
+            or not self._row_matches_invalidation(
+                row, command.expected_invalidation
+            )
+        ):
+            return RecordDisposition.STALE
+        connection.execute(
+            """UPDATE inventory
+                  SET verification_invalidated_at =
+                          COALESCE(verification_invalidated_at, ?),
+                      verification_invalidated_reason = CASE
+                          WHEN verification_invalidated_reason = 'hash-mismatch'
+                               OR ? = 'hash-mismatch'
+                          THEN 'hash-mismatch'
+                          ELSE 'metadata-drift' END
+                WHERE id = ?""",
+            (
+                encode_utc(command.invalidated_at),
+                command.reason.value,
                 command.row_id,
             ),
         )
@@ -860,6 +1038,46 @@ class LedgerRecorder:
             and row["attested_nlink"] == subject.nlink
             and row["attested_attributes"] == subject.metadata.attributes
             and row["attested_created_ns"] == subject.metadata.created_ns
+        )
+
+    @staticmethod
+    def _row_attested_subject_matches_stat(
+        row: sqlite3.Row,
+        stat: FileStat,
+    ) -> bool:
+        if row["content_algorithm"] is None:
+            return True
+        identity = _identity_values(stat.file_identity)
+        attested_identity_is_wildcard = (
+            row["attested_file_identity_volume_serial"] is None
+            and row["attested_file_identity_file_index"] is None
+        )
+        return (
+            row["attested_kind"] == stat.kind.value
+            and row["attested_size"] == stat.size
+            and row["attested_mtime_ns"] == stat.mtime_ns
+            and (
+                attested_identity_is_wildcard
+                or (
+                    row["attested_file_identity_volume_serial"] == identity[0]
+                    and row["attested_file_identity_file_index"] == identity[1]
+                )
+            )
+        )
+
+    @staticmethod
+    def _row_matches_invalidation(
+        row: sqlite3.Row,
+        expected: VerificationInvalidation | None,
+    ) -> bool:
+        if expected is None:
+            return (
+                row["verification_invalidated_at"] is None
+                and row["verification_invalidated_reason"] is None
+            )
+        return (
+            row["verification_invalidated_at"] == encode_utc(expected.at)
+            and row["verification_invalidated_reason"] == expected.reason.value
         )
 
     def _command_receipt(
@@ -906,7 +1124,7 @@ class LedgerRecorder:
         key = normalize_relative_path(canonical)
         identity_serial, identity_index = _identity_values(stat.file_identity)
         row = connection.execute(
-            """INSERT INTO inventory(
+            f"""INSERT INTO inventory(
                    location_id, rel_path, rel_path_key, entry_kind, presence,
                    observed_size, observed_mtime_ns, file_identity_volume_serial,
                    file_identity_file_index, observed_nlink, observed_attributes,
@@ -927,6 +1145,22 @@ class LedgerRecorder:
                    last_observed_at = excluded.last_observed_at,
                    observation_host_id = excluded.observation_host_id,
                    scope_token = excluded.scope_token,
+                   verification_invalidated_at = CASE
+                       WHEN inventory.content_algorithm IS NOT NULL
+                            AND NOT {_OBSERVATION_MATCHES_ATTESTATION}
+                       THEN COALESCE(
+                           inventory.verification_invalidated_at,
+                           excluded.last_observed_at
+                       )
+                       ELSE inventory.verification_invalidated_at END,
+                   verification_invalidated_reason = CASE
+                       WHEN inventory.content_algorithm IS NOT NULL
+                            AND NOT {_OBSERVATION_MATCHES_ATTESTATION}
+                       THEN COALESCE(
+                           inventory.verification_invalidated_reason,
+                           'metadata-drift'
+                       )
+                       ELSE inventory.verification_invalidated_reason END,
                    reappeared_at = CASE
                        WHEN inventory.presence = 'missing' THEN excluded.last_observed_at
                        ELSE inventory.reappeared_at END,
@@ -1047,6 +1281,13 @@ class SyncRunRecorder:
         """Use the same serialized writer for linked post-copy verification."""
 
         return self._owner.record_integrity(command)
+
+    def record_verification_invalidation(
+        self, command: VerificationInvalidationCommand
+    ) -> RecordDisposition:
+        """Use the same serialized writer for linked negative verification."""
+
+        return self._owner.record_verification_invalidation(command)
 
     def record_mkdir(self, op: OpId, target: FileStat) -> None:
         def apply(connection: sqlite3.Connection, plan_op: PlanOperation, at: str) -> None:
@@ -1307,6 +1548,18 @@ class SyncRunRecorder:
                 at,
             )
         identity_serial, identity_index = _identity_values(target.file_identity)
+        invalidated = not self._owner._row_attested_subject_matches_stat(old, target)
+        invalidated_at = (
+            old["verification_invalidated_at"] or at
+            if invalidated
+            else old["verification_invalidated_at"]
+        )
+        invalidated_reason = (
+            old["verification_invalidated_reason"]
+            or VerificationInvalidationReason.METADATA_DRIFT.value
+            if invalidated
+            else old["verification_invalidated_reason"]
+        )
         connection.execute(
             """UPDATE inventory SET
                    rel_path = ?, rel_path_key = ?, entry_kind = ?, presence = 'present',
@@ -1315,7 +1568,9 @@ class SyncRunRecorder:
                    observed_nlink = ?, observed_attributes = ?, observed_created_ns = ?,
                    last_observed_at = ?, observation_host_id = ?, scope_token = ?,
                    missing_since = NULL, acknowledged_at = NULL, reappeared_at = NULL,
-                   unsupported_reason = NULL
+                   unsupported_reason = NULL,
+                   verification_invalidated_at = ?,
+                   verification_invalidated_reason = ?
                  WHERE id = ?""",
             (
                 operation.target_rel_path,
@@ -1331,6 +1586,8 @@ class SyncRunRecorder:
                 at,
                 self._command.host_id,
                 self._command.run_token,
+                invalidated_at,
+                invalidated_reason,
                 old["id"],
             ),
         )
@@ -1380,9 +1637,21 @@ class SyncRunRecorder:
             at,
         )
         connection.execute(
-            """UPDATE inventory SET presence = 'missing', missing_since = ?,
-                                      scope_token = ? WHERE id = ?""",
-            (at, self._command.run_token, row_id),
+            """UPDATE inventory
+                  SET presence = 'missing', missing_since = ?, scope_token = ?,
+                      verification_invalidated_at = CASE
+                          WHEN content_algorithm IS NOT NULL
+                          THEN COALESCE(verification_invalidated_at, ?)
+                          ELSE verification_invalidated_at END,
+                      verification_invalidated_reason = CASE
+                          WHEN content_algorithm IS NOT NULL
+                          THEN COALESCE(
+                              verification_invalidated_reason,
+                              'metadata-drift'
+                          )
+                          ELSE verification_invalidated_reason END
+                WHERE id = ?""",
+            (at, self._command.run_token, at, row_id),
         )
 
     @staticmethod
@@ -1399,7 +1668,9 @@ class SyncRunRecorder:
                    attested_file_identity_volume_serial = ?,
                    attested_file_identity_file_index = ?, attested_nlink = ?,
                    attested_attributes = ?, attested_created_ns = ?,
-                   last_verified_at = NULL
+                   last_verified_at = NULL,
+                   verification_invalidated_at = NULL,
+                   verification_invalidated_reason = NULL
                  WHERE id = ?""",
             (
                 attestation.content.algorithm,

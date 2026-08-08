@@ -52,17 +52,28 @@ degrades recording without rewriting a truthful content verdict.
 2. Open the intended file without following an unexpected reparse point.
 3. Stat before reading and compare size/mtime/identity with retained baseline.
 4. If absent, emit `missing`; if unsupported, emit `unsupported`; if stat
-   changed, emit `modified` without calling it bitrot.
+   changed, emit `modified` without calling it bitrot. A baseline-backed
+   missing or modified result conditionally retains a metadata-drift
+   invalidation.
 5. Read through the cache-honest strategy while hashing XXH3-128 and reporting
    monotonic progress throttled by an injected monotonic clock.
-6. Stat the same open subject/handle after reading; drift yields `modified` or
-   `error` and no write.
+6. Stat the same open subject/handle after reading; proven drift yields
+   `modified` and conditionally records metadata-drift when baseline evidence
+   exists. A generic read/stat error remains `error` and writes nothing.
 7. If no stored hash, emit `baselined` and conditionally record a
    `VERIFY_ATTESTED` baseline.
 8. If stats are stable and digest matches, emit `verified` and conditionally
    advance verification evidence.
 9. If stats are stable and digest differs, emit `mismatched`; preserve the old
-   baseline and never auto-accept.
+   baseline, conditionally retain a hash-mismatch invalidation, and never
+   auto-accept.
+
+Negative verification evidence is guarded by the same row/location/path/scope,
+current-stat, baseline, and expected-invalidation facts as a positive write. A
+stale/conflicting/error result degrades recording without rewriting the truthful
+`missing`, `modified`, or `mismatched` verdict. Hash mismatch dominates later metadata
+drift; matching scans cannot make it verified again. A successful verify or
+explicit baseline/rebaseline evidence write atomically clears the marker.
 
 Every selected file emits exactly one reliable item result when the session
 terminates, including cancel and error paths. Summary counts derive from those
@@ -103,7 +114,8 @@ matching/new evidence clears `reappeared_at` atomically with that write.
 Baseline/rebaseline replacement evidence never advances verification freshness
 and clears a prior `last_verified_at`; only a true comparison match in verify
 advances that timestamp. Copy/update/move-update evidence follows the same
-freshness invalidation rule.
+freshness rule and replaces any prior invalidation only with new attested
+evidence.
 
 Workflow freezes a mode-aware initial selection before calling this module.
 Baseline admits only eligible non-directory rows without an attestation;

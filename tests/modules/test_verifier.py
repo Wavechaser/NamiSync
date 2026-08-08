@@ -39,6 +39,8 @@ from namisync.core.integrity import (
     ReadStrategy,
     RecordDisposition,
     UnsupportedVerification,
+    VerificationInvalidationCommand,
+    VerificationInvalidationReason,
     VerifierContext,
 )
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
@@ -118,9 +120,18 @@ class _Recorder:
         self.disposition = disposition
         self.error = error
         self.commands: list[IntegrityRecordCommand] = []
+        self.invalidation_commands: list[VerificationInvalidationCommand] = []
 
     def record_integrity(self, command: IntegrityRecordCommand) -> RecordDisposition:
         self.commands.append(command)
+        if self.error is not None:
+            raise self.error
+        return self.disposition
+
+    def record_verification_invalidation(
+        self, command: VerificationInvalidationCommand
+    ) -> RecordDisposition:
+        self.invalidation_commands.append(command)
         if self.error is not None:
             raise self.error
         return self.disposition
@@ -281,6 +292,9 @@ def test_verify_classifies_stat_drift_before_digest_mismatch(
     assert result.outcomes[0].result is expected_result
     assert len(_integrity_events(events)) == 1
     assert len(recorder.commands) == (1 if expected_result is IntegrityResult.VERIFIED else 0)
+    assert len(recorder.invalidation_commands) == (
+        0 if expected_result is IntegrityResult.VERIFIED else 1
+    )
 
 
 def test_valid_different_xxh3_digest_remains_a_hash_mismatch(tmp_path: Path) -> None:
@@ -299,6 +313,11 @@ def test_valid_different_xxh3_digest_remains_a_hash_mismatch(tmp_path: Path) -> 
     assert result.outcomes[0].result is IntegrityResult.MISMATCHED
     assert result.outcomes[0].reason is IntegrityReason.HASH_MISMATCH
     assert recorder.commands == []
+    assert len(recorder.invalidation_commands) == 1
+    assert (
+        recorder.invalidation_commands[0].reason
+        is VerificationInvalidationReason.HASH_MISMATCH
+    )
 
 
 def test_wrong_length_hasher_digest_raises_contract_error_before_comparison(
@@ -546,6 +565,35 @@ def test_post_copy_stat_drift_precedes_stable_digest_mismatch(
     assert outcome.result is expected_result
     assert outcome.reason is expected_reason
     assert recorder.commands == []
+    assert len(recorder.invalidation_commands) == 1
+    assert recorder.invalidation_commands[0].reason is (
+        VerificationInvalidationReason.HASH_MISMATCH
+        if expected_result is IntegrityResult.MISMATCHED
+        else VerificationInvalidationReason.METADATA_DRIFT
+    )
+
+
+def test_post_copy_missing_subject_records_verification_invalidation(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path)
+    recorder = _Recorder()
+
+    result = verify_post_copy(
+        PostCopySelection((candidate,)),
+        _context([]),
+        recorder,
+        _FakeReader({candidate.display_path: FileNotFoundError("gone")}),
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.result is IntegrityResult.MISSING
+    assert outcome.reason is IntegrityReason.NOT_FOUND
+    assert outcome.read_strategy is None
+    assert len(recorder.invalidation_commands) == 1
+    command = recorder.invalidation_commands[0]
+    assert command.reason is VerificationInvalidationReason.METADATA_DRIFT
+    assert command.row_id == candidate.recorded_identity.row_id  # type: ignore[union-attr]
 
 
 def test_post_copy_unexpected_reader_exception_escapes_without_an_outcome(
@@ -685,7 +733,7 @@ def test_rebaseline_accepts_fresh_current_stat_without_calling_it_verified(
         (OSError("read failed"), IntegrityResult.ERROR, IntegrityReason.READ_ERROR),
     ],
 )
-def test_missing_unsupported_and_read_errors_emit_once_without_writes(
+def test_missing_invalidates_while_unsupported_and_read_errors_do_not(
     tmp_path: Path,
     entry: BaseException,
     expected: IntegrityResult,
@@ -706,6 +754,14 @@ def test_missing_unsupported_and_read_errors_emit_once_without_writes(
     assert result.outcomes[0].reason is reason
     assert len(_integrity_events(events)) == 1
     assert recorder.commands == []
+    assert len(recorder.invalidation_commands) == (
+        1 if expected is IntegrityResult.MISSING else 0
+    )
+    if expected is IntegrityResult.MISSING:
+        command = recorder.invalidation_commands[0]
+        assert command.reason is VerificationInvalidationReason.METADATA_DRIFT
+        assert command.expected_stat == item.expected_stat
+        assert command.expected_baseline == item.baseline
 
 
 def test_expected_missing_and_unsupported_rows_are_never_opened(tmp_path: Path) -> None:
@@ -727,7 +783,7 @@ def test_expected_missing_and_unsupported_rows_are_never_opened(tmp_path: Path) 
     assert reader.opened == []
 
 
-def test_read_drift_prevents_the_recorder_call(tmp_path: Path) -> None:
+def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
     before = _stat()
     after = _stat(mtime_ns=101)
     item = _item(tmp_path, expected_stat=before)
@@ -743,6 +799,57 @@ def test_read_drift_prevents_the_recorder_call(tmp_path: Path) -> None:
     assert result.outcomes[0].result is IntegrityResult.MODIFIED
     assert result.outcomes[0].reason is IntegrityReason.READ_DRIFT
     assert recorder.commands == []
+    assert len(recorder.invalidation_commands) == 1
+    assert (
+        recorder.invalidation_commands[0].reason
+        is VerificationInvalidationReason.METADATA_DRIFT
+    )
+
+
+@pytest.mark.parametrize(
+    ("recorder", "reason", "disposition"),
+    [
+        (
+            _Recorder(RecordDisposition.STALE),
+            IntegrityReason.RECORDING_STALE,
+            RecordDisposition.STALE,
+        ),
+        (
+            _Recorder(RecordDisposition.CONFLICT),
+            IntegrityReason.RECORDING_CONFLICT,
+            RecordDisposition.CONFLICT,
+        ),
+        (
+            _Recorder(error=OSError("sqlite unavailable")),
+            IntegrityReason.RECORDING_ERROR,
+            None,
+        ),
+    ],
+)
+def test_negative_recording_failures_preserve_modified_truth_and_degrade(
+    tmp_path: Path,
+    recorder: _Recorder,
+    reason: IntegrityReason,
+    disposition: RecordDisposition | None,
+) -> None:
+    before = _stat()
+    after = _stat(mtime_ns=101)
+    item = _item(tmp_path, expected_stat=before)
+
+    result = verify(
+        IntegritySelection((item,)),
+        _context([]),
+        recorder,
+        _FakeReader({item.display_path: _StreamSpec(before, (b"abc",), after)}),
+    )
+
+    outcome = result.outcomes[0]
+    assert outcome.result is IntegrityResult.MODIFIED
+    assert outcome.reason is reason
+    assert outcome.recording is RecordingStatus.DEGRADED
+    assert outcome.record_disposition is disposition
+    assert result.recording is RecordingStatus.DEGRADED
+    assert len(recorder.invalidation_commands) == 1
 
 
 @pytest.mark.parametrize(

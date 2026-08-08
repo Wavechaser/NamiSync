@@ -46,9 +46,10 @@ tagged `copy`, and never advances `last_verified_at`. Paired no-ops require both
 live stats to match the reviewed snapshots. Move recording validates the prior
 row before carrying its evidence forward and transactionally reconciles a
 retained-missing destination row. A pure move preserves that row's content hash,
-provenance, and `last_verified_at` — a same-volume rename keeps size, mtime, and
-identity — so a later verify verifies against carried-forward evidence instead of
-re-baselining; a move of a never-hashed file simply carries no hash. Move-update
+provenance, `last_verified_at`, and any existing invalidation because a
+same-volume rename keeps size, mtime, and identity. A later verify therefore
+compares against carried-forward evidence instead of re-baselining; a move of a
+never-hashed file simply carries no hash. Move-update
 overwrites content and therefore records fresh `copy` evidence. Recase recording
 uses the same row/correspondence reconciliation while requiring the explicit
 `recase` operation kind; it updates only stored target spelling and observed
@@ -74,9 +75,19 @@ absent prior `present` and `unsupported` rows, never already-`missing` or
 out-of-scope rows, and never uses wildcard-sensitive `LIKE`. Full sweeps still
 scale past 33k rows without a giant parameter list.
 
-The integrity primitive gates row, location, canonical path, present state,
-scope token, current stat, and full expected attestation. Evidence,
-`last_verified_at`, and `reappeared_at` change in one transaction or not at all.
+Observation upserts retain attestation but atomically set a sticky
+`metadata-drift` invalidation when current kind/size/mtime or known identity no
+longer matches its subject; missing and unsupported transitions do the same.
+An existing `hash-mismatch` is never downgraded by later scan metadata. Fresh
+copy/baseline/rebaseline/verified evidence clears the marker only while its full
+conditional guard still matches.
+
+The integrity primitives gate row, location, canonical path, present state,
+scope token, current stat, full expected attestation, and expected invalidation.
+Positive evidence, `last_verified_at`, invalidation clearing, and
+`reappeared_at` change in one transaction or not at all. Negative
+metadata-drift/hash-mismatch recording is separately idempotent; hash mismatch
+dominates later metadata drift until a positive evidence transaction clears it.
 
 ## Command Contract
 
@@ -91,6 +102,8 @@ as target identity. At minimum the protocol covers:
 - full, exact-path, and recursive-subtree inventory reconciliation plus
   missing/reappearance state;
 - conditional baseline, verify, and rebaseline;
+- conditional durable verification invalidation for missing/modified/mismatched
+  reads;
 - mapping/location/rebind and soft-delete state;
 - namespaced annotations;
 - `flush()` at explicit durability boundaries.
@@ -106,10 +119,11 @@ command. Recorder commits statements that were true at a known observation
 time; if the world has since drifted, conditional writes affect zero rows. The
 ledger may lag after a crash, but it must not lead reality.
 
-Before executor performs a destructive operation, recorder flushes all prior
-earned evidence. Pause-drain and session terminal force flush. M0 may implement
-each command transactionally with a no-op batching abstraction, but the real
-protocol and flush points exist from day one.
+Before UPDATE and DELETE reach their final destructive guard, recorder flushes
+all prior earned evidence. Other operations retain their operation-specific
+durability boundary. Pause-drain and session terminal force flush. M0 may
+implement each command transactionally with a no-op batching abstraction, but
+the real protocol and flush points exist from day one.
 
 For an opt-in compound run, `LedgerRecorder`/`SyncRunRecorder` remains the one
 outer writer and logical run window from execute through verify. Pause may
@@ -122,10 +136,10 @@ or integrity truth.
 
 ## Conditional Evidence Primitive
 
-Hash/baseline/verification/import writes are gated on location, row id,
-canonical path, present state, expected size/mtime/identity, current hash policy,
-and run/op token. No match means `stale`, not an insert/update against whatever
-now occupies the path.
+Hash/baseline/verification/invalidation/import writes are gated on location,
+row id, canonical path, present state, expected size/mtime/identity, current
+attestation/invalidation, and run/op token. No match means `stale`, not an
+insert/update against whatever now occupies the path.
 
 The same rule protects no-op correspondence refresh: both source and target
 must still match the plan snapshot before identity, last-seen, or mapping state

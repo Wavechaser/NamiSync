@@ -28,6 +28,7 @@ include = ["namisync*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.importlinter]
 root_package = "namisync"

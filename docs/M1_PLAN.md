@@ -1,10 +1,10 @@
 # M1 Plan
 
-Supersession note (2026-08-05): history-v3 and `HistoryRunView` references
-below record the earlier milestone design. The implemented reset-only history
-v4 window journal and summary/item/event page APIs in `HISTORY.md`,
-`DATABASE.md`, and `ARCHITECTURE.md` now govern. No v3 migration or unbounded
-compatibility getter remains.
+Supersession note (2026-08-08): ledger-v2, history-v3, and `HistoryRunView`
+references below record earlier milestone design. The implemented reset-only
+ledger v3 verification-invalidation boundary and history v4 window journal in
+`DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
+unbounded history getter remains.
 
 Status (2026-07-30): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and

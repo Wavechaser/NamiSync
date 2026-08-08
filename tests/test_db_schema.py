@@ -122,11 +122,112 @@ def test_fresh_ledger_contains_schema_freeze_bones(tmp_path: Path) -> None:
             "attested_file_identity_volume_serial",
             "attested_file_identity_file_index",
             "last_verified_at",
+            "verification_invalidated_at",
+            "verification_invalidated_reason",
             "missing_since",
             "acknowledged_at",
             "reappeared_at",
             "unsupported_reason",
         } <= inventory_columns
+    finally:
+        connection.close()
+
+
+def test_inventory_verification_invalidation_constraints_are_enforced(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ledger.db"
+    initialize_ledger(path)
+    connection = connect_ledger_writer(path)
+    now = "2026-01-01T00:00:00.000000Z"
+    try:
+        with connection:
+            host_id = connection.execute(
+                "INSERT INTO hosts(host_key, display_name, first_seen_at, last_seen_at) "
+                "VALUES ('host', 'host', ?, ?) RETURNING id",
+                (now, now),
+            ).fetchone()[0]
+            volume_id = connection.execute(
+                "INSERT INTO volumes(serial, fs_type, first_seen_at, last_seen_at) "
+                "VALUES ('serial', 'NTFS', ?, ?) RETURNING id",
+                (now, now),
+            ).fetchone()[0]
+            location_id = connection.execute(
+                """INSERT INTO locations(
+                       volume_id, volume_relative_path,
+                       volume_relative_path_key, created_at, last_seen_at
+                   ) VALUES (?, 'root', 'ROOT', ?, ?) RETURNING id""",
+                (volume_id, now, now),
+            ).fetchone()[0]
+            row_id = connection.execute(
+                """INSERT INTO inventory(
+                       location_id, rel_path, rel_path_key, entry_kind, presence,
+                       observed_size, observed_mtime_ns, observed_nlink,
+                       observed_attributes, last_observed_at,
+                       observation_host_id, scope_token
+                   ) VALUES (?, 'a.txt', 'A.TXT', 'file', 'present',
+                             1, 1, 1, 0, ?, ?, 'scope')
+                   RETURNING id""",
+                (location_id, now, host_id),
+            ).fetchone()[0]
+
+        invalid_updates = (
+            (
+                "UPDATE inventory SET verification_invalidated_at = ? WHERE id = ?",
+                (now, row_id),
+            ),
+            (
+                """UPDATE inventory
+                      SET verification_invalidated_at = ?,
+                          verification_invalidated_reason = 'metadata-drift'
+                    WHERE id = ?""",
+                (now, row_id),
+            ),
+            (
+                "UPDATE inventory SET last_verified_at = ? WHERE id = ?",
+                (now, row_id),
+            ),
+        )
+        for statement, parameters in invalid_updates:
+            with pytest.raises(sqlite3.IntegrityError):
+                with connection:
+                    connection.execute(statement, parameters)
+
+        with connection:
+            connection.execute(
+                """UPDATE inventory SET
+                       content_algorithm = 'xxh3_128',
+                       content_digest = zeroblob(16), content_size = 1,
+                       hash_provenance = 'verify', content_observed_at = ?,
+                       attested_kind = 'file', attested_size = 1,
+                       attested_mtime_ns = 1, attested_nlink = 1,
+                       attested_attributes = 0, last_verified_at = ?
+                     WHERE id = ?""",
+                (now, now, row_id),
+            )
+
+        with pytest.raises(sqlite3.IntegrityError):
+            with connection:
+                connection.execute(
+                    "UPDATE inventory SET observed_size = 2 WHERE id = ?",
+                    (row_id,),
+                )
+
+        with connection:
+            connection.execute(
+                """UPDATE inventory
+                      SET observed_size = 2,
+                          verification_invalidated_at = ?,
+                          verification_invalidated_reason = 'metadata-drift'
+                    WHERE id = ?""",
+                (now, row_id),
+            )
+        row = connection.execute(
+            """SELECT observed_size, verification_invalidated_reason
+                 FROM inventory WHERE id = ?""",
+            (row_id,),
+        ).fetchone()
+        assert tuple(row) == (2, "metadata-drift")
     finally:
         connection.close()
 
@@ -251,16 +352,20 @@ def test_history_v1_through_v3_are_refused_without_mutation(
         check.close()
 
 
-def test_ledger_v1_is_refused_without_mutation(tmp_path: Path) -> None:
-    path = tmp_path / "ledger-v1.db"
-    _seed_schema_version(path, 1)
+@pytest.mark.parametrize("version", [1, 2])
+def test_ledger_v1_and_v2_are_refused_without_mutation(
+    tmp_path: Path,
+    version: int,
+) -> None:
+    path = tmp_path / f"ledger-v{version}.db"
+    _seed_schema_version(path, version)
 
     with pytest.raises(SchemaResetRequired, match="reset both database files together"):
         initialize_ledger(path)
 
     connection = sqlite3.connect(path)
     try:
-        version = int(
+        retained_version = int(
             connection.execute(
                 "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
             ).fetchone()[0]
@@ -269,7 +374,7 @@ def test_ledger_v1_is_refused_without_mutation(tmp_path: Path) -> None:
     finally:
         connection.close()
 
-    assert version == 1
+    assert retained_version == version
     assert marker == "preserve"
     assert not path.with_name(path.name + "-wal").exists()
     assert not path.with_name(path.name + "-shm").exists()
@@ -339,12 +444,12 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         history_reader.close()
         ledger_reader.close()
 
-    assert ledger_version == LEDGER_SCHEMA_VERSION == 2
+    assert ledger_version == LEDGER_SCHEMA_VERSION == 3
     assert history_version == HISTORY_SCHEMA_VERSION == 4
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
-        == "m1-ledger-xxh3-128"
+        == "m1-ledger-xxh3-128-invalidation-v1"
     )
     assert (
         history_contract

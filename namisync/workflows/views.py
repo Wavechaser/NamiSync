@@ -155,6 +155,9 @@ class InventoryRowView:
     acknowledged_at: str | None
     reappeared_at: str | None
     unsupported_reason: str | None
+    verification_state: str
+    verification_invalidated_at: str | None
+    verification_invalidated_reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,6 +390,13 @@ def inventory_row_view(row: InventorySnapshot) -> InventoryRowView:
             None if row.reappeared_at is None else row.reappeared_at.isoformat()
         ),
         unsupported_reason=row.unsupported_reason,
+        verification_state=row.verification_state.value,
+        verification_invalidated_at=(
+            None if row.invalidation is None else row.invalidation.at.isoformat()
+        ),
+        verification_invalidated_reason=(
+            None if row.invalidation is None else row.invalidation.reason.value
+        ),
     )
 
 

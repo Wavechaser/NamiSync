@@ -405,7 +405,7 @@ def test_execution_pause_before_workflow_entry_snapshots_custody_for_cancel(
         deadline = monotonic() + 2
         while monotonic() < deadline:
             with dispatcher._condition:
-                if session_id not in dispatcher._workers:
+                if session_id not in dispatcher._current_workers:
                     break
             sleep(0.005)
         else:

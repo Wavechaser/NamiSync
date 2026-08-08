@@ -1757,16 +1757,48 @@ def execute(
                         policies.sleep(decision.after)
                         _retry_checkpoint(ctx, state, operation.op_id)
                         continue
+                    published_failure = _failed_after_publish_settlement(
+                        operation,
+                        error,
+                        fs,
+                        target_root,
+                        state,
+                    )
                     cleanup_error = _cleanup_inflight(state, fs)
-                    state.retry_continuations.pop(operation.op_id, None)
-                    state.retry_errors.pop(operation.op_id, None)
                     if cleanup_error is not None:
                         error = OperationFailure(
                             ExecutionReason.CLEANUP_FAILED,
                             f"operation failed and its owned temp could not be removed: {cleanup_error}",
                             cause=error,
                         )
-                    _settle_failure(xset, state, progress, ctx, operation, error)
+                        if published_failure is not None:
+                            published_failure = _failed_after_publish_settlement(
+                                operation,
+                                error,
+                                fs,
+                                target_root,
+                                state,
+                            )
+                    state.retry_continuations.pop(operation.op_id, None)
+                    state.retry_errors.pop(operation.op_id, None)
+                    if published_failure is None:
+                        _settle_failure(
+                            xset,
+                            state,
+                            progress,
+                            ctx,
+                            operation,
+                            error,
+                        )
+                    else:
+                        _settle(
+                            xset,
+                            state,
+                            progress,
+                            ctx,
+                            operation,
+                            published_failure,
+                        )
                     if isinstance(decision, Stop):
                         stop_requested = True
                         state.pause_latched = False
@@ -2526,6 +2558,7 @@ def _update(
                 ExecutionReason.TARGET_DRIFT,
                 "prepared update temp drifted before retry",
             )
+            _flush_before_destructive(recorder, state)
             live = _require_stat_path(fs, prepared.target)
             _guard_path_stat(
                 live,
@@ -2539,7 +2572,6 @@ def _update(
             try:
                 if readonly_cleared:
                     fs.clear_readonly(prepared.target)
-                _flush_before_destructive(recorder, state)
                 fs.replace(prepared.temp, prepared.target)
                 state.inflight_temp = None
                 continuation.published = True
@@ -2949,6 +2981,7 @@ def _delete(
         operation.target_expected.kind is EntryKind.DIRECTORY
         and operation.reason is OperationReason.DIRECTORY_CLEANUP
     )
+    _flush_before_destructive(recorder, state)
     _guard_present(
         fs,
         target_root,
@@ -2959,7 +2992,6 @@ def _delete(
         matcher=_matches_directory_cleanup if directory_cleanup else None,
     )
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
-    _flush_before_destructive(recorder, state)
     readonly_cleared = bool(
         operation.target_expected.metadata.attributes & _READONLY
     )
@@ -3218,19 +3250,7 @@ def _settle_failure(
     operation: PlanOperation,
     error: Exception,
 ) -> None:
-    if isinstance(error, OperationFailure):
-        reason = error.reason
-        detail = error.detail
-    elif isinstance(error, UnsafeExecutionPath):
-        reason = ExecutionReason.UNSAFE_PATH
-        detail = str(error)
-    else:
-        reason = (
-            ExecutionReason.SHARING_VIOLATION
-            if _find_winerror(error) in _SHARING_VIOLATIONS
-            else ExecutionReason.IO_ERROR
-        )
-        detail = str(error)
+    reason, detail = _failure_reason_and_message(error)
     _settle(
         xset,
         state,
@@ -3243,6 +3263,105 @@ def _settle_failure(
             {"error_type": type(error).__name__, "message": detail},
         ),
     )
+
+
+def _failure_reason_and_message(
+    error: Exception,
+) -> tuple[ExecutionReason, str]:
+    if isinstance(error, OperationFailure):
+        return error.reason, error.detail
+    if isinstance(error, UnsafeExecutionPath):
+        return ExecutionReason.UNSAFE_PATH, str(error)
+    reason = (
+        ExecutionReason.SHARING_VIOLATION
+        if _find_winerror(error) in _SHARING_VIOLATIONS
+        else ExecutionReason.IO_ERROR
+    )
+    return reason, str(error)
+
+
+def _failed_after_publish_settlement(
+    operation: PlanOperation,
+    error: Exception,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled | None:
+    continuation = state.retry_continuations.get(operation.op_id)
+    if continuation is None:
+        return None
+
+    reason, message = _failure_reason_and_message(error)
+    detail = dict(continuation.detail)
+    detail.update(
+        {
+            "error_type": type(error).__name__,
+            "message": message,
+            "publish_state": "published",
+            "published_path": operation.target_rel_path,
+        }
+    )
+    try:
+        if isinstance(continuation, _UpdateContinuation):
+            _describe_retained_update_backup(
+                continuation,
+                state.execution_set,
+                fs,
+                target_root,
+                detail,
+            )
+            published = _update_publish_state(continuation, fs, detail)
+        else:
+            published = _new_publish_state(continuation, fs, detail)
+    except Exception as state_error:
+        detail["publish_state"] = "unverified"
+        detail["durable_state"] = "publication-unverified"
+        detail["state_error_type"] = type(state_error).__name__
+        detail["state_error"] = str(state_error)
+        _mark_unrecorded_publish(
+            state,
+            detail,
+            message=(
+                "filesystem mutation may have published but durable state "
+                "could not be verified"
+            ),
+        )
+        return _Settled(Outcome.FAILED, reason, detail)
+    if not published:
+        return None
+
+    target_durable_state = _published_target_durable_state(detail)
+    if isinstance(continuation, _UpdateContinuation):
+        detail["durable_state"] = target_durable_state
+        if (
+            target_durable_state == "target-published"
+            and detail.get("backup_state") == "retained"
+        ):
+            detail["durable_state"] = "target-published-with-backup"
+    elif isinstance(continuation, _MoveUpdateContinuation):
+        if target_durable_state == "target-published":
+            _describe_move_update_durable_state(
+                continuation,
+                fs,
+                target_root,
+                detail,
+            )
+        else:
+            detail["prior_path"] = continuation.old_relative_path
+            if continuation.trash is not None:
+                detail["trash_path"] = _target_relative_path(
+                    continuation.trash,
+                    target_root,
+                )
+            detail["durable_state"] = target_durable_state
+    else:
+        detail["durable_state"] = target_durable_state
+    _mark_unrecorded_publish(
+        state,
+        detail,
+        message="published filesystem mutation failed before ledger settlement",
+    )
+    return _Settled(Outcome.FAILED, reason, detail)
 
 
 def _cleanup_inflight(
@@ -3333,21 +3452,32 @@ def _canceled_durable_settlement(
         return _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail)
 
     detail["publish_state"] = "published"
+    target_durable_state = _published_target_durable_state(detail)
     if isinstance(continuation, _MoveUpdateContinuation):
-        _describe_canceled_move_update(
-            continuation,
-            fs,
-            target_root,
-            detail,
-        )
+        if target_durable_state == "target-published":
+            _describe_move_update_durable_state(
+                continuation,
+                fs,
+                target_root,
+                detail,
+            )
+        else:
+            detail["prior_path"] = continuation.old_relative_path
+            if continuation.trash is not None:
+                detail["trash_path"] = _target_relative_path(
+                    continuation.trash,
+                    target_root,
+                )
+            detail["durable_state"] = target_durable_state
     elif isinstance(continuation, _UpdateContinuation):
-        detail["durable_state"] = (
-            "target-published-with-backup"
-            if detail.get("backup_state") == "retained"
-            else "target-published"
-        )
+        detail["durable_state"] = target_durable_state
+        if (
+            target_durable_state == "target-published"
+            and detail.get("backup_state") == "retained"
+        ):
+            detail["durable_state"] = "target-published-with-backup"
     else:
-        detail["durable_state"] = "target-published"
+        detail["durable_state"] = target_durable_state
     detail["published_path"] = operation.target_rel_path
     _mark_unrecorded_publish(state, detail)
     return _Settled(
@@ -3465,6 +3595,19 @@ def _describe_published_target(
         detail["target_state"] = "changed-after-publish"
 
 
+def _published_target_durable_state(detail: dict[str, object]) -> str:
+    states = {
+        "published": "target-published",
+        "changed-after-publish": "target-changed-after-publish",
+        "missing-after-publish": "target-missing-after-publish",
+        "unverified-after-publish": "target-unverified-after-publish",
+    }
+    target_state = detail.get("target_state")
+    if target_state not in states:
+        raise RuntimeError("published target classification is incomplete")
+    return states[target_state]
+
+
 def _target_relative_path(path: Path, target_root: Path) -> str:
     return str(path.relative_to(target_root)).replace(os.sep, "\\")
 
@@ -3511,7 +3654,7 @@ def _describe_retained_update_backup(
         detail["durable_state"] = "backup-retained"
 
 
-def _describe_canceled_move_update(
+def _describe_move_update_durable_state(
     continuation: _MoveUpdateContinuation,
     fs: ExecutorFileSystem,
     target_root: Path,
@@ -3519,7 +3662,17 @@ def _describe_canceled_move_update(
 ) -> None:
     detail["prior_path"] = continuation.old_relative_path
     if continuation.trash is None:
-        detail["durable_state"] = "new-and-old-unclassified"
+        try:
+            old = fs.stat(target_root, continuation.old_relative_path)
+        except Exception as error:
+            detail["durable_state"] = "new-and-old-unverified"
+            detail["old_state_error"] = f"{type(error).__name__}: {error}"
+            return
+        detail["durable_state"] = (
+            "new-and-old"
+            if old is not None and _matches_expected(old, continuation.old_expected)
+            else "new-and-old-unverified"
+        )
         return
     detail["trash_path"] = _target_relative_path(
         continuation.trash,
@@ -3550,12 +3703,12 @@ def _describe_canceled_move_update(
 def _mark_unrecorded_publish(
     state: _ExecutionState,
     detail: dict[str, object],
+    *,
+    message: str = "cancellation interrupted settlement of a published filesystem mutation",
 ) -> None:
     state.recording = RecordingStatus.DEGRADED
     detail["recording"] = RecordingStatus.DEGRADED.value
-    detail["recording_error"] = (
-        "cancellation interrupted settlement of a published filesystem mutation"
-    )
+    detail["recording_error"] = message
 
 
 def _guard_present(

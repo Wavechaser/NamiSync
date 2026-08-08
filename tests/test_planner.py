@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 
+from namisync.core.evidence import Outcome
 from namisync.core.models import (
     CapabilityProfile,
     DirRecord,
@@ -44,6 +45,7 @@ from namisync.core.planning import (
     serialize_plan,
 )
 from namisync.modules.planner import plan
+from namisync.workflows.selection import ExclusionReason, derive_execution_selection
 
 
 META = MetadataSnapshot(0, 100)
@@ -308,6 +310,139 @@ def test_case_type_and_unsupported_conflicts_are_blocked_while_independent_work_
     independent = next(operation for operation in result.operations if operation.target_rel_path == "independent.bin")
     assert independent.kind is OperationKind.COPY
     assert not independent.blocked
+
+
+@pytest.mark.parametrize(
+    ("deletion_policy", "removal_kind"),
+    [
+        (DeletionPolicy.TRASH, OperationKind.TRASH),
+        (DeletionPolicy.MIRROR, OperationKind.DELETE),
+    ],
+)
+def test_blocked_parent_type_collision_keeps_raw_removal_intent_but_defers_execution(
+    deletion_policy: DeletionPolicy,
+    removal_kind: OperationKind,
+) -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file(r"parent\child.bin"),),
+        directories=(_dir("parent"),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file("parent"), _file("unrelated.bin")),
+    )
+    result = _plan(
+        source,
+        target,
+        options=SyncOptions(
+            deletion_policy=deletion_policy,
+            internal_mirror_authorized=deletion_policy is DeletionPolicy.MIRROR,
+        ),
+    )
+
+    blocked = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "parent" and operation.blocked
+    )
+    blocking_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "parent" and operation.kind is removal_kind
+    )
+    unrelated_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "unrelated.bin"
+        and operation.kind is removal_kind
+    )
+    decision = derive_execution_selection(result)
+    exclusions = {item.op_id: item for item in decision.exclusions}
+    child = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == r"parent\child.bin"
+    )
+
+    assert blocked.blocked_reason is BlockedReason.TYPE_COLLISION
+    assert child.kind is OperationKind.COPY
+    assert child.blocked_reason is BlockedReason.BLOCKED_DEPENDENCY
+    assert blocked.op_id in child.dependencies
+    assert child.op_id not in decision.selection
+    assert exclusions[child.op_id].outcome is Outcome.BLOCKED
+    assert exclusions[child.op_id].reason == BlockedReason.BLOCKED_DEPENDENCY.value
+    assert blocking_removal.op_id not in decision.selection
+    assert exclusions[blocking_removal.op_id].outcome is Outcome.DEFERRED
+    assert (
+        exclusions[blocking_removal.op_id].reason
+        == ExclusionReason.BLOCKED_CORRESPONDENCE
+    )
+    assert unrelated_removal.op_id in decision.selection
+
+
+@pytest.mark.parametrize(
+    ("deletion_policy", "removal_kind"),
+    [
+        (DeletionPolicy.TRASH, OperationKind.TRASH),
+        (DeletionPolicy.MIRROR, OperationKind.DELETE),
+    ],
+)
+def test_source_unsupported_file_keeps_raw_removal_intent_but_defers_execution(
+    deletion_policy: DeletionPolicy,
+    removal_kind: OperationKind,
+) -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        unsupported=(_unsupported("cloud.bin"),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file("cloud.bin"), _file("unrelated.bin")),
+    )
+    result = _plan(
+        source,
+        target,
+        options=SyncOptions(
+            deletion_policy=deletion_policy,
+            internal_mirror_authorized=deletion_policy is DeletionPolicy.MIRROR,
+        ),
+    )
+
+    blocked = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "cloud.bin" and operation.blocked
+    )
+    matching_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "cloud.bin" and operation.kind is removal_kind
+    )
+    unrelated_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "unrelated.bin"
+        and operation.kind is removal_kind
+    )
+    decision = derive_execution_selection(result)
+    exclusions = {item.op_id: item for item in decision.exclusions}
+
+    assert result.source_complete
+    assert blocked.kind is OperationKind.NOOP
+    assert blocked.reason is OperationReason.UNSUPPORTED
+    assert blocked.blocked_reason is BlockedReason.UNSUPPORTED
+    assert matching_removal.op_id not in decision.selection
+    assert exclusions[matching_removal.op_id].outcome is Outcome.DEFERRED
+    assert (
+        exclusions[matching_removal.op_id].reason
+        == ExclusionReason.BLOCKED_CORRESPONDENCE
+    )
+    assert unrelated_removal.op_id in decision.selection
 
 
 @pytest.mark.parametrize(

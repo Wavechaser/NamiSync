@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from threading import Event, Lock, Thread
+from threading import Event, Lock, Thread, get_ident
 from time import monotonic, sleep
 
 import pytest
@@ -10,6 +10,7 @@ from namisync.core.evidence import RecordingStatus
 from namisync.core.events import ItemOutcome, PhaseChanged, StateChanged, Terminal
 from namisync.core.evidence import Outcome
 from namisync.core.session import (
+    Canceled,
     Disposition,
     OperationResult,
     PhaseResult,
@@ -86,6 +87,36 @@ def completed(context):
     return OperationResult(SessionState.COMPLETED)
 
 
+class GatedAcquireProvider:
+    def __init__(self, gated_attempt: int = 1) -> None:
+        self._gated_attempt = gated_attempt
+        self.entered = Event()
+        self.release = Event()
+        self._lock = Lock()
+        self._acquire_count = 0
+
+    @property
+    def acquire_count(self) -> int:
+        with self._lock:
+            return self._acquire_count
+
+    def acquire(self, resources, canceled):
+        with self._lock:
+            self._acquire_count += 1
+            attempt = self._acquire_count
+        if attempt == self._gated_attempt:
+            self.entered.set()
+            assert self.release.wait(2)
+            if canceled():
+                raise Canceled()
+
+        class Lease:
+            def release(self) -> None:
+                return None
+
+        return Lease()
+
+
 def test_disjoint_resources_overlap() -> None:
     active = 0
     maximum = 0
@@ -151,6 +182,65 @@ def test_shared_resource_serializes_in_admission_order() -> None:
     wait_for(dispatcher, first, SessionState.COMPLETED)
     wait_for(dispatcher, second, SessionState.COMPLETED)
     assert order == [b"first", b"second"]
+    assert dispatcher.shutdown().complete
+
+
+def test_scheduler_purges_stale_unschedulable_pending_entry() -> None:
+    entered = Event()
+    opened: list[bytes] = []
+    provider = GatedAcquireProvider(gated_attempt=99)
+
+    def pauseable_for(payload: bytes):
+        opened.append(payload)
+
+        def run(context):
+            entered.set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+
+        return run
+
+    dispatcher = Dispatcher(
+        {
+            "pauseable": registration(
+                pauseable_for,
+                supports_pause=True,
+                resources=(ResourceId("volume", "stale-pending"),),
+            ),
+            "probe": registration(
+                lambda _payload: completed,
+                resources=(ResourceId("volume", "scheduler-probe"),),
+            ),
+        },
+        lock_provider=provider,
+    )
+    paused_id = dispatcher.submit("pauseable", b"paused")
+    assert entered.wait(2)
+    assert dispatcher.pause(paused_id).accepted
+    wait_for(dispatcher, paused_id, SessionState.PAUSED)
+
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        with dispatcher._condition:
+            if paused_id not in dispatcher._current_workers:
+                dispatcher._pending.append(paused_id)
+                dispatcher._condition.notify_all()
+                break
+        sleep(0.005)
+    else:
+        raise AssertionError("paused worker did not retire")
+
+    probe_id = dispatcher.submit("probe", b"probe")
+    wait_for(dispatcher, probe_id, SessionState.COMPLETED)
+
+    assert dispatcher.get(paused_id).state is SessionState.PAUSED
+    assert opened == [b"paused"]
+    assert provider.acquire_count == 2
+    with dispatcher._condition:
+        assert paused_id not in dispatcher._pending
+        assert paused_id not in dispatcher._current_workers
+        assert all(key.session_id != paused_id for key in dispatcher._workers)
     assert dispatcher.shutdown().complete
 
 
@@ -282,7 +372,7 @@ def test_pause_settlement_and_live_event_wait_for_durable_audit_attempt() -> Non
     # Domain state leads the best-effort audit, but settlement and the live
     # PAUSED publication remain behind the durable-attempt barrier.
     assert dispatcher.get(session_id).state is SessionState.PAUSED
-    assert session_id in dispatcher._workers
+    assert session_id in dispatcher._current_workers
     visible_states = []
     while True:
         try:
@@ -295,13 +385,175 @@ def test_pause_settlement_and_live_event_wait_for_durable_audit_attempt() -> Non
 
     release_flush.set()
     deadline = monotonic() + 2
-    while session_id in dispatcher._workers and monotonic() < deadline:
+    while session_id in dispatcher._current_workers and monotonic() < deadline:
         sleep(0.005)
-    assert session_id not in dispatcher._workers
+    assert session_id not in dispatcher._current_workers
     assert stream.next(0.5).body == StateChanged(SessionState.PAUSED)
 
     assert dispatcher.cancel(session_id).accepted
     wait_for(dispatcher, session_id, SessionState.CANCELED)
+    assert dispatcher.shutdown().complete
+
+
+def test_immediate_resume_waits_for_paused_generation_retirement(
+    monkeypatch,
+) -> None:
+    first_entered = Event()
+    retire_entered = Event()
+    release_retirement = Event()
+    probe_entered = Event()
+    opened: list[bytes] = []
+    session_ids = []
+
+    def run_for(payload):
+        opened.append(payload)
+        if payload == b"continued":
+            return completed
+
+        def pauseable(context):
+            first_entered.set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+
+        return pauseable
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                run_for,
+                supports_pause=True,
+                resources=(ResourceId("volume", "resume-gate"),),
+            ),
+            "probe": registration(
+                lambda payload: lambda context: (
+                    probe_entered.set()
+                    or OperationResult(SessionState.COMPLETED)
+                ),
+                resources=(ResourceId("volume", "probe"),),
+            ),
+        }
+    )
+    original_worker_done = dispatcher._worker_done
+
+    def gated_worker_done(key):
+        if (
+            session_ids
+            and key.session_id == session_ids[0]
+            and not retire_entered.is_set()
+        ):
+            retire_entered.set()
+            assert release_retirement.wait(2)
+        return original_worker_done(key)
+
+    monkeypatch.setattr(dispatcher, "_worker_done", gated_worker_done)
+    session_id = dispatcher.submit("pausable", b"initial")
+    session_ids.append(session_id)
+    assert first_entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+    assert retire_entered.wait(2)
+    with dispatcher._condition:
+        old_key = dispatcher._current_workers[session_id]
+
+    try:
+        assert dispatcher.resume(session_id).accepted
+        probe = dispatcher.submit("probe", b"probe")
+        wait_for(dispatcher, probe, SessionState.COMPLETED)
+        assert probe_entered.is_set()
+        with dispatcher._condition:
+            assert dispatcher._current_workers[session_id] == old_key
+            assert tuple(
+                key for key in dispatcher._workers if key.session_id == session_id
+            ) == (old_key,)
+        assert opened == [b"initial"]
+    finally:
+        release_retirement.set()
+
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert opened == [b"initial", b"continued"]
+    assert dispatcher.shutdown().complete
+
+
+def test_cancel_visible_paused_before_retirement_hands_off_once(
+    monkeypatch,
+) -> None:
+    first_entered = Event()
+    retire_entered = Event()
+    release_retirement = Event()
+    probe_entered = Event()
+    settled = []
+    session_ids = []
+
+    def pauseable(context):
+        first_entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.CANCELED,
+            disposition=disposition,
+            canceled=True,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                lambda payload: pauseable,
+                supports_pause=True,
+                resources=(ResourceId("volume", "cancel-pause-gate"),),
+                settle_canceled=settle_canceled,
+            ),
+            "probe": registration(
+                lambda payload: lambda context: (
+                    probe_entered.set()
+                    or OperationResult(SessionState.COMPLETED)
+                ),
+                resources=(ResourceId("volume", "cancel-probe"),),
+            ),
+        }
+    )
+    original_worker_done = dispatcher._worker_done
+
+    def gated_worker_done(key):
+        if (
+            session_ids
+            and key.session_id == session_ids[0]
+            and not retire_entered.is_set()
+        ):
+            retire_entered.set()
+            assert release_retirement.wait(2)
+        return original_worker_done(key)
+
+    monkeypatch.setattr(dispatcher, "_worker_done", gated_worker_done)
+    session_id = dispatcher.submit("pausable", b"initial")
+    session_ids.append(session_id)
+    assert first_entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+    assert retire_entered.wait(2)
+
+    try:
+        assert dispatcher.cancel(session_id).accepted
+        wait_for(dispatcher, session_id, SessionState.CANCELING)
+        probe = dispatcher.submit("probe", b"probe")
+        wait_for(dispatcher, probe, SessionState.COMPLETED)
+        assert probe_entered.is_set()
+        assert settled == []
+        with dispatcher._condition:
+            assert sum(
+                key.session_id == session_id for key in dispatcher._workers
+            ) == 1
+    finally:
+        release_retirement.set()
+
+    canceled = wait_for(dispatcher, session_id, SessionState.CANCELED)
+    assert canceled.result is not None
+    assert canceled.result.disposition is Disposition.RAN
+    assert settled == [(b"continued", Disposition.RAN)]
     assert dispatcher.shutdown().complete
 
 
@@ -435,7 +687,7 @@ def test_pause_before_invocation_run_snapshots_before_later_cancel(
     deadline = monotonic() + 2
     while monotonic() < deadline:
         with dispatcher._condition:
-            if session_id not in dispatcher._workers:
+            if session_id not in dispatcher._current_workers:
                 break
         sleep(0.005)
     else:
@@ -500,7 +752,7 @@ def test_resume_canceled_before_invocation_run_uses_retained_settlement(
     deadline = monotonic() + 2
     while monotonic() < deadline:
         with dispatcher._condition:
-            if session_id not in dispatcher._workers:
+            if session_id not in dispatcher._current_workers:
                 break
         sleep(0.005)
     else:
@@ -966,6 +1218,257 @@ def test_cancel_running_session_emits_one_terminal_and_releases_custody() -> Non
     assert record.result is not None
     assert record.result.disposition is Disposition.RAN
     assert dispatcher.shutdown().custody_released
+
+
+def test_cancel_after_scheduler_dequeue_keeps_single_worker_and_reservation() -> None:
+    provider = GatedAcquireProvider()
+    follower_started = Event()
+    resource = ResourceId("volume", "dequeue-race")
+
+    def run_for(payload):
+        if payload == b"follower":
+            def run(context):
+                follower_started.set()
+                return OperationResult(SessionState.COMPLETED)
+
+            return run
+        return completed
+
+    dispatcher = Dispatcher(
+        {"sync": registration(run_for, resources=(resource,))},
+        lock_provider=provider,
+    )
+    original = dispatcher.submit("sync", b"original")
+    stream = dispatcher.subscribe(original)
+    assert provider.entered.wait(2)
+    assert dispatcher.cancel(original).accepted
+    follower = dispatcher.submit("sync", b"follower")
+    wait_for(dispatcher, original, SessionState.CANCELING)
+
+    sleep(0.05)
+    assert provider.acquire_count == 1
+    assert not follower_started.is_set()
+
+    provider.release.set()
+    canceled = wait_for(dispatcher, original, SessionState.CANCELED)
+    wait_for(dispatcher, follower, SessionState.COMPLETED)
+    terminals = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except (TimeoutError, StopIteration):
+            break
+        if isinstance(envelope.body, Terminal):
+            terminals.append(envelope.body)
+
+    assert canceled.result is not None
+    assert canceled.result.disposition is Disposition.UNRUN
+    assert len(terminals) == 1
+    assert provider.acquire_count == 2
+    shutdown = dispatcher.shutdown()
+    assert shutdown.complete
+    assert shutdown.custody_released
+    assert dispatcher._workers == {}
+    assert dispatcher._current_workers == {}
+    assert dispatcher._leases == {}
+    assert dispatcher._reserved == {}
+
+
+def test_cancel_resumed_attempt_during_acquire_settles_continuation_once() -> None:
+    provider = GatedAcquireProvider(gated_attempt=2)
+    first_entered = Event()
+    resumed_invocation = Event()
+    probe_entered = Event()
+    settled = []
+    resource = ResourceId("volume", "resumed-acquire")
+
+    def run_for(payload):
+        if payload == b"initial":
+            def pauseable(context):
+                first_entered.set()
+                while True:
+                    context.checkpoint()
+                    sleep(0.005)
+
+            return pauseable
+
+        def should_not_run(context):
+            resumed_invocation.set()
+            return OperationResult(SessionState.COMPLETED)
+
+        return should_not_run
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.CANCELED,
+            disposition=disposition,
+            canceled=True,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                run_for,
+                supports_pause=True,
+                resources=(resource,),
+                settle_canceled=settle_canceled,
+            ),
+            "probe": registration(
+                lambda payload: lambda context: (
+                    probe_entered.set()
+                    or OperationResult(SessionState.COMPLETED)
+                ),
+                resources=(ResourceId("volume", "resumed-probe"),),
+            ),
+        },
+        lock_provider=provider,
+    )
+    session_id = dispatcher.submit("pausable", b"initial")
+    stream = dispatcher.subscribe(session_id)
+    assert first_entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        with dispatcher._condition:
+            if session_id not in dispatcher._current_workers:
+                break
+        sleep(0.005)
+    else:
+        raise AssertionError("paused worker did not retire")
+
+    assert dispatcher.resume(session_id).accepted
+    assert provider.entered.wait(2)
+    assert dispatcher.get(session_id).state is SessionState.PENDING
+    assert dispatcher.cancel(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.CANCELING)
+    probe = dispatcher.submit("probe", b"probe")
+    wait_for(dispatcher, probe, SessionState.COMPLETED)
+
+    assert probe_entered.is_set()
+    assert settled == []
+    assert not resumed_invocation.is_set()
+    with dispatcher._condition:
+        key = dispatcher._current_workers[session_id]
+        assert dispatcher._reserved[resource] == key
+        assert sum(
+            worker_key.session_id == session_id
+            for worker_key in dispatcher._workers
+        ) == 1
+
+    provider.release.set()
+    canceled = wait_for(dispatcher, session_id, SessionState.CANCELED)
+    shutdown = dispatcher.shutdown()
+    terminals = []
+    while True:
+        try:
+            envelope = stream.next(0.05)
+        except (TimeoutError, StopIteration):
+            break
+        if isinstance(envelope.body, Terminal):
+            terminals.append(envelope.body)
+
+    assert shutdown.complete
+    assert canceled.result is not None
+    assert canceled.result.disposition is Disposition.RAN
+    assert settled == [(b"continued", Disposition.RAN)]
+    assert not resumed_invocation.is_set()
+    assert len(terminals) == 1
+
+
+def test_stale_generation_cleanup_cannot_touch_successor() -> None:
+    class TrackingLease:
+        def __init__(self) -> None:
+            self.acquired_thread = get_ident()
+            self.released_thread = None
+            self.release_count = 0
+
+        def release(self) -> None:
+            self.released_thread = get_ident()
+            self.release_count += 1
+
+    class TrackingProvider:
+        def __init__(self) -> None:
+            self.leases = []
+
+        def acquire(self, resources, canceled):
+            if canceled():
+                raise Canceled()
+            lease = TrackingLease()
+            self.leases.append(lease)
+            return lease
+
+    provider = TrackingProvider()
+    first_entered = Event()
+    second_entered = Event()
+    release_second = Event()
+    resource = ResourceId("volume", "stale-cleanup")
+
+    def run_for(payload):
+        if payload == b"initial":
+            def pauseable(context):
+                first_entered.set()
+                while True:
+                    context.checkpoint()
+                    sleep(0.005)
+
+            return pauseable
+
+        def hold(context):
+            second_entered.set()
+            assert release_second.wait(2)
+            return OperationResult(SessionState.COMPLETED)
+
+        return hold
+
+    dispatcher = Dispatcher(
+        {
+            "pausable": registration(
+                run_for,
+                supports_pause=True,
+                resources=(resource,),
+            )
+        },
+        lock_provider=provider,
+    )
+    session_id = dispatcher.submit("pausable", b"initial")
+    assert first_entered.wait(2)
+    with dispatcher._condition:
+        old_key = dispatcher._current_workers[session_id]
+    assert dispatcher.pause(session_id).accepted
+    wait_for(dispatcher, session_id, SessionState.PAUSED)
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        with dispatcher._condition:
+            if session_id not in dispatcher._current_workers:
+                break
+        sleep(0.005)
+    else:
+        raise AssertionError("paused worker did not retire")
+
+    assert dispatcher.resume(session_id).accepted
+    assert second_entered.wait(2)
+    with dispatcher._condition:
+        new_key = dispatcher._current_workers[session_id]
+        new_lease = dispatcher._leases[new_key]
+    assert new_key != old_key
+
+    dispatcher._release_custody(old_key, (resource,))
+    dispatcher._worker_done(old_key)
+    with dispatcher._condition:
+        assert dispatcher._current_workers[session_id] == new_key
+        assert dispatcher._leases[new_key] is new_lease
+        assert dispatcher._reserved[resource] == new_key
+    assert new_lease.release_count == 0
+
+    release_second.set()
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert dispatcher.shutdown().complete
+    assert len(provider.leases) == 2
+    for lease in provider.leases:
+        assert lease.release_count == 1
+        assert lease.released_thread == lease.acquired_thread
 
 
 def test_queued_cancel_is_unrun_and_terminal_record_survives_until_close() -> None:
@@ -2127,3 +2630,30 @@ def test_shutdown_deadline_reports_noncooperative_session_then_recovers() -> Non
     release.set()
     wait_for(dispatcher, session_id, SessionState.COMPLETED)
     assert dispatcher.shutdown(timeout=2).complete
+
+
+def test_shutdown_reports_canceled_acquisition_until_owner_retires() -> None:
+    provider = GatedAcquireProvider()
+    dispatcher = Dispatcher(
+        {
+            "blocked-acquire": registration(
+                lambda payload: completed,
+                resources=(ResourceId("volume", "blocked-acquire"),),
+            )
+        },
+        lock_provider=provider,
+    )
+    session_id = dispatcher.submit("blocked-acquire", b"payload")
+    assert provider.entered.wait(2)
+
+    incomplete = dispatcher.shutdown(timeout=0.05)
+    assert not incomplete.complete
+    assert incomplete.unfinished == (session_id,)
+    assert not incomplete.custody_released
+
+    provider.release.set()
+    wait_for(dispatcher, session_id, SessionState.CANCELED)
+    complete = dispatcher.shutdown(timeout=2)
+    assert complete.complete
+    assert complete.custody_released
+    assert complete.unfinished == ()

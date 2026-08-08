@@ -1,10 +1,11 @@
 # Hash Pipeline, XXH3, and Executor IO Refactor
 
-Supersession note (2026-08-05): this document's ledger-v2/history-v3 reset
-describes the hash-transition boundary at the time it landed. Active history is
-now reset-only v4 under `m1-history-windowed-events-v1`; `HISTORY.md` and
-`DATABASE.md` govern that later change. The hash and ledger-v2 decisions here
-remain current.
+Supersession note (2026-08-08): this document's ledger-v2/history-v3 reset
+describes the hash-transition boundary at the time it landed. Active databases
+are reset-only ledger v3 under `m1-ledger-xxh3-128-invalidation-v1` and history
+v4 under `m1-history-windowed-events-v1`; `DATABASE.md` governs those later
+changes. The XXH3-128 evidence decision remains current; v2 references below
+are historical delivery context.
 
 Status: implementation and acceptance last revised 2026-07-24. Both M1
 performance tracks are implemented: the adaptive single-file pipeline and IO

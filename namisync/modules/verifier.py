@@ -43,6 +43,8 @@ from namisync.core.integrity import (
     RecordDisposition,
     UnsupportedVerification,
     VerificationReader,
+    VerificationInvalidationCommand,
+    VerificationInvalidationReason,
     VerifierContext,
 )
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
@@ -390,6 +392,39 @@ def _process_post_copy_candidate(
     )
     identity = candidate.recorded_identity
     if classification.attestation is None:
+        if (
+            identity is not None
+            and classification.result
+            in {
+                IntegrityResult.MODIFIED,
+                IntegrityResult.MISMATCHED,
+                IntegrityResult.MISSING,
+            }
+        ):
+            strategy = classification.read_strategy
+            command = VerificationInvalidationCommand(
+                item_id=candidate.item_id,
+                row_id=identity.row_id,
+                location_id=identity.location_id,
+                rel_path_key=identity.rel_path_key,
+                scope_token=identity.scope_token,
+                expected_state=InventoryState.PRESENT,
+                expected_stat=candidate.expected_stat,
+                expected_baseline=candidate.copy_attestation,
+                expected_invalidation=None,
+                reason=_invalidation_reason(classification.result),
+                invalidated_at=ctx.clock.now(),
+            )
+            return _record_post_copy_invalidation(
+                candidate,
+                classification.result,
+                classification.reason,
+                classification.detail,
+                strategy,
+                command,
+                recorder,
+                classification.bytes_read,
+            )
         return _ProcessedItem(
             _post_copy_outcome(
                 candidate,
@@ -435,6 +470,7 @@ def _process_post_copy_candidate(
         attestation=classification.attestation,
         advances_last_verified=True,
         clear_reappeared=False,
+        expected_invalidation=None,
     )
     return _record_post_copy_outcome(
         candidate,
@@ -519,6 +555,40 @@ def _process_item(
         success_provenance=Provenance.VERIFY_ATTESTED,
     )
     if classification.attestation is None:
+        if (
+            item.baseline is not None
+            and classification.result
+            in {
+                IntegrityResult.MODIFIED,
+                IntegrityResult.MISMATCHED,
+                IntegrityResult.MISSING,
+            }
+        ):
+            strategy = classification.read_strategy
+            command = VerificationInvalidationCommand(
+                item_id=item.item_id,
+                row_id=item.row_id,
+                location_id=item.location_id,
+                rel_path_key=item.rel_path_key,
+                scope_token=item.scope_token,
+                expected_state=item.expected_state,
+                expected_stat=expected_stat,
+                expected_baseline=item.baseline,
+                expected_invalidation=item.invalidation,
+                reason=_invalidation_reason(classification.result),
+                invalidated_at=ctx.clock.now(),
+            )
+            return _record_invalidation_outcome(
+                item,
+                mode,
+                classification.result,
+                classification.reason,
+                classification.detail,
+                strategy,
+                command,
+                recorder,
+                classification.bytes_read,
+            )
         return _ProcessedItem(
             _outcome(
                 item,
@@ -554,6 +624,7 @@ def _process_item(
         attestation=classification.attestation,
         advances_last_verified=result is IntegrityResult.VERIFIED,
         clear_reappeared=item.reappeared_at is not None,
+        expected_invalidation=item.invalidation,
     )
     strategy = classification.read_strategy
     if strategy is None:
@@ -693,6 +764,75 @@ def _classify_subject(
         )
 
 
+def _invalidation_reason(
+    result: IntegrityResult,
+) -> VerificationInvalidationReason:
+    if result is IntegrityResult.MISMATCHED:
+        return VerificationInvalidationReason.HASH_MISMATCH
+    if result is IntegrityResult.MODIFIED:
+        return VerificationInvalidationReason.METADATA_DRIFT
+    if result is IntegrityResult.MISSING:
+        return VerificationInvalidationReason.METADATA_DRIFT
+    raise ValueError("only missing, modified, or mismatched results invalidate verification")
+
+
+def _record_invalidation_outcome(
+    item: IntegritySelectionItem,
+    mode: IntegrityMode,
+    result: IntegrityResult,
+    reason: IntegrityReason | None,
+    detail: str | None,
+    strategy: ReadStrategy | None,
+    command: VerificationInvalidationCommand,
+    recorder: IntegrityRecorder,
+    bytes_read: int,
+) -> _ProcessedItem:
+    try:
+        disposition = recorder.record_verification_invalidation(command)
+    except Exception as exc:
+        return _ProcessedItem(
+            _outcome(
+                item,
+                mode,
+                result,
+                IntegrityReason.RECORDING_ERROR,
+                _error_detail(exc),
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+            ),
+            bytes_read,
+        )
+    if disposition in {RecordDisposition.STALE, RecordDisposition.CONFLICT}:
+        return _ProcessedItem(
+            _outcome(
+                item,
+                mode,
+                result,
+                (
+                    IntegrityReason.RECORDING_STALE
+                    if disposition is RecordDisposition.STALE
+                    else IntegrityReason.RECORDING_CONFLICT
+                ),
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+                record_disposition=disposition,
+            ),
+            bytes_read,
+        )
+    return _ProcessedItem(
+        _outcome(
+            item,
+            mode,
+            result,
+            reason,
+            detail,
+            read_strategy=strategy,
+            record_disposition=disposition,
+        ),
+        bytes_read,
+    )
+
+
 def _record_outcome(
     item: IntegritySelectionItem,
     mode: IntegrityMode,
@@ -810,6 +950,59 @@ def _record_post_copy_outcome(
         _post_copy_outcome(
             candidate,
             result,
+            read_strategy=strategy,
+            record_disposition=disposition,
+        ),
+        bytes_read,
+    )
+
+
+def _record_post_copy_invalidation(
+    candidate: PostCopyCandidate,
+    result: IntegrityResult,
+    reason: IntegrityReason | None,
+    detail: str | None,
+    strategy: ReadStrategy | None,
+    command: VerificationInvalidationCommand,
+    recorder: IntegrityRecorder,
+    bytes_read: int,
+) -> _ProcessedItem:
+    try:
+        disposition = recorder.record_verification_invalidation(command)
+    except Exception as exc:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                result,
+                IntegrityReason.RECORDING_ERROR,
+                _error_detail(exc),
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+            ),
+            bytes_read,
+        )
+    if disposition in {RecordDisposition.STALE, RecordDisposition.CONFLICT}:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                result,
+                (
+                    IntegrityReason.RECORDING_STALE
+                    if disposition is RecordDisposition.STALE
+                    else IntegrityReason.RECORDING_CONFLICT
+                ),
+                read_strategy=strategy,
+                recording=RecordingStatus.DEGRADED,
+                record_disposition=disposition,
+            ),
+            bytes_read,
+        )
+    return _ProcessedItem(
+        _post_copy_outcome(
+            candidate,
+            result,
+            reason,
+            detail,
             read_strategy=strategy,
             record_disposition=disposition,
         ),

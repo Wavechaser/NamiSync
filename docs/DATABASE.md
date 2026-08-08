@@ -77,14 +77,15 @@ readable as `incomplete` after restart and is not classified as interrupted or
 resumable without future durable custody.
 
 The current schemas carry immutable whole-contract metadata: ledger
-`contract_id=m1-ledger-xxh3-128` and history
+`contract_id=m1-ledger-xxh3-128-invalidation-v1` and history
 `contract_id=m1-history-windowed-events-v1`. Opening ledger v1, history v1-v3,
-or a transitional ledger-v2/history-v4 database with a missing/mismatched
+or a transitional ledger-v3/history-v4 database with a missing/mismatched
 marker raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete
-both local database files before restarting. Version 3 cannot be migrated into
-the reliable journal because it never stored state and phase envelopes.
+both local database files before restarting. History version 3 cannot be
+migrated into the reliable journal because it never stored state and phase
+envelopes.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
 database/WAL/SHM artifacts and recreates both current schemas; normal startup
@@ -127,6 +128,8 @@ The initial schema reserves the expensive identity/evidence bones:
 - run/op idempotency tokens and actual UTC run window;
 - digest algorithm/value, `ContentEvidence`, attested subject stat, provenance,
   observed/hash/verified times kept semantically distinct;
+- a paired verification-invalidation time/reason retaining metadata drift or
+  hash mismatch without discarding the attested comparison baseline;
 - metadata snapshot fields for attributes and creation time; ADS has no scan,
   inventory, or schema representation;
 - physical presence, acknowledgement, reappearance, and unsupported state,
@@ -169,7 +172,9 @@ state as a side effect.
 
 Mapping snapshots include correspondence from paired no-ops, missing rows,
 identity ambiguity, and location ids. Inventory reads distinguish current
-observation from retained attested baseline. History readers branch by activity
+observation from retained attested baseline and derive
+unverified/verified/modified/mismatched state from the baseline, current stat,
+last verified time, and sticky invalidation. History readers branch by activity
 kind rather than rendering every activity as source-to-target. History list and
 summary reads use a fixed query count and one primitive indexed fact row per
 run; workflow-supplied predicates preserve workflow ownership of selection and
@@ -188,6 +193,9 @@ for a run.
 
 - Canonical keys are computed in core, not SQLite `NOCASE`.
 - Digests and their stat/provenance unit are written atomically.
+- Retained content evidence may contradict current observation only with a
+  paired durable invalidation marker; successful evidence replacement clears
+  that marker atomically.
 - Mapping source and target locations are distinct and non-nested validation is
   performed before insertion.
 - Soft-deleted mappings cannot be duplicated silently; matching create offers
@@ -211,6 +219,11 @@ the default-binary literal range `root || '\'` through `root || ']'`; no
 Missing rows retain evidence and may be acknowledged/restored/reappeared.
 Tombstone pruning is a future explicit policy with impact review, not an
 incidental scan cleanup.
+
+Stale-inventory reads include rows with no evidence, no true verification time,
+an age-expired verification, a durable invalidation, or a current/attested stat
+contradiction. A matching later scan cannot erase a prior mismatch or drift;
+only a guarded positive evidence transaction can make the row current again.
 
 ## Schema Evolution
 
@@ -302,10 +315,10 @@ rather than current implementation claims.
   decode at most the requested limit, use one indexed lookahead row across
   legitimate sequence gaps, and reject an official durable maximum that does
   not match its event rows.
-- Ledger v1, history v1-v3, and current-number transitional schemas lacking the
+- Ledger v1-v2, history v1-v3, and current-number transitional schemas lacking the
   exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.
-- The explicit coordinated development reset recreates ledger v2/history v4;
+- The explicit coordinated development reset recreates ledger v3/history v4;
   normal startup never deletes either database.
 - Concurrent semantic-settings patches preserve unrelated fields because the
   read-modify-replace cycle is serialized across processes.
