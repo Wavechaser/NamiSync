@@ -5,7 +5,9 @@ M1 desktop shell. The 2026-08-06 revision folded in the bounded-history and
 terminal-cleanup contracts now recorded in `HISTORY.md` and `DISPATCHER.md` and
 added sections 5-8; the 2026-08-07 revision settles single-instance identity,
 the database file-pair matrix, in-loop startup teardown, the normative CSP
-gate, the GUI argument grammar, and constructor-only command composition.
+gate, the GUI argument grammar, and constructor-only command composition; the
+2026-08-08 revision adds the Fluent visual design language (§1.9), motion
+(§1.10), and the two GUI Breaks that bound the visual work.
 Stages 1-5.5 and the WebView2 reality spike are complete; no product window or
 packaged frontend has shipped. NamiSync remains version `0.1.0` until M1 is
 complete. Finishing M1 makes the product beta-ready; any later version change
@@ -238,6 +240,8 @@ namisync/interfaces/web/
     assets/
         index.html
         app.css
+        tokens.css
+        components.css
         app.js
         bridge.js
         tree.js
@@ -256,7 +260,10 @@ tests/assets/
 presentation. `tree.js` virtualizes and renders windows already decided by the
 server; it never reconstructs hierarchy or filters an already-windowed page.
 `plan.js` and `inventory.js` keep the two vertical renderers disjoint;
-`panels.js` owns only their shared panel frame.
+`panels.js` owns only their shared panel frame. `tokens.css` holds the Fluent
+design tokens (section 1.9), `components.css` the Fluent control set built on
+them, and `app.css` layout only; surface renderers consume tokens and
+components and define no color of their own.
 
 The production host resolves its index from package resources. A
 Python-construction-only override accepts an absolute local index path for
@@ -300,6 +307,69 @@ drain per task.
 The Python `BridgeDispatcher` instance exposes only `dispatch`; every other
 instance member remains underscore-prefixed because pywebview recursively
 walks and reads public attributes during injection.
+
+### 1.9 Visual design language
+
+NamiSync presents as a Fluent 2 (Windows 11) desktop app. This section fixes the
+design language; the pixel-level result is tuned in the GUI Breaks (section 2),
+not preselected here.
+
+- **Type and frame.** Body text is Segoe UI Variable; paths and hashes use
+  Cascadia Mono/Consolas. Both are Windows 11 system fonts, so no font ships.
+  M1 keeps the standard OS window frame and gets Fluent chrome from native
+  materials; a frameless custom caption — with its caption-button and
+  window-drag reimplementation — is deferred post-M1 so no new native surface
+  needs re-proving for the beta.
+- **Native materials.** The window base uses Mica (`DWMSBT_MAINWINDOW`) with an
+  immersive dark title bar, applied by DWM on the top-level HWND at the same
+  UI-thread hook Slice 1 uses for guard attachment; the WebView2 controller
+  background is transparent so the material shows through. Mica is scoped to
+  chrome — the title bar and the task rail — while plan, inventory, history, and
+  settings content sit on opaque Fluent layer colors, both because that is how
+  Fluent layers a window and because compositing a material behind a virtualized
+  scrolling list is a rendering and performance trap. No Acrylic in M1; menus and
+  dialogs are opaque. High contrast disables Mica and honors the system
+  high-contrast palette; a system without the material (pre-22H2) or a
+  transparency failure degrades to an opaque Fluent neutral base, never a broken
+  see-through window.
+- **Tokens and theme.** Color ramps (neutral and accent), the type ramp, and
+  spacing, 4px-based radius, and elevation scales live in `tokens.css` as
+  theme-agnostic CSS variables. M1 follows the system light/dark theme and honors
+  high contrast; the accent color is read from Windows and pushed to the token
+  variables, and both theme and accent changes are observed and re-pushed. The
+  Microsoft Fluent 2 Figma kit and Microsoft's published Fluent tokens are the
+  authoritative source these values are transcribed from; no Fluent code is
+  imported (section 1.6 forbids the toolchain that would need).
+- **Components.** Because there is no framework or bundler, the control set is a
+  compact hand-authored Fluent 2 CSS system in `components.css` on those tokens:
+  button, dropdown, tri-state checkbox, determinate and indeterminate progress,
+  text input, toggle, chips, list/tree row, card, dialog, context menu, and the
+  Sync|Integrity segmented control. Each control carries its rest, hover,
+  pressed, disabled, and focused states. Surface renderers consume tokens and
+  components and define no color of their own.
+- **Information architecture.** The rail-plus-panel layout, task cards, the
+  Sync|Integrity toggle, and the setup-form-versus-summary flow follow
+  `DESKTOP_UI.md` and the `ui_mockup/` reference. The mockup is a look and IA
+  reference only — it is dark-only, simulates menus and caption buttons, and
+  sources tokens from a removed Qt file — so it is re-authored against the real
+  tokens and bridge/command/view contracts rather than grafted in.
+
+### 1.10 Motion
+
+Fluent motion is a system, not per-element choreography. Duration steps and the
+Fluent easing curves live in `tokens.css` as CSS variables transcribed from the
+Fluent motion spec; state transitions, expand/collapse, progress, and dialog
+entrance/exit are plain CSS on those tokens (WebView2 is full Chromium, so
+nothing is held back). Two guardrails are normative:
+
+- `prefers-reduced-motion` is honored — non-essential motion reduces or stops,
+  matching the system setting.
+- No animation is bound to virtualized-row recycling. Rows are created and
+  destroyed by scrolling, so animating their insertion or removal produces jank
+  and flicker; motion lives at the panel, control, and discrete-state level, not
+  on the plan or inventory row lifecycle.
+
+The exact choreography is felt, not specified, and is tuned in the GUI Breaks.
 
 ## 2. Delivery Sequence
 
@@ -545,6 +615,39 @@ envelope surface `Gap`, replay only the tail still retained, and reconcile
 terminal truth. Missing reliable events remain visibly missing; recovery never
 pretends full continuity or justifies invented replay headroom.
 
+### GUI Break 1 - Establish the look (after Slice 3, before Slice 4)
+
+A GUI Break is a deliberate stop to build and calibrate the visual system, not a
+fraction of an assembly line. Break 1 builds the foundation every later surface
+consumes and freezes the design language before the renderers exist, so Slices
+4-7 render onto tokens and components rather than inventing their own. Its Lane P
+authoring (tokens, components) may start as early as Slice 1 in parallel; its
+scheduled home is here, immediately before the first frame, where the Slice 2
+harness and Slice 3 drain exist to exercise it through the real host.
+
+Deliverables:
+
+1. The native material mechanism (Lane H): the DWM Mica backdrop, immersive dark
+   title bar, and transparent WebView2 background at Slice 1's UI-thread hook,
+   with the high-contrast and no-material fallbacks from section 1.9 and its own
+   real-stack reality test. The security guards and construction order are
+   unchanged by material application.
+2. `tokens.css`: the Fluent color/type/spacing/radius/elevation and motion
+   tokens, theme-agnostic, with system light/dark/high-contrast following and the
+   accent read-and-observe plumbing.
+3. `components.css`: the section 1.9 control set on those tokens, every state
+   present, demonstrated on a non-shipped component-gallery page that runs
+   through the production host and headed harness. The gallery is a dev/test
+   artifact and never package data.
+
+Calibration is the tinkering part: get Mica, tokens, and components reading
+correctly in all three themes and freeze the language. Time-box it to
+language-and-gallery, not gold-plating — polishing against fixtures that must
+then survive real data is wasted work. GUI Break 1 closes SH-G-11, SH-G-12, and
+SH-G-13. Exit criterion: tokens correct in light, dark, and high contrast; the
+gallery covers every control state; Mica and its fallback are proven on the
+pinned stack; the design language is frozen.
+
 ### Slice 4 - Presentation core and shell frame
 
 Implement `visible_sequence.py` plus the minimal rail/panel/tree frontend.
@@ -583,6 +686,22 @@ and `history.js` treats that page as the end of that traversal, not a
 retryable error. A later repair issues a fresh read that omits `through_seq`
 and captures the new committed prefix; an explicit reversed fixed interval
 remains invalid.
+
+### GUI Break 2 - Visual cohesion (after Slice 7, before Slice 8)
+
+With plan, inventory, history, and settings all real and on screen together,
+Break 2 is the holistic taste pass that cannot happen earlier: cross-surface
+spacing rhythm, motion choreography, empty/edge/error states, and the details
+only visible with everything present. It precedes Slice 8 so packaging freezes a
+finished look.
+
+Its internals are deliberately loose because they are felt, not specified, but
+its acceptance is explicit and mostly review-based: the result matches the
+intended look, and — as the automatable share — contrast ratios meet the
+accessibility bar on the token pairs and `prefers-reduced-motion` is honored
+across every surface. SH-G-11 and SH-G-13 already assert those and are re-run
+here over the now-complete surfaces. No new BR-G or SH-G gate is introduced;
+Break 2 tightens what the earlier gates already pin.
 
 ### Slice 8 - Beta packaging and release closure
 
@@ -766,6 +885,26 @@ carry the `headed` marker; all are collected by the release command.
   page — exposes an instance-namespace override. *Not satisfied by* asserting a
   constant equals itself, deriving identity from the data root, or a test that
   shares the production namespace.
+- **SH-G-11 — Tokens own color; surfaces borrow it.** `tokens.css` defines the
+  color/type/spacing/radius/elevation variables in light, dark, and
+  high-contrast; a static scan proves no surface stylesheet or renderer module
+  defines a raw color literal, and a contrast check proves the token
+  text/background pairs meet the accessibility bar in each theme. *Not satisfied
+  by* a single-theme token set or a scan that allows inline hex in
+  `components.css` or a surface module.
+- **SH-G-12 — Native materials apply or degrade, never break.** On a capable
+  system the DWM Mica backdrop and immersive dark title bar are applied and the
+  WebView2 background is transparent; under high contrast Mica is disabled and
+  the high-contrast palette is honored; on a pre-material system or an injected
+  transparency failure the window falls back to an opaque Fluent neutral base.
+  Material application changes neither the security guards nor the construction
+  order. *Not satisfied by* a documentation lookup, a mock window, or a test that
+  never exercises the fallback.
+- **SH-G-13 — Motion honors the guardrails.** With `prefers-reduced-motion` set,
+  non-essential transitions reduce or stop; a static/DOM check proves no
+  animation or transition is bound to virtualized-row creation or removal in the
+  plan or inventory tree. *Not satisfied by* asserting the media query exists
+  without a reduced-motion render, or by checking only a non-virtualized list.
 
 The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
 `tests/interfaces/web/test_paths.py` (SH-G-2),
@@ -774,9 +913,12 @@ The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
 (SH-G-5), `tests/interfaces/web/test_wheel_assets.py` (SH-G-6),
 `tests/interfaces/web/test_frontend_static.py` (SH-G-7),
 `tests/interfaces/web/test_drain.py` (SH-G-8),
-`tests/interfaces/web/test_history_pager.py` (SH-G-9), and
-`tests/interfaces/web/test_single_instance.py` (SH-G-10). A gate test may live
-elsewhere only when the owning slice updates this list in the same change.
+`tests/interfaces/web/test_history_pager.py` (SH-G-9),
+`tests/interfaces/web/test_single_instance.py` (SH-G-10),
+`tests/interfaces/web/test_design_tokens.py` (SH-G-11),
+`tests/interfaces/web/test_materials.py` (SH-G-12), and
+`tests/interfaces/web/test_motion.py` (SH-G-13). A gate test may live elsewhere
+only when the owning slice updates this list in the same change.
 Release evidence records the collected `test_sh_g_*` node ids alongside the
 BR-G ids; the cleared-`addopts` release command, not the default headless suite,
 is the evidence that no headed gate was deselected.
@@ -790,6 +932,7 @@ clause lands:
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
 | Slice 3 | SH-G-8 |
+| GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 |
 | Slice 4 | SH-G-7 |
 | Slice 7 | SH-G-9 |
 
@@ -816,6 +959,9 @@ against the changed configuration before the change lands.
 | Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
 | Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
+| Fluent 2 design language, token source, and the standard M1 window frame | Section 1.9 | Re-transcribe tokens (rerun SH-G-11); a frame change re-runs BR-G-31's native-surface proof |
+| Mica-scoped-to-chrome, opaque content, and the high-contrast/no-material fallback | Section 1.9 | Rerun SH-G-12 headed on any pywebview/WebView2/Windows-build change |
+| Motion tokens and guardrails (reduced-motion; no virtualized-row animation) | Section 1.10 | Rerun SH-G-13 |
 
 The 256-row visible-window cap and the 256-event history retention cap are
 independent constants that happen to share a value. No shared constant may
@@ -831,7 +977,7 @@ serialized through the current slice integrator.
 | Lane | Owns | Contains | Depends on |
 | --- | --- | --- | --- |
 | **H — Host and transport** | `version.py`, Phase 0/host `pyproject.toml` entries, `launcher.py`, `paths.py`, `logging_config.py`, `host.py`, `bridge.py`, `commands.py`, `slots.py`, `drain.py`, `bridge.js`, harness infrastructure | Phase 0, Slices 1-3, in order | nothing |
-| **P — Presentation core** | `visible_sequence.py`, `tree.js`, `rail.js`, `panels.js`, `app.css` geometry | Slice 4's pure logic and frame | Stage 5.5 arrays (done); frame wiring waits for H Slice 1 and headed geometry waits for H Slice 2 |
+| **P — Presentation core and design foundation** | `tokens.css`, `components.css`, `visible_sequence.py`, `tree.js`, `rail.js`, `panels.js`, `app.css` geometry | GUI Break 1 foundation, then Slice 4's pure logic and frame | Stage 5.5 arrays (done); token/component authoring can start at H Slice 1; frame wiring waits for H Slice 1 and headed geometry/gallery waits for H Slice 2 |
 | **S — Sync surface** | `plan.js`, plan renderer, overlays, follow mode | Slice 5 | H and P |
 | **I — Inventory surface** | `inventory.js`, inventory projections, `view_id` lifecycle, inventory renderer | Slice 6 | H and P; parallel with S |
 | **L — Lifecycle and history** | `history.js`, settings UI, `ui-state.json`, close sequencing | Slice 7 | History/settings preparation may follow H and P; final integration and gate closure wait for S and I |
@@ -851,6 +997,11 @@ registration are integration files and have one editor after lane-owned modules
 and tests are ready. Lane L may prepare disjoint history/settings work earlier,
 but Slice 7 integration and closure remain after Slices 5 and 6 as required by
 `M1_BRIDGE.md`.
+
+GUI Break 1 splits by lane: its material mechanism is Lane H's, while
+`tokens.css`, `components.css`, and the gallery are Lane P's and may begin at
+Slice 1, though the break's scheduled close sits before Slice 4. GUI Break 2 is
+a whole-surface integration pass with a single editor, after Slices 5-7.
 
 ## 8. Atomicity, Idempotency, and Orthogonality Rules
 
@@ -875,6 +1026,9 @@ they are reviewable and testable.
   never a pre-existing file, and a crash between the ledger and history
   publications is recovered by the exactly-one-present refusal on the next
   launch.
+- GUI Break 1's `tokens.css`/`components.css` foundation lands before any surface
+  renderer consumes it; a renderer (Slices 4-7) that introduces its own color or
+  control CSS is mis-sliced.
 
 ### 8.2 Idempotency
 
@@ -935,6 +1089,10 @@ One owner per decision; intentional couplings are named.
   events), 5 MiB (log budget), and 128/64 (replay/subscriber capacities) are
   independent decisions; no shared constant, helper, or "cleanup" may unify
   any pair.
+- `tokens.css` owns color and scale, `components.css` owns control CSS, and
+  surface modules consume both and define neither; section 1.9 owns the material
+  scope and section 1.10 the motion tokens. The Fluent look has one token
+  source, not per-surface palettes.
 - One intentional coupling: the read-only .NET Framework probe serves as both
   the pywebview WinForms prerequisite check and the pythonnet runtime check
   (section 1.2). That is a decision, not an accident, and it stays a single
