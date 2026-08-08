@@ -268,8 +268,11 @@ only the state that semantically depends on it.
 
 Use accessible text and non-color outcome cues, stable layouts, and full-path
 accessibility text for elided paths. Empty, unavailable, ambiguous, blocked,
-and failure states must say what the user can do next. Dark/light presentation
-details may evolve, but contrast and no-color-only signaling are requirements.
+and failure states must say what the user can do next. The desktop presents as a
+Fluent 2 (Windows 11) app that follows the system light/dark theme and reads the
+system accent, over a standard window frame on a Mica base; `M1_SHELL.md`
+sections 1.9-1.10 own the design-language, material, and motion specifics.
+Contrast and no-color-only signaling remain requirements in every theme.
 
 ## Acceptance criteria
 

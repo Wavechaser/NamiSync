@@ -661,9 +661,9 @@ scanner's own hostile-name handling already produces (never raw
 would mangle or fail on the message channel raw regardless. Sink side:
 `textContent`-only rendering, no `innerHTML` anywhere, and the scanner's
 existing hostile-name corpus reused as UI rendering fixtures — the web
-equivalent of the CLI's `_safe()`. The CSP is explicit: `default-src 'none';
-script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none';
-frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'`.
+equivalent of the CLI's `_safe()`. The CSP is explicit and now normative in
+`M1_BRIDGE.md` — the single directive string `M1_SHELL.md`'s SH-G-7 asserts
+byte-for-byte against the shipped `index.html`.
 
 **DR-M1-17 — Bridge protocol versioning.**
 Commands and view models are a new Python↔JS contract shipping in two halves,

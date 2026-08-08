@@ -37,6 +37,13 @@ sidecars byte-for-byte unchanged. Live paths can be validated against managed
 roots before creation. `timestamps.py` is the single fixed-width aware-UTC
 representation used by both schemas.
 
+The M1 desktop shell (service facade) composes these per-file checks into one
+read-only `validate_database_contracts()` preflight returning a
+`fresh`/`ready`/`refused` pair state — including the exactly-one-present and
+orphaned-sidecar refusals — applied across the GUI and CLI paths so history
+cannot be initialized without the ledger. `M1_SHELL.md` Slice 1 step 8 owns that
+contract; it is planned, not yet implemented.
+
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
 values. Canonical path selections are queried in bounded 400-key chunks inside
 one read transaction, so a concurrent commit cannot split one selection across
