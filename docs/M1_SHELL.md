@@ -1,6 +1,6 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, revised 2026-08-07): implementation plan for the remaining
+Status (2026-08-04, revised 2026-08-08): implementation plan for the remaining
 M1 desktop shell. The 2026-08-06 revision folded in the bounded-history and
 terminal-cleanup contracts now recorded in `HISTORY.md` and `DISPATCHER.md` and
 added sections 5-8; the 2026-08-07 revision settles single-instance identity,
@@ -320,18 +320,22 @@ not preselected here.
   materials; a frameless custom caption — with its caption-button and
   window-drag reimplementation — is deferred post-M1 so no new native surface
   needs re-proving for the beta.
-- **Native materials.** The window base uses Mica (`DWMSBT_MAINWINDOW`) with an
-  immersive dark title bar, applied by DWM on the top-level HWND at the same
-  UI-thread hook Slice 1 uses for guard attachment; the WebView2 controller
-  background is transparent so the material shows through. Mica is scoped to
-  chrome — the title bar and the task rail — while plan, inventory, history, and
-  settings content sit on opaque Fluent layer colors, both because that is how
-  Fluent layers a window and because compositing a material behind a virtualized
-  scrolling list is a rendering and performance trap. No Acrylic in M1; menus and
-  dialogs are opaque. High contrast disables Mica and honors the system
-  high-contrast palette; a system without the material (pre-22H2) or a
-  transparency failure degrades to an opaque Fluent neutral base, never a broken
-  see-through window.
+- **Native materials.** Mica (`DWMSBT_MAINWINDOW`) is the whole-window base,
+  applied by DWM on the top-level HWND at the same UI-thread hook Slice 1 uses
+  for guard attachment, with an immersive dark title bar; the WebView2 controller
+  background and the page base are transparent so the material shows through
+  everywhere it is not covered. Content does not hide Mica edge-to-edge — it sits
+  in opaque Fluent *cards* floating on the Mica base, and Mica stays visible in
+  the seams: the title bar, the task-rail and unselected-tab backgrounds, and the
+  gutters and margins around cards. Cards are opaque for readability and because
+  compositing a material behind a virtualized scrolling list is a rendering and
+  performance trap, so the plan and inventory trees render inside an opaque card
+  while their surrounding gutter stays Mica. No Acrylic in M1; menus and dialogs
+  are opaque, and a later CSS `backdrop-filter` acrylic on those overlays is a
+  localized `components.css` change, not a re-architecture. High contrast disables
+  Mica and honors the system high-contrast palette; a system without the material
+  (pre-22H2) or a transparency failure degrades to an opaque Fluent neutral base,
+  never a broken see-through window.
 - **Tokens and theme.** Color ramps (neutral and accent), the type ramp, and
   spacing, 4px-based radius, and elevation scales live in `tokens.css` as
   theme-agnostic CSS variables. M1 follows the system light/dark theme and honors
@@ -643,9 +647,11 @@ Deliverables:
 Calibration is the tinkering part: get Mica, tokens, and components reading
 correctly in all three themes and freeze the language. Time-box it to
 language-and-gallery, not gold-plating — polishing against fixtures that must
-then survive real data is wasted work. GUI Break 1 closes SH-G-11, SH-G-12, and
-SH-G-13. Exit criterion: tokens correct in light, dark, and high contrast; the
-gallery covers every control state; Mica and its fallback are proven on the
+then survive real data is wasted work. GUI Break 1 closes the SH-G-11/12/13
+*foundation* — tokens, materials, and motion proven on the gallery — while each
+gate's production-surface clause finalizes as the trees and renderers land
+(Slices 4-6). Exit criterion: tokens correct in light, dark, and high contrast;
+the gallery covers every control state; Mica and its fallback are proven on the
 pinned stack; the design language is frozen.
 
 ### Slice 4 - Presentation core and shell frame
@@ -894,9 +900,12 @@ carry the `headed` marker; all are collected by the release command.
   `components.css` or a surface module.
 - **SH-G-12 — Native materials apply or degrade, never break.** On a capable
   system the DWM Mica backdrop and immersive dark title bar are applied and the
-  WebView2 background is transparent; under high contrast Mica is disabled and
-  the high-contrast palette is honored; on a pre-material system or an injected
-  transparency failure the window falls back to an opaque Fluent neutral base.
+  WebView2 background is transparent; Mica shows through the intended seams —
+  title bar, rail, and card gutters — while the virtualized plan/inventory tree
+  renders on an opaque card rather than compositing the material behind scrolling
+  rows; under high contrast Mica is disabled and the high-contrast palette is
+  honored; on a pre-material system or an injected transparency failure the
+  window falls back to an opaque Fluent neutral base.
   Material application changes neither the security guards nor the construction
   order. *Not satisfied by* a documentation lookup, a mock window, or a test that
   never exercises the fallback.
@@ -905,6 +914,13 @@ carry the `headed` marker; all are collected by the release command.
   animation or transition is bound to virtualized-row creation or removal in the
   plan or inventory tree. *Not satisfied by* asserting the media query exists
   without a reduced-motion render, or by checking only a non-virtualized list.
+
+SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
+themes with contrast, Mica apply/degrade, and reduced-motion with the motion
+tokens — is proven on GUI Break 1's gallery, while their production-surface
+clauses (no raw color in a surface renderer, the virtualized tree on an opaque
+card, and no animation on row recycling) finalize as `tree.js` and the
+plan/inventory renderers land in Slices 4-6.
 
 The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
 `tests/interfaces/web/test_paths.py` (SH-G-2),
@@ -932,8 +948,9 @@ clause lands:
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
 | Slice 3 | SH-G-8 |
-| GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 |
+| GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation) |
 | Slice 4 | SH-G-7 |
+| Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
 | Slice 7 | SH-G-9 |
 
 ## 6. Contract and Policy Watchlist
@@ -960,7 +977,7 @@ against the changed configuration before the change lands.
 | Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
 | Fluent 2 design language, token source, and the standard M1 window frame | Section 1.9 | Re-transcribe tokens (rerun SH-G-11); a frame change re-runs BR-G-31's native-surface proof |
-| Mica-scoped-to-chrome, opaque content, and the high-contrast/no-material fallback | Section 1.9 | Rerun SH-G-12 headed on any pywebview/WebView2/Windows-build change |
+| Whole-window Mica base, opaque content cards (material visible only in chrome/seams), and the high-contrast/no-material fallback | Section 1.9 | Rerun SH-G-12 headed on any pywebview/WebView2/Windows-build change |
 | Motion tokens and guardrails (reduced-motion; no virtualized-row animation) | Section 1.10 | Rerun SH-G-13 |
 
 The 256-row visible-window cap and the 256-event history retention cap are
