@@ -5,8 +5,9 @@ operation kind on local Windows filesystems. Normal copies use one bounded
 reader/hasher/writer pipeline at a time, fixed adaptive chunks, XXH3-128
 evidence, measured conditional preallocation, and single-handle native
 finalization. Successful byte-producing operations now publish exact
-continuation evidence for optional in-session readback. External writers remain outside NamiSync's volume-lock contract;
-the residual update race is documented below rather than presented as closed.
+continuation evidence for optional in-session readback. External writers remain
+outside NamiSync's volume-lock contract; the residual races are documented
+below rather than presented as closed.
 
 ## Purpose
 
@@ -60,6 +61,8 @@ operation-boundary cleanup.
 - Flush recorder before every operation's final destructive guards so recorder
   contention cannot sit between the last source/destination observation and
   UPDATE, DELETE, MOVE, RECASE, MOVE_UPDATE cleanup, or TRASH mutation.
+  UPDATE places that wait before its final backup, prepared-temp, source, and
+  live-target validation; it does not add a second stat to the success path.
 - Record one final typed outcome per selected operation; dependencies of a
   failed operation become explicit canceled/deferred outcomes, while independent
   operations continue. Pause leaves completed status intact and unreached work
@@ -105,10 +108,12 @@ documentation rather than becoming a false compare-and-swap guarantee.
    atomic primitive appropriate to the planned before-state.
 8. Atomically publish with the Windows/local-filesystem primitive.
 9. Compare one post-publish target stat with the normalized temp baseline.
-   Repair and flush only fields publication changed, including name-tunneled
-   creation time or deferred readonly; otherwise perform no target metadata
-   write, target reopen, or second file flush. The resulting observed stat is
-   reused for the size guard and attestation.
+   Before attestation, require matching kind and size plus stable identity when
+   the target profile supplies it. Repair and flush only fields publication
+   changed, including name-tunneled creation time or deferred readonly;
+   otherwise perform no target metadata write, target reopen, or second file
+   flush. The same observed stat is reused for this binding, the size guard,
+   and attestation, so the check adds no filesystem call.
 10. Require the published target size to equal the hashed byte count before any
     operation-specific destructive completion step. MOVE_UPDATE builds the
     attestation at this point, so an attestation-construction failure cannot
@@ -142,19 +147,21 @@ Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
 ## Update And Trash-On-Update
 
-An update completely prepares and validates the replacement temp before it
-touches the current target. With trash-on-update enabled it then:
+An update completely prepares the replacement temp before backup/publication,
+then revalidates it after the recorder wait and before replacing the current
+target. With trash-on-update enabled it:
 
 1. validates/reserves `.synctrash/<run-id>/<relative-path>` on the target volume;
 2. preserves the old live file there using a same-volume hardlink when
    `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
    temp, flushes it, and atomically publishes the complete backup inside the run
    directory before proceeding;
-3. for a copied backup, captures creation evidence and completes post-publish
-   metadata repair before any destructive change to the live target; retries
-   validate that evidence, while a hardlink defers metadata repair because it
-   still shares the live inode;
-4. flushes prior recorder evidence, then performs the final live-target guard;
+3. flushes prior recorder evidence after backup preparation but before any
+   final publication validation;
+4. captures or revalidates backup evidence, completes copied-backup metadata,
+   and then performs the final backup, prepared-temp, source, and live-target
+   guards; a hardlink defers metadata repair because it still shares the live
+   inode;
 5. clears readonly on the live target if Windows requires it for replacement;
 6. atomically publishes the prepared temp over the live path with `os.replace`;
 7. applies the new file's readonly bit and remaining post-publish metadata;
@@ -309,10 +316,24 @@ non-cancellation failure such as metadata repair exhaustion. The item remains
 `FAILED` under its underlying typed reason, reports whether the target is still
 the published version plus any retained UPDATE backup or MOVE_UPDATE old/trash
 state, and sets `recording=DEGRADED` because no success ledger command
-completed. It never reports `recording=OK` for an unrecorded filesystem
-mutation and never promotes that failed operation to verification evidence. If
-the durable-state probe itself fails, publication is reported unverified and
-recording still degrades instead of claiming the ledger is current.
+completed. A confirmed or unverified durable mutation never reports
+`recording=OK` and never becomes verification evidence. If the durable-state
+probe itself fails, publication is reported unverified and recording still
+degrades instead of claiming the ledger is current.
+
+MOVE, RECASE, TRASH, DELETE, MKDIR, and readonly clearing in UPDATE/DELETE keep
+a lightweight process-local mutation marker from immediately before their first
+mutation until recording or truthful failure settlement. A synchronous return
+confirms the mutation; a raised primitive or later failure uses only
+failure-path stats to prove the captured pre-state unchanged or to classify
+committed, ambiguous, or unreadable state. Exact unchanged state keeps the
+ordinary failure and recording status. Any durable or unverified mutation is
+`FAILED`, recording-degraded, and has no success evidence; cancellation uses
+`canceled-after-mutation`. MKDIR retains the marker through deferred metadata;
+resumed-directory restoration has its own failure probe. Case-insensitive path
+stats cannot prove a failed RECASE's exact spelling, so that state degrades
+conservatively. These markers and probes add no filesystem operation to
+successful execution.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the
@@ -336,6 +357,12 @@ drift into separate implementations. MOVE_UPDATE attests before its destructive
 old-to-trash finish; COPY and UPDATE attest after their operation-specific
 completion/durability boundary.
 
+Non-byte mutation markers likewise survive a retry until the operation proves
+its exact pre-state unchanged or reports the durable/ambiguous mutation. Pause
+is latched while either a byte continuation or mutation marker is live, so it
+cannot discard process-local settlement evidence; cancellation inspects that
+evidence immediately.
+
 Every retry attempt that begins with an already-published continuation performs
 one target stat before any remaining metadata repair, durability, attestation,
 or recording. The current profiled file version must match the cached published
@@ -343,11 +370,13 @@ stat. Before that stat exists, kind/size and stable identity bind the prepared
 publication when identity is available, while mtime remains repairable
 metadata. A missing or identity-detectable replacement fails as `target-drift`
 with no recorder call or published evidence. Normal first-pass execution
-performs no extra stat. On
-an identity-weak profile, the pre-cache guard cannot distinguish a same-size
-replacement; this is neither a byte reread nor an adversarial path lock.
+performs no extra stat. On an identity-weak profile, the pre-cache guard cannot
+distinguish a same-size replacement. Even with stable identity, same-object byte
+mutation that preserves the observed size/metadata is not detected; closing
+either boundary requires a handle-bound publication protocol or rereading
+bytes. This check is neither.
 
-Pause observed at a retry-backoff checkpoint while such a continuation is live
+Pause observed at a retry-backoff checkpoint while either retained state is live
 is latched until that operation settles, then raised at the ordinary operation
 boundary. Cancellation is never latched and preempts a pending pause. If the
 settling failure policy returns `Stop`, that terminal policy decision suppresses
@@ -512,8 +541,12 @@ chunk bands remain private constants, not settings.
   rejects nonempty directories. Source-object swaps are rejected only by an
   explicitly handle-bound mutation; otherwise they remain inside the disclosed
   external-writer boundary. Update fault injection proves an external swap may
-  replace the swapped file without trashing it but cannot create a false ledger
-  attestation or publish partial bytes.
+  replace the swapped file without trashing it but cannot publish partial bytes.
+  A prepared-temp substitution during UPDATE's recorder flush is rejected by
+  the post-flush guard, and a stable-identity temp substitution between guard
+  and publish is rejected by the cached post-publish observation before
+  attestation. Identity-weak and same-object mutation remain the disclosed
+  non-handle-bound boundary.
 - First blocked/failed work does not abort later independent operations; broken
   dependents receive explicit outcomes.
 - Exact temp recovery removes prior-run regular files only from preflight's
@@ -549,6 +582,10 @@ chunk bands remain private constants, not settings.
   move-update old-to-trash failures after an earlier sub-step committed;
   persistent locks fail with actionable `sharing-violation` rather than false
   drift/occupancy and do not hang the session.
+- MOVE/RECASE/TRASH/DELETE/MKDIR commit-then-raise, unchanged pre-commit,
+  ambiguous two-path, and failed-probe cases report recording truth without
+  success evidence. Deferred/resumed mkdir metadata, readonly UPDATE/DELETE
+  restoration, and non-byte retry pause/cancel retain the same guarantee.
 - COPY/UPDATE/MOVE_UPDATE metadata and durability retry faults reject a
   same-size/same-mtime replacement of an already-published stable-identity
   target as `target-drift`, retain the foreign bytes, and record no false

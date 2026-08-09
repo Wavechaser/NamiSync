@@ -60,6 +60,25 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-09). Non-byte mutation settlement. MOVE, RECASE,
+  TRASH, DELETE, and MKDIR could commit and then raise while the failed item
+  still reported `recording=OK`; failed readonly restoration could likewise
+  leave UPDATE or DELETE metadata changed without ledger-behind status. Cause:
+  failure settlement inspected only byte-copy continuations. Fixed with
+  process-local pre-mutation markers, synchronous commit facts, and failure-only
+  state probes retained across retry/pause/cancel and deferred mkdir metadata.
+  Exact unchanged pre-state stays recording-OK; ambiguous, unreadable, and
+  case-only RECASE state degrades conservatively without success evidence.
+- SEVERE - FIXED (2026-08-09). Prepared-temp publication binding. UPDATE
+  validated its prepared temp before a recorder flush, allowing a same-size,
+  same-mtime replacement during that wait to publish foreign bytes under the
+  original digest. Fixed by moving the existing flush before final
+  backup/temp/source/live validation and binding the cached post-publish
+  kind/size plus available stable identity to the prepared temp for COPY,
+  UPDATE, and MOVE_UPDATE before attestation, with no added steady-state
+  filesystem call. Identity-weak substitution and same-object byte mutation
+  still require handle-bound publication or a byte reread and remain outside
+  the external-writer contract.
 - MODERATE - FIXED (2026-08-08). Rename durability-wait window. MOVE, RECASE,
   MOVE_UPDATE old-path cleanup, and TRASH performed their recorder flush after
   a path guard and before the non-replacing rename. An external writer could

@@ -1562,6 +1562,16 @@ class _MoveUpdateContinuation:
 
 
 @dataclass(slots=True)
+class _MutationAttempt:
+    kind: OperationKind
+    primary: Path
+    primary_before: FileStat | None
+    secondary: Path | None = None
+    destination_relative: str | None = None
+    committed: bool = False
+
+
+@dataclass(slots=True)
 class _ExecutionState:
     execution_set: ExecutionSet
     outcomes: dict[OpId, ItemOutcome]
@@ -1573,6 +1583,7 @@ class _ExecutionState:
         OpId, _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
     ] = field(default_factory=dict)
     retry_errors: dict[OpId, Exception] = field(default_factory=dict)
+    mutation_attempts: dict[OpId, _MutationAttempt] = field(default_factory=dict)
     pause_latched: bool = False
     filesystem_failed: bool = False
 
@@ -1756,7 +1767,24 @@ def execute(
                 except (Canceled, PauseRequested):
                     raise
                 except Exception as error:
-                    _settle_failure(xset, state, progress, ctx, operation, error)
+                    mutation_failure = _failed_after_mutation_settlement(
+                        operation,
+                        error,
+                        fs,
+                        state,
+                    )
+                    state.mutation_attempts.pop(operation.op_id, None)
+                    if mutation_failure is None:
+                        _settle_failure(xset, state, progress, ctx, operation, error)
+                    else:
+                        _settle(
+                            xset,
+                            state,
+                            progress,
+                            ctx,
+                            operation,
+                            mutation_failure,
+                        )
                 continue
 
             attempt = 0
@@ -1784,7 +1812,10 @@ def execute(
                         and attempt <= policies.max_retries
                     ):
                         state.retry_errors[operation.op_id] = error
-                        if operation.op_id not in state.retry_continuations:
+                        if (
+                            operation.op_id not in state.retry_continuations
+                            and operation.op_id not in state.mutation_attempts
+                        ):
                             _cleanup_inflight(state, fs)
                         _retry_checkpoint(ctx, state, operation.op_id)
                         policies.sleep(decision.after)
@@ -1797,6 +1828,17 @@ def execute(
                         target_root,
                         state,
                     )
+                    mutation_failure = (
+                        None
+                        if published_failure is not None
+                        else _failed_after_mutation_settlement(
+                            operation,
+                            error,
+                            fs,
+                            state,
+                        )
+                    )
+                    durable_failure = published_failure or mutation_failure
                     cleanup_error = _cleanup_inflight(state, fs)
                     if cleanup_error is not None:
                         error = OperationFailure(
@@ -1804,7 +1846,7 @@ def execute(
                             f"operation failed and its owned temp could not be removed: {cleanup_error}",
                             cause=error,
                         )
-                        if published_failure is not None:
+                        if durable_failure is not None:
                             published_failure = _failed_after_publish_settlement(
                                 operation,
                                 error,
@@ -1812,9 +1854,21 @@ def execute(
                                 target_root,
                                 state,
                             )
+                            mutation_failure = (
+                                None
+                                if published_failure is not None
+                                else _failed_after_mutation_settlement(
+                                    operation,
+                                    error,
+                                    fs,
+                                    state,
+                                )
+                            )
+                            durable_failure = published_failure or mutation_failure
                     state.retry_continuations.pop(operation.op_id, None)
                     state.retry_errors.pop(operation.op_id, None)
-                    if published_failure is None:
+                    state.mutation_attempts.pop(operation.op_id, None)
+                    if durable_failure is None:
                         _settle_failure(
                             xset,
                             state,
@@ -1830,7 +1884,7 @@ def execute(
                             progress,
                             ctx,
                             operation,
-                            published_failure,
+                            durable_failure,
                         )
                     if isinstance(decision, Stop):
                         stop_requested = True
@@ -1842,6 +1896,7 @@ def execute(
                 else:
                     state.retry_continuations.pop(operation.op_id, None)
                     state.retry_errors.pop(operation.op_id, None)
+                    state.mutation_attempts.pop(operation.op_id, None)
                     _settle(xset, state, progress, ctx, operation, settled)
                     if state.pause_latched:
                         state.pause_latched = False
@@ -1875,6 +1930,7 @@ def execute(
                 cleanup_error = None
             state.retry_continuations.pop(current.op_id, None)
             state.retry_errors.pop(current.op_id, None)
+            state.mutation_attempts.pop(current.op_id, None)
             _settle(
                 xset,
                 state,
@@ -1883,9 +1939,12 @@ def execute(
                 current,
                 replace(durable_settlement, detail=detail),
             )
+        if current is not None:
+            state.mutation_attempts.pop(current.op_id, None)
         _finalize_directories(
             xset, ctx, recorder, fs, target_root, state, progress
         )
+        _restore_completed_directory_metadata(xset, fs, target_root, state)
         for operation in xset.plan.operations:
             if operation.op_id in xset.selection and operation.op_id not in xset.status:
                 detail = {}
@@ -2183,6 +2242,24 @@ def _same_unrepaired_publication(
     )
 
 
+def _guard_published_prepared_copy(
+    continuation: (
+        _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
+    ),
+    xset: ExecutionSet,
+) -> None:
+    assert continuation.published_stat is not None
+    if not _same_unrepaired_publication(
+        continuation.published_stat,
+        continuation.prepared_stat,
+        xset.plan.target_profile.stable_file_identity,
+    ):
+        raise OperationFailure(
+            ExecutionReason.TARGET_DRIFT,
+            "published target does not match the prepared copy",
+        )
+
+
 def _complete_published_byte_operation(
     continuation: (
         _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
@@ -2210,6 +2287,7 @@ def _complete_published_byte_operation(
         continuation.prepared.digest,
         continuation.published_stat,
     )
+    _guard_published_prepared_copy(continuation, xset)
     if attest_before_filesystem and continuation.attestation is None:
         continuation.attestation = _attestation(
             continuation.prepared.digest,
@@ -2542,6 +2620,8 @@ def _update(
     else:
         raise RuntimeError("executor continuation kind does not match update")
 
+    if not continuation.published:
+        _flush_before_destructive(recorder, state)
     _observe_update_backup_creation(continuation, fs)
     if (
         not continuation.published
@@ -2591,7 +2671,6 @@ def _update(
                 ExecutionReason.TARGET_DRIFT,
                 "prepared update temp drifted before retry",
             )
-            _flush_before_destructive(recorder, state)
             live = _require_stat_path(fs, prepared.target)
             _guard_path_stat(
                 live,
@@ -2602,12 +2681,20 @@ def _update(
             readonly_cleared = bool(
                 operation.target_expected.metadata.attributes & _READONLY
             )
+            if readonly_cleared:
+                _retain_mutation_attempt(
+                    state,
+                    operation,
+                    primary=prepared.target,
+                    primary_before=live,
+                )
             try:
                 if readonly_cleared:
                     fs.clear_readonly(prepared.target)
                 fs.replace(prepared.temp, prepared.target)
                 state.inflight_temp = None
                 continuation.published = True
+                state.mutation_attempts.pop(operation.op_id, None)
             finally:
                 live = fs.stat_path(prepared.target)
                 if (
@@ -2668,7 +2755,7 @@ def _move(
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
-    _guard_present(
+    old_actual = _guard_present(
         fs,
         target_root,
         old_rel,
@@ -2679,6 +2766,13 @@ def _move(
     _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    mutation = _retain_mutation_attempt(
+        state,
+        operation,
+        primary=old,
+        primary_before=old_actual,
+        secondary=new,
+    )
     try:
         fs.rename_new(old, new)
     except FileExistsError as error:
@@ -2687,6 +2781,7 @@ def _move(
             "move destination appeared before conditional rename",
             cause=error,
         ) from error
+    mutation.committed = True
     detail = _durability_detail(fs, old.parent, new.parent)
     moved = _profiled_stat(
         _require_stat_path(fs, new),
@@ -2735,7 +2830,7 @@ def _recase(
         missing=ExecutionReason.SOURCE_MISSING,
         drift=ExecutionReason.SOURCE_DRIFT,
     )
-    _guard_present(
+    old_actual = _guard_present(
         fs,
         target_root,
         old_rel,
@@ -2745,6 +2840,13 @@ def _recase(
     )
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    mutation = _retain_mutation_attempt(
+        state,
+        operation,
+        primary=old,
+        primary_before=old_actual,
+        secondary=new,
+    )
     try:
         fs.rename_new(old, new)
     except FileExistsError as error:
@@ -2753,6 +2855,7 @@ def _recase(
             "recase destination is a distinct occupied entry",
             cause=error,
         ) from error
+    mutation.committed = True
     detail = _durability_detail(fs, old.parent, new.parent)
     recased = _profiled_stat(
         _require_stat_path(fs, new),
@@ -2967,7 +3070,7 @@ def _trash(
         target_root, xset.run_id, operation.target_rel_path
     )
     _flush_before_destructive(recorder, state)
-    _guard_present(
+    source_actual = _guard_present(
         fs,
         target_root,
         operation.target_rel_path,
@@ -2980,6 +3083,14 @@ def _trash(
         raise OperationFailure(
             ExecutionReason.TRASH_COLLISION, f"trash destination exists: {destination}"
         )
+    mutation = _retain_mutation_attempt(
+        state,
+        operation,
+        primary=source,
+        primary_before=source_actual,
+        secondary=destination,
+        destination_relative=_target_relative_path(destination, target_root),
+    )
     try:
         fs.rename_new(source, destination)
     except FileExistsError as error:
@@ -2988,6 +3099,7 @@ def _trash(
             "trash destination appeared before conditional rename",
             cause=error,
         ) from error
+    mutation.committed = True
     detail = _durability_detail(fs, source.parent, destination.parent)
     moved = _profiled_stat(
         _require_stat_path(fs, destination),
@@ -3018,7 +3130,7 @@ def _delete(
         and operation.reason is OperationReason.DIRECTORY_CLEANUP
     )
     _flush_before_destructive(recorder, state)
-    _guard_present(
+    target_actual = _guard_present(
         fs,
         target_root,
         operation.target_rel_path,
@@ -3031,6 +3143,12 @@ def _delete(
     readonly_cleared = bool(
         operation.target_expected.metadata.attributes & _READONLY
     )
+    mutation = _retain_mutation_attempt(
+        state,
+        operation,
+        primary=target,
+        primary_before=target_actual,
+    )
     removed = False
     try:
         if readonly_cleared:
@@ -3040,6 +3158,7 @@ def _delete(
         else:
             fs.remove_file(target)
         removed = True
+        mutation.committed = True
     finally:
         if readonly_cleared and not removed and fs.stat_path(target) is not None:
             fs.apply_metadata(
@@ -3126,6 +3245,12 @@ def _start_directory(
     )
     _guard_absent(fs, target_root, operation.target_rel_path)
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    mutation = _retain_mutation_attempt(
+        state,
+        operation,
+        primary=target,
+        primary_before=None,
+    )
     try:
         fs.mkdir_new(target)
     except FileExistsError as error:
@@ -3134,6 +3259,7 @@ def _start_directory(
             "directory appeared before conditional create",
             cause=error,
         ) from error
+    mutation.committed = True
     state.pending_directories.append(operation)
     state.ready_directories.add(operation.op_id)
 
@@ -3180,6 +3306,7 @@ def _finalize_directories(
                     operation.op_id, actual
                 ),
             )
+            state.mutation_attempts.pop(operation.op_id, None)
             _settle(
                 xset,
                 state,
@@ -3191,7 +3318,24 @@ def _finalize_directories(
         except (Canceled, PauseRequested):
             raise
         except Exception as error:
-            _settle_failure(xset, state, progress, ctx, operation, error)
+            mutation_failure = _failed_after_mutation_settlement(
+                operation,
+                error,
+                fs,
+                state,
+            )
+            state.mutation_attempts.pop(operation.op_id, None)
+            if mutation_failure is None:
+                _settle_failure(xset, state, progress, ctx, operation, error)
+            else:
+                _settle(
+                    xset,
+                    state,
+                    progress,
+                    ctx,
+                    operation,
+                    mutation_failure,
+                )
         finally:
             state.ready_directories.discard(operation.op_id)
 
@@ -3212,6 +3356,7 @@ def _restore_completed_directory_metadata(
         intended = operation.intended or operation.source_expected
         if intended is None:
             continue
+        target: Path | None = None
         try:
             target = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
             fs.apply_metadata(
@@ -3222,6 +3367,42 @@ def _restore_completed_directory_metadata(
             )
         except Exception:
             state.filesystem_failed = True
+            if target is None:
+                state.recording = RecordingStatus.DEGRADED
+                continue
+            try:
+                actual = fs.stat_path(target)
+            except Exception:
+                state.recording = RecordingStatus.DEGRADED
+                continue
+            if actual is None or not _matches_restored_directory_metadata(
+                actual,
+                intended,
+                preserve_created=xset.plan.preservation.preserve_created,
+            ):
+                state.recording = RecordingStatus.DEGRADED
+
+
+def _matches_restored_directory_metadata(
+    actual: FileStat,
+    intended: FileStat,
+    *,
+    preserve_created: bool,
+) -> bool:
+    return (
+        actual.kind is EntryKind.DIRECTORY
+        and actual.mtime_ns == intended.mtime_ns
+        and (
+            actual.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+        )
+        == (intended.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK)
+        and (
+            not preserve_created
+            or intended.metadata.created_ns is None
+            or os.name != "nt"
+            or actual.metadata.created_ns == intended.metadata.created_ns
+        )
+    )
 
 
 def _dependencies_succeeded(
@@ -3400,6 +3581,224 @@ def _failed_after_publish_settlement(
     return _Settled(Outcome.FAILED, reason, detail)
 
 
+def _retain_mutation_attempt(
+    state: _ExecutionState,
+    operation: PlanOperation,
+    *,
+    primary: Path,
+    primary_before: FileStat | None,
+    secondary: Path | None = None,
+    destination_relative: str | None = None,
+) -> _MutationAttempt:
+    stable_identity = state.execution_set.plan.target_profile.stable_file_identity
+    normalized_before = (
+        None
+        if primary_before is None
+        else _profiled_stat(primary_before, stable_identity)
+    )
+    existing = state.mutation_attempts.get(operation.op_id)
+    if existing is None:
+        attempt = _MutationAttempt(
+            kind=operation.kind,
+            primary=primary,
+            primary_before=normalized_before,
+            secondary=secondary,
+            destination_relative=destination_relative,
+        )
+        state.mutation_attempts[operation.op_id] = attempt
+        return attempt
+    if (
+        existing.kind is not operation.kind
+        or existing.primary != primary
+        or existing.primary_before != normalized_before
+        or existing.secondary != secondary
+        or existing.destination_relative != destination_relative
+    ):
+        raise RuntimeError("executor mutation attempt changed during retry")
+    return existing
+
+
+def _failed_after_mutation_settlement(
+    operation: PlanOperation,
+    error: Exception,
+    fs: ExecutorFileSystem,
+    state: _ExecutionState,
+    *,
+    canceled: bool = False,
+) -> _Settled | None:
+    attempt = state.mutation_attempts.get(operation.op_id)
+    if attempt is None:
+        return None
+
+    reason, message = _failure_reason_and_message(error)
+    detail: dict[str, object] = {
+        "error_type": type(error).__name__,
+        "message": message,
+    }
+    if attempt.kind is OperationKind.UPDATE:
+        detail["publish_state"] = "not-published"
+    if attempt.destination_relative is not None:
+        detail["mutation_destination"] = attempt.destination_relative
+    if not _describe_mutation_attempt(attempt, fs, state, detail):
+        return None
+
+    if canceled:
+        reason = ExecutionReason.CANCELED_AFTER_MUTATION
+        detail["message"] = "cancellation interrupted settlement after a mutation attempt"
+    _mark_unrecorded_mutation(
+        state,
+        detail,
+        message="filesystem mutation may have committed before ledger settlement",
+    )
+    return _Settled(Outcome.FAILED, reason, detail)
+
+
+def _describe_mutation_attempt(
+    attempt: _MutationAttempt,
+    fs: ExecutorFileSystem,
+    state: _ExecutionState,
+    detail: dict[str, object],
+) -> bool:
+    committed_states = {
+        OperationKind.MOVE: "target-renamed",
+        OperationKind.TRASH: "target-trashed",
+    }
+    if attempt.kind is OperationKind.RECASE:
+        # Both spellings address the same entry on Windows, so a path stat cannot
+        # distinguish a committed case-only rename from its exact pre-state.
+        detail["mutation_state"] = (
+            "committed" if attempt.committed else "unverified"
+        )
+        detail["durable_state"] = "recase-state-unverified"
+        return True
+
+    stable_identity = state.execution_set.plan.target_profile.stable_file_identity
+    try:
+        primary = fs.stat_path(attempt.primary)
+        primary = (
+            None if primary is None else _profiled_stat(primary, stable_identity)
+        )
+        secondary = (
+            None
+            if attempt.secondary is None
+            else fs.stat_path(attempt.secondary)
+        )
+        secondary = (
+            None
+            if secondary is None
+            else _profiled_stat(secondary, stable_identity)
+        )
+    except Exception as state_error:
+        detail["mutation_state"] = (
+            "committed" if attempt.committed else "unverified"
+        )
+        detail["durable_state"] = f"{attempt.kind.value}-state-unverified"
+        detail["mutation_state_error"] = (
+            f"{type(state_error).__name__}: {logical_error_text(state_error)}"
+        )
+        return True
+
+    before = attempt.primary_before
+    if attempt.kind in {OperationKind.MOVE, OperationKind.TRASH}:
+        assert before is not None and attempt.secondary is not None
+        primary_matches = primary is not None and _matches_expected(primary, before)
+        secondary_matches = secondary is not None and _matches_expected(
+            secondary, before
+        )
+        detail["source_state"] = (
+            "reviewed" if primary_matches else "absent" if primary is None else "changed"
+        )
+        detail["destination_state"] = (
+            "reviewed"
+            if secondary_matches
+            else "absent"
+            if secondary is None
+            else "changed"
+        )
+        if primary_matches and secondary is None:
+            if attempt.committed:
+                detail["mutation_state"] = "committed"
+                detail["durable_state"] = (
+                    "source-restored-after-move"
+                    if attempt.kind is OperationKind.MOVE
+                    else "source-restored-after-trash"
+                )
+                return True
+            detail["mutation_state"] = "not-committed"
+            detail["durable_state"] = "source-retained"
+            return False
+        if primary is None and secondary_matches:
+            detail["mutation_state"] = "committed"
+            detail["durable_state"] = committed_states[attempt.kind]
+            return True
+        detail["mutation_state"] = (
+            "committed" if attempt.committed else "unverified"
+        )
+        detail["durable_state"] = f"{attempt.kind.value}-state-ambiguous"
+        return True
+
+    if attempt.kind is OperationKind.DELETE:
+        assert before is not None
+        if primary is not None and _matches_expected(primary, before):
+            if attempt.committed:
+                detail["mutation_state"] = "committed"
+                detail["durable_state"] = "target-restored-after-delete"
+                return True
+            detail["mutation_state"] = "not-committed"
+            detail["durable_state"] = "target-retained"
+            return False
+        detail["mutation_state"] = (
+            "committed"
+            if attempt.committed or primary is None
+            else "unverified"
+        )
+        detail["durable_state"] = (
+            "target-deleted"
+            if primary is None
+            else "target-changed-after-delete-attempt"
+        )
+        return True
+
+    if attempt.kind is OperationKind.UPDATE:
+        assert before is not None
+        if primary is not None and _matches_expected(primary, before):
+            detail["mutation_state"] = "not-committed"
+            detail["durable_state"] = "target-retained"
+            return False
+        detail["mutation_state"] = "unverified"
+        detail["durable_state"] = (
+            "target-missing-before-publish"
+            if primary is None
+            else "target-metadata-changed-before-publish"
+        )
+        return True
+
+    if attempt.kind is OperationKind.MKDIR:
+        if primary is None:
+            if attempt.committed:
+                detail["mutation_state"] = "committed"
+                detail["durable_state"] = "directory-missing-after-create"
+                return True
+            detail["mutation_state"] = "not-committed"
+            detail["durable_state"] = "directory-absent"
+            return False
+        detail["mutation_state"] = (
+            "committed"
+            if attempt.committed
+            else "unverified"
+        )
+        detail["durable_state"] = (
+            "directory-created"
+            if attempt.committed and primary.kind is EntryKind.DIRECTORY
+            else "directory-present-after-create-attempt"
+            if primary.kind is EntryKind.DIRECTORY
+            else "mkdir-state-ambiguous"
+        )
+        return True
+
+    raise RuntimeError(f"unsupported mutation attempt kind: {attempt.kind}")
+
+
 def _cleanup_inflight(
     state: _ExecutionState, fs: ExecutorFileSystem
 ) -> Exception | None:
@@ -3424,7 +3823,10 @@ def _retry_checkpoint(
     try:
         ctx.checkpoint()
     except PauseRequested:
-        if op_id not in state.retry_continuations:
+        if (
+            op_id not in state.retry_continuations
+            and op_id not in state.mutation_attempts
+        ):
             raise
         state.pause_latched = True
 
@@ -3439,6 +3841,30 @@ def _policy_stop_checkpoint(ctx: RunContext) -> None:
 
 
 def _canceled_durable_settlement(
+    operation: PlanOperation,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled | None:
+    byte_settlement = _canceled_byte_settlement(
+        operation,
+        fs,
+        target_root,
+        state,
+    )
+    if byte_settlement is not None and byte_settlement.outcome is Outcome.FAILED:
+        return byte_settlement
+    mutation_settlement = _failed_after_mutation_settlement(
+        operation,
+        state.retry_errors.get(operation.op_id) or Canceled(),
+        fs,
+        state,
+        canceled=True,
+    )
+    return mutation_settlement or byte_settlement
+
+
+def _canceled_byte_settlement(
     operation: PlanOperation,
     fs: ExecutorFileSystem,
     target_root: Path,
@@ -3544,6 +3970,10 @@ def _new_publish_state(
         if target is not None:
             detail["target_state"] = "unexpectedly-present-before-publish"
         return False
+    if temp is not None and target is None:
+        detail["temp_state"] = "changed-before-publish"
+        detail["target_state"] = "absent-before-publish"
+        return False
     if temp is None and target is not None:
         detail["target_state"] = (
             "published"
@@ -3588,6 +4018,14 @@ def _update_publish_state(
             detail["target_state"] = "missing-before-publish"
         elif not _same_file_version(target, continuation.live_stat):
             detail["target_state"] = "changed-before-publish"
+        return False
+    if (
+        temp is not None
+        and target is not None
+        and _same_file_version(target, continuation.live_stat)
+    ):
+        detail["temp_state"] = "changed-before-publish"
+        detail["target_state"] = "retained-before-publish"
         return False
     if temp is None and target is not None:
         detail["target_state"] = (
@@ -3749,6 +4187,15 @@ def _mark_unrecorded_publish(
     detail: dict[str, object],
     *,
     message: str = "cancellation interrupted settlement of a published filesystem mutation",
+) -> None:
+    _mark_unrecorded_mutation(state, detail, message=message)
+
+
+def _mark_unrecorded_mutation(
+    state: _ExecutionState,
+    detail: dict[str, object],
+    *,
+    message: str,
 ) -> None:
     state.recording = RecordingStatus.DEGRADED
     detail["recording"] = RecordingStatus.DEGRADED.value

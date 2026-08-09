@@ -2004,6 +2004,169 @@ class PublishedSizeFaultFileSystem(NativeFileSystem):
         return result
 
 
+class FlushTempSubstitutionRecorder(FakeRecorder):
+    def __init__(self, temp: Path) -> None:
+        super().__init__()
+        self.temp = temp
+        self.substituted = False
+
+    def flush(self) -> None:
+        super().flush()
+        if self.substituted or not self.temp.exists():
+            return
+        before = self.temp.stat(follow_symlinks=False)
+        replacement = self.temp.with_name(f"{self.temp.name}.replacement")
+        replacement.write_bytes(b"EVIL-CONTENT")
+        os.utime(
+            replacement,
+            ns=(before.st_atime_ns, before.st_mtime_ns),
+        )
+        os.replace(replacement, self.temp)
+        after = self.temp.stat(follow_symlinks=False)
+        assert after.st_size == before.st_size
+        assert after.st_mtime_ns == before.st_mtime_ns
+        assert after.st_ino != before.st_ino
+        self.substituted = True
+
+
+def test_update_revalidates_prepared_temp_after_recorder_flush(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_name = "file.bin"
+    (source / source_name).write_bytes(b"GOOD-CONTENT")
+    published = target / source_name
+    published.write_bytes(b"OLD!-CONTENT")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, source_name)
+    target_stat = fs.stat(target, source_name)
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path=source_name,
+        target_rel_path=source_name,
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    temp = target / f"{source_name}.synctmp-{RUN_ID}-{operation.op_id}"
+    recorder = FlushTempSubstitutionRecorder(temp)
+    xset = _xset(
+        _plan(
+            source,
+            target,
+            (operation,),
+            trash_on_update=False,
+        )
+    )
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert recorder.substituted
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert published.read_bytes() == b"OLD!-CONTENT"
+    assert not temp.exists()
+    assert result.recording is RecordingStatus.OK
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+
+
+class PostPublishSubstitutionFileSystem(NativeFileSystem):
+    def __init__(self, published: Path) -> None:
+        self.published = published
+        self.substitutions = 0
+
+    def _substitute_published(self, path: Path) -> None:
+        if path != self.published:
+            return
+        before = path.stat(follow_symlinks=False)
+        replacement = path.with_name(f"{path.name}.replacement")
+        replacement.write_bytes(b"EVIL-CONTENT")
+        os.utime(
+            replacement,
+            ns=(before.st_atime_ns, before.st_mtime_ns),
+        )
+        os.replace(replacement, path)
+        after = path.stat(follow_symlinks=False)
+        assert after.st_size == before.st_size
+        assert after.st_mtime_ns == before.st_mtime_ns
+        assert after.st_ino != before.st_ino
+        self.substitutions += 1
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        super().publish_new(temp, target)
+        self._substitute_published(target)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        super().replace(temp, target)
+        self._substitute_published(target)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE],
+)
+def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
+    tmp_path: Path,
+    kind: OperationKind,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_name = "new.bin"
+    published_name = "new.bin"
+    (source / source_name).write_bytes(b"GOOD-CONTENT")
+    published = target / published_name
+    fs = PostPublishSubstitutionFileSystem(published)
+    source_stat = fs.stat(source, source_name)
+    assert source_stat is not None
+    target_expected = None
+    prior_path = None
+    prior_expected = None
+    if kind is OperationKind.UPDATE:
+        published.write_bytes(b"OLD!-CONTENT")
+        target_expected = fs.stat(target, published_name)
+        assert target_expected is not None
+    elif kind is OperationKind.MOVE_UPDATE:
+        (target / "old.bin").write_bytes(b"OLD!-CONTENT")
+        prior_path = "old.bin"
+        prior_expected = fs.stat(target, prior_path)
+        assert prior_expected is not None
+    operation = _operation(
+        1,
+        kind,
+        source_rel_path=source_name,
+        target_rel_path=published_name,
+        source_expected=source_stat,
+        target_expected=target_expected,
+        intended=source_stat,
+        prior_target_rel_path=prior_path,
+        prior_target_expected=prior_expected,
+    )
+    xset = _xset(
+        _plan(
+            source,
+            target,
+            (operation,),
+            trash_on_update=False,
+        )
+    )
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.substitutions == 1
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.reason == "target-drift"
+    assert published.read_bytes() == b"EVIL-CONTENT"
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    if kind is OperationKind.MOVE_UPDATE:
+        assert (target / "old.bin").read_bytes() == b"OLD!-CONTENT"
+
+
 @pytest.mark.parametrize(
     "kind",
     [OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE],
@@ -6466,19 +6629,689 @@ def test_rename_final_guards_run_after_recorder_barrier(
     assert not trash.exists()
 
 
+class NonByteMutationFaultFileSystem(NativeFileSystem):
+    def __init__(
+        self,
+        primitive: str,
+        *,
+        commit: bool,
+        sharing: bool = False,
+    ) -> None:
+        self.primitive = primitive
+        self.commit = commit
+        self.sharing = sharing
+        self.faults = 0
+
+    def _fault(self) -> None:
+        self.faults += 1
+        error = OSError("injected mutation fault")
+        if self.sharing:
+            error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        if self.primitive != "rename":
+            return super().rename_new(source, target)
+        if self.commit:
+            super().rename_new(source, target)
+        self._fault()
+
+    def remove_file(self, path: Path) -> None:
+        if self.primitive != "remove-file":
+            return super().remove_file(path)
+        if self.commit:
+            super().remove_file(path)
+        self._fault()
+
+    def remove_directory(self, path: Path) -> None:
+        if self.primitive != "remove-directory":
+            return super().remove_directory(path)
+        if self.commit:
+            super().remove_directory(path)
+        self._fault()
+
+    def mkdir_new(self, path: Path) -> None:
+        if self.primitive != "mkdir":
+            return super().mkdir_new(path)
+        if self.commit:
+            super().mkdir_new(path)
+        self._fault()
+
+
+def _nonbyte_mutation_operation(
+    source: Path,
+    target: Path,
+    fs: NativeFileSystem,
+    kind: OperationKind,
+    *,
+    directory_delete: bool = False,
+) -> PlanOperation:
+    if kind is OperationKind.MKDIR:
+        (source / "folder").mkdir()
+        source_stat = fs.stat(source, "folder")
+        assert source_stat is not None
+        return _operation(
+            1,
+            kind,
+            source_rel_path="folder",
+            target_rel_path="folder",
+            source_expected=source_stat,
+            target_expected=None,
+            intended=source_stat,
+            reason=OperationReason.REQUIRED_DIRECTORY,
+        )
+    if kind is OperationKind.DELETE:
+        name = "folder" if directory_delete else "old.bin"
+        live = target / name
+        live.mkdir() if directory_delete else live.write_bytes(b"reviewed")
+        target_stat = fs.stat(target, name)
+        assert target_stat is not None
+        return _operation(
+            1,
+            kind,
+            source_rel_path=None,
+            target_rel_path=name,
+            source_expected=None,
+            target_expected=target_stat,
+            intended=None,
+            reason=(
+                OperationReason.DIRECTORY_CLEANUP
+                if directory_delete
+                else OperationReason.TARGET_ONLY
+            ),
+        )
+    if kind is OperationKind.TRASH:
+        (target / "old.bin").write_bytes(b"reviewed")
+        target_stat = fs.stat(target, "old.bin")
+        assert target_stat is not None
+        return _operation(
+            1,
+            kind,
+            source_rel_path=None,
+            target_rel_path="old.bin",
+            source_expected=None,
+            target_expected=target_stat,
+            intended=None,
+            reason=OperationReason.TARGET_ONLY,
+        )
+
+    old_name = "keep.txt" if kind is OperationKind.RECASE else "old.bin"
+    new_name = "KEEP.txt" if kind is OperationKind.RECASE else "new.bin"
+    (target / old_name).write_bytes(b"reviewed")
+    old_stat = fs.stat(target, old_name)
+    assert old_stat is not None
+    source_file = source / new_name
+    source_file.write_bytes(b"reviewed")
+    os.utime(source_file, ns=(old_stat.mtime_ns, old_stat.mtime_ns))
+    source_stat = fs.stat(source, new_name)
+    assert source_stat is not None
+    return _operation(
+        1,
+        kind,
+        source_rel_path=new_name,
+        target_rel_path=new_name,
+        source_expected=source_stat,
+        target_expected=old_stat if kind is OperationKind.RECASE else None,
+        intended=old_stat if kind is OperationKind.RECASE else source_stat,
+        prior_target_rel_path=old_name,
+        prior_target_expected=old_stat,
+        reason=(
+            OperationReason.CASE_MISMATCH
+            if kind is OperationKind.RECASE
+            else OperationReason.IDENTITY_RENAME
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("kind", "primitive", "directory_delete", "mutation_state", "durable_state"),
+    (
+        (OperationKind.MOVE, "rename", False, "committed", "target-renamed"),
+        (OperationKind.RECASE, "rename", False, "unverified", "recase-state-unverified"),
+        (OperationKind.TRASH, "rename", False, "committed", "target-trashed"),
+        (OperationKind.DELETE, "remove-file", False, "committed", "target-deleted"),
+        (OperationKind.DELETE, "remove-directory", True, "committed", "target-deleted"),
+        (OperationKind.MKDIR, "mkdir", False, "unverified", "directory-present-after-create-attempt"),
+    ),
+    ids=("move", "recase", "trash", "delete-file", "delete-directory", "mkdir"),
+)
+def test_nonbyte_commit_then_raise_degrades_unrecorded_mutation(
+    tmp_path: Path,
+    kind: OperationKind,
+    primitive: str,
+    directory_delete: bool,
+    mutation_state: str,
+    durable_state: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationFaultFileSystem(primitive, commit=True)
+    operation = _nonbyte_mutation_operation(
+        source,
+        target,
+        fs,
+        kind,
+        directory_delete=directory_delete,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.reason == "io-error"
+    assert item.detail["mutation_state"] == mutation_state
+    assert item.detail["durable_state"] == durable_state
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    if kind is OperationKind.MOVE:
+        assert not (target / "old.bin").exists()
+        assert (target / "new.bin").read_bytes() == b"reviewed"
+    elif kind is OperationKind.RECASE:
+        assert [path.name for path in target.iterdir()] == ["KEEP.txt"]
+    elif kind is OperationKind.TRASH:
+        assert not (target / "old.bin").exists()
+        assert (target / ".synctrash" / str(RUN_ID) / "old.bin").exists()
+    elif kind is OperationKind.DELETE:
+        assert not (target / operation.target_rel_path).exists()
+    else:
+        assert (target / "folder").is_dir()
+
+
+@pytest.mark.parametrize(
+    ("kind", "primitive"),
+    (
+        (OperationKind.MOVE, "rename"),
+        (OperationKind.DELETE, "remove-file"),
+        (OperationKind.MKDIR, "mkdir"),
+    ),
+    ids=("move", "delete", "mkdir"),
+)
+def test_nonbyte_precommit_failure_keeps_recording_ok_when_state_is_unchanged(
+    tmp_path: Path,
+    kind: OperationKind,
+    primitive: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationFaultFileSystem(primitive, commit=False)
+    operation = _nonbyte_mutation_operation(source, target, fs, kind)
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert "durable_state" not in item.detail
+    assert "recording" not in item.detail
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    if kind is OperationKind.MOVE:
+        assert (target / "old.bin").exists()
+        assert not (target / "new.bin").exists()
+    elif kind is OperationKind.DELETE:
+        assert (target / "old.bin").exists()
+    else:
+        assert not (target / "folder").exists()
+
+
+class DestinationAppearedRenameFileSystem(NativeFileSystem):
+    def rename_new(self, source: Path, target: Path) -> None:
+        target.write_bytes(b"foreign")
+        raise FileExistsError(target)
+
+
+def test_move_failure_with_retained_source_and_occupied_destination_is_ambiguous(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = DestinationAppearedRenameFileSystem()
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.reason == "destination-occupied"
+    assert item.detail["source_state"] == "reviewed"
+    assert item.detail["destination_state"] == "changed"
+    assert item.detail["durable_state"] == "move-state-ambiguous"
+    assert recorder.calls == []
+    assert (target / "old.bin").read_bytes() == b"reviewed"
+    assert (target / "new.bin").read_bytes() == b"foreign"
+
+
+class PostMoveDurabilityDriftFileSystem(NativeFileSystem):
+    def __init__(self, moved: Path) -> None:
+        self.moved = moved
+        self.faulted = False
+
+    def flush_directory(self, path: Path) -> bool:
+        if not self.faulted and self.moved.exists():
+            self.moved.unlink()
+            self.moved.write_bytes(b"foreign")
+            self.faulted = True
+            raise PermissionError("injected post-move durability fault")
+        return super().flush_directory(path)
+
+
+def test_committed_move_failure_probes_current_durable_state(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = PostMoveDurabilityDriftFileSystem(target / "new.bin")
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.faulted
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.detail["mutation_state"] == "committed"
+    assert item.detail["source_state"] == "absent"
+    assert item.detail["destination_state"] == "changed"
+    assert item.detail["durable_state"] == "move-state-ambiguous"
+    assert recorder.calls == []
+    assert not (target / "old.bin").exists()
+    assert (target / "new.bin").read_bytes() == b"foreign"
+
+
+def test_nonbyte_sharing_retry_retains_committed_mutation_state(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationFaultFileSystem("rename", commit=True, sharing=True)
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(
+        xset,
+        fs=fs,
+        policies=_policies(
+            failure=BoundedFailurePolicy(retries=1),
+            max_retries=1,
+        ),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.faults == 1
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.detail["mutation_state"] == "committed"
+    assert item.detail["durable_state"] == "target-renamed"
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert not (target / "old.bin").exists()
+    assert (target / "new.bin").read_bytes() == b"reviewed"
+
+
+def test_cancel_during_nonbyte_retry_settles_committed_mutation(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationFaultFileSystem("rename", commit=True, sharing=True)
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = FakeRecorder()
+    events: list[object] = []
+    checkpoints = 0
+
+    def checkpoint() -> None:
+        nonlocal checkpoints
+        checkpoints += 1
+        if checkpoints == 2:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            recorder,
+            _policies(),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.faults == 1
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "canceled-after-mutation"
+    assert item.detail["durable_state"] == "target-renamed"
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert not (target / "old.bin").exists()
+    assert (target / "new.bin").read_bytes() == b"reviewed"
+
+
+def test_pause_during_nonbyte_retry_settles_committed_mutation_before_pausing(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationFaultFileSystem("rename", commit=True, sharing=True)
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = FakeRecorder()
+    events: list[object] = []
+    checkpoints = 0
+
+    def checkpoint() -> None:
+        nonlocal checkpoints
+        checkpoints += 1
+        if checkpoints == 2:
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            recorder,
+            _policies(),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.faults == 1
+    assert item.outcome is Outcome.FAILED
+    assert item.detail["mutation_state"] == "committed"
+    assert item.detail["durable_state"] == "target-renamed"
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert not (target / "old.bin").exists()
+    assert (target / "new.bin").read_bytes() == b"reviewed"
+
+
+class NonByteMutationProbeFailureFileSystem(NonByteMutationFaultFileSystem):
+    def stat_path(self, path: Path) -> FileStat | None:
+        if self.faults:
+            raise PermissionError("injected mutation-state probe failure")
+        return super().stat_path(path)
+
+
+def test_nonbyte_probe_failure_conservatively_degrades_recording(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationProbeFailureFileSystem("rename", commit=False)
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.detail["mutation_state"] == "unverified"
+    assert item.detail["durable_state"] == "move-state-unverified"
+    assert "PermissionError" in item.detail["mutation_state_error"]
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert (target / "old.bin").read_bytes() == b"reviewed"
+    assert not (target / "new.bin").exists()
+
+
+class CreatedDirectoryMetadataFailureFileSystem(NativeFileSystem):
+    def __init__(self, target: Path) -> None:
+        self.target = target
+
+    def apply_metadata(self, path: Path, *args, **kwargs) -> None:
+        if path == self.target:
+            raise PermissionError("injected created-directory metadata failure")
+        super().apply_metadata(path, *args, **kwargs)
+
+
+def test_mkdir_deferred_metadata_failure_degrades_created_directory(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = CreatedDirectoryMetadataFailureFileSystem(target / "folder")
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MKDIR)
+    xset = _xset(_plan(source, target, (operation,)))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.detail["mutation_state"] == "committed"
+    assert item.detail["durable_state"] == "directory-created"
+    assert (target / "folder").is_dir()
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+
+
+class ResumedDirectoryRestoreFileSystem(NativeFileSystem):
+    def __init__(self, directory: Path, *, failure: str | None) -> None:
+        self.directory = directory
+        self.failure = failure
+        self.restore_attempts = 0
+
+    def apply_metadata(self, path: Path, *args, **kwargs) -> None:
+        if path == self.directory:
+            self.restore_attempts += 1
+            if self.failure == "before":
+                raise PermissionError("injected resumed-directory restore failure")
+        super().apply_metadata(path, *args, **kwargs)
+        if path == self.directory and self.failure == "after":
+            raise PermissionError("injected post-restore failure")
+
+
+def _resumed_directory_execution(
+    source: Path,
+    target: Path,
+    fs: NativeFileSystem,
+) -> tuple[ExecutionSet, PlanOperation, PlanOperation, FileStat]:
+    source_directory = source / "folder"
+    source_directory.mkdir()
+    (source_directory / "child.bin").write_bytes(b"child")
+    os.utime(source_directory, ns=(1_000_000_000, 1_000_000_000))
+    (target / "folder").mkdir()
+    directory_stat = fs.stat(source, "folder")
+    child_stat = fs.stat(source, "folder\\child.bin")
+    assert directory_stat is not None and child_stat is not None
+    mkdir = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=directory_stat,
+        target_expected=None,
+        intended=directory_stat,
+        reason=OperationReason.REQUIRED_DIRECTORY,
+    )
+    copy = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="folder\\child.bin",
+        target_rel_path="folder\\child.bin",
+        source_expected=child_stat,
+        target_expected=None,
+        intended=child_stat,
+        dependencies=(mkdir.op_id,),
+    )
+    xset = _xset(_plan(source, target, (mkdir, copy)))
+    xset.status[mkdir.op_id] = Outcome.SUCCEEDED
+    return xset, mkdir, copy, directory_stat
+
+
+def test_resumed_directory_restore_failure_degrades_recording(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    directory = target / "folder"
+    fs = ResumedDirectoryRestoreFileSystem(directory, failure="before")
+    xset, mkdir, copy, _ = _resumed_directory_execution(source, target, fs)
+
+    result, _, recorder = _run(xset, fs=fs)
+
+    assert fs.restore_attempts == 1
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert xset.status[mkdir.op_id] is Outcome.SUCCEEDED
+    assert xset.status[copy.op_id] is Outcome.SUCCEEDED
+    assert [call[0] for call in recorder.calls] == ["copied"]
+
+
+def test_resumed_directory_restore_then_raise_keeps_recording_truth(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    directory = target / "folder"
+    fs = ResumedDirectoryRestoreFileSystem(directory, failure="after")
+    xset, _, _, _ = _resumed_directory_execution(source, target, fs)
+
+    result, _, recorder = _run(xset, fs=fs)
+
+    assert fs.restore_attempts == 1
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert [call[0] for call in recorder.calls] == ["copied"]
+
+
+def test_cancel_restores_resumed_directory_metadata_before_unwind(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    directory = target / "folder"
+    fs = ResumedDirectoryRestoreFileSystem(directory, failure=None)
+    xset, mkdir, copy, intended = _resumed_directory_execution(source, target, fs)
+    recorder = FakeRecorder()
+    events: list[object] = []
+
+    def checkpoint() -> None:
+        raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            recorder,
+            _policies(),
+            fs,
+        )
+
+    restored = fs.stat(target, "folder")
+    assert restored is not None
+    assert fs.restore_attempts == 1
+    assert restored.mtime_ns == intended.mtime_ns
+    assert xset.recording is RecordingStatus.OK
+    assert xset.status[mkdir.op_id] is Outcome.SUCCEEDED
+    assert xset.status[copy.op_id] is Outcome.CANCELED
+    assert recorder.calls == []
+
+
+class ReadonlyReplaceFailureFileSystem(NativeFileSystem):
+    def __init__(self, target: Path, *, fail_restore: bool) -> None:
+        self.target = target
+        self.fail_restore = fail_restore
+        self.restore_attempts = 0
+
+    def replace(self, temp: Path, target: Path) -> None:
+        raise PermissionError("injected replace failure")
+
+    def apply_metadata(self, path: Path, *args, **kwargs) -> None:
+        if path == self.target and kwargs.get("apply_readonly"):
+            self.restore_attempts += 1
+            if self.fail_restore:
+                raise PermissionError("injected readonly restoration failure")
+        super().apply_metadata(path, *args, **kwargs)
+
+
+@pytest.mark.parametrize("fail_restore", [False, True], ids=("restored", "restore-failed"))
+def test_failed_readonly_update_reports_restoration_truth(
+    tmp_path: Path,
+    fail_restore: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "readonly.bin").write_bytes(b"new-version")
+    live = target / "readonly.bin"
+    live.write_bytes(b"old-version")
+    setup_fs = NativeFileSystem()
+    expected = setup_fs.stat(target, "readonly.bin")
+    assert expected is not None
+    setup_fs.apply_metadata(
+        live,
+        replace(
+            expected,
+            metadata=replace(
+                expected.metadata,
+                attributes=expected.metadata.attributes | 1,
+            ),
+        ),
+        preserve_created=True,
+        apply_readonly=True,
+    )
+    fs = ReadonlyReplaceFailureFileSystem(live, fail_restore=fail_restore)
+    source_stat = fs.stat(source, "readonly.bin")
+    target_stat = fs.stat(target, "readonly.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="readonly.bin",
+        target_rel_path="readonly.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+
+    result, events, recorder = _run(xset, fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    restored = fs.stat(target, "readonly.bin")
+    assert restored is not None
+    assert fs.restore_attempts == 1
+    assert result.status is SessionState.FAILED
+    assert live.read_bytes() == b"old-version"
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    if fail_restore:
+        assert result.recording is RecordingStatus.DEGRADED
+        assert not restored.metadata.attributes & 1
+        assert item.detail["publish_state"] == "not-published"
+        assert item.detail["mutation_state"] == "unverified"
+        assert item.detail["durable_state"] == "target-metadata-changed-before-publish"
+    else:
+        assert result.recording is RecordingStatus.OK
+        assert restored.metadata.attributes & 1
+        assert "durable_state" not in item.detail
+
+
 class FailingReadonlyDeleteFileSystem(NativeFileSystem):
+    def __init__(self, target: Path, *, fail_restore: bool) -> None:
+        self.target = target
+        self.fail_restore = fail_restore
+        self.restore_attempts = 0
+
     def remove_file(self, path: Path) -> None:
         raise PermissionError("injected delete failure")
 
+    def apply_metadata(self, path: Path, *args, **kwargs) -> None:
+        if path == self.target and kwargs.get("apply_readonly"):
+            self.restore_attempts += 1
+            if self.fail_restore:
+                raise PermissionError("injected readonly restoration failure")
+        super().apply_metadata(path, *args, **kwargs)
 
-def test_failed_readonly_delete_restores_planned_attributes(tmp_path: Path) -> None:
+
+@pytest.mark.parametrize("fail_restore", [False, True], ids=("restored", "restore-failed"))
+def test_failed_readonly_delete_reports_restoration_truth(
+    tmp_path: Path,
+    fail_restore: bool,
+) -> None:
     source, target = _roots(tmp_path)
     live = target / "readonly.bin"
     live.write_bytes(b"keep")
-    fs = FailingReadonlyDeleteFileSystem()
-    expected = fs.stat(target, "readonly.bin")
+    setup_fs = NativeFileSystem()
+    expected = setup_fs.stat(target, "readonly.bin")
     assert expected is not None
-    fs.apply_metadata(
+    setup_fs.apply_metadata(
         live,
         replace(
             expected,
@@ -6489,6 +7322,7 @@ def test_failed_readonly_delete_restores_planned_attributes(tmp_path: Path) -> N
         preserve_created=True,
         apply_readonly=True,
     )
+    fs = FailingReadonlyDeleteFileSystem(live, fail_restore=fail_restore)
     expected = fs.stat(target, "readonly.bin")
     assert expected is not None
     operation = _operation(
@@ -6500,14 +7334,27 @@ def test_failed_readonly_delete_restores_planned_attributes(tmp_path: Path) -> N
         target_expected=expected,
         intended=None,
     )
+    xset = _xset(_plan(source, target, (operation,)))
 
-    result, _, recorder = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+    result, events, recorder = _run(xset, fs=fs)
 
+    item = next(event for event in events if isinstance(event, ItemOutcome))
     restored = fs.stat(target, "readonly.bin")
     assert result.status is SessionState.FAILED
     assert live.read_bytes() == b"keep"
-    assert restored is not None and restored.metadata.attributes & 1
+    assert restored is not None
+    assert fs.restore_attempts == 1
     assert recorder.calls == []
+    assert xset.published_evidence == {}
+    if fail_restore:
+        assert result.recording is RecordingStatus.DEGRADED
+        assert not restored.metadata.attributes & 1
+        assert item.detail["mutation_state"] == "unverified"
+        assert item.detail["durable_state"] == "target-changed-after-delete-attempt"
+    else:
+        assert result.recording is RecordingStatus.OK
+        assert restored.metadata.attributes & 1
+        assert "durable_state" not in item.detail
 
 
 class ExternalSwapAfterBackupFileSystem(NativeFileSystem):

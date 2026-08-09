@@ -131,8 +131,9 @@ is why pause is free instead of an unpayable retrofit.
 Pause normally unwinds rather than blocking in place — a blocked stack would
 hold the volume custody that `PAUSED` promises to release. The narrow exception
 is a retry-backoff checkpoint while process-local COPY/UPDATE/MOVE_UPDATE state
-owns staged or published filesystem state: pause is latched until that operation
-settles, then unwinds at its ordinary boundary. Production backoff contributes
+owns staged or published filesystem state, or a non-byte mutation marker owns
+unsettled durable truth: pause is latched until that operation settles, then
+unwinds at its ordinary boundary. Production backoff contributes
 at most 350 ms; remaining delay is uncapped I/O over already-staged data, never
 another main-file copy. Cancellation still unwinds immediately and preempts the
 latch. The continuation state a pause must preserve is explicit. In the execute phase,
@@ -192,10 +193,12 @@ item-processing module's own unwind finalizer emits a state-derived outcome for
 the in-flight item and `CANCELED` for every unreached selected item before
 `Canceled` leaves the module. An unfinished byte operation whose target already
 published is `FAILED/canceled-after-publish`, recording is degraded, and no
-success-only published evidence is invented; an unpublished prepared operation
-remains `CANCELED`. On `PauseRequested` the finalizer emits nothing for
-unreached work, because it remains pending for resume. Emit-as-you-go plus this
-unwind finalizer means the runner never introspects module internals.
+success-only published evidence is invented; a durable or ambiguous non-byte
+attempt is `FAILED/canceled-after-mutation`; and an unpublished prepared or
+proven-unchanged attempt remains `CANCELED`. On `PauseRequested` the finalizer
+emits nothing for unreached work, because it remains pending for resume.
+Emit-as-you-go plus this unwind finalizer means the runner never introspects
+module internals.
 
 Audit finalization is a two-phase step, not a circularity: before the runner
 emits the one immutable `Terminal`, it drains the audit subscriber and races
@@ -979,7 +982,7 @@ resume remains continue-or-refuse).
 
 ### 4.5 executor
 
-**Implementation status (2026-08-08).** The M0 native single-worker executor
+**Implementation status (2026-08-09).** The M0 native single-worker executor
 and its core execution contracts are implemented for all nine operation kinds,
 with conditional publish, zero-byte non-replacing recase, guarded trash/delete,
 deferred directory metadata, continuation state, bounded retries, throttled
@@ -1032,8 +1035,10 @@ elapsed time (the gap between syscalls is usually tiny but not
 scheduler-bounded): trash-routed operations at worst preserve the wrong item
 recoverably, moves at worst misplace without destroying, and only update's
 replace and internal mirror deletes can destroy an external writer's file —
-never NamiSync's displaced version, never its evidence, since attestation
-subjects are always NamiSync's own published files. `ReplaceFileW` — the
+never NamiSync's displaced version. Stable identity binds a substituted
+prepared/published inode before attestation, but identity-weak same-size
+substitution and same-object byte mutation remain outside the path-based
+contract. `ReplaceFileW` — the
 supported single-call replacement with optional backup — is deliberately not
 used: it merges the replaced file's attributes, ACLs, and named streams into
 the replacement and documents partial-state failure cases;
@@ -1044,14 +1049,18 @@ parent times — directory times are restored last); the cancel-unwind finalizer
 (§2.2a — canceled outcomes for in-flight and unreached items emitted before
 unwind); content-only byte accounting; the `FailurePolicy`/`CopyBackend` seams;
 and process-local retry continuations covering COPY plus committed
-update/move-update sub-steps. They revalidate exact prepared/published and
-backup/trash evidence before resuming and latch a retry-backoff pause until
+update/move-update sub-steps. Lightweight markers retain the already-observed
+pre-state for MOVE, RECASE, TRASH, DELETE, MKDIR, and readonly clearing until
+recording or failure settlement; they add state probes only after failure. Both
+kinds of retained state survive retry and latch a retry-backoff pause until
 operation settlement rather than unwinding into the executor's own prior
-mutation. An attempt that enters with an already-published continuation performs
-one target stat before remaining post-publish work, binding the cached published
-version when available or kind/size plus available stable identity while mtime
-is still repairable; normal first-pass execution adds no stat, and the check is
-drift detection rather than an adversarial path lock. Cancellation instead derives
+mutation. Byte continuations revalidate exact prepared/published and
+backup/trash evidence before resuming. An attempt that enters with an
+already-published continuation performs one target stat before remaining
+post-publish work, binding the cached published version when available or
+kind/size plus available stable identity while mtime is still repairable;
+normal first-pass execution adds no stat, and the check is drift detection
+rather than an adversarial path lock. Cancellation instead derives
 the current item's outcome from that state immediately: retained UPDATE backups
 remain visible, published-but-unfinished work is failed with a typed reason and
 degraded recording, and no rollback or false success evidence is attempted.
@@ -1063,9 +1072,12 @@ trash has no remaining destructive mutation and skips the redundant barrier.
 Ordinary failure probes durable publish state before temp cleanup: if COPY,
 UPDATE, or MOVE_UPDATE committed and then raised, the operation reports the
 surviving target/backup/old-path state with `recording=DEGRADED` and never
-manufactures success evidence. A changed or missing published target is named
-as such rather than contradicted by a `target-published` durability label; an
-unsuccessful state probe degrades recording as publication-unverified.
+manufactures success evidence. The same rule covers committed, ambiguous, or
+unreadable non-byte attempts, deferred/resumed directory metadata, and failed
+readonly restoration; exact unchanged pre-state keeps the ordinary recording
+result. A changed or missing published target is named as such rather than
+contradicted by a `target-published` durability label; an unsuccessful state
+probe degrades recording as publication-unverified.
 
 **Flesh — now.** copy/update/recase/move/mkdir-with-metadata/trash/delete/noop;
 hash-on-copy; source-drift guard (re-stat source after read; mismatch fails
@@ -1107,9 +1119,11 @@ dedicated serial, hashless 4 MiB byte loop without preallocation.
 The source stream and published target are bound by two size invariants:
 `CopyDigest.size` must equal the reviewed/observed copy byte count at the
 executor boundary, and every `Attestation` globally requires
-`content.size == subject.size`. Copy and verifier both use the required
-XXH3-128 factory, but the verifier retains its independent cache-honest opener
-and fixed 4 MiB reads.
+`content.size == subject.size`. Before attestation, the cached post-publish stat
+must also match the prepared temp's kind, size, and stable identity when the
+target profile supplies it; this reuses the existing observation rather than
+adding a stat. Copy and verifier both use the required XXH3-128 factory, but the
+verifier retains its independent cache-honest opener and fixed 4 MiB reads.
 
 **Flesh — deferred.** Validated partial execution (`DEFERRED` outcomes);
 executor-time ADS stream copy (per the settled FEATURES → *ADS Preservation*
@@ -1144,6 +1158,12 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
 - A publish primitive that commits then raises yields one truthful failed item
   with degraded recording and explicit durable-state detail for COPY, UPDATE,
   and MOVE_UPDATE.
+- UPDATE rejects recorder-flush temp substitution before publish, and
+  COPY/UPDATE/MOVE_UPDATE reject a stable-identity post-guard inode substitution
+  before attestation without another success-path stat.
+- MOVE/RECASE/TRASH/DELETE/MKDIR commit-then-raise, exact pre-state,
+  ambiguous/probe-failed state, readonly restoration, deferred/resumed mkdir,
+  and retry pause/cancel cases preserve recording and durable-state truth.
 - Temp recovery deletes only exact-shape, different-run regular files in the
   preflight-retained touched parents. Current-run temps, lookalikes, exact-name
   directories, untouched parents, off-volume mounts, and `.synctrash` survive;
@@ -1156,7 +1176,8 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
   consequence**, never elapsed time: each conditional primitive fails cleanly
   on exactly the condition it enforces, trash-routed swaps land recoverably in
   trash, and the update residual's worst case matches the documented bound
-  with no silent ledger corruption.
+  without claiming handle-bound protection against identity-weak substitution
+  or same-object content mutation.
 - Cancellation during a multi-GiB copy takes effect within one chunk.
 - The adaptive helper selects and caps the exact three bands at both
   boundaries; empty, partial, exact, and multi-chunk files all exercise the

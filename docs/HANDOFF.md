@@ -1,66 +1,49 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-08
+Date: 2026-08-09
 Branch: `milestone1`
 
 ## Session Outcome
 
-Implemented the selected MEDIUM findings from the M1 core-logic audit and
-recorded the remaining deferred boundaries as release gates.
+Closed the two remaining executor H3/H4 integrity gaps without changing the
+reviewed full-intent/safe-selection contract or adding steady-state filesystem
+probes.
 
-- M6 now uses one logical/native Windows path contract from service admission
-  through workflow validation, managed-root containment, scanner, preflight,
-  executor, verifier, and inventory binding. Persisted and displayed paths stay
-  unprefixed; native calls receive extended spelling; ambiguous or device roots
-  are refused; native filenames are removed from user-facing diagnostics.
-- M3/M15 now use reset-only history v5 receipt windows. Exact semantic
-  duplicates retain full, non-counting receipts; one supported oversized event
-  retains a bounded hash-only receipt, degrades audit, and does not discard the
-  later stream or terminal truth. Broken ordering, identity, context, or storage
-  still fails the prefix.
-- History receipt metadata/order, item identity/semantics, immutable item
-  projections, lifecycle/watermark/count projections, and terminal truth are
-  authenticated. Strict `WITHOUT ROWID` event storage and append/finality
-  guards prevent replacement or reopening; physical-tail checks reject rows
-  outside committed watermarks. Bounded identity indexes preserve oversize
-  conflict detection, and event pages validate session attribution.
-- M14 frozen-resume and stale integrity selection now read only canonical,
-  location-owned inventory row IDs in bounded snapshot chunks. Explicit path
-  selection remains bounded and full Verify All remains intentionally O(n).
-- Deferred M1/M2/M4/M7/M11/M12 and post-finalization observer-cleanup
-  visibility are documented at their feature/release boundaries. Findings
-  already fixed or rejected on contract/arithmetic grounds received no new
-  production work.
+- UPDATE now flushes prior recorder work before all final backup, prepared-temp,
+  source, and live-target validation. COPY, UPDATE, and MOVE_UPDATE bind the
+  already-observed post-publish kind/size and available stable identity to the
+  prepared temp before attestation.
+- MOVE, RECASE, TRASH, DELETE, MKDIR, and readonly clearing retain a lightweight
+  process-local mutation attempt through recording or failure settlement.
+  Confirmed, ambiguous, or unreadable durable state degrades recording without
+  inventing success evidence; exact unchanged pre-state remains recording-OK.
+- Retry, pause, and cancel preserve mutation-attempt truth. Durable cancellation
+  uses `canceled-after-mutation`; created and resumed directory metadata is
+  finalized/restored during cancel and failure-probed when restoration errors.
+- Failure-only probes report current durable state even after a mutation syscall
+  returned, and MOVE/TRASH require both an exact retained source and absent
+  destination before classifying an attempt as unchanged.
 
 ## Verification
 
-- History/schema/dispatcher/service/CLI focus: `266 passed`.
-- Dispatcher regression file after explicit observer-status fixture updates:
-  `53 passed`.
-- Complete pytest suite: `1215 passed, 1 skipped in 44.73s`. The skip is the
-  existing optional real directory-symlink substitution test on a host without
-  the required privilege; deterministic guard coverage remains active.
-- Million-item history gate: 1,000,000 items across 50 runs in 136.700 seconds;
-  maximum window commit 121.026 ms; summary reads 1.670/1.605 seconds; item/event
-  page maxima 16.256/14.818 ms; retained peak 256 events/79,360 bytes. Every
-  locked threshold passed.
+- Focused H3/H4 regression gate: `27 passed`.
+- Complete executor suite: `213 passed`.
+- Complete pytest suite: `1241 passed, 1 skipped in 110.98s`. The skip is the
+  existing privilege-dependent directory-symlink substitution test.
 - Import linter: `8 kept, 0 broken` across 50 files and 189 dependencies.
-- M6 focused gate: `406 passed`; its independent adversarial review was clean.
-- Two independent history reviews and the final performance-delta review found
-  no remaining P0-P2 defect after the receipt/schema repairs.
-- M14 repository/workflow focus: `33 passed`, with the full workflow file at
-  `24 passed` after noncanonical-ID and baseline/rebaseline filter coverage.
+- Two independent implementation reviews found three H4 edge cases; all three
+  were fixed and the final re-review found no remaining code blocker.
 
 ## Immediate Next Context
 
-- The host has `LongPathsEnabled=1`; a fresh Windows process/VM with legacy
-  long-path policy disabled was not available. Explicit conversion seams and
-  extended-prefix end-to-end tests are the deterministic automated gate.
-- Live UNC integration and long-path SQLite database files remain outside the
-  current local-volume/database support boundary.
-- An observer `close()` failure after durable finalization cannot rewrite live
-  or retained terminal truth. It remains internal cleanup health until a future
-  persistent dispatcher/store contract defines a public projection.
-- Do not ship scoped deletion until disappearing scoped subtrees mark the scan
-  incomplete. Define durable store failures, future-cursor gaps, and wedged
-  finalize ownership before their triggering M2 surfaces land.
+- The demonstrated UPDATE recorder-flush temp substitution is closed without an
+  extra success-path stat. A stable-identity inode substitution after the final
+  temp guard is also rejected using the cached post-publish observation.
+- Identity-weak same-kind/same-size substitution and same-object byte mutation
+  that preserves observed metadata remain outside the external-writer contract.
+  Full closure requires a handle-bound publication protocol or a byte reread;
+  the latter would materially reduce small-file throughput and was not added.
+- `_published_target_durable_state` remains a strict four-value invariant. Both
+  producers are exhaustive today, so its `RuntimeError` is unreachable through
+  legitimate settlement; extending that vocabulary requires updating the
+  mapping and its call-site containment together.

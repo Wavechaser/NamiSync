@@ -133,6 +133,13 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed executor attestation and durable-settlement gaps without changing the
+  full-intent/safe-selection contract or adding normal-path filesystem probes.
+  - **Executor:** moved UPDATE's recorder wait ahead of all final prepared/live
+    validation, bound published identity to the prepared temp, and made failed
+    non-byte and readonly mutations report ledger-behind truth.
+  - **Controls and tests:** covered commit-then-raise, exact pre-state,
+    probe failure, deferred mkdir, temp substitution, and retry pause/cancel.
 - Closed the remaining selected medium audit findings without broadening
   deferred feature scope.
   - **Windows paths:** made service-to-verifier native I/O explicitly long-path

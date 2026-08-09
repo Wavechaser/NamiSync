@@ -229,6 +229,7 @@ class ExecutionReason(StrEnum):
     POLICY_STOP = "policy-stop"
     CANCELED = "canceled"
     CANCELED_AFTER_PUBLISH = "canceled-after-publish"
+    CANCELED_AFTER_MUTATION = "canceled-after-mutation"
     RECORDER_FAILED = "recorder-failed"
 
 
