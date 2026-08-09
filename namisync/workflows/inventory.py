@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat as stat_module
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -33,6 +33,8 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import (
+    PathValidationError,
+    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
@@ -60,6 +62,7 @@ from namisync.db.repositories import (
     LocationSnapshot,
 )
 from namisync.modules.scanner import (
+    FILE_ATTRIBUTE_REPARSE_POINT,
     NativeScannerBackend,
     VolumeSnapshot,
 )
@@ -129,9 +132,26 @@ class VolumeResolution:
     state: VolumeResolutionState
     binding: LocationBinding
     root_path: str | None = None
+    selected_mount: str | None = None
     evidence: VolumeEvidence | None = None
     candidates: tuple[str, ...] = ()
     detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.state is VolumeResolutionState.RESOLVED:
+            if self.root_path is None or self.selected_mount is None:
+                raise ValueError(
+                    "resolved volume requires its current root and mount"
+                )
+            try:
+                lexical_path_chain(
+                    self.root_path,
+                    trusted_anchor=self.selected_mount,
+                )
+            except PathValidationError as error:
+                raise ValueError(
+                    "resolved root is outside its current mount"
+                ) from error
 
 
 class VolumeResolutionRequired(ValueError):
@@ -267,7 +287,18 @@ class IntegrityWorkflowRequest:
             raise ValueError("inventory refresh generation cannot be negative")
 
 
-Scanner = Callable[[Root, IgnoreSet, RunContext, ScanScope | None], ScanResult]
+class Scanner(Protocol):
+    def __call__(
+        self,
+        root: Root,
+        ignores: IgnoreSet,
+        context: RunContext,
+        scope: ScanScope | None,
+        *,
+        trusted_anchor: str | None = None,
+    ) -> ScanResult: ...
+
+
 IntegrityRunner = Callable[
     [IntegritySelection, VerifierContext, LedgerRecorder], IntegrityRunResult
 ]
@@ -415,20 +446,11 @@ def resolve_binding(
         selected.mount_path, binding.volume_relative_path
     )
     try:
-        root_stat = os.stat(
-            to_extended_length_path(root_path),
-            follow_symlinks=False,
+        root_chain = lexical_path_chain(
+            root_path,
+            trusted_anchor=selected.mount_path,
         )
-    except FileNotFoundError:
-        return VolumeResolution(
-            VolumeResolutionState.ROOT_MISSING,
-            binding,
-            root_path=root_path,
-            evidence=selected.evidence,
-            candidates=candidates,
-            detail="configured root no longer exists",
-        )
-    except (OSError, PermissionError) as error:
+    except PathValidationError as error:
         return VolumeResolution(
             VolumeResolutionState.ROOT_UNAVAILABLE,
             binding,
@@ -437,15 +459,53 @@ def resolve_binding(
             candidates=candidates,
             detail=logical_error_text(error),
         )
-    if not stat_module.S_ISDIR(root_stat.st_mode):
-        return VolumeResolution(
-            VolumeResolutionState.ROOT_MISSING,
-            binding,
-            root_path=root_path,
-            evidence=selected.evidence,
-            candidates=candidates,
-            detail="configured root is not a directory",
+    for component in root_chain:
+        try:
+            root_stat = os.stat(
+                to_extended_length_path(component),
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return VolumeResolution(
+                VolumeResolutionState.ROOT_MISSING,
+                binding,
+                root_path=root_path,
+                evidence=selected.evidence,
+                candidates=candidates,
+                detail="configured root no longer exists",
+            )
+        except (OSError, PermissionError) as error:
+            return VolumeResolution(
+                VolumeResolutionState.ROOT_UNAVAILABLE,
+                binding,
+                root_path=root_path,
+                evidence=selected.evidence,
+                candidates=candidates,
+                detail=logical_error_text(error),
+            )
+        root_is_reparse = bool(
+            stat_module.S_ISLNK(root_stat.st_mode)
+            or int(getattr(root_stat, "st_file_attributes", 0))
+            & FILE_ATTRIBUTE_REPARSE_POINT
+            or getattr(root_stat, "st_reparse_tag", 0)
         )
+        if not stat_module.S_ISDIR(root_stat.st_mode) or root_is_reparse:
+            return VolumeResolution(
+                (
+                    VolumeResolutionState.ROOT_UNAVAILABLE
+                    if root_is_reparse
+                    else VolumeResolutionState.ROOT_MISSING
+                ),
+                binding,
+                root_path=root_path,
+                evidence=selected.evidence,
+                candidates=candidates,
+                detail=(
+                    "configured root chain contains a reparse point"
+                    if root_is_reparse
+                    else "configured root chain is not a directory"
+                ),
+            )
     try:
         resolver.probe_root(root_path)
     except (OSError, PermissionError) as error:
@@ -461,6 +521,7 @@ def resolve_binding(
         VolumeResolutionState.RESOLVED,
         binding,
         root_path=root_path,
+        selected_mount=selected.mount_path,
         evidence=selected.evidence,
         candidates=candidates,
     )
@@ -481,7 +542,11 @@ def run_inventory(
             )
         )
         return _refused_resolution(resolution)
-    if resolution.root_path is None or resolution.evidence is None:
+    if (
+        resolution.root_path is None
+        or resolution.selected_mount is None
+        or resolution.evidence is None
+    ):
         raise RuntimeError("resolved inventory root lacks volume evidence")
     root = resolution.root_path
     scope_token = request.request_id
@@ -540,8 +605,8 @@ def run_integrity(
             )
         )
         return _refused_resolution(resolution)
-    if resolution.root_path is None:
-        raise RuntimeError("resolved integrity root lacks a path")
+    if resolution.root_path is None or resolution.selected_mount is None:
+        raise RuntimeError("resolved integrity root lacks its current mount")
     root = resolution.root_path
     scope_token = f"{request.request_id}:refresh:{request.refresh_generation}"
     with LedgerRecorder(
@@ -607,7 +672,12 @@ def run_integrity(
         runner = deps.runners.get(request.mode)
         if runner is None:
             raise RuntimeError(f"integrity runner is not configured: {request.mode.value}")
-        result = runner(selection, deps.verifier_context(ctx), recorder)
+        verification_context = replace(
+            deps.verifier_context(ctx),
+            reviewed_root_anchor=Path(resolution.selected_mount),
+            reviewed_volume_id=request.binding.volume_id,
+        )
+        result = runner(selection, verification_context, recorder)
     bytes_total = sum(
         0 if item.expected_stat is None else item.expected_stat.size
         for item in selection.items
@@ -912,6 +982,7 @@ def _register_and_scan(
         deps.ignores,
         ctx,
         scope,
+        trusted_anchor=resolution.selected_mount,
     )
     if scan.volume_id != binding.volume_id:
         raise RuntimeError("inventory scan volume changed after preflight")

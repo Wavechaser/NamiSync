@@ -48,9 +48,16 @@ distinct outcomes: `resolved`, `offline`, `ambiguous`, `root_missing`, and
 `root_unavailable`. Ambiguity requires an explicit choice before submission;
 a changed candidate set (including a newly mounted clone) refuses before scan
 or hash work at initial start, resume, and queued wakeup. Native root stat and
-probe calls preserve the logical path in workflow details while delegating
-extended-length conversion and directory access to the long-path-safe scanner
-boundary.
+probe calls preserve the lexical logical path in workflow details while
+delegating extended-length conversion and directory access to the
+long-path-safe scanner boundary. If any component in the configured root path
+below its reviewed volume mount becomes a junction, symlink, placeholder, or
+other reparse point, resolution returns `root_unavailable` before probe,
+reconciliation, missing inference, or integrity hashing; the reviewed mount
+itself is the excluded trust anchor, and matching volume identity alone never
+authorizes a redirected tree. When that stable volume is legitimately mounted
+at one new path, resolution carries the current selected mount—not the stale
+stored hint—as the scanner and verifier trust anchor.
 
 The production dispatcher registry contains inventory (pause unsupported) and
 baseline/verify/rebaseline (pause supported), and the CLI reaches all four only
@@ -95,7 +102,10 @@ reappearance marker, host provenance, and optional hardlink group.
 Rows with retained content evidence also carry an optional sticky verification
 invalidation (`metadata-drift` or `hash-mismatch`). The derived presentation
 state is `unverified`, `verified`, `modified`, or `mismatched`; it never infers
-current verification from a historical `last_verified_at` alone.
+current verification from a historical `last_verified_at` alone. For a present
+row with current observation and attestation, sticky `hash-mismatch` is
+projected before ordinary stat/identity drift, so later metadata change cannot
+downgrade the visible state to merely `modified`.
 
 Present files retain `MetadataSnapshot` attributes and creation time needed by
 reviewed preservation. Every walked directory has a `DirRecord`, and typed
@@ -115,6 +125,11 @@ sets a sticky invalidation marker while retaining the prior attestation for
 comparison and recovery. Later matching metadata does not clear that fact, and
 a known hash mismatch dominates metadata drift until a successful evidence
 write clears or replaces it.
+
+Integrity runs bind each native file open to the resolver-selected mount and
+the location's full `VolumeId`. The verifier rechecks that authority before
+each open and requires the opened handle to corroborate the expected volume
+serial before any bytes can become baseline or verification evidence.
 
 ## Reconciliation
 

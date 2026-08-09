@@ -64,6 +64,12 @@ class InventorySnapshot:
             or self.attestation is None
         ):
             return InventoryVerificationState.UNVERIFIED
+        if (
+            self.invalidation is not None
+            and self.invalidation.reason
+            is VerificationInvalidationReason.HASH_MISMATCH
+        ):
+            return InventoryVerificationState.MISMATCHED
         baseline = self.attestation.subject
         observed = self.observed
         if (
@@ -77,11 +83,6 @@ class InventorySnapshot:
         ):
             return InventoryVerificationState.MODIFIED
         if self.invalidation is not None:
-            if (
-                self.invalidation.reason
-                is VerificationInvalidationReason.HASH_MISMATCH
-            ):
-                return InventoryVerificationState.MISMATCHED
             return InventoryVerificationState.MODIFIED
         if self.last_verified_at is None:
             return InventoryVerificationState.UNVERIFIED

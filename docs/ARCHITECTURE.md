@@ -737,12 +737,16 @@ failure; path validation still rejects malformed path spellings upstream.
 Pure relative-path parent/depth/descendant and suffix helpers also live here so
 planner, workflow node trees, and scope validation share one lexical contract.
 Absolute root containment remains a separate filesystem-safety operation.
-Domain and persisted absolute paths use resolved ordinary drive/UNC spelling;
-shared inverse helpers add `\\?\` only at native I/O and strip it from native
-results. They refuse NT/device namespaces and any absolute component that cannot
-round-trip without Windows retargeting (including trailing dot/space and
-reserved DOS names). Native error filename fields are normalized before
-warnings, evidence, history, or interface rendering.
+Domain and persisted absolute paths use lexically normalized ordinary drive/UNC
+spelling; normalization never follows a final filesystem link. Shared inverse
+helpers add `\\?\` only at native I/O and strip it from native results. Native
+admission no-follow checks every configured-root component below its trusted
+volume mount before physical resolution and rejects a reparse in that chain.
+The helpers also refuse NT/device namespaces and any
+absolute component that cannot round-trip without Windows retargeting
+(including trailing dot/space and reserved DOS names). Native error filename
+fields are normalized before warnings, evidence, history, or interface
+rendering.
 
 **Flesh.** None. Core is all bones by definition.
 
@@ -1032,10 +1036,12 @@ exactly its own condition and nothing more — none binds *source* identity to
 a pathname — so the external-writer boundary applies to **every** mutation,
 and each residual race is bounded by its **data consequence**, never by
 elapsed time (the gap between syscalls is usually tiny but not
-scheduler-bounded): trash-routed operations at worst preserve the wrong item
-recoverably, moves at worst misplace without destroying, and only update's
-replace and internal mirror deletes can destroy an external writer's file —
-never NamiSync's displaced version. Stable identity binds a substituted
+scheduler-bounded): a source-leaf substitution routed to an unchanged owned
+trash destination preserves the wrong item recoverably, while a
+destination-parent substitution can preserve bytes outside owned trash and lose
+NamiSync's location/recovery truth. Moves can misplace without destroying, and
+only update's replace and internal mirror deletes can destroy an external
+writer's file. Stable identity binds a substituted
 prepared/published inode before attestation, but identity-weak same-size
 substitution and same-object byte mutation remain outside the path-based
 contract. `ReplaceFileW` — the
@@ -1169,13 +1175,16 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
   directories, untouched parents, off-volume mounts, and `.synctrash` survive;
   a sweep failure occurs before copy allocation, so credited capacity is never
   used unsafely.
-- Trash that would land off-volume or through a reparse point is refused before
-  any move.
+- Trash whose destination chain is redirected before its final guard is refused
+  before any move. A substitution after that guard remains within the disclosed
+  path-validation-to-rename boundary and may preserve bytes outside owned
+  trash.
 - Fault tests exercise an external path swap *between* a final guard and its
   destructive call, not only drift before the guard, and assert the **data
   consequence**, never elapsed time: each conditional primitive fails cleanly
-  on exactly the condition it enforces, trash-routed swaps land recoverably in
-  trash, and the update residual's worst case matches the documented bound
+  on exactly the condition it enforces, a source-leaf trash swap is retained
+  recoverably when the destination chain stays admitted, and the update
+  residual's worst case matches the documented bound
   without claiming handle-bound protection against identity-weak substitution
   or same-object content mutation.
 - Cancellation during a multi-GiB copy takes effect within one chunk.
@@ -1240,9 +1249,10 @@ IO/CPU pipelining even on HDD; automatic background integrity; repair guidance
 (diagnose which side is damaged).
 
 **Acceptance criteria.**
-- A file with changed size/mtime is reported `modified`, **not** `mismatched`;
-  only stats-stable content divergence is `mismatched` (the bitrot signal — PoC
-  misclassification bug).
+- A fresh verifier classification reports changed size/mtime as `modified`, not
+  `mismatched`; when a durable hash-mismatch invalidation already exists, that
+  stronger sticky state continues to dominate later metadata drift until a
+  successful evidence write clears it.
 - A null-hash row encountered during verify is a `baselined` outcome, never a
   `verified` one; `last_verified_at` is never set from a copy-stream digest
   alone (PoC open integrity-lie bug).

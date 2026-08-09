@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,8 @@ from namisync.core.models import IgnoreSet
 from namisync.core.pathing import (
     PathValidationError,
     from_extended_length_path,
+    lexical_absolute_path,
+    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
@@ -70,6 +73,56 @@ def test_extended_length_path_round_trips_without_changing_logical_identity(
     assert to_extended_length_path(native) == native
     assert from_extended_length_path(native) == logical
     assert from_extended_length_path(logical) == logical
+
+
+def test_lexical_absolute_path_normalizes_without_requiring_an_existing_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    assert lexical_absolute_path("configured-root") == str(
+        tmp_path / "configured-root"
+    )
+
+
+def test_lexical_path_chain_excludes_a_trusted_mount_but_includes_every_child(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mounted-volume"
+    root = mount / "parent" / "managed"
+
+    assert lexical_path_chain(root, trusted_anchor=mount) == (
+        str(mount / "parent"),
+        str(root),
+    )
+    assert lexical_path_chain(mount, trusted_anchor=mount) == ()
+
+
+def test_lexical_path_chain_refuses_a_path_outside_its_trusted_anchor(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(PathValidationError, match="trusted anchor"):
+        lexical_path_chain(
+            tmp_path / "other" / "managed",
+            trusted_anchor=tmp_path / "mounted-volume",
+        )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows reparse points")
+def test_lexical_absolute_path_does_not_follow_a_final_root_reparse(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    configured = tmp_path / "configured-root"
+    try:
+        configured.symlink_to(target, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"directory reparse creation is unavailable: {error}")
+
+    assert lexical_absolute_path(configured) == str(configured)
+    assert lexical_absolute_path(configured) != str(target)
 
 
 @pytest.mark.parametrize(

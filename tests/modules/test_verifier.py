@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
+import stat as stat_module
 import subprocess
 import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Iterator
 
 import pytest
@@ -43,8 +44,18 @@ from namisync.core.integrity import (
     VerificationInvalidationReason,
     VerifierContext,
 )
-from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
-from namisync.core.pathing import normalize_relative_path, validate_relative_path
+from namisync.core.models import (
+    EntryKind,
+    FileIdentity,
+    FileStat,
+    MetadataSnapshot,
+    VolumeId,
+)
+from namisync.core.pathing import (
+    from_extended_length_path,
+    normalize_relative_path,
+    validate_relative_path,
+)
 from namisync.core.session import (
     Canceled,
     OperationResult,
@@ -295,6 +306,225 @@ def test_verify_classifies_stat_drift_before_digest_mismatch(
     assert len(recorder.invalidation_commands) == (
         0 if expected_result is IntegrityResult.VERIFIED else 1
     )
+
+
+def _reviewed_context(
+    events: list[object],
+    anchor: Path,
+    volume_id: VolumeId,
+) -> VerifierContext:
+    return replace(
+        _context(events),
+        reviewed_root_anchor=anchor,
+        reviewed_volume_id=volume_id,
+    )
+
+
+def _mock_reviewed_root_state(
+    monkeypatch: pytest.MonkeyPatch,
+    state: dict[str, object],
+) -> None:
+    monkeypatch.setattr(
+        verifier_module,
+        "trusted_volume_anchor",
+        lambda _root: str(state["anchor"]),
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "_verification_volume_id",
+        lambda _root: state["volume_id"],
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "_reject_reparse_components",
+        lambda *_args, **_kwargs: None,
+    )
+
+
+def test_verifier_refuses_remount_before_first_native_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reviewed_anchor = tmp_path / "reviewed-mount"
+    foreign_anchor = tmp_path / "foreign-mount"
+    reviewed_volume = VolumeId("A1B2C3D4", "NTFS")
+    state: dict[str, object] = {
+        "anchor": foreign_anchor,
+        "volume_id": VolumeId("DEADBEEF", "NTFS"),
+    }
+    _mock_reviewed_root_state(monkeypatch, state)
+    root = reviewed_anchor / "managed"
+    item = _item(root, expected_stat=_stat(identity=None))
+    reader = _FakeReader(
+        {
+            item.display_path: _StreamSpec(
+                _stat(identity=FileIdentity(reviewed_volume.serial, 7)),
+                (b"foreign-bytes",),
+            )
+        }
+    )
+    recorder = _Recorder()
+
+    result = verify(
+        IntegritySelection((item,)),
+        _reviewed_context([], reviewed_anchor, reviewed_volume),
+        recorder,
+        reader,
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
+    assert reader.opened == []
+    assert recorder.commands == []
+
+
+def test_verifier_revalidates_reviewed_mount_between_items(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reviewed_anchor = tmp_path / "reviewed-mount"
+    foreign_anchor = tmp_path / "foreign-mount"
+    reviewed_volume = VolumeId("A1B2C3D4", "NTFS")
+    state: dict[str, object] = {
+        "anchor": reviewed_anchor,
+        "volume_id": reviewed_volume,
+    }
+    _mock_reviewed_root_state(monkeypatch, state)
+    root = reviewed_anchor / "managed"
+    first = _item(root, number=1, expected_stat=_stat(identity=None))
+    second = _item(root, number=2, expected_stat=_stat(identity=None))
+    live = _stat(identity=FileIdentity(reviewed_volume.serial, 7))
+
+    class RemountAfterFirstReader(_FakeReader):
+        @contextmanager
+        def open(self, root: Path, relative_path: str):
+            with super().open(root, relative_path) as stream:
+                yield stream
+            if len(self.opened) == 1:
+                state["anchor"] = foreign_anchor
+                state["volume_id"] = VolumeId("DEADBEEF", "NTFS")
+
+    reader = RemountAfterFirstReader(
+        {
+            first.display_path: _StreamSpec(live, (b"abc",), live),
+            second.display_path: _StreamSpec(
+                live,
+                (b"foreign-bytes",),
+                live,
+            ),
+        }
+    )
+    recorder = _Recorder()
+
+    result = verify(
+        IntegritySelection((first, second)),
+        _reviewed_context([], reviewed_anchor, reviewed_volume),
+        recorder,
+        reader,
+    )
+
+    assert [outcome.result for outcome in result.outcomes] == [
+        IntegrityResult.VERIFIED,
+        IntegrityResult.UNSUPPORTED,
+    ]
+    assert reader.opened == [(root, first.display_path)]
+    assert len(recorder.commands) == 1
+
+
+def test_verifier_refuses_opened_handle_on_foreign_volume(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reviewed_anchor = tmp_path / "reviewed-mount"
+    reviewed_volume = VolumeId("A1B2C3D4", "NTFS")
+    state: dict[str, object] = {
+        "anchor": reviewed_anchor,
+        "volume_id": reviewed_volume,
+    }
+    _mock_reviewed_root_state(monkeypatch, state)
+    root = reviewed_anchor / "managed"
+    item = _item(root, expected_stat=_stat(identity=None))
+    reader = _FakeReader(
+        {
+            item.display_path: _StreamSpec(
+                _stat(identity=FileIdentity("DEADBEEF", 7)),
+                (b"foreign-bytes",),
+            )
+        }
+    )
+    recorder = _Recorder()
+
+    result = verify(
+        IntegritySelection((item,)),
+        _reviewed_context([], reviewed_anchor, reviewed_volume),
+        recorder,
+        reader,
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
+    assert len(reader.opened) == 1
+    assert recorder.commands == []
+
+
+def test_verifier_binds_volume_when_reviewed_anchor_is_unavailable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reviewed_volume = VolumeId("A1B2C3D4", "NTFS")
+    state: dict[str, object] = {
+        "anchor": tmp_path,
+        "volume_id": reviewed_volume,
+    }
+    _mock_reviewed_root_state(monkeypatch, state)
+    live = _stat(identity=FileIdentity(reviewed_volume.serial, 7))
+    item = _item(tmp_path, expected_stat=live)
+    reader = _FakeReader(
+        {item.display_path: _StreamSpec(live, (b"abc",), live)}
+    )
+    recorder = _Recorder()
+    context = replace(
+        _context([]),
+        reviewed_volume_id=reviewed_volume,
+    )
+
+    result = verify(
+        IntegritySelection((item,)),
+        context,
+        recorder,
+        reader,
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.VERIFIED
+    assert reader.opened == [(tmp_path, item.display_path)]
+    assert len(recorder.commands) == 1
+
+
+def test_verifier_refuses_reviewed_open_without_volume_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reviewed_volume = VolumeId("A1B2C3D4", "NTFS")
+    state: dict[str, object] = {
+        "anchor": tmp_path,
+        "volume_id": reviewed_volume,
+    }
+    _mock_reviewed_root_state(monkeypatch, state)
+    item = _item(tmp_path, expected_stat=_stat(identity=None))
+    live = _stat(identity=None)
+    reader = _FakeReader(
+        {item.display_path: _StreamSpec(live, (b"foreign-bytes",), live)}
+    )
+    recorder = _Recorder()
+
+    result = verify(
+        IntegritySelection((item,)),
+        _reviewed_context([], tmp_path, reviewed_volume),
+        recorder,
+        reader,
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
+    assert len(reader.opened) == 1
+    assert recorder.commands == []
 
 
 def test_valid_different_xxh3_digest_remains_a_hash_mismatch(tmp_path: Path) -> None:
@@ -1341,6 +1571,38 @@ def test_windows_reader_uses_read_only_share_and_cache_honest_flags(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
+def test_windows_reader_refuses_a_final_root_reparse_before_api_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "configured-root"
+    root.mkdir()
+    (root / "payload.bin").write_bytes(b"payload")
+    original_lstat = verifier_module.os.lstat
+
+    def root_reparse_lstat(path):
+        if Path(from_extended_length_path(str(path))) == root:
+            class _RootReparse:
+                st_mode = stat_module.S_IFDIR | 0o755
+                st_file_attributes = verifier_module._FILE_ATTRIBUTE_REPARSE_POINT
+                st_reparse_tag = 1
+
+            return _RootReparse()
+        return original_lstat(path)
+
+    class _UnexpectedApi:
+        def __init__(self) -> None:
+            raise AssertionError("Windows API setup must follow root rejection")
+
+    monkeypatch.setattr(verifier_module.os, "lstat", root_reparse_lstat)
+    monkeypatch.setattr(verifier_module, "_WindowsApi", _UnexpectedApi)
+
+    with pytest.raises(UnsupportedVerification, match="reparse location root"):
+        with WindowsUnbufferedReader().open(root, "payload.bin"):
+            raise AssertionError("unsafe root yielded a stream")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
 def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback(
     tmp_path: Path,
 ) -> None:
@@ -1436,11 +1698,19 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
         original_lstat = verifier_module.os.lstat
 
         def report_reparse(root: Path, relative_path: str) -> None:
-            class _ReportedReparse:
-                st_file_attributes = verifier_module._FILE_ATTRIBUTE_REPARSE_POINT
+            candidate = root.joinpath(*PureWindowsPath(relative_path).parts)
 
             def reparse_lstat(current: Path):
-                original_lstat(current)
+                observed = original_lstat(current)
+                if Path(from_extended_length_path(str(current))) != candidate:
+                    return observed
+
+                class _ReportedReparse:
+                    st_mode = observed.st_mode
+                    st_file_attributes = (
+                        verifier_module._FILE_ATTRIBUTE_REPARSE_POINT
+                    )
+
                 return _ReportedReparse()
 
             with monkeypatch.context() as patch:

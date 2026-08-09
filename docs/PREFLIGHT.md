@@ -52,8 +52,15 @@ executor's non-replacing rename is the final occupancy guard: an ordinary
 case-insensitive target aliases the same object, while a distinct case-sensitive
 destination cannot be overwritten. Preflight never normalizes NFC/NFD spelling.
 
-Every path is first lexically validated, then opened/resolved under its root
-with long-path-safe, reparse-aware handling. Reclaimable temp accounting accepts
+Every path is first lexically validated. The configured root is converted to
+absolute logical spelling without following links, then every component in its
+root path below the trusted native volume mount is no-follow observed and
+rejected unless it is an ordinary directory before any subject, trash, volume,
+or reclaimable-temp observation. Only after that admission is the physical root
+resolved for overlap/containment evidence; the lexical root remains the domain
+identity.
+Child paths are then resolved under that admitted root with long-path-safe,
+reparse-aware handling. Reclaimable temp accounting accepts
 only regular files with the exact NamiSync temp grammar and a run id different
 from the current execution, in touched target parents outside trash on the
 target volume. `ObservedWorld` retains that identical parent set for the

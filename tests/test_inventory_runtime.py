@@ -129,8 +129,11 @@ class _Scanner:
         ignores: IgnoreSet,
         context: RunContext,
         scope: ScanScope | None,
+        *,
+        trusted_anchor: str | None = None,
     ) -> ScanResult:
         assert scope is not None
+        assert trusted_anchor == str(self.mount)
         self.calls.append(scope)
         selected = set(scope.selected_paths)
         records = (

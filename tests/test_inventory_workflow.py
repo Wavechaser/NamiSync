@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import stat as stat_module
 from contextlib import nullcontext
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from xxhash import xxh3_128
@@ -50,7 +52,10 @@ from namisync.core.session import (
 )
 from namisync.db.connections import connect_ledger_reader
 from namisync.db.repositories import InventoryPresence, LedgerRepository
-from namisync.modules.scanner import VolumeSnapshot
+from namisync.modules.scanner import (
+    FILE_ATTRIBUTE_REPARSE_POINT,
+    VolumeSnapshot,
+)
 from namisync.workflows.inventory import (
     IntegrityDependencies,
     IntegrityWorkflowRequest,
@@ -128,6 +133,7 @@ class _Scanner:
         self.warnings = warnings
         self.complete = True
         self.calls: list[tuple[Root, ScanScope]] = []
+        self.trusted_anchors: list[str] = []
         self.before_scan = None
 
     def __call__(
@@ -136,9 +142,13 @@ class _Scanner:
         ignores: IgnoreSet,
         context: RunContext,
         scope: ScanScope | None,
+        *,
+        trusted_anchor: str | None = None,
     ) -> ScanResult:
         assert scope is not None
+        assert trusted_anchor is not None
         self.calls.append((root, scope))
+        self.trusted_anchors.append(trusted_anchor)
         if self.before_scan is not None:
             self.before_scan()
         selected = set(scope.selected_paths)
@@ -455,6 +465,143 @@ def test_five_volume_states_are_distinct_and_only_resolved_reconciles(
         assert row.presence is InventoryPresence.PRESENT
 
 
+def test_inventory_remount_uses_current_mount_and_preserves_location_identity(
+    tmp_path: Path,
+) -> None:
+    prior_mount = tmp_path / "prior-mount"
+    current_mount = tmp_path / "current-mount"
+    prior_root = prior_mount / "managed"
+    current_root = current_mount / "managed"
+    prior_root.mkdir(parents=True)
+    current_root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    resolver = _Resolver(prior_mount)
+    deps = _dependencies(ledger_path, scanner, resolver, details)
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(prior_root)),
+        ledger_path=ledger_path,
+        backend=_Backend(prior_root, prior_mount),
+        resolver=resolver,
+    )
+
+    seeded = run_inventory(prepared, _context(), deps)
+    assert seeded.status is SessionState.COMPLETED
+    seeded_location = details[-1].location_id
+    resolver.mounts = (current_mount,)
+
+    refreshed = run_inventory(
+        InventoryWorkflowRequest("remounted", prepared.binding),
+        _context(),
+        deps,
+    )
+
+    assert refreshed.status is SessionState.COMPLETED
+    assert details[-1].location_id == seeded_location
+    assert details[-1].resolution.selected_mount == str(current_mount)
+    assert scanner.calls[-1][0].path == str(current_root)
+    assert scanner.trusted_anchors[-1] == str(current_mount)
+
+
+def test_intermediate_reparse_replacement_preserves_inventory_and_blocks_integrity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    parent = mount / "parent"
+    root = parent / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    scanner = _Scanner(records=(_file(),))
+    resolver = _Resolver(mount)
+    details: list[InventoryDetails] = []
+    deps = _dependencies(ledger_path, scanner, resolver, details)
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=resolver,
+    )
+    seed = run_inventory(prepared, _context(), deps)
+    assert seed.status is SessionState.COMPLETED
+    location_id = details[-1].location_id
+    assert location_id is not None
+
+    native_parent = to_extended_length_path(str(parent))
+    native_root = to_extended_length_path(str(root))
+    original_stat = inventory_workflow.os.stat
+
+    def reparse_root_stat(path, *args, **kwargs):
+        if (
+            str(path) == native_parent
+            and kwargs.get("follow_symlinks") is False
+        ):
+            return SimpleNamespace(
+                st_mode=stat_module.S_IFDIR | 0o755,
+                st_file_attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+                st_reparse_tag=1,
+            )
+        if (
+            str(path) == native_root
+            and kwargs.get("follow_symlinks") is False
+        ):
+            raise AssertionError(
+                "inventory must not probe through an intermediate reparse"
+            )
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(inventory_workflow.os, "stat", reparse_root_stat)
+    scanner.records = ()
+
+    inventory_result = run_inventory(
+        InventoryWorkflowRequest("refresh", prepared.binding),
+        _context(),
+        deps,
+    )
+
+    assert inventory_result.status is SessionState.REFUSED
+    assert details[-1].resolution.state is VolumeResolutionState.ROOT_UNAVAILABLE
+    assert "reparse point" in (details[-1].resolution.detail or "")
+    assert len(scanner.calls) == 1
+    with LedgerRepository(ledger_path) as repository:
+        retained = repository.get_inventory(location_id)
+    assert len(retained) == 1
+    assert retained[0].presence is InventoryPresence.PRESENT
+
+    runner_calls = 0
+
+    def runner(*_args):
+        nonlocal runner_calls
+        runner_calls += 1
+        raise AssertionError("integrity reader must not start")
+
+    integrity_result = run_integrity(
+        IntegrityWorkflowRequest(
+            "verify-after-reparse",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=deps.ledger_path,
+            scanner=deps.scanner,
+            resolver=deps.resolver,
+            clock=deps.clock,
+            host_key=deps.host_key,
+            host_name=deps.host_name,
+            save_details=deps.save_details,
+            ignores=deps.ignores,
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert integrity_result.status is SessionState.REFUSED
+    assert details[-1].resolution.state is VolumeResolutionState.ROOT_UNAVAILABLE
+    assert len(scanner.calls) == 1
+    assert runner_calls == 0
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
 def test_root_unavailable_resolution_sanitizes_native_probe_filename(
     tmp_path: Path,
@@ -685,9 +832,11 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
     scanner.warnings = (warning,)
     scanner.complete = False
     selected_states: list[InventoryState] = []
+    verifier_contexts: list[VerifierContext] = []
 
-    def runner(selection, *_args):
+    def runner(selection, verifier_context, _recorder):
         assert len(selection.items) == 2
+        verifier_contexts.append(verifier_context)
         selected_states.extend(
             item.expected_state for item in selection.items
         )
@@ -741,6 +890,8 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
         InventoryState.UNSUPPORTED,
         InventoryState.PRESENT,
     ]
+    assert verifier_contexts[0].reviewed_root_anchor == mount
+    assert verifier_contexts[0].reviewed_volume_id == VOLUME_ID
     assert [item.result for item in result.items] == [
         IntegrityResult.UNSUPPORTED,
         IntegrityResult.VERIFIED,

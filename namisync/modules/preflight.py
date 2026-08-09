@@ -26,9 +26,12 @@ from namisync.core.pathing import (
     from_extended_length_path,
     is_path_below,
     join_under_root,
+    lexical_absolute_path,
+    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
+    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.planning import (
@@ -77,6 +80,31 @@ def _resolved_logical_path(path: str | Path, *, strict: bool) -> str:
     return from_extended_length_path(str(resolved))
 
 
+def _ordinary_logical_root(path: str | Path) -> str:
+    logical = lexical_absolute_path(path)
+    anchor = trusted_volume_anchor(logical)
+    for component in lexical_path_chain(
+        logical,
+        trusted_anchor=anchor,
+    ):
+        observed = os.stat(
+            _native_path(component),
+            follow_symlinks=False,
+        )
+        attributes = int(getattr(observed, "st_file_attributes", 0))
+        if (
+            not stat_module.S_ISDIR(observed.st_mode)
+            or stat_module.S_ISLNK(observed.st_mode)
+            or attributes & 0x00000400
+            or getattr(observed, "st_reparse_tag", 0)
+        ):
+            raise ValueError(
+                "location root chain contains a nonordinary directory: "
+                f"{component}"
+            )
+    return logical
+
+
 def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
     if os.name != "nt":
         observed = os.stat(_native_path(path), follow_symlinks=False)
@@ -119,10 +147,9 @@ class LocalObservationFileSystem:
 
     def observe_root(self, root: Root) -> RootObservation:
         try:
-            resolved = _resolved_logical_path(root.path, strict=True)
-            if not os.path.isdir(_native_path(resolved)):
-                raise NotADirectoryError(resolved)
-            volume_id, evidence = _volume_observation(resolved)
+            logical = _ordinary_logical_root(root.path)
+            resolved = _resolved_logical_path(logical, strict=True)
+            volume_id, evidence = _volume_observation(logical)
             return RootObservation(resolved, volume_id, evidence)
         except (OSError, PermissionError, ValueError) as error:
             return RootObservation(
@@ -133,7 +160,11 @@ class LocalObservationFileSystem:
         try:
             canonical = validate_relative_path(rel_path)
             candidate = join_under_root(root.path, canonical)
-            resolved_root = _resolved_logical_path(root.path, strict=True)
+            logical_root = _ordinary_logical_root(root.path)
+            resolved_root = _resolved_logical_path(
+                logical_root,
+                strict=True,
+            )
             resolved_candidate = _resolved_logical_path(
                 candidate, strict=False
             )
@@ -180,7 +211,8 @@ class LocalObservationFileSystem:
             )
 
     def free_space(self, target: Root) -> int:
-        return int(shutil.disk_usage(_native_path(target.path)).free)
+        root = _ordinary_logical_root(target.path)
+        return int(shutil.disk_usage(_native_path(root)).free)
 
     def reclaimable_temp_bytes(
         self,
@@ -189,14 +221,15 @@ class LocalObservationFileSystem:
         current_run_id: str,
     ) -> int:
         total = 0
-        target_volume, _ = _volume_observation(target.path)
+        root = _ordinary_logical_root(target.path)
+        target_volume, _ = _volume_observation(root)
         for parent_path in sorted(parent_paths, key=lambda value: (normalize_relative_path(value, allow_root=True), value)):
             if parent_path and (
                 normalize_relative_path(parent_path) == ".SYNCTRASH"
                 or normalize_relative_path(parent_path).startswith(".SYNCTRASH\\")
             ):
                 continue
-            absolute = target.path if not parent_path else join_under_root(target.path, parent_path)
+            absolute = root if not parent_path else join_under_root(root, parent_path)
             try:
                 parent_volume, _ = _volume_observation(absolute)
                 if parent_volume != target_volume:
@@ -217,8 +250,10 @@ class LocalObservationFileSystem:
     def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation:
         trash = os.path.join(target.path, ".synctrash")
         try:
+            logical_root = _ordinary_logical_root(target.path)
             root_resolved = _resolved_logical_path(
-                target.path, strict=True
+                logical_root,
+                strict=True,
             )
             trash_path = Path(_native_path(trash))
             exists = trash_path.exists()
@@ -315,7 +350,7 @@ def observe(
             )
     try:
         free_space = fs.free_space(xset.plan.target_root)
-    except (OSError, PermissionError):
+    except (OSError, PermissionError, ValueError):
         free_space = None
     try:
         reclaimable = fs.reclaimable_temp_bytes(
@@ -323,7 +358,7 @@ def observe(
             target_parents,
             str(xset.run_id),
         )
-    except (OSError, PermissionError):
+    except (OSError, PermissionError, ValueError):
         reclaimable = 0
     remaining = xset.remaining()
     needs_trash = any(

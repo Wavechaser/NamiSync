@@ -20,7 +20,7 @@ from xxhash import xxh3_128
 
 import namisync.modules.executor as executor_module
 from namisync.core.evidence import Outcome, Provenance, RecordingStatus
-from namisync.core.events import ItemOutcome, Progress, Terminal
+from namisync.core.events import ItemOutcome, Progress, Terminal, result_item_to_dict
 from namisync.core.execution import (
     CopyDigest,
     ExecutionSet,
@@ -37,7 +37,9 @@ from namisync.core.models import (
     FileStat,
     IgnoreSet,
     Root,
+    VolumeId,
 )
+from namisync.core.pathing import to_extended_length_path
 from namisync.core.planning import (
     Assignment,
     DeletionPolicy,
@@ -259,6 +261,69 @@ def _roots(tmp_path: Path) -> tuple[Path, Path]:
     source.mkdir()
     target.mkdir()
     return source, target
+
+
+def test_native_filesystem_rejects_lexical_root_before_resolving_children(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured = tmp_path / "configured-root"
+    fs = NativeFileSystem()
+    observed: list[Path] = []
+
+    def fail_if_followed(_path: Path, *, strict: bool) -> Path:
+        raise AssertionError("configured root was followed before rejection")
+
+    def reject_root(path: Path) -> None:
+        observed.append(path)
+        if path == configured:
+            raise UnsafeExecutionPath("reparse points are not executable")
+
+    monkeypatch.setattr(executor_module, "_resolved_logical_path", fail_if_followed)
+    monkeypatch.setattr(fs, "_reject_reparse", reject_root)
+
+    with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+        fs.resolve(configured, "file.bin", must_exist=False)
+
+    assert observed[-1] == configured
+
+
+def test_native_filesystem_revalidates_an_empty_chain_mount_anchor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured = tmp_path / "mounted-root"
+    configured.mkdir()
+    fs = NativeFileSystem()
+    monkeypatch.setattr(
+        executor_module,
+        "trusted_volume_anchor",
+        lambda _path: str(tmp_path),
+    )
+    monkeypatch.setattr(
+        fs,
+        "_reject_reparse_chain",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("mismatched reviewed anchor must stop chain admission")
+        ),
+    )
+
+    with pytest.raises(UnsafeExecutionPath, match="volume anchor changed"):
+        fs.revalidate_root(configured, trusted_anchor=configured)
+
+
+def test_native_filesystem_refuses_same_serial_with_different_filesystem(
+    tmp_path: Path,
+) -> None:
+    fs = NativeFileSystem()
+    actual = fs._volume_id(tmp_path)
+    expected = VolumeId(
+        actual.serial,
+        "DIFFERENT" if actual.fs_type != "DIFFERENT" else "OTHER",
+    )
+
+    with pytest.raises(UnsafeExecutionPath, match="volume changed"):
+        fs.revalidate_root(tmp_path, expected_volume=expected)
 
 
 def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) -> None:
@@ -2526,6 +2591,90 @@ class BackupFailureFileSystem(NativeFileSystem):
         return super().finalize_temp(path, *args, **kwargs)
 
 
+class BackupCleanupDiagnosticFileSystem(BackupFailureFileSystem):
+    def __init__(self) -> None:
+        super().__init__("write")
+
+    def remove_owned_temp(self, path: Path) -> None:
+        native = to_extended_length_path(str(path))
+        raise PermissionError(13, "cleanup denied", native)
+
+
+class BackupFinalizationSpyFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.finalize_calls = 0
+
+    def finalize_temp(self, path: Path, *args, **kwargs) -> FileStat:
+        self.finalize_calls += 1
+        return super().finalize_temp(path, *args, **kwargs)
+
+
+class BackupTempCreationSpyFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.source_opened = False
+        self.create_calls = 0
+
+    def open_source(self, path: Path):
+        stream = super().open_source(path)
+        self.source_opened = True
+        return stream
+
+    def create_temp(self, path: Path, *, allocation_size: int | None):
+        self.create_calls += 1
+        return super().create_temp(path, allocation_size=allocation_size)
+
+
+class UpdateSourceGuardTrashSwapFileSystem(NativeFileSystem):
+    def __init__(
+        self,
+        source_root: Path,
+        target_root: Path,
+        redirected_root: Path,
+    ) -> None:
+        self.source_root = source_root
+        self.target_root = target_root
+        self.redirected_root = redirected_root
+        self.detached_root = target_root / f".detached-trash-{RUN_ID}"
+        self.backup_created = False
+        self.swapped = False
+        self.replace_calls = 0
+
+    def hardlink(self, source: Path, target: Path) -> None:
+        super().hardlink(source, target)
+        if ".synctrash" in target.parts:
+            self.backup_created = True
+
+    def copy_backup(
+        self,
+        source,
+        temp,
+        target,
+        checkpoint,
+        validate_destination,
+    ) -> None:
+        super().copy_backup(
+            source,
+            temp,
+            target,
+            checkpoint,
+            validate_destination,
+        )
+        self.backup_created = True
+
+    def stat(self, root: Path, relative_path: str) -> FileStat | None:
+        actual = super().stat(root, relative_path)
+        if root == self.source_root and self.backup_created and not self.swapped:
+            run_root = self.target_root / ".synctrash" / str(RUN_ID)
+            run_root.rename(self.detached_root)
+            _create_directory_reparse(run_root, self.redirected_root)
+            self.swapped = True
+        return actual
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.replace_calls += 1
+        super().replace(temp, target)
+
+
 @pytest.mark.parametrize("failure", ["cancel", "write", "finalize"])
 def test_copied_backup_removes_its_temp_on_every_prepublish_failure(
     tmp_path: Path, failure: str
@@ -2545,11 +2694,146 @@ def test_copied_backup_removes_its_temp_on_every_prepublish_failure(
 
     expected = Canceled if failure == "cancel" else OSError
     with pytest.raises(expected):
-        fs.copy_backup(live, temp, backup, checkpoint)
+        fs.copy_backup(live, temp, backup, checkpoint, lambda: None)
 
     assert live.read_bytes() == b"old-version"
     assert not backup.exists()
     assert not list(target.rglob("*.synctmp-*"))
+
+
+def test_copied_backup_cleanup_note_sanitizes_native_filename(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    trash = target / ".synctrash" / str(RUN_ID)
+    trash.mkdir(parents=True)
+    live = target / "file.bin"
+    live.write_bytes(b"old-version")
+    backup = trash / "file.bin"
+    fs = BackupCleanupDiagnosticFileSystem()
+    temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+
+    with pytest.raises(OSError) as captured:
+        fs.copy_backup(live, temp, backup, lambda: None, lambda: None)
+
+    notes = captured.value.__notes__
+    assert len(notes) == 1
+    assert r"file.bin.synctmp-" in notes[0]
+    assert "\\\\?\\" not in notes[0]
+
+
+def test_copied_backup_revalidates_parent_before_temp_finalization(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    trash = target / ".synctrash" / str(RUN_ID)
+    trash.mkdir(parents=True)
+    live = target / "file.bin"
+    live.write_bytes(b"old-version")
+    backup = trash / "file.bin"
+    fs = BackupFinalizationSpyFileSystem()
+    temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+    validations = 0
+
+    def reject_redirected_parent() -> None:
+        nonlocal validations
+        validations += 1
+        if validations >= 2:
+            raise UnsafeExecutionPath("injected redirected trash parent")
+
+    with pytest.raises(UnsafeExecutionPath, match="redirected trash parent"):
+        fs.copy_backup(
+            live,
+            temp,
+            backup,
+            lambda: None,
+            reject_redirected_parent,
+        )
+
+    assert validations == 3
+    assert fs.finalize_calls == 0
+    assert temp.exists()
+    assert not backup.exists()
+
+
+def test_copied_backup_revalidates_parent_after_source_open_before_temp_create(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    trash = target / ".synctrash" / str(RUN_ID)
+    trash.mkdir(parents=True)
+    live = target / "file.bin"
+    live.write_bytes(b"old-version")
+    backup = trash / "file.bin"
+    fs = BackupTempCreationSpyFileSystem()
+    temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+    validations = 0
+
+    def reject_redirect_after_source_open() -> None:
+        nonlocal validations
+        validations += 1
+        if fs.source_opened:
+            raise UnsafeExecutionPath("injected source-open parent redirect")
+
+    with pytest.raises(UnsafeExecutionPath, match="source-open parent redirect"):
+        fs.copy_backup(
+            live,
+            temp,
+            backup,
+            lambda: None,
+            reject_redirect_after_source_open,
+        )
+
+    assert validations == 2
+    assert fs.create_calls == 0
+    assert not temp.exists()
+    assert not backup.exists()
+
+
+@pytest.mark.parametrize("hardlinks", [True, False], ids=("hardlink", "copy"))
+def test_update_revalidates_trash_parent_after_guards_before_replace(
+    tmp_path: Path,
+    hardlinks: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_path = source / "file.bin"
+    live = target / "file.bin"
+    source_path.write_bytes(b"new-version")
+    live.write_bytes(b"old-version")
+    redirected = tmp_path / "redirected-trash"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    fs = UpdateSourceGuardTrashSwapFileSystem(source, target, redirected)
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=hardlinks)),
+        fs=fs,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.swapped
+    assert fs.replace_calls == 0
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "unsafe-path"
+    assert "publish_state" not in item.detail
+    assert live.read_bytes() == b"old-version"
+    assert (fs.detached_root / "file.bin").read_bytes() == b"old-version"
+    assert not list(redirected.iterdir())
+    assert recorder.calls == []
 
 
 def test_no_hardlink_update_flushes_readonly_backup_before_readonly(
@@ -3711,6 +3995,156 @@ class MidCopySharingOnceFileSystem(NativeFileSystem):
         super().remove_owned_temp(path)
 
 
+class CleanupDiagnosticFileSystem(NativeFileSystem):
+    def __init__(self, *, fail_finalize: bool) -> None:
+        self.fail_finalize = fail_finalize
+        self.temp_created = False
+        self.fail_cleanup = False
+
+    def create_temp(self, path: Path, *, allocation_size: int | None):
+        stream = super().create_temp(path, allocation_size=allocation_size)
+        self.temp_created = True
+        if not self.fail_finalize:
+            self.fail_cleanup = True
+        return stream
+
+    def finalize_temp(
+        self,
+        path: Path,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        acl_source: Path | None,
+    ) -> FileStat:
+        if self.fail_finalize:
+            self.fail_cleanup = True
+            raise OSError("injected finalization failure")
+        return super().finalize_temp(
+            path,
+            intended,
+            preserve_created=preserve_created,
+            acl_source=acl_source,
+        )
+
+    def remove_owned_temp(self, path: Path) -> None:
+        if self.fail_cleanup:
+            native = to_extended_length_path(str(path))
+            raise PermissionError(13, "cleanup denied", native)
+        super().remove_owned_temp(path)
+
+
+class PublishCancelCleanupDiagnosticFileSystem(CleanupDiagnosticFileSystem):
+    def __init__(self) -> None:
+        super().__init__(fail_finalize=False)
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        del temp, target
+        raise Canceled()
+
+
+def test_failed_cleanup_detail_sanitizes_native_temp_filename(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"payload")
+    fs = CleanupDiagnosticFileSystem(fail_finalize=True)
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+
+    result, events, _ = _run(_xset(_plan(source, target, (operation,))), fs=fs)
+
+    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.items == (outcome,)
+    assert outcome.reason == "cleanup-failed"
+    assert r"file.bin.synctmp-" in outcome.detail["message"]
+    assert "\\\\?\\" not in outcome.detail["message"]
+    assert "\\\\?\\" not in str(result_item_to_dict(outcome))
+
+
+def test_canceled_cleanup_detail_sanitizes_native_temp_filename(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"payload")
+    fs = CleanupDiagnosticFileSystem(fail_finalize=False)
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    events: list[object] = []
+
+    def checkpoint() -> None:
+        if fs.temp_created:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            _xset(_plan(source, target, (operation,))),
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(),
+            fs,
+        )
+
+    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    assert outcome.outcome is Outcome.CANCELED
+    assert r"file.bin.synctmp-" in outcome.detail["cleanup_error"]
+    assert "\\\\?\\" not in outcome.detail["cleanup_error"]
+    assert "\\\\?\\" not in str(result_item_to_dict(outcome))
+
+
+def test_canceled_durable_settlement_sanitizes_cleanup_filename(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"payload")
+    fs = PublishCancelCleanupDiagnosticFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    events: list[object] = []
+
+    with pytest.raises(Canceled):
+        execute(
+            _xset(_plan(source, target, (operation,))),
+            RunContext(events.append, lambda: None),
+            FakeRecorder(),
+            _policies(),
+            fs,
+        )
+
+    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    assert outcome.outcome is Outcome.CANCELED
+    assert outcome.detail["publish_state"] == "not-published"
+    assert r"file.bin.synctmp-" in outcome.detail["cleanup_error"]
+    assert "\\\\?\\" not in outcome.detail["cleanup_error"]
+    assert "\\\\?\\" not in str(result_item_to_dict(outcome))
+
+
 def test_midcopy_sharing_retry_recreates_owned_temp_and_converges(
     tmp_path: Path,
 ) -> None:
@@ -4589,9 +5023,17 @@ class BackupSharingAfterCommitFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.attempts = 0
 
-    def copy_backup(self, source, temp, target, checkpoint) -> None:
+    def copy_backup(
+        self, source, temp, target, checkpoint, validate_destination
+    ) -> None:
         self.attempts += 1
-        super().copy_backup(source, temp, target, checkpoint)
+        super().copy_backup(
+            source,
+            temp,
+            target,
+            checkpoint,
+            validate_destination,
+        )
         error = OSError("sharing report after committed backup")
         error.winerror = 32  # type: ignore[attr-defined]
         raise error
@@ -4781,9 +5223,17 @@ class CopyBackupStatSharingOnceFileSystem(NativeFileSystem):
         self.backup_stat_failed = False
         self.backup_copy_attempts = 0
 
-    def copy_backup(self, source, temp, target, checkpoint) -> None:
+    def copy_backup(
+        self, source, temp, target, checkpoint, validate_destination
+    ) -> None:
         self.backup_copy_attempts += 1
-        super().copy_backup(source, temp, target, checkpoint)
+        super().copy_backup(
+            source,
+            temp,
+            target,
+            checkpoint,
+            validate_destination,
+        )
         self.backup_created = True
 
     def stat_path(self, path: Path) -> FileStat | None:
@@ -5124,6 +5574,90 @@ def test_cancel_after_failed_update_replace_does_not_claim_foreign_write(
     assert (target / "file.bin").read_bytes() == b"foreign-write"
     assert trash.read_bytes() == b"old-version"
     assert not list(target.glob("*.synctmp-*"))
+
+
+def test_cancel_update_settlement_rejects_matching_backup_decoy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_path = source / "file.bin"
+    live = target / "file.bin"
+    source_path.write_bytes(b"new-version")
+    live.write_bytes(b"old-version")
+    redirected = tmp_path / "redirected-trash"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    fs = ReplaceSharingAlwaysFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    run_root = trash.parent
+    detached = target / f".detached-trash-{RUN_ID}"
+    real_stat_path = fs.stat_path
+    decoy_stat: FileStat | None = None
+    decoy_reads = 0
+    swapped = False
+    cancel_requested = False
+    events: list[object] = []
+
+    def matching_decoy_stat(path: Path) -> FileStat | None:
+        nonlocal decoy_reads
+        if swapped and path == trash:
+            decoy_reads += 1
+            assert decoy_stat is not None
+            return decoy_stat
+        return real_stat_path(path)
+
+    monkeypatch.setattr(fs, "stat_path", matching_decoy_stat)
+
+    def swap_before_cancel(_delay: float) -> None:
+        nonlocal cancel_requested, decoy_stat, swapped
+        decoy_stat = real_stat_path(trash)
+        assert decoy_stat is not None
+        run_root.rename(detached)
+        _create_directory_reparse(run_root, redirected)
+        (redirected / "file.bin").write_bytes(b"old-version")
+        swapped = True
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=swap_before_cancel),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert swapped
+    assert decoy_reads == 0
+    assert item.outcome is Outcome.CANCELED
+    assert item.reason == "canceled"
+    assert item.detail["backup_state"] == "unverified"
+    assert "reparse points" in item.detail["backup_state_error"]
+    assert item.detail["durable_state"] == "target-not-published"
+    assert live.read_bytes() == b"old-version"
+    assert (detached / "file.bin").read_bytes() == b"old-version"
+    assert (redirected / "file.bin").read_bytes() == b"old-version"
+    assert xset.recording is RecordingStatus.OK
+    assert xset.published_evidence == {}
 
 
 def test_cancel_preempts_an_already_latched_durable_pause(tmp_path: Path) -> None:
@@ -5539,6 +6073,622 @@ def test_unsafe_trash_is_refused_before_move(tmp_path: Path) -> None:
 
     assert result.status is SessionState.FAILED
     assert (target / "file.bin").read_bytes() == b"live"
+    assert recorder.calls == []
+
+
+def _create_directory_reparse(link: Path, target: Path) -> None:
+    if os.name != "nt":
+        os.symlink(target, link, target_is_directory=True)
+        return
+    environment = os.environ.copy()
+    environment["NAMISYNC_TEST_LINK"] = str(link)
+    environment["NAMISYNC_TEST_TARGET"] = str(target)
+    completed = subprocess.run(
+        (
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "New-Item -ItemType Junction -Path $env:NAMISYNC_TEST_LINK "
+            "-Target $env:NAMISYNC_TEST_TARGET -ErrorAction Stop | Out-Null",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    if completed.returncode:
+        raise OSError(completed.stderr.strip() or "junction creation failed")
+
+
+def _require_directory_reparse(tmp_path: Path, target: Path) -> None:
+    probe = tmp_path / "directory-reparse-probe"
+    try:
+        _create_directory_reparse(probe, target)
+    except OSError as error:
+        pytest.skip(f"directory reparse creation unavailable: {error}")
+    if os.name == "nt":
+        probe.rmdir()
+    else:
+        probe.unlink()
+
+
+def _with_reviewed_target_binding(plan: Plan, target: Path) -> Plan:
+    target_snapshot = scan(
+        Root(str(target), "target"),
+        IgnoreSet(),
+        RunContext(lambda _event: None, lambda: None),
+    )
+    assert target_snapshot.volume_id is not None
+    assert target_snapshot.volume_evidence is not None
+    return replace(
+        plan,
+        target_volume_id=target_snapshot.volume_id,
+        target_volume_evidence=target_snapshot.volume_evidence,
+    )
+
+
+def _with_reviewed_source_binding(plan: Plan, source: Path) -> Plan:
+    source_snapshot = scan(
+        Root(str(source), "source"),
+        IgnoreSet(),
+        RunContext(lambda _event: None, lambda: None),
+    )
+    assert source_snapshot.volume_id is not None
+    assert source_snapshot.volume_evidence is not None
+    return replace(
+        plan,
+        source_volume_id=source_snapshot.volume_id,
+        source_volume_evidence=source_snapshot.volume_evidence,
+    )
+
+
+class TargetRootReadGuardFileSystem(NativeFileSystem):
+    def __init__(self, target_root: Path) -> None:
+        self.target_root = target_root
+        self.swapped = False
+        self.decoy_stats: dict[str, FileStat] = {}
+        self.decoy_reads: list[Path] = []
+        self.replace_calls = 0
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if self.swapped and (
+            path == self.target_root or self.target_root in path.parents
+        ):
+            self.decoy_reads.append(path)
+            relative = str(path.relative_to(self.target_root)).replace(os.sep, "\\")
+            return self.decoy_stats.get(relative)
+        return super().stat_path(path)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.replace_calls += 1
+        super().replace(temp, target)
+
+
+class PrepareBoundaryRootSwapFileSystem(TargetRootReadGuardFileSystem):
+    def __init__(
+        self,
+        target_root: Path,
+        redirected_root: Path,
+        *,
+        temp_name: str,
+        swap_on_source_enter: bool,
+    ) -> None:
+        super().__init__(target_root)
+        self.redirected_root = redirected_root
+        self.temp_name = temp_name
+        self.swap_on_source_enter = swap_on_source_enter
+        self.detached_root = target_root.with_name(
+            f"{target_root.name}-detached-{RUN_ID}"
+        )
+        self.create_calls = 0
+        self.finalize_calls = 0
+
+    def swap_root(self) -> None:
+        if self.swapped:
+            return
+        temp = self.target_root / self.temp_name
+        temp_stat = NativeFileSystem.stat_path(self, temp)
+        temp_payload = None if temp_stat is None else temp.read_bytes()
+        if temp_stat is not None:
+            self.decoy_stats[self.temp_name] = temp_stat
+        self.target_root.rename(self.detached_root)
+        if temp_payload is not None:
+            (self.redirected_root / self.temp_name).write_bytes(temp_payload)
+        _create_directory_reparse(self.target_root, self.redirected_root)
+        self.swapped = True
+
+    def open_source(self, path: Path):
+        stream = super().open_source(path)
+        if not self.swap_on_source_enter:
+            return stream
+        owner = self
+
+        class _SwapOnEnter:
+            def __enter__(self):
+                opened = stream.__enter__()
+                owner.swap_root()
+                return opened
+
+            def __exit__(self, *args):
+                return stream.__exit__(*args)
+
+        return _SwapOnEnter()
+
+    def create_temp(self, path: Path, *, allocation_size: int | None):
+        self.create_calls += 1
+        return super().create_temp(path, allocation_size=allocation_size)
+
+    def finalize_temp(self, path: Path, *args, **kwargs) -> FileStat:
+        self.finalize_calls += 1
+        return super().finalize_temp(path, *args, **kwargs)
+
+
+class RootSwapAfterCopyBackend(NativeCopyBackend):
+    def __init__(self, swap_root: Callable[[], None]) -> None:
+        super().__init__(hasher_factory=xxh3_128)
+        self._swap_root = swap_root
+
+    def copy(self, source, target, **kwargs) -> CopyDigest:
+        digest = super().copy(source, target, **kwargs)
+        target.flush()
+        target.close()
+        self._swap_root()
+        return digest
+
+
+@pytest.mark.parametrize(
+    "swap_boundary",
+    ("source-open", "after-copy"),
+)
+def test_copy_prepare_revalidates_root_after_blocking_boundaries(
+    tmp_path: Path,
+    swap_boundary: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    redirected = tmp_path / "redirected-target"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    source_name = "file.bin"
+    (source / source_name).write_bytes(b"new-version")
+    setup_fs = NativeFileSystem()
+    source_stat = setup_fs.stat(source, source_name)
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path=source_name,
+        target_rel_path=source_name,
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    temp_name = f"{source_name}.synctmp-{RUN_ID}-{operation.op_id}"
+    fs = PrepareBoundaryRootSwapFileSystem(
+        target,
+        redirected,
+        temp_name=temp_name,
+        swap_on_source_enter=swap_boundary == "source-open",
+    )
+    policies = (
+        _policies()
+        if swap_boundary == "source-open"
+        else _policies(copy_backend=RootSwapAfterCopyBackend(fs.swap_root))
+    )
+    plan = _with_reviewed_target_binding(
+        _plan(source, target, (operation,)),
+        target,
+    )
+
+    result, events, recorder = _run(
+        _xset(plan),
+        fs=fs,
+        policies=policies,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.swapped
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert fs.create_calls == (0 if swap_boundary == "source-open" else 1)
+    assert fs.finalize_calls == 0
+    assert fs.decoy_reads == []
+    assert recorder.calls == []
+    assert not (fs.detached_root / source_name).exists()
+    if swap_boundary == "source-open":
+        assert not (fs.detached_root / temp_name).exists()
+        assert not list(redirected.iterdir())
+    else:
+        assert (fs.detached_root / temp_name).read_bytes() == b"new-version"
+        assert (redirected / temp_name).read_bytes() == b"new-version"
+
+
+class TargetRootSwappingRecorder(FakeRecorder):
+    def __init__(
+        self,
+        target_root: Path,
+        redirected_root: Path,
+        fs: TargetRootReadGuardFileSystem,
+        *,
+        live_name: str,
+        temp_name: str,
+    ) -> None:
+        super().__init__()
+        self.target_root = target_root
+        self.redirected_root = redirected_root
+        self.fs = fs
+        self.live_name = live_name
+        self.temp_name = temp_name
+        self.detached_root = target_root.with_name(
+            f"{target_root.name}-detached-{RUN_ID}"
+        )
+        self.swapped = False
+
+    def flush(self) -> None:
+        super().flush()
+        if self.swapped:
+            return
+        live = self.target_root / self.live_name
+        temp = self.target_root / self.temp_name
+        live_stat = self.fs.stat_path(live)
+        temp_stat = self.fs.stat_path(temp)
+        assert live_stat is not None and temp_stat is not None
+        self.fs.decoy_stats = {
+            self.live_name: live_stat,
+            self.temp_name: temp_stat,
+        }
+        live_payload = live.read_bytes()
+        temp_payload = temp.read_bytes()
+        self.target_root.rename(self.detached_root)
+        (self.redirected_root / self.live_name).write_bytes(live_payload)
+        (self.redirected_root / self.temp_name).write_bytes(temp_payload)
+        _create_directory_reparse(self.target_root, self.redirected_root)
+        self.fs.swapped = True
+        self.swapped = True
+
+
+def test_update_rejects_target_root_swap_after_recorder_barrier(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    redirected = tmp_path / "redirected-target"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    source_name = "file.bin"
+    (source / source_name).write_bytes(b"new-version")
+    (target / source_name).write_bytes(b"old-version")
+    fs = TargetRootReadGuardFileSystem(target)
+    source_stat = fs.stat(source, source_name)
+    target_stat = fs.stat(target, source_name)
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path=source_name,
+        target_rel_path=source_name,
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    temp_name = f"{source_name}.synctmp-{RUN_ID}-{operation.op_id}"
+    plan = _with_reviewed_target_binding(
+        _plan(
+            source,
+            target,
+            (operation,),
+            trash_on_update=False,
+        ),
+        target,
+    )
+    recorder = TargetRootSwappingRecorder(
+        target,
+        redirected,
+        fs,
+        live_name=source_name,
+        temp_name=temp_name,
+    )
+
+    result, events, _ = _run(_xset(plan), fs=fs, recorder=recorder)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert recorder.swapped
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert item.detail["publish_state"] == "unverified"
+    assert "reparse" in item.detail["state_error"].lower()
+    assert fs.replace_calls == 0
+    assert fs.decoy_reads == []
+    assert recorder.calls == []
+    assert (recorder.detached_root / source_name).read_bytes() == b"old-version"
+    assert (recorder.detached_root / temp_name).read_bytes() == b"new-version"
+    assert (redirected / source_name).read_bytes() == b"old-version"
+    assert (redirected / temp_name).read_bytes() == b"new-version"
+
+
+class PublishedBackoffRootSwapFileSystem(TargetRootReadGuardFileSystem):
+    def __init__(self, target_root: Path, failure_point: str) -> None:
+        super().__init__(target_root)
+        self.failure_point = failure_point
+        self.injected = False
+
+    @staticmethod
+    def _sharing_error() -> OSError:
+        error = OSError("sharing report after publish")
+        error.winerror = 32  # type: ignore[attr-defined]
+        return error
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        super().publish_new(temp, target)
+        if self.failure_point == "committed-publish" and not self.injected:
+            self.injected = True
+            raise self._sharing_error()
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        if self.failure_point == "published-metadata" and not self.injected:
+            self.injected = True
+            raise self._sharing_error()
+        return super().ensure_published_metadata(path, *args, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "failure_point",
+    ("published-metadata", "committed-publish"),
+)
+def test_published_retry_rejects_matching_decoy_after_target_root_swap(
+    tmp_path: Path,
+    failure_point: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    redirected = tmp_path / "redirected-target"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    source_name = "file.bin"
+    (source / source_name).write_bytes(b"new-version")
+    fs = PublishedBackoffRootSwapFileSystem(target, failure_point)
+    source_stat = fs.stat(source, source_name)
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path=source_name,
+        target_rel_path=source_name,
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    plan = _with_reviewed_target_binding(
+        _plan(source, target, (operation,)),
+        target,
+    )
+    detached = target.with_name(f"{target.name}-detached-{RUN_ID}")
+
+    def swap_during_backoff(_delay: float) -> None:
+        if fs.swapped:
+            return
+        published = target / source_name
+        published_stat = NativeFileSystem.stat_path(fs, published)
+        assert published_stat is not None
+        payload = published.read_bytes()
+        fs.decoy_stats[source_name] = published_stat
+        target.rename(detached)
+        (redirected / source_name).write_bytes(payload)
+        _create_directory_reparse(target, redirected)
+        fs.swapped = True
+
+    result, events, recorder = _run(
+        _xset(plan),
+        fs=fs,
+        policies=_policies(sleep=swap_during_backoff),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.injected and fs.swapped
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert fs.decoy_reads == []
+    assert recorder.calls == []
+    assert (detached / source_name).read_bytes() == b"new-version"
+    assert (redirected / source_name).read_bytes() == b"new-version"
+    if failure_point == "published-metadata":
+        assert item.detail["publish_state"] == "published"
+        assert item.detail["target_state"] == "unverified-after-publish"
+        assert "reparse" in item.detail["target_state_error"].lower()
+    else:
+        assert item.detail["publish_state"] == "unverified"
+        assert item.detail["durable_state"] == "publication-unverified"
+        assert "reparse" in item.detail["state_error"].lower()
+
+
+class TrashParentSwappingRecorder(FakeRecorder):
+    def __init__(self, target_root: Path, redirected_root: Path) -> None:
+        super().__init__()
+        self.target_root = target_root
+        self.redirected_root = redirected_root
+        self.detached_root = target_root / f".detached-trash-{RUN_ID}"
+        self.swapped = False
+
+    def flush(self) -> None:
+        super().flush()
+        if self.swapped:
+            return
+        run_root = self.target_root / ".synctrash" / str(RUN_ID)
+        run_root.rename(self.detached_root)
+        _create_directory_reparse(run_root, self.redirected_root)
+        self.swapped = True
+
+
+class TrashCommitThenParentSwapFileSystem(NativeFileSystem):
+    def __init__(self, target_root: Path, redirected_root: Path) -> None:
+        self.target_root = target_root
+        self.redirected_root = redirected_root
+        self.detached_root = target_root / f".detached-trash-{RUN_ID}"
+        self.destination: Path | None = None
+        self.decoy_stat: FileStat | None = None
+        self.decoy_reads = 0
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        if ".synctrash" not in target.parts:
+            super().rename_new(source, target)
+            return
+        super().rename_new(source, target)
+        self.destination = target
+        self.decoy_stat = super().stat_path(target)
+        assert self.decoy_stat is not None
+        run_root = self.target_root / ".synctrash" / str(RUN_ID)
+        run_root.rename(self.detached_root)
+        _create_directory_reparse(run_root, self.redirected_root)
+        (self.redirected_root / target.name).write_bytes(b"old-version")
+        error = OSError("sharing report after committed trash rename")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if self.destination is not None and path == self.destination:
+            self.decoy_reads += 1
+            assert self.decoy_stat is not None
+            return self.decoy_stat
+        return super().stat_path(path)
+
+
+@pytest.mark.parametrize(
+    ("kind", "hardlinks"),
+    (
+        pytest.param(OperationKind.TRASH, True, id="trash"),
+        pytest.param(OperationKind.UPDATE, True, id="update-hardlink"),
+        pytest.param(OperationKind.UPDATE, False, id="update-copy"),
+        pytest.param(OperationKind.MOVE_UPDATE, True, id="move-update"),
+    ),
+)
+def test_owned_trash_parent_reparse_swap_during_recorder_flush_is_refused(
+    tmp_path: Path,
+    kind: OperationKind,
+    hardlinks: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    redirected = tmp_path / "redirected-trash"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+
+    old_name = "old.bin" if kind is OperationKind.MOVE_UPDATE else "file.bin"
+    new_name = "new.bin" if kind is OperationKind.MOVE_UPDATE else "file.bin"
+    old_path = target / old_name
+    old_path.write_bytes(b"old-version")
+    fs = NativeFileSystem()
+    old_stat = fs.stat(target, old_name)
+    assert old_stat is not None
+
+    if kind is OperationKind.TRASH:
+        operation = _operation(
+            1,
+            kind,
+            source_rel_path=None,
+            target_rel_path=old_name,
+            source_expected=None,
+            target_expected=old_stat,
+            intended=None,
+        )
+    else:
+        source_path = source / new_name
+        source_path.write_bytes(b"new-version")
+        source_stat = fs.stat(source, new_name)
+        assert source_stat is not None
+        operation = _operation(
+            1,
+            kind,
+            source_rel_path=new_name,
+            target_rel_path=new_name,
+            source_expected=source_stat,
+            target_expected=(old_stat if kind is OperationKind.UPDATE else None),
+            intended=source_stat,
+            prior_target_rel_path=(
+                old_name if kind is OperationKind.MOVE_UPDATE else None
+            ),
+            prior_target_expected=(
+                old_stat if kind is OperationKind.MOVE_UPDATE else None
+            ),
+        )
+
+    recorder = TrashParentSwappingRecorder(target, redirected)
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=hardlinks)),
+        fs=fs,
+        recorder=recorder,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert recorder.swapped
+    assert recorder.flushes >= 1
+    assert recorder.calls == []
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "unsafe-path"
+    swapped_root = target / ".synctrash" / str(RUN_ID)
+    assert (
+        swapped_root.is_junction()
+        if os.name == "nt"
+        else swapped_root.is_symlink()
+    )
+    assert old_path.read_bytes() == b"old-version"
+    assert not list(redirected.iterdir())
+
+    detached_backup = recorder.detached_root / old_name
+    if kind is OperationKind.UPDATE:
+        assert detached_backup.read_bytes() == b"old-version"
+        assert not list(target.glob("*.synctmp-*"))
+    else:
+        assert not detached_backup.exists()
+    if kind is OperationKind.MOVE_UPDATE:
+        assert (target / new_name).read_bytes() == b"new-version"
+        assert result.recording is RecordingStatus.DEGRADED
+        assert item.detail["publish_state"] == "published"
+    else:
+        assert result.recording is RecordingStatus.OK
+        assert "publish_state" not in item.detail
+        if kind is OperationKind.UPDATE:
+            assert (target / new_name).read_bytes() == b"old-version"
+
+
+def test_failed_trash_settlement_rejects_matching_destination_decoy(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    live = target / "file.bin"
+    live.write_bytes(b"old-version")
+    redirected = tmp_path / "redirected-trash"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    fs = TrashCommitThenParentSwapFileSystem(target, redirected)
+    target_stat = fs.stat(target, "file.bin")
+    assert target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.TRASH,
+        source_rel_path=None,
+        target_rel_path="file.bin",
+        source_expected=None,
+        target_expected=target_stat,
+        intended=None,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(failure=BoundedFailurePolicy(retries=0)),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "sharing-violation"
+    assert item.detail["mutation_state"] == "unverified"
+    assert item.detail["durable_state"] == "trash-state-unverified"
+    assert "reparse points" in item.detail["mutation_state_error"]
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert fs.decoy_reads == 0
+    assert not live.exists()
+    assert (fs.detached_root / "file.bin").read_bytes() == b"old-version"
+    assert (redirected / "file.bin").read_bytes() == b"old-version"
     assert recorder.calls == []
 
 
@@ -6205,6 +7355,63 @@ def test_move_update_retry_recognizes_committed_old_to_trash_rename(
     assert recorder.flushes == 2
 
 
+def test_move_update_retry_revalidates_committed_trash_parent(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_path = source / "renamed.bin"
+    old_path = target / "old.bin"
+    new_path = target / "renamed.bin"
+    source_path.write_bytes(b"changed")
+    old_path.write_bytes(b"old")
+    redirected = tmp_path / "redirected-trash"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    fs = MoveUpdateTrashSharingAfterCommitFileSystem()
+    source_stat = fs.stat(source, "renamed.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.MOVE_UPDATE,
+        source_rel_path="renamed.bin",
+        target_rel_path="renamed.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+        prior_target_rel_path="old.bin",
+        prior_target_expected=old_stat,
+    )
+    run_root = target / ".synctrash" / str(RUN_ID)
+    detached = target / f".detached-trash-{RUN_ID}"
+    swapped = False
+
+    def swap_before_retry(_delay: float) -> None:
+        nonlocal swapped
+        run_root.rename(detached)
+        _create_directory_reparse(run_root, redirected)
+        swapped = True
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(sleep=swap_before_retry),
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert swapped
+    assert fs.attempts == 1
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.reason == "unsafe-path"
+    assert item.detail["publish_state"] == "published"
+    assert not old_path.exists()
+    assert new_path.read_bytes() == b"changed"
+    assert (detached / "old.bin").read_bytes() == b"old"
+    assert not list(redirected.iterdir())
+    assert recorder.calls == []
+
+
 def test_pause_during_move_update_retry_settles_then_resumes_without_collision(
     tmp_path: Path,
 ) -> None:
@@ -6335,6 +7542,94 @@ def test_cancel_during_move_update_retry_reports_partial_publish(
     else:
         assert not (target / "old.bin").exists()
         assert trash.read_bytes() == b"old"
+
+
+def test_cancel_move_update_settlement_rejects_matching_trash_decoy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_path = source / "renamed.bin"
+    old_path = target / "old.bin"
+    new_path = target / "renamed.bin"
+    source_path.write_bytes(b"changed")
+    old_path.write_bytes(b"old")
+    redirected = tmp_path / "redirected-trash"
+    redirected.mkdir()
+    _require_directory_reparse(tmp_path, redirected)
+    fs = MoveUpdateTrashSharingAfterCommitFileSystem()
+    source_stat = fs.stat(source, "renamed.bin")
+    old_stat = fs.stat(target, "old.bin")
+    assert source_stat is not None and old_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.MOVE_UPDATE,
+        source_rel_path="renamed.bin",
+        target_rel_path="renamed.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+        prior_target_rel_path="old.bin",
+        prior_target_expected=old_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    trash = target / ".synctrash" / str(RUN_ID) / "old.bin"
+    run_root = trash.parent
+    detached = target / f".detached-trash-{RUN_ID}"
+    real_stat_path = fs.stat_path
+    decoy_stat: FileStat | None = None
+    decoy_reads = 0
+    swapped = False
+    cancel_requested = False
+    events: list[object] = []
+
+    def matching_decoy_stat(path: Path) -> FileStat | None:
+        nonlocal decoy_reads
+        if swapped and path == trash:
+            decoy_reads += 1
+            assert decoy_stat is not None
+            return decoy_stat
+        return real_stat_path(path)
+
+    monkeypatch.setattr(fs, "stat_path", matching_decoy_stat)
+
+    def swap_before_cancel(_delay: float) -> None:
+        nonlocal cancel_requested, decoy_stat, swapped
+        decoy_stat = real_stat_path(trash)
+        assert decoy_stat is not None
+        run_root.rename(detached)
+        _create_directory_reparse(run_root, redirected)
+        (redirected / "old.bin").write_bytes(b"old")
+        swapped = True
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            FakeRecorder(),
+            _policies(sleep=swap_before_cancel),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert swapped
+    assert decoy_reads == 0
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "canceled-after-publish"
+    assert item.detail["durable_state"] == "new-and-old-unverified"
+    assert "reparse points" in item.detail["trash_state_error"]
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert not old_path.exists()
+    assert new_path.read_bytes() == b"changed"
+    assert (detached / "old.bin").read_bytes() == b"old"
+    assert (redirected / "old.bin").read_bytes() == b"old"
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence == {}
 
 
 class CompositeTrashFaultFileSystem(NativeFileSystem):
@@ -6761,6 +8056,363 @@ def _nonbyte_mutation_operation(
             else OperationReason.IDENTITY_RENAME
         ),
     )
+
+
+class ReviewedBindingSwapFileSystem(NativeFileSystem):
+    def __init__(self, target_root: Path, *, swap_during_resolve: bool) -> None:
+        self.target_root = target_root
+        self.swap_during_resolve = swap_during_resolve
+        self.swapped = False
+        self.reviewed_refusals = 0
+        self.rename_calls = 0
+        self.remove_calls = 0
+        self.mkdir_calls = 0
+
+    def revalidate_root(
+        self,
+        root: Path,
+        *,
+        trusted_anchor: Path | None = None,
+        expected_volume=None,
+    ) -> None:
+        if (
+            self.swapped
+            and root == self.target_root
+            and trusted_anchor is not None
+            and expected_volume is not None
+        ):
+            self.reviewed_refusals += 1
+            raise UnsafeExecutionPath(
+                "reviewed target anchor or volume changed"
+            )
+        super().revalidate_root(
+            root,
+            trusted_anchor=trusted_anchor,
+            expected_volume=expected_volume,
+        )
+
+    def resolve(
+        self,
+        root: Path,
+        relative_path: str,
+        *,
+        must_exist: bool,
+    ) -> Path:
+        resolved = super().resolve(
+            root,
+            relative_path,
+            must_exist=must_exist,
+        )
+        if self.swap_during_resolve and root == self.target_root:
+            self.swapped = True
+        return resolved
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        self.rename_calls += 1
+        super().rename_new(source, target)
+
+    def remove_file(self, path: Path) -> None:
+        self.remove_calls += 1
+        super().remove_file(path)
+
+    def remove_directory(self, path: Path) -> None:
+        self.remove_calls += 1
+        super().remove_directory(path)
+
+    def mkdir_new(self, path: Path) -> None:
+        self.mkdir_calls += 1
+        super().mkdir_new(path)
+
+
+class ReviewedBindingSwapRecorder(FakeRecorder):
+    def __init__(self, fs: ReviewedBindingSwapFileSystem) -> None:
+        super().__init__()
+        self.fs = fs
+
+    def flush(self) -> None:
+        super().flush()
+        self.fs.swapped = True
+
+
+class ReviewedSourceSwapFileSystem(NativeFileSystem):
+    def __init__(
+        self,
+        source_root: Path,
+        *,
+        swap_after_source_resolve: bool = False,
+    ) -> None:
+        self.source_root = source_root
+        self.swap_after_source_resolve = swap_after_source_resolve
+        self.swapped = False
+        self.matching_source_stat: FileStat | None = None
+        self.reviewed_refusals = 0
+        self.foreign_stat_reads = 0
+        self.foreign_source_opens = 0
+        self.source_opens = 0
+        self.target_mutations = 0
+
+    def revalidate_root(
+        self,
+        root: Path,
+        *,
+        trusted_anchor: Path | None = None,
+        expected_volume=None,
+    ) -> None:
+        if (
+            self.swapped
+            and root == self.source_root
+            and trusted_anchor is not None
+            and expected_volume is not None
+        ):
+            self.reviewed_refusals += 1
+            raise UnsafeExecutionPath(
+                "reviewed source anchor or volume changed"
+            )
+        super().revalidate_root(
+            root,
+            trusted_anchor=trusted_anchor,
+            expected_volume=expected_volume,
+        )
+
+    def stat(self, root: Path, relative_path: str) -> FileStat | None:
+        if self.swapped and root == self.source_root:
+            self.foreign_stat_reads += 1
+            return self.matching_source_stat
+        return super().stat(root, relative_path)
+
+    def resolve(
+        self,
+        root: Path,
+        relative_path: str,
+        *,
+        must_exist: bool,
+    ) -> Path:
+        resolved = super().resolve(
+            root,
+            relative_path,
+            must_exist=must_exist,
+        )
+        if self.swap_after_source_resolve and root == self.source_root:
+            self.swapped = True
+        return resolved
+
+    def open_source(self, path: Path):
+        self.source_opens += 1
+        if self.swapped:
+            self.foreign_source_opens += 1
+        return super().open_source(path)
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        self.target_mutations += 1
+        super().publish_new(temp, target)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.target_mutations += 1
+        super().replace(temp, target)
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        self.target_mutations += 1
+        super().rename_new(source, target)
+
+
+class ReviewedSourceSwapRecorder(FakeRecorder):
+    def __init__(self, fs: ReviewedSourceSwapFileSystem) -> None:
+        super().__init__()
+        self.fs = fs
+
+    def flush(self) -> None:
+        super().flush()
+        self.fs.swapped = True
+
+
+def _identity_weak_operation(operation: PlanOperation) -> PlanOperation:
+    assert operation.source_expected is not None
+    intended = operation.intended
+    return replace(
+        operation,
+        source_expected=replace(
+            operation.source_expected,
+            file_identity=None,
+        ),
+        intended=(
+            None
+            if intended is None
+            else replace(intended, file_identity=None)
+        ),
+    )
+
+
+def test_copy_refuses_reviewed_source_swap_before_open(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"matching-foreign-bytes")
+    fs = ReviewedSourceSwapFileSystem(
+        source,
+        swap_after_source_resolve=True,
+    )
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _identity_weak_operation(
+        _operation(
+            1,
+            OperationKind.COPY,
+            source_rel_path="file.bin",
+            target_rel_path="file.bin",
+            source_expected=source_stat,
+            target_expected=None,
+            intended=source_stat,
+        )
+    )
+    fs.matching_source_stat = operation.source_expected
+    plan = _with_reviewed_source_binding(
+        replace(
+            _plan(source, target, (operation,)),
+            source_profile=replace(
+                _profile(),
+                stable_file_identity=False,
+            ),
+        ),
+        source,
+    )
+
+    result, events, recorder = _run(_xset(plan), fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.swapped and fs.reviewed_refusals >= 1
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert fs.source_opens == 0
+    assert fs.foreign_source_opens == 0
+    assert fs.foreign_stat_reads == 0
+    assert fs.target_mutations == 0
+    assert recorder.calls == []
+    assert not (target / "file.bin").exists()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (OperationKind.UPDATE, OperationKind.MOVE),
+    ids=("update", "move"),
+)
+def test_source_swap_during_recorder_barrier_cannot_authorize_mutation(
+    tmp_path: Path,
+    kind: OperationKind,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = ReviewedSourceSwapFileSystem(source)
+    if kind is OperationKind.UPDATE:
+        (source / "file.bin").write_bytes(b"new-version")
+        (target / "file.bin").write_bytes(b"old-version")
+        source_stat = fs.stat(source, "file.bin")
+        target_stat = fs.stat(target, "file.bin")
+        assert source_stat is not None and target_stat is not None
+        operation = _operation(
+            1,
+            kind,
+            source_rel_path="file.bin",
+            target_rel_path="file.bin",
+            source_expected=source_stat,
+            target_expected=target_stat,
+            intended=source_stat,
+        )
+    else:
+        operation = _nonbyte_mutation_operation(source, target, fs, kind)
+    operation = _identity_weak_operation(operation)
+    fs.matching_source_stat = operation.source_expected
+    plan = _with_reviewed_source_binding(
+        replace(
+            _plan(
+                source,
+                target,
+                (operation,),
+                trash_on_update=False,
+            ),
+            source_profile=replace(
+                _profile(),
+                stable_file_identity=False,
+            ),
+        ),
+        source,
+    )
+    recorder = ReviewedSourceSwapRecorder(fs)
+
+    result, events, _ = _run(
+        _xset(plan),
+        fs=fs,
+        recorder=recorder,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.swapped and fs.reviewed_refusals >= 1
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert fs.foreign_source_opens == 0
+    assert fs.foreign_stat_reads == 0
+    assert fs.target_mutations == 0
+    assert recorder.calls == []
+    if kind is OperationKind.UPDATE:
+        assert fs.source_opens == 1
+        assert (target / "file.bin").read_bytes() == b"old-version"
+    else:
+        assert fs.source_opens == 0
+        assert (target / "old.bin").read_bytes() == b"reviewed"
+        assert not (target / "new.bin").exists()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (
+        OperationKind.MOVE,
+        OperationKind.RECASE,
+        OperationKind.DELETE,
+        OperationKind.MKDIR,
+    ),
+    ids=("move", "recase", "delete", "mkdir"),
+)
+def test_nonbyte_mutations_refuse_reviewed_target_binding_swap(
+    tmp_path: Path,
+    kind: OperationKind,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = ReviewedBindingSwapFileSystem(
+        target,
+        swap_during_resolve=kind is OperationKind.MKDIR,
+    )
+    operation = _nonbyte_mutation_operation(source, target, fs, kind)
+    plan = _with_reviewed_target_binding(
+        _plan(source, target, (operation,)),
+        target,
+    )
+    recorder = ReviewedBindingSwapRecorder(fs)
+
+    result, events, _ = _run(
+        _xset(plan),
+        fs=fs,
+        recorder=recorder,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert fs.swapped
+    assert fs.reviewed_refusals >= 1
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert item.outcome is Outcome.FAILED
+    assert "mutation_state" not in item.detail
+    assert "durable_state" not in item.detail
+    assert fs.rename_calls == 0
+    assert fs.remove_calls == 0
+    assert fs.mkdir_calls == 0
+    assert recorder.calls == []
+    if kind is OperationKind.MOVE:
+        assert (target / "old.bin").read_bytes() == b"reviewed"
+        assert not (target / "new.bin").exists()
+    elif kind is OperationKind.RECASE:
+        assert [path.name for path in target.iterdir()] == ["keep.txt"]
+    elif kind is OperationKind.DELETE:
+        assert (target / "old.bin").read_bytes() == b"reviewed"
+    else:
+        assert not (target / "folder").exists()
 
 
 @pytest.mark.parametrize(

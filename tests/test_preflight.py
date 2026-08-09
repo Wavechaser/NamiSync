@@ -6,8 +6,10 @@ import copy
 from dataclasses import replace
 from datetime import datetime, timezone
 import os
+import stat as stat_module
 from pathlib import Path, PureWindowsPath
 import inspect
+from types import SimpleNamespace
 
 import pytest
 
@@ -58,6 +60,39 @@ META = MetadataSnapshot(0, 100)
 SOURCE_VOLUME = VolumeId("SRC", "NTFS")
 TARGET_VOLUME = VolumeId("DST", "NTFS")
 PROFILE = CapabilityProfile("NTFS", 100, True, None, 32767, False, True)
+
+
+def test_local_root_observation_refuses_reparse_before_volume_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "configured-root"
+    root.mkdir()
+
+    def reparse_stat(_path, *, follow_symlinks: bool):
+        assert not follow_symlinks
+        return SimpleNamespace(
+            st_mode=stat_module.S_IFDIR | 0o755,
+            st_file_attributes=0x00000400,
+            st_reparse_tag=1,
+        )
+
+    monkeypatch.setattr(preflight_module.os, "stat", reparse_stat)
+    monkeypatch.setattr(
+        preflight_module,
+        "_volume_observation",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("volume probe must follow root rejection")
+        ),
+    )
+
+    observation = LocalObservationFileSystem().observe_root(
+        Root(str(root), "source")
+    )
+
+    assert observation.resolved_path is None
+    assert observation.error is not None
+    assert "ordinary directory" in observation.error
 
 
 def _file(

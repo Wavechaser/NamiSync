@@ -133,6 +133,19 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed managed-root redirection, owned-trash parent substitution, sticky
+  mismatch projection, and native-path diagnostic gaps without expanding the
+  external-writer threat contract.
+  - **Filesystem safety:** kept managed roots lexical while no-follow admitting
+    configured root-chain components below trusted or reviewed volume anchors,
+    bound scans, execution, and verifier opens to full reviewed volume identity,
+    and revalidated target and owned-trash parents after blocking barriers.
+  - **Evidence and diagnostics:** made sticky hash mismatch dominate later stat
+    drift and normalized enumeration/temp-cleanup filenames before public or
+    durable rendering.
+  - **Tests:** added real junction and deterministic remount substitutions across
+    scan, execution, trash/update, and verification, plus inventory-preservation,
+    projection, and serialized-detail regressions.
 - Closed executor attestation and durable-settlement gaps without changing the
   full-intent/safe-selection contract or adding normal-path filesystem probes.
   - **Executor:** moved UPDATE's recorder wait ahead of all final prepared/live

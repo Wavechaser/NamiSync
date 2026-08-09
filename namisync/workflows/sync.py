@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import stat as stat_module
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
@@ -30,8 +31,11 @@ from namisync.core.integrity import (
 from namisync.core.models import IgnoreSet, Root, ScanResult
 from namisync.core.pathing import (
     from_extended_length_path,
+    lexical_absolute_path,
+    lexical_path_chain,
     logical_error_text,
     to_extended_length_path,
+    trusted_volume_anchor,
 )
 from namisync.core.planning import (
     MappingSnapshot,
@@ -494,6 +498,18 @@ def run_execution(
             verification_context = deps.verifier_context(
                 RunContext(observe_verification, ctx.checkpoint)
             )
+            target_evidence = xset.plan.target_volume_evidence
+            if xset.plan.target_volume_id is not None:
+                verification_context = replace(
+                    verification_context,
+                    reviewed_root_anchor=(
+                        Path(target_evidence.device_id)
+                        if target_evidence is not None
+                        and target_evidence.device_id is not None
+                        else None
+                    ),
+                    reviewed_volume_id=xset.plan.target_volume_id,
+                )
             verification = deps.verifier(
                 current.candidates,
                 verification_context,
@@ -1025,10 +1041,40 @@ def _commitment_error(xset: ExecutionSet) -> str | None:
     return None
 
 
-def _resolved_logical_root(path: str) -> Path:
-    native = Path(to_extended_length_path(path))
+def _ordinary_logical_root(path: str) -> Path:
+    logical = lexical_absolute_path(path)
     try:
-        resolved = native.resolve(strict=True)
+        anchor = trusted_volume_anchor(logical)
+        root_chain = lexical_path_chain(
+            logical,
+            trusted_anchor=anchor,
+        )
+        for component in root_chain:
+            observed = os.stat(
+                to_extended_length_path(component),
+                follow_symlinks=False,
+            )
+            attributes = int(getattr(observed, "st_file_attributes", 0))
+            if (
+                not stat_module.S_ISDIR(observed.st_mode)
+                or stat_module.S_ISLNK(observed.st_mode)
+                or attributes & 0x00000400
+                or getattr(observed, "st_reparse_tag", 0)
+            ):
+                raise ValueError(
+                    "location root chain contains a nonordinary directory: "
+                    f"{component}"
+                )
+    except OSError as error:
+        raise ValueError(logical_error_text(error)) from error
+    return Path(logical)
+
+
+def _physical_logical_root(path: Path) -> Path:
+    try:
+        resolved = Path(to_extended_length_path(str(path))).resolve(
+            strict=True
+        )
     except OSError as error:
         raise ValueError(logical_error_text(error)) from error
     return Path(from_extended_length_path(str(resolved)))
@@ -1040,14 +1086,10 @@ def validate_sync_paths(
 ) -> tuple[Path, Path]:
     """Resolve one interface path pair without exposing native path spelling."""
 
-    source = _resolved_logical_root(source_path)
-    target = _resolved_logical_root(target_path)
-    if not os.path.isdir(to_extended_length_path(str(source))):
-        raise NotADirectoryError(f"source is not a directory: {source}")
-    if not os.path.isdir(to_extended_length_path(str(target))):
-        raise NotADirectoryError(f"target is not a directory: {target}")
-    source_key = os.path.normcase(str(source))
-    target_key = os.path.normcase(str(target))
+    source = _ordinary_logical_root(source_path)
+    target = _ordinary_logical_root(target_path)
+    source_key = os.path.normcase(str(_physical_logical_root(source)))
+    target_key = os.path.normcase(str(_physical_logical_root(target)))
     try:
         common = os.path.normcase(os.path.commonpath((source_key, target_key)))
     except ValueError:

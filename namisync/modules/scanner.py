@@ -33,9 +33,12 @@ from namisync.core.pathing import (
     PathValidationError,
     from_extended_length_path,
     join_under_root,
+    lexical_absolute_path,
+    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
+    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.session import RunContext
@@ -69,7 +72,9 @@ class DirectoryEntry(Protocol):
 
 
 class ScannerBackend(Protocol):
-    def resolve_root(self, path: str) -> str: ...
+    def resolve_root(
+        self, path: str, *, trusted_anchor: str | None = None
+    ) -> str: ...
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot: ...
 
@@ -96,15 +101,46 @@ def _identity_supported(fs_type: str) -> bool:
 class NativeScannerBackend:
     """Native Windows metadata backend; it never opens ordinary file content."""
 
-    def resolve_root(self, path: str) -> str:
-        native = to_extended_length_path(path)
-        if not os.path.isdir(native):
-            raise FileNotFoundError(from_extended_length_path(native))
-        try:
-            resolved = Path(native).resolve(strict=True)
-        except OSError as error:
-            raise OSError(logical_error_text(error)) from error
-        return from_extended_length_path(str(resolved))
+    def trusted_anchor(self, path: str) -> str:
+        return trusted_volume_anchor(path)
+
+    def resolve_root(
+        self, path: str, *, trusted_anchor: str | None = None
+    ) -> str:
+        logical = lexical_absolute_path(path)
+        if trusted_anchor is None:
+            anchor = self.trusted_anchor(logical)
+        else:
+            anchor = lexical_absolute_path(trusted_anchor)
+            try:
+                current_anchor = self.trusted_anchor(logical)
+            except (OSError, ValueError) as error:
+                raise OSError(logical_error_text(error)) from error
+            if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
+                os.path.normpath(anchor)
+            ):
+                raise OSError(
+                    "location volume anchor changed after binding review"
+                )
+        for component in lexical_path_chain(
+            logical,
+            trusted_anchor=anchor,
+        ):
+            native = to_extended_length_path(component)
+            try:
+                observed = os.stat(native, follow_symlinks=False)
+            except OSError as error:
+                raise OSError(logical_error_text(error)) from error
+            if (
+                not _is_directory_stat(observed)
+                or _is_placeholder(observed)
+                or _is_reparse(observed)
+            ):
+                raise NotADirectoryError(
+                    "location root chain contains a nonordinary directory: "
+                    f"{component}"
+                )
+        return logical
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot:
         if os.name != "nt":
@@ -245,10 +281,18 @@ class WalkingScanner:
         ignores: IgnoreSet,
         ctx: RunContext,
         scope: ScanScope | None = None,
+        *,
+        trusted_anchor: str | None = None,
     ) -> ScanResult:
         requested_scope = scope or ScanScope.full()
         try:
-            resolved = self._backend.resolve_root(root.path)
+            if trusted_anchor is None:
+                resolved = self._backend.resolve_root(root.path)
+            else:
+                resolved = self._backend.resolve_root(
+                    root.path,
+                    trusted_anchor=trusted_anchor,
+                )
         except (OSError, PermissionError) as error:
             return self._offline_result(
                 root, requested_scope, error, ScanWarningCode.ROOT_UNAVAILABLE
@@ -256,12 +300,49 @@ class WalkingScanner:
 
         resolved_root = Root(resolved, root.root_id)
         try:
+            reviewed_anchor = self._reviewed_anchor(resolved, trusted_anchor)
+        except (OSError, PathValidationError) as error:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+            )
+        root_error = self._root_error(resolved, reviewed_anchor)
+        if root_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                root_error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+            )
+        try:
             volume = self._backend.volume_snapshot(resolved)
         except (OSError, PermissionError) as error:
             return self._offline_result(
                 resolved_root,
                 requested_scope,
                 error,
+                ScanWarningCode.VOLUME_UNAVAILABLE,
+            )
+        root_error = self._root_error(resolved, reviewed_anchor)
+        if root_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                root_error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+            )
+        binding_error = self._binding_error(
+            resolved,
+            reviewed_anchor,
+            volume.volume_id,
+        )
+        if binding_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                binding_error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
             )
 
@@ -325,6 +406,26 @@ class WalkingScanner:
         collision_complete = self._append_collision_warnings(files, directories, unsupported, warnings)
         self._append_identity_warnings(files, directories, warnings)
         complete = complete and collision_complete
+        root_error = self._root_error(resolved, reviewed_anchor)
+        if root_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                root_error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+            )
+        binding_error = self._binding_error(
+            resolved,
+            reviewed_anchor,
+            volume.volume_id,
+        )
+        if binding_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                binding_error,
+                ScanWarningCode.VOLUME_UNAVAILABLE,
+            )
         return ScanResult(
             root=resolved_root,
             volume_id=volume.volume_id,
@@ -532,7 +633,13 @@ class WalkingScanner:
             except (OSError, PermissionError) as error:
                 enumeration_error = error
             if enumeration_error is not None:
-                warnings.append(ScanWarning(ScanWarningCode.ENUMERATION_ERROR, relative_directory, str(enumeration_error)))
+                warnings.append(
+                    ScanWarning(
+                        ScanWarningCode.ENUMERATION_ERROR,
+                        relative_directory,
+                        logical_error_text(enumeration_error),
+                    )
+                )
                 complete = False
             ordered.sort(key=_entry_sort_key)
 
@@ -784,6 +891,85 @@ class WalkingScanner:
             return UnsupportedReason.DISAPPEARED
         return UnsupportedReason.UNKNOWN_TYPE
 
+    def _root_error(
+        self, path: str, trusted_anchor: str | None
+    ) -> OSError | None:
+        try:
+            if trusted_anchor is not None:
+                anchor = trusted_anchor
+            else:
+                anchor_provider = getattr(
+                    self._backend,
+                    "trusted_anchor",
+                    None,
+                )
+                anchor = (
+                    anchor_provider(path)
+                    if callable(anchor_provider)
+                    else Path(path).anchor
+                )
+            root_chain = lexical_path_chain(
+                path,
+                trusted_anchor=anchor,
+            )
+        except (OSError, PathValidationError) as error:
+            return error
+        for component in root_chain:
+            try:
+                root_stat = self._backend.lstat(component)
+            except (OSError, PermissionError) as error:
+                return error
+            if (
+                not _is_directory_stat(root_stat)
+                or _is_placeholder(root_stat)
+                or _is_reparse(root_stat)
+            ):
+                return NotADirectoryError(
+                    "location root chain contains a nonordinary directory: "
+                    f"{component}"
+                )
+        return None
+
+    def _reviewed_anchor(
+        self,
+        path: str,
+        trusted_anchor: str | None,
+    ) -> str:
+        if trusted_anchor is not None:
+            return lexical_absolute_path(trusted_anchor)
+        anchor_provider = getattr(self._backend, "trusted_anchor", None)
+        if callable(anchor_provider):
+            return lexical_absolute_path(anchor_provider(path))
+        return lexical_absolute_path(Path(path).anchor)
+
+    def _binding_error(
+        self,
+        path: str,
+        reviewed_anchor: str,
+        expected_volume: VolumeId,
+    ) -> OSError | None:
+        anchor_provider = getattr(self._backend, "trusted_anchor", None)
+        if callable(anchor_provider):
+            try:
+                current_anchor = lexical_absolute_path(anchor_provider(path))
+            except (OSError, PathValidationError) as error:
+                return error
+            if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
+                os.path.normpath(reviewed_anchor)
+            ):
+                return OSError(
+                    "location volume anchor changed after binding review"
+                )
+        try:
+            current_volume = self._backend.volume_snapshot(path)
+        except (OSError, PermissionError) as error:
+            return error
+        if current_volume.volume_id != expected_volume:
+            return OSError(
+                "location volume identity changed during inventory scan"
+            )
+        return None
+
     @staticmethod
     def _append_collision_warnings(
         files: list[FileRecord],
@@ -854,5 +1040,13 @@ def scan(
     ignores: IgnoreSet,
     ctx: RunContext,
     scope: ScanScope | None = None,
+    *,
+    trusted_anchor: str | None = None,
 ) -> ScanResult:
-    return WalkingScanner().scan(root, ignores, ctx, scope)
+    return WalkingScanner().scan(
+        root,
+        ignores,
+        ctx,
+        scope,
+        trusted_anchor=trusted_anchor,
+    )

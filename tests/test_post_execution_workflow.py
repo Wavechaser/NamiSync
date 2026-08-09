@@ -35,6 +35,7 @@ from namisync.core.integrity import (
     PostCopySelection,
     ReadStrategy,
     RecordDisposition,
+    VerifierContext,
 )
 from namisync.core.models import (
     CapabilityProfile,
@@ -42,6 +43,8 @@ from namisync.core.models import (
     FileStat,
     MetadataSnapshot,
     Root,
+    VolumeEvidence,
+    VolumeId,
 )
 from namisync.core.planning import (
     Assignment,
@@ -400,6 +403,75 @@ def test_xv_7_execute_verify_keeps_phase_bytes_separate() -> None:
         (SessionState.COMPLETED, RecordingStatus.OK)
     ]
     assert isinstance(continuations[-1], VerifyContinuation)
+
+
+def test_post_copy_verifier_binds_volume_without_optional_device_hint() -> None:
+    operation = _operation(71, 7)
+    volume_id = VolumeId("A1B2C3D4", "NTFS")
+    base_plan = _plan(operation)
+    bound_plan = replace(
+        base_plan,
+        target_volume_id=volume_id,
+        target_volume_evidence=VolumeEvidence("Target", None),
+        fingerprint=PlanFingerprint("0" * 64),
+    )
+    bound_plan = replace(
+        bound_plan,
+        fingerprint=plan_fingerprint(bound_plan),
+    )
+    selection = frozenset({operation.op_id})
+    xset = ExecutionSet(
+        bound_plan,
+        selection,
+        validated_run_id("b" * 32),
+        commitment=Commitment(
+            bound_plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    recordings: list[_Recording] = []
+    contexts: list[VerifierContext] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=7,
+            bytes_total=7,
+        )
+
+    def verifier(selection, context, recorder):
+        contexts.append(context)
+        return _verify_all(selection, context, recorder)
+
+    deps = _deps(
+        executor=executor,
+        verifier=verifier,
+        recordings=recordings,
+    )
+    deps.verifier_context = lambda run: VerifierContext(
+        run=run,
+        clock=SimpleNamespace(now=lambda: NOW),
+        hasher_factory=lambda: None,
+    )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        deps,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert contexts[0].reviewed_volume_id == volume_id
+    assert contexts[0].reviewed_root_anchor is None
 
 
 def test_xv_1_missing_published_evidence_is_named_verification_incomplete() -> None:

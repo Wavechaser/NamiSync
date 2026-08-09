@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 import os
 import stat as stat_module
+import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -253,7 +254,18 @@ class FakeBackend:
         ),
     ],
 )
-def test_full_scan_refuses_nonordinary_location_root(root_stat) -> None:
+@pytest.mark.parametrize(
+    "scope",
+    [
+        ScanScope.full(),
+        ScanScope.selected(("file.bin",)),
+        ScanScope.subtrees(("folder",)),
+    ],
+)
+def test_every_scan_scope_refuses_nonordinary_location_root(
+    root_stat,
+    scope: ScanScope,
+) -> None:
     backend = FakeBackend({}, _profile())
     backend.lstat = lambda _path: root_stat
 
@@ -261,6 +273,7 @@ def test_full_scan_refuses_nonordinary_location_root(root_stat) -> None:
         Root(r"C:\root", "source"),
         IgnoreSet(),
         _ctx(),
+        scope,
     )
 
     assert not result.complete
@@ -270,6 +283,206 @@ def test_full_scan_refuses_nonordinary_location_root(root_stat) -> None:
     assert backend.scandir_calls == []
     assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
     assert result.warnings[0].rel_path is None
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        ScanScope.full(),
+        ScanScope.selected(("file.bin",)),
+        ScanScope.subtrees(("folder",)),
+    ],
+)
+def test_every_scan_scope_rechecks_root_after_volume_observation(
+    scope: ScanScope,
+) -> None:
+    backend = FakeBackend({}, _profile())
+    observations = iter(
+        (
+            _fake_stat(ino=1, directory=True),
+            _fake_stat(
+                ino=2,
+                directory=True,
+                attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+            ),
+        )
+    )
+    backend.lstat = lambda _path: next(observations)
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\root", "source"),
+        IgnoreSet(),
+        _ctx(),
+        scope,
+    )
+
+    assert not result.complete
+    assert result.files == ()
+    assert result.directories == ()
+    assert backend.scandir_calls == []
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+
+
+def test_scanner_refuses_volume_swap_immediately_after_snapshot() -> None:
+    backend = FakeBackend({}, _profile())
+    reviewed = backend.volume_snapshot(r"C:\root")
+    foreign = VolumeSnapshot(
+        VolumeId("DEADBEEF", reviewed.profile.fs_type),
+        VolumeEvidence(device_id="foreign"),
+        reviewed.profile,
+    )
+    snapshots = iter((reviewed, foreign))
+    backend.volume_snapshot = lambda _root: next(snapshots)
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\root", "source"),
+        IgnoreSet(),
+        _ctx(),
+    )
+
+    assert not result.complete
+    assert result.volume_id is None
+    assert result.files == ()
+    assert result.directories == ()
+    assert backend.scandir_calls == []
+    assert result.warnings[0].code is ScanWarningCode.VOLUME_UNAVAILABLE
+
+
+def test_scanner_discards_observations_if_volume_swaps_during_enumeration() -> None:
+    entry = FakeEntry(
+        "foreign.bin",
+        r"C:\root\foreign.bin",
+        False,
+        _fake_stat(ino=2),
+    )
+    backend = FakeBackend({r"C:\root": [entry]}, _profile())
+    reviewed = backend.volume_snapshot(r"C:\root")
+    foreign = VolumeSnapshot(
+        VolumeId("DEADBEEF", reviewed.profile.fs_type),
+        VolumeEvidence(device_id="foreign"),
+        reviewed.profile,
+    )
+    state = {"swapped": False}
+    backend.volume_snapshot = (
+        lambda _root: foreign if state["swapped"] else reviewed
+    )
+
+    @contextmanager
+    def swap_during_scandir(path: str):
+        backend.scandir_calls.append(path)
+        state["swapped"] = True
+        yield iter(backend.entries.get(path, ()))
+
+    backend.scandir = swap_during_scandir
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\root", "source"),
+        IgnoreSet(),
+        _ctx(),
+    )
+
+    assert not result.complete
+    assert result.volume_id is None
+    assert result.files == ()
+    assert result.directories == ()
+    assert backend.scandir_calls == [r"C:\root"]
+    assert result.warnings[0].code is ScanWarningCode.VOLUME_UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [
+        ScanScope.full(),
+        ScanScope.selected(("file.bin",)),
+        ScanScope.subtrees(("folder",)),
+    ],
+)
+def test_every_scan_scope_stops_at_an_intermediate_root_reparse(
+    scope: ScanScope,
+) -> None:
+    backend = FakeBackend({}, _profile())
+
+    def root_chain_stat(path: str):
+        if path == r"C:\parent":
+            return _fake_stat(
+                ino=2,
+                directory=True,
+                attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+            )
+        raise AssertionError("scanner probed through an intermediate reparse")
+
+    backend.lstat = root_chain_stat
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\parent\root", "source"),
+        IgnoreSet(),
+        _ctx(),
+        scope,
+    )
+
+    assert not result.complete
+    assert result.files == ()
+    assert result.directories == ()
+    assert backend.scandir_calls == []
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows reparse points")
+@pytest.mark.parametrize(
+    "scope",
+    [
+        ScanScope.full(),
+        ScanScope.selected(("redirected.bin",)),
+        ScanScope.subtrees(("folder",)),
+    ],
+)
+def test_native_scanner_refuses_a_final_root_reparse_before_every_scope(
+    tmp_path: Path,
+    scope: ScanScope,
+) -> None:
+    redirected = tmp_path / "redirected"
+    redirected.mkdir()
+    (redirected / "redirected.bin").write_bytes(b"outside reviewed root")
+    (redirected / "folder").mkdir()
+    root = tmp_path / "configured-root"
+    environment = os.environ.copy()
+    environment["NAMISYNC_TEST_LINK"] = str(root)
+    environment["NAMISYNC_TEST_TARGET"] = str(redirected)
+    completed = subprocess.run(
+        (
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "New-Item -ItemType Junction -Path $env:NAMISYNC_TEST_LINK "
+            "-Target $env:NAMISYNC_TEST_TARGET -ErrorAction Stop | Out-Null",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    if completed.returncode:
+        pytest.skip(
+            "directory junction creation is unavailable: "
+            f"{completed.stderr.strip()}"
+        )
+
+    try:
+        result = WalkingScanner().scan(
+            Root(str(root), "source"),
+            IgnoreSet(),
+            _ctx(),
+            scope,
+        )
+    finally:
+        root.rmdir()
+
+    assert not result.complete
+    assert result.root.path == str(root)
+    assert result.files == ()
+    assert result.directories == ()
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
 
 
 def _profile(fs_type: str = "NTFS", *, identity: bool = True, hardlinks: bool = True) -> CapabilityProfile:
@@ -442,20 +655,45 @@ def test_native_root_resolution_error_is_sanitized_for_direct_callers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     logical = r"C:\deep\root"
-    native = to_extended_length_path(logical)
-    monkeypatch.setattr(scanner_module.os.path, "isdir", lambda _path: True)
-
-    def denied_resolve(self, *, strict: bool):
-        assert str(self) == native
-        assert strict
+    native = to_extended_length_path(r"C:\deep")
+    def denied_stat(path: str, *, follow_symlinks: bool):
+        assert path == native
+        assert not follow_symlinks
         raise PermissionError(13, "denied", native)
 
-    monkeypatch.setattr(scanner_module.Path, "resolve", denied_resolve)
+    monkeypatch.setattr(scanner_module.os, "stat", denied_stat)
     with pytest.raises(OSError) as captured:
         scanner_module.NativeScannerBackend().resolve_root(logical)
 
     assert "deep" in str(captured.value)
     assert "\\\\?\\" not in str(captured.value)
+
+
+def test_native_root_resolution_revalidates_an_empty_chain_mount_anchor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured = tmp_path / "mounted-root"
+    configured.mkdir()
+    backend = scanner_module.NativeScannerBackend()
+    monkeypatch.setattr(
+        backend,
+        "trusted_anchor",
+        lambda _path: str(tmp_path),
+    )
+    monkeypatch.setattr(
+        scanner_module.os,
+        "stat",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("mismatched reviewed anchor must stop component probes")
+        ),
+    )
+
+    with pytest.raises(OSError, match="volume anchor changed"):
+        backend.resolve_root(
+            str(configured),
+            trusted_anchor=str(configured),
+        )
 
 
 @pytest.mark.parametrize(
@@ -515,6 +753,34 @@ def test_mid_enumeration_failure_keeps_already_reached_records() -> None:
     assert [record.rel_path for record in result.files] == ["reached.bin"]
     assert not result.complete
     assert any(warning.code is ScanWarningCode.ENUMERATION_ERROR for warning in result.warnings)
+
+
+def test_enumeration_error_detail_sanitizes_native_filename() -> None:
+    native = r"\\?\C:\root\private.bin"
+
+    class DeniedBackend(FakeBackend):
+        @contextmanager
+        def scandir(self, path: str):
+            del path
+
+            def entries():
+                raise PermissionError(13, "enumeration denied", native)
+                yield
+
+            yield entries()
+
+    result = WalkingScanner(DeniedBackend({}, _profile())).scan(
+        Root(r"C:\root", "source"), IgnoreSet(), _ctx()
+    )
+
+    warning = next(
+        warning
+        for warning in result.warnings
+        if warning.code is ScanWarningCode.ENUMERATION_ERROR
+    )
+    assert warning.detail is not None
+    assert repr(r"C:\root\private.bin") in warning.detail
+    assert "\\\\?\\" not in warning.detail
 
 
 def test_fake_long_path_walk_is_not_truncated() -> None:

@@ -1264,9 +1264,23 @@ def test_br_g_29_folder_verify_continues_past_one_unreadable_frozen_subject(
     private = _file(r"Folder\private.bin", 2)
 
     class PartialScanner(_Scanner):
-        def __call__(self, root, ignores, context, scope):
+        def __call__(
+            self,
+            root,
+            ignores,
+            context,
+            scope,
+            *,
+            trusted_anchor=None,
+        ):
             if not self.calls:
-                return super().__call__(root, ignores, context, scope)
+                return super().__call__(
+                    root,
+                    ignores,
+                    context,
+                    scope,
+                    trusted_anchor=trusted_anchor,
+                )
             self.calls.append(scope)
             return ScanResult(
                 root,

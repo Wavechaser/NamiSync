@@ -5,45 +5,45 @@ Branch: `milestone1`
 
 ## Session Outcome
 
-Closed the two remaining executor H3/H4 integrity gaps without changing the
-reviewed full-intent/safe-selection contract or adding steady-state filesystem
-probes.
+Closed four post-delivery safety and truth-projection gaps without changing
+plan, inventory, or history persistence formats.
 
-- UPDATE now flushes prior recorder work before all final backup, prepared-temp,
-  source, and live-target validation. COPY, UPDATE, and MOVE_UPDATE bind the
-  already-observed post-publish kind/size and available stable identity to the
-  prepared temp before attestation.
-- MOVE, RECASE, TRASH, DELETE, MKDIR, and readonly clearing retain a lightweight
-  process-local mutation attempt through recording or failure settlement.
-  Confirmed, ambiguous, or unreadable durable state degrades recording without
-  inventing success evidence; exact unchanged pre-state remains recording-OK.
-- Retry, pause, and cancel preserve mutation-attempt truth. Durable cancellation
-  uses `canceled-after-mutation`; created and resumed directory metadata is
-  finalized/restored during cancel and failure-probed when restoration errors.
-- Failure-only probes report current durable state even after a mutation syscall
-  returned, and MOVE/TRASH require both an exact retained source and absent
-  destination before classifying an attempt as unchanged.
+- Managed roots retain lexical identity and are no-follow admitted component by
+  component below a trusted/current mount. Scanner brackets enumeration with
+  full mount and `VolumeId` checks; inventory carries the resolver's current
+  mount across legitimate remounts; executor binds both reviewed roots around
+  blocking and mutation boundaries; verifier binds every open and its resulting
+  handle to reviewed volume authority.
+- TRASH, MOVE_UPDATE, and UPDATE revalidate the exact run-owned trash chain
+  after recorder/copy waits and before retained-path probes, finalize, publish,
+  cleanup, recovery, or settlement. Redirected decoys are neither mutated nor
+  accepted as durable-state evidence.
+- A sticky `hash-mismatch` now remains visibly `mismatched` when later metadata
+  also drifts, while missing current evidence remains `unverified`.
+- Scanner enumeration and executor temp-cleanup failures render native filenames
+  in logical spelling before they enter public or durable details.
 
 ## Verification
 
-- Focused H3/H4 regression gate: `27 passed`.
-- Complete executor suite: `213 passed`.
-- Complete pytest suite: `1241 passed, 1 skipped in 110.98s`. The skip is the
-  existing privilege-dependent directory-symlink substitution test.
+- Focused adversarial root/trash/verifier matrix: `23 passed`.
+- Complete executor suite: `244 passed`.
+- Cross-module scanner, verifier, inventory, workflow, bridge, preflight, and
+  core gate: `322 passed, 1 skipped, 1 deselected`.
+- Complete pytest gate with only the explicitly deferred PAUSED/history polling
+  race deselected: `1306 passed, 2 skipped, 1 deselected in 182.89s`.
 - Import linter: `8 kept, 0 broken` across 50 files and 189 dependencies.
-- Two independent implementation reviews found three H4 edge cases; all three
-  were fixed and the final re-review found no remaining code blocker.
+- Python compile and `git diff --check` passed. Two independent adversarial
+  reviews found no remaining blocker in the frozen patch.
 
 ## Immediate Next Context
 
-- The demonstrated UPDATE recorder-flush temp substitution is closed without an
-  extra success-path stat. A stable-identity inode substitution after the final
-  temp guard is also rejected using the cached post-publish observation.
-- Identity-weak same-kind/same-size substitution and same-object byte mutation
-  that preserves observed metadata remain outside the external-writer contract.
-  Full closure requires a handle-bound publication protocol or a byte reread;
-  the latter would materially reduce small-file throughput and was not added.
-- `_published_target_durable_state` remains a strict four-value invariant. Both
-  producers are exhaustive today, so its `RuntimeError` is unreachable through
-  legitimate settlement; extending that vocabulary requires updating the
-  mapping and its call-site containment together.
+- The remaining root/destination risk is the disclosed path-check-to-syscall
+  interval, including an external swap away and back between bracket checks.
+  Eliminating it requires handle-relative root enumeration and mutation rather
+  than more path stats.
+- A clone with the same full `VolumeId` remains indistinguishable at the native
+  path layer; resolver clone ambiguity still requires an explicit user choice.
+- `test_paused_verify_resumes_without_repeating_or_losing_items` still exposes
+  deferred M1: dispatcher PAUSED can become poll-visible before the audit window
+  exists, so an immediate history summary lookup can raise `KeyError`. This
+  delivery does not mask or modify that test/behavior.

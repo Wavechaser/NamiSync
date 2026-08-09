@@ -200,15 +200,20 @@ observation/preflight. Long-path conversion happens only after validation.
 
 Absolute managed roots have two spellings with one identity contract.
 `Root.path`, plans, continuations, evidence, history, and interface views carry
-resolved ordinary drive/UNC paths without `\\?\`; native backends add the
-extended-length prefix only to the operand passed to Windows I/O and strip it
-from returned paths. The inverse conversion accepts only drive and complete UNC
-filesystem namespaces that round-trip to a stable ordinary spelling. Device/NT
-namespaces, malformed extended UNC anchors, trailing-dot/space or reserved DOS
-components, and other ordinary-ambiguous absolute names are refused rather
-than normalized onto another tree. Native `OSError` filename fields are
-rendered back into logical spelling before entering warnings, durable detail,
-or user-facing diagnostics.
+lexically normalized ordinary drive/UNC paths without `\\?\`; this normalization
+does not follow a final junction or symlink. Native backends add the
+extended-length prefix only to the operand passed to Windows I/O, no-follow
+validate every lexical-root component below a trusted drive/share or reviewed
+volume mount before physical resolution, and strip native spelling from
+returned paths. Physical root resolution is separate observation evidence for
+overlap/containment and never replaces the lexical domain identity. The inverse
+conversion accepts only drive and complete UNC filesystem namespaces that
+round-trip to a stable ordinary spelling. Device/NT namespaces, malformed
+extended UNC anchors, trailing-dot/space or reserved DOS components, and other
+ordinary-ambiguous absolute names are refused rather than normalized onto
+another tree. Native
+`OSError` filename fields are rendered back into logical spelling before
+entering warnings, durable detail, or user-facing diagnostics.
 
 `rel_path_key` follows Windows/NTFS one-codepoint case mapping, not
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code

@@ -618,6 +618,15 @@ file, never NamiSync's own displaced version or evidence. Directory renames
 inherit only the non-destructive classes, since DR-24's decomposition means
 no directory-level mutation exists.
 
+**Corrected (2026-08-09):** The trash-routed consequence above assumes the
+owned destination chain remains the one admitted by the final guard. A
+source-leaf substitution is then retained recoverably in owned trash, but an
+external writer that substitutes a destination parent after its final guard
+can redirect the non-replacing rename outside owned trash. Bytes remain
+preserved, but NamiSync can lose location and recovery truth. Recorder and copy
+barriers now precede complete destination-chain revalidation; eliminating the
+remaining validation-to-rename interval requires handle-relative mutation.
+
 ### DR-35 — Audit status and Terminal finalization were circular
 
 History consumed `Terminal` to finalize its row, but `Terminal.result.audit`

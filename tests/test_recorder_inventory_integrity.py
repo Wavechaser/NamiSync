@@ -739,6 +739,23 @@ def test_verification_invalidation_is_sticky_until_guarded_positive_evidence(
                 NOW,
             )
         )
+        with LedgerRepository(setup.recorder.path) as repository:
+            drifted_mismatch = repository.get_inventory(
+                setup.source_location_id
+            )[0]
+        assert (
+            drifted_mismatch.invalidation.reason
+            is VerificationInvalidationReason.HASH_MISMATCH
+        )
+        assert (
+            drifted_mismatch.verification_state
+            is InventoryVerificationState.MISMATCHED
+        )
+        assert (
+            inventory_row_view(drifted_mismatch).verification_state
+            == "mismatched"
+        )
+
         setup.recorder.record_inventory(
             InventoryCommand(
                 setup.source_location_id,
@@ -858,6 +875,26 @@ def test_verification_invalidation_is_sticky_until_guarded_positive_evidence(
         assert (
             upgraded.invalidation.reason
             is VerificationInvalidationReason.HASH_MISMATCH
+        )
+
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, ()),
+                "scope-8",
+                NOW,
+            )
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            missing = repository.get_inventory(setup.source_location_id)[0]
+        assert (
+            missing.invalidation.reason
+            is VerificationInvalidationReason.HASH_MISMATCH
+        )
+        assert (
+            missing.verification_state
+            is InventoryVerificationState.UNVERIFIED
         )
     finally:
         setup.recorder.close()

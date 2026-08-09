@@ -69,9 +69,15 @@ degrades recording without rewriting a truthful content verdict.
    auto-accept.
 
 Selection roots and display paths remain ordinary absolute drive/UNC spellings.
-The Windows reader resolves the root and checks every reparse component through
-extended-length native paths, and applies the same conversion to volume and
-handle opens. No native prefix is persisted in inventory or integrity evidence.
+The Windows reader lexically normalizes the root without following links,
+no-follow rejects a reparse in the configured root path below its trusted native
+volume mount before Windows API setup, and then checks the selected child's path
+components through extended-length native paths. It applies the
+same conversion to volume and handle opens. No native prefix is persisted in
+inventory or integrity evidence. A reviewed integrity or post-copy run carries
+the full expected `VolumeId` independently of optional mount-path evidence;
+each subject revalidates it before open, and an opened stream without
+corroborating volume identity is unsupported rather than attestable.
 
 Negative verification evidence is guarded by the same row/location/path/scope,
 current-stat, baseline, and expected-invalidation facts as a positive write. A

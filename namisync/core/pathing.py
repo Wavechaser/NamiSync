@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
 
 
 class PathValidationError(ValueError):
@@ -250,6 +250,78 @@ def from_extended_length_path(path: str) -> str:
         _validate_absolute_path_spelling(logical)
         return logical
     return raw
+
+
+def lexical_absolute_path(path: str | os.PathLike[str]) -> str:
+    """Return one logical absolute path without following filesystem links."""
+
+    return from_extended_length_path(to_extended_length_path(os.fspath(path)))
+
+
+def lexical_path_chain(
+    path: str | os.PathLike[str],
+    *,
+    trusted_anchor: str | os.PathLike[str] | None = None,
+) -> tuple[str, ...]:
+    """Return each lexical component below a trusted absolute anchor.
+
+    The anchor itself is deliberately excluded. Drive roots and UNC shares are
+    the default trusted anchors; callers that already hold a mounted-volume
+    root may provide it explicitly.
+    """
+
+    logical = lexical_absolute_path(path)
+    if trusted_anchor is None:
+        anchor = Path(logical).anchor
+        if not anchor:
+            raise PathValidationError("absolute path lacks a trusted anchor")
+    else:
+        anchor = lexical_absolute_path(trusted_anchor)
+        if not is_path_below(logical, anchor):
+            raise PathValidationError("path is outside its trusted anchor")
+    relative = os.path.relpath(logical, anchor)
+    if relative == os.curdir:
+        return ()
+    current = anchor
+    chain: list[str] = []
+    for component in Path(relative).parts:
+        if component in {os.curdir, os.pardir}:
+            raise PathValidationError("path escapes its trusted anchor")
+        current = os.path.join(current, component)
+        chain.append(current)
+    return tuple(chain)
+
+
+def trusted_volume_anchor(path: str | os.PathLike[str]) -> str:
+    """Return the lexical native volume root that may anchor no-follow checks."""
+
+    logical = lexical_absolute_path(path)
+    if os.name != "nt":
+        anchor = Path(logical).anchor
+        if not anchor:
+            raise PathValidationError("absolute path lacks a volume anchor")
+        return anchor
+
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    volume_path = ctypes.create_unicode_buffer(32768)
+    if not kernel32.GetVolumePathNameW(
+        to_extended_length_path(logical),
+        volume_path,
+        len(volume_path),
+    ):
+        raise OSError(
+            ctypes.get_last_error(),
+            "GetVolumePathNameW failed",
+            logical,
+        )
+    anchor = lexical_absolute_path(volume_path.value)
+    if not is_path_below(logical, anchor):
+        raise PathValidationError(
+            "native volume root is outside the configured lexical path"
+        )
+    return anchor
 
 
 def to_extended_length_path(path: str) -> str:

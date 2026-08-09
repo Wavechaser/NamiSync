@@ -60,6 +60,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-09). Owned-trash parent substitution. TRASH,
+  MOVE_UPDATE, and UPDATE validated `.synctrash/<run>` before a recorder or
+  copy barrier but checked only the destination leaf afterward; a same-volume
+  junction swap could relocate a reviewed file or backup outside owned trash
+  while retaining a false lexical trash path. Fixed with an exact
+  run-destination contract, full parent revalidation after recorder and copy
+  preparation, and guards before path-based finalize, publish, cleanup, and
+  recovery probes.
+  Real junction regressions cover all three operation families. The final
+  validation-to-syscall external-writer micro-window remains path-based.
 - SEVERE - FIXED (2026-08-09). Non-byte mutation settlement. MOVE, RECASE,
   TRASH, DELETE, and MKDIR could commit and then raise while the failed item
   still reported `recording=OK`; failed readonly restoration could likewise
@@ -555,6 +565,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-09). Sticky mismatch projection precedence. A
+  retained `hash-mismatch` marker could be projected as ordinary `modified`
+  while current stat or identity also drifted. Cause: the repository returned
+  metadata drift before consulting the stronger invalidation even though
+  storage and stale selection preserved it correctly. Fixed by projecting a
+  present row with current evidence as mismatched before ordinary drift, while
+  unavailable evidence remains unverified; the public view is regression-tested
+  at the intermediate drift state.
 - MINOR - FIXED (2026-08-08). Integrity candidate materialization. Frozen
   resume and stale-before integrity selection loaded every row for a location
   and filtered in Python, making small checks O(location size). Cause: the
@@ -605,6 +623,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-09). Native-path detail sanitization gaps. Scanner
+  enumeration warnings and executor failed/canceled temp-cleanup wrappers used
+  raw exception text, allowing `\\?\` spelling to enter public results or
+  durable history despite the shared logical-path contract. Fixed by applying
+  logical filename rendering before warning/result construction, including
+  copied-backup cleanup notes, with focused public and durable cleanup-detail
+  regressions.
 - MODERATE - FIXED (2026-08-08). Native long-path spelling boundary. A managed
   path over the legacy Windows limit could fail before execution because some
   service, preflight, scanner, executor, or verifier calls used ordinary
@@ -789,6 +814,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-09). Managed-root reparse admission. M6 changed native
+  scanner root normalization to `Path.resolve()`, following a final junction
+  before the no-follow check; checking only that leaf still allowed an earlier
+  same-volume junction to redirect inventory under the original location.
+  Fixed by preserving lexical roots, no-follow checking their configured path
+  components, and binding scanner, executor, and per-open verifier work to the
+  current reviewed mount and full `VolumeId`. Inventory refuses before
+  reconciliation/hash work; scans discard observations if root authority
+  changes before return; physical resolution remains separate overlap evidence.
+  The final check-to-I/O and swap-away-and-back windows remain until root work
+  becomes handle-relative.
 - SEVERE - FIXED (2026-07-30). Recursive-scope normalization complexity.
   Normalizing
   sibling recursive roots compared every root with every retained root and then

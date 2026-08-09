@@ -62,7 +62,10 @@ operation-boundary cleanup.
   contention cannot sit between the last source/destination observation and
   UPDATE, DELETE, MOVE, RECASE, MOVE_UPDATE cleanup, or TRASH mutation.
   UPDATE places that wait before its final backup, prepared-temp, source, and
-  live-target validation; it does not add a second stat to the success path.
+  live-target validation. After any such barrier, an operation touching owned
+  trash revalidates the exact run-owned destination plus every existing parent
+  for containment, ordinary-directory/reparse state, and target-volume identity
+  before inspecting or mutating the leaf.
 - Record one final typed outcome per selected operation; dependencies of a
   failed operation become explicit canceled/deferred outcomes, while independent
   operations continue. Pause leaves completed status intact and unreached work
@@ -155,9 +158,11 @@ target. With trash-on-update enabled it:
 2. preserves the old live file there using a same-volume hardlink when
    `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
    temp, flushes it, and atomically publishes the complete backup inside the run
-   directory before proceeding;
+   directory after revalidating its owned destination; a failed prepublication
+   copy validates the same parent chain before removing its temp;
 3. flushes prior recorder evidence after backup preparation but before any
-   final publication validation;
+   final publication validation, then revalidates the complete owned-trash
+   parent chain again;
 4. captures or revalidates backup evidence, completes copied-backup metadata,
    and then performs the final backup, prepared-temp, source, and live-target
    guards; a hardlink defers metadata repair because it still shares the live
@@ -168,6 +173,13 @@ target. With trash-on-update enabled it:
 8. validates and completes hardlink-backup metadata after the replacement, then
    performs the best-effort parent flushes, constructs the attestation, and
    records success.
+
+Every operation first binds both logical roots to the full source/target
+`VolumeId` and any reviewed mount anchor carried by the plan. Source and target
+authority is rechecked after recorder, copy, or retry boundaries before a
+source predicate can authorize work or a retained target path can be touched.
+NOOP uses the same binding before recording correspondence, and trash parents
+are not created until the reviewed target root is re-admitted.
 
 When changed content also carries an opted-in basename casing change, this same
 required update publishes at the source-spelled basename. Metadata-equal casing
@@ -236,8 +248,10 @@ mapping claim.
 ### Composite move-update
 
 Publish the changed content at the new path first, then flush pending recorder
-state and revalidate both the old and trash paths before trashing the old path.
-An already-completed retry needs no second pre-mutation flush. One plan
+state and revalidate the old path plus the complete owned-trash destination
+chain before trashing the old path. Every attempt, including recovery after a
+committed rename, revalidates that chain before inspecting the trash leaf. An
+already-completed retry needs no second pre-mutation flush. One plan
 operation may have internal prepare/publish/trash stages, but only one
 final outcome and ledger transition. A crash after any internal stage may leave
 both old and new versions, never neither, and leaves no completed mapping claim.
@@ -257,9 +271,10 @@ an all-directory `DirRecord`; executor never creates implicit parent paths.
 
 Resolve trash under the target on the same physical volume, create guarded run
 parents, refuse reparse/off-volume paths, flush pending recorder state, and then
-validate the source and trash destination at touch. Use a non-replacing rename
-that fails atomically on trash collision. Never degrade to copy-delete. Record
-only after the rename succeeds.
+revalidate the lexical target root and every existing trash parent immediately
+before the source/leaf guards and rename. Use a non-replacing rename that fails
+atomically on trash collision. Never degrade to copy-delete. Record only after
+the rename succeeds.
 
 ### Delete and directory cleanup
 
@@ -554,8 +569,10 @@ chunk bands remain private constants, not settings.
   directories, untouched parents, off-volume mounts, and `.synctrash` survive.
   Cleanup failure stops before copy allocation or publication after preflight
   credited those bytes.
-- Trash cannot escape through reparse points, cross volumes, overwrite a trash
-  collision, or degrade to copy-delete.
+- Trash is refused when its final destination-chain guard observes a reparse,
+  cross-volume path, or collision, and never degrades to copy-delete. A parent
+  substitution after that guard remains the disclosed path-to-rename residual
+  and may preserve bytes outside owned trash.
 - Move occupancy, vanished/drifted source, vanished-old-path, wrong type,
   post-rename substitution, and retained-missing-row cases produce correct
   filesystem and recorder outcomes without rolling back other earned records.

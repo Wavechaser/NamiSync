@@ -43,11 +43,14 @@ Stage 6 concerns rather than tree-builder policy.
 
 ### Plan session
 
-1. Resolve and validate distinct non-nested roots and request semantics. The
-   shared service/workflow gate uses extended spelling only for native
-   resolution and directory probes, returns ordinary logical `Path` values,
-   refuses device or ordinary-ambiguous root names, and never persists or
-   displays a `\\?\` prefix.
+1. Lexically normalize and validate distinct non-nested roots and request
+   semantics without following filesystem links. The shared
+   service/workflow gate uses extended spelling only for native no-follow
+   probes of every component in the configured root path below the trusted
+   native volume mount,
+   returns ordinary lexical `Path` values, compares separately resolved
+   physical roots for overlap, refuses reparse, device, or ordinary-ambiguous
+   root names, and never persists or displays a `\\?\` prefix.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
 3. Scan both roots with the same role-free observation contract.
@@ -85,7 +88,8 @@ Stage 6 concerns rather than tree-builder policy.
 
 7. When explicitly requested, translate every successful byte-producing
    publish into a transient post-copy candidate, verify it under the same
-   custody/run token, and retain rowless candidates when copy recording failed.
+   custody/run token and reviewed target-volume authority, and retain rowless
+   candidates when copy recording failed.
 8. Return one ordered operation+integrity item stream and independent execute/
    verify phase summaries. Finish the one logical ledger run exactly once; a
    pause leaves it unfinished for same-process resume. A malformed resumed
@@ -241,6 +245,12 @@ integrity module with the required XXH3-128 factory, flushes recorder, and
 returns inventory plus nominal phase-tagged outcomes. Missing inventory is
 created automatically; the user is not told to run a hidden prerequisite
 manually.
+
+Resolution carries the current sole selected mount even when a stable volume
+has moved from its stored hint. The scan and every subsequent verifier open are
+bound to that mount when available and always to the full stable `VolumeId`, so
+a remount between refresh and hashing cannot be recorded under the old
+location authority.
 
 Scope has three semantic shapes: `FULL`, exact `PATHS`, and recursive
 `SUBTREES`; mixed requests canonicalize overlapping roots and selecting the

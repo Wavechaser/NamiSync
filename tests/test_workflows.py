@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat as stat_module
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,11 +9,13 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.workflows.sync as sync_workflow
 from namisync.core.events import ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
 from namisync.core.integrity import PostCopySelection
 from namisync.core.models import CapabilityProfile, Root
+from namisync.core.pathing import to_extended_length_path
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
@@ -40,7 +43,7 @@ from namisync.core.session import (
 )
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
 from namisync.workflows.selection import ExclusionReason, derive_execution_selection
-from namisync.workflows.sync import run_execution
+from namisync.workflows.sync import run_execution, validate_sync_paths
 from namisync.workflows.models import (
     ExecuteContinuation,
     PlanArtifact,
@@ -51,6 +54,96 @@ from namisync.workflows.runtime import LocalWorkflowRuntime
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
+
+
+def test_sync_path_validation_refuses_a_final_root_reparse_without_following_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    original_stat = os.stat
+
+    def no_follow_stat(path, *args, **kwargs):
+        if (
+            str(path).endswith(str(source))
+            and kwargs.get("follow_symlinks") is False
+        ):
+            return SimpleNamespace(
+                st_mode=stat_module.S_IFDIR | 0o755,
+                st_file_attributes=0x00000400,
+                st_reparse_tag=1,
+            )
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", no_follow_stat)
+
+    with pytest.raises(ValueError, match="ordinary directory"):
+        validate_sync_paths(str(source), str(target))
+
+
+def test_sync_path_validation_stops_at_an_intermediate_root_reparse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "source-parent"
+    source = parent / "source"
+    target = tmp_path / "target"
+    source.mkdir(parents=True)
+    target.mkdir()
+    native_parent = to_extended_length_path(str(parent))
+    native_source = to_extended_length_path(str(source))
+    original_stat = os.stat
+
+    def no_follow_stat(path, *args, **kwargs):
+        if (
+            str(path) == native_parent
+            and kwargs.get("follow_symlinks") is False
+        ):
+            return SimpleNamespace(
+                st_mode=stat_module.S_IFDIR | 0o755,
+                st_file_attributes=0x00000400,
+                st_reparse_tag=1,
+            )
+        if (
+            str(path) == native_source
+            and kwargs.get("follow_symlinks") is False
+        ):
+            raise AssertionError(
+                "sync admission probed through an intermediate reparse"
+            )
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", no_follow_stat)
+
+    with pytest.raises(ValueError, match="root chain"):
+        validate_sync_paths(str(source), str(target))
+
+
+def test_sync_path_validation_uses_physical_paths_only_for_overlap_judgment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source-alias"
+    target = tmp_path / "target-alias"
+    source.mkdir()
+    target.mkdir()
+    physical = tmp_path / "physical"
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "_physical_logical_root",
+        lambda path: (
+            physical
+            if path == source
+            else physical / "nested-target"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="non-nested"):
+        validate_sync_paths(str(source), str(target))
 
 
 def _empty_plan() -> Plan:

@@ -10,6 +10,8 @@ from __future__ import annotations
 import ctypes
 import ntpath
 import os
+import stat as stat_module
+from ctypes import wintypes
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path, PureWindowsPath
@@ -47,12 +49,20 @@ from namisync.core.integrity import (
     VerificationInvalidationReason,
     VerifierContext,
 )
-from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
+from namisync.core.models import (
+    EntryKind,
+    FileIdentity,
+    FileStat,
+    MetadataSnapshot,
+    VolumeId,
+)
 from namisync.core.pathing import (
-    from_extended_length_path,
+    lexical_absolute_path,
+    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
+    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.session import Canceled, PauseRequested
@@ -661,8 +671,10 @@ def _classify_subject(
     """Guard, hash, and classify bytes without ledger row identity or writes."""
 
     try:
+        _revalidate_verification_root(root, ctx)
         with reader.open(root, relative_path) as stream:
             before = stream.stat()
+            _require_reviewed_open_volume(before, ctx)
             if not _matches_expected_stat(expected_stat, before):
                 return _SubjectClassification(
                     result=IntegrityResult.MODIFIED,
@@ -1107,10 +1119,7 @@ class WindowsUnbufferedReader:
             )
 
         normalized = validate_relative_path(relative_path)
-        native_root = Path(to_extended_length_path(str(root)))
-        root_path = Path(
-            from_extended_length_path(str(native_root.resolve(strict=True)))
-        )
+        root_path = Path(lexical_absolute_path(root))
         candidate = root_path.joinpath(*PureWindowsPath(normalized).parts)
         _reject_reparse_components(root_path, normalized)
 
@@ -1126,7 +1135,39 @@ class WindowsUnbufferedReader:
             api.close(handle)
 
 
-def _reject_reparse_components(root: Path, normalized_path: str) -> None:
+def _reject_reparse_components(
+    root: Path,
+    normalized_path: str,
+    *,
+    trusted_anchor: Path | None = None,
+) -> None:
+    try:
+        anchor = (
+            trusted_volume_anchor(root)
+            if trusted_anchor is None
+            else str(trusted_anchor)
+        )
+        root_chain = lexical_path_chain(root, trusted_anchor=anchor)
+    except (OSError, ValueError) as error:
+        raise UnsupportedVerification(logical_error_text(error)) from error
+    for component in root_chain:
+        root_stat = os.lstat(to_extended_length_path(component))
+        root_attributes = int(
+            getattr(root_stat, "st_file_attributes", 0)
+        )
+        root_is_reparse = bool(
+            stat_module.S_ISLNK(root_stat.st_mode)
+            or root_attributes & _FILE_ATTRIBUTE_REPARSE_POINT
+            or getattr(root_stat, "st_reparse_tag", 0)
+        )
+        if root_is_reparse:
+            raise UnsupportedVerification(
+                "verification refuses a reparse location root chain"
+            )
+        if not stat_module.S_ISDIR(root_stat.st_mode):
+            raise UnsupportedVerification(
+                "verification location root chain is not an ordinary directory"
+            )
     current = root
     for component in PureWindowsPath(normalized_path).parts:
         current = current / component
@@ -1136,6 +1177,94 @@ def _reject_reparse_components(root: Path, normalized_path: str) -> None:
             raise UnsupportedVerification(
                 f"verification refuses reparse component: {component}"
             )
+
+
+def _revalidate_verification_root(root: Path, ctx: VerifierContext) -> None:
+    reviewed_anchor = ctx.reviewed_root_anchor
+    expected_volume = ctx.reviewed_volume_id
+    if expected_volume is None:
+        return
+    logical_root = Path(lexical_absolute_path(root))
+    try:
+        current = Path(trusted_volume_anchor(logical_root))
+    except (OSError, ValueError) as error:
+        raise UnsupportedVerification(logical_error_text(error)) from error
+    if reviewed_anchor is None:
+        admitted_anchor = current
+    else:
+        admitted_anchor = Path(lexical_absolute_path(reviewed_anchor))
+        if os.path.normcase(os.path.normpath(current)) != os.path.normcase(
+            os.path.normpath(admitted_anchor)
+        ):
+            raise UnsupportedVerification(
+                "verification root volume anchor changed after review"
+            )
+    _reject_reparse_components(
+        logical_root,
+        "",
+        trusted_anchor=admitted_anchor,
+    )
+    if _verification_volume_id(logical_root) != expected_volume:
+        raise UnsupportedVerification(
+            "verification root volume identity changed after review"
+        )
+
+
+def _require_reviewed_open_volume(
+    opened: FileStat,
+    ctx: VerifierContext,
+) -> None:
+    expected = ctx.reviewed_volume_id
+    identity = opened.file_identity
+    if expected is None:
+        return
+    if identity is None:
+        raise UnsupportedVerification(
+            "opened verification subject has no volume identity"
+        )
+    if identity.volume_serial.casefold() != expected.serial.casefold():
+        raise UnsupportedVerification(
+            "opened verification subject is on a different volume"
+        )
+
+
+def _verification_volume_id(root: Path) -> VolumeId:
+    if os.name != "nt":
+        observed = os.stat(
+            to_extended_length_path(str(root)),
+            follow_symlinks=False,
+        )
+        return VolumeId(f"{observed.st_dev:x}", "UNKNOWN")
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    volume_path = ctypes.create_unicode_buffer(32768)
+    if not kernel32.GetVolumePathNameW(
+        to_extended_length_path(str(root)),
+        volume_path,
+        len(volume_path),
+    ):
+        raise UnsupportedVerification(
+            "cannot identify the reviewed verification volume"
+        )
+    serial = wintypes.DWORD()
+    filesystem = ctypes.create_unicode_buffer(261)
+    if not kernel32.GetVolumeInformationW(
+        volume_path.value,
+        None,
+        0,
+        ctypes.byref(serial),
+        None,
+        None,
+        filesystem,
+        len(filesystem),
+    ):
+        raise UnsupportedVerification(
+            "cannot observe the reviewed verification volume"
+        )
+    return VolumeId(
+        f"{serial.value:08X}",
+        filesystem.value.upper() or "UNKNOWN",
+    )
 
 
 class _FileTime(ctypes.Structure):

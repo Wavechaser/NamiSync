@@ -19,6 +19,8 @@ scan(
     ignores: IgnoreSet,
     ctx: RunContext,
     scope: ScanScope | None = None,
+    *,
+    trusted_anchor: str | None = None,
 ) -> ScanResult
 ```
 
@@ -52,9 +54,9 @@ start plus its location-relative prefix. This keeps nested records keyed as
 identity set spans all roots in a scan. The exact-path branch remains separate
 and retains its existing named-subject completeness rules.
 
-The result contains the resolved root, `VolumeId` plus corroborating
-`VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every walked
-directory as `DirRecord`, typed `UnsupportedRecord` values, warnings, and
+The result contains the lexically normalized, admitted root, `VolumeId` plus
+corroborating `VolumeEvidence`, `CapabilityProfile`, `FileRecord` values, every
+walked directory as `DirRecord`, typed `UnsupportedRecord` values, warnings, and
 `complete`. Unsupported records live in their own collection so planner and
 inventory consumers must handle them explicitly; warning text is not their
 state.
@@ -73,8 +75,11 @@ canonically equivalent source/target pair without changing either name.
 
 ## Walking Rules
 
-1. Validate and open the root using long-path-safe Windows handling.
-2. Resolve volume/capability evidence once for the scan.
+1. Lexically normalize the root without following links, then no-follow reject
+   a file, placeholder, junction, symlink, or other reparse component below the
+   trusted native volume root (or inventory's reviewed mount).
+2. Resolve volume/capability evidence once for the scan, then revalidate the
+   trusted anchor, full volume identity, and lexical root before enumeration.
 3. Enumerate entries without following reparse points by default.
 4. Apply location ignores before descending into an ignored subtree.
 5. Check `ctx.checkpoint()` between entries/directories.
@@ -86,9 +91,12 @@ canonically equivalent source/target pair without changing either name.
    cross-root aliases, and mount loops terminate.
 8. Classify cloud/offline placeholders from attributes/reparse tags without
    hydrating or reading them.
-9. Record access/type/collision/hardlink warnings and set `complete=False` for
+9. Revalidate the trusted anchor, full volume identity, and lexical root before
+   returning. If they changed, discard the accumulated observations rather
+   than attribute them to the original root.
+10. Record access/type/collision/hardlink warnings and set `complete=False` for
    any uncertainty that could make one side appear absent.
-10. Reject Windows-ambiguous suffixes, device spellings, stream qualifiers,
+11. Reject Windows-ambiguous suffixes, device spellings, stream qualifiers,
     traversal, NUL, and unpaired surrogates at the path boundary. Diagnostic
     text escapes hostile code units rather than inserting them into path-bearing
     records, serialized plans, or terminal output.
@@ -96,10 +104,12 @@ canonically equivalent source/target pair without changing either name.
 Root identity and scan evidence always use ordinary absolute drive or UNC
 spelling. The native backend adds the Windows extended-length prefix only for
 root probes, volume calls, stat, and enumeration, and strips it before returning
-the resolved `Root` or `VolumeEvidence`. Non-filesystem device namespaces are
-refused rather than reinterpreted as managed roots. Extended roots whose
-components cannot be represented stably without the prefixâ€”including trailing
-dot/space and reserved DOS device namesâ€”are also refused, preventing a reviewed
+the lexical `Root` or `VolumeEvidence`; it never resolves a configured root
+through an unclassified link in its root chain. Non-filesystem device
+namespaces are refused rather than reinterpreted as managed roots. Extended
+roots whose
+components cannot be represented stably without the prefix—including trailing
+dot/space and reserved DOS device names—are also refused, preventing a reviewed
 root from normalizing onto a different sibling. Native error filename fields
 are converted back to logical spelling before entering scan warnings.
 
@@ -134,9 +144,10 @@ Directory reparse classification uses both stat mode and Windows'
 `FILE_ATTRIBUTE_DIRECTORY`, because no-follow directory-entry probes may
 report a directory link as non-directory. A provisional file-only owned-temp
 ignore therefore confirms that attribute before skipping the entry; exact-name
-and `.synctrash` ignores remain unconditional. The full location root remains
-stricter than a subtree root: it must be an ordinary non-reparse directory or
-the result is `ROOT_UNAVAILABLE` and incomplete.
+and `.synctrash` ignores remain unconditional. Every `FULL`, `PATHS`, and
+`SUBTREES` scan first requires the location root chain below its trusted mount
+to remain ordinary non-reparse directories or the result is `ROOT_UNAVAILABLE`
+and incomplete.
 
 An offline/unmounted volume is not an empty complete scan. It yields a typed
 offline result and cannot trigger missing marking or target-only planning.
@@ -227,8 +238,8 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Missing, unavailable, and former-directory-now-file roots remain distinct;
   file versus directory placeholder/reparse fixtures preserve their different
   completeness consequences, including the native no-follow Windows attribute
-  shape. Full-location scans refuse file, placeholder, and reparse roots before
-  enumeration.
+  shape. Every scan scope refuses a file, placeholder, or reparse location-root
+  component before enumeration.
 - Import-linter proves scanner code imports core but no sibling module.
 
 ## M0 Verification

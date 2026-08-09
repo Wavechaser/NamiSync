@@ -11,7 +11,7 @@ import re
 from typing import BinaryIO, NewType, Protocol, TypeAlias
 
 from .evidence import Attestation, Outcome, Provenance, RecordingStatus
-from .models import EntryKind, FileStat
+from .models import EntryKind, FileStat, VolumeId
 from .pathing import normalize_relative_path
 from .planning import OpId, OperationKind, Plan, PlanFingerprint, PlanOperation
 
@@ -334,6 +334,14 @@ class ExecutorFileSystem(Protocol):
 
     def resolve(self, root: Path, relative_path: str, *, must_exist: bool) -> Path: ...
 
+    def revalidate_root(
+        self,
+        root: Path,
+        *,
+        trusted_anchor: Path | None = None,
+        expected_volume: VolumeId | None = None,
+    ) -> None: ...
+
     def stat(self, root: Path, relative_path: str) -> FileStat | None: ...
 
     def stat_path(self, path: Path) -> FileStat | None: ...
@@ -401,6 +409,7 @@ class ExecutorFileSystem(Protocol):
         temp: Path,
         target: Path,
         checkpoint: Callable[[], None],
+        validate_destination: Callable[[], None],
     ) -> None: ...
 
     def clear_readonly(self, path: Path) -> None: ...
@@ -416,5 +425,13 @@ class ExecutorFileSystem(Protocol):
     def trash_destination(
         self, target_root: Path, run_id: RunId, relative_path: str
     ) -> Path: ...
+
+    def revalidate_trash_destination(
+        self,
+        target_root: Path,
+        run_id: RunId,
+        relative_path: str,
+        destination: Path,
+    ) -> None: ...
 
     def flush_directory(self, path: Path) -> bool: ...

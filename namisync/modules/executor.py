@@ -50,13 +50,17 @@ from namisync.core.models import (
     FileIdentity,
     FileStat,
     MetadataSnapshot,
+    VolumeId,
     owned_temp_run_id,
 )
 from namisync.core.pathing import (
     from_extended_length_path,
+    lexical_absolute_path,
+    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
+    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.planning import OpId, OperationKind, OperationReason, PlanOperation
@@ -722,18 +726,56 @@ def _allocation_size(reviewed_size: int) -> int | None:
 class NativeFileSystem:
     """Native local-filesystem primitives retained by the executor machine."""
 
+    def revalidate_root(
+        self,
+        root: Path,
+        *,
+        trusted_anchor: Path | None = None,
+        expected_volume: VolumeId | None = None,
+    ) -> None:
+        logical = _lexical_logical_path(root)
+        reviewed_anchor: Path | None = None
+        if trusted_anchor is not None:
+            reviewed_anchor = _lexical_logical_path(trusted_anchor)
+            try:
+                current_anchor = _lexical_logical_path(
+                    trusted_volume_anchor(logical)
+                )
+            except (OSError, ValueError) as error:
+                raise UnsafeExecutionPath(logical_error_text(error)) from error
+            if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
+                os.path.normpath(reviewed_anchor)
+            ):
+                raise UnsafeExecutionPath(
+                    "reviewed root volume anchor changed before filesystem access"
+                )
+        self._reject_reparse_chain(
+            logical,
+            trusted_anchor=reviewed_anchor,
+        )
+        if (
+            expected_volume is not None
+            and self._volume_id(logical) != expected_volume
+        ):
+            raise UnsafeExecutionPath(
+                "reviewed root volume changed before filesystem access"
+            )
+
     def resolve(self, root: Path, relative_path: str, *, must_exist: bool) -> Path:
         canonical = validate_relative_path(relative_path)
-        root_path = _resolved_logical_path(root, strict=True)
-        self._reject_reparse(root_path)
+        root_path = _lexical_logical_path(root)
+        self.revalidate_root(root_path)
+        resolved_root = _resolved_logical_path(root_path, strict=True)
         candidate = root_path.joinpath(*PureWindowsPath(canonical).parts)
         self._validate_existing_chain(root_path, candidate)
         if must_exist and not os.path.lexists(_win32_path(candidate)):
             raise FileNotFoundError(candidate)
         resolved = _resolved_logical_path(candidate, strict=must_exist)
         try:
-            common = os.path.commonpath((str(root_path), str(resolved)))
-            if os.path.normcase(common) != os.path.normcase(str(root_path)):
+            common = os.path.commonpath((str(resolved_root), str(resolved)))
+            if os.path.normcase(common) != os.path.normcase(
+                str(resolved_root)
+            ):
                 raise UnsafeExecutionPath(f"path escapes reviewed root: {relative_path}")
         except ValueError as error:
             raise UnsafeExecutionPath(
@@ -786,7 +828,9 @@ class NativeFileSystem:
         return target.with_name(f"{target.name}.synctmp-{run_text}-{op_text}")
 
     def remove_owned_temp(self, path: Path) -> None:
+        self._reject_reparse_chain(path.parent)
         try:
+            self._reject_reparse(path)
             Path(_win32_path(path)).unlink()
         except FileNotFoundError:
             return
@@ -800,7 +844,8 @@ class NativeFileSystem:
         """Remove exact prior-run temps from preflight's touched parents."""
 
         current = str(current_run_id)
-        target_root = _resolved_logical_path(target_root, strict=True)
+        target_root = _lexical_logical_path(target_root)
+        self._reject_reparse_chain(target_root)
         target_volume = self._volume_serial(target_root)
         for relative in sorted(
             parent_paths,
@@ -1143,36 +1188,43 @@ class NativeFileSystem:
         temp: Path,
         target: Path,
         checkpoint: Callable[[], None],
+        validate_destination: Callable[[], None],
     ) -> None:
         published = False
         try:
-            with self.open_source(source) as reader, self.create_temp(
-                temp, allocation_size=None
-            ) as writer:
-                while True:
-                    checkpoint()
-                    chunk = reader.read(4 * 1024 * 1024)
-                    if not chunk:
-                        break
-                    _write_all(writer, chunk, "backup copy")
+            with self.open_source(source) as reader:
+                validate_destination()
+                with self.create_temp(temp, allocation_size=None) as writer:
+                    while True:
+                        checkpoint()
+                        chunk = reader.read(4 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        _write_all(writer, chunk, "backup copy")
+            validate_destination()
             source_stat = self.stat_path(source)
             if source_stat is None:
                 raise FileNotFoundError(source)
+            validate_destination()
             self.finalize_temp(
                 temp,
                 source_stat,
                 preserve_created=True,
                 acl_source=None,
             )
+            validate_destination()
             self.publish_new(temp, target)
             published = True
         except BaseException as error:
             if not published:
                 try:
+                    validate_destination()
                     self.remove_owned_temp(temp)
                 except Exception as cleanup_error:
                     error.add_note(
-                        f"backup temp cleanup failed: {cleanup_error!r}"
+                        "backup temp cleanup failed: "
+                        f"{type(cleanup_error).__name__}: "
+                        f"{logical_error_text(cleanup_error)}"
                     )
             raise
 
@@ -1196,8 +1248,8 @@ class NativeFileSystem:
         self, target_root: Path, run_id: RunId, relative_path: str
     ) -> Path:
         canonical = validate_relative_path(relative_path)
-        root = _resolved_logical_path(target_root, strict=True)
-        self._reject_reparse(root)
+        root = _lexical_logical_path(target_root)
+        self._reject_reparse_chain(root)
         current = root
         for part in (".synctrash", str(run_id), *PureWindowsPath(canonical).parts[:-1]):
             current = current / part
@@ -1215,6 +1267,44 @@ class NativeFileSystem:
         destination = current / PureWindowsPath(canonical).name
         self._validate_existing_chain(root, destination)
         return destination
+
+    def revalidate_trash_destination(
+        self,
+        target_root: Path,
+        run_id: RunId,
+        relative_path: str,
+        destination: Path,
+    ) -> None:
+        canonical = validate_relative_path(relative_path)
+        root = _lexical_logical_path(target_root)
+        self._reject_reparse_chain(root)
+        expected = root.joinpath(
+            ".synctrash",
+            str(run_id),
+            *PureWindowsPath(canonical).parts,
+        )
+        if destination != expected:
+            raise UnsafeExecutionPath(
+                "trash destination does not match the owned run path"
+            )
+        root_volume = self._volume_serial(root)
+        current = root
+        for part in PureWindowsPath(
+            str(expected.parent.relative_to(root))
+        ).parts:
+            current = current / part
+            if not os.path.lexists(_win32_path(current)):
+                raise UnsafeExecutionPath(
+                    f"trash parent disappeared before mutation: {current}"
+                )
+            self._reject_reparse(current)
+            if not Path(_win32_path(current)).is_dir():
+                raise UnsafeExecutionPath(
+                    f"trash parent is not a directory: {current}"
+                )
+            if self._volume_serial(current) != root_volume:
+                raise UnsafeExecutionPath("trash path leaves the target volume")
+        self._validate_existing_chain(root, destination)
 
     def flush_directory(self, path: Path) -> bool:
         if os.name != "nt":
@@ -1345,6 +1435,34 @@ class NativeFileSystem:
         if stat_module.S_ISLNK(info.st_mode) or attributes & _REPARSE_POINT:
             raise UnsafeExecutionPath(f"reparse points are not executable: {path}")
 
+    def _reject_reparse_chain(
+        self,
+        path: Path,
+        *,
+        trusted_anchor: Path | None = None,
+    ) -> None:
+        logical = _lexical_logical_path(path)
+        try:
+            anchor = (
+                str(trusted_anchor)
+                if trusted_anchor is not None
+                else trusted_volume_anchor(logical)
+            )
+            chain = lexical_path_chain(
+                logical,
+                trusted_anchor=anchor,
+            )
+        except (OSError, ValueError) as error:
+            raise UnsafeExecutionPath(logical_error_text(error)) from error
+        for component in chain:
+            current = Path(component)
+            self._reject_reparse(current)
+            if not Path(_win32_path(current)).is_dir():
+                raise UnsafeExecutionPath(
+                    "reviewed root chain contains a nondirectory: "
+                    f"{current}"
+                )
+
     def _get_attributes(self, path: Path) -> int:
         if os.name != "nt":
             return (
@@ -1426,10 +1544,11 @@ class NativeFileSystem:
         finally:
             _WINDOWS.close_handle(handle)
 
-    def _volume_serial(self, path: Path) -> str:
+    def _volume_id(self, path: Path) -> VolumeId:
         if os.name != "nt":
-            return (
-                f"{Path(_win32_path(path)).stat(follow_symlinks=False).st_dev:x}"
+            return VolumeId(
+                f"{Path(_win32_path(path)).stat(follow_symlinks=False).st_dev:x}",
+                "UNKNOWN",
             )
         assert _WINDOWS is not None
         volume_path = ctypes.create_unicode_buffer(32768)
@@ -1438,6 +1557,7 @@ class NativeFileSystem:
         ):
             raise ctypes.WinError(ctypes.get_last_error())
         serial = wintypes.DWORD()
+        filesystem = ctypes.create_unicode_buffer(261)
         if not _WINDOWS.get_volume_information(
             volume_path.value,
             None,
@@ -1445,11 +1565,17 @@ class NativeFileSystem:
             ctypes.byref(serial),
             None,
             None,
-            None,
-            0,
+            filesystem,
+            len(filesystem),
         ):
             raise ctypes.WinError(ctypes.get_last_error())
-        return f"{serial.value:08X}"
+        return VolumeId(
+            f"{serial.value:08X}",
+            filesystem.value.upper() or "UNKNOWN",
+        )
+
+    def _volume_serial(self, path: Path) -> str:
+        return self._volume_id(path).serial
 
     @staticmethod
     def _created_ns(info: os.stat_result) -> int | None:
@@ -1475,6 +1601,10 @@ def _win32_path(path: Path | str) -> str:
 def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
     resolved = Path(_win32_path(path)).resolve(strict=strict)
     return Path(from_extended_length_path(str(resolved)))
+
+
+def _lexical_logical_path(path: Path | str) -> Path:
+    return Path(lexical_absolute_path(path))
 
 
 def _windows_ticks(unix_ns: int) -> int:
@@ -1568,6 +1698,7 @@ class _MutationAttempt:
     primary_before: FileStat | None
     secondary: Path | None = None
     destination_relative: str | None = None
+    trash_source_relative: str | None = None
     committed: bool = False
 
 
@@ -1843,7 +1974,8 @@ def execute(
                     if cleanup_error is not None:
                         error = OperationFailure(
                             ExecutionReason.CLEANUP_FAILED,
-                            f"operation failed and its owned temp could not be removed: {cleanup_error}",
+                            "operation failed and its owned temp could not be removed: "
+                            f"{logical_error_text(cleanup_error)}",
                             cause=error,
                         )
                         if durable_failure is not None:
@@ -1926,7 +2058,7 @@ def execute(
         if durable_settlement is not None and current is not None:
             detail = dict(durable_settlement.detail)
             if cleanup_error is not None:
-                detail["cleanup_error"] = str(cleanup_error)
+                detail["cleanup_error"] = logical_error_text(cleanup_error)
                 cleanup_error = None
             state.retry_continuations.pop(current.op_id, None)
             state.retry_errors.pop(current.op_id, None)
@@ -1949,7 +2081,7 @@ def execute(
             if operation.op_id in xset.selection and operation.op_id not in xset.status:
                 detail = {}
                 if cleanup_error is not None and operation is current:
-                    detail["cleanup_error"] = str(cleanup_error)
+                    detail["cleanup_error"] = logical_error_text(cleanup_error)
                 _settle(
                     xset,
                     state,
@@ -2025,6 +2157,9 @@ def _execute_operation(
     state: _ExecutionState,
     progress: _ProgressTracker,
 ) -> _Settled:
+    _revalidate_target_root(fs, xset, target_root)
+    if operation.source_rel_path is not None:
+        _revalidate_source_root(fs, xset, source_root)
     if operation.kind is OperationKind.COPY:
         return _copy(
             operation,
@@ -2087,7 +2222,7 @@ def _execute_operation(
     if operation.kind is OperationKind.TRASH:
         return _trash(operation, xset, recorder, fs, target_root, state)
     if operation.kind is OperationKind.DELETE:
-        return _delete(operation, recorder, fs, target_root, state)
+        return _delete(operation, xset, recorder, fs, target_root, state)
     if operation.kind is OperationKind.NOOP:
         return _noop(operation, recorder, fs, source_root, target_root, state)
     raise OperationFailure(
@@ -2110,6 +2245,7 @@ def _prepare_copy(
         raise OperationFailure(
             ExecutionReason.SOURCE_MISSING, "copy operation has no source evidence"
         )
+    _revalidate_source_root(fs, xset, source_root)
     _guard_present(
         fs,
         source_root,
@@ -2123,6 +2259,13 @@ def _prepare_copy(
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
     temp = fs.owned_temp(target, xset.run_id, operation.op_id)
     try:
+        _resolve_target_path(
+            fs,
+            xset,
+            target_root,
+            temp,
+            must_exist=False,
+        )
         fs.remove_owned_temp(temp)
     except Exception as error:
         raise OperationFailure(
@@ -2134,16 +2277,25 @@ def _prepare_copy(
     try:
         reviewed_size = operation.source_expected.size
         chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
-        with fs.open_source(source) as reader, fs.create_temp(
-            temp, allocation_size=_allocation_size(reviewed_size)
-        ) as writer:
-            digest = policies.copy_backend.copy(
-                reader,
-                writer,
-                chunk_size=chunk_size,
-                checkpoint=ctx.checkpoint,
-                on_chunk=progress.copied,
+        _revalidate_source_root(fs, xset, source_root)
+        with fs.open_source(source) as reader:
+            _resolve_target_path(
+                fs,
+                xset,
+                target_root,
+                temp,
+                must_exist=False,
             )
+            with fs.create_temp(
+                temp, allocation_size=_allocation_size(reviewed_size)
+            ) as writer:
+                digest = policies.copy_backend.copy(
+                    reader,
+                    writer,
+                    chunk_size=chunk_size,
+                    checkpoint=ctx.checkpoint,
+                    on_chunk=progress.copied,
+                )
         intended = operation.intended or operation.source_expected
         if digest.size != reviewed_size:
             raise OperationFailure(
@@ -2151,6 +2303,14 @@ def _prepare_copy(
                 "source byte count changed during copy",
             )
         try:
+            _revalidate_source_root(fs, xset, source_root)
+            _resolve_target_path(
+                fs,
+                xset,
+                target_root,
+                temp,
+                must_exist=True,
+            )
             finalized = fs.finalize_temp(
                 temp,
                 intended,
@@ -2164,6 +2324,7 @@ def _prepare_copy(
                 cause=error.__cause__ if isinstance(error.__cause__, Exception) else error,
             ) from error
         ctx.checkpoint()
+        _revalidate_source_root(fs, xset, source_root)
         _guard_present(
             fs,
             source_root,
@@ -2182,9 +2343,17 @@ def _published_copy_stat(
     prepared: _PreparedCopy,
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
+    target_root: Path,
 ) -> FileStat:
-    observed = fs.ensure_published_metadata(
+    target = _resolve_target_path(
+        fs,
+        xset,
+        target_root,
         prepared.target,
+        must_exist=True,
+    )
+    observed = fs.ensure_published_metadata(
+        target,
         prepared.finalized,
         prepared.intended,
         preserve_created=xset.plan.preservation.preserve_created,
@@ -2201,9 +2370,15 @@ def _guard_resumed_published_target(
     ),
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
+    target_root: Path,
 ) -> None:
     stable_identity = xset.plan.target_profile.stable_file_identity
-    observed = fs.stat_path(continuation.prepared.target)
+    observed = _stat_target_path(
+        fs,
+        xset,
+        target_root,
+        continuation.prepared.target,
+    )
     if observed is None:
         raise OperationFailure(
             ExecutionReason.TARGET_DRIFT,
@@ -2268,6 +2443,7 @@ def _complete_published_byte_operation(
     policies: ExecutorPolicies,
     fs: ExecutorFileSystem,
     state: _ExecutionState,
+    target_root: Path,
     *,
     resumed_published: bool,
     finish_filesystem: Callable[[], tuple[Path, ...]],
@@ -2275,12 +2451,18 @@ def _complete_published_byte_operation(
     attest_before_filesystem: bool = False,
 ) -> _Settled:
     if resumed_published:
-        _guard_resumed_published_target(continuation, xset, fs)
+        _guard_resumed_published_target(
+            continuation,
+            xset,
+            fs,
+            target_root,
+        )
     if continuation.published_stat is None:
         continuation.published_stat = _published_copy_stat(
             continuation.prepared,
             xset,
             fs,
+            target_root,
         )
     assert continuation.published_stat is not None
     _guard_attestation_size(
@@ -2348,12 +2530,22 @@ def _guard_update_backup(
 
 def _observe_update_backup_creation(
     continuation: _UpdateContinuation,
+    operation: PlanOperation,
+    xset: ExecutionSet,
     fs: ExecutorFileSystem,
+    target_root: Path,
 ) -> None:
     backup = continuation.backup
     if backup is None:
         return
     if backup.created_stat is None:
+        _revalidate_target_root(fs, xset, target_root)
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            operation.target_rel_path,
+            backup.path,
+        )
         backup.created_stat = _require_stat_path(fs, backup.path)
 
 
@@ -2372,9 +2564,16 @@ def _repair_update_backup_metadata(
     operation: PlanOperation,
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
+    target_root: Path,
     *,
     validate_before_repair: bool,
 ) -> None:
+    fs.revalidate_trash_destination(
+        target_root,
+        xset.run_id,
+        operation.target_rel_path,
+        backup.path,
+    )
     if validate_before_repair:
         _guard_update_backup(backup, xset, fs)
     if backup.published_stat is not None:
@@ -2400,6 +2599,7 @@ def _finish_update_filesystem(
     operation: PlanOperation,
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
+    target_root: Path,
     *,
     validate_before_repair: bool,
 ) -> tuple[Path, ...]:
@@ -2412,10 +2612,18 @@ def _finish_update_filesystem(
             operation,
             xset,
             fs,
+            target_root,
             validate_before_repair=validate_before_repair,
         )
-    elif validate_before_repair:
-        _guard_update_backup(backup, xset, fs)
+    else:
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            operation.target_rel_path,
+            backup.path,
+        )
+        if validate_before_repair:
+            _guard_update_backup(backup, xset, fs)
     return (
         continuation.prepared.target.parent,
         backup.path.parent,
@@ -2460,9 +2668,19 @@ def _copy(
         raise RuntimeError("executor continuation kind does not match copy")
 
     if not continuation.published:
-        temp_stat = fs.stat_path(prepared.temp)
+        temp_stat = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            prepared.temp,
+        )
         if temp_stat is None:
-            published = _require_stat_path(fs, prepared.target)
+            published = _require_target_stat(
+                fs,
+                xset,
+                target_root,
+                prepared.target,
+            )
             if not _same_file_version(published, continuation.prepared_stat):
                 raise OperationFailure(
                     ExecutionReason.TARGET_DRIFT,
@@ -2471,6 +2689,7 @@ def _copy(
             continuation.published = True
             state.inflight_temp = None
         else:
+            _revalidate_source_root(fs, xset, source_root)
             _guard_present(
                 fs,
                 source_root,
@@ -2487,6 +2706,8 @@ def _copy(
             )
             _guard_expected_target(fs, target_root, operation)
             try:
+                _revalidate_source_root(fs, xset, source_root)
+                _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
             except FileExistsError as error:
                 raise OperationFailure(
@@ -2503,6 +2724,7 @@ def _copy(
         policies,
         fs,
         state,
+        target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: (prepared.target.parent,),
         record_published=lambda attestation: recorder.record_copied(
@@ -2556,8 +2778,15 @@ def _update(
         backup: _UpdateBackup | None = None
         backup_error: Exception | None = None
         if xset.plan.trash_on_update:
+            _revalidate_target_root(fs, xset, target_root)
             backup_path = fs.trash_destination(
                 target_root, xset.run_id, operation.target_rel_path
+            )
+            fs.revalidate_trash_destination(
+                target_root,
+                xset.run_id,
+                operation.target_rel_path,
+                backup_path,
             )
             if fs.stat_path(backup_path) is not None:
                 raise OperationFailure(
@@ -2572,6 +2801,12 @@ def _update(
             detail["backup"] = backup_kind
             try:
                 if backup_kind == "hardlink":
+                    fs.revalidate_trash_destination(
+                        target_root,
+                        xset.run_id,
+                        operation.target_rel_path,
+                        backup_path,
+                    )
                     fs.hardlink(prepared.target, backup_path)
                 else:
                     backup_temp = fs.owned_temp(
@@ -2579,7 +2814,18 @@ def _update(
                         xset.run_id,
                         operation.op_id,
                     )
+
+                    def validate_backup_destination() -> None:
+                        _revalidate_target_root(fs, xset, target_root)
+                        fs.revalidate_trash_destination(
+                            target_root,
+                            xset.run_id,
+                            operation.target_rel_path,
+                            backup_path,
+                        )
+
                     try:
+                        validate_backup_destination()
                         fs.remove_owned_temp(backup_temp)
                     except Exception as error:
                         raise OperationFailure(
@@ -2592,10 +2838,17 @@ def _update(
                         backup_temp,
                         backup_path,
                         ctx.checkpoint,
+                        validate_backup_destination,
                     )
             except (Canceled, PauseRequested):
                 raise
             except Exception as error:
+                fs.revalidate_trash_destination(
+                    target_root,
+                    xset.run_id,
+                    operation.target_rel_path,
+                    backup_path,
+                )
                 if fs.stat_path(backup_path) is None:
                     raise
                 backup_error = error
@@ -2612,7 +2865,13 @@ def _update(
         )
         state.retry_continuations[operation.op_id] = continuation
         if backup_error is not None:
-            _observe_update_backup_creation(continuation, fs)
+            _observe_update_backup_creation(
+                continuation,
+                operation,
+                xset,
+                fs,
+                target_root,
+            )
             raise backup_error
     elif isinstance(existing, _UpdateContinuation):
         continuation = existing
@@ -2622,13 +2881,33 @@ def _update(
 
     if not continuation.published:
         _flush_before_destructive(recorder, state)
-    _observe_update_backup_creation(continuation, fs)
+        _revalidate_source_root(fs, xset, source_root)
+        _revalidate_target_root(fs, xset, target_root)
+        if continuation.backup is not None:
+            fs.revalidate_trash_destination(
+                target_root,
+                xset.run_id,
+                operation.target_rel_path,
+                continuation.backup.path,
+            )
+    _observe_update_backup_creation(
+        continuation,
+        operation,
+        xset,
+        fs,
+        target_root,
+    )
     if (
         not continuation.published
         and continuation.backup is not None
         and continuation.backup.kind == "copy"
     ):
-        live = _require_stat_path(fs, prepared.target)
+        live = _require_target_stat(
+            fs,
+            xset,
+            target_root,
+            prepared.target,
+        )
         _guard_path_stat(
             live,
             _expected_update_live(continuation),
@@ -2640,15 +2919,26 @@ def _update(
             operation,
             xset,
             fs,
+            target_root,
             validate_before_repair=existing is not None,
         )
 
     if not continuation.published:
         if continuation.backup is not None:
             _guard_update_backup(continuation.backup, xset, fs)
-        temp_stat = fs.stat_path(prepared.temp)
+        temp_stat = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            prepared.temp,
+        )
         if temp_stat is None:
-            published = _require_stat_path(fs, prepared.target)
+            published = _require_target_stat(
+                fs,
+                xset,
+                target_root,
+                prepared.target,
+            )
             if not _same_file_version(published, continuation.prepared_stat):
                 raise OperationFailure(
                     ExecutionReason.TARGET_DRIFT,
@@ -2657,6 +2947,7 @@ def _update(
             continuation.published = True
             state.inflight_temp = None
         else:
+            _revalidate_source_root(fs, xset, source_root)
             _guard_present(
                 fs,
                 source_root,
@@ -2671,16 +2962,30 @@ def _update(
                 ExecutionReason.TARGET_DRIFT,
                 "prepared update temp drifted before retry",
             )
-            live = _require_stat_path(fs, prepared.target)
+            live = _require_target_stat(
+                fs,
+                xset,
+                target_root,
+                prepared.target,
+            )
             _guard_path_stat(
                 live,
                 _expected_update_live(continuation),
                 ExecutionReason.TARGET_DRIFT,
                 "live update target drifted after its backup was created",
             )
+            if continuation.backup is not None:
+                fs.revalidate_trash_destination(
+                    target_root,
+                    xset.run_id,
+                    operation.target_rel_path,
+                    continuation.backup.path,
+                )
             readonly_cleared = bool(
                 operation.target_expected.metadata.attributes & _READONLY
             )
+            _revalidate_source_root(fs, xset, source_root)
+            _revalidate_target_root(fs, xset, target_root)
             if readonly_cleared:
                 _retain_mutation_attempt(
                     state,
@@ -2691,12 +2996,19 @@ def _update(
             try:
                 if readonly_cleared:
                     fs.clear_readonly(prepared.target)
+                _revalidate_source_root(fs, xset, source_root)
+                _revalidate_target_root(fs, xset, target_root)
                 fs.replace(prepared.temp, prepared.target)
                 state.inflight_temp = None
                 continuation.published = True
                 state.mutation_attempts.pop(operation.op_id, None)
             finally:
-                live = fs.stat_path(prepared.target)
+                live = _stat_target_path(
+                    fs,
+                    xset,
+                    target_root,
+                    prepared.target,
+                )
                 if (
                     readonly_cleared
                     and not continuation.published
@@ -2716,12 +3028,14 @@ def _update(
         policies,
         fs,
         state,
+        target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_update_filesystem(
             continuation,
             operation,
             xset,
             fs,
+            target_root,
             validate_before_repair=resumed_published,
         ),
         record_published=lambda attestation: recorder.record_updated(
@@ -2747,6 +3061,8 @@ def _move(
         )
     old_rel, old_expected = _prior_target(operation)
     _flush_before_destructive(recorder, state)
+    _revalidate_source_root(fs, xset, source_root)
+    _revalidate_target_root(fs, xset, target_root)
     _guard_present(
         fs,
         source_root,
@@ -2766,6 +3082,8 @@ def _move(
     _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    _revalidate_source_root(fs, xset, source_root)
+    _revalidate_target_root(fs, xset, target_root)
     mutation = _retain_mutation_attempt(
         state,
         operation,
@@ -2784,7 +3102,7 @@ def _move(
     mutation.committed = True
     detail = _durability_detail(fs, old.parent, new.parent)
     moved = _profiled_stat(
-        _require_stat_path(fs, new),
+        _require_target_stat(fs, xset, target_root, new),
         xset.plan.target_profile.stable_file_identity,
     )
     _guard_path_stat(
@@ -2822,6 +3140,8 @@ def _recase(
             "recase paths must differ only by Windows filename casing",
         )
     _flush_before_destructive(recorder, state)
+    _revalidate_source_root(fs, xset, source_root)
+    _revalidate_target_root(fs, xset, target_root)
     _guard_present(
         fs,
         source_root,
@@ -2840,6 +3160,8 @@ def _recase(
     )
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    _revalidate_source_root(fs, xset, source_root)
+    _revalidate_target_root(fs, xset, target_root)
     mutation = _retain_mutation_attempt(
         state,
         operation,
@@ -2858,7 +3180,7 @@ def _recase(
     mutation.committed = True
     detail = _durability_detail(fs, old.parent, new.parent)
     recased = _profiled_stat(
-        _require_stat_path(fs, new),
+        _require_target_stat(fs, xset, target_root, new),
         xset.plan.target_profile.stable_file_identity,
     )
     _guard_path_stat(
@@ -2884,6 +3206,7 @@ def _finish_move_update_filesystem(
     state: _ExecutionState,
 ) -> tuple[Path, ...]:
     prepared = continuation.prepared
+    _revalidate_target_root(fs, xset, target_root)
     if continuation.trash is None:
         continuation.trash = fs.trash_destination(
             target_root,
@@ -2897,11 +3220,24 @@ def _finish_move_update_filesystem(
         must_exist=False,
     )
     old_actual = fs.stat(target_root, continuation.old_relative_path)
-    trash_actual = fs.stat_path(trash)
+    fs.revalidate_trash_destination(
+        target_root,
+        xset.run_id,
+        continuation.old_relative_path,
+        trash,
+    )
+    trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is not None:
         _flush_before_destructive(recorder, state)
+        _revalidate_target_root(fs, xset, target_root)
         old_actual = fs.stat(target_root, continuation.old_relative_path)
-        trash_actual = fs.stat_path(trash)
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            continuation.old_relative_path,
+            trash,
+        )
+        trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is None:
         if trash_actual is None or not _matches_expected(
             trash_actual,
@@ -2924,6 +3260,7 @@ def _finish_move_update_filesystem(
                 f"move-update trash exists: {trash}",
             )
         try:
+            _revalidate_target_root(fs, xset, target_root)
             fs.rename_new(old, trash)
         except FileExistsError as error:
             raise OperationFailure(
@@ -2983,9 +3320,19 @@ def _move_update(
         raise RuntimeError("executor continuation kind does not match move-update")
 
     if not continuation.published:
-        temp_stat = fs.stat_path(prepared.temp)
+        temp_stat = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            prepared.temp,
+        )
         if temp_stat is None:
-            published_actual = _require_stat_path(fs, prepared.target)
+            published_actual = _require_target_stat(
+                fs,
+                xset,
+                target_root,
+                prepared.target,
+            )
             if not _same_file_version(
                 published_actual,
                 continuation.prepared_stat,
@@ -2997,6 +3344,7 @@ def _move_update(
             continuation.published = True
             state.inflight_temp = None
         else:
+            _revalidate_source_root(fs, xset, source_root)
             _guard_present(
                 fs,
                 source_root,
@@ -3021,6 +3369,8 @@ def _move_update(
             )
             _guard_expected_target(fs, target_root, operation)
             try:
+                _revalidate_source_root(fs, xset, source_root)
+                _revalidate_target_root(fs, xset, target_root)
                 fs.publish_new(prepared.temp, prepared.target)
             except FileExistsError as error:
                 raise OperationFailure(
@@ -3037,6 +3387,7 @@ def _move_update(
         policies,
         fs,
         state,
+        target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_move_update_filesystem(
             continuation,
@@ -3066,10 +3417,12 @@ def _trash(
         raise OperationFailure(
             ExecutionReason.TARGET_MISSING, "trash operation has no target evidence"
         )
+    _revalidate_target_root(fs, xset, target_root)
     destination = fs.trash_destination(
         target_root, xset.run_id, operation.target_rel_path
     )
     _flush_before_destructive(recorder, state)
+    _revalidate_target_root(fs, xset, target_root)
     source_actual = _guard_present(
         fs,
         target_root,
@@ -3079,10 +3432,23 @@ def _trash(
         drift=ExecutionReason.TARGET_DRIFT,
     )
     source = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
-    if fs.stat_path(destination) is not None:
+    fs.revalidate_trash_destination(
+        target_root,
+        xset.run_id,
+        operation.target_rel_path,
+        destination,
+    )
+    if _stat_target_path(fs, xset, target_root, destination) is not None:
         raise OperationFailure(
             ExecutionReason.TRASH_COLLISION, f"trash destination exists: {destination}"
         )
+    _revalidate_target_root(fs, xset, target_root)
+    fs.revalidate_trash_destination(
+        target_root,
+        xset.run_id,
+        operation.target_rel_path,
+        destination,
+    )
     mutation = _retain_mutation_attempt(
         state,
         operation,
@@ -3090,6 +3456,7 @@ def _trash(
         primary_before=source_actual,
         secondary=destination,
         destination_relative=_target_relative_path(destination, target_root),
+        trash_source_relative=operation.target_rel_path,
     )
     try:
         fs.rename_new(source, destination)
@@ -3102,7 +3469,7 @@ def _trash(
     mutation.committed = True
     detail = _durability_detail(fs, source.parent, destination.parent)
     moved = _profiled_stat(
-        _require_stat_path(fs, destination),
+        _require_target_stat(fs, xset, target_root, destination),
         xset.plan.target_profile.stable_file_identity,
     )
     trash_relative = str(destination.relative_to(target_root)).replace(os.sep, "\\")
@@ -3116,6 +3483,7 @@ def _trash(
 
 def _delete(
     operation: PlanOperation,
+    xset: ExecutionSet,
     recorder: Recorder,
     fs: ExecutorFileSystem,
     target_root: Path,
@@ -3130,6 +3498,7 @@ def _delete(
         and operation.reason is OperationReason.DIRECTORY_CLEANUP
     )
     _flush_before_destructive(recorder, state)
+    _revalidate_target_root(fs, xset, target_root)
     target_actual = _guard_present(
         fs,
         target_root,
@@ -3143,6 +3512,7 @@ def _delete(
     readonly_cleared = bool(
         operation.target_expected.metadata.attributes & _READONLY
     )
+    _revalidate_target_root(fs, xset, target_root)
     mutation = _retain_mutation_attempt(
         state,
         operation,
@@ -3160,13 +3530,22 @@ def _delete(
         removed = True
         mutation.committed = True
     finally:
-        if readonly_cleared and not removed and fs.stat_path(target) is not None:
-            fs.apply_metadata(
-                target,
-                operation.target_expected,
-                preserve_created=True,
-                apply_readonly=True,
-            )
+        if readonly_cleared and not removed:
+            actual = _stat_target_path(fs, xset, target_root, target)
+            if actual is not None:
+                guarded_target = _resolve_target_path(
+                    fs,
+                    xset,
+                    target_root,
+                    target,
+                    must_exist=True,
+                )
+                fs.apply_metadata(
+                    guarded_target,
+                    operation.target_expected,
+                    preserve_created=True,
+                    apply_readonly=True,
+                )
     detail = _durability_detail(fs, target.parent)
     _record(
         state,
@@ -3229,12 +3608,12 @@ def _start_directory(
     target_root: Path,
     state: _ExecutionState,
 ) -> None:
-    del xset
     if operation.source_rel_path is None or operation.source_expected is None:
         raise OperationFailure(
             ExecutionReason.SOURCE_MISSING,
             "mkdir operation lacks source evidence",
         )
+    _revalidate_source_root(fs, xset, source_root)
     _guard_present(
         fs,
         source_root,
@@ -3245,6 +3624,8 @@ def _start_directory(
     )
     _guard_absent(fs, target_root, operation.target_rel_path)
     target = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
+    _revalidate_source_root(fs, xset, source_root)
+    _revalidate_target_root(fs, xset, target_root)
     mutation = _retain_mutation_attempt(
         state,
         operation,
@@ -3287,7 +3668,16 @@ def _finalize_directories(
                     ExecutionReason.WRONG_TYPE,
                     "mkdir operation lacks intended directory metadata",
                 )
-            target = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
+            target = target_root.joinpath(
+                *PureWindowsPath(operation.target_rel_path).parts
+            )
+            target = _resolve_target_path(
+                fs,
+                xset,
+                target_root,
+                target,
+                must_exist=True,
+            )
             fs.apply_metadata(
                 target,
                 intended,
@@ -3296,7 +3686,7 @@ def _finalize_directories(
             )
             detail = _durability_detail(fs, target.parent)
             actual = _profiled_stat(
-                _require_stat_path(fs, target),
+                _require_target_stat(fs, xset, target_root, target),
                 xset.plan.target_profile.stable_file_identity,
             )
             _record(
@@ -3358,7 +3748,16 @@ def _restore_completed_directory_metadata(
             continue
         target: Path | None = None
         try:
-            target = fs.resolve(target_root, operation.target_rel_path, must_exist=True)
+            target = target_root.joinpath(
+                *PureWindowsPath(operation.target_rel_path).parts
+            )
+            target = _resolve_target_path(
+                fs,
+                xset,
+                target_root,
+                target,
+                must_exist=True,
+            )
             fs.apply_metadata(
                 target,
                 intended,
@@ -3371,7 +3770,12 @@ def _restore_completed_directory_metadata(
                 state.recording = RecordingStatus.DEGRADED
                 continue
             try:
-                actual = fs.stat_path(target)
+                actual = _stat_target_path(
+                    fs,
+                    xset,
+                    target_root,
+                    target,
+                )
             except Exception:
                 state.recording = RecordingStatus.DEGRADED
                 continue
@@ -3525,11 +3929,24 @@ def _failed_after_publish_settlement(
                 state.execution_set,
                 fs,
                 target_root,
+                operation.target_rel_path,
                 detail,
             )
-            published = _update_publish_state(continuation, fs, detail)
+            published = _update_publish_state(
+                continuation,
+                fs,
+                state.execution_set,
+                target_root,
+                detail,
+            )
         else:
-            published = _new_publish_state(continuation, fs, detail)
+            published = _new_publish_state(
+                continuation,
+                fs,
+                state.execution_set,
+                target_root,
+                detail,
+            )
     except Exception as state_error:
         detail["publish_state"] = "unverified"
         detail["durable_state"] = "publication-unverified"
@@ -3559,6 +3976,7 @@ def _failed_after_publish_settlement(
         if target_durable_state == "target-published":
             _describe_move_update_durable_state(
                 continuation,
+                state.execution_set,
                 fs,
                 target_root,
                 detail,
@@ -3589,6 +4007,7 @@ def _retain_mutation_attempt(
     primary_before: FileStat | None,
     secondary: Path | None = None,
     destination_relative: str | None = None,
+    trash_source_relative: str | None = None,
 ) -> _MutationAttempt:
     stable_identity = state.execution_set.plan.target_profile.stable_file_identity
     normalized_before = (
@@ -3604,6 +4023,7 @@ def _retain_mutation_attempt(
             primary_before=normalized_before,
             secondary=secondary,
             destination_relative=destination_relative,
+            trash_source_relative=trash_source_relative,
         )
         state.mutation_attempts[operation.op_id] = attempt
         return attempt
@@ -3613,6 +4033,7 @@ def _retain_mutation_attempt(
         or existing.primary_before != normalized_before
         or existing.secondary != secondary
         or existing.destination_relative != destination_relative
+        or existing.trash_source_relative != trash_source_relative
     ):
         raise RuntimeError("executor mutation attempt changed during retry")
     return existing
@@ -3653,6 +4074,28 @@ def _failed_after_mutation_settlement(
     return _Settled(Outcome.FAILED, reason, detail)
 
 
+def _stat_mutation_secondary(
+    attempt: _MutationAttempt,
+    fs: ExecutorFileSystem,
+    state: _ExecutionState,
+) -> FileStat | None:
+    secondary = attempt.secondary
+    if secondary is None:
+        return None
+    xset = state.execution_set
+    target_root = Path(xset.plan.target_root.path)
+    if attempt.kind is OperationKind.TRASH:
+        if attempt.trash_source_relative is None:
+            raise RuntimeError("trash mutation lacks its source-relative path")
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            attempt.trash_source_relative,
+            secondary,
+        )
+    return _stat_target_path(fs, xset, target_root, secondary)
+
+
 def _describe_mutation_attempt(
     attempt: _MutationAttempt,
     fs: ExecutorFileSystem,
@@ -3673,15 +4116,21 @@ def _describe_mutation_attempt(
         return True
 
     stable_identity = state.execution_set.plan.target_profile.stable_file_identity
+    target_root = Path(state.execution_set.plan.target_root.path)
     try:
-        primary = fs.stat_path(attempt.primary)
+        primary = _stat_target_path(
+            fs,
+            state.execution_set,
+            target_root,
+            attempt.primary,
+        )
         primary = (
             None if primary is None else _profiled_stat(primary, stable_identity)
         )
         secondary = (
             None
             if attempt.secondary is None
-            else fs.stat_path(attempt.secondary)
+            else _stat_mutation_secondary(attempt, fs, state)
         )
         secondary = (
             None
@@ -3807,6 +4256,11 @@ def _cleanup_inflight(
     temp = state.inflight_temp
     state.inflight_temp = None
     try:
+        _revalidate_target_root(
+            fs,
+            state.execution_set,
+            Path(state.execution_set.plan.target_root.path),
+        )
         fs.remove_owned_temp(temp)
     except Exception as error:
         return error
@@ -3888,11 +4342,24 @@ def _canceled_byte_settlement(
                 state.execution_set,
                 fs,
                 target_root,
+                operation.target_rel_path,
                 detail,
             )
-            published = _update_publish_state(continuation, fs, detail)
+            published = _update_publish_state(
+                continuation,
+                fs,
+                state.execution_set,
+                target_root,
+                detail,
+            )
         else:
-            published = _new_publish_state(continuation, fs, detail)
+            published = _new_publish_state(
+                continuation,
+                fs,
+                state.execution_set,
+                target_root,
+                detail,
+            )
     except Exception as error:
         detail.setdefault("durable_state", "unverified")
         detail["publish_state"] = "unverified"
@@ -3919,6 +4386,7 @@ def _canceled_byte_settlement(
         if target_durable_state == "target-published":
             _describe_move_update_durable_state(
                 continuation,
+                state.execution_set,
                 fs,
                 target_root,
                 detail,
@@ -3952,6 +4420,8 @@ def _canceled_byte_settlement(
 def _new_publish_state(
     continuation: _CopyContinuation | _MoveUpdateContinuation,
     fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
     detail: dict[str, object],
 ) -> bool:
     prepared = continuation.prepared
@@ -3960,12 +4430,14 @@ def _new_publish_state(
             prepared.target,
             continuation.published_stat or continuation.prepared_stat,
             fs,
+            xset,
+            target_root,
             detail,
         )
         return True
 
-    temp = fs.stat_path(prepared.temp)
-    target = fs.stat_path(prepared.target)
+    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
+    target = _stat_target_path(fs, xset, target_root, prepared.target)
     if temp is not None and _same_file_version(temp, continuation.prepared_stat):
         if target is not None:
             detail["target_state"] = "unexpectedly-present-before-publish"
@@ -3999,6 +4471,8 @@ def _new_publish_state(
 def _update_publish_state(
     continuation: _UpdateContinuation,
     fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
     detail: dict[str, object],
 ) -> bool:
     prepared = continuation.prepared
@@ -4007,12 +4481,14 @@ def _update_publish_state(
             prepared.target,
             continuation.published_stat or continuation.prepared_stat,
             fs,
+            xset,
+            target_root,
             detail,
         )
         return True
 
-    temp = fs.stat_path(prepared.temp)
-    target = fs.stat_path(prepared.target)
+    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
+    target = _stat_target_path(fs, xset, target_root, prepared.target)
     if temp is not None and _same_file_version(temp, continuation.prepared_stat):
         if target is None:
             detail["target_state"] = "missing-before-publish"
@@ -4053,10 +4529,12 @@ def _describe_published_target(
     target: Path,
     expected: FileStat,
     fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
     detail: dict[str, object],
 ) -> None:
     try:
-        actual = fs.stat_path(target)
+        actual = _stat_target_path(fs, xset, target_root, target)
     except Exception as error:
         detail["target_state"] = "unverified-after-publish"
         detail["target_state_error"] = (
@@ -4088,11 +4566,92 @@ def _target_relative_path(path: Path, target_root: Path) -> str:
     return str(path.relative_to(target_root)).replace(os.sep, "\\")
 
 
+def _revalidate_target_root(
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+) -> None:
+    evidence = xset.plan.target_volume_evidence
+    fs.revalidate_root(
+        target_root,
+        trusted_anchor=(
+            None
+            if evidence is None or evidence.device_id is None
+            else Path(evidence.device_id)
+        ),
+        expected_volume=xset.plan.target_volume_id,
+    )
+
+
+def _revalidate_source_root(
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    source_root: Path,
+) -> None:
+    evidence = xset.plan.source_volume_evidence
+    fs.revalidate_root(
+        source_root,
+        trusted_anchor=(
+            None
+            if evidence is None or evidence.device_id is None
+            else Path(evidence.device_id)
+        ),
+        expected_volume=xset.plan.source_volume_id,
+    )
+
+
+def _stat_target_path(
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+    path: Path,
+) -> FileStat | None:
+    guarded = _resolve_target_path(
+        fs,
+        xset,
+        target_root,
+        path,
+        must_exist=False,
+    )
+    return fs.stat_path(guarded)
+
+
+def _resolve_target_path(
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+    path: Path,
+    *,
+    must_exist: bool,
+) -> Path:
+    _revalidate_target_root(fs, xset, target_root)
+    relative = _target_relative_path(path, target_root)
+    guarded = fs.resolve(target_root, relative, must_exist=must_exist)
+    if os.path.normcase(str(guarded)) != os.path.normcase(str(path)):
+        raise UnsafeExecutionPath(
+            "retained target path changed during root-relative validation"
+        )
+    return guarded
+
+
+def _require_target_stat(
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+    path: Path,
+) -> FileStat:
+    observed = _stat_target_path(fs, xset, target_root, path)
+    if observed is None:
+        raise FileNotFoundError(path)
+    return observed
+
+
 def _describe_retained_update_backup(
     continuation: _UpdateContinuation,
     xset: ExecutionSet,
     fs: ExecutorFileSystem,
     target_root: Path,
+    relative_path: str,
     detail: dict[str, object],
 ) -> None:
     backup = continuation.backup
@@ -4100,7 +4659,18 @@ def _describe_retained_update_backup(
         return
     detail["backup_path"] = _target_relative_path(backup.path, target_root)
     try:
-        actual = fs.stat_path(backup.path)
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            relative_path,
+            backup.path,
+        )
+        actual = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            backup.path,
+        )
     except Exception as error:
         detail["backup_state"] = "unverified"
         detail["backup_state_error"] = (
@@ -4134,14 +4704,18 @@ def _describe_retained_update_backup(
 
 def _describe_move_update_durable_state(
     continuation: _MoveUpdateContinuation,
+    xset: ExecutionSet,
     fs: ExecutorFileSystem,
     target_root: Path,
     detail: dict[str, object],
 ) -> None:
     detail["prior_path"] = continuation.old_relative_path
+    old_path = target_root.joinpath(
+        *PureWindowsPath(continuation.old_relative_path).parts
+    )
     if continuation.trash is None:
         try:
-            old = fs.stat(target_root, continuation.old_relative_path)
+            old = _stat_target_path(fs, xset, target_root, old_path)
         except Exception as error:
             detail["durable_state"] = "new-and-old-unverified"
             detail["old_state_error"] = (
@@ -4159,11 +4733,29 @@ def _describe_move_update_durable_state(
         target_root,
     )
     try:
-        old = fs.stat(target_root, continuation.old_relative_path)
-        trash = fs.stat_path(continuation.trash)
+        old = _stat_target_path(fs, xset, target_root, old_path)
     except Exception as error:
         detail["durable_state"] = "new-and-old-unverified"
         detail["old_state_error"] = (
+            f"{type(error).__name__}: {logical_error_text(error)}"
+        )
+        return
+    try:
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            continuation.old_relative_path,
+            continuation.trash,
+        )
+        trash = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            continuation.trash,
+        )
+    except Exception as error:
+        detail["durable_state"] = "new-and-old-unverified"
+        detail["trash_state_error"] = (
             f"{type(error).__name__}: {logical_error_text(error)}"
         )
         return

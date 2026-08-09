@@ -1702,7 +1702,9 @@ def classify_result(result: OperationResultView) -> ResultCategory:
 
 def _location_resolution_view(resolution) -> LocationResolutionView:
     binding = resolution.binding
-    selected_mount = binding.selected_mount
+    selected_mount = (
+        getattr(resolution, "selected_mount", None) or binding.selected_mount
+    )
     if selected_mount == "<unmounted>" or (
         resolution.state.value == "ambiguous"
         and not binding.explicit_ambiguity_choice
