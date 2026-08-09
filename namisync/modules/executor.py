@@ -4306,7 +4306,10 @@ def _canceled_durable_settlement(
         target_root,
         state,
     )
-    if byte_settlement is not None and byte_settlement.outcome is Outcome.FAILED:
+    if (
+        byte_settlement is not None
+        and byte_settlement.detail.get("publish_state") == "published"
+    ):
         return byte_settlement
     mutation_settlement = _failed_after_mutation_settlement(
         operation,
@@ -4315,7 +4318,19 @@ def _canceled_durable_settlement(
         state,
         canceled=True,
     )
-    return mutation_settlement or byte_settlement
+    if mutation_settlement is None:
+        return byte_settlement
+    if byte_settlement is None or byte_settlement.outcome is Outcome.CANCELED:
+        return mutation_settlement
+
+    detail = dict(byte_settlement.detail)
+    mutation_detail = dict(mutation_settlement.detail)
+    mutation_detail.pop("publish_state", None)
+    mutation_durable_state = mutation_detail.pop("durable_state", None)
+    detail.update(mutation_detail)
+    if mutation_durable_state is not None:
+        detail["mutation_durable_state"] = mutation_durable_state
+    return replace(mutation_settlement, detail=detail)
 
 
 def _canceled_byte_settlement(

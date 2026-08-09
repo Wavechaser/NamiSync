@@ -8874,6 +8874,43 @@ class ReadonlyReplaceFailureFileSystem(NativeFileSystem):
         super().apply_metadata(path, *args, **kwargs)
 
 
+class CanceledReadonlyProbeFileSystem(NativeFileSystem):
+    def __init__(
+        self,
+        target: Path,
+        *,
+        fail_restore: bool,
+        commit_replace: bool = False,
+    ) -> None:
+        self.target = target
+        self.fail_restore = fail_restore
+        self.commit_replace = commit_replace
+        self.restore_attempts = 0
+        self.probe_failures = 0
+
+    def replace(self, temp: Path, target: Path) -> None:
+        if self.commit_replace:
+            super().replace(temp, target)
+        error = OSError("injected replace sharing failure")
+        error.winerror = 32  # type: ignore[attr-defined]
+        raise error
+
+    def apply_metadata(self, path: Path, *args, **kwargs) -> None:
+        if path == self.target and kwargs.get("apply_readonly"):
+            self.restore_attempts += 1
+            if self.fail_restore:
+                error = OSError("injected readonly restoration sharing failure")
+                error.winerror = 32  # type: ignore[attr-defined]
+                raise error
+        super().apply_metadata(path, *args, **kwargs)
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if path == self.target and self.probe_failures:
+            self.probe_failures -= 1
+            raise PermissionError("cancel publication-state probe unavailable")
+        return super().stat_path(path)
+
+
 @pytest.mark.parametrize("fail_restore", [False, True], ids=("restored", "restore-failed"))
 def test_failed_readonly_update_reports_restoration_truth(
     tmp_path: Path,
@@ -8933,6 +8970,122 @@ def test_failed_readonly_update_reports_restoration_truth(
         assert result.recording is RecordingStatus.OK
         assert restored.metadata.attributes & 1
         assert "durable_state" not in item.detail
+
+
+@pytest.mark.parametrize(
+    ("fail_restore", "commit_replace"),
+    ((False, False), (True, False), (False, True)),
+    ids=("restored", "restore-failed", "published"),
+)
+def test_cancel_composes_byte_and_readonly_mutation_state(
+    tmp_path: Path,
+    fail_restore: bool,
+    commit_replace: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "readonly.bin").write_bytes(b"new-version")
+    live = target / "readonly.bin"
+    live.write_bytes(b"old-version")
+    setup_fs = NativeFileSystem()
+    expected = setup_fs.stat(target, "readonly.bin")
+    assert expected is not None
+    setup_fs.apply_metadata(
+        live,
+        replace(
+            expected,
+            metadata=replace(
+                expected.metadata,
+                attributes=expected.metadata.attributes | 1,
+            ),
+        ),
+        preserve_created=True,
+        apply_readonly=True,
+    )
+    fs = CanceledReadonlyProbeFileSystem(
+        live,
+        fail_restore=fail_restore,
+        commit_replace=commit_replace,
+    )
+    source_stat = fs.stat(source, "readonly.bin")
+    target_stat = fs.stat(target, "readonly.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="readonly.bin",
+        target_rel_path="readonly.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+    recorder = FakeRecorder()
+    cancel_requested = False
+    events: list[object] = []
+
+    def sleep(_delay: float) -> None:
+        nonlocal cancel_requested
+        if not commit_replace:
+            fs.probe_failures = 1
+        cancel_requested = True
+
+    def checkpoint() -> None:
+        if cancel_requested:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            recorder,
+            _policies(sleep=sleep),
+            fs,
+        )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    observed = setup_fs.stat(target, "readonly.bin")
+    assert observed is not None
+    assert fs.probe_failures == 0
+    assert item.outcome is Outcome.FAILED
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
+    assert not list(target.glob("*.synctmp-*"))
+    if commit_replace:
+        assert fs.restore_attempts == 0
+        assert item.reason == "canceled-after-publish"
+        assert item.detail["publish_state"] == "published"
+        assert item.detail["durable_state"] == "target-published"
+        assert "mutation_state" not in item.detail
+        assert "mutation_durable_state" not in item.detail
+        assert xset.recording is RecordingStatus.DEGRADED
+        assert live.read_bytes() == b"new-version"
+        assert not observed.metadata.attributes & 1
+    elif fail_restore:
+        assert fs.restore_attempts == 1
+        assert item.reason == "canceled-after-mutation"
+        assert xset.recording is RecordingStatus.DEGRADED
+        assert not observed.metadata.attributes & 1
+        assert item.detail["mutation_state"] == "unverified"
+        assert item.detail["mutation_durable_state"] == (
+            "target-metadata-changed-before-publish"
+        )
+        assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    else:
+        assert fs.restore_attempts == 1
+        assert item.reason == "io-error"
+        assert xset.recording is RecordingStatus.OK
+        assert observed.metadata.attributes & 1
+        assert "mutation_state" not in item.detail
+        assert "mutation_durable_state" not in item.detail
+        assert "recording" not in item.detail
+    if not commit_replace:
+        assert item.detail["publish_state"] == "unverified"
+        assert item.detail["durable_state"] == "unverified"
+        assert item.detail["state_error_type"] == "PermissionError"
+        assert item.detail["state_error"] == (
+            "cancel publication-state probe unavailable"
+        )
+        assert live.read_bytes() == b"old-version"
 
 
 class FailingReadonlyDeleteFileSystem(NativeFileSystem):

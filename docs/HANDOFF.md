@@ -5,45 +5,44 @@ Branch: `milestone1`
 
 ## Session Outcome
 
-Closed four post-delivery safety and truth-projection gaps without changing
-plan, inventory, or history persistence formats.
+Closed the cancellation-settlement composition gap found while reviewing
+commits `8787e13` and `d4300a9`, without changing plan, inventory, history, or
+normal success-path filesystem behavior.
 
-- Managed roots retain lexical identity and are no-follow admitted component by
-  component below a trusted/current mount. Scanner brackets enumeration with
-  full mount and `VolumeId` checks; inventory carries the resolver's current
-  mount across legitimate remounts; executor binds both reviewed roots around
-  blocking and mutation boundaries; verifier binds every open and its resulting
-  handle to reviewed volume authority.
-- TRASH, MOVE_UPDATE, and UPDATE revalidate the exact run-owned trash chain
-  after recorder/copy waits and before retained-path probes, finalize, publish,
-  cleanup, recovery, or settlement. Redirected decoys are neither mutated nor
-  accepted as durable-state evidence.
-- A sticky `hash-mismatch` now remains visibly `mismatched` when later metadata
-  also drifts, while missing current evidence remains `unverified`.
-- Scanner enumeration and executor temp-cleanup failures render native filenames
-  in logical spelling before they enter public or durable details.
+- Cancellation now evaluates retained byte-publication and readonly/non-byte
+  mutation state independently unless publication is already confirmed.
+- An unavailable byte-publication probe no longer hides a changed, ambiguous,
+  or unreadable mutation marker: the item reports
+  `canceled-after-mutation`, recording degrades, and both state channels remain
+  visible in structured detail.
+- Exact restored mutation pre-state keeps the ordinary failed byte result and
+  recording status. Confirmed publication remains the authoritative
+  `canceled-after-publish` result.
+- Focused regressions cover all three precedence cases and assert no recorder
+  command, published evidence, or owned temp survives the canceled operation.
 
 ## Verification
 
-- Focused adversarial root/trash/verifier matrix: `23 passed`.
-- Complete executor suite: `244 passed`.
-- Cross-module scanner, verifier, inventory, workflow, bridge, preflight, and
-  core gate: `322 passed, 1 skipped, 1 deselected`.
-- Complete pytest gate with only the explicitly deferred PAUSED/history polling
-  race deselected: `1306 passed, 2 skipped, 1 deselected in 182.89s`.
+- Focused three-state cancellation composition regression: `3 passed`.
+- Complete executor suite: `247 passed`.
+- Complete partitioned pytest gate: `1310 passed, 2 skipped`.
 - Import linter: `8 kept, 0 broken` across 50 files and 189 dependencies.
-- Python compile and `git diff --check` passed. Two independent adversarial
-  reviews found no remaining blocker in the frozen patch.
+- Python compile and `git diff --check` passed.
+- Independent adversarial review found no new retry, pause, cleanup, or state
+  precedence gap in the implementation.
 
 ## Immediate Next Context
 
-- The remaining root/destination risk is the disclosed path-check-to-syscall
-  interval, including an external swap away and back between bracket checks.
-  Eliminating it requires handle-relative root enumeration and mutation rather
-  than more path stats.
-- A clone with the same full `VolumeId` remains indistinguishable at the native
-  path layer; resolver clone ambiguity still requires an explicit user choice.
+- Prepared-temp same-object byte mutation and identity-weak substitution remain
+  an explicitly accepted residual boundary. Closing them would add a byte
+  reread or handle-bound publication cost that this performance-focused threat
+  contract does not currently justify.
+- A FULL scan still rejects a legitimate managed root that is itself a trusted
+  folder-mounted volume anchor. This is data-safe nuisance behavior, not a
+  redirection risk. A future small scanner fix must distinguish that exact
+  resolver-selected mount root from an ordinary configured-root junction and
+  retain the existing final/intermediate reparse rejection tests.
 - `test_paused_verify_resumes_without_repeating_or_losing_items` still exposes
-  deferred M1: dispatcher PAUSED can become poll-visible before the audit window
-  exists, so an immediate history summary lookup can raise `KeyError`. This
-  delivery does not mask or modify that test/behavior.
+  deferred M1 behavior: dispatcher `PAUSED` can become poll-visible before the
+  audit window exists, so an immediate history summary lookup can raise
+  `KeyError`. This delivery does not mask or modify that test/behavior.

@@ -60,6 +60,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-09). Cancellation settlement composition. UPDATE
+  could clear readonly, fail replacement and restoration into retry, then
+  cancel while publication probing failed; the failed byte settlement returned
+  before the retained mutation marker was inspected, leaving changed metadata
+  with `recording=OK`. Fixed by settling both retained channels unless
+  publication is confirmed, preserving publication diagnostics while changed
+  or unverified marker truth owns `canceled-after-mutation` and recording
+  degradation. Exact restored pre-state remains recording-OK; regressions cover
+  restored, changed, and committed-publication precedence without success
+  evidence.
 - SEVERE - FIXED (2026-08-09). Owned-trash parent substitution. TRASH,
   MOVE_UPDATE, and UPDATE validated `.synctrash/<run>` before a recorder or
   copy barrier but checked only the destination leaf afterward; a same-volume

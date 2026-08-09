@@ -133,6 +133,15 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed a cancellation-settlement composition gap that could hide an earlier
+  readonly mutation.
+  - **Executor:** now evaluates retained byte-publication and mutation-marker
+    state independently; confirmed publication stays authoritative, while
+    changed or unverified marker truth degrades recording even when publication
+    probing fails.
+  - **Tests:** cover restored readonly pre-state, failed restoration with an
+    unavailable publication probe, and committed-publication precedence without
+    false success evidence.
 - Closed managed-root redirection, owned-trash parent substitution, sticky
   mismatch projection, and native-path diagnostic gaps without expanding the
   external-writer threat contract.

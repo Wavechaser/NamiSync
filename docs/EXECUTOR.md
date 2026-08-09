@@ -311,15 +311,20 @@ degraded recording, and no success-only published evidence. The classifier
 prefers the continuation's synchronous publish flag and cached post-repair stat.
 Otherwise an intact matching owned temp proves the publish did not occur even
 if the target changed independently; consumed temp plus a present target is the
-committed-but-raised fallback. Truly unverified state fails with its drift/I/O
-reason and does not claim publication or degrade recording. UPDATE deletes only
-the staged temp and reports a backup as `retained` only when its current version
-matches the continuation's creation or repaired evidence; replacement, absence,
-and read failure are reported as `changed`, `absent`, or `unverified`. Backup and
-MOVE_UPDATE trash paths in result detail are target-root-relative rather than
-machine-specific absolute paths. Before repaired evidence exists, an
-identity-weak profile cannot distinguish a same-kind/same-size backup
-substitution. MOVE_UPDATE distinguishes new+old from
+committed-but-raised fallback. Truly unverified byte state fails with its
+drift/I/O reason and does not by itself claim publication or degrade recording.
+Cancellation still settles an independent mutation marker: exact restored
+pre-state retains the byte result, while changed, ambiguous, or unreadable
+readonly/non-byte state becomes `canceled-after-mutation` and degrades
+recording. Combined detail preserves byte `publish_state`, `durable_state`, and
+probe error fields while naming marker durability as `mutation_durable_state`.
+UPDATE deletes only the staged temp and reports a backup as `retained` only when
+its current version matches the continuation's creation or repaired evidence;
+replacement, absence, and read failure are reported as `changed`, `absent`, or
+`unverified`. Backup and MOVE_UPDATE trash paths in result detail are
+target-root-relative rather than machine-specific absolute paths. Before
+repaired evidence exists, an identity-weak profile cannot distinguish a
+same-kind/same-size backup substitution. MOVE_UPDATE distinguishes new+old from
 new+trash; neither is rolled back. Ordinary pause
 abandons/reclaims an in-flight temp through exact-name recovery, preserves
 completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
@@ -348,7 +353,10 @@ ordinary failure and recording status. Any durable or unverified mutation is
 resumed-directory restoration has its own failure probe. Case-insensitive path
 stats cannot prove a failed RECASE's exact spelling, so that state degrades
 conservatively. These markers and probes add no filesystem operation to
-successful execution.
+successful execution. Cancellation evaluates the byte continuation and mutation
+marker independently unless byte publication is confirmed, which remains the
+authoritative `canceled-after-publish` result; a failed byte classifier cannot
+short-circuit marker settlement.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the
@@ -376,7 +384,7 @@ Non-byte mutation markers likewise survive a retry until the operation proves
 its exact pre-state unchanged or reports the durable/ambiguous mutation. Pause
 is latched while either a byte continuation or mutation marker is live, so it
 cannot discard process-local settlement evidence; cancellation inspects that
-evidence immediately.
+evidence and composes both state channels immediately.
 
 Every retry attempt that begins with an already-published continuation performs
 one target stat before any remaining metadata repair, durability, attestation,
@@ -603,6 +611,9 @@ chunk bands remain private constants, not settings.
   ambiguous two-path, and failed-probe cases report recording truth without
   success evidence. Deferred/resumed mkdir metadata, readonly UPDATE/DELETE
   restoration, and non-byte retry pause/cancel retain the same guarantee.
+- Readonly UPDATE retry cancellation composes unavailable byte-publication
+  state with restored or changed marker state, preserves confirmed-publication
+  authority, and records no false evidence.
 - COPY/UPDATE/MOVE_UPDATE metadata and durability retry faults reject a
   same-size/same-mtime replacement of an already-published stable-identity
   target as `target-drift`, retain the foreign bytes, and record no false

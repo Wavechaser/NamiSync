@@ -1070,6 +1070,11 @@ rather than an adversarial path lock. Cancellation instead derives
 the current item's outcome from that state immediately: retained UPDATE backups
 remain visible, published-but-unfinished work is failed with a typed reason and
 degraded recording, and no rollback or false success evidence is attempted.
+Byte continuations and mutation markers are evaluated independently unless
+publication is confirmed. An unavailable byte-state probe cannot suppress
+changed, ambiguous, or unreadable readonly/non-byte mutation truth; combined
+detail retains publication diagnostics and names marker durability separately,
+while an exact restored pre-state does not itself degrade recording.
 UPDATE, DELETE, MOVE, RECASE, MOVE_UPDATE old-path cleanup, and TRASH force
 prior recorder evidence durable before their final destructive
 source/destination guards, leaving no writer wait between those guards and
@@ -1170,6 +1175,9 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
 - MOVE/RECASE/TRASH/DELETE/MKDIR commit-then-raise, exact pre-state,
   ambiguous/probe-failed state, readonly restoration, deferred/resumed mkdir,
   and retry pause/cancel cases preserve recording and durable-state truth.
+- Readonly UPDATE cancellation composes failed publication probing with restored
+  or changed marker state, while confirmed publication remains authoritative;
+  all three cases omit false success evidence.
 - Temp recovery deletes only exact-shape, different-run regular files in the
   preflight-retained touched parents. Current-run temps, lookalikes, exact-name
   directories, untouched parents, off-volume mounts, and `.synctrash` survive;
