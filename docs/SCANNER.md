@@ -77,9 +77,16 @@ canonically equivalent source/target pair without changing either name.
 
 1. Lexically normalize the root without following links, then no-follow reject
    a file, placeholder, junction, symlink, or other reparse component below the
-   trusted native volume root (or inventory's reviewed mount).
+   trusted native volume root (or inventory's reviewed mount). The anchor itself
+   is the trust boundary: a FULL root may carry its folder-mount reparse tag only
+   when the resolved root, reviewed/current anchor, and volume-evidence mount
+   agree exactly. No configured-root-chain component, exact scoped start, or
+   enumerated descendant inherits that exception.
 2. Resolve volume/capability evidence once for the scan, then revalidate the
-   trusted anchor, full volume identity, and lexical root before enumeration.
+   trusted anchor, full volume identity, and lexical root before enumeration. An
+   authorized folder-mount root is first classified without following and then
+   metadata-statted through the mount so its root record and visited identity
+   describe the mounted volume rather than the host reparse entry.
 3. Enumerate entries without following reparse points by default.
 4. Apply location ignores before descending into an ignored subtree.
 5. Check `ctx.checkpoint()` between entries/directories.
@@ -105,7 +112,9 @@ Root identity and scan evidence always use ordinary absolute drive or UNC
 spelling. The native backend adds the Windows extended-length prefix only for
 root probes, volume calls, stat, and enumeration, and strips it before returning
 the lexical `Root` or `VolumeEvidence`; it never resolves a configured root
-through an unclassified link in its root chain. Non-filesystem device
+through an unclassified link in its root chain. The followed root stat is added
+only for an exact authorized folder mount; ordinary roots and scoped scans add
+no filesystem call. Non-filesystem device
 namespaces are refused rather than reinterpreted as managed roots. Extended
 roots whose
 components cannot be represented stably without the prefix—including trailing
@@ -147,7 +156,15 @@ ignore therefore confirms that attribute before skipping the entry; exact-name
 and `.synctrash` ignores remain unconditional. Every `FULL`, `PATHS`, and
 `SUBTREES` scan first requires the location root chain below its trusted mount
 to remain ordinary non-reparse directories or the result is `ROOT_UNAVAILABLE`
-and incomplete.
+and incomplete. A FULL root equal to that exact trusted folder mount remains
+admissible only when it is a non-placeholder directory, its followed state is
+ordinary, and the existing before/after anchor plus `VolumeId` brackets hold.
+
+Known limitation: PATHS and SUBTREES no-follow stat each requested final start
+but do not yet validate every intermediate component inside that requested
+relative path. An intermediate reparse can therefore redirect scoped metadata
+observation and reconciliation; FULL scanning and verifier opens use separate
+component admission and do not share this gap.
 
 An offline/unmounted volume is not an empty complete scan. It yields a typed
 offline result and cannot trigger missing marking or target-only planning.
@@ -238,8 +255,12 @@ NTFS. Neither implementation changes planner or inventory contracts.
 - Missing, unavailable, and former-directory-now-file roots remain distinct;
   file versus directory placeholder/reparse fixtures preserve their different
   completeness consequences, including the native no-follow Windows attribute
-  shape. Every scan scope refuses a file, placeholder, or reparse location-root
-  component before enumeration.
+  shape. Every scan scope refuses a file, placeholder, or reparse configured-root
+  component below its trusted anchor before enumeration.
+- A FULL scan whose root is exactly an inventory-reviewed or native-derived
+  folder-mounted volume anchor completes with the followed mounted-root identity;
+  forged anchors, ordinary final/intermediate junction roots, invalid followed
+  state, subtree starts, and descendant reparses remain refused or untraversed.
 - Import-linter proves scanner code imports core but no sibling module.
 
 ## M0 Verification

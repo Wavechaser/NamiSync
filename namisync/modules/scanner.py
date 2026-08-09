@@ -80,6 +80,8 @@ class ScannerBackend(Protocol):
 
     def lstat(self, path: str) -> os.stat_result: ...
 
+    def stat(self, path: str) -> os.stat_result: ...
+
     def scandir(self, path: str) -> AbstractContextManager[Iterator[DirectoryEntry]]: ...
 
 
@@ -203,6 +205,9 @@ class NativeScannerBackend:
     def lstat(self, path: str) -> os.stat_result:
         return os.stat(to_extended_length_path(path), follow_symlinks=False)
 
+    def stat(self, path: str) -> os.stat_result:
+        return os.stat(to_extended_length_path(path), follow_symlinks=True)
+
     def scandir(self, path: str) -> AbstractContextManager[Iterator[DirectoryEntry]]:
         return os.scandir(to_extended_length_path(path))  # type: ignore[return-value]
 
@@ -255,6 +260,12 @@ def _is_directory_stat(stat: os.stat_result) -> bool:
     return bool(
         stat_module.S_ISDIR(stat.st_mode)
         or _attributes(stat) & FILE_ATTRIBUTE_DIRECTORY
+    )
+
+
+def _same_logical_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
+        os.path.normpath(right)
     )
 
 
@@ -345,6 +356,19 @@ class WalkingScanner:
                 binding_error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
             )
+        device_anchor = volume.evidence.device_id
+        # The reviewed mount may itself be a folder-volume reparse point. A
+        # caller-provided anchor alone is insufficient authority to follow it.
+        trusted_mount_root = (
+            resolved
+            if (
+                os.name == "nt"
+                and device_anchor is not None
+                and _same_logical_path(resolved, reviewed_anchor)
+                and _same_logical_path(resolved, device_anchor)
+            )
+            else None
+        )
 
         files: list[FileRecord] = []
         directories: list[DirRecord] = []
@@ -360,6 +384,7 @@ class WalkingScanner:
                 unsupported,
                 warnings,
                 starting_points=((resolved, ""),),
+                trusted_mount_root=trusted_mount_root,
             )
         elif requested_scope.kind is ScanScopeKind.PATHS:
             complete = self._scan_selected(
@@ -450,6 +475,7 @@ class WalkingScanner:
         warnings: list[ScanWarning],
         *,
         starting_points: tuple[tuple[str, str], ...],
+        trusted_mount_root: str | None = None,
     ) -> bool:
         visited: set[FileIdentity] = set()
         pending: list[tuple[str, str]] = []
@@ -458,6 +484,19 @@ class WalkingScanner:
             ctx.checkpoint()
             try:
                 root_stat = self._backend.lstat(absolute_start)
+                if (
+                    not relative_start
+                    and trusted_mount_root is not None
+                    and _same_logical_path(
+                        absolute_start,
+                        trusted_mount_root,
+                    )
+                    and _is_directory_stat(root_stat)
+                    and _is_reparse(root_stat)
+                    and not _is_placeholder(root_stat)
+                ):
+                    # Record the mounted root, not the hosting reparse entry.
+                    root_stat = self._backend.stat(absolute_start)
             except FileNotFoundError as error:
                 if relative_start:
                     warnings.append(

@@ -791,6 +791,14 @@ subtree requests deduplicate deterministically. Owned artifacts and file
 placeholder/reparse exclusions do not alone make a scan incomplete; unreadable
 directories, directory placeholder/reparse points, repeated directory identity,
 collisions, and unsafe names do.
+**Flesh — M1 hardening.** An exact FULL root may retain the reparse tag of a
+folder-mounted volume anchor only when its resolved path, reviewed/current
+anchor, and volume-evidence mount agree. The walker classifies that anchor
+without following, then follows only its metadata so the root record and visited
+identity belong to the mounted volume. Configured-root-chain components below
+the anchor, exact scoped starts, and enumerated descendants retain ordinary
+no-follow reparse refusal, and the anchor plus full `VolumeId` still bracket
+enumeration.
 **Flesh — deferred.** USN change-journal `ChangeSource`; network-share awareness.
 
 **Acceptance criteria.**
@@ -810,6 +818,10 @@ collisions, and unsafe names do.
 - Cancellation observed within one directory/file step.
 - exFAT root reports `stable_file_identity=False` and coarse
   `mtime_granularity_ns`.
+- A FULL scan rooted exactly at a reviewed/native folder-volume mount records
+  the followed mounted-root identity and completes; a forged anchor, ordinary
+  final/intermediate configured-root junction, invalid followed root, subtree
+  start, or descendant reparse cannot inherit that exception.
 
 ### 4.3 planner
 

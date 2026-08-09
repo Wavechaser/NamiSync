@@ -57,7 +57,10 @@ reconciliation, missing inference, or integrity hashing; the reviewed mount
 itself is the excluded trust anchor, and matching volume identity alone never
 authorizes a redirected tree. When that stable volume is legitimately mounted
 at one new path, resolution carries the current selected mount—not the stale
-stored hint—as the scanner and verifier trust anchor.
+stored hint—as the scanner and verifier trust anchor. When the configured root
+equals that selected folder mount, FULL scanning admits the anchor's own
+mount-point classification only under matching current mount and full-volume
+binding; no component below it inherits the exception.
 
 The production dispatcher registry contains inventory (pause unsupported) and
 baseline/verify/rebaseline (pause supported), and the CLI reaches all four only

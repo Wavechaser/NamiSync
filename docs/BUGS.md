@@ -824,6 +824,25 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-09). Scoped-path intermediate admission. PATHS and
+  SUBTREES no-follow validate the configured root chain and requested final
+  start, but not every intermediate component inside the requested relative
+  path; a junction there can redirect scoped metadata observation and
+  reconciliation outside the location while the result remains complete.
+  Cause: the scanner joins the root and relative path, then lstats only the
+  final requested subject. FULL scanning and verifier opens do not share the
+  gap. Fix requires component-by-component scoped admission plus hostile
+  intermediate-reparse regressions.
+- MINOR - FIXED (2026-08-09). Full-walk trusted-anchor classification. A FULL
+  scan rejected a location whose root exactly equaled its folder-mounted volume
+  anchor because the walker treated the anchor's mount-point reparse tag as an
+  untrusted configured-root junction. Inventory failed safely as
+  `root_unavailable` before reconciliation. Fixed by requiring exact agreement
+  among the resolved root, reviewed/current anchor, and volume-evidence mount,
+  then following metadata only for that authorized root so its record uses the
+  mounted-volume identity rather than the host mount entry. Final/intermediate
+  configured-root reparses, placeholders, invalid followed state, subtree
+  starts, and descendants remain refused.
 - SEVERE - FIXED (2026-08-09). Managed-root reparse admission. M6 changed native
   scanner root normalization to `Path.resolve()`, following a final junction
   before the no-follow check; checking only that leaf still allowed an earlier

@@ -133,6 +133,14 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Restored FULL scan availability when a managed root is exactly a trusted
+  folder-mounted volume anchor, without relaxing junction refusal.
+  - **Scanner:** requires the resolved root, reviewed/current anchor, and volume
+    evidence mount to agree, then uses followed metadata only for that exact
+    mount root while retaining the surrounding anchor and `VolumeId` checks.
+  - **Tests:** cover inventory-reviewed and native-derived anchors, accurate
+    mounted-root identity, forged/placeholder/invalid states, scoped scans, and
+    continued descendant and configured-root reparse refusal.
 - Closed a cancellation-settlement composition gap that could hide an earlier
   readonly mutation.
   - **Executor:** now evaluates retained byte-publication and mutation-marker

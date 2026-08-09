@@ -236,6 +236,311 @@ class FakeBackend:
         yield iter(self.entries.get(path, ()))
 
 
+class TrustedMountBackend(FakeBackend):
+    def __init__(
+        self,
+        entries: dict[str, list[FakeEntry]],
+        *,
+        root: str,
+        device_anchor: str,
+        root_lstat: object,
+        followed_root_stat: object,
+        path_lstats: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(entries, _profile())
+        self.root = root
+        self.device_anchor = device_anchor
+        self.root_lstat = root_lstat
+        self.followed_root_stat = followed_root_stat
+        self.path_lstats = path_lstats or {}
+        self.lstat_calls: list[str] = []
+        self.followed_stat_calls: list[str] = []
+
+    def resolve_root(
+        self,
+        path: str,
+        *,
+        trusted_anchor: str | None = None,
+    ) -> str:
+        assert path == self.root
+        assert trusted_anchor in {None, self.root}
+        return path
+
+    def trusted_anchor(self, path: str) -> str:
+        assert path == self.root
+        return self.root
+
+    def volume_snapshot(self, root: str) -> VolumeSnapshot:
+        assert root == self.root
+        return VolumeSnapshot(
+            VolumeId("ABCD", self.profile.fs_type),
+            VolumeEvidence(device_id=self.device_anchor),
+            self.profile,
+        )
+
+    def lstat(self, path: str):
+        self.lstat_calls.append(path)
+        if path == self.root:
+            return self.root_lstat
+        assert path in self.path_lstats
+        observed = self.path_lstats[path]
+        if isinstance(observed, BaseException):
+            raise observed
+        return observed
+
+    def stat(self, path: str):
+        assert path == self.root
+        self.followed_stat_calls.append(path)
+        if isinstance(self.followed_root_stat, BaseException):
+            raise self.followed_root_stat
+        return self.followed_root_stat
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows folder mounts")
+@pytest.mark.parametrize(
+    "explicit_anchor",
+    (True, False),
+    ids=("inventory-reviewed", "native-derived"),
+)
+def test_full_scan_admits_exact_trusted_folder_mount_root(
+    explicit_anchor: bool,
+) -> None:
+    root = r"C:\mounted-volume"
+    entry = FakeEntry(
+        "inside.bin",
+        root + r"\inside.bin",
+        False,
+        _fake_stat(ino=8),
+    )
+    backend = TrustedMountBackend(
+        {root: [entry]},
+        root=root,
+        device_anchor=root if explicit_anchor else root + "\\",
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        followed_root_stat=_fake_stat(ino=7, directory=True),
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor=root if explicit_anchor else None,
+    )
+
+    assert result.complete, result.warnings
+    assert [record.rel_path for record in result.files] == ["inside.bin"]
+    assert [record.rel_path for record in result.directories] == [""]
+    assert result.directories[0].file_identity is not None
+    assert result.directories[0].file_identity.file_index == 7
+    assert result.directories[0].metadata.attributes == 0
+    assert backend.followed_stat_calls == [root]
+    assert backend.scandir_calls == [root]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows folder mounts")
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+def test_scoped_scan_at_a_trusted_mount_does_not_follow_the_root(
+    scope_kind: str,
+) -> None:
+    root = r"C:\mounted-volume"
+    folder = root + r"\folder"
+    if scope_kind == "paths":
+        absolute = root + r"\inside.bin"
+        scope = ScanScope.selected(("inside.bin",))
+        entries: dict[str, list[FakeEntry]] = {}
+        path_lstats = {absolute: _fake_stat(ino=8)}
+        expected_files = ["inside.bin"]
+        expected_directories: list[str] = []
+        expected_scans: list[str] = []
+    else:
+        absolute = folder
+        scope = ScanScope.subtrees(("folder",))
+        entries = {
+            folder: [
+                FakeEntry(
+                    "inside.bin",
+                    folder + r"\inside.bin",
+                    False,
+                    _fake_stat(ino=8),
+                )
+            ]
+        }
+        path_lstats = {folder: _fake_stat(ino=9, directory=True)}
+        expected_files = [r"folder\inside.bin"]
+        expected_directories = ["folder"]
+        expected_scans = [folder]
+    backend = TrustedMountBackend(
+        entries,
+        root=root,
+        device_anchor=root,
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        followed_root_stat=AssertionError("scoped scan followed mount root"),
+        path_lstats=path_lstats,
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        scope,
+        trusted_anchor=root,
+    )
+
+    assert result.complete, result.warnings
+    assert [record.rel_path for record in result.files] == expected_files
+    assert [record.rel_path for record in result.directories] == expected_directories
+    assert backend.lstat_calls == [absolute]
+    assert backend.followed_stat_calls == []
+    assert backend.scandir_calls == expected_scans
+
+
+def test_full_scan_does_not_trust_a_claimed_anchor_without_volume_evidence() -> None:
+    root = r"C:\claimed-anchor"
+    backend = TrustedMountBackend(
+        {},
+        root=root,
+        device_anchor=r"C:\actual-volume",
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        followed_root_stat=_fake_stat(ino=7, directory=True),
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor=root,
+    )
+
+    assert not result.complete
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+    assert backend.followed_stat_calls == []
+    assert backend.scandir_calls == []
+
+
+def test_full_scan_never_follows_a_placeholder_mount_anchor() -> None:
+    root = r"C:\placeholder-anchor"
+    backend = TrustedMountBackend(
+        {},
+        root=root,
+        device_anchor=root,
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=(
+                FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_OFFLINE
+            ),
+        ),
+        followed_root_stat=AssertionError("placeholder root was followed"),
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor=root,
+    )
+
+    assert not result.complete
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+    assert backend.followed_stat_calls == []
+    assert backend.scandir_calls == []
+
+
+@pytest.mark.parametrize(
+    "followed_root_stat",
+    (
+        _fake_stat(ino=7),
+        _fake_stat(
+            ino=7,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        PermissionError("mounted root metadata unavailable"),
+    ),
+    ids=("file", "reparse", "unavailable"),
+)
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows folder mounts")
+def test_full_scan_requires_an_ordinary_followed_mount_root(
+    followed_root_stat: object,
+) -> None:
+    root = r"C:\mounted-volume"
+    backend = TrustedMountBackend(
+        {},
+        root=root,
+        device_anchor=root,
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        followed_root_stat=followed_root_stat,
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor=root,
+    )
+
+    assert not result.complete
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+    assert backend.followed_stat_calls == [root]
+    assert backend.scandir_calls == []
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows folder mounts")
+def test_reparse_child_below_a_trusted_mount_root_is_not_followed() -> None:
+    root = r"C:\mounted-volume"
+    child = root + r"\junction"
+    entry = FakeEntry(
+        "junction",
+        child,
+        True,
+        _fake_stat(
+            ino=8,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+    )
+    backend = TrustedMountBackend(
+        {root: [entry]},
+        root=root,
+        device_anchor=root,
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        followed_root_stat=_fake_stat(ino=7, directory=True),
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor=root,
+    )
+
+    assert not result.complete
+    assert [record.rel_path for record in result.directories] == [""]
+    assert result.unsupported[0].reason is UnsupportedReason.REPARSE_POINT
+    assert backend.followed_stat_calls == [root]
+    assert backend.scandir_calls == [root]
+
+
 @pytest.mark.parametrize(
     "root_stat",
     [
@@ -694,6 +999,23 @@ def test_native_root_resolution_revalidates_an_empty_chain_mount_anchor(
             str(configured),
             trusted_anchor=str(configured),
         )
+
+
+def test_native_followed_root_stat_uses_the_extended_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logical = r"C:\mounted-volume"
+    native = to_extended_length_path(logical)
+    observed = _fake_stat(ino=7, directory=True)
+
+    def followed_stat(path: str, *, follow_symlinks: bool):
+        assert path == native
+        assert follow_symlinks
+        return observed
+
+    monkeypatch.setattr(scanner_module.os, "stat", followed_stat)
+
+    assert scanner_module.NativeScannerBackend().stat(logical) is observed
 
 
 @pytest.mark.parametrize(
