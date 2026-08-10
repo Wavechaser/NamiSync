@@ -103,6 +103,15 @@ their contract, and update the matching tests and documentation when it does.
   non-byte mutation effects are orthogonal journal entries whose settlement is
   reduced centrally; do not reintroduce parallel ad-hoc state dictionaries or
   sibling-specific settlement branches.
+- Treat executor settlement restructuring as gated work. Before splitting the
+  executor or replacing its retained-state dictionaries with a journal or
+  reducer, the corrected monolith must pass the committed settlement oracle
+  three times with identical normalized traces, no skipped or unclassified
+  scenarios, no snapshot drift, and no unresolved settlement finding. Land any
+  discovered policy fix separately with a persistent regression, then reset
+  and repeat the stability gate. Keep the oracle and its baseline under
+  `tools/` through the full refactor; do not delete them in the split, journal,
+  reducer, verifier, or test-consolidation commits.
 - Use `sqlite3` directly. Do not add an ORM.
 - Keep live SQLite databases local only. Do not place app DBs in cloud-synced
   folders.

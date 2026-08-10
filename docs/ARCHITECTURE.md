@@ -1096,6 +1096,18 @@ and recorder ordering. The package migration and journal reduction are
 contract-preserving maintenance: a discovered policy discrepancy is isolated
 as a separate bug fix rather than folded into the refactor.
 
+**Settlement stability barrier.** The monolithic corrected baseline is not
+declared stable merely because a differential run reproduces it. Before the
+file-to-package split, and again before journal or reducer adoption, the
+retained public-facade settlement oracle must have a complete classified
+manifest, pass three identical normalized runs, and report no expected-policy
+or committed-snapshot difference. Any mismatch is investigated as a possible
+latent defect; a confirmed fix lands alone with a persistent regression and
+restarts the barrier. The oracle and committed baseline stay in `tools/`
+through package splitting, journal/reducer work, verifier restructuring, test
+consolidation, and final acceptance so later failures can still be attributed
+against the corrected monolith.
+
 Single-file throughput work belongs primarily in `pipeline.py`; Windows I/O
 flags and handle mechanics belong in `native.py`; multi-file scheduling and
 per-volume concurrency belong in `runtime.py`. No finer executor split is

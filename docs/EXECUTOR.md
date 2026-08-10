@@ -363,6 +363,26 @@ publication diagnostics stay primary, marker durability is named
 `mutation_durable_state`, and a failed byte classifier cannot short-circuit
 marker settlement.
 
+## Settlement Stability Gate
+
+Settlement refactoring is blocked on an independent retained oracle, not only
+on differential parity with the current implementation. Its scenario manifest
+states expected terminal outcome, reason, recording disposition, durable-state
+classification, recorder/flush behavior, retry/control behavior, cleanup, and
+filesystem trace through public executor and core contracts. A corrected
+baseline is eligible for structural work only when every scenario is
+classified, none is skipped or expected to fail, three consecutive normalized
+runs are byte-identical, the committed snapshot has no diff, and an adversarial
+review has no unresolved settlement finding.
+
+A newly exposed policy defect is fixed in its own commit with a persistent
+regression before the baseline is regenerated; that change resets the
+three-run gate. The oracle and its committed baseline remain under `tools/`
+through the executor split, typed journal, reducer, verifier split, and final
+test consolidation. They are intentionally not temporary checkpoint artifacts:
+the retained baseline answers whether a later settlement regression came from
+the refactor or already existed in the corrected monolith.
+
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the
 copy-recording result across a same-process execute pause. If status reaches
