@@ -4207,6 +4207,18 @@ class MidCopySharingOnceFileSystem(NativeFileSystem):
         super().remove_owned_temp(path)
 
 
+class RetryCleanupFailureFileSystem(MidCopySharingOnceFileSystem):
+    def __init__(self) -> None:
+        super().__init__()
+        self.cleanup_attempts = 0
+
+    def remove_owned_temp(self, path: Path) -> None:
+        if self.create_attempts > 0 and path.exists():
+            self.cleanup_attempts += 1
+            raise PermissionError("injected retry cleanup failure")
+        super().remove_owned_temp(path)
+
+
 class CleanupDiagnosticFileSystem(NativeFileSystem):
     def __init__(self, *, fail_finalize: bool) -> None:
         self.fail_finalize = fail_finalize
@@ -4468,6 +4480,55 @@ def test_midcopy_sharing_retry_recreates_owned_temp_and_converges(
     assert (target / "file.bin").read_bytes() == payload
     assert not expected_temp.exists()
     assert [call[0] for call in recorder.calls] == ["copied"]
+
+
+def test_failed_pre_retry_cleanup_settles_before_control_checkpoint(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"abcdefghijkl")
+    fs = RetryCleanupFailureFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    sleeps: list[float] = []
+
+    def checkpoint() -> None:
+        if fs.cleanup_attempts:
+            raise Canceled()
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(max_chunk_size=4, sleep=sleeps.append),
+        checkpoint=checkpoint,
+    )
+
+    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    owned_temp = target / (
+        f"file.bin.synctmp-{RUN_ID}-{operation.op_id}"
+    )
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert outcome.outcome is Outcome.FAILED
+    assert outcome.reason == "cleanup-failed"
+    assert outcome.detail["error_type"] == "OperationFailure"
+    assert "injected retry cleanup failure" in outcome.detail["message"]
+    assert fs.create_attempts == 1
+    assert fs.cleanup_attempts == 1
+    assert sleeps == []
+    assert owned_temp.exists()
+    assert not (target / "file.bin").exists()
+    assert recorder.calls == []
+    assert recorder.flushes == 1
 
 
 def test_transient_sharing_violation_retries_within_bound(tmp_path: Path) -> None:

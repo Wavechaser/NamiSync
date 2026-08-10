@@ -60,6 +60,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-10). Pre-retry cleanup loss. A retryable copy
+  failure before continuation installation attempted owned-temp cleanup but
+  discarded its error and cleared process-local ownership. Cancellation at the
+  next retry checkpoint then reported a plain canceled item while the current
+  run's temp remained without diagnostics. Fixed by requiring cleanup to
+  succeed before retry sleep or control checkpoints and settling a failed
+  cleanup immediately as `cleanup-failed`; exact-name rerun recovery remains.
 - MODERATE - FIXED (2026-08-10). Pre-publication backup composition. UPDATE
   could retain its reviewed backup in owned trash, fail replacement and
   readonly restoration, then discard all backup evidence from ordinary or

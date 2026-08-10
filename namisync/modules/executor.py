@@ -1971,15 +1971,23 @@ def execute(
                         and attempt <= policies.max_retries
                     ):
                         state.retry_errors[operation.op_id] = error
+                        retry_cleanup_error: Exception | None = None
                         if (
                             operation.op_id not in state.retry_continuations
                             and operation.op_id not in state.mutation_attempts
                         ):
-                            _cleanup_inflight(state, fs)
-                        _retry_checkpoint(ctx, state, operation.op_id)
-                        policies.sleep(decision.after)
-                        _retry_checkpoint(ctx, state, operation.op_id)
-                        continue
+                            retry_cleanup_error = _cleanup_inflight(state, fs)
+                        if retry_cleanup_error is None:
+                            _retry_checkpoint(ctx, state, operation.op_id)
+                            policies.sleep(decision.after)
+                            _retry_checkpoint(ctx, state, operation.op_id)
+                            continue
+                        error = OperationFailure(
+                            ExecutionReason.CLEANUP_FAILED,
+                            "operation failed and its owned temp could not be removed: "
+                            f"{logical_error_text(retry_cleanup_error)}",
+                            cause=error,
+                        )
                     durable_failure = _failed_durable_settlement(
                         operation,
                         error,

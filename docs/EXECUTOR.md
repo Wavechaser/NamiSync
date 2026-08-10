@@ -419,6 +419,12 @@ is latched while either a byte continuation or mutation marker is live, so it
 cannot discard process-local settlement evidence; cancellation inspects that
 evidence and composes both state channels immediately.
 
+When a retryable failure occurs before either retained-state channel exists,
+owned-temp cleanup must succeed before retry sleep or another control
+checkpoint. Cleanup failure terminates that item as `cleanup-failed`; it cannot
+be discarded and then reclassified as a plain cancellation while the temp
+remains for exact-name recovery.
+
 Every retry attempt that begins with an already-published continuation performs
 one target stat before any remaining metadata repair, durability, attestation,
 or recording. The current profiled file version must match the cached published
