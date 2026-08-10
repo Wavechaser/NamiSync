@@ -52,6 +52,12 @@ Two consequences worth stating outright:
   exists. A workflow function passes one module's typed return value into the
   next. Control flows through calls and returns; observation flows out through
   events; records flow down through the recorder. Nothing flows sideways.
+- **A domain component may be a module or a package.** Package internals may
+  collaborate behind one component facade; that is not a sideways dependency.
+  Import linting applies independence to the five component roots (`scanner`,
+  `planner`, `preflight`, `executor`, and `verifier`), not to every descendant
+  file. Code outside a component imports its public facade. Tests patch the
+  internal submodule that owns a private symbol rather than a facade re-export.
 - **Adapters are siblings.** `interfaces/launcher.py` may dispatch to `cli` or
   `web`; neither adapter imports the other, and both reach domain behavior only
   through `interfaces/service.py`.
@@ -62,6 +68,25 @@ Every collaborator a module needs — recorder, clock, policies — is **receive
 as an argument, wired once at a single composition root. No module constructs
 its own collaborator. This is what makes every module testable with fakes and
 what keeps the SQLite/desktop-host/OS surfaces injectable rather than hardcoded.
+
+The settled maintenance packages have explicit internal direction:
+
+```text
+executor/__init__.py  -> runtime.py, native.py, pipeline.py
+executor/runtime.py   -> native.py, pipeline.py
+executor/native.py    -> core + stdlib
+executor/pipeline.py  -> core + stdlib
+
+verifier/__init__.py  -> engine.py, native.py
+verifier/engine.py    -> native.py
+verifier/native.py    -> core + stdlib
+```
+
+`native.py` and `pipeline.py` are executor leaves: neither imports the other or
+`runtime.py`. Verifier `native.py` likewise never imports `engine.py`. These
+package shapes are settled target boundaries; the behavior-preserving file
+migration may land in later checkpoints without changing the public component
+imports.
 
 ---
 
@@ -749,6 +774,25 @@ absolute component that cannot round-trip without Windows retargeting
 fields are normalized before warnings, evidence, history, or interface
 rendering.
 
+**Settled root-authority boundary (staged migration).**
+`core/root_authority.py` owns an immutable, ephemeral `RootAuthority`: the
+ordinary logical root, optional reviewed volume anchor, and optional expected
+`VolumeId`. It also owns stateless no-follow component inspection and native
+volume observation shapes shared by scanner, preflight, executor, verifier,
+and their workflows. `core/pathing.py` retains lexical spelling and relative
+path algebra. An authority is reviewed evidence, not a permission token: it is
+never persisted, fingerprinted separately, cached as fresh, or substituted for
+a consumer's live probe.
+
+Shared authority code reports typed observations and failures but does not
+choose domain outcomes. Scanner retains traversal and its exact FULL mounted-
+root exception; preflight retains read-only observation and refusal mapping;
+workflows retain mount ambiguity and overlap policy; executor runtime retains
+every final-touch validation point; verifier retains per-item revalidation and
+handle-bound final-path, volume, sharing, and cache-honest read guarantees.
+Native adapters translate the shared mechanics into each component's existing
+error vocabulary without broadening what a prior successful check authorizes.
+
 **Flesh.** None. Core is all bones by definition.
 
 **Acceptance criteria.**
@@ -1016,6 +1060,33 @@ operation's direct preconditions against the live filesystem — preflight is
 one stage of TOCTOU prevention, never the last, because the world can change
 between preflight and touch. Records only through `recorder`.
 
+**Settled component boundary (staged migration).** `executor/__init__.py`
+preserves the existing public imports. `runtime.py` remains the operations
+engine: dispatch, all operations, executor-specific path guards, retries,
+continuations and the typed effect journal, cancellation, recording,
+settlement, progress, and outcomes. `native.py` owns Windows filesystem
+primitives, metadata, handles, publication, trash, and adaptation of core root
+authority to executor errors. `pipeline.py` owns only the bounded one-file
+read/hash/write flow, queues, backpressure, teardown, metrics, and `CopyDigest`
+production; it never publishes, records, retries, or interprets an operation.
+Final-touch timing remains in runtime even when the observation mechanics are
+shared through core.
+
+The operation-keyed effect journal admits byte/publication state and non-byte
+mutation state simultaneously; neither may hide the other. Typed mutation
+variants cover readonly clearing, rename/recase, trash rename, removal, and
+directory creation. One settlement reducer consumes the journal for success,
+ordinary failure, retry/pause, and cancellation while preserving existing
+reason precedence, detail vocabulary, recording degradation, cleanup timing,
+and recorder ordering. The package migration and journal reduction are
+contract-preserving maintenance: a discovered policy discrepancy is isolated
+as a separate bug fix rather than folded into the refactor.
+
+Single-file throughput work belongs primarily in `pipeline.py`; Windows I/O
+flags and handle mechanics belong in `native.py`; multi-file scheduling and
+per-volume concurrency belong in `runtime.py`. No finer executor split is
+assumed until these boundaries have stabilized.
+
 **Bones.** Typed-result return — the session runner owns `Terminal` (§2.2a);
 atomic temp-then-`os.replace` publish with best-effort parent-dir flush through
 a directory handle opened with `GENERIC_WRITE` access and
@@ -1228,6 +1299,21 @@ with an inline first-chunk fast exit rather than a maintained serial engine.
 reader=None) -> IntegrityRunResult`. `VerifierContext` requires the same
 parameterless `HasherFactory` used by the copy backend. Records through
 `recorder`.
+
+**Settled component boundary (staged migration).** `verifier/__init__.py`
+preserves the existing public imports. `engine.py` owns selection processing,
+classification, progress, cancellation, conditional recording, settlement,
+and verifier outcome policy. `native.py` owns the Windows bindings and the
+cache-honest, handle-bound reader. The native leaf may use core root-authority
+mechanics but never imports the engine; the engine may call the native reader
+through the core protocol.
+
+Each invocation is bound to one exact reviewed logical root, its reviewed
+anchor when available, and its expected `VolumeId`. Authority is revalidated
+before each item and does not replace the reader's opened-handle volume and
+final-path checks. Standalone and post-copy verification continue through the
+same ledger-neutral classifier; executor publication policy and verifier read
+policy remain independent.
 
 **Bones.** Per-file `IntegrityOutcome` emission (no silent-until-done); the
 cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached

@@ -10,10 +10,26 @@ reused by CLI, queue, or service entry points.
 
 ## Directory Conventions
 
-- `namisync/core/`: contracts, session state, events, path safety, and protocol
-  shapes. It imports only the Python standard library.
-- `namisync/modules/`: scanner, planner, preflight, executor, and verifier. It
-  imports `core`; modules do not import one another.
+- `namisync/core/`: contracts, session state, events, lexical path safety,
+  ephemeral root-authority evidence, and protocol shapes. It imports only the
+  Python standard library. Shared root-authority code probes and classifies;
+  it does not cache freshness, persist bindings, or decide module policy.
+- `namisync/modules/`: scanner, planner, preflight, executor, and verifier. A
+  domain component may be one module or a package. Files inside one component
+  package may import one another; component roots do not import sibling domain
+  components and import project contracts only from `core`.
+- `namisync/modules/executor/`: the executor component package. `__init__.py`
+  is the stable public facade; `runtime.py` owns operation policy, dispatch,
+  final-touch guards, retries, the typed effect journal, cancellation,
+  recording, settlement, and outcomes; `native.py` owns Windows filesystem
+  primitives, metadata, handles, publication, trash, and root-authority
+  adaptation; `pipeline.py` owns the bounded one-file read/hash/write flow,
+  teardown, metrics, and `CopyDigest` production. `native.py` and `pipeline.py`
+  are independent leaves and never import `runtime.py` or one another.
+- `namisync/modules/verifier/`: the verifier component package. `__init__.py`
+  is the stable public facade; `engine.py` owns classification, progress,
+  recording, and verifier policy; `native.py` owns the Windows cache-honest,
+  handle-bound reader and native bindings and never imports `engine.py`.
 - `namisync/db/`: recorder, repositories, schemas, and the history observer. It
   imports `core` and is the sole writer of the main ledger.
 - `namisync/workflows/`: sync and integrity workflow coordination. It is the
@@ -79,6 +95,14 @@ their contract, and update the matching tests and documentation when it does.
 - Make surgical changes. Every changed line should trace to the current task.
 - Prefer explicit dataclasses and typed functions over implicit dictionaries for
   core contracts.
+- Treat `RootAuthority` as reviewed evidence, never as a lasting authorization
+  token. Consumers must re-probe at their existing point of use; scanner,
+  preflight, executor, and verifier retain their distinct admission and outcome
+  policies.
+- Keep executor effects typed and operation-local. Publication, metadata, and
+  non-byte mutation effects are orthogonal journal entries whose settlement is
+  reduced centrally; do not reintroduce parallel ad-hoc state dictionaries or
+  sibling-specific settlement branches.
 - Use `sqlite3` directly. Do not add an ORM.
 - Keep live SQLite databases local only. Do not place app DBs in cloud-synced
   folders.
@@ -99,6 +123,9 @@ their contract, and update the matching tests and documentation when it does.
 ## Testing And Verification
 
 - Use pytest.
+- Import component public APIs through the component facade. Tests that inject
+  or patch an internal collaborator patch the submodule that owns the symbol,
+  not a facade re-export.
 - For bug fixes, write or identify a reproducing test first when practical.
 - For new core behavior, add focused tests in the matching test area.
 - Document behavioral changes in the module-specific document in `docs/` in

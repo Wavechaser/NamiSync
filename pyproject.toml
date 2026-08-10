@@ -57,10 +57,15 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Domain modules are mutually independent"
-type = "forbidden"
-source_modules = ["namisync.modules.*"]
-forbidden_modules = ["namisync.modules.*"]
+name = "Domain components are mutually independent"
+type = "independence"
+modules = [
+    "namisync.modules.scanner",
+    "namisync.modules.planner",
+    "namisync.modules.preflight",
+    "namisync.modules.executor",
+    "namisync.modules.verifier",
+]
 
 [[tool.importlinter.contracts]]
 name = "Database imports only core"
