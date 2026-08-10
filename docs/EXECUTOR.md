@@ -342,6 +342,10 @@ completed. A confirmed or unverified durable mutation never reports
 `recording=OK` and never becomes verification evidence. If the durable-state
 probe itself fails, publication is reported unverified and recording still
 degrades instead of claiming the ledger is current.
+Ordinary failure snapshots retained byte and mutation effects exactly once
+before owned-temp cleanup. A cleanup failure decorates that snapshot without
+probing again or replacing the underlying operation reason; when no durable or
+unverified effect exists, the existing `cleanup-failed` result remains.
 
 MOVE, RECASE, TRASH, DELETE, MKDIR, and readonly clearing in UPDATE/DELETE keep
 a lightweight process-local mutation marker from immediately before their first

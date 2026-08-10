@@ -1989,19 +1989,21 @@ def execute(
                     )
                     cleanup_error = _cleanup_inflight(state, fs)
                     if cleanup_error is not None:
-                        error = OperationFailure(
-                            ExecutionReason.CLEANUP_FAILED,
-                            "operation failed and its owned temp could not be removed: "
-                            f"{logical_error_text(cleanup_error)}",
-                            cause=error,
-                        )
-                        if durable_failure is not None:
-                            durable_failure = _failed_durable_settlement(
-                                operation,
-                                error,
-                                fs,
-                                target_root,
-                                state,
+                        if durable_failure is None:
+                            error = OperationFailure(
+                                ExecutionReason.CLEANUP_FAILED,
+                                "operation failed and its owned temp could not be removed: "
+                                f"{logical_error_text(cleanup_error)}",
+                                cause=error,
+                            )
+                        else:
+                            detail = dict(durable_failure.detail)
+                            detail["cleanup_error"] = logical_error_text(
+                                cleanup_error
+                            )
+                            durable_failure = replace(
+                                durable_failure,
+                                detail=detail,
                             )
                     state.retry_continuations.pop(operation.op_id, None)
                     state.retry_errors.pop(operation.op_id, None)

@@ -60,6 +60,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-10). Cleanup-time settlement re-observation. An
+  ordinary operation failure with retained byte or mutation state was probed
+  before owned-temp cleanup, then probed again if cleanup failed. A one-shot
+  unavailable probe or cleanup's own filesystem effect could therefore erase
+  the first truthful durable verdict and replace the underlying reason with
+  `cleanup-failed`. Fixed by taking one pre-cleanup settlement snapshot and
+  adding cleanup diagnostics without another probe; failures with no retained
+  effect keep the existing cleanup-owned reason.
 - MODERATE - FIXED (2026-08-10). Ordinary sibling settlement. UPDATE could
   clear readonly, fail replacement and restoration, then lose its publication
   state probe; the resulting publication-unverified settlement short-circuited

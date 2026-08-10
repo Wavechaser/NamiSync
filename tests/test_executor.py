@@ -4254,6 +4254,31 @@ class PublishCancelCleanupDiagnosticFileSystem(CleanupDiagnosticFileSystem):
         raise Canceled()
 
 
+class UnverifiedPublishCleanupFailureFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.publish_attempted = False
+        self.settlement_probe_calls = 0
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        del temp, target
+        self.publish_attempted = True
+        raise PermissionError("injected publish failure")
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if self.publish_attempted:
+            self.settlement_probe_calls += 1
+            if self.settlement_probe_calls == 1:
+                raise PermissionError(
+                    "injected one-shot publication probe failure"
+                )
+        return super().stat_path(path)
+
+    def remove_owned_temp(self, path: Path) -> None:
+        if self.publish_attempted:
+            raise PermissionError("injected cleanup failure")
+        super().remove_owned_temp(path)
+
+
 def test_failed_cleanup_detail_sanitizes_native_temp_filename(
     tmp_path: Path,
 ) -> None:
@@ -4355,6 +4380,58 @@ def test_canceled_durable_settlement_sanitizes_cleanup_filename(
     assert r"file.bin.synctmp-" in outcome.detail["cleanup_error"]
     assert "\\\\?\\" not in outcome.detail["cleanup_error"]
     assert "\\\\?\\" not in str(result_item_to_dict(outcome))
+
+
+def test_failed_durable_settlement_observes_once_before_cleanup(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"payload")
+    fs = UnverifiedPublishCleanupFailureFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(failure=BoundedFailurePolicy(retries=0)),
+    )
+
+    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert outcome.outcome is Outcome.FAILED
+    assert outcome.reason == "io-error"
+    assert outcome.detail == {
+        "error_type": "PermissionError",
+        "message": "injected publish failure",
+        "publish_state": "unverified",
+        "published_path": "file.bin",
+        "durable_state": "publication-unverified",
+        "state_error_type": "PermissionError",
+        "state_error": "injected one-shot publication probe failure",
+        "recording": RecordingStatus.DEGRADED.value,
+        "recording_error": (
+            "filesystem mutation may have published but durable state "
+            "could not be verified"
+        ),
+        "cleanup_error": "injected cleanup failure",
+    }
+    assert fs.settlement_probe_calls == 1
+    assert recorder.calls == []
+    owned_temp = target / (
+        f"file.bin.synctmp-{RUN_ID}-{operation.op_id}"
+    )
+    assert owned_temp.exists()
 
 
 def test_midcopy_sharing_retry_recreates_owned_temp_and_converges(
