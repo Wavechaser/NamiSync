@@ -60,6 +60,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-10). Ordinary sibling settlement. UPDATE could
+  clear readonly, fail replacement and restoration, then lose its publication
+  state probe; the resulting publication-unverified settlement short-circuited
+  the retained mutation marker. Recording was already degraded, but item detail
+  omitted the changed metadata needed for accurate recovery. Fixed by making
+  only confirmed publication authoritative and composing unverified byte
+  diagnostics with marker truth under `mutation_durable_state`. A regression
+  covers failed restoration plus an unavailable ordinary publication probe.
 - MINOR - FIXED (2026-08-10). Copied-backup evidence skew. On a target without
   hardlink support, UPDATE copied the reviewed live file and then sampled its
   path for backup metadata; a concurrent grow, truncation, or rewrite could

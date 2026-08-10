@@ -355,10 +355,13 @@ ordinary failure and recording status. Any durable or unverified mutation is
 resumed-directory restoration has its own failure probe. Case-insensitive path
 stats cannot prove a failed RECASE's exact spelling, so that state degrades
 conservatively. These markers and probes add no filesystem operation to
-successful execution. Cancellation evaluates the byte continuation and mutation
-marker independently unless byte publication is confirmed, which remains the
-authoritative `canceled-after-publish` result; a failed byte classifier cannot
-short-circuit marker settlement.
+successful execution. Ordinary failure and cancellation evaluate the byte
+continuation and mutation marker independently unless byte publication is
+confirmed. Confirmed publication remains the authoritative failed-publish or
+`canceled-after-publish` result. When byte classification is unverified,
+publication diagnostics stay primary, marker durability is named
+`mutation_durable_state`, and a failed byte classifier cannot short-circuit
+marker settlement.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the

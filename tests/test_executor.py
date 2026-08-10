@@ -9084,20 +9084,39 @@ def test_cancel_restores_resumed_directory_metadata_before_unwind(
 
 
 class ReadonlyReplaceFailureFileSystem(NativeFileSystem):
-    def __init__(self, target: Path, *, fail_restore: bool) -> None:
+    def __init__(
+        self,
+        target: Path,
+        *,
+        fail_restore: bool,
+        fail_probe: bool = False,
+        commit_replace: bool = False,
+    ) -> None:
         self.target = target
         self.fail_restore = fail_restore
+        self.fail_probe = fail_probe
+        self.commit_replace = commit_replace
+        self.probe_failure_armed = False
         self.restore_attempts = 0
 
     def replace(self, temp: Path, target: Path) -> None:
+        if self.commit_replace:
+            super().replace(temp, target)
         raise PermissionError("injected replace failure")
 
     def apply_metadata(self, path: Path, *args, **kwargs) -> None:
         if path == self.target and kwargs.get("apply_readonly"):
             self.restore_attempts += 1
             if self.fail_restore:
+                self.probe_failure_armed = self.fail_probe
                 raise PermissionError("injected readonly restoration failure")
         super().apply_metadata(path, *args, **kwargs)
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        if path == self.target and self.probe_failure_armed:
+            self.probe_failure_armed = False
+            raise PermissionError("ordinary publication-state probe unavailable")
+        return super().stat_path(path)
 
 
 class CanceledReadonlyProbeFileSystem(NativeFileSystem):
@@ -9137,10 +9156,26 @@ class CanceledReadonlyProbeFileSystem(NativeFileSystem):
         return super().stat_path(path)
 
 
-@pytest.mark.parametrize("fail_restore", [False, True], ids=("restored", "restore-failed"))
-def test_failed_readonly_update_reports_restoration_truth(
+@pytest.mark.parametrize(
+    ("fail_restore", "fail_probe", "commit_replace"),
+    (
+        (False, False, False),
+        (True, False, False),
+        (True, True, False),
+        (False, False, True),
+    ),
+    ids=(
+        "restored",
+        "restore-failed",
+        "restore-and-probe-failed",
+        "published",
+    ),
+)
+def test_failed_readonly_update_reports_durable_truth(
     tmp_path: Path,
     fail_restore: bool,
+    fail_probe: bool,
+    commit_replace: bool,
 ) -> None:
     source, target = _roots(tmp_path)
     (source / "readonly.bin").write_bytes(b"new-version")
@@ -9161,7 +9196,12 @@ def test_failed_readonly_update_reports_restoration_truth(
         preserve_created=True,
         apply_readonly=True,
     )
-    fs = ReadonlyReplaceFailureFileSystem(live, fail_restore=fail_restore)
+    fs = ReadonlyReplaceFailureFileSystem(
+        live,
+        fail_restore=fail_restore,
+        fail_probe=fail_probe,
+        commit_replace=commit_replace,
+    )
     source_stat = fs.stat(source, "readonly.bin")
     target_stat = fs.stat(target, "readonly.bin")
     assert source_stat is not None and target_stat is not None
@@ -9181,12 +9221,46 @@ def test_failed_readonly_update_reports_restoration_truth(
     item = next(event for event in events if isinstance(event, ItemOutcome))
     restored = fs.stat(target, "readonly.bin")
     assert restored is not None
-    assert fs.restore_attempts == 1
+    assert fs.restore_attempts == (0 if commit_replace else 1)
     assert result.status is SessionState.FAILED
-    assert live.read_bytes() == b"old-version"
+    assert live.read_bytes() == (
+        b"new-version" if commit_replace else b"old-version"
+    )
     assert recorder.calls == []
     assert xset.published_evidence == {}
-    if fail_restore:
+    assert not fs.probe_failure_armed
+    if commit_replace:
+        assert item.outcome is Outcome.FAILED
+        assert item.reason == "io-error"
+        assert result.recording is RecordingStatus.DEGRADED
+        assert not restored.metadata.attributes & 1
+        assert item.detail["publish_state"] == "published"
+        assert item.detail["target_state"] == "published"
+        assert item.detail["durable_state"] == "target-published"
+        assert "mutation_state" not in item.detail
+        assert "mutation_durable_state" not in item.detail
+    elif fail_probe:
+        assert item.outcome is Outcome.FAILED
+        assert item.reason == "io-error"
+        assert result.recording is RecordingStatus.DEGRADED
+        assert not restored.metadata.attributes & 1
+        assert item.detail == {
+            "error_type": "PermissionError",
+            "message": "injected readonly restoration failure",
+            "publish_state": "unverified",
+            "published_path": "readonly.bin",
+            "durable_state": "publication-unverified",
+            "state_error_type": "PermissionError",
+            "state_error": "ordinary publication-state probe unavailable",
+            "recording": RecordingStatus.DEGRADED.value,
+            "recording_error": (
+                "filesystem mutation may have published but durable state "
+                "could not be verified"
+            ),
+            "mutation_state": "unverified",
+            "mutation_durable_state": "target-metadata-changed-before-publish",
+        }
+    elif fail_restore:
         assert result.recording is RecordingStatus.DEGRADED
         assert not restored.metadata.attributes & 1
         assert item.detail["publish_state"] == "not-published"

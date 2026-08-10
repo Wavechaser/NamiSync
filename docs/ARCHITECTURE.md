@@ -1155,11 +1155,12 @@ rather than an adversarial path lock. Cancellation instead derives
 the current item's outcome from that state immediately: retained UPDATE backups
 remain visible, published-but-unfinished work is failed with a typed reason and
 degraded recording, and no rollback or false success evidence is attempted.
-Byte continuations and mutation markers are evaluated independently unless
-publication is confirmed. An unavailable byte-state probe cannot suppress
-changed, ambiguous, or unreadable readonly/non-byte mutation truth; combined
-detail retains publication diagnostics and names marker durability separately,
-while an exact restored pre-state does not itself degrade recording.
+Ordinary failure and cancellation evaluate byte continuations and mutation
+markers independently unless publication is confirmed. An unavailable
+byte-state probe cannot suppress changed, ambiguous, or unreadable
+readonly/non-byte mutation truth; combined detail retains publication
+diagnostics and names marker durability separately, while an exact restored
+pre-state does not itself degrade recording.
 UPDATE, DELETE, MOVE, RECASE, MOVE_UPDATE old-path cleanup, and TRASH force
 prior recorder evidence durable before their final destructive
 source/destination guards, leaving no writer wait between those guards and

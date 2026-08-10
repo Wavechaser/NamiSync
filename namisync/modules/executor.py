@@ -1980,24 +1980,13 @@ def execute(
                         policies.sleep(decision.after)
                         _retry_checkpoint(ctx, state, operation.op_id)
                         continue
-                    published_failure = _failed_after_publish_settlement(
+                    durable_failure = _failed_durable_settlement(
                         operation,
                         error,
                         fs,
                         target_root,
                         state,
                     )
-                    mutation_failure = (
-                        None
-                        if published_failure is not None
-                        else _failed_after_mutation_settlement(
-                            operation,
-                            error,
-                            fs,
-                            state,
-                        )
-                    )
-                    durable_failure = published_failure or mutation_failure
                     cleanup_error = _cleanup_inflight(state, fs)
                     if cleanup_error is not None:
                         error = OperationFailure(
@@ -2007,24 +1996,13 @@ def execute(
                             cause=error,
                         )
                         if durable_failure is not None:
-                            published_failure = _failed_after_publish_settlement(
+                            durable_failure = _failed_durable_settlement(
                                 operation,
                                 error,
                                 fs,
                                 target_root,
                                 state,
                             )
-                            mutation_failure = (
-                                None
-                                if published_failure is not None
-                                else _failed_after_mutation_settlement(
-                                    operation,
-                                    error,
-                                    fs,
-                                    state,
-                                )
-                            )
-                            durable_failure = published_failure or mutation_failure
                     state.retry_continuations.pop(operation.op_id, None)
                     state.retry_errors.pop(operation.op_id, None)
                     state.mutation_attempts.pop(operation.op_id, None)
@@ -3927,6 +3905,54 @@ def _failure_reason_and_message(
         else ExecutionReason.IO_ERROR
     )
     return reason, logical_error_text(error)
+
+
+def _failed_durable_settlement(
+    operation: PlanOperation,
+    error: Exception,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled | None:
+    published = _failed_after_publish_settlement(
+        operation,
+        error,
+        fs,
+        target_root,
+        state,
+    )
+    if (
+        published is not None
+        and published.detail.get("publish_state") == "published"
+    ):
+        return published
+
+    mutation = _failed_after_mutation_settlement(
+        operation,
+        error,
+        fs,
+        state,
+    )
+    if published is None:
+        return mutation
+    if mutation is None:
+        return published
+
+    detail = dict(published.detail)
+    mutation_detail = dict(mutation.detail)
+    for duplicate in (
+        "error_type",
+        "message",
+        "publish_state",
+        "recording",
+        "recording_error",
+    ):
+        mutation_detail.pop(duplicate, None)
+    mutation_durable_state = mutation_detail.pop("durable_state", None)
+    detail.update(mutation_detail)
+    if mutation_durable_state is not None:
+        detail["mutation_durable_state"] = mutation_durable_state
+    return replace(published, detail=detail)
 
 
 def _failed_after_publish_settlement(
