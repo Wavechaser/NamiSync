@@ -227,11 +227,13 @@ devices. Native
 entering warnings, durable detail, or user-facing diagnostics.
 
 `RootAuthority` is ephemeral reviewed context: a logical root plus an optional
-reviewed native anchor and `VolumeId`. Admission freshly observes the current
-anchor, no-follow checks each root component below it, then requires the volume
-probe's own anchor evidence to match before accepting its identity. Authority
-is never cached or persisted. Non-Windows probe branches are development/test
-fallbacks only, not production mount-boundary authority.
+reviewed native anchor and `VolumeId`. `admit_root_chain()` observes the current
+anchor through its supplied/native probe and no-follow checks each root
+component below it without observing volume identity; it returns the admitted
+anchor. `admit_root()` performs that exact chain admission once, then requires
+the volume probe's own anchor evidence to match before accepting its identity.
+Authority is never cached or persisted. Non-Windows probe branches are
+development/test fallbacks only, not production mount-boundary authority.
 
 `rel_path_key` follows Windows/NTFS one-codepoint case mapping, not
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code

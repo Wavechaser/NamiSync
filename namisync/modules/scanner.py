@@ -31,30 +31,31 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import (
     PathValidationError,
-    from_extended_length_path,
     join_under_root,
     lexical_absolute_path,
-    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
-    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.root_authority import (
+    FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_OFFLINE,
+    FILE_ATTRIBUTE_REPARSE_POINT,
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
     admit_existing_relative_chain,
+    admit_root_chain,
+    current_volume_anchor,
+    is_directory_stat,
+    is_placeholder_stat,
+    is_reparse_stat,
+    observe_native_volume,
 )
 from namisync.core.session import RunContext
 
 
-FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
-FILE_ATTRIBUTE_DIRECTORY = 0x00000010
-FILE_ATTRIBUTE_OFFLINE = 0x00001000
-FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x00040000
-FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
 FILE_NAMED_STREAMS = 0x00040000
 FILE_SUPPORTS_HARD_LINKS = 0x00400000
 
@@ -110,101 +111,45 @@ class NativeScannerBackend:
     """Native Windows metadata backend; it never opens ordinary file content."""
 
     def trusted_anchor(self, path: str) -> str:
-        return trusted_volume_anchor(path)
+        return current_volume_anchor(path)
 
     def resolve_root(
         self, path: str, *, trusted_anchor: str | None = None
     ) -> str:
         logical = lexical_absolute_path(path)
-        if trusted_anchor is None:
-            anchor = self.trusted_anchor(logical)
-        else:
-            anchor = lexical_absolute_path(trusted_anchor)
-            try:
-                current_anchor = self.trusted_anchor(logical)
-            except (OSError, ValueError) as error:
-                raise OSError(logical_error_text(error)) from error
-            if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
-                os.path.normpath(anchor)
-            ):
-                raise OSError(
-                    "location volume anchor changed after binding review"
-                )
-        for component in lexical_path_chain(
-            logical,
-            trusted_anchor=anchor,
-        ):
-            native = to_extended_length_path(component)
-            try:
-                observed = os.stat(native, follow_symlinks=False)
-            except OSError as error:
-                raise OSError(logical_error_text(error)) from error
-            if (
-                not _is_directory_stat(observed)
-                or _is_placeholder(observed)
-                or _is_reparse(observed)
-            ):
-                raise NotADirectoryError(
-                    "location root chain contains a nonordinary directory: "
-                    f"{component}"
-                )
+        try:
+            authority = RootAuthority(logical, trusted_anchor)
+            admit_root_chain(
+                authority,
+                lstat=self.lstat,
+                anchor_probe=self.trusted_anchor,
+            )
+        except PathValidationError as error:
+            raise OSError(
+                "location volume anchor changed after binding review"
+            ) from error
+        except RootAuthorityError as error:
+            raise _scanner_root_error(error) from error
         return logical
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot:
-        if os.name != "nt":
-            stat = os.stat(to_extended_length_path(root), follow_symlinks=False)
-            serial = f"{stat.st_dev:x}"
-            fs_type = "UNKNOWN"
-            return VolumeSnapshot(
-                VolumeId(serial, fs_type),
-                VolumeEvidence(device_id=os.path.splitdrive(root)[0] or root),
-                CapabilityProfile(fs_type, _granularity_for(fs_type), False, None, 32767, False, False),
-            )
-
-        import ctypes
-        from ctypes import wintypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        volume_path = ctypes.create_unicode_buffer(32768)
-        native_root = to_extended_length_path(root)
-        if not kernel32.GetVolumePathNameW(
-            native_root, volume_path, len(volume_path)
-        ):
-            raise OSError(ctypes.get_last_error(), "GetVolumePathNameW failed", root)
-
-        label = ctypes.create_unicode_buffer(261)
-        filesystem = ctypes.create_unicode_buffer(261)
-        serial = wintypes.DWORD()
-        max_component = wintypes.DWORD()
-        flags = wintypes.DWORD()
-        if not kernel32.GetVolumeInformationW(
-            volume_path.value,
-            label,
-            len(label),
-            ctypes.byref(serial),
-            ctypes.byref(max_component),
-            ctypes.byref(flags),
-            filesystem,
-            len(filesystem),
-        ):
-            raise OSError(ctypes.get_last_error(), "GetVolumeInformationW failed", root)
-
-        fs_type = filesystem.value.upper() or "UNKNOWN"
-        volume_id = VolumeId(f"{serial.value:08X}", fs_type)
+        observed = observe_native_volume(root)
+        fs_type = observed.volume_id.fs_type
         return VolumeSnapshot(
-            volume_id,
-            VolumeEvidence(
-                label.value or None,
-                from_extended_length_path(volume_path.value),
-            ),
+            observed.volume_id,
+            observed.evidence,
             CapabilityProfile(
                 fs_type=fs_type,
                 mtime_granularity_ns=_granularity_for(fs_type),
                 stable_file_identity=_identity_supported(fs_type),
                 incurs_seek_penalty=None,
                 max_path=32767,
-                supports_ads=bool(flags.value & FILE_NAMED_STREAMS),
-                supports_hardlinks=bool(flags.value & FILE_SUPPORTS_HARD_LINKS),
+                supports_ads=bool(
+                    observed.filesystem_flags & FILE_NAMED_STREAMS
+                ),
+                supports_hardlinks=bool(
+                    observed.filesystem_flags & FILE_SUPPORTS_HARD_LINKS
+                ),
             ),
         )
 
@@ -249,30 +194,25 @@ def _to_stat(stat: os.stat_result, kind: EntryKind, volume: VolumeSnapshot) -> F
     )
 
 
-def _is_placeholder(stat: os.stat_result) -> bool:
-    attributes = _attributes(stat)
-    return bool(
-        attributes & FILE_ATTRIBUTE_REPARSE_POINT
-        and attributes
-        & (FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
-    )
-
-
-def _is_reparse(stat: os.stat_result) -> bool:
-    return bool(_attributes(stat) & FILE_ATTRIBUTE_REPARSE_POINT or getattr(stat, "st_reparse_tag", 0))
-
-
-def _is_directory_stat(stat: os.stat_result) -> bool:
-    return bool(
-        stat_module.S_ISDIR(stat.st_mode)
-        or _attributes(stat) & FILE_ATTRIBUTE_DIRECTORY
-    )
-
-
 def _same_logical_path(left: str, right: str) -> bool:
     return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
         os.path.normpath(right)
     )
+
+
+def _scanner_root_error(error: RootAuthorityError) -> OSError:
+    if error.issue is RootAuthorityIssue.ANCHOR_CHANGED:
+        return OSError("location volume anchor changed after binding review")
+    if error.issue in {
+        RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+        RootAuthorityIssue.REPARSE_COMPONENT,
+        RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+    }:
+        return NotADirectoryError(
+            "location root chain contains a nonordinary directory: "
+            f"{error.logical_path}"
+        )
+    return OSError(logical_error_text(error))
 
 
 def _escaped_path(value: str) -> str:
@@ -523,9 +463,9 @@ class WalkingScanner:
                         absolute_start,
                         trusted_mount_root,
                     )
-                    and _is_directory_stat(root_stat)
-                    and _is_reparse(root_stat)
-                    and not _is_placeholder(root_stat)
+                    and is_directory_stat(root_stat)
+                    and is_reparse_stat(root_stat)
+                    and not is_placeholder_stat(root_stat)
                 ):
                     # Record the mounted root, not the hosting reparse entry.
                     root_stat = self._backend.stat(absolute_start)
@@ -561,9 +501,9 @@ class WalkingScanner:
 
             if not relative_start:
                 if (
-                    not _is_directory_stat(root_stat)
-                    or _is_placeholder(root_stat)
-                    or _is_reparse(root_stat)
+                    not is_directory_stat(root_stat)
+                    or is_placeholder_stat(root_stat)
+                    or is_reparse_stat(root_stat)
                 ):
                     warnings.append(
                         ScanWarning(
@@ -592,8 +532,8 @@ class WalkingScanner:
                 pending.append((absolute_start, ""))
                 continue
 
-            is_directory = _is_directory_stat(root_stat)
-            if _is_placeholder(root_stat):
+            is_directory = is_directory_stat(root_stat)
+            if is_placeholder_stat(root_stat):
                 kind = (
                     EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                 )
@@ -611,7 +551,7 @@ class WalkingScanner:
                 if is_directory:
                     complete = False
                 continue
-            if _is_reparse(root_stat):
+            if is_reparse_stat(root_stat):
                 kind = (
                     EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                 )
@@ -787,7 +727,7 @@ class WalkingScanner:
                     complete = False
                     continue
 
-                is_directory = is_directory or _is_directory_stat(stat)
+                is_directory = is_directory or is_directory_stat(stat)
                 if (
                     provisionally_ignored
                     and ignores.excludes(
@@ -795,7 +735,7 @@ class WalkingScanner:
                     )
                 ):
                     continue
-                if _is_placeholder(stat):
+                if is_placeholder_stat(stat):
                     kind = EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                     unsupported.append(
                         UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.PLACEHOLDER, kind)
@@ -804,7 +744,7 @@ class WalkingScanner:
                     if is_directory:
                         complete = False
                     continue
-                if _is_reparse(stat):
+                if is_reparse_stat(stat):
                     kind = EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                     unsupported.append(
                         UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.REPARSE_POINT, kind)
@@ -921,16 +861,19 @@ class WalkingScanner:
                 )
                 complete = False
                 continue
-            is_directory = stat_module.S_ISDIR(stat.st_mode) and not _is_reparse(stat)
+            is_directory = (
+                stat_module.S_ISDIR(stat.st_mode)
+                and not is_reparse_stat(stat)
+            )
             if ignores.excludes(rel_path, is_directory=is_directory):
                 complete = False
                 continue
-            if _is_placeholder(stat):
+            if is_placeholder_stat(stat):
                 unsupported.append(
                     UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.PLACEHOLDER)
                 )
                 warnings.append(ScanWarning(ScanWarningCode.PLACEHOLDER, rel_path))
-            elif _is_reparse(stat):
+            elif is_reparse_stat(stat):
                 unsupported.append(
                     UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.REPARSE_POINT)
                 )
@@ -1034,40 +977,26 @@ class WalkingScanner:
     def _root_error(
         self, path: str, trusted_anchor: str | None
     ) -> OSError | None:
-        try:
-            if trusted_anchor is not None:
-                anchor = trusted_anchor
-            else:
-                anchor_provider = getattr(
-                    self._backend,
-                    "trusted_anchor",
-                    None,
-                )
-                anchor = (
-                    anchor_provider(path)
-                    if callable(anchor_provider)
-                    else Path(path).anchor
-                )
-            root_chain = lexical_path_chain(
-                path,
-                trusted_anchor=anchor,
+        anchor_provider = getattr(self._backend, "trusted_anchor", None)
+        find_anchor = (
+            (lambda _path: trusted_anchor)
+            if trusted_anchor is not None
+            else (
+                anchor_provider
+                if callable(anchor_provider)
+                else (lambda _path: Path(path).anchor)
             )
+        )
+        try:
+            admit_root_chain(
+                RootAuthority(path, trusted_anchor),
+                lstat=self._backend.lstat,
+                anchor_probe=find_anchor,
+            )
+        except RootAuthorityError as error:
+            return _scanner_root_error(error)
         except (OSError, PathValidationError) as error:
             return error
-        for component in root_chain:
-            try:
-                root_stat = self._backend.lstat(component)
-            except (OSError, PermissionError) as error:
-                return error
-            if (
-                not _is_directory_stat(root_stat)
-                or _is_placeholder(root_stat)
-                or _is_reparse(root_stat)
-            ):
-                return NotADirectoryError(
-                    "location root chain contains a nonordinary directory: "
-                    f"{component}"
-                )
         return None
 
     def _reviewed_anchor(
@@ -1094,9 +1023,7 @@ class WalkingScanner:
                 current_anchor = lexical_absolute_path(anchor_provider(path))
             except (OSError, PathValidationError) as error:
                 return error
-            if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
-                os.path.normpath(reviewed_anchor)
-            ):
+            if not _same_logical_path(current_anchor, reviewed_anchor):
                 return OSError(
                     "location volume anchor changed after binding review"
                 )

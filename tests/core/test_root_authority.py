@@ -20,6 +20,7 @@ from namisync.core.root_authority import (
     RootAuthorityIssue,
     admit_existing_relative_chain,
     admit_root,
+    admit_root_chain,
     current_volume_anchor,
     is_directory_stat,
     is_placeholder_stat,
@@ -118,6 +119,28 @@ def test_admit_root_checks_anchor_chain_then_volume(tmp_path: Path) -> None:
         ("lstat", str(parent)),
         ("lstat", str(root)),
         ("volume", str(root)),
+    ]
+
+
+def test_admit_root_chain_checks_anchor_and_components_without_volume(
+    tmp_path: Path,
+) -> None:
+    anchor = tmp_path / "mount"
+    root = anchor / "managed"
+    calls: list[tuple[str, str]] = []
+    authority = RootAuthority(str(root), str(anchor), VOLUME)
+
+    admitted_anchor = admit_root_chain(
+        authority,
+        anchor_probe=lambda path: calls.append(("anchor", path)) or str(anchor),
+        lstat=lambda path: calls.append(("lstat", path))
+        or _stat(directory=True),
+    )
+
+    assert admitted_anchor == str(anchor)
+    assert calls == [
+        ("anchor", str(root)),
+        ("lstat", str(root)),
     ]
 
 

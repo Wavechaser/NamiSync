@@ -1072,6 +1072,58 @@ def test_scanner_discards_observations_if_volume_swaps_during_enumeration() -> N
     assert result.warnings[0].code is ScanWarningCode.VOLUME_UNAVAILABLE
 
 
+def test_scanner_discards_observations_if_root_chain_swaps_after_enumeration() -> None:
+    root = r"C:\root"
+    entry = FakeEntry(
+        "observed.bin",
+        root + r"\observed.bin",
+        False,
+        _fake_stat(ino=2, nlink=2),
+    )
+    backend = FakeBackend({root: [entry]}, _profile())
+    state = {"swapped": False}
+    volume_calls: list[str] = []
+    original_volume_snapshot = backend.volume_snapshot
+
+    backend.lstat = lambda _path: _fake_stat(
+        ino=1,
+        directory=True,
+        attributes=(
+            FILE_ATTRIBUTE_REPARSE_POINT if state["swapped"] else 0
+        ),
+    )
+
+    def volume_snapshot(path: str) -> VolumeSnapshot:
+        volume_calls.append(path)
+        return original_volume_snapshot(path)
+
+    @contextmanager
+    def swap_during_scandir(path: str):
+        backend.scandir_calls.append(path)
+        state["swapped"] = True
+        yield iter(backend.entries.get(path, ()))
+
+    backend.volume_snapshot = volume_snapshot
+    backend.scandir = swap_during_scandir
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+    )
+
+    assert not result.complete
+    assert result.volume_id is None
+    assert result.files == ()
+    assert result.directories == ()
+    assert result.unsupported == ()
+    assert [warning.code for warning in result.warnings] == [
+        ScanWarningCode.ROOT_UNAVAILABLE
+    ]
+    assert backend.scandir_calls == [root]
+    assert volume_calls == [root, root]
+
+
 @pytest.mark.parametrize(
     "scope",
     [
@@ -1377,6 +1429,129 @@ def test_native_root_resolution_revalidates_an_empty_chain_mount_anchor(
             str(configured),
             trusted_anchor=str(configured),
         )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows volume anchors")
+def test_native_root_resolution_maps_an_outside_reviewed_anchor_to_legacy_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = scanner_module.NativeScannerBackend()
+    monkeypatch.setattr(
+        backend,
+        "trusted_anchor",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("invalid reviewed anchor reached native probing")
+        ),
+    )
+
+    with pytest.raises(
+        OSError,
+        match="location volume anchor changed after binding review",
+    ) as raised:
+        backend.resolve_root(r"C:\managed", trusted_anchor="D:\\")
+
+    assert not isinstance(raised.value, PathValidationError)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows volume anchors")
+def test_scanner_reports_an_outside_reviewed_anchor_as_root_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = scanner_module.NativeScannerBackend()
+    monkeypatch.setattr(
+        backend,
+        "trusted_anchor",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("invalid reviewed anchor reached native probing")
+        ),
+    )
+    monkeypatch.setattr(
+        backend,
+        "volume_snapshot",
+        lambda _path: (_ for _ in ()).throw(
+            AssertionError("invalid reviewed anchor reached volume probing")
+        ),
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(r"C:\managed", "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor="D:\\",
+    )
+
+    assert not result.complete
+    assert result.volume_id is None
+    assert result.warnings[0].code is ScanWarningCode.ROOT_UNAVAILABLE
+    assert (
+        result.warnings[0].detail
+        == "location volume anchor changed after binding review"
+    )
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows root admission order")
+@pytest.mark.parametrize("explicit_anchor", (True, False))
+def test_native_scan_preserves_root_authority_probe_order(
+    explicit_anchor: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = r"C:\root"
+    anchor = "C:\\"
+    calls: list[tuple[str, str]] = []
+    backend = scanner_module.NativeScannerBackend()
+
+    def trusted_anchor(path: str) -> str:
+        calls.append(("anchor", path))
+        return anchor
+
+    def lstat(path: str):
+        calls.append(("lstat", path))
+        return _fake_stat(ino=1, directory=True)
+
+    def volume_snapshot(path: str) -> VolumeSnapshot:
+        calls.append(("volume", path))
+        return VolumeSnapshot(
+            VolumeId("ABCD", "NTFS"),
+            VolumeEvidence(device_id=anchor),
+            _profile(),
+        )
+
+    @contextmanager
+    def scandir(path: str):
+        calls.append(("scandir", path))
+        yield iter(())
+
+    monkeypatch.setattr(backend, "trusted_anchor", trusted_anchor)
+    monkeypatch.setattr(backend, "lstat", lstat)
+    monkeypatch.setattr(backend, "volume_snapshot", volume_snapshot)
+    monkeypatch.setattr(backend, "scandir", scandir)
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        trusted_anchor=anchor if explicit_anchor else None,
+    )
+
+    expected_calls = [
+        ("anchor", root),
+        ("lstat", root),
+        ("lstat", root),
+        ("volume", root),
+        ("lstat", root),
+        ("anchor", root),
+        ("volume", root),
+        ("lstat", root),
+        ("scandir", root),
+        ("lstat", root),
+        ("anchor", root),
+        ("volume", root),
+    ]
+    if not explicit_anchor:
+        expected_calls.insert(2, ("anchor", root))
+
+    assert result.complete, result.warnings
+    assert calls == expected_calls
 
 
 def test_native_followed_root_stat_uses_the_extended_path(

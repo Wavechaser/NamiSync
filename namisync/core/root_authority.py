@@ -244,18 +244,21 @@ def observe_native_volume(path: str | os.PathLike[str]) -> NativeVolumeInfo:
     )
 
 
-def admit_root(
+def admit_root_chain(
     authority: RootAuthority,
     *,
     lstat: NoFollowStat | None = None,
     anchor_probe: AnchorProbe | None = None,
-    volume_probe: VolumeProbe | None = None,
-) -> NativeVolumeInfo:
-    """Freshly admit a configured root against its reviewed authority."""
+) -> str:
+    """Freshly admit a configured root's anchor and no-follow chain.
+
+    This chain-only boundary deliberately performs no volume observation. It
+    returns the admitted current/reviewed anchor for a caller that will perform
+    a later volume-bound admission in the same operation.
+    """
 
     stat_path = _native_lstat if lstat is None else lstat
     find_anchor = current_volume_anchor if anchor_probe is None else anchor_probe
-    find_volume = observe_native_volume if volume_probe is None else volume_probe
     try:
         current_anchor = lexical_absolute_path(
             find_anchor(authority.logical_root)
@@ -291,6 +294,24 @@ def admit_root(
     for component in root_chain:
         observed = _observe_component(component, stat_path)
         _require_ordinary_directory(component, observed)
+    return admitted_anchor
+
+
+def admit_root(
+    authority: RootAuthority,
+    *,
+    lstat: NoFollowStat | None = None,
+    anchor_probe: AnchorProbe | None = None,
+    volume_probe: VolumeProbe | None = None,
+) -> NativeVolumeInfo:
+    """Freshly admit a configured root against its reviewed authority."""
+
+    admitted_anchor = admit_root_chain(
+        authority,
+        lstat=lstat,
+        anchor_probe=anchor_probe,
+    )
+    find_volume = observe_native_volume if volume_probe is None else volume_probe
 
     try:
         volume = find_volume(authority.logical_root)

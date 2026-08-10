@@ -33,6 +33,11 @@ fault disappearing entries, permission errors, placeholder attributes,
 identity cycles, case collisions, coarse filesystems, and partial enumeration
 without opening file content.
 
+The native backend delegates current-anchor discovery, native volume facts,
+configured-root-chain admission, and no-follow stat classification to core.
+Scanner still owns capability interpretation, scan warning vocabulary, probe
+timing, traversal, and the exact FULL folder-mount exception.
+
 On a volume that advertises stable file identity, Windows directory-entry
 metadata may still omit the inode for an extended-path enumeration. In that
 case only, the walker repeats the metadata-only stat through its backend for the
@@ -121,6 +126,12 @@ components cannot be represented stably without the prefix—including trailing
 dot/space and reserved DOS device names—are also refused, preventing a reviewed
 root from normalizing onto a different sibling. Native error filename fields
 are converted back to logical spelling before entering scan warnings.
+
+The three scan-level authority brackets retain their established order: a
+chain-only admission precedes the reviewed volume snapshot; immediately before
+enumeration and again after it, chain admission precedes the fresh anchor and
+volume comparison. A chain failure remains `ROOT_UNAVAILABLE` and stops the
+later binding probes; a binding failure remains `VOLUME_UNAVAILABLE`.
 
 Built-in ignores use exact names or exact generated-name grammar. `.synctrash`
 is excluded as an owned root; a user filename merely containing `.synctmp-`,
