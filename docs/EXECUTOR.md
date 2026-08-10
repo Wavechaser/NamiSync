@@ -365,7 +365,11 @@ confirmed. Confirmed publication remains the authoritative failed-publish or
 `canceled-after-publish` result. When byte classification is unverified,
 publication diagnostics stay primary, marker durability is named
 `mutation_durable_state`, and a failed byte classifier cannot short-circuit
-marker settlement.
+marker settlement. A pre-publication UPDATE backup is also byte-channel state:
+when it remains in owned trash, ordinary failure and cancellation retain its
+path, method, and observed state as primary detail while independently naming
+any readonly mutation. Confirmed publication remains authoritative and
+suppresses that subordinate marker even when the retained backup is reported.
 
 ## Settlement Stability Gate
 

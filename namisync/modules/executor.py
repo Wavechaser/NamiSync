@@ -3942,14 +3942,11 @@ def _failed_durable_settlement(
 
     detail = dict(published.detail)
     mutation_detail = dict(mutation.detail)
-    for duplicate in (
-        "error_type",
-        "message",
-        "publish_state",
-        "recording",
-        "recording_error",
-    ):
+    for duplicate in ("error_type", "message", "publish_state"):
         mutation_detail.pop(duplicate, None)
+    for duplicate in ("recording", "recording_error"):
+        if duplicate in detail:
+            mutation_detail.pop(duplicate, None)
     mutation_durable_state = mutation_detail.pop("durable_state", None)
     detail.update(mutation_detail)
     if mutation_durable_state is not None:
@@ -4018,6 +4015,15 @@ def _failed_after_publish_settlement(
         )
         return _Settled(Outcome.FAILED, reason, detail)
     if not published:
+        if (
+            isinstance(continuation, _UpdateContinuation)
+            and continuation.backup is not None
+            and detail.get("backup_state") == "retained"
+        ):
+            detail["publish_state"] = "not-published"
+            detail.pop("published_path", None)
+            detail.setdefault("durable_state", "target-not-published")
+            return _Settled(Outcome.FAILED, reason, detail)
         return None
 
     target_durable_state = _published_target_durable_state(detail)
@@ -4376,7 +4382,7 @@ def _canceled_durable_settlement(
     )
     if mutation_settlement is None:
         return byte_settlement
-    if byte_settlement is None or byte_settlement.outcome is Outcome.CANCELED:
+    if byte_settlement is None:
         return mutation_settlement
 
     detail = dict(byte_settlement.detail)

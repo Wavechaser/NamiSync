@@ -60,6 +60,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-10). Pre-publication backup composition. UPDATE
+  could retain its reviewed backup in owned trash, fail replacement and
+  readonly restoration, then discard all backup evidence from ordinary or
+  cancellation settlement while reporting only the metadata mutation. Cause:
+  a not-published byte verdict was treated as no byte channel even when its
+  backup was durable. Fixed by retaining backup detail as the primary byte
+  state and composing readonly truth under `mutation_durable_state`; confirmed
+  publication still suppresses the subordinate marker.
 - MODERATE - FIXED (2026-08-10). Cleanup-time settlement re-observation. An
   ordinary operation failure with retained byte or mutation state was probed
   before owned-temp cleanup, then probed again if cleanup failed. A one-shot

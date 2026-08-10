@@ -9234,18 +9234,22 @@ class CanceledReadonlyProbeFileSystem(NativeFileSystem):
 
 
 @pytest.mark.parametrize(
-    ("fail_restore", "fail_probe", "commit_replace"),
+    ("fail_restore", "fail_probe", "commit_replace", "retain_backup"),
     (
-        (False, False, False),
-        (True, False, False),
-        (True, True, False),
-        (False, False, True),
+        (False, False, False, False),
+        (True, False, False, False),
+        (True, True, False, False),
+        (False, False, True, False),
+        (True, False, False, True),
+        (False, False, True, True),
     ),
     ids=(
         "restored",
         "restore-failed",
         "restore-and-probe-failed",
         "published",
+        "restore-failed-with-backup",
+        "published-with-backup",
     ),
 )
 def test_failed_readonly_update_reports_durable_truth(
@@ -9253,6 +9257,7 @@ def test_failed_readonly_update_reports_durable_truth(
     fail_restore: bool,
     fail_probe: bool,
     commit_replace: bool,
+    retain_backup: bool,
 ) -> None:
     source, target = _roots(tmp_path)
     (source / "readonly.bin").write_bytes(b"new-version")
@@ -9291,7 +9296,14 @@ def test_failed_readonly_update_reports_durable_truth(
         target_expected=target_stat,
         intended=source_stat,
     )
-    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+    xset = _xset(
+        _plan(
+            source,
+            target,
+            (operation,),
+            trash_on_update=retain_backup,
+        )
+    )
 
     result, events, recorder = _run(xset, fs=fs)
 
@@ -9313,9 +9325,18 @@ def test_failed_readonly_update_reports_durable_truth(
         assert not restored.metadata.attributes & 1
         assert item.detail["publish_state"] == "published"
         assert item.detail["target_state"] == "published"
-        assert item.detail["durable_state"] == "target-published"
+        assert item.detail["durable_state"] == (
+            "target-published-with-backup"
+            if retain_backup
+            else "target-published"
+        )
         assert "mutation_state" not in item.detail
         assert "mutation_durable_state" not in item.detail
+        if retain_backup:
+            assert item.detail["backup_state"] == "retained"
+            assert item.detail["backup_path"] == (
+                f".synctrash\\{RUN_ID}\\readonly.bin"
+            )
     elif fail_probe:
         assert item.outcome is Outcome.FAILED
         assert item.reason == "io-error"
@@ -9342,7 +9363,29 @@ def test_failed_readonly_update_reports_durable_truth(
         assert not restored.metadata.attributes & 1
         assert item.detail["publish_state"] == "not-published"
         assert item.detail["mutation_state"] == "unverified"
-        assert item.detail["durable_state"] == "target-metadata-changed-before-publish"
+        if retain_backup:
+            backup = target / ".synctrash" / str(RUN_ID) / "readonly.bin"
+            assert backup.read_bytes() == b"old-version"
+            assert item.detail["backup"] == "hardlink"
+            assert item.detail["backup_state"] == "retained"
+            assert item.detail["backup_metadata"] == "unrepaired"
+            assert item.detail["backup_path"] == (
+                f".synctrash\\{RUN_ID}\\readonly.bin"
+            )
+            assert item.detail["durable_state"] == "backup-retained"
+            assert item.detail["mutation_durable_state"] == (
+                "target-metadata-changed-before-publish"
+            )
+            assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+            assert item.detail["recording_error"] == (
+                "filesystem mutation may have committed before ledger settlement"
+            )
+            assert "published_path" not in item.detail
+            assert not list(target.glob("*.synctmp-*"))
+        else:
+            assert item.detail["durable_state"] == (
+                "target-metadata-changed-before-publish"
+            )
     else:
         assert result.recording is RecordingStatus.OK
         assert restored.metadata.attributes & 1
@@ -9350,14 +9393,27 @@ def test_failed_readonly_update_reports_durable_truth(
 
 
 @pytest.mark.parametrize(
-    ("fail_restore", "commit_replace"),
-    ((False, False), (True, False), (False, True)),
-    ids=("restored", "restore-failed", "published"),
+    ("fail_restore", "commit_replace", "retain_backup"),
+    (
+        (False, False, False),
+        (True, False, False),
+        (False, True, False),
+        (True, False, True),
+        (False, True, True),
+    ),
+    ids=(
+        "restored",
+        "restore-failed",
+        "published",
+        "restore-failed-with-backup",
+        "published-with-backup",
+    ),
 )
 def test_cancel_composes_byte_and_readonly_mutation_state(
     tmp_path: Path,
     fail_restore: bool,
     commit_replace: bool,
+    retain_backup: bool,
 ) -> None:
     source, target = _roots(tmp_path)
     (source / "readonly.bin").write_bytes(b"new-version")
@@ -9395,14 +9451,21 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
         target_expected=target_stat,
         intended=source_stat,
     )
-    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+    xset = _xset(
+        _plan(
+            source,
+            target,
+            (operation,),
+            trash_on_update=retain_backup,
+        )
+    )
     recorder = FakeRecorder()
     cancel_requested = False
     events: list[object] = []
 
     def sleep(_delay: float) -> None:
         nonlocal cancel_requested
-        if not commit_replace:
+        if not commit_replace and not retain_backup:
             fs.probe_failures = 1
         cancel_requested = True
 
@@ -9431,12 +9494,21 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
         assert fs.restore_attempts == 0
         assert item.reason == "canceled-after-publish"
         assert item.detail["publish_state"] == "published"
-        assert item.detail["durable_state"] == "target-published"
+        assert item.detail["durable_state"] == (
+            "target-published-with-backup"
+            if retain_backup
+            else "target-published"
+        )
         assert "mutation_state" not in item.detail
         assert "mutation_durable_state" not in item.detail
         assert xset.recording is RecordingStatus.DEGRADED
         assert live.read_bytes() == b"new-version"
         assert not observed.metadata.attributes & 1
+        if retain_backup:
+            assert item.detail["backup_state"] == "retained"
+            assert item.detail["backup_path"] == (
+                f".synctrash\\{RUN_ID}\\readonly.bin"
+            )
     elif fail_restore:
         assert fs.restore_attempts == 1
         assert item.reason == "canceled-after-mutation"
@@ -9447,6 +9519,16 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
             "target-metadata-changed-before-publish"
         )
         assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+        if retain_backup:
+            backup = target / ".synctrash" / str(RUN_ID) / "readonly.bin"
+            assert backup.read_bytes() == b"old-version"
+            assert item.detail["backup"] == "hardlink"
+            assert item.detail["backup_state"] == "retained"
+            assert item.detail["backup_metadata"] == "unrepaired"
+            assert item.detail["backup_path"] == (
+                f".synctrash\\{RUN_ID}\\readonly.bin"
+            )
+            assert item.detail["durable_state"] == "backup-retained"
     else:
         assert fs.restore_attempts == 1
         assert item.reason == "io-error"
@@ -9456,12 +9538,18 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
         assert "mutation_durable_state" not in item.detail
         assert "recording" not in item.detail
     if not commit_replace:
-        assert item.detail["publish_state"] == "unverified"
-        assert item.detail["durable_state"] == "unverified"
-        assert item.detail["state_error_type"] == "PermissionError"
-        assert item.detail["state_error"] == (
-            "cancel publication-state probe unavailable"
-        )
+        if retain_backup:
+            assert item.detail["publish_state"] == "not-published"
+            assert item.detail["durable_state"] == "backup-retained"
+            assert "state_error_type" not in item.detail
+            assert "state_error" not in item.detail
+        else:
+            assert item.detail["publish_state"] == "unverified"
+            assert item.detail["durable_state"] == "unverified"
+            assert item.detail["state_error_type"] == "PermissionError"
+            assert item.detail["state_error"] == (
+                "cancel publication-state probe unavailable"
+            )
         assert live.read_bytes() == b"old-version"
 
 
