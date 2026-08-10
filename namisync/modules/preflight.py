@@ -27,11 +27,9 @@ from namisync.core.pathing import (
     is_path_below,
     join_under_root,
     lexical_absolute_path,
-    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
-    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.planning import (
@@ -50,23 +48,42 @@ from namisync.core.preflight import (
     TrashObservation,
     Verdict,
 )
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_existing_relative_chain,
+    admit_root,
+    is_directory_stat,
+    is_placeholder_stat,
+    is_reparse_stat,
+    observe_native_volume,
+)
 
 
 class ObservationFileSystem(Protocol):
-    def observe_root(self, root: Root) -> RootObservation: ...
+    def observe_root(self, authority: RootAuthority) -> RootObservation: ...
 
-    def stat(self, root: Root, rel_path: str, profile: CapabilityProfile) -> StatObservation: ...
+    def stat(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation: ...
 
-    def free_space(self, target: Root) -> int: ...
+    def free_space(self, authority: RootAuthority) -> int: ...
 
     def reclaimable_temp_bytes(
         self,
-        target: Root,
+        authority: RootAuthority,
         parent_paths: frozenset[str],
         current_run_id: str,
     ) -> int: ...
 
-    def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation: ...
+    def observe_trash(
+        self,
+        authority: RootAuthority,
+    ) -> TrashObservation: ...
 
     def now_utc(self) -> datetime: ...
 
@@ -80,89 +97,100 @@ def _resolved_logical_path(path: str | Path, *, strict: bool) -> str:
     return from_extended_length_path(str(resolved))
 
 
-def _ordinary_logical_root(path: str | Path) -> str:
-    logical = lexical_absolute_path(path)
-    anchor = trusted_volume_anchor(logical)
-    for component in lexical_path_chain(
-        logical,
-        trusted_anchor=anchor,
-    ):
-        observed = os.stat(
-            _native_path(component),
-            follow_symlinks=False,
-        )
-        attributes = int(getattr(observed, "st_file_attributes", 0))
-        if (
-            not stat_module.S_ISDIR(observed.st_mode)
-            or stat_module.S_ISLNK(observed.st_mode)
-            or attributes & 0x00000400
-            or getattr(observed, "st_reparse_tag", 0)
-        ):
-            raise ValueError(
-                "location root chain contains a nonordinary directory: "
-                f"{component}"
-            )
-    return logical
-
-
-def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
-    if os.name != "nt":
-        observed = os.stat(_native_path(path), follow_symlinks=False)
-        return VolumeId(f"{observed.st_dev:x}", "UNKNOWN"), VolumeEvidence(device_id=str(Path(path).anchor))
-
-    import ctypes
-    from ctypes import wintypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(32768)
-    if not kernel32.GetVolumePathNameW(
-        _native_path(path), volume_path, len(volume_path)
-    ):
-        raise OSError(ctypes.get_last_error(), "GetVolumePathNameW failed", path)
-    label = ctypes.create_unicode_buffer(261)
-    filesystem = ctypes.create_unicode_buffer(261)
-    serial = wintypes.DWORD()
-    max_component = wintypes.DWORD()
-    flags = wintypes.DWORD()
-    if not kernel32.GetVolumeInformationW(
-        volume_path.value,
-        label,
-        len(label),
-        ctypes.byref(serial),
-        ctypes.byref(max_component),
-        ctypes.byref(flags),
-        filesystem,
-        len(filesystem),
-    ):
-        raise OSError(ctypes.get_last_error(), "GetVolumeInformationW failed", path)
-    fs_type = filesystem.value.upper() or "UNKNOWN"
-    return VolumeId(f"{serial.value:08X}", fs_type), VolumeEvidence(
-        label.value or None,
-        from_extended_length_path(volume_path.value),
+def _root_authority(
+    root: Root,
+    expected_volume: VolumeId | None,
+    reviewed_evidence: VolumeEvidence | None,
+) -> RootAuthority:
+    return RootAuthority(
+        root.path,
+        None if reviewed_evidence is None else reviewed_evidence.device_id,
+        expected_volume,
     )
+
+
+def _classify_root_facts(
+    expected_volume: VolumeId | None,
+    reviewed_anchor: str | None,
+    observed: RootObservation | None,
+) -> RootAuthorityIssue | None:
+    if observed is None:
+        return RootAuthorityIssue.ANCHOR_UNAVAILABLE
+    if observed.error is not None or observed.resolved_path is None:
+        return observed.authority_issue or RootAuthorityIssue.ANCHOR_UNAVAILABLE
+    if reviewed_anchor is not None:
+        evidence_anchor = (
+            None
+            if observed.volume_evidence is None
+            else observed.volume_evidence.device_id
+        )
+        if not evidence_anchor:
+            return RootAuthorityIssue.ANCHOR_UNAVAILABLE
+        try:
+            current_anchor = lexical_absolute_path(evidence_anchor)
+            expected_anchor = lexical_absolute_path(reviewed_anchor)
+        except (OSError, TypeError, ValueError):
+            return RootAuthorityIssue.ANCHOR_UNAVAILABLE
+        if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
+            os.path.normpath(expected_anchor)
+        ):
+            return RootAuthorityIssue.ANCHOR_CHANGED
+    if expected_volume is None or observed.volume_id != expected_volume:
+        return RootAuthorityIssue.VOLUME_CHANGED
+    return None
 
 
 class LocalObservationFileSystem:
     """Read-only local observation implementation used by composition roots."""
 
-    def observe_root(self, root: Root) -> RootObservation:
+    def observe_root(self, authority: RootAuthority) -> RootObservation:
         try:
-            logical = _ordinary_logical_root(root.path)
-            resolved = _resolved_logical_path(logical, strict=True)
-            volume_id, evidence = _volume_observation(logical)
-            return RootObservation(resolved, volume_id, evidence)
+            admitted = admit_root(authority)
+            resolved = _resolved_logical_path(
+                authority.logical_root,
+                strict=True,
+            )
+            return RootObservation(
+                resolved,
+                admitted.volume_id,
+                admitted.evidence,
+            )
+        except RootAuthorityError as error:
+            return RootObservation(
+                None,
+                None,
+                None,
+                logical_error_text(error),
+                error.issue,
+            )
         except (OSError, PermissionError, ValueError) as error:
             return RootObservation(
                 None, None, None, logical_error_text(error)
             )
 
-    def stat(self, root: Root, rel_path: str, profile: CapabilityProfile) -> StatObservation:
+    def stat(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation:
         try:
             canonical = validate_relative_path(rel_path)
-            candidate = join_under_root(root.path, canonical)
-            logical_root = _ordinary_logical_root(root.path)
+            candidate = join_under_root(authority.logical_root, canonical)
+        except (OSError, PermissionError, ValueError) as error:
+            return StatObservation(
+                None, logical_error_text(error), True, False
+            )
+
+        admitted = admit_root(authority)
+        try:
+            exists = admit_existing_relative_chain(
+                authority,
+                canonical,
+                include_leaf=True,
+            )
             resolved_root = _resolved_logical_path(
-                logical_root,
+                authority.logical_root,
                 strict=True,
             )
             resolved_candidate = _resolved_logical_path(
@@ -172,23 +200,36 @@ class LocalObservationFileSystem:
             representable = len(resolved_candidate) <= profile.max_path
             if not contained:
                 return StatObservation(None, "resolved path escapes root", False, representable)
+            if not exists:
+                return StatObservation(None, None, True, representable)
             try:
                 observed = os.stat(
                     _native_path(candidate), follow_symlinks=False
                 )
             except FileNotFoundError:
                 return StatObservation(None, None, True, representable)
-            if stat_module.S_ISREG(observed.st_mode):
-                kind = EntryKind.FILE
-                size = int(observed.st_size)
-            elif stat_module.S_ISDIR(observed.st_mode):
+            if is_placeholder_stat(observed):
+                raise RootAuthorityError(
+                    RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+                    candidate,
+                    "path contains a placeholder component",
+                )
+            if is_reparse_stat(observed):
+                raise RootAuthorityError(
+                    RootAuthorityIssue.REPARSE_COMPONENT,
+                    candidate,
+                    "path contains a reparse component",
+                )
+            if is_directory_stat(observed):
                 kind = EntryKind.DIRECTORY
                 size = 0
+            elif stat_module.S_ISREG(observed.st_mode):
+                kind = EntryKind.FILE
+                size = int(observed.st_size)
             else:
                 return StatObservation(None, "unsupported entry type", True, representable)
-            volume_id, _ = _volume_observation(root.path)
             identity = (
-                FileIdentity(volume_id.serial, int(observed.st_ino))
+                FileIdentity(admitted.volume_id.serial, int(observed.st_ino))
                 if profile.stable_file_identity and int(observed.st_ino) > 0
                 else None
             )
@@ -210,19 +251,21 @@ class LocalObservationFileSystem:
                 None, logical_error_text(error), True, False
             )
 
-    def free_space(self, target: Root) -> int:
-        root = _ordinary_logical_root(target.path)
-        return int(shutil.disk_usage(_native_path(root)).free)
+    def free_space(self, authority: RootAuthority) -> int:
+        admit_root(authority)
+        return int(
+            shutil.disk_usage(_native_path(authority.logical_root)).free
+        )
 
     def reclaimable_temp_bytes(
         self,
-        target: Root,
+        authority: RootAuthority,
         parent_paths: frozenset[str],
         current_run_id: str,
     ) -> int:
         total = 0
-        root = _ordinary_logical_root(target.path)
-        target_volume, _ = _volume_observation(root)
+        admitted = admit_root(authority)
+        root = authority.logical_root
         for parent_path in sorted(parent_paths, key=lambda value: (normalize_relative_path(value, allow_root=True), value)):
             if parent_path and (
                 normalize_relative_path(parent_path) == ".SYNCTRASH"
@@ -231,8 +274,25 @@ class LocalObservationFileSystem:
                 continue
             absolute = root if not parent_path else join_under_root(root, parent_path)
             try:
-                parent_volume, _ = _volume_observation(absolute)
-                if parent_volume != target_volume:
+                if parent_path and not admit_existing_relative_chain(
+                    authority,
+                    parent_path,
+                    include_leaf=True,
+                ):
+                    continue
+                if parent_path:
+                    parent_stat = os.stat(
+                        _native_path(absolute),
+                        follow_symlinks=False,
+                    )
+                    if (
+                        is_placeholder_stat(parent_stat)
+                        or is_reparse_stat(parent_stat)
+                        or not is_directory_stat(parent_stat)
+                    ):
+                        continue
+                parent_volume = observe_native_volume(absolute)
+                if parent_volume.volume_id != admitted.volume_id:
                     continue
                 with os.scandir(_native_path(absolute)) as entries:
                     for entry in entries:
@@ -243,44 +303,81 @@ class LocalObservationFileSystem:
                             and entry.is_file(follow_symlinks=False)
                         ):
                             total += int(entry.stat(follow_symlinks=False).st_size)
-            except (FileNotFoundError, PermissionError, NotADirectoryError):
+            except OSError:
                 continue
         return total
 
-    def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation:
-        trash = os.path.join(target.path, ".synctrash")
+    def observe_trash(
+        self,
+        authority: RootAuthority,
+    ) -> TrashObservation:
+        trash = os.path.join(authority.logical_root, ".synctrash")
+        admit_root(authority)
         try:
-            logical_root = _ordinary_logical_root(target.path)
+            exists = admit_existing_relative_chain(
+                authority,
+                ".synctrash",
+                include_leaf=True,
+            )
             root_resolved = _resolved_logical_path(
-                logical_root,
+                authority.logical_root,
                 strict=True,
             )
-            trash_path = Path(_native_path(trash))
-            exists = trash_path.exists()
-            resolved = from_extended_length_path(
-                str(trash_path.resolve(strict=False))
+            resolved = _resolved_logical_path(
+                trash,
+                strict=False,
             )
             contained = is_path_below(resolved, root_resolved)
-            junction = bool(exists and hasattr(trash_path, "is_junction") and trash_path.is_junction())
-            attributes = 0
-            if exists:
-                attributes = int(
-                    getattr(
-                        os.lstat(_native_path(trash)),
-                        "st_file_attributes",
-                        0,
-                    )
+            if not contained:
+                return TrashObservation(
+                    resolved,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    "trash path resolves outside target root",
                 )
-            reparse_safe = not exists or not (
-                trash_path.is_symlink() or junction or attributes & 0x00000400
+            if exists:
+                observed = os.stat(
+                    _native_path(trash),
+                    follow_symlinks=False,
+                )
+                if is_placeholder_stat(observed):
+                    raise RootAuthorityError(
+                        RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+                        trash,
+                        "trash path is a placeholder",
+                    )
+                if is_reparse_stat(observed):
+                    raise RootAuthorityError(
+                        RootAuthorityIssue.REPARSE_COMPONENT,
+                        trash,
+                        "trash path is a reparse component",
+                    )
+                available = is_directory_stat(observed)
+            else:
+                available = True
+            writable_path = _native_path(
+                trash if exists else authority.logical_root
             )
-            available = not exists or trash_path.is_dir()
-            writable_path = _native_path(trash if exists else target.path)
             writable = os.access(writable_path, os.W_OK)
-            actual_volume, _ = _volume_observation(resolved if exists else target.path)
-            same_volume = expected_volume is not None and actual_volume == expected_volume
-            return TrashObservation(resolved, available, contained, same_volume, writable, reparse_safe)
-        except (OSError, PermissionError) as error:
+            actual_volume = observe_native_volume(
+                resolved if exists else authority.logical_root
+            )
+            same_volume = (
+                authority.expected_volume_id is not None
+                and actual_volume.volume_id == authority.expected_volume_id
+            )
+            return TrashObservation(
+                resolved,
+                available,
+                contained,
+                same_volume,
+                writable,
+                True,
+            )
+        except (OSError, PermissionError, ValueError) as error:
             return TrashObservation(
                 None,
                 False,
@@ -329,36 +426,115 @@ def observe(
 ) -> ObservedWorld:
     """Read the current scoped world without making any safety decision."""
 
+    plan = xset.plan
+
+    def authority_for(root: Root) -> RootAuthority:
+        if root.root_id == plan.source_root.root_id:
+            return _root_authority(
+                root,
+                plan.source_volume_id,
+                plan.source_volume_evidence,
+            )
+        return _root_authority(
+            root,
+            plan.target_volume_id,
+            plan.target_volume_evidence,
+        )
+
+    roots: dict[str, RootObservation] = {}
+    authorities: dict[str, RootAuthority] = {}
+    admitted_roots: dict[str, bool] = {}
+
+    def reject_root(root: Root, error: RootAuthorityError) -> None:
+        roots[root.root_id] = RootObservation(
+            None,
+            None,
+            None,
+            logical_error_text(error),
+            error.issue,
+        )
+        admitted_roots[root.root_id] = False
+
+    for root in (xset.plan.source_root, xset.plan.target_root):
+        try:
+            authority = authority_for(root)
+            authorities[root.root_id] = authority
+            observation = fs.observe_root(authority)
+        except RootAuthorityError as error:
+            reject_root(root, error)
+        except (OSError, PermissionError, ValueError) as error:
+            observation = RootObservation(
+                None, None, None, logical_error_text(error)
+            )
+            roots[root.root_id] = observation
+            admitted_roots[root.root_id] = False
+        else:
+            roots[root.root_id] = observation
+            admitted_roots[root.root_id] = _classify_root_facts(
+                authority.expected_volume_id,
+                authority.reviewed_anchor,
+                observation,
+            ) is None
+
     subjects, target_parents = _operation_subjects(xset)
     stats: dict[Subject, StatObservation] = {}
     paths: dict[Subject, str] = {}
     for subject, (root, rel_path, profile) in sorted(subjects.items()):
+        paths[subject] = rel_path
+        if not admitted_roots.get(root.root_id, False):
+            root_observation = roots.get(root.root_id)
+            stats[subject] = StatObservation(
+                None,
+                root_observation.error
+                if (
+                    root_observation is not None
+                    and root_observation.error is not None
+                )
+                else "root observation unavailable",
+            )
+            continue
         try:
-            stats[subject] = fs.stat(root, rel_path, profile)
+            stats[subject] = fs.stat(
+                authorities[root.root_id],
+                rel_path,
+                profile,
+            )
+        except RootAuthorityError as error:
+            reject_root(root, error)
+            stats[subject] = StatObservation(
+                None,
+                logical_error_text(error),
+            )
         except (OSError, PermissionError, ValueError) as error:
             stats[subject] = StatObservation(
                 None, logical_error_text(error)
             )
-        paths[subject] = rel_path
-    roots: dict[str, RootObservation] = {}
-    for root in (xset.plan.source_root, xset.plan.target_root):
+
+    target = xset.plan.target_root
+    if admitted_roots.get(target.root_id, False):
         try:
-            roots[root.root_id] = fs.observe_root(root)
-        except (OSError, PermissionError, ValueError) as error:
-            roots[root.root_id] = RootObservation(
-                None, None, None, logical_error_text(error)
-            )
-    try:
-        free_space = fs.free_space(xset.plan.target_root)
-    except (OSError, PermissionError, ValueError):
+            free_space = fs.free_space(authorities[target.root_id])
+        except RootAuthorityError as error:
+            reject_root(target, error)
+            free_space = None
+        except (OSError, PermissionError, ValueError):
+            free_space = None
+    else:
         free_space = None
-    try:
-        reclaimable = fs.reclaimable_temp_bytes(
-            xset.plan.target_root,
-            target_parents,
-            str(xset.run_id),
-        )
-    except (OSError, PermissionError, ValueError):
+
+    if admitted_roots.get(target.root_id, False):
+        try:
+            reclaimable = fs.reclaimable_temp_bytes(
+                authorities[target.root_id],
+                target_parents,
+                str(xset.run_id),
+            )
+        except RootAuthorityError as error:
+            reject_root(target, error)
+            reclaimable = 0
+        except (OSError, PermissionError, ValueError):
+            reclaimable = 0
+    else:
         reclaimable = 0
     remaining = xset.remaining()
     needs_trash = any(
@@ -369,9 +545,22 @@ def observe(
         )
         for operation in remaining
     )
-    if needs_trash:
+    if needs_trash and admitted_roots.get(target.root_id, False):
         try:
-            trash = fs.observe_trash(xset.plan.target_root, xset.plan.target_volume_id)
+            trash = fs.observe_trash(
+                authorities[target.root_id]
+            )
+        except RootAuthorityError as error:
+            reject_root(target, error)
+            trash = TrashObservation(
+                None,
+                False,
+                False,
+                False,
+                False,
+                False,
+                logical_error_text(error),
+            )
         except (OSError, PermissionError, ValueError) as error:
             trash = TrashObservation(
                 None,
@@ -456,14 +645,59 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
     refusals: list[Refusal] = []
     source_root = world.roots.get(plan.source_root.root_id)
     target_root = world.roots.get(plan.target_root.root_id)
-    for expected, observed in ((plan.source_volume_id, source_root), (plan.target_volume_id, target_root)):
-        if observed is None or observed.error is not None or observed.resolved_path is None:
-            refusals.append(Refusal(RefusalCode.ROOT_UNAVAILABLE, detail=observed.error if observed else "missing root observation"))
-            continue
-        if observed.volume_evidence is not None and observed.volume_evidence.clone_ambiguous:
+    for expected, reviewed_evidence, observed in (
+        (
+            plan.source_volume_id,
+            plan.source_volume_evidence,
+            source_root,
+        ),
+        (
+            plan.target_volume_id,
+            plan.target_volume_evidence,
+            target_root,
+        ),
+    ):
+        issue = _classify_root_facts(
+            expected,
+            (
+                None
+                if reviewed_evidence is None
+                else reviewed_evidence.device_id
+            ),
+            observed,
+        )
+        if issue is not None:
+            changed = issue in {
+                RootAuthorityIssue.ANCHOR_CHANGED,
+                RootAuthorityIssue.VOLUME_CHANGED,
+            }
+            refusals.append(
+                Refusal(
+                    RefusalCode.ROOT_CHANGED
+                    if changed
+                    else RefusalCode.ROOT_UNAVAILABLE,
+                    detail=(
+                        ""
+                        if changed
+                        else (
+                            (
+                                observed.error
+                                or "root authority observation unavailable"
+                            )
+                            if observed is not None
+                            else "missing root observation"
+                        )
+                    ),
+                )
+            )
+        if (
+            observed is not None
+            and observed.error is None
+            and observed.resolved_path is not None
+            and observed.volume_evidence is not None
+            and observed.volume_evidence.clone_ambiguous
+        ):
             refusals.append(Refusal(RefusalCode.VOLUME_CLONE_AMBIGUOUS))
-        if expected is None or observed.volume_id != expected:
-            refusals.append(Refusal(RefusalCode.ROOT_CHANGED))
     if (
         source_root is not None
         and target_root is not None

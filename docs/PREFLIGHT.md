@@ -1,9 +1,9 @@
 # Preflight Module
 
 Status: M0 observation and pure judgment implementation complete, with M1
-Stage 1's immutable reviewed-policy semantics. Fresh preflight remains
-mandatory immediately before every managed-data mutation, on resume, and on
-queued wakeup.
+Stage 1's immutable reviewed-policy semantics and shared ephemeral root
+authority. Fresh preflight remains mandatory immediately before every
+managed-data mutation, on resume, and on queued wakeup.
 
 ## Purpose
 
@@ -52,15 +52,19 @@ executor's non-replacing rename is the final occupancy guard: an ordinary
 case-insensitive target aliases the same object, while a distinct case-sensitive
 destination cannot be overwritten. Preflight never normalizes NFC/NFD spelling.
 
-Every path is first lexically validated. The configured root is converted to
-absolute logical spelling without following links, then every component in its
-root path below the trusted native volume mount is no-follow observed and
-rejected unless it is an ordinary directory before any subject, trash, volume,
-or reclaimable-temp observation. Only after that admission is the physical root
-resolved for overlap/containment evidence; the lexical root remains the domain
-identity.
-Child paths are then resolved under that admitted root with long-path-safe,
-reparse-aware handling. Reclaimable temp accounting accepts
+Every root-dependent backend call derives an ephemeral `RootAuthority` from the
+plan's logical root, optional reviewed volume anchor, and expected `VolumeId`.
+Root, subject, free-space, reclaimable-temp, and trash calls each freshly admit
+that authority; no earlier success is cached as permission. Admission no-follow
+checks every configured-root component below the reviewed/current mount before
+physical resolution, and typed anchor or volume changes remain observation
+evidence for pure judgment to map to `root_changed`.
+
+Every existing relative component of a subject, temp parent, or `.synctrash`
+path is likewise no-follow admitted before physical resolution, volume probing,
+writability checks, or enumeration. A missing subject remains ordinary absence;
+a missing or unsafe temp parent contributes no reclaimable bytes; and unsafe
+trash is unavailable. Reclaimable temp accounting accepts
 only regular files with the exact NamiSync temp grammar and a run id different
 from the current execution, in touched target parents outside trash on the
 target volume. `ObservedWorld` retains that identical parent set for the

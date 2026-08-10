@@ -854,6 +854,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-10). Preflight relative authority admission.
+  Preflight no-follow checked configured roots but physically resolved subjects
+  and trash, and volume-probed/enumerated reclaimable-temp parents, without
+  first checking every relative component. An in-root junction could therefore
+  redirect read-only evidence, produce a false touched-path observation, or
+  credit unsafe temp bytes before the later verdict. Fixed by independently
+  re-admitting each plan-bound root and no-follow admitting existing relative
+  chains before every later probe; typed authority changes remain pure-verdict
+  evidence. Executor final-touch guards still own the residual path-to-use race.
 - MODERATE - FIXED (2026-08-10). Scoped-path intermediate admission. PATHS and
   SUBTREES joined each requested relative path and no-follow statted only its
   final subject, so an intermediate junction could redirect observation and

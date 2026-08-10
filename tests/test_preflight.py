@@ -10,6 +10,7 @@ import stat as stat_module
 from pathlib import Path, PureWindowsPath
 import inspect
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -51,6 +52,13 @@ from namisync.core.preflight import (
     Subject,
     TrashObservation,
 )
+from namisync.core.root_authority import (
+    NativeVolumeInfo,
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    observe_native_volume,
+)
 from namisync.modules.planner import plan
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 
@@ -62,37 +70,290 @@ TARGET_VOLUME = VolumeId("DST", "NTFS")
 PROFILE = CapabilityProfile("NTFS", 100, True, None, 32767, False, True)
 
 
-def test_local_root_observation_refuses_reparse_before_volume_probe(
+def _native_info(
+    authority: RootAuthority,
+    volume_id: VolumeId | None = None,
+) -> NativeVolumeInfo:
+    return NativeVolumeInfo(
+        volume_id or authority.expected_volume_id or TARGET_VOLUME,
+        VolumeEvidence(
+            device_id=(
+                authority.reviewed_anchor
+                or str(Path(authority.logical_root).anchor)
+            )
+        ),
+        255,
+        0,
+    )
+
+
+def _local_authority(path: Path) -> RootAuthority:
+    observed = observe_native_volume(path)
+    return RootAuthority(
+        str(path),
+        observed.evidence.device_id,
+        observed.volume_id,
+    )
+
+
+def _raise(error: BaseException) -> None:
+    raise error
+
+
+def _explode(probe: str) -> None:
+    raise AssertionError(f"authority rejection reached {probe}")
+
+
+@pytest.mark.parametrize("surface", ("root", "subject", "free-space"))
+def test_local_root_authority_failure_stops_before_later_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+) -> None:
+    authority = RootAuthority(str(tmp_path), expected_volume_id=TARGET_VOLUME)
+    rejected = RootAuthorityError(
+        RootAuthorityIssue.REPARSE_COMPONENT,
+        str(tmp_path),
+        "configured root is a reparse component",
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_root",
+        lambda _authority: _raise(rejected),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "_resolved_logical_path",
+        lambda *_args, **_kwargs: _explode("physical resolution"),
+    )
+
+    with patch.object(
+        preflight_module.shutil,
+        "disk_usage",
+        side_effect=lambda *_args, **_kwargs: _explode("disk usage"),
+    ):
+        if surface == "root":
+            observation = LocalObservationFileSystem().observe_root(authority)
+            assert observation.error is not None
+            assert observation.authority_issue is rejected.issue
+        else:
+            with pytest.raises(RootAuthorityError) as raised:
+                if surface == "subject":
+                    LocalObservationFileSystem().stat(
+                        authority,
+                        "payload.bin",
+                        PROFILE,
+                    )
+                else:
+                    LocalObservationFileSystem().free_space(authority)
+            assert raised.value is rejected
+
+
+def test_local_missing_subject_stops_before_final_leaf_probe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    root = tmp_path / "configured-root"
-    root.mkdir()
-
-    def reparse_stat(_path, *, follow_symlinks: bool):
-        assert not follow_symlinks
-        return SimpleNamespace(
-            st_mode=stat_module.S_IFDIR | 0o755,
-            st_file_attributes=0x00000400,
-            st_reparse_tag=1,
-        )
-
-    monkeypatch.setattr(preflight_module.os, "stat", reparse_stat)
+    authority = RootAuthority(str(tmp_path), expected_volume_id=TARGET_VOLUME)
+    admissions: list[RootAuthority] = []
     monkeypatch.setattr(
         preflight_module,
-        "_volume_observation",
-        lambda _path: (_ for _ in ()).throw(
-            AssertionError("volume probe must follow root rejection")
+        "admit_root",
+        lambda observed: admissions.append(observed) or _native_info(authority),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_existing_relative_chain",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "_resolved_logical_path",
+        lambda path, *, strict: str(path),
+    )
+
+    with patch.object(
+        preflight_module.os,
+        "stat",
+        side_effect=AssertionError("missing subject reached final leaf stat"),
+    ):
+        observation = LocalObservationFileSystem().stat(
+            authority,
+            "missing.bin",
+            PROFILE,
+        )
+
+    assert observation == StatObservation(None)
+    assert admissions == [authority]
+
+
+@pytest.mark.parametrize("surface", ("subject", "temp", "trash"))
+def test_local_unsafe_relative_chain_stops_before_later_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+) -> None:
+    authority = RootAuthority(str(tmp_path), expected_volume_id=TARGET_VOLUME)
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_root",
+        lambda _authority: _native_info(authority),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_existing_relative_chain",
+        lambda *_args, **_kwargs: _raise(
+            RootAuthorityError(
+                RootAuthorityIssue.REPARSE_COMPONENT,
+                str(tmp_path / "unsafe"),
+                "relative chain is a reparse component",
+            )
         ),
     )
-
-    observation = LocalObservationFileSystem().observe_root(
-        Root(str(root), "source")
+    monkeypatch.setattr(
+        preflight_module,
+        "_resolved_logical_path",
+        lambda *_args, **_kwargs: _explode("physical resolution"),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "observe_native_volume",
+        lambda _path: _explode("volume observation"),
     )
 
-    assert observation.resolved_path is None
-    assert observation.error is not None
-    assert "ordinary directory" in observation.error
+    with patch.object(
+        preflight_module.os,
+        "scandir",
+        side_effect=lambda *_args, **_kwargs: _explode("enumeration"),
+    ), patch.object(
+        preflight_module.os,
+        "stat",
+        side_effect=lambda *_args, **_kwargs: _explode("leaf stat"),
+    ), patch.object(
+        preflight_module.os,
+        "access",
+        side_effect=lambda *_args, **_kwargs: _explode("access probe"),
+    ):
+        filesystem = LocalObservationFileSystem()
+        if surface == "subject":
+            observed = filesystem.stat(
+                authority,
+                r"unsafe\payload.bin",
+                PROFILE,
+            )
+            assert observed.error is not None
+        elif surface == "temp":
+            assert filesystem.reclaimable_temp_bytes(
+                authority,
+                frozenset({"unsafe"}),
+                "a" * 32,
+            ) == 0
+        else:
+            observed_trash = filesystem.observe_trash(authority)
+            assert observed_trash.error is not None
+            assert not observed_trash.reparse_safe
+
+
+def test_local_trash_escape_stops_before_access_and_volume_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = RootAuthority(str(tmp_path), expected_volume_id=TARGET_VOLUME)
+    escaped = tmp_path.parent / "escaped-trash"
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_root",
+        lambda _authority: _native_info(authority),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_existing_relative_chain",
+        lambda *_args, **_kwargs: False,
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "_resolved_logical_path",
+        lambda path, *, strict: (
+            str(tmp_path)
+            if os.path.normcase(str(path)) == os.path.normcase(str(tmp_path))
+            else str(escaped)
+        ),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "observe_native_volume",
+        lambda _path: _explode("volume observation"),
+    )
+
+    with patch.object(
+        preflight_module.os,
+        "access",
+        side_effect=lambda *_args, **_kwargs: _explode("access probe"),
+    ):
+        observed = LocalObservationFileSystem().observe_trash(authority)
+
+    assert observed.resolved_path == str(escaped)
+    assert not observed.available
+    assert not observed.contained
+    assert not observed.same_volume
+    assert not observed.writable
+    assert not observed.reparse_safe
+    assert observed.error == "trash path resolves outside target root"
+
+
+@pytest.mark.parametrize(
+    ("mode", "attributes", "reparse_tag"),
+    (
+        (stat_module.S_IFREG | 0o644, 0, 0),
+        (stat_module.S_IFIFO | 0o644, 0, 0),
+        (stat_module.S_IFDIR | 0o755, 0x400, 1),
+        (stat_module.S_IFDIR | 0o755, 0x1400, 1),
+    ),
+)
+def test_local_temp_parent_must_be_an_ordinary_directory_before_later_probes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: int,
+    attributes: int,
+    reparse_tag: int,
+) -> None:
+    authority = RootAuthority(str(tmp_path), expected_volume_id=TARGET_VOLUME)
+    parent_stat = SimpleNamespace(
+        st_mode=mode,
+        st_file_attributes=attributes,
+        st_reparse_tag=reparse_tag,
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_root",
+        lambda _authority: _native_info(authority),
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "admit_existing_relative_chain",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "observe_native_volume",
+        lambda _path: _explode("volume observation"),
+    )
+
+    with patch.object(
+        preflight_module.os,
+        "stat",
+        return_value=parent_stat,
+    ), patch.object(
+        preflight_module.os,
+        "scandir",
+        side_effect=lambda *_args, **_kwargs: _explode("enumeration"),
+    ):
+        reclaimable = LocalObservationFileSystem().reclaimable_temp_bytes(
+            authority,
+            frozenset({"unsafe"}),
+            "a" * 32,
+        )
+
+    assert reclaimable == 0
 
 
 def _file(
@@ -131,7 +392,7 @@ def _scan(
     return ScanResult(
         Root(fr"C:\{root_id}", root_id),
         volume,
-        VolumeEvidence(device_id=volume.serial),
+        VolumeEvidence(device_id="C:\\"),
         profile,
         files,
         (_dir(""), *directories),
@@ -418,6 +679,46 @@ def test_root_swap_and_clone_are_typed() -> None:
     } <= _codes(xset, drifted)
 
 
+@pytest.mark.parametrize(
+    ("issue", "expected"),
+    (
+        (RootAuthorityIssue.ANCHOR_CHANGED, RefusalCode.ROOT_CHANGED),
+        (RootAuthorityIssue.VOLUME_CHANGED, RefusalCode.ROOT_CHANGED),
+        (
+            RootAuthorityIssue.ANCHOR_UNAVAILABLE,
+            RefusalCode.ROOT_UNAVAILABLE,
+        ),
+        (
+            RootAuthorityIssue.REPARSE_COMPONENT,
+            RefusalCode.ROOT_UNAVAILABLE,
+        ),
+    ),
+)
+def test_root_authority_issue_mapping_remains_pure_and_typed(
+    issue: RootAuthorityIssue,
+    expected: RefusalCode,
+) -> None:
+    xset = _xset()
+    world = _world(xset)
+    roots = dict(world.roots)
+    roots[xset.plan.source_root.root_id] = RootObservation(
+        None,
+        None,
+        None,
+        "root authority rejected",
+        issue,
+    )
+
+    codes = _codes(xset, replace(world, roots=roots))
+
+    assert expected in codes
+    assert (
+        RefusalCode.ROOT_UNAVAILABLE
+        if expected is RefusalCode.ROOT_CHANGED
+        else RefusalCode.ROOT_CHANGED
+    ) not in codes
+
+
 def test_same_or_nested_resolved_roots_are_refused() -> None:
     xset = _xset()
     world = _world(xset)
@@ -545,38 +846,72 @@ class InstrumentedFileSystem:
         self.xset = xset
         self.stat_calls: list[tuple[str, str]] = []
         self.root_calls: list[str] = []
+        self.authorities: list[RootAuthority] = []
         self.user_state = b"unchanged"
 
-    def observe_root(self, root: Root) -> RootObservation:
-        self.root_calls.append(root.root_id)
-        volume = self.xset.plan.source_volume_id if root.root_id == "source" else self.xset.plan.target_volume_id
-        evidence = self.xset.plan.source_volume_evidence if root.root_id == "source" else self.xset.plan.target_volume_evidence
-        return RootObservation(root.path, volume, evidence)
+    def _root_id(self, authority: RootAuthority) -> str:
+        return (
+            "source"
+            if authority.logical_root == self.xset.plan.source_root.path
+            else "target"
+        )
 
-    def stat(self, root: Root, rel_path: str, profile: CapabilityProfile) -> StatObservation:
+    def observe_root(
+        self,
+        authority: RootAuthority,
+    ) -> RootObservation:
+        root_id = self._root_id(authority)
+        self.root_calls.append(root_id)
+        self.authorities.append(authority)
+        volume = (
+            self.xset.plan.source_volume_id
+            if root_id == "source"
+            else self.xset.plan.target_volume_id
+        )
+        evidence = (
+            self.xset.plan.source_volume_evidence
+            if root_id == "source"
+            else self.xset.plan.target_volume_evidence
+        )
+        return RootObservation(authority.logical_root, volume, evidence)
+
+    def stat(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation:
         del profile
-        self.stat_calls.append((root.root_id, rel_path))
+        root_id = self._root_id(authority)
+        self.stat_calls.append((root_id, rel_path))
+        self.authorities.append(authority)
         for operation in self.xset.plan.operations:
-            if root.root_id == "source" and operation.source_rel_path == rel_path:
+            if root_id == "source" and operation.source_rel_path == rel_path:
                 return StatObservation(operation.source_expected)
-            if root.root_id == "target" and operation.target_rel_path == rel_path:
+            if root_id == "target" and operation.target_rel_path == rel_path:
                 return StatObservation(operation.target_expected)
-            if root.root_id == "target" and operation.prior_target_rel_path == rel_path:
+            if root_id == "target" and operation.prior_target_rel_path == rel_path:
                 return StatObservation(operation.prior_target_expected)
         return StatObservation(None)
 
-    def free_space(self, target: Root) -> int:
+    def free_space(self, authority: RootAuthority) -> int:
+        self.authorities.append(authority)
         return 10_000
 
     def reclaimable_temp_bytes(
         self,
-        target: Root,
+        authority: RootAuthority,
         parent_paths: frozenset[str],
         current_run_id: str,
     ) -> int:
+        self.authorities.append(authority)
         return 0
 
-    def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation:
+    def observe_trash(
+        self,
+        authority: RootAuthority,
+    ) -> TrashObservation:
+        self.authorities.append(authority)
         return TrashObservation(r"C:\target\.synctrash", True, True, True, True, True)
 
     def now_utc(self) -> datetime:
@@ -599,7 +934,325 @@ def test_observation_is_read_only_and_stats_only_remaining_touched_paths_and_par
     assert ("target", r"folder\one.bin") in fs.stat_calls
     assert ("target", "folder") in fs.stat_calls
     assert not any(path.endswith("two.bin") for _, path in fs.stat_calls)
+    for authority in fs.authorities:
+        if authority.logical_root == selected.plan.source_root.path:
+            assert authority.reviewed_anchor == "C:\\"
+            assert authority.expected_volume_id == SOURCE_VOLUME
+        else:
+            assert authority.reviewed_anchor == "C:\\"
+            assert authority.expected_volume_id == TARGET_VOLUME
     assert world.observed_at is NOW
+
+
+@pytest.mark.parametrize("rejected_root", ("source", "target"))
+def test_observe_gates_rejected_root_but_continues_the_other_root(
+    monkeypatch: pytest.MonkeyPatch,
+    rejected_root: str,
+) -> None:
+    xset = _xset(
+        source_files=(_file("same.bin", size=20, mtime=2_000),),
+        target_files=(
+            _file("same.bin", size=10, volume="DST", index=2),
+        ),
+    )
+    filesystem = InstrumentedFileSystem(xset)
+    original_root = filesystem.observe_root
+    original_stat = filesystem.stat
+    original_free_space = filesystem.free_space
+    original_reclaimable = filesystem.reclaimable_temp_bytes
+    original_trash = filesystem.observe_trash
+    trace: list[tuple[str, str]] = []
+
+    def observe_root(authority: RootAuthority) -> RootObservation:
+        root_id = filesystem._root_id(authority)
+        trace.append(("root", root_id))
+        if root_id == rejected_root:
+            raise RootAuthorityError(
+                RootAuthorityIssue.ANCHOR_CHANGED,
+                authority.logical_root,
+                f"{root_id} anchor changed",
+            )
+        return original_root(authority)
+
+    def stat(
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation:
+        root_id = filesystem._root_id(authority)
+        if root_id == rejected_root:
+            _explode(f"{root_id} stat")
+        trace.append(("stat", root_id))
+        return original_stat(authority, rel_path, profile)
+
+    def target_probe(name: str, original, authority, *args):
+        if rejected_root == "target":
+            _explode(name)
+        trace.append((name, "target"))
+        return original(authority, *args)
+
+    monkeypatch.setattr(filesystem, "observe_root", observe_root)
+    monkeypatch.setattr(filesystem, "stat", stat)
+    monkeypatch.setattr(
+        filesystem,
+        "free_space",
+        lambda authority: target_probe(
+            "free-space", original_free_space, authority
+        ),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "reclaimable_temp_bytes",
+        lambda authority, parents, run_id: target_probe(
+            "reclaimable",
+            original_reclaimable,
+            authority,
+            parents,
+            run_id,
+        ),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "observe_trash",
+        lambda authority: target_probe(
+            "trash", original_trash, authority
+        ),
+    )
+
+    world = observe(xset, filesystem)
+    codes = _codes(xset, world)
+
+    assert trace[:2] == [("root", "source"), ("root", "target")]
+    assert ("stat", rejected_root) not in trace
+    assert ("stat", "target" if rejected_root == "source" else "source") in trace
+    target_surfaces = {name for name, root_id in trace if root_id == "target"}
+    if rejected_root == "source":
+        assert {"free-space", "reclaimable", "trash"} <= target_surfaces
+    else:
+        assert not {"free-space", "reclaimable", "trash"} & target_surfaces
+    assert codes & {
+        RefusalCode.ROOT_CHANGED,
+        RefusalCode.ROOT_UNAVAILABLE,
+    } == {RefusalCode.ROOT_CHANGED}
+
+
+@pytest.mark.parametrize(
+    ("returned_fact", "expected_root_code"),
+    (
+        ("volume", RefusalCode.ROOT_CHANGED),
+        ("anchor", RefusalCode.ROOT_CHANGED),
+        ("missing-evidence-and-volume", RefusalCode.ROOT_UNAVAILABLE),
+        ("missing-device", RefusalCode.ROOT_UNAVAILABLE),
+        ("invalid-device", RefusalCode.ROOT_UNAVAILABLE),
+    ),
+)
+def test_observe_gates_incompatible_returned_target_root_facts(
+    monkeypatch: pytest.MonkeyPatch,
+    returned_fact: str,
+    expected_root_code: RefusalCode,
+) -> None:
+    xset = _xset(
+        source_files=(_file("same.bin", size=20, mtime=2_000),),
+        target_files=(
+            _file("same.bin", size=10, volume="DST", index=2),
+        ),
+    )
+    filesystem = InstrumentedFileSystem(xset)
+    original_root = filesystem.observe_root
+    original_stat = filesystem.stat
+    trace: list[tuple[str, str]] = []
+    returned: list[RootObservation] = []
+
+    def observe_root(authority: RootAuthority) -> RootObservation:
+        root_id = filesystem._root_id(authority)
+        trace.append(("root", root_id))
+        observation = original_root(authority)
+        if root_id == "source":
+            return observation
+        assert observation.volume_id is not None
+        wrong_volume = VolumeId("RETURNED", observation.volume_id.fs_type)
+        if returned_fact == "volume":
+            observation = replace(observation, volume_id=wrong_volume)
+        elif returned_fact == "anchor":
+            observation = replace(
+                observation,
+                volume_evidence=VolumeEvidence(device_id="D:\\"),
+            )
+        elif returned_fact == "missing-evidence-and-volume":
+            observation = replace(
+                observation,
+                volume_id=wrong_volume,
+                volume_evidence=None,
+            )
+        elif returned_fact == "missing-device":
+            observation = replace(
+                observation,
+                volume_evidence=VolumeEvidence(),
+            )
+        else:
+            observation = replace(
+                observation,
+                volume_evidence=VolumeEvidence(device_id=r"\\.\C:"),
+            )
+        returned.append(observation)
+        return observation
+
+    def stat(
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation:
+        root_id = filesystem._root_id(authority)
+        if root_id == "target":
+            _explode("target stat")
+        trace.append(("stat", root_id))
+        return original_stat(authority, rel_path, profile)
+
+    monkeypatch.setattr(filesystem, "observe_root", observe_root)
+    monkeypatch.setattr(filesystem, "stat", stat)
+    monkeypatch.setattr(
+        filesystem,
+        "free_space",
+        lambda _authority: _explode("free-space probe"),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "reclaimable_temp_bytes",
+        lambda *_args: _explode("reclaimable-temp probe"),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "observe_trash",
+        lambda _authority: _explode("trash probe"),
+    )
+
+    world = observe(xset, filesystem)
+    verdict = preflight(xset, world)
+    codes = {refusal.code for refusal in verdict.refusals}
+
+    assert trace[:2] == [("root", "source"), ("root", "target")]
+    assert ("stat", "source") in trace
+    assert returned and world.roots["target"] is returned[0]
+    assert returned[0].error is None
+    assert returned[0].authority_issue is None
+    assert codes & {
+        RefusalCode.ROOT_CHANGED,
+        RefusalCode.ROOT_UNAVAILABLE,
+    } == {expected_root_code}
+    root_refusal = next(
+        refusal
+        for refusal in verdict.refusals
+        if refusal.code is expected_root_code
+    )
+    assert isinstance(root_refusal.detail, str)
+
+
+def test_later_stat_root_failure_gates_target_while_relative_error_stays_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    xset = _xset(
+        source_files=(
+            _file("a.bin", size=20, mtime=2_000, index=1),
+            _file("b.bin", size=20, mtime=2_000, index=2),
+        ),
+        target_files=(
+            _file("a.bin", size=10, volume="DST", index=11),
+            _file("b.bin", size=10, volume="DST", index=12),
+        ),
+    )
+    filesystem = InstrumentedFileSystem(xset)
+    original_stat = filesystem.stat
+    source_calls: list[str] = []
+    target_calls: list[str] = []
+
+    def stat(
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation:
+        root_id = filesystem._root_id(authority)
+        if root_id == "source":
+            source_calls.append(rel_path)
+            if rel_path == "a.bin":
+                return StatObservation(None, "relative chain rejected")
+            return original_stat(authority, rel_path, profile)
+        target_calls.append(rel_path)
+        if len(target_calls) > 1:
+            _explode("second target stat")
+        raise RootAuthorityError(
+            RootAuthorityIssue.VOLUME_CHANGED,
+            authority.logical_root,
+            "target volume changed",
+        )
+
+    monkeypatch.setattr(filesystem, "stat", stat)
+    monkeypatch.setattr(
+        filesystem,
+        "free_space",
+        lambda _authority: _explode("free-space probe"),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "reclaimable_temp_bytes",
+        lambda *_args: _explode("reclaimable-temp probe"),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "observe_trash",
+        lambda _authority: _explode("trash probe"),
+    )
+
+    codes = _codes(xset, observe(xset, filesystem))
+
+    assert source_calls == ["a.bin", "b.bin"]
+    assert target_calls == ["a.bin"]
+    assert codes & {
+        RefusalCode.ROOT_CHANGED,
+        RefusalCode.ROOT_UNAVAILABLE,
+    } == {RefusalCode.ROOT_CHANGED}
+
+
+def test_free_space_root_failure_skips_reclaimable_and_trash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    xset = _xset(
+        source_files=(_file("same.bin", size=20, mtime=2_000),),
+        target_files=(
+            _file("same.bin", size=10, volume="DST", index=2),
+        ),
+    )
+    filesystem = InstrumentedFileSystem(xset)
+    free_space_error = RootAuthorityError(
+        RootAuthorityIssue.ANCHOR_CHANGED,
+        xset.plan.target_root.path,
+        "target anchor changed",
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "free_space",
+        lambda _authority: _raise(free_space_error),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "reclaimable_temp_bytes",
+        lambda *_args: _explode("reclaimable-temp probe"),
+    )
+    monkeypatch.setattr(
+        filesystem,
+        "observe_trash",
+        lambda _authority: _explode("trash probe"),
+    )
+
+    world = observe(xset, filesystem)
+    codes = _codes(xset, world)
+
+    assert world.free_space is None
+    assert world.reclaimable_temp_bytes == 0
+    assert world.trash is None
+    assert codes & {
+        RefusalCode.ROOT_CHANGED,
+        RefusalCode.ROOT_UNAVAILABLE,
+    } == {RefusalCode.ROOT_CHANGED}
 
 
 def test_local_reclaimable_temp_count_is_exact_and_excludes_synctrash(
@@ -621,19 +1274,32 @@ def test_local_reclaimable_temp_count_is_exact_and_excludes_synctrash(
     (off_volume / ("mounted.bin.synctmp-" + "a" * 32 + "-" + "b" * 32)).write_bytes(
         b"other volume"
     )
+    unavailable = tmp_path / "unavailable"
+    unavailable.mkdir()
+    (unavailable / ("unreadable.bin.synctmp-" + "a" * 32 + "-" + "b" * 32)).write_bytes(
+        b"must not hide the safe sibling credit"
+    )
+    authority = _local_authority(tmp_path)
+    expected_volume = authority.expected_volume_id
+    assert expected_volume is not None
     monkeypatch.setattr(
-        "namisync.modules.preflight._volume_observation",
-        lambda path: (
-            VolumeId("OTHER", "UNKNOWN")
+        preflight_module,
+        "observe_native_volume",
+        lambda path: _raise(OSError("parent volume unavailable"))
+        if Path(path).name == "unavailable"
+        else _native_info(
+            authority,
+            VolumeId("OTHER", expected_volume.fs_type)
             if Path(path).name == "off-volume"
-            else VolumeId("TARGET", "UNKNOWN"),
-            VolumeEvidence(device_id=str(path)),
+            else expected_volume,
         ),
     )
     fs = LocalObservationFileSystem()
     assert fs.reclaimable_temp_bytes(
-        Root(str(tmp_path), "target"),
-        frozenset({"folder", ".synctrash", "off-volume"}),
+        authority,
+        frozenset(
+            {"folder", ".synctrash", "off-volume", "unavailable"}
+        ),
         "c" * 32,
     ) == 5
 
@@ -647,6 +1313,7 @@ def test_local_observation_uses_native_spelling_but_reports_logical_paths(
     root_path.mkdir()
     subject = root_path / "payload.bin"
     subject.write_bytes(b"payload")
+    authority = _local_authority(root_path)
     observed_paths: list[str] = []
     real_stat = preflight_module.os.stat
 
@@ -656,9 +1323,12 @@ def test_local_observation_uses_native_spelling_but_reports_logical_paths(
 
     monkeypatch.setattr(preflight_module.os, "stat", recording_stat)
     filesystem = LocalObservationFileSystem()
-    root = Root(str(root_path), "source")
-    root_observation = filesystem.observe_root(root)
-    stat_observation = filesystem.stat(root, "payload.bin", PROFILE)
+    root_observation = filesystem.observe_root(authority)
+    stat_observation = filesystem.stat(
+        authority,
+        "payload.bin",
+        PROFILE,
+    )
 
     assert root_observation.resolved_path == str(root_path.resolve())
     assert not root_observation.resolved_path.startswith("\\\\?\\")
@@ -668,7 +1338,7 @@ def test_local_observation_uses_native_spelling_but_reports_logical_paths(
 
     short_profile = replace(PROFILE, max_path=len(str(subject)) - 1)
     assert not filesystem.stat(
-        root, "payload.bin", short_profile
+        authority, "payload.bin", short_profile
     ).representable
 
 
@@ -680,6 +1350,7 @@ def test_deep_observation_failure_reports_logical_path_spelling(
     root_path = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90)
     assert len(str(root_path)) > 260
     os.makedirs(to_extended_length_path(str(root_path)))
+    authority = _local_authority(root_path)
     native_subject = to_extended_length_path(
         str(root_path / "blocked.bin")
     )
@@ -692,7 +1363,7 @@ def test_deep_observation_failure_reports_logical_path_spelling(
 
     monkeypatch.setattr(preflight_module.os, "stat", denied_stat)
     observation = LocalObservationFileSystem().stat(
-        Root(str(root_path), "source"),
+        authority,
         "blocked.bin",
         PROFILE,
     )

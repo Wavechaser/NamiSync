@@ -9,6 +9,7 @@ from typing import Mapping, NamedTuple
 
 from .models import FileStat, VolumeEvidence, VolumeId
 from .planning import OpId
+from .root_authority import RootAuthorityIssue
 
 
 class Subject(NamedTuple):
@@ -30,6 +31,11 @@ class RootObservation:
     volume_id: VolumeId | None
     volume_evidence: VolumeEvidence | None
     error: str | None = None
+    authority_issue: RootAuthorityIssue | None = None
+
+    def __post_init__(self) -> None:
+        if self.authority_issue is not None and self.error is None:
+            raise ValueError("root authority issue requires an observation error")
 
 
 @dataclass(frozen=True)

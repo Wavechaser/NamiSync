@@ -993,6 +993,14 @@ touches the filesystem. Planning already embedded the reviewed semantic
 snapshot in the committed plan; execution consumes it and never rereads global
 defaults.
 
+The local observer derives ephemeral `RootAuthority` values from the plan's
+reviewed anchors and volume identities. Root, subject, capacity, temp-parent,
+and trash calls re-admit independently; existing relative components are
+no-follow checked before resolution, volume probes, access checks, or
+enumeration. Typed authority failures remain observation evidence, while the
+pure judge alone maps changed authority to `root_changed` and unavailable
+authority to `root_unavailable`.
+
 The split is a bone, for three reasons: `preflight()` becomes exhaustively
 testable against synthetic worlds with no temp directories; the expensive IO
 happens exactly once per judgment and is never entangled with it — and every
