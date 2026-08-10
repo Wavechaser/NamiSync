@@ -60,6 +60,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-10). Copied-backup evidence skew. On a target without
+  hardlink support, UPDATE copied the reviewed live file and then sampled its
+  path for backup metadata; a concurrent grow, truncation, or rewrite could
+  leave mixed recovery bytes decorated with a later stat. The final live guard
+  prevented ordinary drift from being overwritten, but the retained backup was
+  not trustworthy. Fixed by binding the reviewed target snapshot to pre/post
+  stats from one open read handle, requiring the exact copied byte count, and
+  publishing neither backup nor update on detectable drift. Same-size mutation
+  with restored metadata remains inside the documented inference boundary.
 - SEVERE - FIXED (2026-08-09). Cancellation settlement composition. UPDATE
   could clear readonly, fail replacement and restoration into retry, then
   cancel while publication probing failed; the failed byte settlement returned
@@ -575,6 +584,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-10). SQLite contention misclassification. The
+  serialized writer retried any `OperationalError` whose message contained
+  "busy" or "locked", delaying unrelated failures and reporting them as lock
+  exhaustion. Cause: retry policy parsed human-readable exception prose. Fixed
+  by accepting only primary `SQLITE_BUSY`/`SQLITE_LOCKED` result codes, masking
+  extended codes to their primary value, and failing misleading message text
+  immediately within the original recording-error boundary.
 - MODERATE - FIXED (2026-08-09). Sticky mismatch projection precedence. A
   retained `hash-mismatch` marker could be projected as ordinary `modified`
   while current stat or identity also drifted. Cause: the repository returned
@@ -633,6 +649,12 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-10). Incomplete DOS-device aliases. Path validation
+  rejected ordinary reserved names but admitted `CONIN$`, `CONOUT$`, and the
+  superscript-one/two/three COM/LPT aliases recognized by Windows. Those names
+  cannot safely participate in the ordinary relative-path contract. Fixed by
+  extending the one core reserved-basename set with case- and extension-aware
+  coverage; unsupported device namespaces remain refused separately.
 - MINOR - FIXED (2026-08-09). Native-path detail sanitization gaps. Scanner
   enumeration warnings and executor failed/canceled temp-cleanup wrappers used
   raw exception text, allowing `\\?\` spelling to enter public results or
@@ -888,6 +910,17 @@ defect, and move implementation-level test choreography out of the log.
   on stable-ID volumes and absent-identity-as-absent-evidence matching.
 
 ## PLANNER
+
+### M1 Hardening
+
+- MINOR - FIXED (2026-08-10). Unmanaged-attribute nonconvergence. Planner
+  compared the complete Windows attribute bitmap while executor intentionally
+  managed only readonly, hidden, system, and not-content-indexed. ARCHIVE or
+  TEMPORARY drift could therefore schedule a content UPDATE on every rerun,
+  including repeated trash backups, without ever converging. Fixed with one
+  core-owned managed-attribute mask consumed by planner and executor; raw
+  attributes remain evidence, every managed-bit drift still updates, and a
+  native ARCHIVE-only execute/rescan converges to `NOOP`.
 
 ### M0 hardening
 

@@ -75,6 +75,16 @@ absent prior `present` and `unsupported` rows, never already-`missing` or
 out-of-scope rows, and never uses wildcard-sensitive `LIKE`. Full sweeps still
 scale past 33k rows without a giant parameter list.
 
+The configured root itself is owned by the `locations` row and is not duplicated
+as an empty-path inventory child; descendant observation upserts therefore
+reject an empty relative path. Complete FULL/SUBTREES reconciliation uses a
+connection-local observed-key scratch table, clearing it before use and after a
+successful batch; rollback restores a failed use and connection close drops the
+table. Duplicate keys in a malformed complete FULL/SUBTREES scan fail and roll
+back instead of being silently ignored and authorizing false missing inference;
+complete PATHS input is set-deduplicated, and the native scanner reports case
+collisions as incomplete before this boundary.
+
 Observation upserts retain attestation but atomically set a sticky
 `metadata-drift` invalidation when current kind/size/mtime or known identity no
 longer matches its subject; missing and unsupported transitions do the same.
@@ -161,6 +171,11 @@ write transaction is acquired and is deliberately outside this contention
 budget. Long CPU/path matching work happens before opening a write transaction;
 inputs are pre-indexed by canonical key.
 
+Retry classification uses SQLite result codes, not exception prose. Only
+primary `SQLITE_BUSY` and `SQLITE_LOCKED` are contention, with extended codes
+masked to their primary value; another operational error containing words such
+as "busy" or "locked" fails immediately as a recording error.
+
 Transactions are operation/batch scoped, not multi-hour activity scoped. One
 late failure cannot erase hours of earned verification evidence. A failed
 operation does not roll back independent earlier committed operations.
@@ -239,9 +254,14 @@ commits every command eagerly.
   `stale` without altering prior evidence.
 - Repeating identical run/op commands is a no-op; token reuse with different
   payload is rejected.
+- Corrupt joined-location context and a malformed no-op without its required
+  source path raise typed recording errors and leave the command transaction
+  unchanged.
 - Two disjoint-volume sessions record completely through one serialized writer
   under stress; cross-process contention retries within bound and surfaces final
   failure.
+- Primary and extended SQLite `BUSY`/`LOCKED` codes retry, while misleading
+  non-contention message text does not consume the retry budget.
 - A late verifier failure preserves earlier committed per-file evidence.
 - Flush occurs before each destructive operation, on pause drain, and before
   terminal delivery; crash loses at most the declared batch window.

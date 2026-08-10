@@ -698,9 +698,15 @@ def test_coarse_timestamp_granularity_produces_metadata_noop() -> None:
     assert [operation.kind for operation in _plan(source, target).operations] == [OperationKind.NOOP]
 
 
-def test_standard_attribute_change_plans_update_without_mtime_change() -> None:
+@pytest.mark.parametrize(
+    "managed_attribute", (0x00000001, 0x00000002, 0x00000004, 0x00002000)
+)
+def test_managed_attribute_change_plans_update_without_mtime_change(
+    managed_attribute: int,
+) -> None:
     source_file = replace(
-        _file("same.bin"), metadata=MetadataSnapshot(1, META.created_ns)
+        _file("same.bin"),
+        metadata=MetadataSnapshot(managed_attribute, META.created_ns),
     )
     target_file = _file("same.bin", identity=FileIdentity("DST", 2))
     source = _scan("source", SOURCE_VOLUME, files=(source_file,))
@@ -712,6 +718,27 @@ def test_standard_attribute_change_plans_update_without_mtime_change() -> None:
     assert operations[0].reason is OperationReason.METADATA_CHANGED
     assert operations[0].metadata == source_file.metadata
     assert operations[0].content_bytes == source_file.size
+
+
+@pytest.mark.parametrize("unmanaged_attribute", (0x00000020, 0x00000100))
+def test_unmanaged_attribute_change_remains_noop_with_full_observation(
+    unmanaged_attribute: int,
+) -> None:
+    source_file = _file("same.bin")
+    target_file = replace(
+        _file("same.bin", identity=FileIdentity("DST", 2)),
+        metadata=MetadataSnapshot(unmanaged_attribute, META.created_ns),
+    )
+
+    operations = _plan(
+        _scan("source", SOURCE_VOLUME, files=(source_file,)),
+        _scan("target", TARGET_VOLUME, files=(target_file,)),
+    ).operations
+
+    assert [operation.kind for operation in operations] == [OperationKind.NOOP]
+    assert operations[0].reason is OperationReason.METADATA_MATCH
+    assert operations[0].intended == source_file.stat
+    assert operations[0].target_expected == target_file.stat
 
 
 def test_duplicate_identity_and_ambiguous_prior_correspondence_disable_move() -> None:

@@ -13,6 +13,7 @@ from namisync.core.models import (
     FileIdentity,
     FileRecord,
     FileStat,
+    MANAGED_FILE_ATTRIBUTE_MASK,
     MetadataSnapshot,
     ScanResult,
 )
@@ -49,7 +50,10 @@ def _metadata_equal(source: FileStat, target: FileStat, granularity_ns: int) -> 
     return (
         source.size == target.size
         and abs(source.mtime_ns - target.mtime_ns) <= granularity_ns
-        and source.metadata.attributes == target.metadata.attributes
+        and (
+            source.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+            == target.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        )
     )
 
 

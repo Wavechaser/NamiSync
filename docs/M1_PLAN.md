@@ -284,10 +284,15 @@ Known M1 limitations to document, not silently carry: a task card's plan does
 not survive a process restart, and until M2's durable session store the task
 rail contains only adapter-owned tasks — a concurrent CLI run is invisible to
 it except through volume-lock contention. Also (review finding 10's
-corollary): the plan dictionary now grows for the life of a long-running GUI
-process where the CLI's process-per-command previously hid that; closing a
-task card must cancel busy work, wait for its terminal record, close the
-session/observation, and call `drop_plan`.
+corollary): process-local plan, execution-detail, and inventory-detail
+dictionaries grow for the life of a long-running GUI process where the CLI's
+process-per-command previously hid that. Stage 6 task close must use one
+task-owned facade release for the exact plan, selection, execution/inventory
+detail, view/projection, session, and command-receipt artifacts. Plan-only and
+already-terminal tasks release immediately; busy work first cancels, waits for
+its terminal record, and closes observation/session. Repeated create/close tests
+must keep every registry bounded while retained database history remains
+readable.
 
 ### History and event schema
 

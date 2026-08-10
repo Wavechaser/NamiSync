@@ -222,10 +222,12 @@ session state and remains distinct from **Paused** until custody actually
 releases. Repeat pause/resume is disabled during that drain, cancellation stays
 available, and the next state may be paused or terminal if the active operation
 settles the run first.
-Closing a terminal task drops only its live presentation state; retained
-history remains. Closing queued or busy work asks for the service-supported
-control, waits for actual terminal observation, and never treats a transient
-progress flag as completion.
+Closing a plan-only or already-terminal task needs no confirmation: it invokes
+the Stage 6 facade's task-owned artifact release, then drops the adapter's
+presentation projections; retained history remains. Closing queued or busy work
+confirms, asks for the service-supported control, waits for the terminal record,
+then performs the same release. It never treats a transient progress flag as
+completion.
 
 Sync remains a two-session interaction: plan first, review its immutable
 fingerprint-bound intent, choose a dependency-closed selection, then start
@@ -293,6 +295,9 @@ Contrast and no-color-only signaling remain requirements in every theme.
 - A bounded coalescing event drain preserves reliable item/terminal ordering,
   makes gaps visible, and closes all observations cleanly on task close and
   app shutdown.
+- Repeated task create/plan-only-close, terminal-close, and busy-cancel-close
+  cycles release all process-local task artifacts and keep service, runtime,
+  bridge, and adapter maps bounded while retained history remains readable.
 - Hostile filenames remain structured data and render as text, never HTML or
   executable content.
 - Plan, inventory, settings, and history consume facade views only and remain

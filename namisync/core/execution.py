@@ -408,6 +408,7 @@ class ExecutorFileSystem(Protocol):
         source: Path,
         temp: Path,
         target: Path,
+        source_expected: FileStat,
         checkpoint: Callable[[], None],
         validate_destination: Callable[[], None],
     ) -> None: ...

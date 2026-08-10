@@ -568,9 +568,10 @@ After publish, stat the target and compare it with the finalized temp
 observation, plus any deferred readonly state. Comparing with the observed temp
 rather than raw source nanoseconds avoids treating target-filesystem timestamp
 rounding as publication damage. Check every field NamiSync promises to
-preserve: mtime, optional creation time, and the managed readonly/hidden/system
-attributes. If they already match, reuse that stat for the published-size
-guard and attestation and do not reopen or rewrite the file. If any field
+preserve: mtime, optional creation time, and the managed
+readonly/hidden/system/not-content-indexed attributes. If they already match,
+reuse that stat for the published-size guard and attestation and do not reopen
+or rewrite the file. If any field
 differs, repair only the differing managed fields through one native handle,
 flush that handle, close it, and restat before attestation.
 
@@ -1191,7 +1192,8 @@ XXH3 hasher* — the refactor is the reason each is now at risk.
   temp twice and uses `os.utime`.) *Not satisfied by* building the attestation
   from `CopyDigest` the moment `copy()` returns and testing only the happy path.
 - **A8 — Metadata mask and last-access preserved.** With an unmanaged attribute
-  (e.g. `NOT_CONTENT_INDEXED`) plus managed hidden+system on the source, the
+  (e.g. `ARCHIVE`) plus managed hidden+system+not-content-indexed on the source,
+  the
   published target retains the unmanaged attribute and the managed ones, mtime
   equals normalized source mtime, last-access equals mtime, and creation time is
   preserved; a `created_ns` of `None` never overwrites the real creation time.

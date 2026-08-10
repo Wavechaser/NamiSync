@@ -681,8 +681,12 @@ BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42.
 ### Slice 7 - Lifecycle, settings, and history
 
 Land database-paged history, semantic-settings UI, cosmetic `ui-state.json`,
-task close sequencing, full task detail in Slice 1's existing
-shutdown-retry/incomplete presentation, and normal single-instance activation
+and one task-owned close/release seam that drops plan, selection,
+execution/inventory detail, view/projection, session, and receipt artifacts
+immediately for plan-only/already-terminal tasks or after terminal settlement
+for busy work. Repeated create/close tests keep every registry bounded while
+history remains. Also land full task detail in Slice 1's existing
+shutdown-retry/incomplete presentation and normal single-instance activation
 behavior. Close BR-G-40, BR-G-41, and the history portion of BR-G-42.
 
 History paging follows the bounded readback contract exactly. A fresh event

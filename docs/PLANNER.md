@@ -99,9 +99,12 @@ intent but can execute only the derived safe selection; they must not treat raw
 - Apply the plan's filter snapshot symmetrically before diffing. Location
   ignores have already bounded scan completeness.
 - Compare mtimes within the coarser capability granularity.
-- Matching size, mtime within the coarser granularity, and standard attributes
-  is an M0 metadata no-op. An attributes-only change plans an update even when
-  size and mtime are unchanged. Content-aware no-op comes later.
+- Matching size, mtime within the coarser granularity, and the shared managed
+  attribute subset (readonly, hidden, system, and not-content-indexed) is an M0
+  metadata no-op. Drift in any managed bit plans an update even when size and
+  mtime are unchanged. Raw unmanaged bits such as ARCHIVE and TEMPORARY remain
+  in both reviewed snapshots but do not schedule work the executor does not
+  propagate. Content-aware no-op comes later.
 - Source-only files plan copy; changed matched files plan update.
 - Every directory the plan will create has an explicit parent-first
   mkdir-with-metadata operation; file and child-directory operations depend on
@@ -208,9 +211,10 @@ work. M1 has no ADS-enabled mapping or per-operation ADS state.
   copy+trash.
 - Incomplete scans and unsupported entries remain visible; unsupported items
   are blocked, while workflow permits only completeness-independent operations.
-- Attribute-only drift is update-worthy; the remaining metadata no-op risk is
-  content changing behind equal size/time/attributes, and later content
-  evidence is additive.
+- Managed-attribute-only drift is update-worthy; unmanaged attribute drift is
+  retained as evidence without causing a non-convergent update. The remaining
+  metadata no-op risk is content changing behind equal size/time/managed
+  attributes, and later content evidence is additive.
 
 ## Acceptance Criteria
 
@@ -255,8 +259,10 @@ work. M1 has no ADS-enabled mapping or per-operation ADS state.
   bytes for the link itself.
 - Filter application is symmetric; excluded retained rows are not planned as
   missing/deleted, and the filter snapshot is serialized.
-- A readonly/hidden/system-only difference with unchanged size and mtime plans
-  an update and propagates through the real sync workflow.
+- A readonly/hidden/system/not-content-indexed difference with unchanged size
+  and mtime plans an update and propagates through the real sync workflow.
+  ARCHIVE/TEMPORARY-only differences remain no-ops, retain both full snapshots,
+  and a native Windows execute/rescan cycle converges.
 - Destination policy collision and companion-group property tests produce
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.

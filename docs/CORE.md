@@ -31,6 +31,9 @@ attestation format.
 - `MappingSnapshot`, root-qualified `Subject`, `Commitment`,
   `PreservationPolicy`, `MetadataSnapshot`, capability profile,
   and the stable `VolumeId`/corroborating `VolumeEvidence` split.
+- `MANAGED_FILE_ATTRIBUTE_MASK`, the shared readonly/hidden/system/
+  not-content-indexed policy used by planner equality and executor mutation;
+  `MetadataSnapshot.attributes` still retains the complete observed bitmap.
 - `SessionState`, its legal transition table, and terminal-state predicate.
 - Six-value `Outcome` (`succeeded`, `skipped`, `failed`, `canceled`, `deferred`,
   `blocked`) and typed reason codes; free-form text is presentation detail, not
@@ -211,7 +214,9 @@ conversion accepts only drive and complete UNC filesystem namespaces that
 round-trip to a stable ordinary spelling. Device/NT namespaces, malformed
 extended UNC anchors, trailing-dot/space or reserved DOS components, and other
 ordinary-ambiguous absolute names are refused rather than normalized onto
-another tree. Native
+another tree. Reserved DOS aliases include `CONIN$`, `CONOUT$`, and the
+superscript-one/two/three `COM`/`LPT` forms as well as the ordinary numbered
+devices. Native
 `OSError` filename fields are rendered back into logical spelling before
 entering warnings, durable detail, or user-facing diagnostics.
 
@@ -345,9 +350,10 @@ logic; no scanner role or inventory representation is added.
 - Unicode corpus tests preserve NTFS-distinct paths and normalize separator and
   ordinary case variants identically.
 - Path tests reject drive, UNC, device, traversal, NUL, mixed-separator escape,
-  ambiguous absolute components, and reparse-root escape cases while accepting
-  valid long relative paths. Drive/UNC logical-native round trips and logical
-  error rendering are pinned separately.
+  ambiguous absolute components, console/superscript DOS aliases, and
+  reparse-root escape cases while accepting valid long relative paths.
+  Drive/UNC logical-native round trips and logical error rendering are pinned
+  separately.
 - Scan-scope tests prove exact-only, recursive-subtree, and full shapes are
   canonical, segment-aware, and reject malformed direct construction.
 - UTC/DST boundary tests prove all core timestamps are aware UTC values.

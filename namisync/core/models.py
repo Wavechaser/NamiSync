@@ -15,6 +15,10 @@ from .pathing import (
 )
 
 
+# Windows attributes that execution deliberately propagates from source to target.
+MANAGED_FILE_ATTRIBUTE_MASK = 0x00000001 | 0x00000002 | 0x00000004 | 0x00002000
+
+
 class EntryKind(StrEnum):
     FILE = "file"
     DIRECTORY = "directory"

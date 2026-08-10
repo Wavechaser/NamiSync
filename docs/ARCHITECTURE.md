@@ -341,7 +341,8 @@ class CapabilityProfile:        # one per scanned root
 
 @dataclass(frozen=True)
 class MetadataSnapshot:         # what "preserve metadata" observed / intends
-    attributes: int             # readonly / hidden / system bits
+    attributes: int             # complete observed Windows attribute bitmap;
+                                # planner/executor share a smaller managed mask
     created_ns: int | None      # None where the fs can't say
     # no stream manifest — ever (DR-32, amended): ADS is settled as
     # executor-time enumeration at copy (the executor already holds the file),
@@ -825,9 +826,9 @@ enumeration.
 
 ### 4.3 planner
 
-**Implementation status (2026-07-21).** The pure M0 planner and its core plan
+**Implementation status (2026-08-10).** The pure M0 planner and its core plan
 contracts are implemented: identity assignment, timestamp- and
-standard-attribute-aware metadata diffing, explicit
+managed-attribute-aware metadata diffing with complete raw snapshots, explicit
 directory chains, correspondence-qualified file moves, composite move-update,
 planned-removal cleanup, symmetric filters, deterministic surrogate-safe
 serialization, non-blocking exact-case and canonical-Unicode advisories,
@@ -857,7 +858,8 @@ though the M0 policy is the identity assignment. This one indirection is what
 makes ingest a policy change instead of a planner rewrite.
 
 **Flesh — now.** Mtime diffing within the coarser root's granularity plus
-exact standard-attribute diffing;
+exact comparison of the core-owned readonly/hidden/system/not-content-indexed
+mask; unmanaged bits remain observed evidence but do not schedule mutations;
 copy/update/trash/delete/noop planning, with an explicit mkdir-with-metadata
 operation for every directory the plan creates (full chain — file operations
 depend on their parent's mkdir; the executor never creates a directory

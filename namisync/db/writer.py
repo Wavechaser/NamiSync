@@ -29,8 +29,11 @@ class TokenConflictError(RecordingError):
 
 
 def _is_busy(error: sqlite3.OperationalError) -> bool:
-    message = str(error).lower()
-    return "locked" in message or "busy" in message
+    code = getattr(error, "sqlite_errorcode", None)
+    return type(code) is int and code & 0xFF in (
+        sqlite3.SQLITE_BUSY,
+        sqlite3.SQLITE_LOCKED,
+    )
 
 
 class SerializedWriter:

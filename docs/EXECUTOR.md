@@ -157,16 +157,18 @@ target. With trash-on-update enabled it:
 1. validates/reserves `.synctrash/<run-id>/<relative-path>` on the target volume;
 2. preserves the old live file there using a same-volume hardlink when
    `CapabilityProfile.supports_hardlinks`; otherwise writes a trash-local exact
-   temp, flushes it, and atomically publishes the complete backup inside the run
-   directory after revalidating its owned destination; a failed prepublication
-   copy validates the same parent chain before removing its temp;
+   temp from one open source handle. The handle stat must match the reviewed
+   live-target snapshot before copying; the copied byte count and a second stat
+   of that same handle must still match before metadata is finalized from the
+   bound snapshot and the backup publishes atomically. Growth, truncation, or
+   visible same-size drift fails as `target-drift`; a failed prepublication copy
+   revalidates the owned parent chain before removing its temp;
 3. flushes prior recorder evidence after backup preparation but before any
    final publication validation, then revalidates the complete owned-trash
    parent chain again;
-4. captures or revalidates backup evidence, completes copied-backup metadata,
-   and then performs the final backup, prepared-temp, source, and live-target
-   guards; a hardlink defers metadata repair because it still shares the live
-   inode;
+4. captures or revalidates backup evidence and then performs the final backup,
+   prepared-temp, source, and live-target guards; a hardlink defers metadata
+   repair because it still shares the live inode;
 5. clears readonly on the live target if Windows requires it for replacement;
 6. atomically publishes the prepared temp over the live path with `os.replace`;
 7. applies the new file's readonly bit and remaining post-publish metadata;
@@ -195,10 +197,10 @@ discarding the only known-good version.
 
 The planner/preflight formula includes backup-copy bytes on no-hardlink targets.
 A partial backup remains under exact temp grammar, is ignored by restore
-planning, and ages out with the trash run directory; ordinary temp recovery
-still never walks `.synctrash`. Readonly ordering/recovery restores the old
-version's planned attributes after replacement so the hardlinked trash inode is
-not left silently degraded.
+planning, and remains with the trash run directory until a future reviewed
+maintenance purge; ordinary temp recovery still never walks `.synctrash`.
+Readonly ordering/recovery restores the old version's planned attributes after
+replacement so the hardlinked trash inode is not left silently degraded.
 
 Backup creation never redefines the accepted live target version. UPDATE keeps
 the pre-backup stat across retries, permits only its own hardlink's expected
@@ -550,6 +552,11 @@ chunk bands remain private constants, not settings.
 - On a no-hardlink target, backup fault injection leaves only an exact temp or a
   complete published trash version; restore ignores the former and capacity
   includes its content bytes.
+- A no-hardlink backup binds the reviewed live-target stat to one open handle,
+  rejects pre-copy mismatch or post-copy growth/truncation/same-size metadata
+  drift, removes the unpublished temp, and performs neither backup publication
+  nor live replacement. Stable copying preserves the exact bytes and bound
+  metadata before the ordinary final target guards run.
 - Source mutation during any chunk or before final stat fails the operation and
   records no digest/attestation.
 - Opt-in ACL copy failure fails before publish and leaves the prior live target

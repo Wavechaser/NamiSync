@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from namisync.db.writer import RecordingBusyError, SerializedWriter
+from namisync.db.writer import RecordingBusyError, RecordingError, SerializedWriter
 
 
 class _FakeClock:
@@ -22,8 +22,16 @@ class _FakeClock:
 
 
 class _BusyConnection:
-    def __init__(self, clock: _FakeClock) -> None:
+    def __init__(
+        self,
+        clock: _FakeClock,
+        *,
+        message: str = "database is locked",
+        error_code: int = sqlite3.SQLITE_BUSY | (2 << 8),
+    ) -> None:
         self._clock = clock
+        self._message = message
+        self._error_code = error_code
         self.begin_times: list[float] = []
         self.busy_timeouts: list[int] = []
         self.closed = False
@@ -34,7 +42,9 @@ class _BusyConnection:
             return self
         assert statement == "BEGIN IMMEDIATE"
         self.begin_times.append(self._clock.now)
-        raise sqlite3.OperationalError("database is locked")
+        error = sqlite3.OperationalError(self._message)
+        error.sqlite_errorcode = self._error_code
+        raise error
 
     def rollback(self) -> None:
         pass
@@ -43,11 +53,19 @@ class _BusyConnection:
         self.closed = True
 
 
+@pytest.mark.parametrize(
+    "error_code",
+    [
+        sqlite3.SQLITE_BUSY | (2 << 8),
+        sqlite3.SQLITE_LOCKED | (3 << 8),
+    ],
+)
 def test_writer_caps_busy_wait_and_sleep_to_one_retry_deadline(
     tmp_path: Path,
+    error_code: int,
 ) -> None:
     clock = _FakeClock()
-    connection = _BusyConnection(clock)
+    connection = _BusyConnection(clock, error_code=error_code)
     writer = SerializedWriter(
         tmp_path / "ledger.db",
         lambda path, *, busy_timeout_ms: connection,
@@ -101,6 +119,32 @@ def test_writer_applies_retry_deadline_to_in_process_lock_wait(
         assert connection.begin_times == []
     finally:
         writer._lock = original_lock
+        writer.close()
+
+
+def test_writer_does_not_retry_non_contention_error_with_busy_word(
+    tmp_path: Path,
+) -> None:
+    clock = _FakeClock()
+    connection = _BusyConnection(
+        clock,
+        message="no such table: busy_jobs",
+        error_code=sqlite3.SQLITE_ERROR,
+    )
+    writer = SerializedWriter(
+        tmp_path / "ledger.db",
+        lambda path, *, busy_timeout_ms: connection,
+        retry_timeout_seconds=1.0,
+        monotonic=clock.monotonic,
+        sleep=clock.sleep,
+    )
+    try:
+        with pytest.raises(RecordingError, match="no such table: busy_jobs"):
+            writer.transact(lambda database: None)
+
+        assert connection.begin_times == [0.0]
+        assert clock.sleeps == []
+    finally:
         writer.close()
 
 

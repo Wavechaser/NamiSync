@@ -204,6 +204,16 @@ dispatcher retention so neither a retry nor a late admission can return a
 receipt for an already-closed session. Shutdown prevents a late admission
 return from repopulating cleared receipt state.
 
+The current `close_session()` boundary owns dispatcher retention, observation,
+and command receipts only. Process-local workflow artifacts such as reviewed
+plans, execution detail, and inventory detail have separate opaque ids and are
+not implicitly released by that call. Before Stage 6 task close ships, the
+facade must add one task-owned artifact-release seam that drops the exact linked
+runtime entries immediately for a plan-only or already-terminal task, and only
+after terminal settlement for busy work. Repeated create/close tests must prove
+every service/runtime registry remains bounded without touching retained
+database history.
+
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
 `settings.json` beside the selected ledger. `read_semantic_settings()` and

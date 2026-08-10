@@ -169,6 +169,25 @@ def test_plan_request_encoding_escapes_unpaired_surrogates_defensively() -> None
     assert decode_plan_request(encoded).request_id == hostile
 
 
+@pytest.mark.parametrize("constant", [b"NaN", b"Infinity", b"-Infinity"])
+def test_workflow_payload_rejects_non_json_numeric_constants(
+    constant: bytes,
+) -> None:
+    encoded = encode_plan_request(
+        PlanRequest("request", r"C:\source", r"D:\target")
+    )
+    marker = b'"schema_version":4'
+    assert marker in encoded
+    malformed = encoded.replace(
+        marker,
+        b'"schema_version":' + constant,
+        1,
+    )
+
+    with pytest.raises(ValueError, match="invalid JSON number"):
+        decode_plan_request(malformed)
+
+
 def _op_id(number: int) -> OpId:
     return OpId(f"{number:032x}")
 

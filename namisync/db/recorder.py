@@ -403,6 +403,11 @@ class LedgerRecorder:
             (command.source_location_id, command.target_location_id),
         ).fetchall()
         by_id = {int(row["id"]): row for row in locations}
+        if (
+            command.source_location_id not in by_id
+            or command.target_location_id not in by_id
+        ):
+            raise MappingValidationError("run location is unavailable")
         if not _same_volume(by_id[command.source_location_id], command.plan.source_volume_id):
             raise MappingValidationError("plan source volume does not match the location")
         if not _same_volume(by_id[command.target_location_id], command.plan.target_volume_id):
@@ -1308,7 +1313,9 @@ class SyncRunRecorder:
         def apply(connection: sqlite3.Connection, plan_op: PlanOperation, at: str) -> None:
             if source != plan_op.source_expected or target != plan_op.target_expected:
                 raise StaleRecordingError("no-op live snapshots differ from the reviewed plan")
-            source_id = self._owner._upsert_observation(connection, self._command.source_location_id, self._command.host_id, self._command.run_token, plan_op.source_rel_path or "", source, at)
+            if plan_op.source_rel_path is None:
+                raise StaleRecordingError("no-op reviewed operation has no source path")
+            source_id = self._owner._upsert_observation(connection, self._command.source_location_id, self._command.host_id, self._command.run_token, plan_op.source_rel_path, source, at)
             target_id = self._owner._upsert_observation(connection, self._command.target_location_id, self._command.host_id, self._command.run_token, plan_op.target_rel_path, target, at)
             self._record_correspondence(connection, plan_op, source_id, target_id, source, target, at)
 

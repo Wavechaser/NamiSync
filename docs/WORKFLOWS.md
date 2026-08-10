@@ -164,7 +164,10 @@ origin for recase, move, and move-update rows, so the target-side rename is not
 lost while translating the immutable core plan into a presentation model.
 Workflow JSON keeps valid-Unicode bytes stable and backslash-escapes an
 unpaired surrogate defensively, matching plan, ledger-hash, and history
-serialization without weakening path validation.
+serialization without weakening path validation. Decoding rejects duplicate
+object keys and the nonstandard numeric constants `NaN`, `Infinity`, and
+`-Infinity`; no payload may acquire a non-finite value through Python's
+otherwise-permissive JSON parser.
 
 M0 automatically selects the maximal safe dependency-closed subset. Directly
 blocked items remain in the reviewed plan as `BLOCKED`; operations touching
@@ -429,6 +432,9 @@ import from handling refusal differently than baseline/verify.
   the reviewed/committed execution.
 - Execution always uses the exact reviewed plan/selection, fresh observation,
   and preflight; drift refuses without mutation.
+- Payload round trips retain every fingerprint input and reject duplicate keys,
+  invalid Unicode, and all nonstandard non-finite numeric constants before
+  constructing a workflow request.
 - A blocked item cannot refuse independent safe work merely by existing in the
   plan; its overlapping target correspondence and dependent operations remain
   excluded.

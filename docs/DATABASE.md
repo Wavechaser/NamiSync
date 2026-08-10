@@ -118,13 +118,20 @@ version 5.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
 database/WAL/SHM artifacts and recreates both current schemas; normal startup
-never calls it. No general ordered migration, backup, retention, export/import,
-or maintenance writer is claimed yet.
+never calls it. The reset is intentionally destructive and non-transactional:
+all NamiSync and SQLite handles must already be closed, and a locked sidecar can
+make a later delete fail after an earlier artifact was removed. The caller must
+clear the lock and rerun the coordinated reset/recreation; this helper is not a
+user-data recovery guarantee. No general ordered migration, backup, retention,
+export/import, or maintenance writer is claimed yet.
 
 `settings.py` owns `SemanticSettingsStore`. A commit takes a deterministic
 Windows named mutex, rereads the latest document while holding it, applies only
-the supplied patch fields, and atomically replaces the UTF-8 JSON file. This
-prevents two processes editing unrelated settings from reverting one another.
+the supplied patch fields, flushes the replacement payload, and atomically
+replaces the UTF-8 JSON file. This prevents two processes editing unrelated
+settings from reverting one another. The settings store does not claim
+parent-directory write-through across sudden power loss; preferences are not
+part of the audit ledger's durability contract.
 Reads require the exact integer schema discriminator and reject duplicate JSON
 object keys rather than accepting boolean/integer equivalence or last-key-wins
 ambiguity.
@@ -172,6 +179,14 @@ execute→verify reuses one run token/window and the same run-bound recorder for
 conditional integrity writes; pause closes/reopens the connection without
 ending the row, and terminal settlement fills `ended_at` once.
 
+Official writers keep observed and attested file-identity fields paired and
+clear attested-only fields when no content evidence exists. Ledger v3 does not
+encode every one of those defensive invariants as a raw-SQL `CHECK`, and
+attested creation time remains legitimately optional. Stronger half-identity
+and no-attestation constraints, plus defensive reader rejection of corrupt
+rows, are deferred to the next coordinated ledger schema revision rather than
+retrofitted into the reset-only v3 contract.
+
 Drive letters are current mount/display data, never persisted identity. Label
 drift is noted without rebind; a matching serial with a changed filesystem type
 requires explicit rebind; simultaneous duplicate keys require explicit user
@@ -183,10 +198,18 @@ from referencing a target file in another location.
 Every writable ledger connection enables foreign keys, WAL, bounded busy
 timeout, and explicit transactions. The serialized writer spends one monotonic
 contention budget across its local lock, SQLite busy waits, and retry sleeps;
-the transaction body is not misclassified as contention time. Read repositories
-use read-only connections where possible. A function named/read-scoped as
-read-only may never be used for retention or other writes—the PoC made that
-error and disabled pruning entirely.
+the transaction body is not misclassified as contention time. Only SQLite
+primary result codes `SQLITE_BUSY` and `SQLITE_LOCKED`, including their extended
+forms after primary-code masking, are retryable; exception message text never
+controls contention handling. Read repositories use read-only connections where
+possible. A function named/read-scoped as read-only may never be used for
+retention or other writes—the PoC made that error and disabled pruning entirely.
+
+First-time schema creation still relies on the connection's bounded SQLite busy
+timeout rather than an application-level database-pair startup mutex or retry
+loop. Concurrent process startup can therefore refuse after that bound; a
+persistent multi-process service must add a pair-scoped initialization gate and
+two-process regression before claiming stronger startup liveness.
 
 The serialized recorder owns normal writes. Schema creation/migration and
 dedicated maintenance are the only other write owners and do not run inside
@@ -316,6 +339,9 @@ rather than current implementation claims.
   and foreign-key/trigger constraint required above.
 - `PRAGMA foreign_keys`, WAL, and busy timeout are verified on every connection
   type; readonly connections reject writes by construction.
+- Serialized-writer tests prove primary and extended `BUSY`/`LOCKED` codes
+  retry within one deadline, while misleading message text on another SQLite
+  error fails immediately.
 - Schema rejects cross-location mapping correspondence despite valid row ids.
 - Windows path-key corpus stores NTFS-distinct names separately and ordinary
   case/separator variants as one key.

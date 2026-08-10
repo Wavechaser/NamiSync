@@ -103,6 +103,12 @@ the resolved root. The handle permits other readers but denies writer/delete
 sharing so the selected name cannot be replaced while it still refers to the
 old subject. Pre- and post-read stats come from that same handle.
 
+The aligned native allocation is created once per opened file and freed when
+that stream ends. Each yielded chunk is still materialized as a Python `bytes`
+object for the current hasher protocol. That allocation is a performance seam,
+not a correctness defect; change the stream/hasher lifetime contract only after
+a profile shows chunk materialization is the limiting cost.
+
 There is deliberately no buffered fallback. A non-Windows host, reparse
 subject, alignment rejection, unsupported volume, or inability to prove handle
 containment produces a disclosed `unsupported` outcome and never a false
@@ -166,6 +172,11 @@ advancing status; pause unwinds after preserving completed items, releases
 custody without terminal, and resume freshly refreshes/guards only the remaining
 selection. Rebaseline therefore uses the same continuation rather than a
 separate short-operation exception.
+
+`bytes_done` measures physical read work, not unique logical file coverage. A
+pause during an in-flight file restarts that file on resume, so already-read
+bytes are counted again while the item still emits exactly one terminal result;
+the reporter expands its total as needed to keep progress monotonic and bounded.
 
 On cancellation, the verifier's unwind finalizer emits `canceled` for the
 in-flight file and every unreached selected file before re-raising `Canceled` to

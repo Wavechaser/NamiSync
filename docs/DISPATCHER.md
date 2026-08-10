@@ -218,6 +218,15 @@ commit success settles OK, while failure settles degraded with no
 contradictory row. The immutable Terminal is then sent to ordinary subscribers,
 never used as history's own finalization input.
 
+Terminal settlement therefore has one intentional transient for direct record
+pollers: dispatcher first persists/emits the terminal `StateChanged` with
+`SessionRecord.result is None`, finalizes the audit axis, persists the final
+result, and only then emits `Terminal`. A consumer that observes terminal state
+without a result must treat it as settlement-in-progress and wait for the result
+or reliable `Terminal`; it must not index or summarize the absent result. The
+service observer delivers its terminal record only after that event and final
+record lookup.
+
 Durable finalization success is latched before observer cleanup. The pump closes
 the observer exactly once on every exit path; a later `close()` exception marks
 pump health degraded but cannot rewrite an already-committed terminal row or

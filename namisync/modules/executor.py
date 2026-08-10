@@ -49,6 +49,7 @@ from namisync.core.models import (
     EntryKind,
     FileIdentity,
     FileStat,
+    MANAGED_FILE_ATTRIBUTE_MASK,
     MetadataSnapshot,
     VolumeId,
     owned_temp_run_id,
@@ -75,11 +76,6 @@ from namisync.core.session import (
 
 
 _READONLY = 0x00000001
-_HIDDEN = 0x00000002
-_SYSTEM = 0x00000004
-_NOT_CONTENT_INDEXED = 0x00002000
-_STANDARD_ATTRIBUTE_MASK = _READONLY | _HIDDEN | _SYSTEM
-_PRESERVED_ATTRIBUTE_MASK = _STANDARD_ATTRIBUTE_MASK | _NOT_CONTENT_INDEXED
 _REPARSE_POINT = 0x00000400
 _SHARING_VIOLATIONS = {32, 33}
 _PIPELINE_BYTE_BUDGET = 32 * 1024 * 1024
@@ -963,7 +959,7 @@ class NativeFileSystem:
                 _win32_path(path),
                 ns=(observed_access_ns, stat.mtime_ns),
             )
-        desired = stat.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+        desired = stat.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
         if not apply_readonly:
             desired &= ~_READONLY
         self._set_standard_attributes(path, desired)
@@ -1044,10 +1040,10 @@ class NativeFileSystem:
                     ) from error
             current = self._basic_info(handle)
             desired_attributes = (
-                current.FileAttributes & ~_PRESERVED_ATTRIBUTE_MASK
+                current.FileAttributes & ~MANAGED_FILE_ATTRIBUTE_MASK
             ) | (
                 intended.metadata.attributes
-                & (_PRESERVED_ATTRIBUTE_MASK & ~_READONLY)
+                & (MANAGED_FILE_ATTRIBUTE_MASK & ~_READONLY)
             )
             creation = current.CreationTime
             if preserve_created and intended.metadata.created_ns is not None:
@@ -1097,12 +1093,12 @@ class NativeFileSystem:
             and observed.metadata.created_ns != finalized_temp.metadata.created_ns
         )
         desired_managed = (
-            intended.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+            intended.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
         )
         if not apply_readonly:
             desired_managed &= ~_READONLY
         repair_attributes = (
-            observed.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+            observed.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
         ) != desired_managed
         if not (repair_mtime or repair_created or repair_attributes):
             return observed
@@ -1116,7 +1112,7 @@ class NativeFileSystem:
                         finalized_temp.metadata,
                         attributes=(
                             finalized_temp.metadata.attributes
-                            & ~_PRESERVED_ATTRIBUTE_MASK
+                            & ~MANAGED_FILE_ATTRIBUTE_MASK
                         )
                         | desired_managed,
                     ),
@@ -1145,7 +1141,7 @@ class NativeFileSystem:
                 else current.LastWriteTime
             )
             attributes = (
-                (current.FileAttributes & ~_PRESERVED_ATTRIBUTE_MASK)
+                (current.FileAttributes & ~MANAGED_FILE_ATTRIBUTE_MASK)
                 | desired_managed
                 if repair_attributes
                 else current.FileAttributes
@@ -1187,13 +1183,21 @@ class NativeFileSystem:
         source: Path,
         temp: Path,
         target: Path,
+        source_expected: FileStat,
         checkpoint: Callable[[], None],
         validate_destination: Callable[[], None],
     ) -> None:
         published = False
         try:
             with self.open_source(source) as reader:
+                source_before = self._stat_open_file(reader)
+                if not _matches_expected(source_before, source_expected):
+                    raise OperationFailure(
+                        ExecutionReason.TARGET_DRIFT,
+                        "live update target drifted before its backup was copied",
+                    )
                 validate_destination()
+                copied_size = 0
                 with self.create_temp(temp, allocation_size=None) as writer:
                     while True:
                         checkpoint()
@@ -1201,14 +1205,18 @@ class NativeFileSystem:
                         if not chunk:
                             break
                         _write_all(writer, chunk, "backup copy")
-            validate_destination()
-            source_stat = self.stat_path(source)
-            if source_stat is None:
-                raise FileNotFoundError(source)
+                        copied_size += len(chunk)
+                validate_destination()
+                source_after = self._stat_open_file(reader)
+                if copied_size != source_before.size or source_after != source_before:
+                    raise OperationFailure(
+                        ExecutionReason.TARGET_DRIFT,
+                        "live update target drifted while its backup was copied",
+                    )
             validate_destination()
             self.finalize_temp(
                 temp,
-                source_stat,
+                source_before,
                 preserve_created=True,
                 acl_source=None,
             )
@@ -1227,6 +1235,26 @@ class NativeFileSystem:
                         f"{logical_error_text(cleanup_error)}"
                     )
             raise
+
+    def _stat_open_file(self, stream: BinaryIO) -> FileStat:
+        if os.name == "nt":
+            import msvcrt
+
+            return self._stat_handle(msvcrt.get_osfhandle(stream.fileno()))
+        info = os.fstat(stream.fileno())
+        if not stat_module.S_ISREG(info.st_mode):
+            raise UnsafeExecutionPath("backup source is not a regular file")
+        return FileStat(
+            kind=EntryKind.FILE,
+            size=info.st_size,
+            mtime_ns=info.st_mtime_ns,
+            file_identity=FileIdentity(f"{info.st_dev:x}", int(info.st_ino)),
+            nlink=info.st_nlink,
+            metadata=MetadataSnapshot(
+                attributes=int(getattr(info, "st_file_attributes", 0)),
+                created_ns=self._created_ns(info),
+            ),
+        )
 
     def clear_readonly(self, path: Path) -> None:
         current = self._get_attributes(path)
@@ -1490,7 +1518,7 @@ class NativeFileSystem:
     def _set_standard_attributes(self, path: Path, desired: int) -> None:
         current = self._get_attributes(path)
         self._set_attributes(
-            path, (current & ~_PRESERVED_ATTRIBUTE_MASK) | desired
+            path, (current & ~MANAGED_FILE_ATTRIBUTE_MASK) | desired
         )
 
     def _set_creation_time(self, path: Path, created_ns: int) -> None:
@@ -2764,7 +2792,7 @@ def _update(
             state,
             progress,
         )
-        _guard_present(
+        live_stat = _guard_present(
             fs,
             target_root,
             operation.target_rel_path,
@@ -2773,7 +2801,6 @@ def _update(
             drift=ExecutionReason.TARGET_DRIFT,
         )
         prepared_stat = _require_stat_path(fs, prepared.temp)
-        live_stat = _require_stat_path(fs, prepared.target)
         detail: dict[str, object] = {}
         backup: _UpdateBackup | None = None
         backup_error: Exception | None = None
@@ -2837,6 +2864,7 @@ def _update(
                         prepared.target,
                         backup_temp,
                         backup_path,
+                        live_stat,
                         ctx.checkpoint,
                         validate_backup_destination,
                     )
@@ -3797,9 +3825,9 @@ def _matches_restored_directory_metadata(
         actual.kind is EntryKind.DIRECTORY
         and actual.mtime_ns == intended.mtime_ns
         and (
-            actual.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK
+            actual.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
         )
-        == (intended.metadata.attributes & _PRESERVED_ATTRIBUTE_MASK)
+        == (intended.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK)
         and (
             not preserve_created
             or intended.metadata.created_ns is None

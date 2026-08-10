@@ -57,6 +57,7 @@ from namisync.interfaces.service import (
     PreservationSettingsView,
     SemanticSettingsPatchView,
 )
+from namisync.modules.executor import NativeFileSystem
 from namisync.workflows.models import PlanOperationView
 from namisync.workflows.views import session_record_view
 
@@ -1461,6 +1462,49 @@ def test_immediate_rerun_is_noop_and_each_explicit_run_is_retained(
 
     assert history_result == EXIT_SUCCESS
     assert history_output.getvalue().count(" -> ") == 2
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires native Windows attributes")
+def test_archive_attribute_created_by_copy_does_not_prevent_rerun_convergence(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    source_file = source / "payload.txt"
+    source_file.write_text("stable", encoding="utf-8")
+    filesystem = NativeFileSystem()
+    filesystem._set_attributes(
+        source_file,
+        filesystem._get_attributes(source_file) & ~stat.FILE_ATTRIBUTE_ARCHIVE,
+    )
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+
+    first = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("execute\n"),
+        stdout=io.StringIO(),
+        stderr=io.StringIO(),
+    )
+    target_file = target / "payload.txt"
+    assert first == EXIT_SUCCESS
+    assert not source_file.stat().st_file_attributes & stat.FILE_ATTRIBUTE_ARCHIVE
+    assert target_file.stat().st_file_attributes & stat.FILE_ATTRIBUTE_ARCHIVE
+
+    output = io.StringIO()
+    errors = io.StringIO()
+    second = main(
+        _arguments(source, target, ledger, history),
+        stdin=io.StringIO("execute\n"),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert second == EXIT_SUCCESS, (output.getvalue(), errors.getvalue())
+    assert "noop=1" in output.getvalue()
+    assert target_file.stat().st_file_attributes & stat.FILE_ATTRIBUTE_ARCHIVE
 
 
 def test_second_sync_uses_recorded_correspondence_for_source_rename(

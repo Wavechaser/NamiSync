@@ -466,3 +466,37 @@ def test_noop_requires_both_live_snapshots_and_persists_correspondence(tmp_path:
             connection.close()
     finally:
         setup.recorder.close()
+
+
+def test_noop_without_reviewed_source_path_is_typed_stale_recording(
+    tmp_path: Path,
+) -> None:
+    source = file_stat(identity_index=5)
+    target = file_stat(identity_index=6, volume_serial="target-serial")
+    noop = operation(
+        OperationKind.NOOP,
+        source_path=None,
+        source=source,
+        target=target,
+        intended=target,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan((noop,)))
+    try:
+        with pytest.raises(
+            StaleRecordingError,
+            match="reviewed operation has no source path",
+        ):
+            setup.run.record_noop(noop.op_id, source, target)
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 0
+            assert connection.execute(
+                "SELECT count(*) FROM mapping_correspondence"
+            ).fetchone()[0] == 0
+            assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()

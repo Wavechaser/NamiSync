@@ -382,8 +382,6 @@ class Dispatcher:
     def _cancel_with_publication_lock(
         self,
         session_id: SessionId,
-        *,
-        audit_offer_timeout: float | None = None,
     ) -> ControlResult:
         with self._condition:
             record = self._records.get(session_id)
@@ -413,11 +411,7 @@ class Dispatcher:
             ) and session_id not in self._pending:
                 self._enqueue_once_locked(session_id)
             self._condition.notify_all()
-        changed = StateChanged(updated.state)
-        if audit_offer_timeout is None:
-            hub.emit(changed)
-        else:
-            hub.emit(changed, audit_offer_timeout=audit_offer_timeout)
+        hub.emit(StateChanged(updated.state))
         return ControlResult(
             ControlCode.ACCEPTED,
             session_id,

@@ -158,6 +158,14 @@ status cases, not new safety logic. Queue wakeup calls the same functions.
 Network roots require a distinct weaker observation/custody profile and remain
 refused until that profile exists.
 
+Native subject observation currently repeats root and volume evidence reads for
+present selected subjects. This is conservative and can be expensive on very
+large plans, but it is not a correctness failure. Any optimization must cache
+only inside one `observe()` invocation, retain a final root/full-volume
+revalidation, and prove reduced native call counts under a large-plan benchmark;
+a process-lifetime volume cache would make remount evidence stale and is not an
+acceptable shortcut.
+
 ## PoC Hardening
 
 - Scoped stats fix whole-tree over-refusal and duplicate full-walk latency.

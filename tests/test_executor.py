@@ -2558,6 +2558,192 @@ def test_copied_backup_stays_serial_hashless_fixed_chunk_and_unallocated(
     ]
 
 
+class MutatingBackupStream:
+    def __init__(self, stream, path: Path, mutation: str) -> None:
+        self.stream = stream
+        self.path = path
+        self.mutation = mutation
+        self.mutated = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.stream.close()
+
+    def read(self, size: int) -> bytes:
+        chunk = self.stream.read(size)
+        if chunk and not self.mutated:
+            before = self.path.stat(follow_symlinks=False)
+            if self.mutation == "grow":
+                with self.path.open("ab", buffering=0) as writer:
+                    writer.write(b"-external-growth")
+            elif self.mutation == "shrink":
+                with self.path.open("r+b", buffering=0) as writer:
+                    writer.truncate(0)
+            else:
+                with self.path.open("r+b", buffering=0) as writer:
+                    writer.write(b"X" * before.st_size)
+                os.utime(
+                    self.path,
+                    ns=(before.st_atime_ns, before.st_mtime_ns + 2_000_000_000),
+                )
+            self.mutated = True
+        return chunk
+
+    def __getattr__(self, name: str):
+        return getattr(self.stream, name)
+
+
+class MutatingCopiedBackupFileSystem(NativeFileSystem):
+    def __init__(self, live: Path, mutation: str) -> None:
+        self.live = live
+        self.mutation = mutation
+        self.backup_publish_calls = 0
+        self.replace_calls = 0
+
+    def open_source(self, path: Path):
+        stream = super().open_source(path)
+        if path != self.live:
+            return stream
+        return MutatingBackupStream(stream, path, self.mutation)
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        if ".synctrash" in target.parts:
+            self.backup_publish_calls += 1
+        super().publish_new(temp, target)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.replace_calls += 1
+        super().replace(temp, target)
+
+
+class CopiedBackupPublicationSpyFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.backup_publish_calls = 0
+        self.replace_calls = 0
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        if ".synctrash" in target.parts:
+            self.backup_publish_calls += 1
+        super().publish_new(temp, target)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self.replace_calls += 1
+        super().replace(temp, target)
+
+
+def test_copied_backup_does_not_adopt_target_drift_after_reviewed_guard(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_path = source / "file.bin"
+    live = target / "file.bin"
+    source_path.write_bytes(b"new-version")
+    live.write_bytes(b"old-version")
+    fs = CopiedBackupPublicationSpyFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    real_require_stat_path = executor_module._require_stat_path
+    mutated = False
+
+    def mutate_after_reviewed_guard(filesystem, path: Path) -> FileStat:
+        nonlocal mutated
+        if not mutated and ".synctmp-" in path.name:
+            live.write_bytes(b"external-version-is-different")
+            mutated = True
+        return real_require_stat_path(filesystem, path)
+
+    monkeypatch.setattr(
+        executor_module,
+        "_require_stat_path",
+        mutate_after_reviewed_guard,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)),
+        fs=fs,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert mutated
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert item.detail["message"] == (
+        "live update target drifted before its backup was copied"
+    )
+    assert live.read_bytes() == b"external-version-is-different"
+    assert fs.backup_publish_calls == 0
+    assert fs.replace_calls == 0
+    assert not backup.exists()
+    assert not list(target.rglob("*.synctmp-*"))
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_live"),
+    [
+        ("grow", b"old-version-external-growth"),
+        ("shrink", b""),
+        ("rewrite", b"X" * len(b"old-version")),
+    ],
+)
+def test_copied_backup_rejects_live_drift_before_backup_or_update_publish(
+    tmp_path: Path,
+    mutation: str,
+    expected_live: bytes,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_path = source / "file.bin"
+    live = target / "file.bin"
+    source_path.write_bytes(b"new-version")
+    live.write_bytes(b"old-version")
+    fs = MutatingCopiedBackupFileSystem(live, mutation)
+    source_stat = fs.stat(source, "file.bin")
+    target_stat = fs.stat(target, "file.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,), hardlinks=False)),
+        fs=fs,
+    )
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert result.status is SessionState.FAILED
+    assert item.reason == "target-drift"
+    assert item.detail["message"] == (
+        "live update target drifted while its backup was copied"
+    )
+    assert live.read_bytes() == expected_live
+    assert fs.backup_publish_calls == 0
+    assert fs.replace_calls == 0
+    assert not backup.exists()
+    assert not list(target.rglob("*.synctmp-*"))
+    assert recorder.calls == []
+
+
 class FailingBackupWriter:
     def __init__(self, stream) -> None:
         self.stream = stream
@@ -2649,6 +2835,7 @@ class UpdateSourceGuardTrashSwapFileSystem(NativeFileSystem):
         source,
         temp,
         target,
+        source_expected,
         checkpoint,
         validate_destination,
     ) -> None:
@@ -2656,6 +2843,7 @@ class UpdateSourceGuardTrashSwapFileSystem(NativeFileSystem):
             source,
             temp,
             target,
+            source_expected,
             checkpoint,
             validate_destination,
         )
@@ -2687,14 +2875,23 @@ def test_copied_backup_removes_its_temp_on_every_prepublish_failure(
     backup = trash / "file.bin"
     fs = BackupFailureFileSystem(failure)
     temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+    live_stat = fs.stat_path(live)
+    assert live_stat is not None
 
     def checkpoint() -> None:
         if failure == "cancel":
             raise Canceled()
 
-    expected = Canceled if failure == "cancel" else OSError
-    with pytest.raises(expected):
-        fs.copy_backup(live, temp, backup, checkpoint, lambda: None)
+    expected_error = Canceled if failure == "cancel" else OSError
+    with pytest.raises(expected_error):
+        fs.copy_backup(
+            live,
+            temp,
+            backup,
+            live_stat,
+            checkpoint,
+            lambda: None,
+        )
 
     assert live.read_bytes() == b"old-version"
     assert not backup.exists()
@@ -2712,9 +2909,18 @@ def test_copied_backup_cleanup_note_sanitizes_native_filename(
     backup = trash / "file.bin"
     fs = BackupCleanupDiagnosticFileSystem()
     temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+    live_stat = fs.stat_path(live)
+    assert live_stat is not None
 
     with pytest.raises(OSError) as captured:
-        fs.copy_backup(live, temp, backup, lambda: None, lambda: None)
+        fs.copy_backup(
+            live,
+            temp,
+            backup,
+            live_stat,
+            lambda: None,
+            lambda: None,
+        )
 
     notes = captured.value.__notes__
     assert len(notes) == 1
@@ -2733,6 +2939,8 @@ def test_copied_backup_revalidates_parent_before_temp_finalization(
     backup = trash / "file.bin"
     fs = BackupFinalizationSpyFileSystem()
     temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+    live_stat = fs.stat_path(live)
+    assert live_stat is not None
     validations = 0
 
     def reject_redirected_parent() -> None:
@@ -2746,6 +2954,7 @@ def test_copied_backup_revalidates_parent_before_temp_finalization(
             live,
             temp,
             backup,
+            live_stat,
             lambda: None,
             reject_redirected_parent,
         )
@@ -2767,6 +2976,8 @@ def test_copied_backup_revalidates_parent_after_source_open_before_temp_create(
     backup = trash / "file.bin"
     fs = BackupTempCreationSpyFileSystem()
     temp = fs.owned_temp(backup, RUN_ID, OpId("2" * 32))
+    live_stat = fs.stat_path(live)
+    assert live_stat is not None
     validations = 0
 
     def reject_redirect_after_source_open() -> None:
@@ -2780,6 +2991,7 @@ def test_copied_backup_revalidates_parent_after_source_open_before_temp_create(
             live,
             temp,
             backup,
+            live_stat,
             lambda: None,
             reject_redirect_after_source_open,
         )
@@ -5024,13 +5236,20 @@ class BackupSharingAfterCommitFileSystem(NativeFileSystem):
         self.attempts = 0
 
     def copy_backup(
-        self, source, temp, target, checkpoint, validate_destination
+        self,
+        source,
+        temp,
+        target,
+        source_expected,
+        checkpoint,
+        validate_destination,
     ) -> None:
         self.attempts += 1
         super().copy_backup(
             source,
             temp,
             target,
+            source_expected,
             checkpoint,
             validate_destination,
         )
@@ -5224,13 +5443,20 @@ class CopyBackupStatSharingOnceFileSystem(NativeFileSystem):
         self.backup_copy_attempts = 0
 
     def copy_backup(
-        self, source, temp, target, checkpoint, validate_destination
+        self,
+        source,
+        temp,
+        target,
+        source_expected,
+        checkpoint,
+        validate_destination,
     ) -> None:
         self.backup_copy_attempts += 1
         super().copy_backup(
             source,
             temp,
             target,
+            source_expected,
             checkpoint,
             validate_destination,
         )

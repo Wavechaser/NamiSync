@@ -16,11 +16,15 @@ _DEVICE_PREFIXES = ("\\\\?\\", "\\\\.\\", "\\??\\")
 _INVALID_ABSOLUTE_COMPONENT_CHARACTERS = frozenset('<>"/\\|?*')
 _RESERVED_BASENAMES = {
     "CON",
+    "CONIN$",
+    "CONOUT$",
     "PRN",
     "AUX",
     "NUL",
     *(f"COM{number}" for number in range(1, 10)),
     *(f"LPT{number}" for number in range(1, 10)),
+    *(f"COM{number}" for number in "¹²³"),
+    *(f"LPT{number}" for number in "¹²³"),
 }
 
 

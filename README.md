@@ -133,6 +133,17 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed the remaining actionable LOW audit findings and tightened adjacent
+  malformed-input boundaries without changing deferred feature scope.
+  - **Planner and executor:** share one managed Windows-attribute mask so
+    unmanaged ARCHIVE/TEMPORARY drift converges, while copied UPDATE backups
+    bind reviewed target evidence to one stable open handle before publication.
+  - **Defensive boundaries:** classify SQLite contention by result code, reject
+    the remaining documented DOS-device aliases and non-finite workflow JSON,
+    and surface malformed recorder context through typed rollback-safe errors.
+  - **Tests:** cover managed/unmanaged attribute behavior and native rerun,
+    grow/truncate/rewrite backup drift, extended BUSY/LOCKED codes, reserved
+    names, strict payload constants, and malformed recorder transactions.
 - Restored FULL scan availability when a managed root is exactly a trusted
   folder-mounted volume anchor, without relaxing junction refusal.
   - **Scanner:** requires the resolved root, reviewed/current anchor, and volume

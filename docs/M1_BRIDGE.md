@@ -1313,8 +1313,9 @@ or it leaks memory and serves torn reads.
   the original key was reaching for, obtained without importing task vocabulary
   below the bridge. Cache state stays under the same ownership as selection
   state (DR-BR-03), which is what lets both be validated atomically.
-- **Cleanup.** Released definitively when the view changes location, when the
-  task closes (alongside `drop_plan`), and at service shutdown.
+- **Cleanup.** Released definitively when the view changes location, through the
+  task-owned facade artifact release when the task closes, and at service
+  shutdown. The adapter separately drops its task/projection references.
 - **Swap, never mutate.** Rebuilds construct a new immutable projection and swap
   the reference under a lock. A window request already holding a reference
   finishes against consistent structure instead of watching rows move beneath it.
@@ -1639,7 +1640,9 @@ precondition documented rather than growing a control policy.
 1. Request the service-supported control (cancel).
 2. The card enters a visible **closing** state and remains on the rail.
 3. **On the terminal record — not the terminal event** — unsubscribe, close
-   the session, and drop the plan.
+   the session, and invoke the task-owned facade artifact release. Plan-only
+   and already-terminal tasks invoke that release immediately; the adapter
+   separately drops its presentation projections.
 
 Step 3's distinction is a real race, not pedantry. `SessionObserver` delivers
 the `Terminal` event to the sink and only *afterward* calls
@@ -2727,9 +2730,13 @@ because its local tests are easier.
   delivery while its artifact survives until task close; compound phases remain
   one session with independent counters. Closing a live task asks once, enters
   visible closing, cancels, waits for a terminal **record**, then unsubscribes,
-  closes, and drops the plan; refusal leaves it open. A delayed terminal leaves
-  the card visibly closing without prematurely closing the session or dropping
-  the plan. The rail renders `pausing` distinctly until `paused` or terminal,
+  closes, and releases the exact task-owned plan, selection, execution/inventory
+  detail, view/projection, session, and receipt artifacts; refusal leaves it
+  open. Plan-only and already-terminal tasks release immediately. A delayed
+  terminal leaves the card visibly closing without prematurely closing the
+  session or dropping artifacts. Repeated create/close cycles keep facade,
+  runtime, bridge, and adapter registries bounded while retained history remains
+  readable. The rail renders `pausing` distinctly until `paused` or terminal,
   with repeat pause/resume disabled and cancel still available. Closing a
   terminal task asks nothing. `ui-state.json` round-trips
   only the permitted cosmetic fields, including collapsed opaque node-id sets,
@@ -2739,8 +2746,8 @@ because its local tests are easier.
   invalid values do not poison the file, and changed semantics affect the next
   plan but never an already committed one. Shutdown under concurrent dispatch
   satisfies DR-BR-24 and XV-18. *Not satisfied by* cleanup triggered by the
-  terminal event, by a task rail reconstructed only from `list_sessions()`, or
-  by a clean idle shutdown.
+  terminal event, by releasing only the plan, by a task rail reconstructed only
+  from `list_sessions()`, or by a clean idle shutdown.
 - **BR-G-42 — The named scale envelope passes fixed budgets.** Using §9.4's
   exact fixtures, reference profile, sample rules, and ceilings, record critical
   click feedback, command/frozen-scope receipt latency, plan projection build

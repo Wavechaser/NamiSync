@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import replace
 from pathlib import Path
 
@@ -112,6 +113,57 @@ def test_mapping_rejects_nested_roots_on_one_physical_volume(tmp_path: Path) -> 
             recorder.ensure_mapping(MappingCommand(outer, inner, NOW))
     finally:
         recorder.close()
+
+
+def test_run_context_reports_missing_joined_location_as_mapping_error(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "ledger.db"
+    source = file_stat()
+    target = file_stat(identity_index=2, volume_serial="target-serial")
+    copy = operation(OperationKind.COPY, source=source, intended=target)
+    sync_plan = plan((copy,))
+    setup = setup_recorder(database, sync_plan)
+    setup.recorder.close()
+
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute(
+            "DELETE FROM locations WHERE id = ?",
+            (setup.source_location_id,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    recorder = LedgerRecorder(database, clock=FakeClock())
+    selection = frozenset({copy.op_id})
+    command = SyncRunCommand(
+        "b" * 32,
+        setup.host_id,
+        setup.mapping_id,
+        setup.source_location_id,
+        setup.target_location_id,
+        sync_plan,
+        selection,
+        selection_digest(selection),
+        NOW,
+    )
+    try:
+        with pytest.raises(MappingValidationError, match="location is unavailable"):
+            recorder.begin_sync_run(command)
+    finally:
+        recorder.close()
+
+    connection = sqlite3.connect(database)
+    try:
+        assert connection.execute(
+            "SELECT count(*) FROM runs WHERE run_token = ?",
+            (command.run_token,),
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
 
 
 def test_run_token_is_idempotent_and_conflicting_selection_is_rejected(tmp_path: Path) -> None:

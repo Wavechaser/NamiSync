@@ -1254,6 +1254,7 @@ def _payload(payload: bytes, expected_kind: str) -> Mapping[str, object]:
         value = json.loads(
             payload.decode("utf-8"),
             object_pairs_hook=_unique_object,
+            parse_constant=_reject_json_constant,
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("workflow payload is not valid UTF-8 JSON") from error
@@ -1264,6 +1265,10 @@ def _payload(payload: bytes, expected_kind: str) -> Mapping[str, object]:
     if item.get("kind") != expected_kind:
         raise ValueError("workflow payload kind does not match registration")
     return item
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"invalid JSON number: {value}")
 
 
 def _unique_object(

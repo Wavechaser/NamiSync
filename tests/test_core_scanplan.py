@@ -43,6 +43,28 @@ def test_relative_path_validation_rejects_windows_escape_and_ambiguity(value: st
         validate_relative_path(value)
 
 
+@pytest.mark.parametrize(
+    "basename",
+    [
+        "conin$",
+        "ConOut$",
+        "cOm¹",
+        "COM²",
+        "com³",
+        "lPt¹",
+        "LPT²",
+        "lpt³",
+    ],
+)
+@pytest.mark.parametrize("suffix", ["", ".txt"])
+def test_relative_path_validation_rejects_additional_documented_windows_devices(
+    basename: str,
+    suffix: str,
+) -> None:
+    with pytest.raises(PathValidationError, match="Windows device"):
+        validate_relative_path(f"folder\\{basename}{suffix}")
+
+
 def test_relative_path_key_normalizes_separator_and_ordinary_case_without_casefold_expansion() -> None:
     assert normalize_relative_path("Folder/file.txt") == normalize_relative_path(r"folder\FILE.TXT")
     assert normalize_relative_path("Straße.txt") != normalize_relative_path("strasse.txt")
