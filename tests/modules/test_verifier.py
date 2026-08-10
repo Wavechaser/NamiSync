@@ -56,6 +56,13 @@ from namisync.core.pathing import (
     normalize_relative_path,
     validate_relative_path,
 )
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    current_volume_anchor,
+    observe_native_volume,
+)
 from namisync.core.session import (
     Canceled,
     OperationResult,
@@ -259,6 +266,18 @@ def _context(
     )
 
 
+def _native_context(events: list[object], root: Path) -> VerifierContext:
+    volume = observe_native_volume(root)
+    return replace(
+        _context(events),
+        root_authority=RootAuthority(
+            logical_root=str(root),
+            reviewed_anchor=current_volume_anchor(root),
+            expected_volume_id=volume.volume_id,
+        ),
+    )
+
+
 def _integrity_events(events: list[object]) -> list[IntegrityOutcome]:
     return [event for event in events if isinstance(event, IntegrityOutcome)]
 
@@ -310,13 +329,17 @@ def test_verify_classifies_stat_drift_before_digest_mismatch(
 
 def _reviewed_context(
     events: list[object],
-    anchor: Path,
+    root: Path,
+    anchor: Path | None,
     volume_id: VolumeId,
 ) -> VerifierContext:
     return replace(
         _context(events),
-        reviewed_root_anchor=anchor,
-        reviewed_volume_id=volume_id,
+        root_authority=RootAuthority(
+            logical_root=str(root),
+            reviewed_anchor=None if anchor is None else str(anchor),
+            expected_volume_id=volume_id,
+        ),
     )
 
 
@@ -324,21 +347,32 @@ def _mock_reviewed_root_state(
     monkeypatch: pytest.MonkeyPatch,
     state: dict[str, object],
 ) -> None:
-    monkeypatch.setattr(
-        verifier_module,
-        "trusted_volume_anchor",
-        lambda _root: str(state["anchor"]),
-    )
-    monkeypatch.setattr(
-        verifier_module,
-        "_verification_volume_id",
-        lambda _root: state["volume_id"],
-    )
-    monkeypatch.setattr(
-        verifier_module,
-        "_reject_reparse_components",
-        lambda *_args, **_kwargs: None,
-    )
+    admissions: list[RootAuthority] = []
+    state["admissions"] = admissions
+
+    def admit(authority: RootAuthority) -> None:
+        admissions.append(authority)
+        if (
+            authority.reviewed_anchor is not None
+            and os.path.normcase(os.path.normpath(str(state["anchor"])))
+            != os.path.normcase(os.path.normpath(authority.reviewed_anchor))
+        ):
+            raise RootAuthorityError(
+                RootAuthorityIssue.ANCHOR_CHANGED,
+                authority.logical_root,
+                "reviewed root volume anchor changed",
+            )
+        if (
+            authority.expected_volume_id is not None
+            and state["volume_id"] != authority.expected_volume_id
+        ):
+            raise RootAuthorityError(
+                RootAuthorityIssue.VOLUME_CHANGED,
+                authority.logical_root,
+                "reviewed root volume identity changed",
+            )
+
+    monkeypatch.setattr(verifier_module, "admit_root", admit)
 
 
 def test_verifier_refuses_remount_before_first_native_read(
@@ -367,7 +401,7 @@ def test_verifier_refuses_remount_before_first_native_read(
 
     result = verify(
         IntegritySelection((item,)),
-        _reviewed_context([], reviewed_anchor, reviewed_volume),
+        _reviewed_context([], root, reviewed_anchor, reviewed_volume),
         recorder,
         reader,
     )
@@ -417,7 +451,7 @@ def test_verifier_revalidates_reviewed_mount_between_items(
 
     result = verify(
         IntegritySelection((first, second)),
-        _reviewed_context([], reviewed_anchor, reviewed_volume),
+        _reviewed_context([], root, reviewed_anchor, reviewed_volume),
         recorder,
         reader,
     )
@@ -428,6 +462,7 @@ def test_verifier_revalidates_reviewed_mount_between_items(
     ]
     assert reader.opened == [(root, first.display_path)]
     assert len(recorder.commands) == 1
+    assert len(state["admissions"]) == 2
 
 
 def test_verifier_refuses_opened_handle_on_foreign_volume(
@@ -455,7 +490,7 @@ def test_verifier_refuses_opened_handle_on_foreign_volume(
 
     result = verify(
         IntegritySelection((item,)),
-        _reviewed_context([], reviewed_anchor, reviewed_volume),
+        _reviewed_context([], root, reviewed_anchor, reviewed_volume),
         recorder,
         reader,
     )
@@ -483,7 +518,10 @@ def test_verifier_binds_volume_when_reviewed_anchor_is_unavailable(
     recorder = _Recorder()
     context = replace(
         _context([]),
-        reviewed_volume_id=reviewed_volume,
+        root_authority=RootAuthority(
+            logical_root=str(tmp_path),
+            expected_volume_id=reviewed_volume,
+        ),
     )
 
     result = verify(
@@ -517,7 +555,7 @@ def test_verifier_refuses_reviewed_open_without_volume_identity(
 
     result = verify(
         IntegritySelection((item,)),
-        _reviewed_context([], tmp_path, reviewed_volume),
+        _reviewed_context([], tmp_path, tmp_path, reviewed_volume),
         recorder,
         reader,
     )
@@ -525,6 +563,152 @@ def test_verifier_refuses_reviewed_open_without_volume_identity(
     assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
     assert len(reader.opened) == 1
     assert recorder.commands == []
+
+
+_ROOT_BOUND_STATE_CASES = (
+    (IntegrityMode.VERIFY, InventoryState.PRESENT),
+    (IntegrityMode.VERIFY, InventoryState.MISSING),
+    (IntegrityMode.VERIFY, InventoryState.UNSUPPORTED),
+    (IntegrityMode.BASELINE, InventoryState.PRESENT),
+)
+
+
+@pytest.mark.parametrize(("mode", "expected_state"), _ROOT_BOUND_STATE_CASES)
+def test_verifier_refuses_mismatched_selection_root_before_state_shortcuts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: IntegrityMode,
+    expected_state: InventoryState,
+) -> None:
+    reviewed_root = tmp_path / "reviewed"
+    selected_root = tmp_path / "different"
+    item = _item(selected_root, expected_state=expected_state)
+    reader = _FakeReader({})
+    recorder = _Recorder()
+    context = replace(
+        _context([]),
+        root_authority=RootAuthority(str(reviewed_root)),
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "admit_root",
+        lambda _authority: pytest.fail("mismatched root must not be admitted"),
+    )
+
+    runner = baseline if mode is IntegrityMode.BASELINE else verify
+    result = runner(IntegritySelection((item,)), context, recorder, reader)
+
+    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
+    assert result.outcomes[0].reason is IntegrityReason.UNSUPPORTED_READ
+    assert reader.opened == []
+    assert recorder.commands == []
+    assert recorder.invalidation_commands == []
+
+
+@pytest.mark.parametrize(("mode", "expected_state"), _ROOT_BOUND_STATE_CASES)
+def test_invalid_path_precedes_wrong_root_and_state_shortcuts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: IntegrityMode,
+    expected_state: InventoryState,
+) -> None:
+    item = replace(
+        _item(tmp_path / "different", expected_state=expected_state),
+        display_path=r"..\escape.bin",
+    )
+    reader = _FakeReader({})
+    recorder = _Recorder()
+    context = replace(
+        _context([]),
+        root_authority=RootAuthority(str(tmp_path / "reviewed")),
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "admit_root",
+        lambda _authority: pytest.fail("invalid path must not be admitted"),
+    )
+
+    runner = baseline if mode is IntegrityMode.BASELINE else verify
+    result = runner(IntegritySelection((item,)), context, recorder, reader)
+
+    assert result.outcomes[0].result is IntegrityResult.ERROR
+    assert result.outcomes[0].reason is IntegrityReason.PATH_INVALID
+    assert reader.opened == []
+    assert recorder.commands == []
+    assert recorder.invalidation_commands == []
+
+
+def test_post_copy_refuses_mismatched_selection_root_before_read_or_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path / "different")
+    reader = _FakeReader({})
+    recorder = _Recorder()
+    context = replace(
+        _context([]),
+        root_authority=RootAuthority(str(tmp_path / "reviewed")),
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "admit_root",
+        lambda _authority: pytest.fail("mismatched root must not be admitted"),
+    )
+
+    result = verify_post_copy(
+        PostCopySelection((candidate,)),
+        context,
+        recorder,
+        reader,
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
+    assert result.outcomes[0].reason is IntegrityReason.UNSUPPORTED_READ
+    assert reader.opened == []
+    assert recorder.commands == []
+    assert recorder.invalidation_commands == []
+
+
+def test_post_copy_invalid_path_precedes_wrong_root_without_side_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path / "different")
+    object.__setattr__(candidate, "display_path", r"..\escape.bin")
+    reader = _FakeReader({})
+    recorder = _Recorder()
+    context = replace(
+        _context([]),
+        root_authority=RootAuthority(str(tmp_path / "reviewed")),
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "admit_root",
+        lambda _authority: pytest.fail("invalid path must not be admitted"),
+    )
+
+    result = verify_post_copy(
+        PostCopySelection((candidate,)),
+        context,
+        recorder,
+        reader,
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.ERROR
+    assert result.outcomes[0].reason is IntegrityReason.PATH_INVALID
+    assert reader.opened == []
+    assert recorder.commands == []
+    assert recorder.invalidation_commands == []
+
+
+def test_default_and_explicit_native_readers_require_root_authority() -> None:
+    selection = IntegritySelection(())
+    context = _context([])
+
+    with pytest.raises(ValueError, match="default verification reader"):
+        verify(selection, context, _Recorder())
+    with pytest.raises(ValueError, match="native verification reader"):
+        verify(selection, context, _Recorder(), WindowsUnbufferedReader())
 
 
 def test_valid_different_xxh3_digest_remains_a_hash_mismatch(tmp_path: Path) -> None:
@@ -1636,6 +1820,7 @@ def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback
         run=RunContext(emit=events.append, checkpoint=lambda: None),
         clock=_Clock(),
         hasher_factory=xxh3_128,
+        root_authority=_native_context([], tmp_path).root_authority,
     )
     assert context.chunk_size == 4 * 1024 * 1024
     reader = WindowsUnbufferedReader()
@@ -1785,7 +1970,7 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
 
     result = verify(
         IntegritySelection((item,)),
-        _context([]),
+        _native_context([], tmp_path),
         recorder,
         WindowsUnbufferedReader(),
     )

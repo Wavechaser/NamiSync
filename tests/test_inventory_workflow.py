@@ -44,6 +44,7 @@ from namisync.core.pathing import (
     to_extended_length_path,
 )
 from namisync.core.recording import InventoryCommand
+from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Disposition,
     PauseRequested,
@@ -503,6 +504,56 @@ def test_inventory_remount_uses_current_mount_and_preserves_location_identity(
     assert scanner.calls[-1][0].path == str(current_root)
     assert scanner.trusted_anchors[-1] == str(current_mount)
 
+    verifier_contexts: list[VerifierContext] = []
+
+    def runner(selection, verifier_context, _recorder):
+        verifier_contexts.append(verifier_context)
+        return IntegrityRunResult(
+            tuple(
+                IntegrityOutcome(
+                    item_id=item.item_id,
+                    row_id=item.row_id,
+                    location_id=item.location_id,
+                    path=item.display_path,
+                    result=IntegrityResult.VERIFIED,
+                    phase=IntegrityMode.VERIFY.value,
+                )
+                for item in selection.items
+            ),
+            RecordingStatus.OK,
+        )
+
+    integrity = run_integrity(
+        IntegrityWorkflowRequest(
+            "remounted-integrity",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=deps.ledger_path,
+            scanner=deps.scanner,
+            resolver=deps.resolver,
+            clock=deps.clock,
+            host_key=deps.host_key,
+            host_name=deps.host_name,
+            save_details=deps.save_details,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=deps.clock,
+                hasher_factory=xxh3_128,
+            ),
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert integrity.status is SessionState.COMPLETED
+    assert verifier_contexts[0].root_authority == RootAuthority(
+        str(current_root),
+        str(current_mount),
+        VOLUME_ID,
+    )
+
 
 def test_intermediate_reparse_replacement_preserves_inventory_and_blocks_integrity(
     tmp_path: Path,
@@ -890,8 +941,11 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
         InventoryState.UNSUPPORTED,
         InventoryState.PRESENT,
     ]
-    assert verifier_contexts[0].reviewed_root_anchor == mount
-    assert verifier_contexts[0].reviewed_volume_id == VOLUME_ID
+    assert verifier_contexts[0].root_authority == RootAuthority(
+        str(root),
+        str(mount),
+        VOLUME_ID,
+    )
     assert [item.result for item in result.items] == [
         IntegrityResult.UNSUPPORTED,
         IntegrityResult.VERIFIED,

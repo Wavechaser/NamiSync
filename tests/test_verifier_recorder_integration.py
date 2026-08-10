@@ -41,6 +41,11 @@ from namisync.core.pathing import (
 )
 from namisync.core.planning import OperationKind
 from namisync.core.recording import InventoryCommand
+from namisync.core.root_authority import (
+    RootAuthority,
+    current_volume_anchor,
+    observe_native_volume,
+)
 from namisync.core.session import RunContext
 from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
 from namisync.modules.executor import NativeCopyBackend, NativeFileSystem
@@ -196,6 +201,11 @@ def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
             run=RunContext(lambda _event: None, lambda: None),
             clock=_Clock(),
             hasher_factory=factory,
+            root_authority=RootAuthority(
+                str(target_root),
+                current_volume_anchor(target_root),
+                observe_native_volume(target_root).volume_id,
+            ),
         )
         assert backend._hasher_factory is context.hasher_factory is factory
 
@@ -303,6 +313,11 @@ def test_reappeared_baseline_and_clear_are_atomic_across_recorder_rollback(
             run=RunContext(emit=lambda event: None, checkpoint=lambda: None),
             clock=_Clock(),
             hasher_factory=xxh3_128,
+            root_authority=RootAuthority(
+                str(managed_root),
+                current_volume_anchor(managed_root),
+                observe_native_volume(managed_root).volume_id,
+            ),
         )
 
         writer = connect_ledger_writer(setup.recorder.path)

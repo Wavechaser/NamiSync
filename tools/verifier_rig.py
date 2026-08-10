@@ -38,6 +38,11 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import FileStat, IgnoreSet, Root, ScanWarningCode
 from namisync.core.pathing import normalize_relative_path
+from namisync.core.root_authority import (
+    RootAuthority,
+    current_volume_anchor,
+    observe_native_volume,
+)
 from namisync.modules.scanner import scan as scan_root
 from namisync.modules.verifier import (
     WindowsUnbufferedReader,
@@ -70,6 +75,16 @@ RUNNERS = {
 
 class VerifierRigError(RuntimeError):
     """The rig could not build a usable integrity selection."""
+
+
+def _root_authority(root: Path) -> RootAuthority:
+    logical_root = Path(root).resolve()
+    volume = observe_native_volume(logical_root)
+    return RootAuthority(
+        str(logical_root),
+        current_volume_anchor(logical_root),
+        volume.volume_id,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +251,7 @@ def run_verifier(
         clock=RigClock(),
         hasher_factory=hasher_factory,
         chunk_size=chunk_size,
+        root_authority=_root_authority(root),
     )
     recorder = CapturingIntegrityRecorder()
 
@@ -369,11 +385,17 @@ def run_post_copy(
 
     tape = Tape()
     reader = _reader(tap_reader)
+    roots = {Path(candidate.root).resolve() for candidate in selection.candidates}
+    if len(roots) != 1:
+        raise VerifierRigError(
+            "post-copy verification requires one non-empty exact target root"
+        )
     context = VerifierContext(
         run=tape.context(),
         clock=RigClock(),
         hasher_factory=hasher_factory,
         chunk_size=chunk_size,
+        root_authority=_root_authority(roots.pop()),
     )
     recorder = CapturingIntegrityRecorder()
 

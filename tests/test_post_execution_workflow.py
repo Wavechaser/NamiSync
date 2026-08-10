@@ -62,6 +62,7 @@ from namisync.core.planning import (
 )
 from namisync.core.pathing import normalize_relative_path, to_extended_length_path
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
+from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -299,7 +300,11 @@ def _deps(
         executor_policies=object(),
         executor_fs=_FileSystem(),
         verifier=verifier,
-        verifier_context=lambda run: SimpleNamespace(run=run),
+        verifier_context=lambda run: VerifierContext(
+            run=run,
+            clock=SimpleNamespace(now=lambda: NOW),
+            hasher_factory=lambda: None,
+        ),
     )
 
 
@@ -470,8 +475,11 @@ def test_post_copy_verifier_binds_volume_without_optional_device_hint() -> None:
     )
 
     assert result.status is SessionState.COMPLETED
-    assert contexts[0].reviewed_volume_id == volume_id
-    assert contexts[0].reviewed_root_anchor is None
+    assert contexts[0].root_authority == RootAuthority(
+        bound_plan.target_root.path,
+        None,
+        volume_id,
+    )
 
 
 def test_xv_1_missing_published_evidence_is_named_verification_incomplete() -> None:
@@ -902,9 +910,11 @@ def test_xv_4_verify_pause_resumes_remaining_without_duplicates() -> None:
     assert isinstance(resumed_request.continuation, VerifyContinuation)
     resumed_recordings: list[_Recording] = []
     resumed_ids: list[str] = []
+    resumed_contexts: list[VerifierContext] = []
 
     def verify_remaining(selection, context, recorder):
         resumed_ids.extend(candidate.item_id for candidate in selection.pending)
+        resumed_contexts.append(context)
         return _verify_all(selection, context, recorder)
 
     resumed = run_execution(
@@ -919,6 +929,13 @@ def test_xv_4_verify_pause_resumes_remaining_without_duplicates() -> None:
 
     outcomes = [item for item in events if isinstance(item, IntegrityOutcome)]
     assert resumed_ids == [str(second.op_id)]
+    decoded_plan = resumed_request.continuation.execution_set.plan
+    target_evidence = decoded_plan.target_volume_evidence
+    assert resumed_contexts[0].root_authority == RootAuthority(
+        decoded_plan.target_root.path,
+        None if target_evidence is None else target_evidence.device_id,
+        decoded_plan.target_volume_id,
+    )
     assert [item.item_id for item in outcomes] == [
         str(first.op_id),
         str(second.op_id),

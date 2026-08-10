@@ -48,6 +48,7 @@ from namisync.core.recording import (
     LocationCommand,
     VolumeCommand,
 )
+from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Disposition,
     FailureDetail,
@@ -674,8 +675,11 @@ def run_integrity(
             raise RuntimeError(f"integrity runner is not configured: {request.mode.value}")
         verification_context = replace(
             deps.verifier_context(ctx),
-            reviewed_root_anchor=Path(resolution.selected_mount),
-            reviewed_volume_id=request.binding.volume_id,
+            root_authority=RootAuthority(
+                logical_root=resolution.root_path,
+                reviewed_anchor=resolution.selected_mount,
+                expected_volume_id=request.binding.volume_id,
+            ),
         )
         result = runner(selection, verification_context, recorder)
     bytes_total = sum(

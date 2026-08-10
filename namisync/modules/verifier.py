@@ -54,7 +54,6 @@ from namisync.core.models import (
     FileIdentity,
     FileStat,
     MetadataSnapshot,
-    VolumeId,
 )
 from namisync.core.pathing import (
     lexical_absolute_path,
@@ -66,6 +65,12 @@ from namisync.core.pathing import (
     validate_relative_path,
 )
 from namisync.core.session import Canceled, PauseRequested
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_root,
+)
 
 
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
@@ -117,6 +122,26 @@ def _finish_content_hasher(hasher: StreamingHasher) -> bytes:
     return require_content_digest(digest)
 
 
+def _reader_for_context(
+    ctx: VerifierContext,
+    reader: VerificationReader | None,
+) -> VerificationReader:
+    if reader is None:
+        if ctx.root_authority is None:
+            raise ValueError(
+                "the default verification reader requires root authority"
+            )
+        return WindowsUnbufferedReader()
+    if (
+        ctx.root_authority is None
+        and isinstance(reader, WindowsUnbufferedReader)
+    ):
+        raise ValueError(
+            "the native verification reader requires root authority"
+        )
+    return reader
+
+
 def baseline(
     selection: IntegritySelection,
     ctx: VerifierContext,
@@ -158,7 +183,7 @@ def verify_post_copy(
 ) -> IntegrityRunResult:
     """Read back transient published targets without requiring ledger rows."""
 
-    actual_reader = reader if reader is not None else WindowsUnbufferedReader()
+    actual_reader = _reader_for_context(ctx, reader)
     emitted: list[IntegrityOutcome] = []
     reporter = _ProgressReporter(
         selection,
@@ -282,7 +307,7 @@ def _run(
     reader: VerificationReader | None,
     mode: IntegrityMode,
 ) -> IntegrityRunResult:
-    actual_reader = reader if reader is not None else WindowsUnbufferedReader()
+    actual_reader = _reader_for_context(ctx, reader)
     emitted: list[IntegrityOutcome] = []
     reporter = _ProgressReporter(
         selection,
@@ -384,6 +409,22 @@ def _process_post_copy_candidate(
                 candidate,
                 IntegrityResult.ERROR,
                 IntegrityReason.PATH_INVALID,
+                _error_detail(exc),
+                recording=(
+                    RecordingStatus.OK
+                    if candidate.recorded_identity is not None
+                    else RecordingStatus.DEGRADED
+                ),
+            )
+        )
+    try:
+        _require_selected_root(candidate.root, ctx)
+    except UnsupportedVerification as exc:
+        return _ProcessedItem(
+            _post_copy_outcome(
+                candidate,
+                IntegrityResult.UNSUPPORTED,
+                IntegrityReason.UNSUPPORTED_READ,
                 _error_detail(exc),
                 recording=(
                     RecordingStatus.OK
@@ -517,6 +558,18 @@ def _process_item(
                 mode,
                 IntegrityResult.ERROR,
                 IntegrityReason.PATH_INVALID,
+                _error_detail(exc),
+            )
+        )
+    try:
+        _require_selected_root(item.root, ctx)
+    except UnsupportedVerification as exc:
+        return _ProcessedItem(
+            _outcome(
+                item,
+                mode,
+                IntegrityResult.UNSUPPORTED,
+                IntegrityReason.UNSUPPORTED_READ,
                 _error_detail(exc),
             )
         )
@@ -671,7 +724,7 @@ def _classify_subject(
     """Guard, hash, and classify bytes without ledger row identity or writes."""
 
     try:
-        _revalidate_verification_root(root, ctx)
+        _admit_verification_root(root, ctx)
         with reader.open(root, relative_path) as stream:
             before = stream.stat()
             _require_reviewed_open_volume(before, ctx)
@@ -1179,42 +1232,59 @@ def _reject_reparse_components(
             )
 
 
-def _revalidate_verification_root(root: Path, ctx: VerifierContext) -> None:
-    reviewed_anchor = ctx.reviewed_root_anchor
-    expected_volume = ctx.reviewed_volume_id
-    if expected_volume is None:
-        return
-    logical_root = Path(lexical_absolute_path(root))
+def _require_selected_root(
+    root: Path,
+    ctx: VerifierContext,
+) -> RootAuthority | None:
+    authority = ctx.root_authority
+    if authority is None:
+        return None
     try:
-        current = Path(trusted_volume_anchor(logical_root))
+        selected = lexical_absolute_path(root)
     except (OSError, ValueError) as error:
         raise UnsupportedVerification(logical_error_text(error)) from error
-    if reviewed_anchor is None:
-        admitted_anchor = current
-    else:
-        admitted_anchor = Path(lexical_absolute_path(reviewed_anchor))
-        if os.path.normcase(os.path.normpath(current)) != os.path.normcase(
-            os.path.normpath(admitted_anchor)
-        ):
-            raise UnsupportedVerification(
-                "verification root volume anchor changed after review"
-            )
-    _reject_reparse_components(
-        logical_root,
-        "",
-        trusted_anchor=admitted_anchor,
-    )
-    if _verification_volume_id(logical_root) != expected_volume:
+    if os.path.normcase(os.path.normpath(selected)) != os.path.normcase(
+        os.path.normpath(authority.logical_root)
+    ):
         raise UnsupportedVerification(
-            "verification root volume identity changed after review"
+            "verification selection root does not match its reviewed root"
         )
+    return authority
+
+
+def _admit_verification_root(root: Path, ctx: VerifierContext) -> None:
+    authority = _require_selected_root(root, ctx)
+    if authority is None:
+        return
+    try:
+        admit_root(authority)
+    except RootAuthorityError as error:
+        detail = {
+            RootAuthorityIssue.ANCHOR_CHANGED: (
+                "verification root volume anchor changed after review"
+            ),
+            RootAuthorityIssue.VOLUME_CHANGED: (
+                "verification root volume identity changed after review"
+            ),
+            RootAuthorityIssue.PLACEHOLDER_COMPONENT: (
+                "verification refuses a reparse location root chain"
+            ),
+            RootAuthorityIssue.REPARSE_COMPONENT: (
+                "verification refuses a reparse location root chain"
+            ),
+            RootAuthorityIssue.NON_DIRECTORY_COMPONENT: (
+                "verification location root chain is not an ordinary directory"
+            ),
+        }.get(error.issue, logical_error_text(error))
+        raise UnsupportedVerification(detail) from error
 
 
 def _require_reviewed_open_volume(
     opened: FileStat,
     ctx: VerifierContext,
 ) -> None:
-    expected = ctx.reviewed_volume_id
+    authority = ctx.root_authority
+    expected = None if authority is None else authority.expected_volume_id
     identity = opened.file_identity
     if expected is None:
         return
@@ -1226,45 +1296,6 @@ def _require_reviewed_open_volume(
         raise UnsupportedVerification(
             "opened verification subject is on a different volume"
         )
-
-
-def _verification_volume_id(root: Path) -> VolumeId:
-    if os.name != "nt":
-        observed = os.stat(
-            to_extended_length_path(str(root)),
-            follow_symlinks=False,
-        )
-        return VolumeId(f"{observed.st_dev:x}", "UNKNOWN")
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(32768)
-    if not kernel32.GetVolumePathNameW(
-        to_extended_length_path(str(root)),
-        volume_path,
-        len(volume_path),
-    ):
-        raise UnsupportedVerification(
-            "cannot identify the reviewed verification volume"
-        )
-    serial = wintypes.DWORD()
-    filesystem = ctypes.create_unicode_buffer(261)
-    if not kernel32.GetVolumeInformationW(
-        volume_path.value,
-        None,
-        0,
-        ctypes.byref(serial),
-        None,
-        None,
-        filesystem,
-        len(filesystem),
-    ):
-        raise UnsupportedVerification(
-            "cannot observe the reviewed verification volume"
-        )
-    return VolumeId(
-        f"{serial.value:08X}",
-        filesystem.value.upper() or "UNKNOWN",
-    )
 
 
 class _FileTime(ctypes.Structure):

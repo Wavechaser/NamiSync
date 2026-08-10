@@ -48,6 +48,7 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.preflight import ObservedWorld, Verdict
+from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -499,17 +500,18 @@ def run_execution(
                 RunContext(observe_verification, ctx.checkpoint)
             )
             target_evidence = xset.plan.target_volume_evidence
-            if xset.plan.target_volume_id is not None:
-                verification_context = replace(
-                    verification_context,
-                    reviewed_root_anchor=(
-                        Path(target_evidence.device_id)
+            verification_context = replace(
+                verification_context,
+                root_authority=RootAuthority(
+                    logical_root=xset.plan.target_root.path,
+                    reviewed_anchor=(
+                        target_evidence.device_id
                         if target_evidence is not None
-                        and target_evidence.device_id is not None
                         else None
                     ),
-                    reviewed_volume_id=xset.plan.target_volume_id,
-                )
+                    expected_volume_id=xset.plan.target_volume_id,
+                ),
+            )
             verification = deps.verifier(
                 current.candidates,
                 verification_context,

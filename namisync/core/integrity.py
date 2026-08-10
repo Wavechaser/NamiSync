@@ -17,8 +17,9 @@ from time import monotonic
 from typing import Callable, ClassVar, Iterator, Mapping, Protocol
 
 from .evidence import Attestation, HasherFactory, Provenance, RecordingStatus
-from .models import FileStat, VolumeId
+from .models import FileStat
 from .pathing import normalize_relative_path, validate_relative_path
+from .root_authority import RootAuthority
 from .session import ResultItem, RunContext
 
 
@@ -505,8 +506,7 @@ class VerifierContext:
     monotonic: Callable[[], float] = monotonic
     chunk_size: int = 4 * 1024 * 1024
     progress_interval_seconds: float = 0.1
-    reviewed_root_anchor: Path | None = None
-    reviewed_volume_id: VolumeId | None = None
+    root_authority: RootAuthority | None = None
 
     def __post_init__(self) -> None:
         if not callable(self.hasher_factory):
@@ -515,13 +515,10 @@ class VerifierContext:
             raise ValueError("verification chunk size must be positive")
         if self.progress_interval_seconds < 0:
             raise ValueError("progress interval cannot be negative")
-        if (
-            self.reviewed_root_anchor is not None
-            and self.reviewed_volume_id is None
+        if self.root_authority is not None and not isinstance(
+            self.root_authority, RootAuthority
         ):
-            raise ValueError(
-                "a reviewed verification root anchor requires a volume identity"
-            )
+            raise TypeError("verification root authority has the wrong type")
 
 
 class UnsupportedVerification(OSError):

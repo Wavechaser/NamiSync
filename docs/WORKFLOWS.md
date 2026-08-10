@@ -251,9 +251,12 @@ manually.
 
 Resolution carries the current sole selected mount even when a stable volume
 has moved from its stored hint. The scan and every subsequent verifier open are
-bound to that mount when available and always to the full stable `VolumeId`, so
-a remount between refresh and hashing cannot be recorded under the old
-location authority.
+bound by an ephemeral `RootAuthority` built from the fresh resolution's logical
+root, selected mount, and the location's full stable `VolumeId`, so a remount
+between refresh and hashing cannot be recorded under the old location
+authority. Post-copy verification instead derives the same contract from the
+committed plan target root, its optional reviewed device anchor, and target
+volume identity; neither workflow persists the authority in a continuation.
 
 Scope has three semantic shapes: `FULL`, exact `PATHS`, and recursive
 `SUBTREES`; mixed requests canonicalize overlapping roots and selecting the

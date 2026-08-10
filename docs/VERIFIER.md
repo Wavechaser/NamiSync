@@ -75,9 +75,16 @@ volume mount before Windows API setup, and then checks the selected child's path
 components through extended-length native paths. It applies the
 same conversion to volume and handle opens. No native prefix is persisted in
 inventory or integrity evidence. A reviewed integrity or post-copy run carries
-the full expected `VolumeId` independently of optional mount-path evidence;
-each subject revalidates it before open, and an opened stream without
-corroborating volume identity is unsupported rather than attestable.
+one ephemeral `RootAuthority`: the exact reviewed logical root, optional
+reviewed mount anchor, and optional expected `VolumeId`. Every selected item,
+including retained missing/unsupported rows and already-baselined shortcuts,
+must name that exact logical root before reader or recorder work. Every readable
+subject then freshly admits the authority before open; the check is evidence at
+that point, not cached authorization. The default native reader requires bound
+authority, while an unbound context remains only an explicit fake/custom-reader
+test seam. Opened-handle volume identity and final-path-by-handle containment
+remain independent checks; a stream without required corroboration is
+unsupported rather than attestable.
 
 Negative verification evidence is guarded by the same row/location/path/scope,
 current-stat, baseline, and expected-invalidation facts as a positive write. A

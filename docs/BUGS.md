@@ -657,6 +657,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-10). Verifier logical-root binding. Verifier
+  contexts carried reviewed mount and volume facts but not the exact logical
+  root, so a malformed selection could admit one reviewed authority and open a
+  different root on the same volume; default native entry points could also run
+  unbound. Fixed with one ephemeral `RootAuthority`, exact selection-root
+  refusal before state shortcuts/read/record work, and fresh admission before
+  each readable item. Production inventory derives authority from its current
+  resolution and post-copy from the reviewed plan; opened-handle and final-path
+  checks remain independent. Unbound mode is limited to explicit fake/custom
+  readers.
 - MINOR - FIXED (2026-08-10). Incomplete DOS-device aliases. Path validation
   rejected ordinary reserved names but admitted `CONIN$`, `CONOUT$`, and the
   superscript-one/two/three COM/LPT aliases recognized by Windows. Those names

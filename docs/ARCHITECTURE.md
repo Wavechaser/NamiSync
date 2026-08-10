@@ -1317,12 +1317,16 @@ cache-honest, handle-bound reader. The native leaf may use core root-authority
 mechanics but never imports the engine; the engine may call the native reader
 through the core protocol.
 
-Each invocation is bound to one exact reviewed logical root, its reviewed
-anchor when available, and its expected `VolumeId`. Authority is revalidated
-before each item and does not replace the reader's opened-handle volume and
-final-path checks. Standalone and post-copy verification continue through the
-same ledger-neutral classifier; executor publication policy and verifier read
-policy remain independent.
+Each production invocation is bound to one exact reviewed logical root, its
+reviewed anchor when available, and its expected `VolumeId`. Selection-root
+equality is checked after existing display-path validation and before every
+inventory-state or existing-baseline shortcut, reader open, or evidence write.
+Authority is freshly admitted for each readable item and does not replace the
+reader's second root-chain walk, opened-handle volume check, or final-path
+check. The default native reader rejects an unbound context; unbound operation
+is reserved for explicitly injected fake/custom readers. Standalone and
+post-copy verification continue through the same ledger-neutral classifier;
+executor publication policy and verifier read policy remain independent.
 
 **Bones.** Per-file `IntegrityOutcome` emission (no silent-until-done); the
 cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached
