@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path, PureWindowsPath
+from types import SimpleNamespace
 from typing import Iterator
 
 import pytest
@@ -701,14 +702,208 @@ def test_post_copy_invalid_path_precedes_wrong_root_without_side_effects(
     assert recorder.invalidation_commands == []
 
 
-def test_default_and_explicit_native_readers_require_root_authority() -> None:
+def test_default_and_explicit_native_readers_require_root_authority(
+    tmp_path: Path,
+) -> None:
     selection = IntegritySelection(())
     context = _context([])
 
+    class EmptyNativeReader(WindowsUnbufferedReader):
+        pass
+
+    class InstrumentedNativeReader(WindowsUnbufferedReader):
+        def __init__(self) -> None:
+            super().__init__()
+            self.opened: list[tuple[Path, str]] = []
+
+        @contextmanager
+        def open(self, root: Path, relative_path: str) -> Iterator[object]:
+            self.opened.append((root, relative_path))
+            yield object()
+
+    instrumented = InstrumentedNativeReader()
+
     with pytest.raises(ValueError, match="default verification reader"):
         verify(selection, context, _Recorder())
-    with pytest.raises(ValueError, match="native verification reader"):
-        verify(selection, context, _Recorder(), WindowsUnbufferedReader())
+    for reader in (
+        WindowsUnbufferedReader(),
+        EmptyNativeReader(),
+        instrumented,
+    ):
+        with pytest.raises(ValueError, match="native verification reader"):
+            verify(selection, context, _Recorder(), reader)
+
+    bound_context = replace(
+        context,
+        root_authority=RootAuthority(str(tmp_path)),
+    )
+    selected = verifier_module._reader_for_context(
+        bound_context,
+        instrumented,
+    )
+    assert selected is instrumented
+    with verifier_module._open_reader(
+        selected,
+        tmp_path,
+        "payload.bin",
+        bound_context,
+    ):
+        pass
+    assert instrumented.opened == [(tmp_path, "payload.bin")]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows reader admission order")
+def test_native_reader_keeps_full_and_final_touch_admissions_distinct(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority = RootAuthority(str(tmp_path))
+    context = replace(_context([]), root_authority=authority)
+    calls: list[str] = []
+
+    def admit_full(observed: RootAuthority) -> None:
+        assert observed is authority
+        calls.append("full")
+
+    def admit_chain(observed: RootAuthority, *, lstat) -> str:
+        assert observed is authority
+        assert callable(lstat)
+        calls.append("chain")
+        return observed.reviewed_anchor or tmp_path.anchor
+
+    def observe_relative(path: str):
+        assert Path(path) == tmp_path / "payload.bin"
+        calls.append("relative")
+        return SimpleNamespace(
+            st_mode=stat_module.S_IFREG | 0o644,
+            st_file_attributes=0,
+            st_reparse_tag=0,
+        )
+
+    api = SimpleNamespace(
+        sector_size=lambda _candidate: calls.append("sector") or 4096,
+        open_file=lambda _candidate: calls.append("open") or 73,
+        require_expected_final_path=(
+            lambda _root, _relative, _handle: calls.append("final")
+        ),
+        stat=lambda _handle: calls.append("stat") or _stat(),
+        close=lambda _handle: calls.append("close"),
+    )
+
+    monkeypatch.setattr(verifier_module, "admit_root", admit_full)
+    monkeypatch.setattr(verifier_module, "admit_root_chain", admit_chain)
+    monkeypatch.setattr(
+        verifier_module,
+        "_verification_lstat",
+        observe_relative,
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "_WindowsApi",
+        lambda: calls.append("api") or api,
+    )
+
+    verifier_module._admit_verification_root(tmp_path, context)
+    explicit_reader = WindowsUnbufferedReader()
+    reader = verifier_module._reader_for_context(
+        context,
+        explicit_reader,
+    )
+    assert reader is explicit_reader
+    with verifier_module._open_reader(
+        reader,
+        tmp_path,
+        "payload.bin",
+        context,
+    ):
+        pass
+
+    assert calls == [
+        "full",
+        "chain",
+        "relative",
+        "api",
+        "sector",
+        "open",
+        "final",
+        "stat",
+        "close",
+    ]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows reader admission")
+@pytest.mark.parametrize(
+    ("relative_state", "expected_result", "expected_reason"),
+    (
+        (
+            "missing",
+            IntegrityResult.MISSING,
+            IntegrityReason.NOT_FOUND,
+        ),
+        (
+            "nondirectory",
+            IntegrityResult.ERROR,
+            IntegrityReason.READ_ERROR,
+        ),
+    ),
+)
+def test_native_reader_preserves_relative_admission_outcomes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    relative_state: str,
+    expected_result: IntegrityResult,
+    expected_reason: IntegrityReason,
+) -> None:
+    authority = RootAuthority(str(tmp_path))
+    context = replace(_context([]), root_authority=authority)
+    item = _item(
+        tmp_path,
+        path=r"folder\payload.bin",
+        baseline_evidence=None,
+    )
+
+    monkeypatch.setattr(verifier_module, "admit_root", lambda _authority: None)
+    monkeypatch.setattr(
+        verifier_module,
+        "admit_root_chain",
+        lambda observed, **_kwargs: observed.reviewed_anchor or tmp_path.anchor,
+    )
+
+    relative_calls = 0
+
+    def observe_relative(path: str):
+        nonlocal relative_calls
+        relative_calls += 1
+        if relative_state == "missing":
+            raise FileNotFoundError(2, "missing", path)
+        if relative_calls == 2:
+            raise NotADirectoryError(267, "not a directory", path)
+        return SimpleNamespace(
+            st_mode=stat_module.S_IFREG | 0o644,
+            st_file_attributes=0,
+            st_reparse_tag=0,
+        )
+
+    monkeypatch.setattr(
+        verifier_module,
+        "_verification_lstat",
+        observe_relative,
+    )
+    monkeypatch.setattr(
+        verifier_module,
+        "_WindowsApi",
+        lambda: pytest.fail("relative refusal reached Windows API setup"),
+    )
+
+    result = verify(
+        IntegritySelection((item,)),
+        context,
+        _Recorder(),
+        WindowsUnbufferedReader(),
+    )
+
+    assert result.outcomes[0].result is expected_result
+    assert result.outcomes[0].reason is expected_reason
 
 
 def test_valid_different_xxh3_digest_remains_a_hash_mismatch(tmp_path: Path) -> None:
@@ -1882,8 +2077,13 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
         original_reject = verifier_module._reject_reparse_components
         original_lstat = verifier_module.os.lstat
 
-        def report_reparse(root: Path, relative_path: str) -> None:
-            candidate = root.joinpath(*PureWindowsPath(relative_path).parts)
+        def report_reparse(
+            authority: RootAuthority,
+            relative_path: str,
+        ) -> None:
+            candidate = Path(authority.logical_root).joinpath(
+                *PureWindowsPath(relative_path).parts
+            )
 
             def reparse_lstat(current: Path):
                 observed = original_lstat(current)
@@ -1900,7 +2100,7 @@ def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
 
             with monkeypatch.context() as patch:
                 patch.setattr(verifier_module.os, "lstat", reparse_lstat)
-                original_reject(root, relative_path)
+                original_reject(authority, relative_path)
 
         monkeypatch.setattr(
             verifier_module, "_reject_reparse_components", report_reparse

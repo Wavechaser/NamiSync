@@ -44,10 +44,9 @@ Stage 6 concerns rather than tree-builder policy.
 ### Plan session
 
 1. Lexically normalize and validate distinct non-nested roots and request
-   semantics without following filesystem links. The shared
-   service/workflow gate uses extended spelling only for native no-follow
-   probes of every component in the configured root path below the trusted
-   native volume mount,
+   semantics without following filesystem links. The shared core chain-only
+   admission obtains the current native anchor and uses extended spelling only
+   for no-follow probes of every configured-root component below it,
    returns ordinary lexical `Path` values, compares separately resolved
    physical roots for overlap, refuses reparse, device, or ordinary-ambiguous
    root names, and never persists or displays a `\\?\` prefix.
@@ -257,6 +256,9 @@ between refresh and hashing cannot be recorded under the old location
 authority. Post-copy verification instead derives the same contract from the
 committed plan target root, its optional reviewed device anchor, and target
 volume identity; neither workflow persists the authority in a continuation.
+Before the scan, inventory uses that resolver-selected mount in core's
+chain-only admission and then performs its existing accessibility probe; it
+does not add a second volume observation or move ambiguity policy into core.
 
 Scope has three semantic shapes: `FULL`, exact `PATHS`, and recursive
 `SUBTREES`; mixed requests canonicalize overlapping roots and selecting the

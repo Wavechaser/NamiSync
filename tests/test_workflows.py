@@ -146,6 +146,35 @@ def test_sync_path_validation_uses_physical_paths_only_for_overlap_judgment(
         validate_sync_paths(str(source), str(target))
 
 
+def test_sync_path_validation_admits_both_roots_before_physical_overlap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    calls: list[tuple[str, str]] = []
+
+    def admit(authority, *, anchor_probe) -> str:
+        assert anchor_probe is sync_workflow.current_volume_anchor
+        calls.append(("chain", authority.logical_root))
+        return tmp_path.anchor
+
+    def physical(path: Path) -> Path:
+        calls.append(("physical", str(path)))
+        return path
+
+    monkeypatch.setattr(sync_workflow, "admit_root_chain", admit)
+    monkeypatch.setattr(sync_workflow, "_physical_logical_root", physical)
+
+    assert validate_sync_paths(str(source), str(target)) == (source, target)
+    assert calls == [
+        ("chain", str(source)),
+        ("chain", str(target)),
+        ("physical", str(source)),
+        ("physical", str(target)),
+    ]
+
+
 def _empty_plan() -> Plan:
     profile = CapabilityProfile("NTFS", 100, True, False, 32767, True, True)
     placeholder = Plan(

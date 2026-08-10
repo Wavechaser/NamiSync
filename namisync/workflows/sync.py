@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import stat as stat_module
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
@@ -32,10 +31,8 @@ from namisync.core.models import IgnoreSet, Root, ScanResult
 from namisync.core.pathing import (
     from_extended_length_path,
     lexical_absolute_path,
-    lexical_path_chain,
     logical_error_text,
     to_extended_length_path,
-    trusted_volume_anchor,
 )
 from namisync.core.planning import (
     MappingSnapshot,
@@ -48,7 +45,13 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.preflight import ObservedWorld, Verdict
-from namisync.core.root_authority import RootAuthority
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_root_chain,
+    current_volume_anchor,
+)
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -1046,29 +1049,26 @@ def _commitment_error(xset: ExecutionSet) -> str | None:
 def _ordinary_logical_root(path: str) -> Path:
     logical = lexical_absolute_path(path)
     try:
-        anchor = trusted_volume_anchor(logical)
-        root_chain = lexical_path_chain(
-            logical,
-            trusted_anchor=anchor,
+        admit_root_chain(
+            RootAuthority(logical),
+            anchor_probe=current_volume_anchor,
         )
-        for component in root_chain:
-            observed = os.stat(
-                to_extended_length_path(component),
-                follow_symlinks=False,
+    except RootAuthorityError as error:
+        if error.issue in {
+            RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+            RootAuthorityIssue.REPARSE_COMPONENT,
+            RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+        }:
+            detail = (
+                "location root chain contains a nonordinary directory: "
+                f"{error.logical_path}"
             )
-            attributes = int(getattr(observed, "st_file_attributes", 0))
-            if (
-                not stat_module.S_ISDIR(observed.st_mode)
-                or stat_module.S_ISLNK(observed.st_mode)
-                or attributes & 0x00000400
-                or getattr(observed, "st_reparse_tag", 0)
-            ):
-                raise ValueError(
-                    "location root chain contains a nonordinary directory: "
-                    f"{component}"
-                )
-    except OSError as error:
-        raise ValueError(logical_error_text(error)) from error
+        else:
+            cause = error.__cause__
+            detail = logical_error_text(
+                cause if isinstance(cause, OSError) else error
+            )
+        raise ValueError(detail) from error
     return Path(logical)
 
 

@@ -10,9 +10,8 @@ from __future__ import annotations
 import ctypes
 import ntpath
 import os
-import stat as stat_module
 from ctypes import wintypes
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path, PureWindowsPath
 from typing import Callable, Iterator
@@ -57,11 +56,9 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import (
     lexical_absolute_path,
-    lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
-    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.session import Canceled, PauseRequested
@@ -70,6 +67,9 @@ from namisync.core.root_authority import (
     RootAuthorityError,
     RootAuthorityIssue,
     admit_root,
+    admit_root_chain,
+    is_placeholder_stat,
+    is_reparse_stat,
 )
 
 
@@ -131,7 +131,7 @@ def _reader_for_context(
             raise ValueError(
                 "the default verification reader requires root authority"
             )
-        return WindowsUnbufferedReader()
+        return WindowsUnbufferedReader(ctx.root_authority)
     if (
         ctx.root_authority is None
         and isinstance(reader, WindowsUnbufferedReader)
@@ -140,6 +140,26 @@ def _reader_for_context(
             "the native verification reader requires root authority"
         )
     return reader
+
+
+def _open_reader(
+    reader: VerificationReader,
+    root: Path,
+    relative_path: str,
+    ctx: VerifierContext,
+) -> AbstractContextManager:
+    if type(reader) is WindowsUnbufferedReader:
+        authority = ctx.root_authority
+        if authority is None:
+            raise ValueError(
+                "the native verification reader requires root authority"
+            )
+        return reader._open_with_authority(  # type: ignore[attr-defined]
+            root,
+            relative_path,
+            authority,
+        )
+    return reader.open(root, relative_path)
 
 
 def baseline(
@@ -725,7 +745,7 @@ def _classify_subject(
 
     try:
         _admit_verification_root(root, ctx)
-        with reader.open(root, relative_path) as stream:
+        with _open_reader(reader, root, relative_path, ctx) as stream:
             before = stream.stat()
             _require_reviewed_open_volume(before, ctx)
             if not _matches_expected_stat(expected_stat, before):
@@ -1164,8 +1184,25 @@ class WindowsUnbufferedReader:
     ``UnsupportedVerification`` and can never be rendered as verified.
     """
 
+    def __init__(self, root_authority: RootAuthority | None = None) -> None:
+        self._root_authority = root_authority
+
     @contextmanager
     def open(self, root: Path, relative_path: str) -> Iterator[_WindowsStream]:
+        with self._open_with_authority(
+            root,
+            relative_path,
+            self._root_authority,
+        ) as stream:
+            yield stream
+
+    @contextmanager
+    def _open_with_authority(
+        self,
+        root: Path,
+        relative_path: str,
+        root_authority: RootAuthority | None,
+    ) -> Iterator[_WindowsStream]:
         if os.name != "nt":
             raise UnsupportedVerification(
                 "cache-honest verification is implemented only for Windows"
@@ -1173,8 +1210,13 @@ class WindowsUnbufferedReader:
 
         normalized = validate_relative_path(relative_path)
         root_path = Path(lexical_absolute_path(root))
+        authority = root_authority or RootAuthority(str(root_path))
+        if not _same_logical_path(str(root_path), authority.logical_root):
+            raise UnsupportedVerification(
+                "verification selection root does not match its reviewed root"
+            )
         candidate = root_path.joinpath(*PureWindowsPath(normalized).parts)
-        _reject_reparse_components(root_path, normalized)
+        _reject_reparse_components(authority, normalized)
 
         api = _WindowsApi()
         sector_size = api.sector_size(candidate)
@@ -1189,47 +1231,54 @@ class WindowsUnbufferedReader:
 
 
 def _reject_reparse_components(
-    root: Path,
+    authority: RootAuthority,
     normalized_path: str,
-    *,
-    trusted_anchor: Path | None = None,
 ) -> None:
     try:
-        anchor = (
-            trusted_volume_anchor(root)
-            if trusted_anchor is None
-            else str(trusted_anchor)
+        admit_root_chain(
+            authority,
+            lstat=_verification_lstat,
         )
-        root_chain = lexical_path_chain(root, trusted_anchor=anchor)
-    except (OSError, ValueError) as error:
-        raise UnsupportedVerification(logical_error_text(error)) from error
-    for component in root_chain:
-        root_stat = os.lstat(to_extended_length_path(component))
-        root_attributes = int(
-            getattr(root_stat, "st_file_attributes", 0)
-        )
-        root_is_reparse = bool(
-            stat_module.S_ISLNK(root_stat.st_mode)
-            or root_attributes & _FILE_ATTRIBUTE_REPARSE_POINT
-            or getattr(root_stat, "st_reparse_tag", 0)
-        )
-        if root_is_reparse:
-            raise UnsupportedVerification(
-                "verification refuses a reparse location root chain"
-            )
-        if not stat_module.S_ISDIR(root_stat.st_mode):
-            raise UnsupportedVerification(
-                "verification location root chain is not an ordinary directory"
-            )
-    current = root
+    except RootAuthorityError as error:
+        _raise_verification_root_admission(error)
+
+    current = Path(authority.logical_root)
     for component in PureWindowsPath(normalized_path).parts:
         current = current / component
-        stat_result = os.lstat(to_extended_length_path(str(current)))
-        attributes = getattr(stat_result, "st_file_attributes", 0)
-        if attributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        observed = _verification_lstat(str(current))
+        if is_placeholder_stat(observed) or is_reparse_stat(observed):
             raise UnsupportedVerification(
                 f"verification refuses reparse component: {component}"
             )
+
+
+def _verification_lstat(path: str) -> os.stat_result:
+    return os.lstat(to_extended_length_path(path))
+
+
+def _raise_verification_root_admission(error: RootAuthorityError) -> None:
+    if error.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE:
+        cause = error.__cause__
+        if isinstance(cause, OSError):
+            raise cause from error
+    if error.issue in {
+        RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+        RootAuthorityIssue.REPARSE_COMPONENT,
+    }:
+        raise UnsupportedVerification(
+            "verification refuses a reparse location root chain"
+        ) from error
+    if error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT:
+        raise UnsupportedVerification(
+            "verification location root chain is not an ordinary directory"
+        ) from error
+    raise UnsupportedVerification(logical_error_text(error)) from error
+
+
+def _same_logical_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
+        os.path.normpath(right)
+    )
 
 
 def _require_selected_root(
@@ -1243,9 +1292,7 @@ def _require_selected_root(
         selected = lexical_absolute_path(root)
     except (OSError, ValueError) as error:
         raise UnsupportedVerification(logical_error_text(error)) from error
-    if os.path.normcase(os.path.normpath(selected)) != os.path.normcase(
-        os.path.normpath(authority.logical_root)
-    ):
+    if not _same_logical_path(selected, authority.logical_root):
         raise UnsupportedVerification(
             "verification selection root does not match its reviewed root"
         )

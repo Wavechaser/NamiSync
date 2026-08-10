@@ -80,11 +80,15 @@ reviewed mount anchor, and optional expected `VolumeId`. Every selected item,
 including retained missing/unsupported rows and already-baselined shortcuts,
 must name that exact logical root before reader or recorder work. Every readable
 subject then freshly admits the authority before open; the check is evidence at
-that point, not cached authorization. The default native reader requires bound
-authority, while an unbound context remains only an explicit fake/custom-reader
-test seam. Opened-handle volume identity and final-path-by-handle containment
-remain independent checks; a stream without required corroboration is
-unsupported rather than attestable.
+that point, not cached authorization. The native reader receives that authority
+at construction or at the exact engine/native open boundary, then performs its
+distinct chain-only final-touch check without another volume probe. Its
+root-relative no-follow walk retains raw missing/access behavior while using
+the shared reparse/placeholder classifiers. The default native reader requires
+bound authority, while an unbound context remains only an explicit fake/custom-
+reader test seam. Opened-handle volume identity and final-path-by-handle
+containment remain independent checks; a stream without required corroboration
+is unsupported rather than attestable.
 
 Negative verification evidence is guarded by the same row/location/path/scope,
 current-stat, baseline, and expected-invalidation facts as a positive write. A

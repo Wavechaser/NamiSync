@@ -47,10 +47,11 @@ never creates a mapping from location-only activity. Resolution preserves five
 distinct outcomes: `resolved`, `offline`, `ambiguous`, `root_missing`, and
 `root_unavailable`. Ambiguity requires an explicit choice before submission;
 a changed candidate set (including a newly mounted clone) refuses before scan
-or hash work at initial start, resume, and queued wakeup. Native root stat and
-probe calls preserve the lexical logical path in workflow details while
-delegating extended-length conversion and directory access to the
-long-path-safe scanner boundary. If any component in the configured root path
+or hash work at initial start, resume, and queued wakeup. The resolver-selected
+mount is supplied to core's chain-only root admission; that admission performs
+no new volume observation, preserves the lexical path in workflow details, and
+still precedes the separate accessibility probe. If any component in the
+configured root path
 below its reviewed volume mount becomes a junction, symlink, placeholder, or
 other reparse point, resolution returns `root_unavailable` before probe,
 reconciliation, missing inference, or integrity hashing; the reviewed mount

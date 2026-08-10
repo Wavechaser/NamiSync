@@ -91,6 +91,7 @@ class _Resolver:
     def __init__(self, *mounts: Path) -> None:
         self.mounts = tuple(mounts)
         self.probe_error: OSError | None = None
+        self.probed_roots: list[str] = []
 
     def mounted_volumes(
         self, volume_id: VolumeId, hints: tuple[str, ...] = ()
@@ -99,6 +100,7 @@ class _Resolver:
         return tuple(MountedVolume(str(path), EVIDENCE) for path in self.mounts)
 
     def probe_root(self, root_path: str) -> None:
+        self.probed_roots.append(root_path)
         if self.probe_error is not None:
             raise self.probe_error
 
@@ -264,12 +266,42 @@ def test_resolve_binding_stats_extended_path_but_reports_logical_root(
         assert not follow_symlinks
         raise FileNotFoundError(path)
 
+    resolver = _Resolver(mount)
     monkeypatch.setattr(inventory_workflow.os, "stat", missing_stat)
-    resolution = resolve_binding(_binding(mount), _Resolver(mount))
+    resolution = resolve_binding(_binding(mount), resolver)
 
     assert observed_paths == [to_extended_length_path(str(root))]
     assert resolution.state is VolumeResolutionState.ROOT_MISSING
     assert resolution.root_path == str(root)
+    assert resolver.probed_roots == []
+
+
+def test_resolve_binding_admits_chain_before_accessibility_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    resolver = _Resolver(mount)
+    calls: list[str] = []
+
+    def admit(authority: RootAuthority, *, anchor_probe) -> str:
+        assert authority == RootAuthority(str(root), str(mount))
+        assert anchor_probe(str(root)) == str(mount)
+        calls.append("chain")
+        return str(mount)
+
+    def probe(root_path: str) -> None:
+        assert root_path == str(root)
+        calls.append("probe")
+
+    monkeypatch.setattr(inventory_workflow, "admit_root_chain", admit)
+    resolver.probe_root = probe
+
+    resolution = resolve_binding(_binding(mount), resolver)
+
+    assert resolution.state is VolumeResolutionState.RESOLVED
+    assert calls == ["chain", "probe"]
 
 
 def test_native_resolver_probe_uses_scanner_backend(

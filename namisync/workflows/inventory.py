@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat as stat_module
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
@@ -37,7 +36,6 @@ from namisync.core.pathing import (
     lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
-    to_extended_length_path,
     validate_relative_path,
 )
 from namisync.core.recording import (
@@ -48,7 +46,12 @@ from namisync.core.recording import (
     LocationCommand,
     VolumeCommand,
 )
-from namisync.core.root_authority import RootAuthority
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_root_chain,
+)
 from namisync.core.session import (
     Disposition,
     FailureDetail,
@@ -63,7 +66,6 @@ from namisync.db.repositories import (
     LocationSnapshot,
 )
 from namisync.modules.scanner import (
-    FILE_ATTRIBUTE_REPARSE_POINT,
     NativeScannerBackend,
     VolumeSnapshot,
 )
@@ -447,9 +449,9 @@ def resolve_binding(
         selected.mount_path, binding.volume_relative_path
     )
     try:
-        root_chain = lexical_path_chain(
-            root_path,
-            trusted_anchor=selected.mount_path,
+        admit_root_chain(
+            RootAuthority(root_path, selected.mount_path),
+            anchor_probe=lambda _path: selected.mount_path,
         )
     except PathValidationError as error:
         return VolumeResolution(
@@ -460,53 +462,44 @@ def resolve_binding(
             candidates=candidates,
             detail=logical_error_text(error),
         )
-    for component in root_chain:
-        try:
-            root_stat = os.stat(
-                to_extended_length_path(component),
-                follow_symlinks=False,
+    except RootAuthorityError as error:
+        cause = error.__cause__
+        missing = (
+            error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT
+            or (
+                error.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE
+                and isinstance(cause, FileNotFoundError)
             )
-        except FileNotFoundError:
-            return VolumeResolution(
-                VolumeResolutionState.ROOT_MISSING,
-                binding,
-                root_path=root_path,
-                evidence=selected.evidence,
-                candidates=candidates,
-                detail="configured root no longer exists",
-            )
-        except (OSError, PermissionError) as error:
-            return VolumeResolution(
-                VolumeResolutionState.ROOT_UNAVAILABLE,
-                binding,
-                root_path=root_path,
-                evidence=selected.evidence,
-                candidates=candidates,
-                detail=logical_error_text(error),
-            )
-        root_is_reparse = bool(
-            stat_module.S_ISLNK(root_stat.st_mode)
-            or int(getattr(root_stat, "st_file_attributes", 0))
-            & FILE_ATTRIBUTE_REPARSE_POINT
-            or getattr(root_stat, "st_reparse_tag", 0)
         )
-        if not stat_module.S_ISDIR(root_stat.st_mode) or root_is_reparse:
-            return VolumeResolution(
-                (
-                    VolumeResolutionState.ROOT_UNAVAILABLE
-                    if root_is_reparse
-                    else VolumeResolutionState.ROOT_MISSING
-                ),
-                binding,
-                root_path=root_path,
-                evidence=selected.evidence,
-                candidates=candidates,
-                detail=(
-                    "configured root chain contains a reparse point"
-                    if root_is_reparse
-                    else "configured root chain is not a directory"
-                ),
-            )
+        reparse = error.issue in {
+            RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+            RootAuthorityIssue.REPARSE_COMPONENT,
+        }
+        detail_source = cause if isinstance(cause, OSError) else error
+        return VolumeResolution(
+            (
+                VolumeResolutionState.ROOT_MISSING
+                if missing
+                else VolumeResolutionState.ROOT_UNAVAILABLE
+            ),
+            binding,
+            root_path=root_path,
+            evidence=selected.evidence,
+            candidates=candidates,
+            detail=(
+                "configured root no longer exists"
+                if isinstance(cause, FileNotFoundError)
+                else (
+                    "configured root chain is not a directory"
+                    if missing
+                    else (
+                        "configured root chain contains a reparse point"
+                        if reparse
+                        else logical_error_text(detail_source)
+                    )
+                )
+            ),
+        )
     try:
         resolver.probe_root(root_path)
     except (OSError, PermissionError) as error:

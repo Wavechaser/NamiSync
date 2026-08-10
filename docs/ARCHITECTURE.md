@@ -792,9 +792,12 @@ every final-touch validation point; verifier retains per-item revalidation and
 handle-bound final-path, volume, sharing, and cache-honest read guarantees.
 Native adapters translate the shared mechanics into each component's existing
 error vocabulary without broadening what a prior successful check authorizes.
-The public chain-only admission performs no volume probe; scanner uses it at
+The public chain-only admission performs no volume probe. Scanner uses it at
 its established chain checkpoints while retaining separate chain-first binding
-precedence and capability policy.
+precedence and capability policy; inventory and initial sync path validation
+reuse it without moving resolution/overlap policy; verifier uses it for the
+native reader's distinct final-touch root walk without replacing engine volume
+admission or handle-bound checks.
 
 **Flesh.** None. Core is all bones by definition.
 
