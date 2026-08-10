@@ -16,6 +16,7 @@ import pytest
 import namisync.modules.scanner as scanner_module
 from namisync.core.models import (
     CapabilityProfile,
+    EntryKind,
     IgnoreSet,
     Root,
     ScanScope,
@@ -236,6 +237,31 @@ class FakeBackend:
         yield iter(self.entries.get(path, ()))
 
 
+class ScopedAdmissionBackend(FakeBackend):
+    def __init__(
+        self,
+        stats: dict[str, object],
+        entries: dict[str, list[FakeEntry]] | None = None,
+        *,
+        root: str = r"C:\root",
+    ) -> None:
+        super().__init__(entries or {}, _profile())
+        self.root = root
+        self.stats = stats
+        self.lstat_calls: list[str] = []
+
+    def lstat(self, path: str):
+        self.lstat_calls.append(path)
+        if path == self.root:
+            return _fake_stat(ino=1, directory=True)
+        if path not in self.stats:
+            raise AssertionError(f"unexpected scoped lstat: {path}")
+        observed = self.stats[path]
+        if isinstance(observed, BaseException):
+            raise observed
+        return observed
+
+
 class TrustedMountBackend(FakeBackend):
     def __init__(
         self,
@@ -294,6 +320,309 @@ class TrustedMountBackend(FakeBackend):
         if isinstance(self.followed_root_stat, BaseException):
             raise self.followed_root_stat
         return self.followed_root_stat
+
+
+_SCOPED_ROOT = r"C:\root"
+
+
+def _nested_scope(scope_kind: str, relative_path: str) -> ScanScope:
+    if scope_kind == "paths":
+        return ScanScope.selected((relative_path,))
+    return ScanScope.subtrees((relative_path,))
+
+
+def _scan_nested(
+    backend: FakeBackend,
+    scope_kind: str,
+    relative_path: str,
+    *,
+    root: str = _SCOPED_ROOT,
+    trusted_anchor: str | None = None,
+):
+    return WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        _nested_scope(scope_kind, relative_path),
+        trusted_anchor=trusted_anchor,
+    )
+
+
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+@pytest.mark.parametrize(
+    ("blocked_stat", "warning_code", "unsupported_reason"),
+    (
+        (
+            _fake_stat(
+                ino=3,
+                directory=True,
+                attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+            ),
+            ScanWarningCode.REPARSE_POINT,
+            UnsupportedReason.REPARSE_POINT,
+        ),
+        (
+            _fake_stat(
+                ino=3,
+                directory=True,
+                attributes=(
+                    FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_OFFLINE
+                ),
+            ),
+            ScanWarningCode.PLACEHOLDER,
+            UnsupportedReason.PLACEHOLDER,
+        ),
+        (
+            _fake_stat(ino=3),
+            ScanWarningCode.UNKNOWN_TYPE,
+            UnsupportedReason.UNKNOWN_TYPE,
+        ),
+        (
+            PermissionError("denied ancestor"),
+            ScanWarningCode.ACCESS_DENIED,
+            UnsupportedReason.ACCESS_DENIED,
+        ),
+        (
+            OSError("unavailable ancestor"),
+            ScanWarningCode.ENUMERATION_ERROR,
+            UnsupportedReason.UNKNOWN_TYPE,
+        ),
+    ),
+    ids=("reparse", "placeholder", "file", "denied", "unavailable"),
+)
+def test_scoped_scan_stops_at_an_unsafe_intermediate_component(
+    scope_kind: str,
+    blocked_stat: object,
+    warning_code: ScanWarningCode,
+    unsupported_reason: UnsupportedReason,
+) -> None:
+    root = _SCOPED_ROOT
+    safe = root + r"\safe"
+    blocked = safe + r"\blocked"
+    relative = (
+        r"safe\blocked\leaf.bin"
+        if scope_kind == "paths"
+        else r"safe\blocked\start"
+    )
+    backend = ScopedAdmissionBackend(
+        {
+            safe: _fake_stat(ino=2, directory=True),
+            blocked: blocked_stat,
+        }
+    )
+
+    result = _scan_nested(backend, scope_kind, relative)
+
+    assert not result.complete
+    assert result.files == ()
+    assert result.directories == ()
+    assert [(item.rel_path, item.reason) for item in result.unsupported] == [
+        (relative, unsupported_reason)
+    ]
+    assert any(
+        warning.code is warning_code and warning.rel_path == relative
+        for warning in result.warnings
+    )
+    assert [path for path in backend.lstat_calls if path != root] == [
+        safe,
+        blocked,
+    ]
+    assert backend.scandir_calls == []
+
+
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+def test_scoped_scan_treats_a_missing_intermediate_as_complete_absence(
+    scope_kind: str,
+) -> None:
+    root = _SCOPED_ROOT
+    safe = root + r"\safe"
+    missing = safe + r"\missing"
+    relative = (
+        r"safe\missing\leaf.bin"
+        if scope_kind == "paths"
+        else r"safe\missing\start"
+    )
+    backend = ScopedAdmissionBackend(
+        {
+            safe: _fake_stat(ino=2, directory=True),
+            missing: FileNotFoundError("missing ancestor"),
+        }
+    )
+
+    result = _scan_nested(backend, scope_kind, relative)
+
+    assert result.complete, result.warnings
+    assert result.files == ()
+    assert result.directories == ()
+    assert result.unsupported == ()
+    assert any(
+        warning.code is ScanWarningCode.DISAPPEARED
+        and warning.rel_path == relative
+        for warning in result.warnings
+    )
+    assert [path for path in backend.lstat_calls if path != root] == [
+        safe,
+        missing,
+    ]
+    assert backend.scandir_calls == []
+
+
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+def test_scoped_scan_preserves_final_classification_after_safe_ancestors(
+    scope_kind: str,
+) -> None:
+    root = _SCOPED_ROOT
+    safe = root + r"\safe"
+    relative = r"safe\leaf.bin" if scope_kind == "paths" else r"safe\start"
+    final = root + "\\" + relative
+    entries: dict[str, list[FakeEntry]] = {}
+    if scope_kind == "paths":
+        final_stat = _fake_stat(ino=3)
+        expected_file = relative
+        expected_directory: str | None = None
+    else:
+        final_stat = _fake_stat(ino=3, directory=True)
+        child = final + r"\child.bin"
+        entries[final] = [
+            FakeEntry("child.bin", child, False, _fake_stat(ino=4))
+        ]
+        expected_file = relative + r"\child.bin"
+        expected_directory = relative
+    backend = ScopedAdmissionBackend(
+        {
+            safe: _fake_stat(ino=2, directory=True),
+            final: final_stat,
+        },
+        entries,
+    )
+
+    result = _scan_nested(backend, scope_kind, relative)
+
+    assert result.complete, result.warnings
+    assert [record.rel_path for record in result.files] == [expected_file]
+    assert [record.rel_path for record in result.directories] == (
+        [] if expected_directory is None else [expected_directory]
+    )
+    assert [path for path in backend.lstat_calls if path != root] == [
+        safe,
+        final,
+    ]
+    assert backend.scandir_calls == (
+        [] if scope_kind == "paths" else [final]
+    )
+
+
+def test_selected_scan_checks_cancellation_before_touching_the_final_leaf() -> None:
+    root = _SCOPED_ROOT
+    ancestor = root + r"\safe"
+    relative = r"safe\leaf.bin"
+    final = root + "\\" + relative
+    backend = ScopedAdmissionBackend(
+        {
+            ancestor: _fake_stat(ino=2, directory=True),
+            final: _fake_stat(ino=3),
+        }
+    )
+    cancellation_requested = False
+    original_lstat = backend.lstat
+
+    def request_cancellation_during_ancestor_lstat(path: str):
+        nonlocal cancellation_requested
+        observed = original_lstat(path)
+        if path == ancestor:
+            cancellation_requested = True
+        return observed
+
+    def checkpoint() -> None:
+        if cancellation_requested:
+            raise Canceled
+
+    backend.lstat = request_cancellation_during_ancestor_lstat
+
+    with pytest.raises(Canceled):
+        WalkingScanner(backend).scan(
+            Root(root, "source"),
+            IgnoreSet(),
+            _ctx(checkpoint),
+            ScanScope.selected((relative,)),
+        )
+
+    assert [path for path in backend.lstat_calls if path != root] == [
+        ancestor
+    ]
+    assert final not in backend.lstat_calls
+
+
+@pytest.mark.parametrize(
+    ("scope_kind", "expected_complete", "expected_kind"),
+    (
+        ("paths", True, None),
+        ("subtrees", False, EntryKind.DIRECTORY),
+    ),
+)
+def test_ancestor_admission_leaves_final_reparse_policy_unchanged(
+    scope_kind: str,
+    expected_complete: bool,
+    expected_kind: EntryKind | None,
+) -> None:
+    safe = _SCOPED_ROOT + r"\safe"
+    relative = r"safe\final-junction"
+    final = _SCOPED_ROOT + "\\" + relative
+    backend = ScopedAdmissionBackend(
+        {
+            safe: _fake_stat(ino=2, directory=True),
+            final: _fake_stat(
+                ino=3,
+                directory=True,
+                attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+            ),
+        }
+    )
+
+    result = _scan_nested(backend, scope_kind, relative)
+
+    assert result.complete is expected_complete
+    assert len(result.unsupported) == 1
+    assert result.unsupported[0].reason is UnsupportedReason.REPARSE_POINT
+    assert result.unsupported[0].kind is expected_kind
+    assert [path for path in backend.lstat_calls if path != _SCOPED_ROOT] == [
+        safe,
+        final,
+    ]
+    assert backend.scandir_calls == []
+
+
+def test_unsafe_subtree_start_does_not_prevent_a_safe_sibling_scan() -> None:
+    root = _SCOPED_ROOT
+    blocked = root + r"\blocked"
+    refused = blocked + r"\start"
+    safe = root + r"\safe"
+    child = safe + r"\child.bin"
+    backend = ScopedAdmissionBackend(
+        {
+            blocked: _fake_stat(
+                ino=2,
+                directory=True,
+                attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+            ),
+            safe: _fake_stat(ino=3, directory=True),
+        },
+        {safe: [FakeEntry("child.bin", child, False, _fake_stat(ino=4))]},
+    )
+
+    result = WalkingScanner(backend).scan(
+        Root(root, "source"),
+        IgnoreSet(),
+        _ctx(),
+        ScanScope.subtrees((r"blocked\start", "safe")),
+    )
+
+    assert not result.complete
+    assert [record.rel_path for record in result.files] == [r"safe\child.bin"]
+    assert [record.rel_path for record in result.directories] == ["safe"]
+    assert result.unsupported[0].rel_path == r"blocked\start"
+    assert refused not in backend.lstat_calls
+    assert backend.scandir_calls == [safe]
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires Windows folder mounts")
@@ -400,6 +729,55 @@ def test_scoped_scan_at_a_trusted_mount_does_not_follow_the_root(
     assert backend.lstat_calls == [absolute]
     assert backend.followed_stat_calls == []
     assert backend.scandir_calls == expected_scans
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Windows folder mounts")
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+def test_scoped_descendant_cannot_inherit_the_trusted_mount_exception(
+    scope_kind: str,
+) -> None:
+    root = r"C:\mounted-volume"
+    safe = root + r"\safe"
+    blocked = safe + r"\junction"
+    relative = (
+        r"safe\junction\leaf.bin"
+        if scope_kind == "paths"
+        else r"safe\junction\start"
+    )
+    backend = TrustedMountBackend(
+        {},
+        root=root,
+        device_anchor=root,
+        root_lstat=_fake_stat(
+            ino=91,
+            directory=True,
+            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        ),
+        followed_root_stat=AssertionError("scoped scan followed mount root"),
+        path_lstats={
+            safe: _fake_stat(ino=2, directory=True),
+            blocked: _fake_stat(
+                ino=3,
+                directory=True,
+                attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+            ),
+        },
+    )
+
+    result = _scan_nested(
+        backend,
+        scope_kind,
+        relative,
+        root=root,
+        trusted_anchor=root,
+    )
+
+    assert not result.complete
+    assert result.unsupported[0].rel_path == relative
+    assert result.unsupported[0].reason is UnsupportedReason.REPARSE_POINT
+    assert backend.lstat_calls == [safe, blocked]
+    assert backend.followed_stat_calls == []
+    assert backend.scandir_calls == []
 
 
 def test_full_scan_does_not_trust_a_claimed_anchor_without_volume_evidence() -> None:

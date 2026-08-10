@@ -160,11 +160,16 @@ and incomplete. A FULL root equal to that exact trusted folder mount remains
 admissible only when it is a non-placeholder directory, its followed state is
 ordinary, and the existing before/after anchor plus `VolumeId` brackets hold.
 
-Known limitation: PATHS and SUBTREES no-follow stat each requested final start
-but do not yet validate every intermediate component inside that requested
-relative path. An intermediate reparse can therefore redirect scoped metadata
-observation and reconciliation; FULL scanning and verifier opens use separate
-component admission and do not share this gap.
+PATHS subjects and SUBTREES starts no-follow admit every existing ancestor
+below the managed root before touching their final subject. A missing ancestor
+is conclusive selected absence. A placeholder, reparse, nondirectory, or
+unavailable ancestor records the selected subject as unsupported, makes the
+scope incomplete, and prevents the final stat or subtree enumeration. This
+relative walk begins below the managed root: scoped descendants cannot inherit
+FULL's exact folder-mount exception, while a scoped scan beneath that reviewed
+mount still does not follow the mount root itself. These pathname probes do not
+close component replacement after admission; handle-relative traversal remains
+the stronger future boundary.
 
 An offline/unmounted volume is not an empty complete scan. It yields a typed
 offline result and cannot trigger missing marking or target-only planning.
@@ -261,6 +266,10 @@ NTFS. Neither implementation changes planner or inventory contracts.
   folder-mounted volume anchor completes with the followed mounted-root identity;
   forged anchors, ordinary final/intermediate junction roots, invalid followed
   state, subtree starts, and descendant reparses remain refused or untraversed.
+- PATHS and SUBTREES stop before the final subject when any relative ancestor
+  is unsafe or unavailable, report that selected subject as incomplete, and
+  retain complete disappearance semantics when an ancestor is missing; safe
+  sibling subtree roots continue independently.
 - Import-linter proves scanner code imports core but no sibling module.
 
 ## M0 Verification

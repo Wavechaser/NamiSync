@@ -854,15 +854,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-09). Scoped-path intermediate admission. PATHS and
-  SUBTREES no-follow validate the configured root chain and requested final
-  start, but not every intermediate component inside the requested relative
-  path; a junction there can redirect scoped metadata observation and
-  reconciliation outside the location while the result remains complete.
-  Cause: the scanner joins the root and relative path, then lstats only the
-  final requested subject. FULL scanning and verifier opens do not share the
-  gap. Fix requires component-by-component scoped admission plus hostile
-  intermediate-reparse regressions.
+- MODERATE - FIXED (2026-08-10). Scoped-path intermediate admission. PATHS and
+  SUBTREES joined each requested relative path and no-follow statted only its
+  final subject, so an intermediate junction could redirect observation and
+  reconciliation outside the location while the result remained complete.
+  Fixed by admitting every existing ancestor through the shared root-authority
+  primitive before the scanner touches the leaf: unsafe or unavailable chains
+  record the selected subject as incomplete unsupported evidence, while a
+  missing ancestor remains conclusive selected absence. The exact FULL mounted-
+  root exception is not inherited by scoped descendants. Component replacement
+  after admission remains part of the documented path-to-use race until native
+  traversal becomes handle-relative.
 - MINOR - FIXED (2026-08-09). Full-walk trusted-anchor classification. A FULL
   scan rejected a location whose root exactly equaled its folder-mounted volume
   anchor because the walker treated the anchor's mount-point reparse tag as an

@@ -41,6 +41,12 @@ from namisync.core.pathing import (
     trusted_volume_anchor,
     validate_relative_path,
 )
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_existing_relative_chain,
+)
 from namisync.core.session import RunContext
 
 
@@ -369,6 +375,15 @@ class WalkingScanner:
             )
             else None
         )
+        authority = (
+            None
+            if requested_scope.kind is ScanScopeKind.FULL
+            else RootAuthority(
+                resolved,
+                reviewed_anchor,
+                volume.volume_id,
+            )
+        )
 
         files: list[FileRecord] = []
         directories: list[DirRecord] = []
@@ -387,8 +402,9 @@ class WalkingScanner:
                 trusted_mount_root=trusted_mount_root,
             )
         elif requested_scope.kind is ScanScopeKind.PATHS:
+            assert authority is not None
             complete = self._scan_selected(
-                resolved,
+                authority,
                 volume,
                 ignores,
                 requested_scope,
@@ -399,8 +415,9 @@ class WalkingScanner:
                 warnings,
             )
         elif requested_scope.kind is ScanScopeKind.SUBTREES:
+            assert authority is not None
             selected_complete = self._scan_selected(
-                resolved,
+                authority,
                 volume,
                 ignores,
                 requested_scope,
@@ -410,10 +427,21 @@ class WalkingScanner:
                 unsupported,
                 warnings,
             )
-            starting_points = tuple(
-                (join_under_root(resolved, relative), relative)
-                for relative in requested_scope.subtree_roots
-            )
+            scoped_complete = True
+            starting_points: list[tuple[str, str]] = []
+            for relative in requested_scope.subtree_roots:
+                ctx.checkpoint()
+                touch_leaf, subject_complete = self._admit_scoped_ancestors(
+                    authority,
+                    relative,
+                    unsupported,
+                    warnings,
+                )
+                scoped_complete = scoped_complete and subject_complete
+                if touch_leaf:
+                    starting_points.append(
+                        (join_under_root(resolved, relative), relative)
+                    )
             recursive_complete = self._scan_full(
                 volume,
                 ignores,
@@ -422,9 +450,13 @@ class WalkingScanner:
                 directories,
                 unsupported,
                 warnings,
-                starting_points=starting_points,
+                starting_points=tuple(starting_points),
             )
-            complete = selected_complete and recursive_complete
+            complete = (
+                selected_complete
+                and scoped_complete
+                and recursive_complete
+            )
         else:
             raise ValueError(f"unsupported scan scope: {requested_scope.kind}")
 
@@ -841,7 +873,7 @@ class WalkingScanner:
 
     def _scan_selected(
         self,
-        root: str,
+        authority: RootAuthority,
         volume: VolumeSnapshot,
         ignores: IgnoreSet,
         scope: ScanScope,
@@ -854,7 +886,17 @@ class WalkingScanner:
         complete = True
         for rel_path in scope.selected_paths:
             ctx.checkpoint()
-            absolute = join_under_root(root, rel_path)
+            touch_leaf, subject_complete = self._admit_scoped_ancestors(
+                authority,
+                rel_path,
+                unsupported,
+                warnings,
+            )
+            complete = complete and subject_complete
+            if not touch_leaf:
+                continue
+            ctx.checkpoint()
+            absolute = join_under_root(authority.logical_root, rel_path)
             try:
                 stat = self._backend.lstat(absolute)
             except FileNotFoundError as error:
@@ -913,6 +955,65 @@ class WalkingScanner:
                 )
                 warnings.append(ScanWarning(ScanWarningCode.UNKNOWN_TYPE, rel_path))
         return complete
+
+    def _admit_scoped_ancestors(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        unsupported: list[UnsupportedRecord],
+        warnings: list[ScanWarning],
+    ) -> tuple[bool, bool]:
+        """Admit ancestors while leaving final-subject policy to the scanner."""
+
+        try:
+            ancestors_present = admit_existing_relative_chain(
+                authority,
+                rel_path,
+                lstat=self._backend.lstat,
+                include_leaf=False,
+            )
+        except RootAuthorityError as error:
+            if error.issue is RootAuthorityIssue.PLACEHOLDER_COMPONENT:
+                code = ScanWarningCode.PLACEHOLDER
+                reason = UnsupportedReason.PLACEHOLDER
+            elif error.issue is RootAuthorityIssue.REPARSE_COMPONENT:
+                code = ScanWarningCode.REPARSE_POINT
+                reason = UnsupportedReason.REPARSE_POINT
+            elif error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT:
+                code = ScanWarningCode.UNKNOWN_TYPE
+                reason = UnsupportedReason.UNKNOWN_TYPE
+            elif error.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE:
+                cause = error.__cause__
+                observed_error = (
+                    cause if isinstance(cause, OSError) else error
+                )
+                code = self._error_code(observed_error)
+                reason = self._unsupported_error(observed_error)
+            else:
+                raise RuntimeError(
+                    "relative admission returned a root-level authority issue"
+                ) from error
+            unsupported.append(
+                UnsupportedRecord(
+                    rel_path,
+                    normalize_relative_path(rel_path),
+                    reason,
+                )
+            )
+            warnings.append(
+                ScanWarning(code, rel_path, logical_error_text(error))
+            )
+            return False, False
+        if not ancestors_present:
+            warnings.append(
+                ScanWarning(
+                    ScanWarningCode.DISAPPEARED,
+                    rel_path,
+                    "an intermediate path component is absent",
+                )
+            )
+            return False, True
+        return True, True
 
     @staticmethod
     def _error_code(error: OSError) -> ScanWarningCode:
