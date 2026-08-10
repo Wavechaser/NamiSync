@@ -297,35 +297,11 @@ def lexical_path_chain(
 
 
 def trusted_volume_anchor(path: str | os.PathLike[str]) -> str:
-    """Return the lexical native volume root that may anchor no-follow checks."""
+    """Compatibility alias for the shared native root-authority probe."""
 
-    logical = lexical_absolute_path(path)
-    if os.name != "nt":
-        anchor = Path(logical).anchor
-        if not anchor:
-            raise PathValidationError("absolute path lacks a volume anchor")
-        return anchor
+    from .root_authority import current_volume_anchor
 
-    import ctypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(32768)
-    if not kernel32.GetVolumePathNameW(
-        to_extended_length_path(logical),
-        volume_path,
-        len(volume_path),
-    ):
-        raise OSError(
-            ctypes.get_last_error(),
-            "GetVolumePathNameW failed",
-            logical,
-        )
-    anchor = lexical_absolute_path(volume_path.value)
-    if not is_path_below(logical, anchor):
-        raise PathValidationError(
-            "native volume root is outside the configured lexical path"
-        )
-    return anchor
+    return current_volume_anchor(path)
 
 
 def to_extended_length_path(path: str) -> str:

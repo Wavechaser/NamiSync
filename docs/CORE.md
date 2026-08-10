@@ -13,8 +13,9 @@ recursive inventory scope an explicit core contract.
 
 `namisync.core` defines the vocabulary and invariants shared by the system. It
 contains no scanner, planner, executor, database, dispatcher, workflow, or UI
-behavior. It imports only the Python standard library and never constructs an
-OS, SQLite, clock, policy, or presentation collaborator.
+policy. It imports only the Python standard library; direct filesystem access
+is limited to shared root-authority mechanics, and core owns no SQLite, clock,
+or presentation collaborator.
 
 Core exists to make unsafe or inconsistent states difficult to express. A
 module may add behavior behind these contracts, but it may not invent a second
@@ -48,15 +49,20 @@ attestation format.
   storage, and filesystem observations needed by module contracts.
 - Windows relative-path normalization, validation, hierarchy, containment, and
   long-path conversion helpers.
+- Ephemeral `RootAuthority` facts plus stateless native anchor, volume, and
+  no-follow component probes; every admission uses fresh evidence and typed
+  failures rather than cached or persisted authorization.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
 
 The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
-`core/models.py`, `core/planning.py`, and `core/preflight.py`. These files own
-canonical Windows relative paths, immutable filesystem evidence, deterministic
-plan serialization and capacity, and root-qualified observation/refusal
-shapes. OS walking and observation remain in operation modules; core stays
-standard-library-only and behavior-free.
+`core/root_authority.py`, `core/models.py`, `core/planning.py`, and
+`core/preflight.py`. These files own canonical Windows relative paths,
+immutable filesystem evidence, shared native root-admission mechanics,
+deterministic plan serialization and capacity, and root-qualified
+observation/refusal shapes. General filesystem walking and domain observation
+remain in operation modules; core's stateless probes carry no module policy and
+remain standard-library-only.
 
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
@@ -219,6 +225,13 @@ superscript-one/two/three `COM`/`LPT` forms as well as the ordinary numbered
 devices. Native
 `OSError` filename fields are rendered back into logical spelling before
 entering warnings, durable detail, or user-facing diagnostics.
+
+`RootAuthority` is ephemeral reviewed context: a logical root plus an optional
+reviewed native anchor and `VolumeId`. Admission freshly observes the current
+anchor, no-follow checks each root component below it, then requires the volume
+probe's own anchor evidence to match before accepting its identity. Authority
+is never cached or persisted. Non-Windows probe branches are development/test
+fallbacks only, not production mount-boundary authority.
 
 `rel_path_key` follows Windows/NTFS one-codepoint case mapping, not
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code
