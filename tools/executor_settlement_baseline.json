@@ -422,6 +422,7 @@
         "cleanup.ordinary.no-durable-cleanup-failure",
         "cleanup.ordinary.stale-owned-temp-recovered",
         "cleanup.ordinary.pre-retry-cleanup-succeeds",
+        "cleanup.ordinary.pre-retry-cleanup-fails",
         "cleanup.ordinary.durable-verdict-plus-cleanup-failure"
       ],
       "tags": [
@@ -431,7 +432,7 @@
         "matrix",
         "retry"
       ],
-      "variants": 4
+      "variants": 5
     },
     {
       "id": "cleanup.canceled-failure",
@@ -6903,6 +6904,435 @@
               "sha256": "744f1efab0732450178a7a08d5cc65eea3de083689e8a4435a245e918332aecd",
               "size": 12,
               "text": "copy-payload"
+            }
+          }
+        },
+        {
+          "control": {
+            "checkpoints": 2,
+            "sleeps": []
+          },
+          "copy_backend": {
+            "calls": 1,
+            "trace": [
+              {
+                "call": 1,
+                "chunk_size": 4,
+                "error": "OSError"
+              }
+            ]
+          },
+          "execution_set": {
+            "published_evidence": [],
+            "recording": "ok",
+            "selected": 1,
+            "selection": [
+              {
+                "kind": "copy",
+                "op": "00000000000000000000000000000001"
+              }
+            ],
+            "status": [
+              {
+                "kind": "copy",
+                "op": "00000000000000000000000000000001",
+                "outcome": "failed"
+              }
+            ]
+          },
+          "failure_policy": {
+            "trace": [
+              {
+                "attempt": 1,
+                "decision": "retry",
+                "error": "OSError",
+                "kind": "copy",
+                "op": "00000000000000000000000000000001"
+              }
+            ]
+          },
+          "filesystem": {
+            "counts": {
+              "create_temp": 1,
+              "open_source": 1,
+              "owned_temp": 1,
+              "remove_owned_temp": 2,
+              "resolve": 4,
+              "revalidate_root": 7,
+              "stat": 2
+            },
+            "trace": [
+              {
+                "args": [
+                  "$TARGET"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE",
+                  "copy.bin"
+                ],
+                "call": "stat",
+                "kwargs": {},
+                "result": {
+                  "attributes": 32,
+                  "created": "time-2",
+                  "identity": "identity-1",
+                  "kind": "file",
+                  "mtime": "time-1",
+                  "nlink": 1,
+                  "size": 12
+                }
+              },
+              {
+                "args": [
+                  "$TARGET",
+                  "copy.bin"
+                ],
+                "call": "stat",
+                "kwargs": {},
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE",
+                  "copy.bin"
+                ],
+                "call": "resolve",
+                "kwargs": {
+                  "must_exist": true
+                },
+                "result": "$SOURCE/copy.bin"
+              },
+              {
+                "args": [
+                  "$TARGET",
+                  "copy.bin"
+                ],
+                "call": "resolve",
+                "kwargs": {
+                  "must_exist": false
+                },
+                "result": "$TARGET/copy.bin"
+              },
+              {
+                "args": [
+                  "$TARGET/copy.bin",
+                  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "00000000000000000000000000000001"
+                ],
+                "call": "owned_temp",
+                "kwargs": {},
+                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+              },
+              {
+                "args": [
+                  "$TARGET"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$TARGET",
+                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "resolve",
+                "kwargs": {
+                  "must_exist": false
+                },
+                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+              },
+              {
+                "args": [
+                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "remove_owned_temp",
+                "kwargs": {},
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$SOURCE/copy.bin"
+                ],
+                "call": "open_source",
+                "kwargs": {},
+                "result": "<stream>"
+              },
+              {
+                "args": [
+                  "$TARGET"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$TARGET",
+                  "copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "resolve",
+                "kwargs": {
+                  "must_exist": false
+                },
+                "result": "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+              },
+              {
+                "args": [
+                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "create_temp",
+                "kwargs": {
+                  "allocation_size": null
+                },
+                "result": "<stream>"
+              },
+              {
+                "args": [
+                  "$TARGET"
+                ],
+                "call": "revalidate_root",
+                "kwargs": {
+                  "expected_volume": null,
+                  "trusted_anchor": null
+                },
+                "result": null
+              },
+              {
+                "args": [
+                  "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001"
+                ],
+                "call": "remove_owned_temp",
+                "error": "PermissionError",
+                "kwargs": {},
+                "message": "injected retry cleanup failure"
+              }
+            ]
+          },
+          "items": [
+            {
+              "detail": {
+                "error_type": "OperationFailure",
+                "message": "operation failed and its owned temp could not be removed: injected retry cleanup failure"
+              },
+              "kind": "copy",
+              "op": "00000000000000000000000000000001",
+              "outcome": "failed",
+              "path": "copy.bin",
+              "reason": "cleanup-failed"
+            }
+          ],
+          "operation_contracts": [
+            {
+              "intended": {
+                "attributes": 32,
+                "created": "time-2",
+                "identity": "identity-1",
+                "kind": "file",
+                "mtime": "time-1",
+                "nlink": 1,
+                "size": 12
+              },
+              "kind": "copy",
+              "op": "00000000000000000000000000000001",
+              "prior_target_expected": null,
+              "prior_target_rel_path": null,
+              "source_expected": {
+                "attributes": 32,
+                "created": "time-2",
+                "identity": "identity-1",
+                "kind": "file",
+                "mtime": "time-1",
+                "nlink": 1,
+                "size": 12
+              },
+              "source_rel_path": "copy.bin",
+              "target_expected": null,
+              "target_rel_path": "copy.bin"
+            }
+          ],
+          "progress_final": {
+            "bytes_done": 4,
+            "bytes_total": 12,
+            "current_path": "copy.bin",
+            "items_done": 1,
+            "items_total": 1
+          },
+          "recorder": {
+            "trace": [
+              {
+                "command": "flush",
+                "payload": {},
+                "result": null
+              }
+            ]
+          },
+          "reliable_events": [
+            {
+              "phase": "execute",
+              "type": "phase"
+            },
+            {
+              "detail": {
+                "error_type": "OperationFailure",
+                "message": "operation failed and its owned temp could not be removed: injected retry cleanup failure"
+              },
+              "kind": "copy",
+              "op": "00000000000000000000000000000001",
+              "outcome": "failed",
+              "path": "copy.bin",
+              "reason": "cleanup-failed",
+              "type": "item"
+            }
+          ],
+          "result": {
+            "audit": "ok",
+            "bytes_done": 4,
+            "bytes_total": 12,
+            "canceled": false,
+            "disposition": "ran",
+            "error": null,
+            "items": [
+              {
+                "detail": {
+                  "error_type": "OperationFailure",
+                  "message": "operation failed and its owned temp could not be removed: injected retry cleanup failure"
+                },
+                "kind": "copy",
+                "op": "00000000000000000000000000000001",
+                "outcome": "failed",
+                "path": "copy.bin",
+                "reason": "cleanup-failed"
+              }
+            ],
+            "phases": [],
+            "recording": "ok",
+            "status": "failed"
+          },
+          "row": "cleanup.ordinary.pre-retry-cleanup-fails",
+          "termination": {
+            "raised": null,
+            "returned": "failed"
+          },
+          "timeline": [
+            "emit:phase:execute",
+            "control:checkpoint:1:begin",
+            "control:checkpoint:1:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:stat:begin",
+            "fs:stat:end",
+            "fs:stat:begin",
+            "fs:stat:end",
+            "fs:resolve:begin",
+            "fs:resolve:end",
+            "fs:resolve:begin",
+            "fs:resolve:end",
+            "fs:owned_temp:begin",
+            "fs:owned_temp:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:resolve:begin",
+            "fs:resolve:end",
+            "fs:remove_owned_temp:begin",
+            "fs:remove_owned_temp:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:open_source:begin",
+            "fs:open_source:end",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:resolve:begin",
+            "fs:resolve:end",
+            "fs:create_temp:begin",
+            "fs:create_temp:end",
+            "backend:copy:1:begin",
+            "backend:copy:1:checkpoint:begin",
+            "control:checkpoint:2:begin",
+            "control:checkpoint:2:end",
+            "backend:copy:1:checkpoint:end",
+            "backend:copy:1:chunk:1:bytes:4",
+            "backend:copy:1:error:OSError",
+            "failure-policy:00000000000000000000000000000001:attempt:1:decision:retry",
+            "fs:revalidate_root:begin",
+            "fs:revalidate_root:end",
+            "fs:remove_owned_temp:begin",
+            "fs:remove_owned_temp:error",
+            "emit:item:00000000000000000000000000000001:copy:failed",
+            "recorder:flush",
+            "recorder:flush:end"
+          ],
+          "tree": {
+            "$SOURCE/copy.bin": {
+              "created": "time-2",
+              "identity": "identity-1",
+              "kind": "file",
+              "mtime": "time-1",
+              "readonly": false,
+              "sha256": "744f1efab0732450178a7a08d5cc65eea3de083689e8a4435a245e918332aecd",
+              "size": 12,
+              "text": "copy-payload"
+            },
+            "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001": {
+              "created": "time-3",
+              "identity": "identity-2",
+              "kind": "file",
+              "mtime": "time-3",
+              "readonly": false,
+              "sha256": "6f5a6034e770acbfb3f797e6a7eb7948d470d45f9928f92b7d72dc7c45e6d0cd",
+              "size": 4,
+              "text": "copy"
             }
           }
         },

@@ -74,7 +74,7 @@ DEFAULT_BASELINE = Path(__file__).with_name("executor_settlement_baseline.json")
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_BASELINE_GIT_PATH = "tools/executor_settlement_baseline.json"
 REVIEWED_BASELINE_SHA256 = (
-    "261fab6f9af30bf79590d0a4e1fbc9ab6c706bafdb86748802dcc2da3035c0b3"
+    "e137bbaf01df2fd830c094eb383d8fa34048701e79baf85de862c9e01285ac2b"
 )
 _BYTE_KINDS = frozenset(
     {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
