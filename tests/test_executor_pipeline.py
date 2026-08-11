@@ -20,6 +20,11 @@ from namisync.core.execution import CopyDigest
 from namisync.core.session import Canceled, PauseRequested
 import namisync.modules.executor.pipeline as executor_module
 from namisync.modules.executor import NativeCopyBackend
+from namisync.modules.executor.pipeline import (
+    _PREALLOCATION_THRESHOLD,
+    _allocation_size,
+    _copy_chunk_size,
+)
 
 
 _REAL_THREAD = threading.Thread
@@ -1990,3 +1995,39 @@ def test_b8_repeated_short_final_chunks_release_the_entire_budget(
         assert metrics.payload_high_water <= executor_module._PIPELINE_BYTE_BUDGET
 
     _assert_workers_joined(workers, copies=5)
+
+
+@pytest.mark.parametrize(
+    ("reviewed_size", "expected"),
+    [
+        (0, 256 * 1024),
+        (8 * 1024 * 1024 - 1, 256 * 1024),
+        (8 * 1024 * 1024, 1024 * 1024),
+        (32 * 1024 * 1024 - 1, 1024 * 1024),
+        (32 * 1024 * 1024, 4 * 1024 * 1024),
+    ],
+)
+def test_adaptive_copy_chunk_bands_are_exact(
+    reviewed_size: int, expected: int
+) -> None:
+    assert _copy_chunk_size(reviewed_size, 4 * 1024 * 1024) == expected
+    assert _copy_chunk_size(reviewed_size, 128 * 1024) == 128 * 1024
+
+
+def test_native_copy_backend_requires_a_keyword_only_hasher_factory() -> None:
+    with pytest.raises(TypeError):
+        NativeCopyBackend()  # type: ignore[call-arg]
+    with pytest.raises(TypeError):
+        NativeCopyBackend(xxh3_128)  # type: ignore[misc]
+
+
+def test_copy_digest_accepts_only_raw_xxh3_128_width() -> None:
+    assert CopyDigest(b"x" * 16, 0).digest == b"x" * 16
+    with pytest.raises(ValueError, match="XXH3-128"):
+        CopyDigest(b"x" * 32, 0)
+
+
+def test_preallocation_policy_uses_the_measured_private_crossover() -> None:
+    assert _allocation_size(0) is None
+    assert _allocation_size(_PREALLOCATION_THRESHOLD - 1) is None
+    assert _allocation_size(_PREALLOCATION_THRESHOLD) == _PREALLOCATION_THRESHOLD

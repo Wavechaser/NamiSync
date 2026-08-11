@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+import os
 from pathlib import Path
+import subprocess
 from typing import Callable, TypeVar
 
+import pytest
 from xxhash import xxh3_128
 
 from namisync.core.events import ItemOutcome
@@ -364,4 +367,126 @@ def _reviewed_byte_operation(
             prior_target_expected=prior_target_expected,
         ),
         target / target_rel_path,
+    )
+
+
+def _create_directory_reparse(link: Path, target: Path) -> None:
+    if os.name != "nt":
+        os.symlink(target, link, target_is_directory=True)
+        return
+    environment = os.environ.copy()
+    environment["NAMISYNC_TEST_LINK"] = str(link)
+    environment["NAMISYNC_TEST_TARGET"] = str(target)
+    completed = subprocess.run(
+        (
+            "powershell.exe",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "New-Item -ItemType Junction -Path $env:NAMISYNC_TEST_LINK "
+            "-Target $env:NAMISYNC_TEST_TARGET -ErrorAction Stop | Out-Null",
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    if completed.returncode:
+        raise OSError(completed.stderr.strip() or "junction creation failed")
+
+
+def _require_directory_reparse(tmp_path: Path, target: Path) -> None:
+    probe = tmp_path / "directory-reparse-probe"
+    try:
+        _create_directory_reparse(probe, target)
+    except OSError as error:
+        pytest.skip(f"directory reparse creation unavailable: {error}")
+    if os.name == "nt":
+        probe.rmdir()
+    else:
+        probe.unlink()
+
+
+def _nonbyte_mutation_operation(
+    source: Path,
+    target: Path,
+    fs: NativeFileSystem,
+    kind: OperationKind,
+    *,
+    directory_delete: bool = False,
+) -> PlanOperation:
+    if kind is OperationKind.MKDIR:
+        (source / "folder").mkdir()
+        source_stat = fs.stat(source, "folder")
+        assert source_stat is not None
+        return _operation(
+            1,
+            kind,
+            source_rel_path="folder",
+            target_rel_path="folder",
+            source_expected=source_stat,
+            target_expected=None,
+            intended=source_stat,
+            reason=OperationReason.REQUIRED_DIRECTORY,
+        )
+    if kind is OperationKind.DELETE:
+        name = "folder" if directory_delete else "old.bin"
+        live = target / name
+        live.mkdir() if directory_delete else live.write_bytes(b"reviewed")
+        target_stat = fs.stat(target, name)
+        assert target_stat is not None
+        return _operation(
+            1,
+            kind,
+            source_rel_path=None,
+            target_rel_path=name,
+            source_expected=None,
+            target_expected=target_stat,
+            intended=None,
+            reason=(
+                OperationReason.DIRECTORY_CLEANUP
+                if directory_delete
+                else OperationReason.TARGET_ONLY
+            ),
+        )
+    if kind is OperationKind.TRASH:
+        (target / "old.bin").write_bytes(b"reviewed")
+        target_stat = fs.stat(target, "old.bin")
+        assert target_stat is not None
+        return _operation(
+            1,
+            kind,
+            source_rel_path=None,
+            target_rel_path="old.bin",
+            source_expected=None,
+            target_expected=target_stat,
+            intended=None,
+            reason=OperationReason.TARGET_ONLY,
+        )
+
+    old_name = "keep.txt" if kind is OperationKind.RECASE else "old.bin"
+    new_name = "KEEP.txt" if kind is OperationKind.RECASE else "new.bin"
+    (target / old_name).write_bytes(b"reviewed")
+    old_stat = fs.stat(target, old_name)
+    assert old_stat is not None
+    source_file = source / new_name
+    source_file.write_bytes(b"reviewed")
+    os.utime(source_file, ns=(old_stat.mtime_ns, old_stat.mtime_ns))
+    source_stat = fs.stat(source, new_name)
+    assert source_stat is not None
+    return _operation(
+        1,
+        kind,
+        source_rel_path=new_name,
+        target_rel_path=new_name,
+        source_expected=source_stat,
+        target_expected=old_stat if kind is OperationKind.RECASE else None,
+        intended=old_stat if kind is OperationKind.RECASE else source_stat,
+        prior_target_rel_path=old_name,
+        prior_target_expected=old_stat,
+        reason=(
+            OperationReason.CASE_MISMATCH
+            if kind is OperationKind.RECASE
+            else OperationReason.IDENTITY_RENAME
+        ),
     )
