@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
 import inspect
 import os
 from pathlib import Path
@@ -38,7 +37,6 @@ from namisync.core.execution import (
     validated_run_id,
 )
 from namisync.core.models import (
-    CapabilityProfile,
     EntryKind,
     FileIdentity,
     FileStat,
@@ -49,14 +47,10 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import to_extended_length_path
 from namisync.core.planning import (
-    Assignment,
-    DeletionPolicy,
-    FilterSet,
     OpId,
     OperationKind,
     OperationReason,
     Plan,
-    PlanFingerprint,
     PlanOperation,
     PreservationPolicy,
 )
@@ -78,200 +72,25 @@ from namisync.modules.executor.pipeline import (
 )
 from namisync.modules.scanner import scan
 
-
-RUN_ID = validated_run_id("1" * 32)
-
-
-class FakeRecorder:
-    def __init__(self, *, fail: str | None = None) -> None:
-        self.fail = fail
-        self.calls: list[tuple[str, object, object | None]] = []
-        self.flushes = 0
-
-    def _record(self, name: str, first: object, second: object | None = None) -> None:
-        if self.fail == name:
-            raise RuntimeError(f"injected {name} failure")
-        self.calls.append((name, first, second))
-
-    def flush(self) -> None:
-        self.flushes += 1
-        if self.fail == "flush":
-            raise RuntimeError("injected flush failure")
-
-    @staticmethod
-    def _copy_identity(op: OpId) -> RecordedCopyIdentity:
-        return RecordedCopyIdentity(
-            row_id=f"row-{op}",
-            location_id="target-location",
-            scope_token=f"scope-{op}",
-            rel_path_key=f"PATH-{op}".upper(),
-        )
-
-    def record_copied(self, op, attestation) -> RecordedCopyIdentity:
-        self._record("copied", op, attestation)
-        return self._copy_identity(op)
-
-    def record_updated(self, op, attestation) -> RecordedCopyIdentity:
-        self._record("updated", op, attestation)
-        return self._copy_identity(op)
-
-    def record_moved(self, op, target) -> None:
-        self._record("moved", op, target)
-
-    def record_recased(self, op, target) -> None:
-        self._record("recased", op, target)
-
-    def record_move_updated(self, op, attestation) -> RecordedCopyIdentity:
-        self._record("move_updated", op, attestation)
-        return self._copy_identity(op)
-
-    def record_mkdir(self, op, target) -> None:
-        self._record("mkdir", op, target)
-
-    def record_trashed(self, op, trash_relative_path, target) -> None:
-        self._record("trashed", op, (trash_relative_path, target))
-
-    def record_deleted(self, op, prior) -> None:
-        self._record("deleted", op, prior)
-
-    def record_noop(self, op, source, target) -> None:
-        self._record("noop", op, (source, target))
-
-
-class FixedClock:
-    def now(self) -> datetime:
-        return datetime(2026, 7, 18, 12, tzinfo=UTC)
-
-
-def _profile(*, hardlinks: bool = True) -> CapabilityProfile:
-    return CapabilityProfile(
-        fs_type="NTFS",
-        mtime_granularity_ns=100,
-        stable_file_identity=True,
-        incurs_seek_penalty=False,
-        max_path=32767,
-        supports_ads=True,
-        supports_hardlinks=hardlinks,
-    )
-
-
-def _operation(
-    number: int,
-    kind: OperationKind,
-    *,
-    source_rel_path: str | None,
-    target_rel_path: str,
-    source_expected: FileStat | None,
-    target_expected: FileStat | None,
-    intended: FileStat | None,
-    prior_target_rel_path: str | None = None,
-    prior_target_expected: FileStat | None = None,
-    dependencies: tuple[OpId, ...] = (),
-    reason: OperationReason = OperationReason.SOURCE_ONLY,
-) -> PlanOperation:
-    return PlanOperation(
-        op_id=OpId(f"{number:032x}"),
-        kind=kind,
-        source_rel_path=source_rel_path,
-        target_rel_path=target_rel_path,
-        source_expected=source_expected,
-        target_expected=target_expected,
-        intended=intended,
-        prior_target_rel_path=prior_target_rel_path,
-        prior_target_expected=prior_target_expected,
-        metadata=None if intended is None else intended.metadata,
-        content_bytes=(
-            0
-            if source_expected is None
-            or kind not in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
-            else source_expected.size
-        ),
-        dependencies=dependencies,
-        reason=reason,
-    )
-
-
-def _plan(
-    source: Path,
-    target: Path,
-    operations: tuple[PlanOperation, ...],
-    *,
-    hardlinks: bool = True,
-    preservation: PreservationPolicy = PreservationPolicy(),
-    trash_on_update: bool = True,
-) -> Plan:
-    profile = _profile(hardlinks=hardlinks)
-    return Plan(
-        source_root=Root(str(source), "source"),
-        target_root=Root(str(target), "target"),
-        source_volume_id=None,
-        target_volume_id=None,
-        source_volume_evidence=None,
-        target_volume_evidence=None,
-        source_profile=profile,
-        target_profile=profile,
-        source_complete=True,
-        target_complete=True,
-        operations=operations,
-        assignment=Assignment("identity", "1", ()),
-        preservation=preservation,
-        filter_snapshot=FilterSet(),
-        deletion_policy=DeletionPolicy.TRASH,
-        trash_on_update=trash_on_update,
-        policy_fingerprint="p" * 64,
-        required_volumes=frozenset(),
-        required_bytes=sum(operation.content_bytes for operation in operations),
-        fingerprint=PlanFingerprint("f" * 64),
-    )
-
-
-def _xset(plan: Plan) -> ExecutionSet:
-    return ExecutionSet(
-        plan=plan,
-        selection=frozenset(operation.op_id for operation in plan.operations),
-        run_id=RUN_ID,
-    )
-
-
-def _policies(**changes: object) -> ExecutorPolicies:
-    values: dict[str, object] = {
-        "failure": BoundedFailurePolicy(retries=2, initial_delay=0),
-        "copy_backend": NativeCopyBackend(hasher_factory=xxh3_128),
-        "clock": FixedClock(),
-        "max_chunk_size": 4,
-        "progress_interval_seconds": 0,
-        "sleep": lambda _: None,
-    }
-    values.update(changes)
-    return ExecutorPolicies(**values)  # type: ignore[arg-type]
-
-
-def _run(
-    xset: ExecutionSet,
-    *,
-    fs: NativeFileSystem | None = None,
-    recorder: FakeRecorder | None = None,
-    policies: ExecutorPolicies | None = None,
-    checkpoint: Callable[[], None] = lambda: None,
-) -> tuple[object, list[object], FakeRecorder]:
-    events: list[object] = []
-    actual_recorder = recorder or FakeRecorder()
-    result = execute(
-        xset,
-        RunContext(events.append, checkpoint),
-        actual_recorder,
-        policies or _policies(),
-        fs or NativeFileSystem(),
-    )
-    return result, events, actual_recorder
-
-
-def _roots(tmp_path: Path) -> tuple[Path, Path]:
-    source = tmp_path / "source"
-    target = tmp_path / "target"
-    source.mkdir()
-    target.mkdir()
-    return source, target
+from _executor_fixtures import (
+    RUN_ID,
+    FakeRecorder,
+    FixedClock,
+    _ControlLatch,
+    _item_outcome,
+    _make_readonly,
+    _operation,
+    _plan,
+    _policies,
+    _profile,
+    _recorder_names,
+    _readonly_update_setup,
+    _reviewed_byte_operation,
+    _roots,
+    _run,
+    _sharing_violation,
+    _xset,
+)
 
 
 def test_native_filesystem_rejects_lexical_root_before_resolving_children(
@@ -484,7 +303,7 @@ def test_executor_maps_invalid_plan_anchor_to_unsafe_path(
 
     result, events, recorder = _run(_xset(plan), fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
     assert item.reason == "unsafe-path"
@@ -575,7 +394,7 @@ def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) 
     )
     assert max(event.bytes_done for event in progress) == len(b"complete-content")
     assert not any(isinstance(event, Terminal) for event in events)
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert "durability_warnings" not in item.detail
 
 
@@ -1017,7 +836,7 @@ def test_native_pipeline_faults_are_atomic_and_clean_current_owned_temp(
         f"file.bin.synctmp-{RUN_ID}-{operation.op_id}"
     )
     expected_temp = target / expected_name
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "io-error"
     assert not (target / "file.bin").exists()
@@ -1136,7 +955,7 @@ def test_substantive_preallocation_failure_cleans_temp_before_copying(
     )
 
     assert result.status is SessionState.FAILED
-    item = next(event for event in _ if isinstance(event, ItemOutcome))
+    item = _item_outcome(_)
     assert item.reason == "io-error"
     assert backend.calls == 0
     assert recorder.calls == []
@@ -1204,7 +1023,7 @@ def test_unsupported_preallocation_falls_back_through_real_copy(
     assert result.status is SessionState.COMPLETED
     assert backend.calls == 1
     assert (target / "file.bin").stat().st_size == _PREALLOCATION_THRESHOLD
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
     assert not list(target.glob("*.synctmp-*"))
 
 
@@ -1382,7 +1201,7 @@ def test_full_copy_has_no_writer_flush_and_finalizes_before_restrictive_acl(
     assert (target / "file.bin").read_bytes() == b"payload"
     assert fs.writer_flushes == 0
     assert fs.calls == ["open", "acl", "basic", "flush", "close"]
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
 
 
 class PublishedMetadataSpyFileSystem(NativeFileSystem):
@@ -1803,7 +1622,7 @@ def test_unavailable_directory_flush_remains_an_honest_warning(tmp_path: Path) -
 
     result, events, _ = _run(_xset(_plan(source, target, (operation,))), fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.COMPLETED
     assert item.detail["durability_warnings"] == (
         f"parent directory flush unsupported: {target}",
@@ -1832,7 +1651,7 @@ def test_parent_directory_flush_error_records_nothing_after_publish(
         _xset(_plan(source, target, (operation,))), fs=fs
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "io-error"
     assert (target / "file.bin").read_bytes() == b"durable-content"
@@ -1873,6 +1692,7 @@ def test_published_copy_metadata_survives_process_exit_after_record(
         import runpy
         import sys
 
+        sys.path.insert(0, str(Path(sys.argv[1]).parent))
         ns = runpy.run_path(sys.argv[1])
         source = Path(sys.argv[2])
         target = Path(sys.argv[3])
@@ -2075,7 +1895,7 @@ def test_source_drift_after_stream_removes_temp_and_records_nothing(tmp_path: Pa
     assert not (target / "file.bin").exists()
     assert not list(target.glob("*.synctmp-*"))
     assert recorder.calls == []
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     assert outcome.reason == "source-drift"
 
 
@@ -2185,7 +2005,7 @@ def test_source_growth_and_shrink_are_read_to_real_eof_then_classified_as_drift(
     assert recorder.calls == []
     assert not (target / "file.bin").exists()
     assert not list(target.glob("*.synctmp-*"))
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "source-drift"
 
 
@@ -2227,7 +2047,7 @@ def test_256k_ceiling_reads_growth_across_reviewed_8mib_band_to_eof(
     assert recorder.calls == []
     assert not (target / "file.bin").exists()
     assert not list(target.glob("*.synctmp-*"))
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "source-drift"
 
 
@@ -2258,7 +2078,7 @@ def test_conditional_publish_does_not_overwrite_target_appearance(tmp_path: Path
     )
 
     assert result.status is SessionState.FAILED
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "destination-occupied"
     assert (target / "file.bin").read_bytes() == b"external"
     assert recorder.calls == []
@@ -2336,7 +2156,7 @@ def test_update_revalidates_prepared_temp_after_recorder_flush(
 
     result, events, _ = _run(xset, fs=fs, recorder=recorder)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert recorder.substituted
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
@@ -2428,7 +2248,7 @@ def test_byte_operation_refuses_substituted_postpublish_identity_before_record(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.substitutions == 1
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
@@ -2485,7 +2305,7 @@ def test_published_size_guard_fails_all_byte_producing_operations_before_record(
     assert (target / published_name).stat().st_size == source_stat.size + 1
     assert recorder.calls == []
     assert xset.published_evidence == {}
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "published-size-mismatch"
     if kind is OperationKind.MOVE_UPDATE:
         assert (target / "old.bin").read_bytes() == b"old"
@@ -2884,7 +2704,7 @@ def test_copied_backup_does_not_adopt_target_drift_after_reviewed_guard(
         fs=fs,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
     assert mutated
     assert result.status is SessionState.FAILED
@@ -2937,7 +2757,7 @@ def test_copied_backup_rejects_live_drift_before_backup_or_update_publish(
         fs=fs,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
@@ -3242,7 +3062,7 @@ def test_update_revalidates_trash_parent_after_guards_before_replace(
         fs=fs,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.swapped
     assert fs.replace_calls == 0
     assert result.status is SessionState.FAILED
@@ -3496,7 +3316,7 @@ def test_update_fault_never_leaves_live_target_absent(tmp_path: Path, after: boo
         RecordingStatus.DEGRADED if after else RecordingStatus.OK
     )
     if after:
-        item = next(event for event in events if isinstance(event, ItemOutcome))
+        item = _item_outcome(events)
         assert item.detail["publish_state"] == "published"
         assert item.detail["target_state"] == "published"
         assert item.detail["durable_state"] == "target-published-with-backup"
@@ -3525,7 +3345,7 @@ def test_unverifiable_publish_failure_degrades_recording(tmp_path: Path) -> None
         _xset(_plan(source, target, (operation,))), fs=fs
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
     assert published_target.read_bytes() == b"new-version"
@@ -3570,7 +3390,7 @@ def test_acl_failure_happens_before_update_publish(tmp_path: Path) -> None:
     assert result.status is SessionState.FAILED
     assert (target / "file.bin").read_bytes() == b"old"
     assert recorder.calls == []
-    assert next(event for event in events if isinstance(event, ItemOutcome)).reason == "acl-copy-failed"
+    assert _item_outcome(events).reason == "acl-copy-failed"
 
 
 def test_failed_work_does_not_abort_independent_and_defers_dependents(tmp_path: Path) -> None:
@@ -3621,7 +3441,7 @@ def test_failed_work_does_not_abort_independent_and_defers_dependents(tmp_path: 
         dependent.op_id: Outcome.DEFERRED,
     }
     assert (target / "good.bin").read_bytes() == b"good"
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
 
 
 def test_directory_metadata_is_applied_after_child_operation(tmp_path: Path) -> None:
@@ -3672,7 +3492,7 @@ def test_directory_metadata_is_applied_after_child_operation(tmp_path: Path) -> 
         path for path in fs.metadata_paths if ".synctmp-" in path.name
     )
     assert fs.metadata_paths.index(copied_temp) < fs.metadata_paths.index(target / "folder")
-    assert [call[0] for call in recorder.calls] == ["copied", "mkdir"]
+    assert _recorder_names(recorder) == ["copied", "mkdir"]
 
 
 def test_mkdir_refuses_vanished_reviewed_source_directory(
@@ -3702,7 +3522,7 @@ def test_mkdir_refuses_vanished_reviewed_source_directory(
     )
 
     assert result.status is SessionState.FAILED
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "source-missing"
     assert not (target / "folder").exists()
     assert recorder.calls == []
@@ -3843,7 +3663,7 @@ def test_directory_cleanup_succeeds_after_last_child_is_trashed(tmp_path: Path) 
     assert (
         target / ".synctrash" / str(RUN_ID) / "obsolete" / "child.bin"
     ).read_bytes() == b"old"
-    assert [call[0] for call in recorder.calls] == ["trashed", "deleted"]
+    assert _recorder_names(recorder) == ["trashed", "deleted"]
 
 
 def test_directory_cleanup_succeeds_after_last_child_is_moved(tmp_path: Path) -> None:
@@ -3900,7 +3720,7 @@ def test_directory_cleanup_succeeds_after_last_child_is_moved(tmp_path: Path) ->
     assert result.status is SessionState.COMPLETED
     assert not old_folder.exists()
     assert (new_folder / "child.bin").read_bytes() == b"content"
-    assert [call[0] for call in recorder.calls] == ["moved", "deleted"]
+    assert _recorder_names(recorder) == ["moved", "deleted"]
 
 
 def test_directory_cleanup_rejects_replaced_empty_directory(tmp_path: Path) -> None:
@@ -3930,7 +3750,7 @@ def test_directory_cleanup_rejects_replaced_empty_directory(tmp_path: Path) -> N
         _xset(_plan(source, target, (cleanup,))), fs=fs
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
     assert folder.is_dir()
@@ -4000,7 +3820,7 @@ def test_identityless_directory_cleanup_still_rejects_metadata_drift(
         _xset(_plan(source, target, (cleanup,))), fs=fs
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
     assert folder.is_dir()
@@ -4366,9 +4186,7 @@ class SharingOnceFileSystem(NativeFileSystem):
     def publish_new(self, temp: Path, target: Path) -> None:
         self.attempts += 1
         if self.attempts == 1:
-            error = OSError("sharing violation")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing violation")
         super().publish_new(temp, target)
 
 
@@ -4386,9 +4204,7 @@ class SharingViolationWriter:
     def write(self, data) -> int:
         self.writes += 1
         if self.writes == 2:
-            error = OSError("sharing violation during streamed write")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing violation during streamed write")
         return self.stream.write(data)
 
     def __getattr__(self, name: str):
@@ -4519,7 +4335,7 @@ def test_failed_cleanup_detail_sanitizes_native_temp_filename(
 
     result, events, _ = _run(_xset(_plan(source, target, (operation,))), fs=fs)
 
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     assert result.items == (outcome,)
     assert outcome.reason == "cleanup-failed"
     assert r"file.bin.synctmp-" in outcome.detail["message"]
@@ -4559,7 +4375,7 @@ def test_canceled_cleanup_detail_sanitizes_native_temp_filename(
             fs,
         )
 
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     assert outcome.outcome is Outcome.CANCELED
     assert r"file.bin.synctmp-" in outcome.detail["cleanup_error"]
     assert "\\\\?\\" not in outcome.detail["cleanup_error"]
@@ -4594,7 +4410,7 @@ def test_canceled_durable_settlement_sanitizes_cleanup_filename(
             fs,
         )
 
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     assert outcome.outcome is Outcome.CANCELED
     assert outcome.detail["publish_state"] == "not-published"
     assert r"file.bin.synctmp-" in outcome.detail["cleanup_error"]
@@ -4626,7 +4442,7 @@ def test_failed_durable_settlement_observes_once_before_cleanup(
         policies=_policies(failure=BoundedFailurePolicy(retries=0)),
     )
 
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
     assert outcome.outcome is Outcome.FAILED
@@ -4687,7 +4503,7 @@ def test_midcopy_sharing_retry_recreates_owned_temp_and_converges(
     assert fs.cleaned == [expected_temp]
     assert (target / "file.bin").read_bytes() == payload
     assert not expected_temp.exists()
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
 
 
 def test_failed_pre_retry_cleanup_settles_before_control_checkpoint(
@@ -4735,7 +4551,7 @@ def test_failed_pre_retry_cleanup_settles_before_control_checkpoint(
         checkpoint=checkpoint,
     )
 
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     owned_temp = target / (
         f"file.bin.synctmp-{RUN_ID}-{operation.op_id}"
     )
@@ -4790,9 +4606,7 @@ class CopyMetadataSharingOnceFileSystem(NativeFileSystem):
     def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
         self.metadata_attempts += 1
         if self.metadata_attempts == 1:
-            error = OSError("sharing violation after copy publish")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing violation after copy publish")
         return super().ensure_published_metadata(path, *args, **kwargs)
 
 
@@ -4818,9 +4632,7 @@ class PublishedRetrySharingOnceFileSystem(NativeFileSystem):
                     path,
                     ns=(native.st_atime_ns, native.st_mtime_ns + 2_000_000_000),
                 )
-                error = OSError("sharing violation before published stat")
-                error.winerror = 32  # type: ignore[attr-defined]
-                raise error
+                raise _sharing_violation("sharing violation before published stat")
         observed = super().ensure_published_metadata(path, *args, **kwargs)
         if path == self.published_target:
             self.published_metadata_observed = True
@@ -4830,52 +4642,8 @@ class PublishedRetrySharingOnceFileSystem(NativeFileSystem):
         if not self.before_stat_cache and self.published_metadata_observed:
             self.flush_attempts += 1
             if self.flush_attempts == 1:
-                error = OSError("sharing violation after published stat")
-                error.winerror = 32  # type: ignore[attr-defined]
-                raise error
+                raise _sharing_violation("sharing violation after published stat")
         return super().flush_directory(path)
-
-
-def _published_retry_operation(
-    kind: OperationKind,
-    source: Path,
-    target: Path,
-    fs: NativeFileSystem,
-) -> tuple[PlanOperation, Path]:
-    target_rel_path = (
-        "renamed.bin" if kind is OperationKind.MOVE_UPDATE else "file.bin"
-    )
-    (source / target_rel_path).write_bytes(b"new-version")
-    source_stat = fs.stat(source, target_rel_path)
-    assert source_stat is not None
-
-    target_expected = None
-    prior_target_rel_path = None
-    prior_target_expected = None
-    if kind is OperationKind.UPDATE:
-        (target / target_rel_path).write_bytes(b"old-version")
-        target_expected = fs.stat(target, target_rel_path)
-        assert target_expected is not None
-    elif kind is OperationKind.MOVE_UPDATE:
-        prior_target_rel_path = "old.bin"
-        (target / prior_target_rel_path).write_bytes(b"old-version")
-        prior_target_expected = fs.stat(target, prior_target_rel_path)
-        assert prior_target_expected is not None
-
-    return (
-        _operation(
-            1,
-            kind,
-            source_rel_path=target_rel_path,
-            target_rel_path=target_rel_path,
-            source_expected=source_stat,
-            target_expected=target_expected,
-            intended=source_stat,
-            prior_target_rel_path=prior_target_rel_path,
-            prior_target_expected=prior_target_expected,
-        ),
-        target / target_rel_path,
-    )
 
 
 def _replace_published_target(path: Path, fs: NativeFileSystem) -> None:
@@ -4919,7 +4687,7 @@ def test_retry_rejects_replaced_published_target(
         published_target,
         before_stat_cache=before_stat_cache,
     )
-    operation, published_target = _published_retry_operation(
+    operation, published_target = _reviewed_byte_operation(
         kind, source, target, fs
     )
 
@@ -4932,7 +4700,7 @@ def test_retry_rejects_replaced_published_target(
         ),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
     assert item.reason == "target-drift"
@@ -4964,7 +4732,7 @@ def test_cancel_after_published_target_changes_reports_changed_durable_state(
         published_target,
         before_stat_cache=True,
     )
-    operation, published_target = _published_retry_operation(
+    operation, published_target = _reviewed_byte_operation(
         kind, source, target, fs
     )
     xset = _xset(_plan(source, target, (operation,), hardlinks=False))
@@ -4989,7 +4757,7 @@ def test_cancel_after_published_target_changes_reports_changed_durable_state(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.FAILED
     assert item.reason == "canceled-after-publish"
     assert item.detail["publish_state"] == "published"
@@ -5009,7 +4777,7 @@ def test_metadata_retry_repairs_published_mtime_without_recopy(
         published_target,
         before_stat_cache=True,
     )
-    operation, _ = _published_retry_operation(
+    operation, _ = _reviewed_byte_operation(
         OperationKind.COPY, source, target, fs
     )
 
@@ -5025,7 +4793,7 @@ def test_metadata_retry_repairs_published_mtime_without_recopy(
     assert published.mtime_ns == operation.source_expected.mtime_ns
     assert fs.metadata_attempts == 2
     assert fs.source_opens == 1
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
 
 
 class PermanentPublishedMetadataFailureFileSystem(NativeFileSystem):
@@ -5037,9 +4805,7 @@ class PermanentPublishedMetadataFailureFileSystem(NativeFileSystem):
         if path != self.published_target:
             return super().ensure_published_metadata(path, *args, **kwargs)
         self.metadata_attempts += 1
-        error = OSError("persistent sharing violation after publish")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("persistent sharing violation after publish")
 
 
 class TerminalPublishAfterCommitFileSystem(NativeFileSystem):
@@ -5049,25 +4815,57 @@ class TerminalPublishAfterCommitFileSystem(NativeFileSystem):
     def replace(self, temp: Path, target: Path) -> None:
         super().replace(temp, target)
         if target == self.published_target:
-            error = OSError("sharing report after committed publish")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing report after committed publish")
 
     def publish_new(self, temp: Path, target: Path) -> None:
         super().publish_new(temp, target)
         if target == self.published_target:
-            error = OSError("sharing report after committed publish")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing report after committed publish")
+
+
+_TERMINAL_PUBLICATION_CASES = (
+    pytest.param(
+        OperationKind.COPY,
+        "target-published",
+        id="copy-target-published",
+    ),
+    pytest.param(
+        OperationKind.UPDATE,
+        "target-published-with-backup",
+        id="update-target-published-with-backup",
+    ),
+    pytest.param(
+        OperationKind.MOVE_UPDATE,
+        "new-and-old",
+        id="move_update-new-and-old",
+    ),
+)
+
+
+def _assert_terminal_publication_failure(
+    result,
+    item: ItemOutcome,
+    recorder: FakeRecorder,
+    xset: ExecutionSet,
+    published_target: Path,
+    durable_state: str,
+) -> None:
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "sharing-violation"
+    assert item.detail["publish_state"] == "published"
+    assert item.detail["target_state"] == "published"
+    assert item.detail["durable_state"] == durable_state
+    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert published_target.read_bytes() == b"new-version"
+    assert recorder.calls == []
+    assert xset.published_evidence == {}
 
 
 @pytest.mark.parametrize(
     ("kind", "durable_state"),
-    [
-        (OperationKind.COPY, "target-published"),
-        (OperationKind.UPDATE, "target-published-with-backup"),
-        (OperationKind.MOVE_UPDATE, "new-and-old"),
-    ],
+    _TERMINAL_PUBLICATION_CASES,
 )
 def test_terminal_post_publish_failure_degrades_recording_and_reports_durable_state(
     tmp_path: Path,
@@ -5076,7 +4874,7 @@ def test_terminal_post_publish_failure_degrades_recording_and_reports_durable_st
 ) -> None:
     source, target = _roots(tmp_path)
     fs = PermanentPublishedMetadataFailureFileSystem()
-    operation, published_target = _published_retry_operation(
+    operation, published_target = _reviewed_byte_operation(
         kind,
         source,
         target,
@@ -5088,23 +4886,20 @@ def test_terminal_post_publish_failure_degrades_recording_and_reports_durable_st
 
     result, events, _ = _run(xset, fs=fs, recorder=recorder)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
-    assert result.status is SessionState.FAILED
-    assert result.recording is RecordingStatus.DEGRADED
-    assert item.outcome is Outcome.FAILED
-    assert item.reason == "sharing-violation"
-    assert item.detail["publish_state"] == "published"
-    assert item.detail["target_state"] == "published"
-    assert item.detail["durable_state"] == durable_state
+    item = _item_outcome(events)
+    _assert_terminal_publication_failure(
+        result,
+        item,
+        recorder,
+        xset,
+        published_target,
+        durable_state,
+    )
     assert item.detail["published_path"] == operation.target_rel_path
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
     assert item.detail["recording_error"] == (
         "published filesystem mutation failed before ledger settlement"
     )
-    assert published_target.read_bytes() == b"new-version"
     assert fs.metadata_attempts == 3
-    assert recorder.calls == []
-    assert xset.published_evidence == {}
 
     if kind is OperationKind.UPDATE:
         backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
@@ -5117,11 +4912,7 @@ def test_terminal_post_publish_failure_degrades_recording_and_reports_durable_st
 
 @pytest.mark.parametrize(
     ("kind", "durable_state"),
-    [
-        (OperationKind.COPY, "target-published"),
-        (OperationKind.UPDATE, "target-published-with-backup"),
-        (OperationKind.MOVE_UPDATE, "new-and-old"),
-    ],
+    _TERMINAL_PUBLICATION_CASES,
 )
 def test_terminal_publish_that_commits_before_error_degrades_recording(
     tmp_path: Path,
@@ -5130,7 +4921,7 @@ def test_terminal_publish_that_commits_before_error_degrades_recording(
 ) -> None:
     source, target = _roots(tmp_path)
     fs = TerminalPublishAfterCommitFileSystem()
-    operation, published_target = _published_retry_operation(
+    operation, published_target = _reviewed_byte_operation(
         kind,
         source,
         target,
@@ -5147,18 +4938,14 @@ def test_terminal_publish_that_commits_before_error_degrades_recording(
         policies=_policies(failure=BoundedFailurePolicy(retries=0)),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
-    assert result.status is SessionState.FAILED
-    assert result.recording is RecordingStatus.DEGRADED
-    assert item.outcome is Outcome.FAILED
-    assert item.reason == "sharing-violation"
-    assert item.detail["publish_state"] == "published"
-    assert item.detail["target_state"] == "published"
-    assert item.detail["durable_state"] == durable_state
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
-    assert published_target.read_bytes() == b"new-version"
-    assert recorder.calls == []
-    assert xset.published_evidence == {}
+    _assert_terminal_publication_failure(
+        result,
+        _item_outcome(events),
+        recorder,
+        xset,
+        published_target,
+        durable_state,
+    )
 
 
 def test_pause_during_published_copy_retry_settles_without_recopy(
@@ -5179,22 +4966,14 @@ def test_pause_during_published_copy_retry_settles_without_recopy(
         intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    pause_requested = False
-
-    def sleep(_delay: float) -> None:
-        nonlocal pause_requested
-        pause_requested = True
-
-    def checkpoint() -> None:
-        if pause_requested:
-            raise PauseRequested()
+    control = _ControlLatch(PauseRequested)
 
     with pytest.raises(PauseRequested):
         execute(
             xset,
-            RunContext(lambda _: None, checkpoint),
+            RunContext(lambda _: None, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
@@ -5226,27 +5005,19 @@ def test_cancel_during_published_copy_retry_fails_without_false_evidence(
         intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    cancel_requested = False
+    control = _ControlLatch(Canceled)
     events: list[object] = []
-
-    def sleep(_delay: float) -> None:
-        nonlocal cancel_requested
-        cancel_requested = True
-
-    def checkpoint() -> None:
-        if cancel_requested:
-            raise Canceled()
 
     with pytest.raises(Canceled):
         execute(
             xset,
-            RunContext(events.append, checkpoint),
+            RunContext(events.append, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.FAILED
     assert item.reason == "canceled-after-publish"
     assert item.detail["durable_state"] == "target-published"
@@ -5295,7 +5066,7 @@ def test_cancel_after_failed_copy_publish_does_not_claim_foreign_target(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.CANCELED
     assert item.reason == "canceled"
     assert item.detail["publish_state"] == "not-published"
@@ -5311,9 +5082,7 @@ class VanishingTempSharingFileSystem(NativeFileSystem):
     def publish_new(self, temp: Path, target: Path) -> None:
         del target
         temp.unlink()
-        error = OSError("sharing report with missing staged temp")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("sharing report with missing staged temp")
 
 
 def test_unclassifiable_cancel_does_not_assume_publish_or_degrade_recording(
@@ -5334,27 +5103,19 @@ def test_unclassifiable_cancel_does_not_assume_publish_or_degrade_recording(
         intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    cancel_requested = False
+    control = _ControlLatch(Canceled)
     events: list[object] = []
-
-    def sleep(_delay: float) -> None:
-        nonlocal cancel_requested
-        cancel_requested = True
-
-    def checkpoint() -> None:
-        if cancel_requested:
-            raise Canceled()
 
     with pytest.raises(Canceled):
         execute(
             xset,
-            RunContext(events.append, checkpoint),
+            RunContext(events.append, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.FAILED
     assert item.reason == "target-missing"
     assert item.detail["publish_state"] == "unverified"
@@ -5381,9 +5142,7 @@ class PublishedMtimeThenFlushSharingFileSystem(NativeFileSystem):
     def flush_directory(self, path: Path) -> bool:
         self.flush_attempts += 1
         if self.flush_attempts == 1:
-            error = OSError("sharing violation after repaired metadata")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing violation after repaired metadata")
         return super().flush_directory(path)
 
 
@@ -5405,27 +5164,19 @@ def test_cancel_uses_cached_published_stat_after_metadata_changes(
         intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    cancel_requested = False
+    control = _ControlLatch(Canceled)
     events: list[object] = []
-
-    def sleep(_delay: float) -> None:
-        nonlocal cancel_requested
-        cancel_requested = True
-
-    def checkpoint() -> None:
-        if cancel_requested:
-            raise Canceled()
 
     with pytest.raises(Canceled):
         execute(
             xset,
-            RunContext(events.append, checkpoint),
+            RunContext(events.append, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.FAILED
     assert item.reason == "canceled-after-publish"
     assert item.detail["publish_state"] == "published"
@@ -5442,9 +5193,7 @@ class PrepareSharingFileSystem(NativeFileSystem):
     def open_source(self, path: Path):
         self.attempts += 1
         self.failed = True
-        error = OSError("sharing violation before durable ownership")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("sharing violation before durable ownership")
 
 
 def test_pause_without_durable_continuation_unwinds_before_retry_sleep(
@@ -5493,8 +5242,7 @@ def test_pause_without_durable_continuation_unwinds_before_retry_sleep(
 
 def test_production_retry_sleep_budget_is_350_milliseconds() -> None:
     policy = BoundedFailurePolicy()
-    error = OSError("sharing violation")
-    error.winerror = 32  # type: ignore[attr-defined]
+    error = _sharing_violation("sharing violation")
     operation = object()
 
     decisions = [
@@ -5514,9 +5262,7 @@ class ReplaceSharingOnceFileSystem(NativeFileSystem):
     def replace(self, temp: Path, target: Path) -> None:
         self.attempts += 1
         if self.attempts == 1:
-            error = OSError("sharing violation during replace")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("sharing violation during replace")
         super().replace(temp, target)
 
 
@@ -5549,7 +5295,7 @@ def test_update_retries_replace_without_restarting_after_backup(
     assert fs.attempts == 2
     assert (target / "file.bin").read_bytes() == b"new-version"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
-    assert [call[0] for call in recorder.calls] == ["updated"]
+    assert _recorder_names(recorder) == ["updated"]
 
 
 class ReplaceSharingAfterCommitFileSystem(NativeFileSystem):
@@ -5559,9 +5305,7 @@ class ReplaceSharingAfterCommitFileSystem(NativeFileSystem):
     def replace(self, temp: Path, target: Path) -> None:
         self.attempts += 1
         super().replace(temp, target)
-        error = OSError("sharing report after committed replace")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("sharing report after committed replace")
 
 
 def test_update_retry_recognizes_replace_that_committed_before_error(
@@ -5590,7 +5334,7 @@ def test_update_retry_recognizes_replace_that_committed_before_error(
     assert fs.attempts == 1
     assert (target / "file.bin").read_bytes() == b"new-version"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
-    assert [call[0] for call in recorder.calls] == ["updated"]
+    assert _recorder_names(recorder) == ["updated"]
 
 
 class BackupSharingAfterCommitFileSystem(NativeFileSystem):
@@ -5615,9 +5359,7 @@ class BackupSharingAfterCommitFileSystem(NativeFileSystem):
             checkpoint,
             validate_destination,
         )
-        error = OSError("sharing report after committed backup")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("sharing report after committed backup")
 
 
 def test_update_retry_recognizes_committed_copy_backup(tmp_path: Path) -> None:
@@ -5646,7 +5388,7 @@ def test_update_retry_recognizes_committed_copy_backup(tmp_path: Path) -> None:
     assert fs.attempts == 1
     assert (target / "file.bin").read_bytes() == b"new-version"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
-    assert [call[0] for call in recorder.calls] == ["updated"]
+    assert _recorder_names(recorder) == ["updated"]
 
 
 class CopyBackupMetadataSharingOnceFileSystem(NativeFileSystem):
@@ -5662,9 +5404,9 @@ class CopyBackupMetadataSharingOnceFileSystem(NativeFileSystem):
                 assert observed is not None
                 damaged_mtime = observed.mtime_ns + 10_000_000_000
                 os.utime(path, ns=(damaged_mtime, damaged_mtime))
-                error = OSError("sharing violation before backup metadata repair")
-                error.winerror = 32  # type: ignore[attr-defined]
-                raise error
+                raise _sharing_violation(
+                    "sharing violation before backup metadata repair"
+                )
         return super().ensure_published_metadata(path, *args, **kwargs)
 
     def replace(self, temp: Path, target: Path) -> None:
@@ -5706,7 +5448,7 @@ def test_copied_backup_metadata_repair_resumes_before_update_replace(
     assert repaired.mtime_ns == target_stat.mtime_ns
     assert trash.read_bytes() == b"old-version"
     assert (target / "file.bin").read_bytes() == b"new-version"
-    assert [call[0] for call in recorder.calls] == ["updated"]
+    assert _recorder_names(recorder) == ["updated"]
 
 
 class CopyBackupMetadataSharingAlwaysFileSystem(
@@ -5715,9 +5457,9 @@ class CopyBackupMetadataSharingAlwaysFileSystem(
     def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
         if ".synctrash" in path.parts:
             self.backup_metadata_attempts += 1
-            error = OSError("persistent backup metadata sharing violation")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation(
+                "persistent backup metadata sharing violation"
+            )
         return NativeFileSystem.ensure_published_metadata(
             self,
             path,
@@ -5790,7 +5532,7 @@ def test_resumed_update_rejects_target_drift_before_backup_metadata_repair(
         ),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
     assert fs.backup_metadata_attempts == 1
@@ -5831,9 +5573,9 @@ class CopyBackupStatSharingOnceFileSystem(NativeFileSystem):
             and ".synctrash" in path.parts
         ):
             self.backup_stat_failed = True
-            error = OSError("sharing violation observing published backup")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation(
+                "sharing violation observing published backup"
+            )
         return super().stat_path(path)
 
 
@@ -5868,7 +5610,7 @@ def test_update_retry_retains_continuation_when_backup_stat_temporarily_fails(
     assert fs.backup_stat_failed
     assert trash.read_bytes() == b"old-version"
     assert (target / "file.bin").read_bytes() == b"new-version"
-    assert [call[0] for call in recorder.calls] == ["updated"]
+    assert _recorder_names(recorder) == ["updated"]
 
 
 class ReplaceSharingAlwaysFileSystem(NativeFileSystem):
@@ -5877,9 +5619,7 @@ class ReplaceSharingAlwaysFileSystem(NativeFileSystem):
 
     def replace(self, temp: Path, target: Path) -> None:
         self.attempts += 1
-        error = OSError("persistent replace sharing violation")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("persistent replace sharing violation")
 
 
 def test_persistent_update_sharing_exhausts_policy_without_false_drift(
@@ -5906,7 +5646,7 @@ def test_persistent_update_sharing_exhausts_policy_without_false_drift(
         _xset(_plan(source, target, (operation,))), fs=fs
     )
 
-    outcome = next(event for event in events if isinstance(event, ItemOutcome))
+    outcome = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert fs.attempts == 3
     assert outcome.reason == "sharing-violation"
@@ -5934,22 +5674,14 @@ def test_pause_during_update_retry_settles_then_resumes_without_trash_collision(
         intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    pause_requested = False
-
-    def sleep(_delay: float) -> None:
-        nonlocal pause_requested
-        pause_requested = True
-
-    def checkpoint() -> None:
-        if pause_requested:
-            raise PauseRequested()
+    control = _ControlLatch(PauseRequested)
 
     with pytest.raises(PauseRequested):
         execute(
             xset,
-            RunContext(lambda _: None, checkpoint),
+            RunContext(lambda _: None, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
@@ -6004,27 +5736,19 @@ def test_cancel_during_update_retry_reports_owned_durable_state(
         intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    cancel_requested = False
+    control = _ControlLatch(Canceled)
     events: list[object] = []
-
-    def sleep(_delay: float) -> None:
-        nonlocal cancel_requested
-        cancel_requested = True
-
-    def checkpoint() -> None:
-        if cancel_requested:
-            raise Canceled()
 
     with pytest.raises(Canceled):
         execute(
             xset,
-            RunContext(events.append, checkpoint),
+            RunContext(events.append, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
     assert item.outcome is expected_outcome
     assert item.detail["durable_state"] == expected_state
@@ -6096,7 +5820,7 @@ def test_cancel_during_update_retry_does_not_claim_replaced_backup(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.CANCELED
     assert item.reason == "canceled"
     assert item.detail["backup_state"] == "changed"
@@ -6149,7 +5873,7 @@ def test_cancel_after_failed_update_replace_does_not_claim_foreign_write(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     trash = target / ".synctrash" / str(RUN_ID) / "file.bin"
     assert item.outcome is Outcome.CANCELED
     assert item.reason == "canceled"
@@ -6233,7 +5957,7 @@ def test_cancel_update_settlement_rejects_matching_backup_decoy(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert swapped
     assert decoy_reads == 0
     assert item.outcome is Outcome.CANCELED
@@ -6341,21 +6065,13 @@ def test_policy_stop_suppresses_latched_pause_and_settles_remaining_work(
         intended=later_source,
     )
     xset = _xset(_plan(source, target, (locked, later)))
-    pause_requested = False
-
-    def sleep(_delay: float) -> None:
-        nonlocal pause_requested
-        pause_requested = True
-
-    def checkpoint() -> None:
-        if pause_requested:
-            raise PauseRequested()
+    control = _ControlLatch(PauseRequested)
 
     result, events, _ = _run(
         xset,
         fs=fs,
-        checkpoint=checkpoint,
-        policies=_policies(failure=RetryThenStopPolicy(), sleep=sleep),
+        checkpoint=control.checkpoint,
+        policies=_policies(failure=RetryThenStopPolicy(), sleep=control.arm),
     )
 
     items = [event for event in events if isinstance(event, ItemOutcome)]
@@ -6429,9 +6145,7 @@ class PersistentSharingFileSystem(NativeFileSystem):
     def publish_new(self, temp: Path, target: Path) -> None:
         if target.name == "locked.bin":
             self.attempts += 1
-            error = OSError("persistent sharing violation")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation("persistent sharing violation")
         super().publish_new(temp, target)
 
 
@@ -6470,11 +6184,7 @@ def test_persistent_sharing_is_bounded_and_independent_work_continues(
     assert fs.attempts == 3
     assert not (target / "locked.bin").exists()
     assert (target / "free.bin").read_bytes() == b"free"
-    outcome = next(
-        event
-        for event in events
-        if isinstance(event, ItemOutcome) and event.item_id == str(locked.op_id)
-    )
+    outcome = _item_outcome(events, locked.op_id)
     assert outcome.reason == "sharing-violation"
 
 
@@ -6506,7 +6216,7 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
     assert result.status is SessionState.COMPLETED
     assert result.recording is RecordingStatus.DEGRADED
     assert (target / "file.bin").read_bytes() == b"copied"
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.outcome is Outcome.SUCCEEDED
     assert item.detail["recording"] == "degraded"
     assert xset.recording is RecordingStatus.DEGRADED
@@ -6551,7 +6261,7 @@ def test_copy_recorder_none_return_is_degraded_not_recorded(
     published = xset.published_evidence[operation.op_id]
     assert not published.copy_recorded
     assert published.recorded_identity is None
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert "did not return a recorded copy identity" in item.detail["recording_error"]
 
 
@@ -6874,7 +6584,7 @@ def test_copy_prepare_revalidates_root_after_blocking_boundaries(
         policies=policies,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.swapped
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
@@ -6978,7 +6688,7 @@ def test_update_rejects_target_root_swap_after_recorder_barrier(
 
     result, events, _ = _run(_xset(plan), fs=fs, recorder=recorder)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert recorder.swapped
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
@@ -7001,9 +6711,7 @@ class PublishedBackoffRootSwapFileSystem(TargetRootReadGuardFileSystem):
 
     @staticmethod
     def _sharing_error() -> OSError:
-        error = OSError("sharing report after publish")
-        error.winerror = 32  # type: ignore[attr-defined]
-        return error
+        return _sharing_violation("sharing report after publish")
 
     def publish_new(self, temp: Path, target: Path) -> None:
         super().publish_new(temp, target)
@@ -7069,7 +6777,7 @@ def test_published_retry_rejects_matching_decoy_after_target_root_swap(
         policies=_policies(sleep=swap_during_backoff),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.injected and fs.swapped
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
@@ -7126,9 +6834,7 @@ class TrashCommitThenParentSwapFileSystem(NativeFileSystem):
         run_root.rename(self.detached_root)
         _create_directory_reparse(run_root, self.redirected_root)
         (self.redirected_root / target.name).write_bytes(b"old-version")
-        error = OSError("sharing report after committed trash rename")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("sharing report after committed trash rename")
 
     def stat_path(self, path: Path) -> FileStat | None:
         if self.destination is not None and path == self.destination:
@@ -7203,7 +6909,7 @@ def test_owned_trash_parent_reparse_swap_during_recorder_flush_is_refused(
         recorder=recorder,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert recorder.swapped
     assert recorder.flushes >= 1
     assert recorder.calls == []
@@ -7264,7 +6970,7 @@ def test_failed_trash_settlement_rejects_matching_destination_decoy(
         policies=_policies(failure=BoundedFailurePolicy(retries=0)),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
     assert item.outcome is Outcome.FAILED
@@ -7346,7 +7052,7 @@ def test_move_refuses_vanished_reviewed_source_before_target_rename(
     )
 
     assert result.status is SessionState.FAILED
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "source-missing"
     assert (target / "old.bin").read_bytes() == b"same"
     assert not (target / "new.bin").exists()
@@ -7382,7 +7088,7 @@ def test_recase_renames_in_place_without_copy_or_trash(tmp_path: Path) -> None:
     assert recased.file_identity == target_stat.file_identity
     assert (target / "KEEP.txt").read_bytes() == b"same"
     assert [path.name for path in target.iterdir()] == ["KEEP.txt"]
-    assert [call[0] for call in recorder.calls] == ["recased"]
+    assert _recorder_names(recorder) == ["recased"]
     assert result.bytes_total == 0
     assert not (target / ".synctrash").exists()
 
@@ -7455,7 +7161,7 @@ def test_move_occupancy_or_vanished_old_path_fails_without_overwrite(
     )
 
     assert result.status is SessionState.FAILED
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == (
         "target-missing" if old_missing else "destination-occupied"
     )
@@ -7557,7 +7263,7 @@ def test_pure_rename_refuses_substituted_post_rename_identity(
     )
 
     assert result.status is SessionState.FAILED
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert item.reason == "target-drift"
     assert recorder.calls == []
 
@@ -7589,7 +7295,7 @@ def test_composite_move_update_publishes_new_then_trashes_old(tmp_path: Path) ->
     assert (target / "renamed.bin").read_bytes() == b"changed"
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
-    assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert _recorder_names(recorder) == ["move_updated"]
     assert recorder.flushes == 2
     assert set(xset.published_evidence) == {operation.op_id}
     assert xset.published_evidence[operation.op_id].copy_recorded
@@ -7801,7 +7507,7 @@ def test_a15_move_update_stage_faults_never_lose_both_versions_or_false_record(
     expected_temp = target / (
         f"new.bin.synctmp-{RUN_ID}-{operation.op_id}"
     )
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert observed_faults == [stage]
     assert old_path.exists() or new_path.exists()
     assert not expected_temp.exists()
@@ -7859,9 +7565,7 @@ class MoveUpdateTrashSharingOnceFileSystem(NativeFileSystem):
         if ".synctrash" in target.parts:
             self.attempts += 1
             if self.attempts == 1:
-                error = OSError("sharing violation while trashing old path")
-                error.winerror = 32  # type: ignore[attr-defined]
-                raise error
+                raise _sharing_violation("sharing violation while trashing old path")
         super().rename_new(source, target)
 
 
@@ -7892,7 +7596,7 @@ def test_move_update_retries_old_to_trash_without_republishing(tmp_path: Path) -
     assert (target / "renamed.bin").read_bytes() == b"changed"
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
-    assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert _recorder_names(recorder) == ["move_updated"]
     assert recorder.flushes == 3
 
 
@@ -7904,9 +7608,9 @@ class MoveUpdateTrashSharingAfterCommitFileSystem(NativeFileSystem):
         if ".synctrash" in target.parts:
             self.attempts += 1
             super().rename_new(source, target)
-            error = OSError("sharing report after committed trash rename")
-            error.winerror = 32  # type: ignore[attr-defined]
-            raise error
+            raise _sharing_violation(
+                "sharing report after committed trash rename"
+            )
         super().rename_new(source, target)
 
 
@@ -7939,7 +7643,7 @@ def test_move_update_retry_recognizes_committed_old_to_trash_rename(
     assert (target / "renamed.bin").read_bytes() == b"changed"
     assert not (target / "old.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "old.bin").read_bytes() == b"old"
-    assert [call[0] for call in recorder.calls] == ["move_updated"]
+    assert _recorder_names(recorder) == ["move_updated"]
     assert recorder.flushes == 2
 
 
@@ -7986,7 +7690,7 @@ def test_move_update_retry_revalidates_committed_trash_parent(
         policies=_policies(sleep=swap_before_retry),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert swapped
     assert fs.attempts == 1
     assert result.status is SessionState.FAILED
@@ -8022,22 +7726,14 @@ def test_pause_during_move_update_retry_settles_then_resumes_without_collision(
         prior_target_expected=old_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    pause_requested = False
-
-    def sleep(_delay: float) -> None:
-        nonlocal pause_requested
-        pause_requested = True
-
-    def checkpoint() -> None:
-        if pause_requested:
-            raise PauseRequested()
+    control = _ControlLatch(PauseRequested)
 
     with pytest.raises(PauseRequested):
         execute(
             xset,
-            RunContext(lambda _: None, checkpoint),
+            RunContext(lambda _: None, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
@@ -8092,27 +7788,19 @@ def test_cancel_during_move_update_retry_reports_partial_publish(
         prior_target_expected=old_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    cancel_requested = False
+    control = _ControlLatch(Canceled)
     events: list[object] = []
-
-    def sleep(_delay: float) -> None:
-        nonlocal cancel_requested
-        cancel_requested = True
-
-    def checkpoint() -> None:
-        if cancel_requested:
-            raise Canceled()
 
     with pytest.raises(Canceled):
         execute(
             xset,
-            RunContext(events.append, checkpoint),
+            RunContext(events.append, control.checkpoint),
             FakeRecorder(),
-            _policies(sleep=sleep),
+            _policies(sleep=control.arm),
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     trash = target / ".synctrash" / str(RUN_ID) / "old.bin"
     assert item.outcome is Outcome.FAILED
     assert item.reason == "canceled-after-publish"
@@ -8204,7 +7892,7 @@ def test_cancel_move_update_settlement_rejects_matching_trash_decoy(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert swapped
     assert decoy_reads == 0
     assert item.outcome is Outcome.FAILED
@@ -8303,7 +7991,7 @@ def test_successful_trash_delete_and_noop_record_after_filesystem_result(
     assert not (target / "trash.bin").exists()
     assert (target / ".synctrash" / str(RUN_ID) / "trash.bin").read_bytes() == b"trash"
     assert not (target / "delete.bin").exists()
-    assert [call[0] for call in recorder.calls] == ["noop", "trashed", "deleted"]
+    assert _recorder_names(recorder) == ["noop", "trashed", "deleted"]
 
 
 def test_recorder_flush_failure_blocks_destructive_delete(tmp_path: Path) -> None:
@@ -8376,7 +8064,7 @@ def test_update_final_guard_runs_after_recorder_barrier(tmp_path: Path) -> None:
 
     result, events, _ = _run(xset, fs=fs, recorder=recorder)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.OK
@@ -8411,7 +8099,7 @@ def test_delete_final_guard_runs_after_recorder_barrier(tmp_path: Path) -> None:
         recorder=recorder,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.OK
     assert item.reason == "target-drift"
@@ -8492,7 +8180,7 @@ def test_rename_final_guards_run_after_recorder_barrier(
     xset = _xset(_plan(source, target, (operation,)))
     result, events, _ = _run(xset, fs=fs, recorder=recorder)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
     assert reviewed.read_bytes() == b"foreign!-version"
@@ -8866,7 +8554,7 @@ def test_copy_refuses_reviewed_source_swap_before_open(
 
     result, events, recorder = _run(_xset(plan), fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.swapped and fs.reviewed_refusals >= 1
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
@@ -8931,7 +8619,7 @@ def test_source_swap_during_recorder_barrier_cannot_authorize_mutation(
         recorder=recorder,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.swapped and fs.reviewed_refusals >= 1
     assert result.status is SessionState.FAILED
     assert item.outcome is Outcome.FAILED
@@ -8980,7 +8668,7 @@ def test_nonbyte_mutations_refuse_reviewed_target_binding_swap(
         recorder=recorder,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.swapped
     assert fs.reviewed_refusals >= 1
     assert result.status is SessionState.FAILED
@@ -9003,17 +8691,66 @@ def test_nonbyte_mutations_refuse_reviewed_target_binding_swap(
         assert not (target / "folder").exists()
 
 
+@dataclass(frozen=True)
+class _NonByteMutationCase:
+    test_id: str
+    kind: OperationKind
+    primitive: str
+    directory_delete: bool
+    mutation_state: str
+    durable_state: str
+    precommit_id: str | None
+
+
+_NONBYTE_MUTATION_CASES = (
+    _NonByteMutationCase(
+        "move", OperationKind.MOVE, "rename", False,
+        "committed", "target-renamed", "move",
+    ),
+    _NonByteMutationCase(
+        "recase", OperationKind.RECASE, "rename", False,
+        "unverified", "recase-state-unverified", None,
+    ),
+    _NonByteMutationCase(
+        "trash", OperationKind.TRASH, "rename", False,
+        "committed", "target-trashed", None,
+    ),
+    _NonByteMutationCase(
+        "delete-file", OperationKind.DELETE, "remove-file", False,
+        "committed", "target-deleted", "delete",
+    ),
+    _NonByteMutationCase(
+        "delete-directory", OperationKind.DELETE, "remove-directory", True,
+        "committed", "target-deleted", None,
+    ),
+    _NonByteMutationCase(
+        "mkdir", OperationKind.MKDIR, "mkdir", False,
+        "unverified", "directory-present-after-create-attempt", "mkdir",
+    ),
+)
+
+_COMMITTED_NONBYTE_CASES = tuple(
+    pytest.param(
+        case.kind,
+        case.primitive,
+        case.directory_delete,
+        case.mutation_state,
+        case.durable_state,
+        id=case.test_id,
+    )
+    for case in _NONBYTE_MUTATION_CASES
+)
+
+_PRECOMMIT_NONBYTE_CASES = tuple(
+    pytest.param(case.kind, case.primitive, id=case.precommit_id)
+    for case in _NONBYTE_MUTATION_CASES
+    if case.precommit_id is not None
+)
+
+
 @pytest.mark.parametrize(
     ("kind", "primitive", "directory_delete", "mutation_state", "durable_state"),
-    (
-        (OperationKind.MOVE, "rename", False, "committed", "target-renamed"),
-        (OperationKind.RECASE, "rename", False, "unverified", "recase-state-unverified"),
-        (OperationKind.TRASH, "rename", False, "committed", "target-trashed"),
-        (OperationKind.DELETE, "remove-file", False, "committed", "target-deleted"),
-        (OperationKind.DELETE, "remove-directory", True, "committed", "target-deleted"),
-        (OperationKind.MKDIR, "mkdir", False, "unverified", "directory-present-after-create-attempt"),
-    ),
-    ids=("move", "recase", "trash", "delete-file", "delete-directory", "mkdir"),
+    _COMMITTED_NONBYTE_CASES,
 )
 def test_nonbyte_commit_then_raise_degrades_unrecorded_mutation(
     tmp_path: Path,
@@ -9036,7 +8773,7 @@ def test_nonbyte_commit_then_raise_degrades_unrecorded_mutation(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.detail["mutation_state"] == mutation_state
     assert item.detail["durable_state"] == durable_state
@@ -9058,12 +8795,7 @@ def test_nonbyte_commit_then_raise_degrades_unrecorded_mutation(
 
 @pytest.mark.parametrize(
     ("kind", "primitive"),
-    (
-        (OperationKind.MOVE, "rename"),
-        (OperationKind.DELETE, "remove-file"),
-        (OperationKind.MKDIR, "mkdir"),
-    ),
-    ids=("move", "delete", "mkdir"),
+    _PRECOMMIT_NONBYTE_CASES,
 )
 def test_nonbyte_precommit_failure_keeps_recording_ok_when_state_is_unchanged(
     tmp_path: Path,
@@ -9077,7 +8809,7 @@ def test_nonbyte_precommit_failure_keeps_recording_ok_when_state_is_unchanged(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert "durable_state" not in item.detail
     assert recorder.calls == []
@@ -9107,7 +8839,7 @@ def test_move_failure_with_retained_source_and_occupied_destination_is_ambiguous
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
     assert item.reason == "destination-occupied"
@@ -9143,7 +8875,7 @@ def test_committed_move_failure_probes_current_durable_state(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.faulted
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
@@ -9173,7 +8905,7 @@ def test_nonbyte_sharing_retry_retains_committed_mutation_state(
         ),
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.faults == 1
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
@@ -9211,7 +8943,7 @@ def test_cancel_during_nonbyte_retry_settles_committed_mutation(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.faults == 1
     assert item.outcome is Outcome.FAILED
     assert item.detail["durable_state"] == "target-renamed"
@@ -9247,7 +8979,7 @@ def test_pause_during_nonbyte_retry_settles_committed_mutation_before_pausing(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert fs.faults == 1
     assert item.outcome is Outcome.FAILED
     assert item.detail["mutation_state"] == "committed"
@@ -9276,7 +9008,7 @@ def test_nonbyte_probe_failure_conservatively_degrades_recording(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.detail["mutation_state"] == "unverified"
     assert item.detail["durable_state"] == "move-state-unverified"
@@ -9307,7 +9039,7 @@ def test_mkdir_deferred_metadata_failure_degrades_created_directory(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
     assert item.detail["mutation_state"] == "committed"
@@ -9386,7 +9118,7 @@ def test_resumed_directory_restore_failure_degrades_recording(
     assert result.recording is RecordingStatus.DEGRADED
     assert xset.status[mkdir.op_id] is Outcome.SUCCEEDED
     assert xset.status[copy.op_id] is Outcome.SUCCEEDED
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
 
 
 def test_resumed_directory_restore_then_raise_keeps_recording_truth(
@@ -9402,7 +9134,7 @@ def test_resumed_directory_restore_then_raise_keeps_recording_truth(
     assert fs.restore_attempts == 1
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.OK
-    assert [call[0] for call in recorder.calls] == ["copied"]
+    assert _recorder_names(recorder) == ["copied"]
 
 
 def test_cancel_restores_resumed_directory_metadata_before_unwind(
@@ -9490,17 +9222,15 @@ class CanceledReadonlyProbeFileSystem(NativeFileSystem):
     def replace(self, temp: Path, target: Path) -> None:
         if self.commit_replace:
             super().replace(temp, target)
-        error = OSError("injected replace sharing failure")
-        error.winerror = 32  # type: ignore[attr-defined]
-        raise error
+        raise _sharing_violation("injected replace sharing failure")
 
     def apply_metadata(self, path: Path, *args, **kwargs) -> None:
         if path == self.target and kwargs.get("apply_readonly"):
             self.restore_attempts += 1
             if self.fail_restore:
-                error = OSError("injected readonly restoration sharing failure")
-                error.winerror = 32  # type: ignore[attr-defined]
-                raise error
+                raise _sharing_violation(
+                    "injected readonly restoration sharing failure"
+                )
         super().apply_metadata(path, *args, **kwargs)
 
     def stat_path(self, path: Path) -> FileStat | None:
@@ -9536,55 +9266,20 @@ def test_failed_readonly_update_reports_durable_truth(
     commit_replace: bool,
     retain_backup: bool,
 ) -> None:
-    source, target = _roots(tmp_path)
-    (source / "readonly.bin").write_bytes(b"new-version")
-    live = target / "readonly.bin"
-    live.write_bytes(b"old-version")
-    setup_fs = NativeFileSystem()
-    expected = setup_fs.stat(target, "readonly.bin")
-    assert expected is not None
-    setup_fs.apply_metadata(
-        live,
-        replace(
-            expected,
-            metadata=replace(
-                expected.metadata,
-                attributes=expected.metadata.attributes | 1,
-            ),
+    target, live, setup_fs, fs, xset = _readonly_update_setup(
+        tmp_path,
+        lambda path: ReadonlyReplaceFailureFileSystem(
+            path,
+            fail_restore=fail_restore,
+            fail_probe=fail_probe,
+            commit_replace=commit_replace,
         ),
-        preserve_created=True,
-        apply_readonly=True,
-    )
-    fs = ReadonlyReplaceFailureFileSystem(
-        live,
-        fail_restore=fail_restore,
-        fail_probe=fail_probe,
-        commit_replace=commit_replace,
-    )
-    source_stat = fs.stat(source, "readonly.bin")
-    target_stat = fs.stat(target, "readonly.bin")
-    assert source_stat is not None and target_stat is not None
-    operation = _operation(
-        1,
-        OperationKind.UPDATE,
-        source_rel_path="readonly.bin",
-        target_rel_path="readonly.bin",
-        source_expected=source_stat,
-        target_expected=target_stat,
-        intended=source_stat,
-    )
-    xset = _xset(
-        _plan(
-            source,
-            target,
-            (operation,),
-            trash_on_update=retain_backup,
-        )
+        retain_backup=retain_backup,
     )
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     restored = fs.stat(target, "readonly.bin")
     assert restored is not None
     assert fs.restore_attempts == (0 if commit_replace else 1)
@@ -9692,49 +9387,14 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
     commit_replace: bool,
     retain_backup: bool,
 ) -> None:
-    source, target = _roots(tmp_path)
-    (source / "readonly.bin").write_bytes(b"new-version")
-    live = target / "readonly.bin"
-    live.write_bytes(b"old-version")
-    setup_fs = NativeFileSystem()
-    expected = setup_fs.stat(target, "readonly.bin")
-    assert expected is not None
-    setup_fs.apply_metadata(
-        live,
-        replace(
-            expected,
-            metadata=replace(
-                expected.metadata,
-                attributes=expected.metadata.attributes | 1,
-            ),
+    target, live, setup_fs, fs, xset = _readonly_update_setup(
+        tmp_path,
+        lambda path: CanceledReadonlyProbeFileSystem(
+            path,
+            fail_restore=fail_restore,
+            commit_replace=commit_replace,
         ),
-        preserve_created=True,
-        apply_readonly=True,
-    )
-    fs = CanceledReadonlyProbeFileSystem(
-        live,
-        fail_restore=fail_restore,
-        commit_replace=commit_replace,
-    )
-    source_stat = fs.stat(source, "readonly.bin")
-    target_stat = fs.stat(target, "readonly.bin")
-    assert source_stat is not None and target_stat is not None
-    operation = _operation(
-        1,
-        OperationKind.UPDATE,
-        source_rel_path="readonly.bin",
-        target_rel_path="readonly.bin",
-        source_expected=source_stat,
-        target_expected=target_stat,
-        intended=source_stat,
-    )
-    xset = _xset(
-        _plan(
-            source,
-            target,
-            (operation,),
-            trash_on_update=retain_backup,
-        )
+        retain_backup=retain_backup,
     )
     recorder = FakeRecorder()
     cancel_requested = False
@@ -9759,7 +9419,7 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
             fs,
         )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     observed = setup_fs.stat(target, "readonly.bin")
     assert observed is not None
     assert fs.probe_failures == 0
@@ -9858,17 +9518,7 @@ def test_failed_readonly_delete_reports_restoration_truth(
     setup_fs = NativeFileSystem()
     expected = setup_fs.stat(target, "readonly.bin")
     assert expected is not None
-    setup_fs.apply_metadata(
-        live,
-        replace(
-            expected,
-            metadata=replace(
-                expected.metadata, attributes=expected.metadata.attributes | 1
-            ),
-        ),
-        preserve_created=True,
-        apply_readonly=True,
-    )
+    _make_readonly(setup_fs, live, expected)
     fs = FailingReadonlyDeleteFileSystem(live, fail_restore=fail_restore)
     expected = fs.stat(target, "readonly.bin")
     assert expected is not None
@@ -9885,7 +9535,7 @@ def test_failed_readonly_delete_reports_restoration_truth(
 
     result, events, recorder = _run(xset, fs=fs)
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     restored = fs.stat(target, "readonly.bin")
     assert result.status is SessionState.FAILED
     assert live.read_bytes() == b"keep"
@@ -9936,7 +9586,7 @@ def test_update_external_swap_after_backup_is_rejected_without_overwrite(
         fs=fs,
     )
 
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "target-drift"
     assert (target / "file.bin").read_bytes() == b"external-swap"
@@ -10005,7 +9655,7 @@ def test_failed_copy_without_transferred_bytes_keeps_byte_progress_at_zero(
     )
 
     progress = [event for event in events if isinstance(event, Progress)]
-    item = next(event for event in events if isinstance(event, ItemOutcome))
+    item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "source-missing"
     assert progress[-1].bytes_done == 0

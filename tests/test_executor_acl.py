@@ -10,9 +10,10 @@ from pathlib import Path
 import pytest
 
 import namisync.modules.executor.native as executor_module
-from namisync.core.execution import RunId
 from namisync.core.planning import OpId
 from namisync.modules.executor import NativeFileSystem
+
+from _executor_fixtures import RUN_ID
 
 
 _DACL_SECURITY_INFORMATION = 0x00000004
@@ -200,7 +201,7 @@ def test_restrictive_acl_cannot_block_held_finalization_handle(
     target = tmp_path / "target.bin"
     temp = fs.owned_temp(
         target,
-        RunId("1" * 32),
+        RUN_ID,
         OpId("2" * 32),
     )
     source.write_bytes(b"source payload")

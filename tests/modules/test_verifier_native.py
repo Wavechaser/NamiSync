@@ -6,136 +6,36 @@ import os
 import stat as stat_module
 import subprocess
 import sys
-from datetime import UTC, datetime
 from pathlib import Path, PureWindowsPath
 
 import pytest
 from xxhash import xxh3_128
 
 import namisync.modules.verifier.native as verifier_native
-from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.integrity import (
     IntegrityReason,
-    IntegrityRecordCommand,
     IntegrityResult,
     IntegritySelection,
-    IntegritySelectionItem,
-    InventoryState,
     ReadStrategy,
-    RecordDisposition,
     UnsupportedVerification,
-    VerificationInvalidationCommand,
     VerifierContext,
 )
-from namisync.core.models import (
-    EntryKind,
-    FileIdentity,
-    FileStat,
-    MetadataSnapshot,
-)
-from namisync.core.pathing import (
-    from_extended_length_path,
-    normalize_relative_path,
-)
+from namisync.core.models import FileStat
+from namisync.core.pathing import from_extended_length_path
 from namisync.core.root_authority import (
     RootAuthority,
-    current_volume_anchor,
-    observe_native_volume,
 )
 from namisync.core.session import RunContext
 from namisync.modules.verifier import WindowsUnbufferedReader, verify
 
-
-_NOW = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
-
-
-class _Clock:
-    def now(self) -> datetime:
-        return _NOW
-
-
-class _Recorder:
-    def __init__(self) -> None:
-        self.commands: list[IntegrityRecordCommand] = []
-        self.invalidation_commands: list[VerificationInvalidationCommand] = []
-
-    def record_integrity(self, command: IntegrityRecordCommand) -> RecordDisposition:
-        self.commands.append(command)
-        return RecordDisposition.APPLIED
-
-    def record_verification_invalidation(
-        self, command: VerificationInvalidationCommand
-    ) -> RecordDisposition:
-        self.invalidation_commands.append(command)
-        return RecordDisposition.APPLIED
-
-
-def _stat(
-    *,
-    size: int = 3,
-    mtime_ns: int = 100,
-    identity: FileIdentity | None = FileIdentity("A1B2C3D4", 7),
-) -> FileStat:
-    return FileStat(
-        kind=EntryKind.FILE,
-        size=size,
-        mtime_ns=mtime_ns,
-        file_identity=identity,
-        nlink=1,
-        metadata=MetadataSnapshot(attributes=0, created_ns=50),
-    )
-
-
-def _attestation(data: bytes, subject: FileStat) -> Attestation:
-    return Attestation(
-        content=ContentEvidence(
-            algorithm="xxh3_128",
-            digest=xxh3_128(data).digest(),
-            size=len(data),
-            provenance=Provenance.VERIFY_ATTESTED,
-            observed_at=_NOW,
-        ),
-        subject=subject,
-    )
-
-
-def _item(
-    root: Path,
-    *,
-    path: str,
-    expected_stat: FileStat,
-    baseline_evidence: Attestation,
-) -> IntegritySelectionItem:
-    return IntegritySelectionItem(
-        item_id="item-1",
-        row_id="row-1",
-        location_id="location-1",
-        root=root,
-        rel_path_key=normalize_relative_path(path),
-        display_path=path,
-        expected_state=InventoryState.PRESENT,
-        expected_stat=expected_stat,
-        baseline=baseline_evidence,
-        scope_token="scope-1",
-    )
-
-
-def _native_context(events: list[object], root: Path) -> VerifierContext:
-    volume = observe_native_volume(root)
-    return VerifierContext(
-        run=RunContext(emit=events.append, checkpoint=lambda: None),
-        clock=_Clock(),
-        hasher_factory=xxh3_128,
-        monotonic=lambda: 0.0,
-        chunk_size=1,
-        progress_interval_seconds=0.1,
-        root_authority=RootAuthority(
-            logical_root=str(root),
-            reviewed_anchor=current_volume_anchor(root),
-            expected_volume_id=volume.volume_id,
-        ),
-    )
-
+from _verifier_fixtures import (
+    _Clock,
+    _Recorder,
+    _attestation,
+    _item,
+    _native_context,
+    _stat,
+)
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
 def test_windows_reader_uses_read_only_share_and_cache_honest_flags(

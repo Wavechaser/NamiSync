@@ -7,8 +7,7 @@ import inspect
 import os
 import stat as stat_module
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Iterator
@@ -21,9 +20,7 @@ import namisync.modules.verifier.engine as verifier_engine
 import namisync.modules.verifier.native as verifier_native
 from namisync.core.evidence import (
     Attestation,
-    ContentEvidence,
     HasherContractError,
-    HasherFactory,
     Provenance,
     RecordingStatus,
 )
@@ -32,31 +29,23 @@ from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
     IntegrityReason,
-    IntegrityRecordCommand,
     IntegrityResult,
     IntegritySelection,
-    IntegritySelectionItem,
     InventoryState,
-    PostCopyCandidate,
-    PostCopyRecordIdentity,
     PostCopySelection,
     ReadStrategy,
     RecordDisposition,
     UnsupportedVerification,
-    VerificationInvalidationCommand,
     VerificationInvalidationReason,
     VerifierContext,
 )
 from namisync.core.models import (
-    EntryKind,
     FileIdentity,
     FileStat,
-    MetadataSnapshot,
     VolumeId,
 )
 from namisync.core.pathing import (
     normalize_relative_path,
-    validate_relative_path,
 )
 from namisync.core.root_authority import (
     RootAuthority,
@@ -79,8 +68,18 @@ from namisync.modules.verifier import (
     verify_post_copy,
 )
 
-
-_NOW = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+from _verifier_fixtures import (
+    _Clock,
+    _FakeReader,
+    _Recorder,
+    _StreamSpec,
+    _attestation,
+    _context,
+    _integrity_events,
+    _item,
+    _post_copy_candidate,
+    _stat,
+)
 
 
 def test_verifier_package_boundaries_match_component_ownership() -> None:
@@ -183,194 +182,6 @@ def test_verifier_public_facade_preserves_exact_exports_and_signatures() -> None
             "= None) -> 'IntegrityRunResult'"
         ),
     }
-
-
-class _Clock:
-    def now(self) -> datetime:
-        return _NOW
-
-
-@dataclass(frozen=True)
-class _StreamSpec:
-    before: FileStat
-    chunks: tuple[bytes, ...]
-    after: FileStat | None = None
-
-
-class _FakeStream:
-    strategy = ReadStrategy.WINDOWS_UNBUFFERED
-
-    def __init__(self, spec: _StreamSpec) -> None:
-        self._spec = spec
-        self._stat_calls = 0
-
-    def stat(self) -> FileStat:
-        self._stat_calls += 1
-        if self._stat_calls == 1 or self._spec.after is None:
-            return self._spec.before
-        return self._spec.after
-
-    def iter_chunks(self, chunk_size: int) -> Iterator[bytes]:
-        assert chunk_size > 0
-        yield from self._spec.chunks
-
-
-class _FakeReader:
-    def __init__(self, entries: dict[str, _StreamSpec | BaseException]) -> None:
-        self.entries = {
-            validate_relative_path(path): entry for path, entry in entries.items()
-        }
-        self.opened: list[tuple[Path, str]] = []
-
-    @contextmanager
-    def open(self, root: Path, relative_path: str) -> Iterator[_FakeStream]:
-        self.opened.append((root, relative_path))
-        entry = self.entries[relative_path]
-        if isinstance(entry, BaseException):
-            raise entry
-        yield _FakeStream(entry)
-
-
-class _Recorder:
-    def __init__(
-        self,
-        disposition: RecordDisposition = RecordDisposition.APPLIED,
-        error: Exception | None = None,
-    ) -> None:
-        self.disposition = disposition
-        self.error = error
-        self.commands: list[IntegrityRecordCommand] = []
-        self.invalidation_commands: list[VerificationInvalidationCommand] = []
-
-    def record_integrity(self, command: IntegrityRecordCommand) -> RecordDisposition:
-        self.commands.append(command)
-        if self.error is not None:
-            raise self.error
-        return self.disposition
-
-    def record_verification_invalidation(
-        self, command: VerificationInvalidationCommand
-    ) -> RecordDisposition:
-        self.invalidation_commands.append(command)
-        if self.error is not None:
-            raise self.error
-        return self.disposition
-
-
-def _stat(
-    *,
-    size: int = 3,
-    mtime_ns: int = 100,
-    identity: FileIdentity | None = FileIdentity("A1B2C3D4", 7),
-) -> FileStat:
-    return FileStat(
-        kind=EntryKind.FILE,
-        size=size,
-        mtime_ns=mtime_ns,
-        file_identity=identity,
-        nlink=1,
-        metadata=MetadataSnapshot(attributes=0, created_ns=50),
-    )
-
-
-def _attestation(
-    data: bytes,
-    subject: FileStat,
-    provenance: Provenance = Provenance.VERIFY_ATTESTED,
-) -> Attestation:
-    return Attestation(
-        content=ContentEvidence(
-            algorithm="xxh3_128",
-            digest=xxh3_128(data).digest(),
-            size=len(data),
-            provenance=provenance,
-            observed_at=_NOW,
-        ),
-        subject=subject,
-    )
-
-
-def _item(
-    root: Path,
-    *,
-    number: int = 1,
-    path: str | None = None,
-    location_id: str = "location-1",
-    expected_state: InventoryState = InventoryState.PRESENT,
-    expected_stat: FileStat | None = None,
-    baseline_evidence: Attestation | None | object = ...,
-    reappeared: bool = False,
-) -> IntegritySelectionItem:
-    display_path = path or f"Folder\\file-{number}.bin"
-    stat = expected_stat or _stat()
-    if baseline_evidence is ...:
-        baseline_evidence = _attestation(b"abc", stat)
-    return IntegritySelectionItem(
-        item_id=f"item-{number}",
-        row_id=f"row-{number}",
-        location_id=location_id,
-        root=root,
-        rel_path_key=normalize_relative_path(display_path),
-        display_path=display_path,
-        expected_state=expected_state,
-        expected_stat=stat if expected_state is InventoryState.PRESENT else None,
-        baseline=baseline_evidence,
-        scope_token="scope-1",
-        reappeared_at=_NOW if reappeared else None,
-    )
-
-
-def _post_copy_candidate(
-    root: Path,
-    *,
-    number: int = 1,
-    path: str | None = None,
-    expected_stat: FileStat | None = None,
-    recorded: bool = True,
-) -> PostCopyCandidate:
-    display_path = path or f"Folder\\copied-{number}.bin"
-    stat = expected_stat or _stat()
-    identity = (
-        PostCopyRecordIdentity(
-            row_id=f"row-{number}",
-            location_id="location-1",
-            scope_token="scope-1",
-            rel_path_key=normalize_relative_path(display_path),
-        )
-        if recorded
-        else None
-    )
-    return PostCopyCandidate(
-        item_id=f"copy-{number}",
-        root=root,
-        display_path=display_path,
-        expected_stat=stat,
-        copy_attestation=_attestation(
-            b"abc", stat, Provenance.COPY_ATTESTED
-        ),
-        recorded_identity=identity,
-    )
-
-
-def _context(
-    events: list[object],
-    checkpoint=lambda: None,
-    monotonic=lambda: 0.0,
-    hasher_factory: HasherFactory = xxh3_128,
-) -> VerifierContext:
-    return VerifierContext(
-        run=RunContext(emit=events.append, checkpoint=checkpoint),
-        clock=_Clock(),
-        hasher_factory=hasher_factory,
-        monotonic=monotonic,
-        chunk_size=1,
-        progress_interval_seconds=0.1,
-    )
-
-
-
-def _integrity_events(events: list[object]) -> list[IntegrityOutcome]:
-    return [event for event in events if isinstance(event, IntegrityOutcome)]
 
 
 def test_xxh3_128_digest_encoding_is_raw_canonical_big_endian() -> None:
@@ -663,17 +474,44 @@ _ROOT_BOUND_STATE_CASES = (
     (IntegrityMode.BASELINE, InventoryState.PRESENT),
 )
 
+_ROOT_ADMISSION_PRECEDENCE_CASES = (
+    pytest.param(
+        False,
+        IntegrityResult.UNSUPPORTED,
+        IntegrityReason.UNSUPPORTED_READ,
+        "mismatched root must not be admitted",
+        id="mismatched-root",
+    ),
+    pytest.param(
+        True,
+        IntegrityResult.ERROR,
+        IntegrityReason.PATH_INVALID,
+        "invalid path must not be admitted",
+        id="invalid-path",
+    ),
+)
+
 
 @pytest.mark.parametrize(("mode", "expected_state"), _ROOT_BOUND_STATE_CASES)
-def test_verifier_refuses_mismatched_selection_root_before_state_shortcuts(
+@pytest.mark.parametrize(
+    ("invalid_path", "expected_result", "expected_reason", "admission_message"),
+    _ROOT_ADMISSION_PRECEDENCE_CASES,
+)
+def test_verifier_root_and_path_admission_precede_state_shortcuts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     mode: IntegrityMode,
     expected_state: InventoryState,
+    invalid_path: bool,
+    expected_result: IntegrityResult,
+    expected_reason: IntegrityReason,
+    admission_message: str,
 ) -> None:
     reviewed_root = tmp_path / "reviewed"
     selected_root = tmp_path / "different"
     item = _item(selected_root, expected_state=expected_state)
+    if invalid_path:
+        item = replace(item, display_path=r"..\escape.bin")
     reader = _FakeReader({})
     recorder = _Recorder()
     context = replace(
@@ -683,57 +521,34 @@ def test_verifier_refuses_mismatched_selection_root_before_state_shortcuts(
     monkeypatch.setattr(
         verifier_engine,
         "admit_root",
-        lambda _authority: pytest.fail("mismatched root must not be admitted"),
+        lambda _authority: pytest.fail(admission_message),
     )
 
     runner = baseline if mode is IntegrityMode.BASELINE else verify
     result = runner(IntegritySelection((item,)), context, recorder, reader)
 
-    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
-    assert result.outcomes[0].reason is IntegrityReason.UNSUPPORTED_READ
+    assert result.outcomes[0].result is expected_result
+    assert result.outcomes[0].reason is expected_reason
     assert reader.opened == []
     assert recorder.commands == []
     assert recorder.invalidation_commands == []
 
 
-@pytest.mark.parametrize(("mode", "expected_state"), _ROOT_BOUND_STATE_CASES)
-def test_invalid_path_precedes_wrong_root_and_state_shortcuts(
+@pytest.mark.parametrize(
+    ("invalid_path", "expected_result", "expected_reason", "admission_message"),
+    _ROOT_ADMISSION_PRECEDENCE_CASES,
+)
+def test_post_copy_root_and_path_admission_precede_side_effects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    mode: IntegrityMode,
-    expected_state: InventoryState,
-) -> None:
-    item = replace(
-        _item(tmp_path / "different", expected_state=expected_state),
-        display_path=r"..\escape.bin",
-    )
-    reader = _FakeReader({})
-    recorder = _Recorder()
-    context = replace(
-        _context([]),
-        root_authority=RootAuthority(str(tmp_path / "reviewed")),
-    )
-    monkeypatch.setattr(
-        verifier_engine,
-        "admit_root",
-        lambda _authority: pytest.fail("invalid path must not be admitted"),
-    )
-
-    runner = baseline if mode is IntegrityMode.BASELINE else verify
-    result = runner(IntegritySelection((item,)), context, recorder, reader)
-
-    assert result.outcomes[0].result is IntegrityResult.ERROR
-    assert result.outcomes[0].reason is IntegrityReason.PATH_INVALID
-    assert reader.opened == []
-    assert recorder.commands == []
-    assert recorder.invalidation_commands == []
-
-
-def test_post_copy_refuses_mismatched_selection_root_before_read_or_record(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    invalid_path: bool,
+    expected_result: IntegrityResult,
+    expected_reason: IntegrityReason,
+    admission_message: str,
 ) -> None:
     candidate = _post_copy_candidate(tmp_path / "different")
+    if invalid_path:
+        object.__setattr__(candidate, "display_path", r"..\escape.bin")
     reader = _FakeReader({})
     recorder = _Recorder()
     context = replace(
@@ -743,7 +558,7 @@ def test_post_copy_refuses_mismatched_selection_root_before_read_or_record(
     monkeypatch.setattr(
         verifier_engine,
         "admit_root",
-        lambda _authority: pytest.fail("mismatched root must not be admitted"),
+        lambda _authority: pytest.fail(admission_message),
     )
 
     result = verify_post_copy(
@@ -753,40 +568,8 @@ def test_post_copy_refuses_mismatched_selection_root_before_read_or_record(
         reader,
     )
 
-    assert result.outcomes[0].result is IntegrityResult.UNSUPPORTED
-    assert result.outcomes[0].reason is IntegrityReason.UNSUPPORTED_READ
-    assert reader.opened == []
-    assert recorder.commands == []
-    assert recorder.invalidation_commands == []
-
-
-def test_post_copy_invalid_path_precedes_wrong_root_without_side_effects(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    candidate = _post_copy_candidate(tmp_path / "different")
-    object.__setattr__(candidate, "display_path", r"..\escape.bin")
-    reader = _FakeReader({})
-    recorder = _Recorder()
-    context = replace(
-        _context([]),
-        root_authority=RootAuthority(str(tmp_path / "reviewed")),
-    )
-    monkeypatch.setattr(
-        verifier_engine,
-        "admit_root",
-        lambda _authority: pytest.fail("invalid path must not be admitted"),
-    )
-
-    result = verify_post_copy(
-        PostCopySelection((candidate,)),
-        context,
-        recorder,
-        reader,
-    )
-
-    assert result.outcomes[0].result is IntegrityResult.ERROR
-    assert result.outcomes[0].reason is IntegrityReason.PATH_INVALID
+    assert result.outcomes[0].result is expected_result
+    assert result.outcomes[0].reason is expected_reason
     assert reader.opened == []
     assert recorder.commands == []
     assert recorder.invalidation_commands == []
@@ -1510,7 +1293,8 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     (
-        "observation",
+        "disposition",
+        "error_detail",
         "expected_reason",
         "expected_detail",
         "expected_recording",
@@ -1518,45 +1302,40 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
     ),
     (
         (
-            verifier_engine._RecordingObservation(
-                disposition=RecordDisposition.APPLIED
-            ),
+            RecordDisposition.APPLIED,
+            None,
             IntegrityReason.READ_DRIFT,
             "classification detail",
             RecordingStatus.OK,
             RecordDisposition.APPLIED,
         ),
         (
-            verifier_engine._RecordingObservation(
-                disposition=RecordDisposition.NOOP
-            ),
+            RecordDisposition.NOOP,
+            None,
             IntegrityReason.READ_DRIFT,
             "classification detail",
             RecordingStatus.OK,
             RecordDisposition.NOOP,
         ),
         (
-            verifier_engine._RecordingObservation(
-                disposition=RecordDisposition.STALE
-            ),
+            RecordDisposition.STALE,
+            None,
             IntegrityReason.RECORDING_STALE,
             None,
             RecordingStatus.DEGRADED,
             RecordDisposition.STALE,
         ),
         (
-            verifier_engine._RecordingObservation(
-                disposition=RecordDisposition.CONFLICT
-            ),
+            RecordDisposition.CONFLICT,
+            None,
             IntegrityReason.RECORDING_CONFLICT,
             None,
             RecordingStatus.DEGRADED,
             RecordDisposition.CONFLICT,
         ),
         (
-            verifier_engine._RecordingObservation(
-                error_detail="OSError: sqlite unavailable"
-            ),
+            None,
+            "OSError: sqlite unavailable",
             IntegrityReason.RECORDING_ERROR,
             "OSError: sqlite unavailable",
             RecordingStatus.DEGRADED,
@@ -1566,14 +1345,18 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
     ids=("applied", "noop", "stale", "conflict", "error"),
 )
 def test_recording_settlement_reducer_is_pure_policy(
-    observation: verifier_engine._RecordingObservation,
+    disposition: RecordDisposition | None,
+    error_detail: str | None,
     expected_reason: IntegrityReason,
     expected_detail: str | None,
     expected_recording: RecordingStatus,
     expected_disposition: RecordDisposition | None,
 ) -> None:
     settlement = verifier_engine._reduce_recording(
-        observation,
+        verifier_engine._RecordingObservation(
+            disposition=disposition,
+            error_detail=error_detail,
+        ),
         reason=IntegrityReason.READ_DRIFT,
         detail="classification detail",
     )
