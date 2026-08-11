@@ -7,9 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import namisync.core.root_authority as authority_module
 from namisync.core.models import VolumeEvidence, VolumeId
-from namisync.core.pathing import PathValidationError, trusted_volume_anchor
+from namisync.core.pathing import PathValidationError
 from namisync.core.root_authority import (
     FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_OFFLINE,
@@ -70,22 +69,6 @@ def test_root_authority_normalizes_and_requires_anchor_containment(
     assert authority.reviewed_anchor == str(anchor)
     with pytest.raises(PathValidationError, match="reviewed volume anchor"):
         RootAuthority(str(root), str(tmp_path / "other"), VOLUME)
-
-
-def test_pathing_trusted_anchor_is_a_live_compatibility_alias(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    observed: list[str] = []
-
-    def anchor(path: str | os.PathLike[str]) -> str:
-        observed.append(os.fspath(path))
-        return str(tmp_path)
-
-    monkeypatch.setattr(authority_module, "current_volume_anchor", anchor)
-
-    assert trusted_volume_anchor(tmp_path / "managed") == str(tmp_path)
-    assert observed == [os.fspath(tmp_path / "managed")]
 
 
 def test_admit_root_checks_anchor_chain_then_volume(tmp_path: Path) -> None:

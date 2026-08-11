@@ -296,14 +296,6 @@ def lexical_path_chain(
     return tuple(chain)
 
 
-def trusted_volume_anchor(path: str | os.PathLike[str]) -> str:
-    """Compatibility alias for the shared native root-authority probe."""
-
-    from .root_authority import current_volume_anchor
-
-    return current_volume_anchor(path)
-
-
 def to_extended_length_path(path: str) -> str:
     """Return a Windows extended-length spelling without changing identity."""
 

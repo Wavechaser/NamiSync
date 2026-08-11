@@ -34,7 +34,10 @@ and `CopyDigest` production.
 Runtime may import both leaves. Native and pipeline are mutually independent,
 never import runtime, and do not import sibling domain components. Code outside
 the executor imports this package facade; tests that patch an internal detail
-patch the file that owns it.
+patch the file that owns it. Acceptance tests mirror the boundary in
+`test_executor_runtime.py`, `test_executor_native.py`,
+`test_executor_pipeline.py`, and `test_executor_settlement.py`; the focused ACL
+contract remains in `test_executor_acl.py`.
 
 ## Entry Contract
 

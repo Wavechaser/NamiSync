@@ -133,6 +133,16 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Consolidated the recent safety hardening behind stable authority, execution,
+  verification, and settlement boundaries without changing persisted contracts.
+  - **Root authority:** centralized fresh ephemeral anchor, volume, and no-follow
+    facts in core while preserving each consumer's timing and refusal policy.
+  - **Executor and verifier:** introduced stable package facades with coarse
+    runtime/native/pipeline and engine/native ownership respectively.
+  - **Settlement:** replaced parallel retained-state maps with a typed effect
+    journal and pure reducer, guarded by the retained 30-scenario oracle.
+  - **Tests:** consolidated shared fixtures and matrices, then organized executor
+    and verifier coverage by the production boundary each case protects.
 - Closed the remaining actionable LOW audit findings and tightened adjacent
   malformed-input boundaries without changing deferred feature scope.
   - **Planner and executor:** share one managed Windows-attribute mask so

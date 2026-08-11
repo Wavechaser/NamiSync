@@ -772,7 +772,7 @@ absolute component that cannot round-trip without Windows retargeting
 fields are normalized before warnings, evidence, history, or interface
 rendering.
 
-**Settled root-authority boundary (staged migration).**
+**Settled root-authority boundary (implemented).**
 `core/root_authority.py` owns an immutable, ephemeral `RootAuthority`: the
 ordinary logical root, optional reviewed volume anchor, and optional expected
 `VolumeId`. It also owns stateless no-follow component inspection and native
@@ -1123,8 +1123,9 @@ against the corrected monolith.
 
 Single-file throughput work belongs primarily in `pipeline.py`; Windows I/O
 flags and handle mechanics belong in `native.py`; multi-file scheduling and
-per-volume concurrency belong in `runtime.py`. No finer executor split is
-assumed until these boundaries have stabilized.
+per-volume concurrency belong in `runtime.py`. These ownership boundaries are
+stabilized; no finer executor split is planned without new evidence that one of
+them fails.
 
 **Bones.** Typed-result return — the session runner owns `Terminal` (§2.2a);
 atomic temp-then-`os.replace` publish with best-effort parent-dir flush through

@@ -241,8 +241,8 @@ def load_validated(
 
 
 def _subject_matches(expected: FileStat, actual: FileStat) -> bool:
-    # Mirrors verifier._matches_expected_stat: identity participates only when
-    # the stored subject carries one.
+    # Mirrors verifier.engine._matches_expected_stat: identity participates
+    # only when the stored subject carries one.
     if expected.kind is not actual.kind:
         return False
     if expected.size != actual.size or expected.mtime_ns != actual.mtime_ns:

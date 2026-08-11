@@ -31,7 +31,8 @@ construction. `native.py` owns Windows root-chain admission, unbuffered reads,
 handle/volume work, and final-path-by-handle checks. Engine may import native;
 native imports only core contracts and the standard library and never imports
 engine. Tests patch the submodule that owns each collaborator; direct reader,
-handle, and cache-honesty cases live separately from engine policy tests.
+handle, and cache-honesty cases live in `test_verifier_native.py`, separately
+from the engine policy tests in `test_verifier_engine.py`.
 
 ## Entry Contracts
 

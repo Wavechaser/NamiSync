@@ -516,8 +516,8 @@ retention sweep to purge them, and execution can be paused or canceled.
 
 The single exception is `UPDATE` while `trash_on_update` is disabled, where
 the prior target content is overwritten with no recoverable copy
-([executor.py:2095](../namisync/modules/executor.py) guards the trash step on
-that flag). **`MOVE_UPDATE` does not count**: `_move_update` publishes to the
+([`runtime._update`](../namisync/modules/executor/runtime.py) guards the trash
+step on that flag). **`MOVE_UPDATE` does not count**: `_move_update` publishes to the
 new path and trashes the old one unconditionally, with no `trash_on_update`
 guard, so its prior content is always recoverable.
 

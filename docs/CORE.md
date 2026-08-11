@@ -62,7 +62,8 @@ immutable filesystem evidence, shared native root-admission mechanics,
 deterministic plan serialization and capacity, and root-qualified
 observation/refusal shapes. General filesystem walking and domain observation
 remain in operation modules; core's stateless probes carry no module policy and
-remain standard-library-only.
+remain standard-library-only. `core/pathing.py` stays purely lexical and does
+not re-export native anchor or volume probes from `core/root_authority.py`.
 
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`

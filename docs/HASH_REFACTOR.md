@@ -68,8 +68,8 @@ executor overhead.
 - Python 3.13.14, `xxhash` 3.8.1
 - Source: `F:` - WD_BLACK SN850X 4 TB
 - Target: `G:` - WD_BLACK SN850X 4 TB (separate physical disk)
-- 8 GiB workload, 4 MiB chunks (the `chunk_size` default in
-  `executor.py` and `integrity.py`)
+- 8 GiB workload, 4 MiB chunks (the executor runtime policy and core integrity
+  context defaults)
 - Two IO regimes: an unbuffered ceiling (`FILE_FLAG_NO_BUFFERING`,
   sector-aligned buffers) and the buffered production shape
   (`open(buffering=0)` FileIO with immutable `read()`), which is what the
@@ -653,7 +653,8 @@ This order takes the fixed per-file reductions first and leaves the concurrency
 change until finalization and the current copy behavior are stable.
 
 The pipeline remains contained inside `NativeCopyBackend` in
-`modules/executor.py`. Keep the `CopyBackend.copy(..., chunk_size=...)`
+`modules/executor/pipeline.py`. Keep the
+`CopyBackend.copy(..., chunk_size=...)`
 protocol unchanged: `chunk_size` is the positive actual read size for that
 call. Rename only `ExecutorPolicies.chunk_size` to
 `ExecutorPolicies.max_chunk_size`, retaining its 4 MiB default.
@@ -947,9 +948,9 @@ before mutation.
 | `pyproject.toml` | **Stage 1 complete:** declares compatible `xxhash>=3.8.1,<4`; Track 2 consumes it |
 | `core/evidence.py` | **Stage 1 protocol complete:** the standard-library-only streaming hasher/factory seam is defined. Track 2 makes `ContentEvidence.algorithm` accept only `xxh3_128`, requires exactly 16 digest bytes, and globally requires attestation content/subject sizes to match |
 | `core/execution.py` | `CopyDigest` validates a 16-byte XXH3-128 digest |
-| `modules/executor.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
+| `modules/executor/pipeline.py`, `runtime.py` | `NativeCopyBackend` requires a no-argument `hasher_factory`; copy attestation records `xxh3_128`; `ExecutorPolicies.copy_backend` becomes required instead of default-constructing `NativeCopyBackend` |
 | `core/integrity.py` | `VerifierContext` requires the same no-argument `hasher_factory` seam |
-| `modules/verifier.py` | Baseline, verify, and rebaseline obtain a hasher from the context, require a 16-byte result before any comparison, and record `xxh3_128` |
+| `modules/verifier/engine.py` | Baseline, verify, and rebaseline obtain a hasher from the context, require a 16-byte result before any comparison, and record `xxh3_128` |
 | `workflows/runtime.py` — Stage 2 half | **Complete:** composition imports the concrete XXH3 constructor and explicitly supplies `NativeCopyBackend(hasher_factory=...)` when constructing `ExecutorPolicies` |
 | `workflows/runtime.py` — Stage 3 half | **Complete:** production standalone inventory/integrity composition supplies that identical retained constructor object to every `VerifierContext` |
 | `db/repositories.py` | Reconstruct content evidence using the stored identifier rather than replacing it with `sha256` |
