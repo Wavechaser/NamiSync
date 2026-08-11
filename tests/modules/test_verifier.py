@@ -1092,9 +1092,12 @@ def test_post_copy_readback_classifies_without_a_ledger_identity(
     assert outcome.location_id is None
     assert outcome.recording is RecordingStatus.DEGRADED
     assert outcome.reason is IntegrityReason.RECORDING_ERROR
+    assert outcome.detail == "copy evidence was not durably recorded"
+    assert outcome.record_disposition is None
     assert result.recording is RecordingStatus.DEGRADED
     assert selection.completed_bytes == {candidate.item_id: 3}
     assert recorder.commands == []
+    assert recorder.invalidation_commands == []
 
 
 def test_post_copy_match_uses_readback_provenance_and_degrades_stale_recording(
@@ -1416,34 +1419,90 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("recorder", "reason", "disposition"),
-    [
+    (
+        "observation",
+        "expected_reason",
+        "expected_detail",
+        "expected_recording",
+        "expected_disposition",
+    ),
+    (
         (
-            _Recorder(RecordDisposition.STALE),
+            verifier_module._RecordingObservation(
+                disposition=RecordDisposition.APPLIED
+            ),
+            IntegrityReason.READ_DRIFT,
+            "classification detail",
+            RecordingStatus.OK,
+            RecordDisposition.APPLIED,
+        ),
+        (
+            verifier_module._RecordingObservation(
+                disposition=RecordDisposition.NOOP
+            ),
+            IntegrityReason.READ_DRIFT,
+            "classification detail",
+            RecordingStatus.OK,
+            RecordDisposition.NOOP,
+        ),
+        (
+            verifier_module._RecordingObservation(
+                disposition=RecordDisposition.STALE
+            ),
             IntegrityReason.RECORDING_STALE,
+            None,
+            RecordingStatus.DEGRADED,
             RecordDisposition.STALE,
         ),
         (
-            _Recorder(RecordDisposition.CONFLICT),
+            verifier_module._RecordingObservation(
+                disposition=RecordDisposition.CONFLICT
+            ),
             IntegrityReason.RECORDING_CONFLICT,
+            None,
+            RecordingStatus.DEGRADED,
             RecordDisposition.CONFLICT,
         ),
         (
-            _Recorder(error=OSError("sqlite unavailable")),
+            verifier_module._RecordingObservation(
+                error_detail="OSError: sqlite unavailable"
+            ),
             IntegrityReason.RECORDING_ERROR,
+            "OSError: sqlite unavailable",
+            RecordingStatus.DEGRADED,
             None,
         ),
-    ],
+    ),
+    ids=("applied", "noop", "stale", "conflict", "error"),
 )
-def test_negative_recording_failures_preserve_modified_truth_and_degrade(
+def test_recording_settlement_reducer_is_pure_policy(
+    observation: verifier_module._RecordingObservation,
+    expected_reason: IntegrityReason,
+    expected_detail: str | None,
+    expected_recording: RecordingStatus,
+    expected_disposition: RecordDisposition | None,
+) -> None:
+    settlement = verifier_module._reduce_recording(
+        observation,
+        reason=IntegrityReason.READ_DRIFT,
+        detail="classification detail",
+    )
+
+    assert settlement == verifier_module._RecordingSettlement(
+        expected_reason,
+        expected_detail,
+        expected_recording,
+        expected_disposition,
+    )
+
+
+def test_negative_recording_error_preserves_modified_truth_and_degrades(
     tmp_path: Path,
-    recorder: _Recorder,
-    reason: IntegrityReason,
-    disposition: RecordDisposition | None,
 ) -> None:
     before = _stat()
     after = _stat(mtime_ns=101)
     item = _item(tmp_path, expected_stat=before)
+    recorder = _Recorder(error=OSError("sqlite unavailable"))
 
     result = verify(
         IntegritySelection((item,)),
@@ -1454,36 +1513,20 @@ def test_negative_recording_failures_preserve_modified_truth_and_degrade(
 
     outcome = result.outcomes[0]
     assert outcome.result is IntegrityResult.MODIFIED
-    assert outcome.reason is reason
+    assert outcome.reason is IntegrityReason.RECORDING_ERROR
+    assert outcome.detail == "OSError: sqlite unavailable"
     assert outcome.recording is RecordingStatus.DEGRADED
-    assert outcome.record_disposition is disposition
+    assert outcome.record_disposition is None
     assert result.recording is RecordingStatus.DEGRADED
     assert len(recorder.invalidation_commands) == 1
+    assert recorder.commands == []
 
 
-@pytest.mark.parametrize(
-    ("recorder", "reason", "disposition"),
-    [
-        (
-            _Recorder(RecordDisposition.STALE),
-            IntegrityReason.RECORDING_STALE,
-            RecordDisposition.STALE,
-        ),
-        (
-            _Recorder(RecordDisposition.CONFLICT),
-            IntegrityReason.RECORDING_CONFLICT,
-            RecordDisposition.CONFLICT,
-        ),
-        (_Recorder(error=OSError("sqlite unavailable")), IntegrityReason.RECORDING_ERROR, None),
-    ],
-)
-def test_conditional_recording_drift_and_errors_degrade_only_recording_axis(
+def test_conditional_stale_recording_degrades_only_recording_axis(
     tmp_path: Path,
-    recorder: _Recorder,
-    reason: IntegrityReason,
-    disposition: RecordDisposition | None,
 ) -> None:
     item = _item(tmp_path)
+    recorder = _Recorder(RecordDisposition.STALE)
 
     result = verify(
         IntegritySelection((item,)),
@@ -1495,10 +1538,12 @@ def test_conditional_recording_drift_and_errors_degrade_only_recording_axis(
     outcome = result.outcomes[0]
     assert outcome.result is IntegrityResult.VERIFIED
     assert outcome.recording is RecordingStatus.DEGRADED
-    assert outcome.reason is reason
-    assert outcome.record_disposition is disposition
+    assert outcome.reason is IntegrityReason.RECORDING_STALE
+    assert outcome.detail is None
+    assert outcome.record_disposition is RecordDisposition.STALE
     assert result.recording is RecordingStatus.DEGRADED
     assert len(recorder.commands) == 1
+    assert recorder.invalidation_commands == []
 
 
 def test_canonical_key_validation_prevents_wrong_target_open(tmp_path: Path) -> None:

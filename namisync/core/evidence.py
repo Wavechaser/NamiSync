@@ -52,6 +52,29 @@ class HasherContractError(RuntimeError):
     """A supplied content hasher violated the fixed streaming contract."""
 
 
+def new_content_hasher(factory: HasherFactory) -> StreamingHasher:
+    """Construct and validate one streaming content hasher."""
+
+    try:
+        hasher = factory()
+    except Exception as error:
+        raise HasherContractError("content hasher factory failed") from error
+    if not callable(getattr(hasher, "update", None)):
+        raise HasherContractError("content hasher must provide update(bytes)")
+    if not callable(getattr(hasher, "digest", None)):
+        raise HasherContractError("content hasher must provide digest()")
+    return hasher
+
+
+def update_content_hasher(hasher: StreamingHasher, chunk: bytes) -> None:
+    """Add one chunk while preserving the shared hasher error contract."""
+
+    try:
+        hasher.update(chunk)
+    except Exception as error:
+        raise HasherContractError("content hasher update failed") from error
+
+
 def require_content_digest(value: object) -> bytes:
     """Validate one raw digest returned by the canonical content hasher."""
 
@@ -62,6 +85,16 @@ def require_content_digest(value: object) -> bytes:
             "content hasher digest must contain exactly 16 bytes"
         )
     return value
+
+
+def finish_content_hasher(hasher: StreamingHasher) -> bytes:
+    """Finalize and validate one raw canonical content digest."""
+
+    try:
+        digest = hasher.digest()
+    except Exception as error:
+        raise HasherContractError("content hasher digest failed") from error
+    return require_content_digest(digest)
 
 
 def _require_utc(value: datetime, field_name: str) -> None:

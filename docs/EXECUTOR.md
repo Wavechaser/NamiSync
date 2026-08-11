@@ -625,11 +625,12 @@ typed executor reasons and decisions, and the filesystem/copy/recorder
 protocols. The `namisync.modules.executor` facade supplies `NativeFileSystem`,
 `NativeCopyBackend`, `BoundedFailurePolicy`, `ExecutorPolicies`, and `execute`
 from the owning package files described above. Pipeline consumes a required
-parameterless hasher factory and has no third-party or sibling-module import;
-workflow composition owns the sole concrete `xxhash.xxh3_128` object and
-supplies the reviewed, freshly preflighted set. Dispatcher/session owns custody
-and terminal aggregation, and the run-bound recorder owns durable ledger
-interpretation.
+parameterless hasher factory and delegates construction, update, finalization,
+and raw-digest validation to the shared core evidence lifecycle. It has no
+third-party or sibling-module import; workflow composition owns the sole
+concrete `xxhash.xxh3_128` object and supplies the reviewed, freshly preflighted
+set. Dispatcher/session owns custody and terminal aggregation, and the
+run-bound recorder owns durable ledger interpretation.
 
 The Stage 2 suite re-proves all nine operation kinds through the new path and
 pins every gate in `HASH_REFACTOR.md` §4.5: stage overlap and FIFO/byte bounds;

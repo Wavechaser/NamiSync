@@ -282,7 +282,11 @@ converts to local time.
 `StreamingHasher` and `HasherFactory` define the parameterless,
 standard-library-only dependency boundary shared by both content producers.
 Core never imports the concrete implementation; workflow composition supplies
-the exact same `xxhash.xxh3_128` constructor to executor and verifier.
+the exact same `xxhash.xxh3_128` constructor to executor and verifier. Core
+evidence also owns the shared construction, update, and finalization lifecycle:
+it validates the structural protocol, wraps ordinary collaborator exceptions
+in the existing `HasherContractError` vocabulary, lets `BaseException`
+control flow escape, and validates the raw digest only after `digest()` returns.
 
 `ContentEvidence` and `CopyDigest` accept only raw 16-byte `xxh3_128` content
 digests. Mixed algorithms are invalid, hasher collaborator failures raise the

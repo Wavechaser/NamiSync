@@ -56,7 +56,9 @@ degrades recording without rewriting a truthful content verdict.
    missing or modified result conditionally retains a metadata-drift
    invalidation.
 5. Read through the cache-honest strategy while hashing XXH3-128 and reporting
-   monotonic progress throttled by an injected monotonic clock.
+   monotonic progress throttled by an injected monotonic clock. Construction,
+   update, digest finalization, and raw-width validation use the same core
+   evidence lifecycle as executor pipeline hashing.
 6. Stat the same open subject/handle after reading; proven drift yields
    `modified` and conditionally records metadata-drift when baseline evidence
    exists. A generic read/stat error remains `error` and writes nothing.
@@ -96,6 +98,17 @@ stale/conflicting/error result degrades recording without rewriting the truthful
 `missing`, `modified`, or `mismatched` verdict. Hash mismatch dominates later metadata
 drift; matching scans cannot make it verified again. A successful verify or
 explicit baseline/rebaseline evidence write atomically clears the marker.
+
+Recorder calls are observations; a small pure reducer maps their typed
+disposition or normalized error into reason, detail, recording status, and
+record disposition. Item and post-copy positive writes and invalidations retain
+four separate wrappers so they continue to build their distinct commands and
+outcomes. `APPLIED` and `NOOP` preserve the truthful classification,
+`STALE`/`CONFLICT` replace only the recording reason and discard subordinate
+classification detail, and an ordinary recorder exception becomes
+`RECORDING_ERROR`. A successful identityless post-copy read remains truthful
+`verified` with degraded recording without entering this reducer because no
+recorder call was possible.
 
 Every selected file emits exactly one reliable item result when the session
 terminates, including cancel and error paths. Summary counts derive from those

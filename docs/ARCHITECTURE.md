@@ -1244,6 +1244,11 @@ source grows; the backend reads to actual EOF and the executor reports
 `SOURCE_DRIFT`. A deliberately lower `max_chunk_size` may reduce the effective
 window but cannot weaken correctness or deadlock freedom.
 
+Executor pipeline and verifier both use the lifecycle helpers owned by core
+evidence to construct, structurally validate, update, and finalize the injected
+hasher. Those helpers preserve one error vocabulary and exception boundary;
+core still imports no concrete hashing implementation.
+
 Normal target temps are conditionally preallocated above a measured crossover.
 Windows bindings are hoisted and bound once. Buffered source handles carry the
 sequential-access cache hint, complementary to the application's bounded
@@ -1396,6 +1401,14 @@ hash-mismatch. The marker is sticky across ordinary matching scans, mismatch
 dominates later metadata drift, and only a guarded positive evidence write
 clears it; repositories derive inventory verification state from this marker
 and retained evidence rather than age alone.
+
+Conditional recorder calls remain I/O observations. A private pure settlement
+reducer receives only the typed disposition or normalized recorder error plus
+the truthful classification reason/detail, then selects recording precedence
+without constructing outcomes or calling the ledger. Separate item and
+post-copy, positive and invalidation wrappers retain their command and outcome
+identity contracts. Rowless successful post-copy classification remains a
+distinct no-recording path and is not reinterpreted by the reducer.
 
 **Flesh — deferred.** Benchmark-justified multithreaded verification with
 per-volume safety policy (no worker-count setting is reserved);

@@ -10,10 +10,14 @@ from xxhash import xxh3_128
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
+    HasherContractError,
+    HasherFactory,
     Outcome,
     Provenance,
     RecordingStatus,
-    HasherFactory,
+    finish_content_hasher,
+    new_content_hasher,
+    update_content_hasher,
 )
 from namisync.core.events import (
     SCHEMA_VERSION,
@@ -157,6 +161,81 @@ def test_streaming_hasher_factory_is_a_standard_structural_contract() -> None:
     hasher.update(b"NamiSync")
 
     assert hasher.digest() == xxh3_128(b"NamiSync").digest()
+
+
+def test_shared_content_hasher_lifecycle_preserves_the_exact_error_contract() -> None:
+    class _Hasher:
+        def __init__(
+            self,
+            *,
+            update_error: BaseException | None = None,
+            digest_error: BaseException | None = None,
+        ) -> None:
+            self.update_error = update_error
+            self.digest_error = digest_error
+
+        def update(self, _data: bytes) -> None:
+            if self.update_error is not None:
+                raise self.update_error
+
+        def digest(self) -> bytes:
+            if self.digest_error is not None:
+                raise self.digest_error
+            return b"x" * 16
+
+    factory_error = ValueError("factory")
+    with pytest.raises(
+        HasherContractError,
+        match="^content hasher factory failed$",
+    ) as raised:
+        new_content_hasher(
+            lambda: (_ for _ in ()).throw(factory_error)
+        )
+    assert raised.value.__cause__ is factory_error
+
+    with pytest.raises(
+        HasherContractError,
+        match=r"^content hasher must provide update\(bytes\)$",
+    ):
+        new_content_hasher(lambda: object())  # type: ignore[arg-type,return-value]
+    with pytest.raises(
+        HasherContractError,
+        match=r"^content hasher must provide digest\(\)$",
+    ):
+        new_content_hasher(  # type: ignore[arg-type]
+            lambda: type("UpdateOnly", (), {"update": lambda *_: None})()
+        )
+
+    update_error = ValueError("update")
+    with pytest.raises(
+        HasherContractError,
+        match="^content hasher update failed$",
+    ) as raised:
+        update_content_hasher(_Hasher(update_error=update_error), b"chunk")
+    assert raised.value.__cause__ is update_error
+
+    digest_error = ValueError("digest")
+    with pytest.raises(
+        HasherContractError,
+        match="^content hasher digest failed$",
+    ) as raised:
+        finish_content_hasher(_Hasher(digest_error=digest_error))
+    assert raised.value.__cause__ is digest_error
+
+    for stage in ("factory", "update", "digest"):
+        fatal = KeyboardInterrupt(stage)
+        with pytest.raises(KeyboardInterrupt) as raised:
+            if stage == "factory":
+                new_content_hasher(
+                    lambda: (_ for _ in ()).throw(fatal)
+                )
+            elif stage == "update":
+                update_content_hasher(_Hasher(update_error=fatal), b"chunk")
+            else:
+                finish_content_hasher(_Hasher(digest_error=fatal))
+        assert raised.value is fatal
+
+    assert finish_content_hasher(_Hasher()) == b"x" * 16
 
 
 @pytest.mark.parametrize("path", ["success", "cancel", "failure"])

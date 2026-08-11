@@ -9,10 +9,10 @@ import time
 from typing import BinaryIO, cast
 
 from namisync.core.evidence import (
-    HasherContractError,
     HasherFactory,
-    StreamingHasher,
-    require_content_digest,
+    finish_content_hasher,
+    new_content_hasher,
+    update_content_hasher,
 )
 from namisync.core.execution import CopyDigest
 from namisync.core.session import Canceled, PauseRequested
@@ -69,33 +69,6 @@ class _FirstPipelineError:
     def get(self) -> BaseException | None:
         with self._lock:
             return self._error
-
-
-def _new_content_hasher(factory: HasherFactory) -> StreamingHasher:
-    try:
-        hasher = factory()
-    except Exception as error:
-        raise HasherContractError("content hasher factory failed") from error
-    if not callable(getattr(hasher, "update", None)):
-        raise HasherContractError("content hasher must provide update(bytes)")
-    if not callable(getattr(hasher, "digest", None)):
-        raise HasherContractError("content hasher must provide digest()")
-    return hasher
-
-
-def _update_content_hasher(hasher: StreamingHasher, chunk: bytes) -> None:
-    try:
-        hasher.update(chunk)
-    except Exception as error:
-        raise HasherContractError("content hasher update failed") from error
-
-
-def _finish_content_hasher(hasher: StreamingHasher) -> bytes:
-    try:
-        digest = hasher.digest()
-    except Exception as error:
-        raise HasherContractError("content hasher digest failed") from error
-    return require_content_digest(digest)
 
 
 class NativeCopyBackend:
@@ -168,7 +141,7 @@ class NativeCopyBackend:
 
         def hasher_worker() -> None:
             try:
-                hasher = _new_content_hasher(self._hasher_factory)
+                hasher = new_content_hasher(self._hasher_factory)
                 while not abort.is_set():
                     try:
                         item = hash_queue.get(timeout=_PIPELINE_POLL_SECONDS)
@@ -177,11 +150,11 @@ class NativeCopyBackend:
                     except ShutDown:
                         return
                     if item is _PIPELINE_EOF:
-                        digest_result.append(_finish_content_hasher(hasher))
+                        digest_result.append(finish_content_hasher(hasher))
                         put_worker(write_queue, _PIPELINE_EOF)
                         return
                     chunk = cast(bytes, item)
-                    _update_content_hasher(hasher, chunk)
+                    update_content_hasher(hasher, chunk)
                     if abort.is_set():
                         return
                     put_worker(write_queue, chunk)

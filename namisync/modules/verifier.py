@@ -20,11 +20,11 @@ from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
     HasherContractError,
-    HasherFactory,
     Provenance,
     RecordingStatus,
-    StreamingHasher,
-    require_content_digest,
+    finish_content_hasher,
+    new_content_hasher,
+    update_content_hasher,
 )
 from namisync.core.events import Progress
 from namisync.core.integrity import (
@@ -93,33 +93,6 @@ _ERROR_PATH_NOT_FOUND = 3
 _ERROR_ACCESS_DENIED = 5
 _ERROR_INVALID_PARAMETER = 87
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
-
-
-def _new_content_hasher(factory: HasherFactory) -> StreamingHasher:
-    try:
-        hasher = factory()
-    except Exception as error:
-        raise HasherContractError("content hasher factory failed") from error
-    if not callable(getattr(hasher, "update", None)):
-        raise HasherContractError("content hasher must provide update(bytes)")
-    if not callable(getattr(hasher, "digest", None)):
-        raise HasherContractError("content hasher must provide digest()")
-    return hasher
-
-
-def _update_content_hasher(hasher: StreamingHasher, chunk: bytes) -> None:
-    try:
-        hasher.update(chunk)
-    except Exception as error:
-        raise HasherContractError("content hasher update failed") from error
-
-
-def _finish_content_hasher(hasher: StreamingHasher) -> bytes:
-    try:
-        digest = hasher.digest()
-    except Exception as error:
-        raise HasherContractError("content hasher digest failed") from error
-    return require_content_digest(digest)
 
 
 def _reader_for_context(
@@ -274,6 +247,20 @@ class _SubjectClassification:
     read_strategy: ReadStrategy | None = None
     bytes_read: int = 0
     attestation: Attestation | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordingObservation:
+    disposition: RecordDisposition | None = None
+    error_detail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordingSettlement:
+    reason: IntegrityReason | None
+    detail: str | None
+    recording: RecordingStatus
+    record_disposition: RecordDisposition | None
 
 
 class _ProgressReporter:
@@ -765,13 +752,13 @@ def _classify_subject(
                     read_strategy=stream.strategy,
                 )
 
-            digest = _new_content_hasher(ctx.hasher_factory)
+            digest = new_content_hasher(ctx.hasher_factory)
             bytes_read = 0
             for chunk in stream.iter_chunks(ctx.chunk_size):
                 ctx.run.checkpoint()
                 if not chunk:
                     continue
-                _update_content_hasher(digest, chunk)
+                update_content_hasher(digest, chunk)
                 bytes_read += len(chunk)
                 on_bytes(len(chunk))
 
@@ -795,7 +782,7 @@ def _classify_subject(
                     bytes_read=bytes_read,
                 )
 
-            actual_digest = _finish_content_hasher(digest)
+            actual_digest = finish_content_hasher(digest)
             if (
                 mode is IntegrityMode.VERIFY
                 and baseline is not None
@@ -867,6 +854,53 @@ def _invalidation_reason(
     raise ValueError("only missing, modified, or mismatched results invalidate verification")
 
 
+def _observe_recording(
+    call: Callable[[], RecordDisposition | None],
+) -> _RecordingObservation:
+    try:
+        disposition = call()
+    except Exception as exc:
+        return _RecordingObservation(error_detail=_error_detail(exc))
+    return _RecordingObservation(disposition=disposition)
+
+
+def _reduce_recording(
+    observation: _RecordingObservation,
+    *,
+    reason: IntegrityReason | None,
+    detail: str | None,
+) -> _RecordingSettlement:
+    """Reduce one recorder observation without performing I/O."""
+
+    if observation.error_detail is not None:
+        return _RecordingSettlement(
+            IntegrityReason.RECORDING_ERROR,
+            observation.error_detail,
+            RecordingStatus.DEGRADED,
+            None,
+        )
+    if observation.disposition in {
+        RecordDisposition.STALE,
+        RecordDisposition.CONFLICT,
+    }:
+        return _RecordingSettlement(
+            (
+                IntegrityReason.RECORDING_STALE
+                if observation.disposition is RecordDisposition.STALE
+                else IntegrityReason.RECORDING_CONFLICT
+            ),
+            None,
+            RecordingStatus.DEGRADED,
+            observation.disposition,
+        )
+    return _RecordingSettlement(
+        reason,
+        detail,
+        RecordingStatus.OK,
+        observation.disposition,
+    )
+
+
 def _record_invalidation_outcome(
     item: IntegritySelectionItem,
     mode: IntegrityMode,
@@ -878,47 +912,23 @@ def _record_invalidation_outcome(
     recorder: IntegrityRecorder,
     bytes_read: int,
 ) -> _ProcessedItem:
-    try:
-        disposition = recorder.record_verification_invalidation(command)
-    except Exception as exc:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                mode,
-                result,
-                IntegrityReason.RECORDING_ERROR,
-                _error_detail(exc),
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-            ),
-            bytes_read,
-        )
-    if disposition in {RecordDisposition.STALE, RecordDisposition.CONFLICT}:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                mode,
-                result,
-                (
-                    IntegrityReason.RECORDING_STALE
-                    if disposition is RecordDisposition.STALE
-                    else IntegrityReason.RECORDING_CONFLICT
-                ),
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-                record_disposition=disposition,
-            ),
-            bytes_read,
-        )
+    settlement = _reduce_recording(
+        _observe_recording(
+            lambda: recorder.record_verification_invalidation(command)
+        ),
+        reason=reason,
+        detail=detail,
+    )
     return _ProcessedItem(
         _outcome(
             item,
             mode,
             result,
-            reason,
-            detail,
+            settlement.reason,
+            settlement.detail,
             read_strategy=strategy,
-            record_disposition=disposition,
+            recording=settlement.recording,
+            record_disposition=settlement.record_disposition,
         ),
         bytes_read,
     )
@@ -933,55 +943,21 @@ def _record_outcome(
     recorder: IntegrityRecorder,
     bytes_read: int,
 ) -> _ProcessedItem:
-    try:
-        disposition = recorder.record_integrity(command)
-    except Exception as exc:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                mode,
-                result,
-                IntegrityReason.RECORDING_ERROR,
-                _error_detail(exc),
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-            ),
-            bytes_read,
-        )
-
-    if disposition is RecordDisposition.STALE:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                mode,
-                result,
-                IntegrityReason.RECORDING_STALE,
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-                record_disposition=disposition,
-            ),
-            bytes_read,
-        )
-    if disposition is RecordDisposition.CONFLICT:
-        return _ProcessedItem(
-            _outcome(
-                item,
-                mode,
-                result,
-                IntegrityReason.RECORDING_CONFLICT,
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-                record_disposition=disposition,
-            ),
-            bytes_read,
-        )
+    settlement = _reduce_recording(
+        _observe_recording(lambda: recorder.record_integrity(command)),
+        reason=None,
+        detail=None,
+    )
     return _ProcessedItem(
         _outcome(
             item,
             mode,
             result,
+            settlement.reason,
+            settlement.detail,
             read_strategy=strategy,
-            record_disposition=disposition,
+            recording=settlement.recording,
+            record_disposition=settlement.record_disposition,
         ),
         bytes_read,
     )
@@ -998,51 +974,20 @@ def _record_post_copy_outcome(
     identity = candidate.recorded_identity
     if identity is None:  # guarded by the caller; defensive only
         raise RuntimeError("post-copy recording requires a durable identity")
-    try:
-        disposition = recorder.record_integrity(command)
-    except Exception as exc:
-        return _ProcessedItem(
-            _post_copy_outcome(
-                candidate,
-                result,
-                IntegrityReason.RECORDING_ERROR,
-                _error_detail(exc),
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-            ),
-            bytes_read,
-        )
-
-    if disposition is RecordDisposition.STALE:
-        return _ProcessedItem(
-            _post_copy_outcome(
-                candidate,
-                result,
-                IntegrityReason.RECORDING_STALE,
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-                record_disposition=disposition,
-            ),
-            bytes_read,
-        )
-    if disposition is RecordDisposition.CONFLICT:
-        return _ProcessedItem(
-            _post_copy_outcome(
-                candidate,
-                result,
-                IntegrityReason.RECORDING_CONFLICT,
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-                record_disposition=disposition,
-            ),
-            bytes_read,
-        )
+    settlement = _reduce_recording(
+        _observe_recording(lambda: recorder.record_integrity(command)),
+        reason=None,
+        detail=None,
+    )
     return _ProcessedItem(
         _post_copy_outcome(
             candidate,
             result,
+            settlement.reason,
+            settlement.detail,
             read_strategy=strategy,
-            record_disposition=disposition,
+            recording=settlement.recording,
+            record_disposition=settlement.record_disposition,
         ),
         bytes_read,
     )
@@ -1058,44 +1003,22 @@ def _record_post_copy_invalidation(
     recorder: IntegrityRecorder,
     bytes_read: int,
 ) -> _ProcessedItem:
-    try:
-        disposition = recorder.record_verification_invalidation(command)
-    except Exception as exc:
-        return _ProcessedItem(
-            _post_copy_outcome(
-                candidate,
-                result,
-                IntegrityReason.RECORDING_ERROR,
-                _error_detail(exc),
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-            ),
-            bytes_read,
-        )
-    if disposition in {RecordDisposition.STALE, RecordDisposition.CONFLICT}:
-        return _ProcessedItem(
-            _post_copy_outcome(
-                candidate,
-                result,
-                (
-                    IntegrityReason.RECORDING_STALE
-                    if disposition is RecordDisposition.STALE
-                    else IntegrityReason.RECORDING_CONFLICT
-                ),
-                read_strategy=strategy,
-                recording=RecordingStatus.DEGRADED,
-                record_disposition=disposition,
-            ),
-            bytes_read,
-        )
+    settlement = _reduce_recording(
+        _observe_recording(
+            lambda: recorder.record_verification_invalidation(command)
+        ),
+        reason=reason,
+        detail=detail,
+    )
     return _ProcessedItem(
         _post_copy_outcome(
             candidate,
             result,
-            reason,
-            detail,
+            settlement.reason,
+            settlement.detail,
             read_strategy=strategy,
-            record_disposition=disposition,
+            recording=settlement.recording,
+            record_disposition=settlement.record_disposition,
         ),
         bytes_read,
     )
