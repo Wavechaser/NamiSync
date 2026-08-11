@@ -20,6 +20,7 @@ import math
 import os
 from pathlib import Path, PureWindowsPath
 import stat as stat_module
+import subprocess
 import tempfile
 from typing import Any
 
@@ -70,6 +71,11 @@ from namisync.modules.executor import ExecutorPolicies, NativeFileSystem, execut
 FORMAT_VERSION = 1
 RUN_ID = validated_run_id("a" * 32)
 DEFAULT_BASELINE = Path(__file__).with_name("executor_settlement_baseline.json")
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_BASELINE_GIT_PATH = "tools/executor_settlement_baseline.json"
+REVIEWED_BASELINE_SHA256 = (
+    "261fab6f9af30bf79590d0a4e1fbc9ab6c706bafdb86748802dcc2da3035c0b3"
+)
 _BYTE_KINDS = frozenset(
     {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
 )
@@ -188,6 +194,17 @@ class TracingFileSystem:
             if rule.matches(method, phase, args, kwargs, result):
                 rule.fire(args, kwargs, result)
 
+    def require_faults_consumed(self, row: str) -> None:
+        unused = [
+            f"{index}:{rule.method}/{rule.phase} remaining={rule.remaining}"
+            for index, rule in enumerate(self._rules, start=1)
+            if rule.remaining != 0
+        ]
+        if unused:
+            raise AuditError(
+                f"{row}: installed fault rules were not consumed: {', '.join(unused)}"
+            )
+
     def path(self, value: Path | str) -> str:
         candidate = Path(value)
         for root, label in (
@@ -298,8 +315,14 @@ class TracingFileSystem:
 class SynchronousCopyBackend:
     """Deterministic one-thread CopyBackend used to isolate settlement policy."""
 
-    def __init__(self, *, fail_before_read: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail_before_read: bool = False,
+        fail_midcopy_sharing_once: bool = False,
+    ) -> None:
         self.fail_before_read = fail_before_read
+        self.fail_midcopy_sharing_once = fail_midcopy_sharing_once
         self.calls = 0
         self.trace: list[dict[str, object]] = []
         self._timeline: list[str] = []
@@ -342,6 +365,8 @@ class SynchronousCopyBackend:
                 chunk = source.read(chunk_size)
                 if not chunk:
                     break
+                if self.fail_midcopy_sharing_once and call == 1 and chunks == 1:
+                    raise _sharing_error("injected mid-copy sharing failure")
                 hasher.update(chunk)
                 view = memoryview(chunk)
                 written = 0
@@ -1089,6 +1114,8 @@ def _run_fixture(
         raised = error
     except BaseException as error:  # retained as evidence; the oracle rejects it
         raised = error
+
+    filesystem.require_faults_consumed(row)
 
     return _build_report(
         row=row,
@@ -2621,15 +2648,16 @@ def _update_backup_state_matrix(base: Path) -> list[dict[str, object]]:
                     and Path(args[0]) == backup
                 )
 
-            rules = (
-                FaultRule("replace", "before", fail_replace),
-                FaultRule(
-                    "stat_path",
-                    "before",
-                    _raise(lambda: PermissionError("backup probe unavailable")),
-                    predicate=unavailable_backup_probe,
-                ),
-            )
+            rules = (FaultRule("replace", "before", fail_replace),)
+            if backup_state == "unverified":
+                rules += (
+                    FaultRule(
+                        "stat_path",
+                        "before",
+                        _raise(lambda: PermissionError("backup probe unavailable")),
+                        predicate=unavailable_backup_probe,
+                    ),
+                )
             reports.append(
                 _run_fixture(
                     source,
@@ -2726,6 +2754,28 @@ def _cleanup_ordinary_matrix(base: Path) -> list[dict[str, object]]:
                     _raise(lambda: _sharing_error("retry after prepared temp")),
                 ),
             ),
+            retries=1,
+        )
+    )
+
+    source, target, fs = _roots(base, "pre-retry-cleanup-failure")
+    operation = _copy_operation(source, target, fs)
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="cleanup.ordinary.pre-retry-cleanup-fails",
+            rules=(
+                FaultRule(
+                    "remove_owned_temp",
+                    "before",
+                    _raise(lambda: PermissionError("injected retry cleanup failure")),
+                    predicate=lambda args, _kwargs, _result: bool(args)
+                    and Path(args[0]).exists(),
+                ),
+            ),
+            backend=SynchronousCopyBackend(fail_midcopy_sharing_once=True),
             retries=1,
         )
     )
@@ -2939,6 +2989,7 @@ def _resume_same_execution_set(base: Path) -> list[dict[str, object]]:
         or raised is not None
     ):
         raise AuditError("terminal execution-set reinvocation did not remain complete")
+    filesystem.require_faults_consumed("resume.pause-same-execution-set")
     report = _build_report(
         row="resume.pause-same-execution-set",
         source=source,
@@ -3590,6 +3641,7 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
             "cancel.move-update-partial-publish",
             "pause.copy-prepared",
             "cleanup.ordinary.no-durable-cleanup-failure",
+            "cleanup.ordinary.pre-retry-cleanup-fails",
             "cleanup.canceled-failure",
             "mkdir.primitive-precommit-unchanged",
             "mkdir.primitive-commit-then-raise",
@@ -4589,6 +4641,21 @@ _CLEANUP_ORDINARY_MATRIX = (
         returned=SessionState.FAILED.value,
         raised=None,
         recording=RecordingStatus.OK.value,
+        items=(_item(OperationKind.COPY, Outcome.FAILED, "cleanup-failed"),),
+        recorder_commands=(),
+        tree_files=(
+            (f"$TARGET/copy.bin.synctmp-{RUN_ID}-{1:032x}", "copy"),
+        ),
+        tree_absent=("$TARGET/copy.bin",),
+        backend_calls=1,
+        policy_decisions=("retry",),
+        fs_counts=(("remove_owned_temp", 2),),
+        row="cleanup.ordinary.pre-retry-cleanup-fails",
+    ),
+    ExpectedSettlement(
+        returned=SessionState.FAILED.value,
+        raised=None,
+        recording=RecordingStatus.OK.value,
         items=(
             _item(
                 OperationKind.UPDATE,
@@ -4926,6 +4993,7 @@ _RESULT_BYTES: dict[str, tuple[int, int]] = {
     "cleanup.ordinary.no-durable-cleanup-failure": (0, 12),
     "cleanup.ordinary.stale-owned-temp-recovered": (12, 12),
     "cleanup.ordinary.pre-retry-cleanup-succeeds": (12, 12),
+    "cleanup.ordinary.pre-retry-cleanup-fails": (4, 12),
     "cleanup.ordinary.durable-verdict-plus-cleanup-failure": (11, 11),
     "recording.final-flush-degradation": (12, 12),
     "recording.sticky-aggregate-degradation": (24, 24),
@@ -5313,6 +5381,7 @@ def _build_tree_metadata_relations() -> dict[
     add(
         (
             "cleanup.ordinary.no-durable-cleanup-failure",
+            "cleanup.ordinary.pre-retry-cleanup-fails",
             "cleanup.canceled-failure",
         ),
         empty_temp,
@@ -5644,6 +5713,12 @@ _EXACT_ITEM_DETAILS: dict[str, tuple[Mapping[str, object], ...]] = {
         _details(
             error_type="OperationFailure",
             message="operation failed and its owned temp could not be removed: injected temp cleanup failure",
+        ),
+    ),
+    "cleanup.ordinary.pre-retry-cleanup-fails": (
+        _details(
+            error_type="OperationFailure",
+            message="operation failed and its owned temp could not be removed: injected retry cleanup failure",
         ),
     ),
     "cleanup.ordinary.durable-verdict-plus-cleanup-failure": (
@@ -6411,6 +6486,7 @@ _REQUIRED_ROWS = frozenset(
         "cleanup.ordinary.no-durable-cleanup-failure",
         "cleanup.ordinary.stale-owned-temp-recovered",
         "cleanup.ordinary.pre-retry-cleanup-succeeds",
+        "cleanup.ordinary.pre-retry-cleanup-fails",
         "cleanup.ordinary.durable-verdict-plus-cleanup-failure",
         "cleanup.canceled-failure",
         "mkdir.primitive-precommit-unchanged",
@@ -6755,15 +6831,10 @@ def _strict_json_float(value: str) -> float:
     return parsed
 
 
-def _read_baseline(path: Path) -> Mapping[str, object]:
-    if not path.is_file():
-        raise AuditError(
-            f"settlement baseline is missing: {path}; snapshot the corrected "
-            "committed monolith before restructuring"
-        )
+def _parse_baseline(text: str, source: str) -> Mapping[str, object]:
     try:
         data = json.loads(
-            path.read_text(encoding="utf-8"),
+            text,
             object_pairs_hook=_strict_json_object,
             parse_constant=_reject_json_constant,
             parse_float=_strict_json_float,
@@ -6780,8 +6851,8 @@ def _read_baseline(path: Path) -> Mapping[str, object]:
         raise AuditError(
             f"settlement baseline contains non-finite JSON number: {error}"
         ) from error
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise AuditError(f"cannot read settlement baseline {path}: {error}") from error
+    except json.JSONDecodeError as error:
+        raise AuditError(f"cannot read settlement baseline {source}: {error}") from error
     if not isinstance(data, Mapping):
         raise AuditError("settlement baseline root must be an object")
     required = {"format_version", "repeat", "manifest", "scenarios"}
@@ -6807,6 +6878,98 @@ def _read_baseline(path: Path) -> Mapping[str, object]:
     ):
         raise AuditError("settlement baseline manifest/scenarios have the wrong type")
     return data
+
+
+def _read_baseline(path: Path) -> Mapping[str, object]:
+    if not path.is_file():
+        raise AuditError(
+            f"settlement baseline is missing: {path}; snapshot the corrected "
+            "committed monolith before restructuring"
+        )
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise AuditError(f"cannot read settlement baseline {path}: {error}") from error
+    return _parse_baseline(text, str(path))
+
+
+def _is_default_baseline(path: Path) -> bool:
+    return os.path.normcase(str(path.resolve())) == os.path.normcase(
+        str(DEFAULT_BASELINE.resolve())
+    )
+
+
+def _run_git(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+    try:
+        return subprocess.run(
+            ("git", *arguments),
+            cwd=_REPOSITORY_ROOT,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as error:
+        raise AuditError(
+            f"cannot inspect committed settlement baseline: {error}"
+        ) from error
+
+
+def _read_reviewed_committed_baseline() -> Mapping[str, object]:
+    cleanliness_checks = (
+        (
+            "staged",
+            (
+                "diff",
+                "--cached",
+                "--quiet",
+                "HEAD",
+                "--",
+                _DEFAULT_BASELINE_GIT_PATH,
+            ),
+        ),
+        (
+            "unstaged",
+            ("diff", "--quiet", "--", _DEFAULT_BASELINE_GIT_PATH),
+        ),
+    )
+    for label, arguments in cleanliness_checks:
+        dirty = _run_git(*arguments)
+        if dirty.returncode == 1:
+            raise AuditError(
+                f"default settlement baseline has {label} changes; the official "
+                "check requires the reviewed baseline to be committed and clean"
+            )
+        if dirty.returncode != 0:
+            message = dirty.stderr.decode("utf-8", errors="replace").strip()
+            raise AuditError(
+                "cannot inspect committed settlement baseline"
+                + (f": {message}" if message else "")
+            )
+
+    committed = _run_git("show", f"HEAD:{_DEFAULT_BASELINE_GIT_PATH}")
+    if committed.returncode != 0:
+        message = committed.stderr.decode("utf-8", errors="replace").strip()
+        raise AuditError(
+            "cannot read committed settlement baseline"
+            + (f": {message}" if message else "")
+        )
+    try:
+        text = committed.stdout.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise AuditError(
+            "cannot read committed settlement baseline as UTF-8"
+        ) from error
+    baseline = _parse_baseline(text, f"HEAD:{_DEFAULT_BASELINE_GIT_PATH}")
+    observed_digest = hashlib.sha256(
+        _canonical(baseline).encode("utf-8")
+    ).hexdigest()
+    if observed_digest != REVIEWED_BASELINE_SHA256:
+        raise AuditError(
+            "committed settlement baseline is not the reviewed baseline: "
+            f"expected semantic SHA-256 {REVIEWED_BASELINE_SHA256}, "
+            f"observed {observed_digest}"
+        )
+    return baseline
 
 
 def _baseline_differences(
@@ -6950,6 +7113,16 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.command in {"snapshot", "check"} and args.repeat < 3:
             raise AuditError(f"{args.command} requires at least three repeats")
+        baseline: Mapping[str, object] | None = None
+        official_check = args.command == "check" and _is_default_baseline(
+            args.baseline
+        )
+        if args.command == "check":
+            baseline = (
+                _read_reviewed_committed_baseline()
+                if official_check
+                else _read_baseline(args.baseline)
+            )
         capture = capture_all(repeat=args.repeat)
         if args.command == "oracle":
             _print_errors(capture)
@@ -6966,7 +7139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"wrote settlement baseline: {args.baseline}")
             return 0
 
-        baseline = _read_baseline(args.baseline)
+        if baseline is None:
+            baseline = _read_baseline(args.baseline)
         differences = _baseline_differences(baseline, capture)
         if args.command == "diff":
             for difference in differences:
@@ -6980,7 +7154,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         for difference in differences:
             print(f"diff: {difference}")
         if capture.ok and not differences:
-            print(f"settlement check passed: {len(SCENARIOS)} scenarios x {args.repeat} runs")
+            if official_check:
+                print(
+                    "settlement check passed: "
+                    f"{len(SCENARIOS)} scenarios x {args.repeat} runs"
+                )
+            else:
+                print(
+                    "unpinned custom-baseline diagnostic passed: "
+                    f"{len(SCENARIOS)} scenarios x {args.repeat} runs"
+                )
             return 0
         return 1
     except AuditError as error:

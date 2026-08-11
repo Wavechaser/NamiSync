@@ -403,14 +403,25 @@ with oracle `format_version: 1`. The resume gate is exactly:
 python -m tools.executor_settlement_audit check --repeat 3
 ```
 
-For the current 30-scenario manifest, success ends with
+For the current 30-scenario, 58-row manifest, success ends with
 `settlement check passed: 30 scenarios x 3 runs`. The command is read-only: it
 requires all independent policy expectations, three byte-identical normalized
-captures, and exact manifest/trace parity with the committed baseline. Package
-split, journal, reducer, verifier-split, and immediate stabilization commits
-must not edit or regenerate that baseline. Only a separately reviewed and
-documented settlement-policy fix may replace it after its focused regression
-lands and the three-run gate is restarted.
+captures, and exact manifest/trace parity with the clean baseline at `HEAD`.
+The canonical JSON must also match the separately reviewed semantic SHA-256
+pinned in the tool, so a staged, worktree-only, or unpinned committed baseline
+replacement cannot satisfy the official gate. A non-default `--baseline` check
+is labeled as an unpinned diagnostic and is not a resume gate. Package split,
+journal, reducer, verifier-split, and immediate stabilization commits must not
+edit or regenerate that baseline. Only a separately reviewed and documented
+settlement-policy fix may replace it after its focused regression lands. The
+replacement baseline and its semantic pin then land together in one dedicated,
+reviewed baseline-replacement commit before the three-run gate is restarted.
+
+Fixture fault injection is fail-closed: every installed rule must fire its
+declared number of times. The cleanup matrix includes the failed pre-retry temp
+cleanup regression, requiring `cleanup-failed` settlement before retry sleep or
+another control checkpoint while retaining the exact-name partial temp for
+fresh-run recovery.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the

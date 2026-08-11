@@ -56,17 +56,24 @@ The portable resume gate is exactly:
 python -m tools.executor_settlement_audit check --repeat 3
 ```
 
-For the current 30-scenario manifest, a successful gate ends with
+For the current 30-scenario, 58-row manifest, a successful gate ends with
 `settlement check passed: 30 scenarios x 3 runs`. `check` performs three fresh
 complete captures, requires every in-code policy row to pass, requires the
 three normalized traces to be byte-identical, and then compares that trace and
-manifest with the committed baseline. It is read-only and never refreshes the
-baseline.
+manifest with the clean baseline stored at `HEAD`. The default baseline's
+canonical JSON also must match the separately reviewed semantic SHA-256 pinned
+in the tool. Staged or unstaged changes to that file make the official check
+fail; unrelated worktree changes do not. The command is read-only and never
+refreshes the baseline.
 
 The in-code oracle is independent of
 `tools/executor_settlement_baseline.json`. Each manifest row declares its
 expected terminal outcome, reason, recording state, durable-state detail,
 recorder behavior, retry/control behavior, cleanup, evidence, and final tree.
+Every installed filesystem fault rule must fire its declared number of times;
+an unused or partly consumed rule invalidates the fixture. The cleanup matrix
+includes failed pre-retry temp cleanup and proves it settles immediately as
+`cleanup-failed`, without sleeping or entering another control checkpoint.
 The JSON baseline separately retains the complete normalized collaborator and
 filesystem-boundary trace from the corrected monolith. `check` requires both
 the policy oracle and the historical trace to match; either can fail while the
@@ -74,13 +81,23 @@ other passes.
 
 `snapshot` requires at least three byte-identical complete runs, refuses every
 oracle mismatch, writes atomically, and will not replace an existing baseline
-unless `--replace` is explicit. `--baseline PATH` redirects snapshot/diff/check
-for tool testing. A snapshot is never an "accept current behavior" mechanism:
+unless `--replace` is explicit. `--baseline PATH` redirects snapshot and diff;
+on `check`, a path other than the default is explicitly labeled as an unpinned
+custom-baseline diagnostic and is not the resume gate. Resolving an alias of the
+default path cannot bypass its Git and semantic-pin checks. A snapshot is never
+an "accept current behavior" mechanism:
 when the oracle exposes a policy defect, fix and document that defect in its
 own commit, add its focused regression, restart the three-run gate, and only
 then replace the corrected baseline in a separate checkpoint. Executor split,
 journal, reducer, verifier, and test-consolidation commits run `check`; they do
 not refresh the snapshot to make a difference pass.
+
+After a reviewed policy correction expands or changes the baseline, commit the
+replacement baseline and the explicit `REVIEWED_BASELINE_SHA256` update together
+in one dedicated baseline-replacement commit, separate from the oracle or
+behavior correction. Only then does the restarted three-run `check` establish
+the new structural-refactor gate. This makes a baseline replacement visible
+even if it accompanies an accidental behavior change.
 
 Absolute roots, volatile timestamps, native identities, handles, and wall time
 are removed from retained output. Symbolic paths preserve source/target/temp/

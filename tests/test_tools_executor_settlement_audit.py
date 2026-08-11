@@ -6,6 +6,7 @@ import copy
 from dataclasses import fields, replace
 import json
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -93,6 +94,7 @@ _EXPECTED_ROWS = frozenset(
         "cleanup.ordinary.no-durable-cleanup-failure",
         "cleanup.ordinary.stale-owned-temp-recovered",
         "cleanup.ordinary.pre-retry-cleanup-succeeds",
+        "cleanup.ordinary.pre-retry-cleanup-fails",
         "cleanup.ordinary.durable-verdict-plus-cleanup-failure",
         "cleanup.canceled-failure",
         "mkdir.primitive-precommit-unchanged",
@@ -197,6 +199,20 @@ def _subcommands(parser: argparse.ArgumentParser) -> dict[str, argparse.Argument
     return dict(action.choices)
 
 
+def _git_result(
+    returncode: int,
+    *,
+    stdout: bytes = b"",
+    stderr: bytes = b"",
+) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.CompletedProcess(
+        args=("git",),
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
 def test_audit_imports_executor_only_through_its_public_facade() -> None:
     source_path = Path(audit.__file__)
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
@@ -250,7 +266,7 @@ def test_manifest_is_complete_labeled_and_has_no_escape_state() -> None:
         kind for scenario in audit.SCENARIOS for kind in scenario.kinds
     } == set(OperationKind)
     rows = [expected.row for scenario in audit.SCENARIOS for expected in scenario.expected]
-    assert len(rows) == 57
+    assert len(rows) == 58
     assert len(rows) == len(set(rows))
     assert frozenset(rows) == _EXPECTED_ROWS
     assert [
@@ -1042,6 +1058,67 @@ def test_representative_capture_is_oracle_clean_and_deterministic() -> None:
     ] == "failure.move-precommit-unchanged"
 
 
+def test_cleanup_matrix_covers_failed_pre_retry_cleanup() -> None:
+    capture = audit.capture_one("cleanup.ordinary-matrix")
+
+    assert capture.ok
+    variants = capture.scenarios["cleanup.ordinary-matrix"]["variants"]
+    report = next(
+        variant
+        for variant in variants
+        if variant["row"] == "cleanup.ordinary.pre-retry-cleanup-fails"
+    )
+    owned_temp = (
+        f"$TARGET/copy.bin.synctmp-{audit.RUN_ID}-"
+        f"{1:032x}"
+    )
+    assert report["termination"] == {"returned": "failed", "raised": None}
+    assert report["items"] == [
+        {
+            "op": f"{1:032x}",
+            "kind": "copy",
+            "path": "copy.bin",
+            "outcome": "failed",
+            "reason": "cleanup-failed",
+            "detail": {
+                "error_type": "OperationFailure",
+                "message": (
+                    "operation failed and its owned temp could not be removed: "
+                    "injected retry cleanup failure"
+                ),
+            },
+        }
+    ]
+    assert report["failure_policy"]["trace"][0]["decision"] == "retry"
+    assert report["control"] == {"checkpoints": 2, "sleeps": []}
+    assert report["copy_backend"]["calls"] == 1
+    assert report["copy_backend"]["trace"][0]["error"] == "OSError"
+    assert report["filesystem"]["counts"]["remove_owned_temp"] == 2
+    assert report["tree"][owned_temp]["text"] == "copy"
+    assert "$TARGET/copy.bin" not in report["tree"]
+
+
+def test_fixture_rejects_every_unconsumed_fault_rule(tmp_path: Path) -> None:
+    source, target, fs = audit._roots(tmp_path)
+    operation = audit._copy_operation(source, target, fs)
+    unused = audit.FaultRule("replace", "before", lambda *_args: None)
+
+    with pytest.raises(
+        audit.AuditError,
+        match=(
+            r"unused-fault: installed fault rules were not consumed: "
+            r"1:replace/before remaining=1"
+        ),
+    ):
+        audit._run_fixture(
+            source,
+            target,
+            (operation,),
+            row="unused-fault",
+            rules=(unused,),
+        )
+
+
 def test_cli_lists_the_exact_manifest_and_rejects_an_unknown_scenario(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -1285,6 +1362,190 @@ def test_missing_baseline_is_a_clear_hard_check_failure(
     output = capsys.readouterr().out
     assert f"settlement baseline is missing: {missing}" in output
     assert "snapshot the corrected committed monolith" in output
+
+
+def test_official_check_reads_clean_head_baseline_and_enforces_semantic_pin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, ...]] = []
+    payload = json.loads(audit.DEFAULT_BASELINE.read_text(encoding="utf-8"))
+    committed = json.dumps(payload, indent=1).replace("\n", "\r\n").encode("utf-8")
+
+    def fake_git(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        calls.append(arguments)
+        if arguments[0] == "diff":
+            return _git_result(0)
+        return _git_result(0, stdout=committed)
+
+    monkeypatch.setattr(audit, "_run_git", fake_git)
+
+    baseline = audit._read_reviewed_committed_baseline()
+
+    assert baseline["format_version"] == audit.FORMAT_VERSION
+    assert calls == [
+        (
+            "diff",
+            "--cached",
+            "--quiet",
+            "HEAD",
+            "--",
+            "tools/executor_settlement_baseline.json",
+        ),
+        (
+            "diff",
+            "--quiet",
+            "--",
+            "tools/executor_settlement_baseline.json",
+        ),
+        ("show", "HEAD:tools/executor_settlement_baseline.json"),
+    ]
+
+
+@pytest.mark.parametrize("dirty_check", [1, 2])
+def test_official_check_rejects_a_dirty_or_staged_default_baseline(
+    dirty_check: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fake_git(*_arguments: str) -> subprocess.CompletedProcess[bytes]:
+        nonlocal calls
+        calls += 1
+        return _git_result(1 if calls == dirty_check else 0)
+
+    monkeypatch.setattr(audit, "_run_git", fake_git)
+
+    with pytest.raises(audit.AuditError, match="staged|unstaged"):
+        audit._read_reviewed_committed_baseline()
+
+
+def test_dirty_default_baseline_stops_official_check_before_capture(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(audit, "_run_git", lambda *_args: _git_result(1))
+
+    def unexpected_capture(*, repeat: int) -> audit.Capture:
+        raise AssertionError(f"capture unexpectedly ran with repeat={repeat}")
+
+    monkeypatch.setattr(audit, "capture_all", unexpected_capture)
+
+    assert audit.main(["check", "--repeat", "3"]) == 2
+    assert "has staged changes" in capsys.readouterr().out
+
+
+def test_git_unavailable_stops_official_check_before_capture(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def unavailable(*_args: object, **_kwargs: object) -> object:
+        raise FileNotFoundError("git is unavailable")
+
+    def unexpected_capture(*, repeat: int) -> audit.Capture:
+        raise AssertionError(f"capture unexpectedly ran with repeat={repeat}")
+
+    monkeypatch.setattr(audit.subprocess, "run", unavailable)
+    monkeypatch.setattr(audit, "capture_all", unexpected_capture)
+
+    assert audit.main(["check", "--repeat", "3"]) == 2
+    assert "cannot inspect committed settlement baseline" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("results", "message"),
+    [
+        ((_git_result(2, stderr=b"fatal diff"),), "fatal diff"),
+        (
+            (
+                _git_result(0),
+                _git_result(0),
+                _git_result(128, stderr=b"missing HEAD baseline"),
+            ),
+            "cannot read committed settlement baseline: missing HEAD baseline",
+        ),
+    ],
+)
+def test_git_errors_stop_official_check_before_capture(
+    results: tuple[subprocess.CompletedProcess[bytes], ...],
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pending = iter(results)
+    monkeypatch.setattr(audit, "_run_git", lambda *_args: next(pending))
+
+    def unexpected_capture(*, repeat: int) -> audit.Capture:
+        raise AssertionError(f"capture unexpectedly ran with repeat={repeat}")
+
+    monkeypatch.setattr(audit, "capture_all", unexpected_capture)
+
+    assert audit.main(["check", "--repeat", "3"]) == 2
+    assert message in capsys.readouterr().out
+
+
+def test_official_check_rejects_a_committed_baseline_with_a_stale_pin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    committed = audit.DEFAULT_BASELINE.read_bytes()
+
+    def fake_git(*arguments: str) -> subprocess.CompletedProcess[bytes]:
+        if arguments[0] == "diff":
+            return _git_result(0)
+        return _git_result(0, stdout=committed)
+
+    monkeypatch.setattr(audit, "_run_git", fake_git)
+    monkeypatch.setattr(audit, "REVIEWED_BASELINE_SHA256", "0" * 64)
+
+    with pytest.raises(audit.AuditError, match="not the reviewed baseline"):
+        audit._read_reviewed_committed_baseline()
+
+
+def test_default_baseline_alias_cannot_bypass_the_official_check(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    capture = _capture()
+    baseline = audit._baseline_payload(capture)
+    official_calls = 0
+
+    def official() -> dict[str, object]:
+        nonlocal official_calls
+        official_calls += 1
+        return baseline
+
+    def unexpected_worktree_read(_path: Path) -> dict[str, object]:
+        raise AssertionError("official check read the working-tree baseline")
+
+    monkeypatch.setattr(audit, "_read_reviewed_committed_baseline", official)
+    monkeypatch.setattr(audit, "_read_baseline", unexpected_worktree_read)
+    monkeypatch.setattr(audit, "capture_all", lambda *, repeat: capture)
+
+    alias = Path("tools") / "executor_settlement_baseline.json"
+    assert audit.main(["check", "--repeat", "3", "--baseline", str(alias)]) == 0
+    assert official_calls == 1
+    assert "settlement check passed" in capsys.readouterr().out
+
+
+def test_custom_baseline_check_is_labeled_as_an_unpinned_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    capture = _capture()
+    custom = tmp_path / "custom.json"
+    custom.write_text(
+        json.dumps(audit._baseline_payload(capture)),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(audit, "capture_all", lambda *, repeat: capture)
+
+    assert audit.main(
+        ["check", "--repeat", "3", "--baseline", str(custom)]
+    ) == 0
+    assert (
+        "unpinned custom-baseline diagnostic passed: 30 scenarios x 3 runs"
+        in capsys.readouterr().out
+    )
 
 
 @pytest.mark.parametrize(
