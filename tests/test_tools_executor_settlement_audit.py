@@ -1043,6 +1043,71 @@ def test_symbolic_timestamps_preserve_equivalence_and_cover_final_tree(
     )
 
 
+def test_partial_unfinalized_temp_excludes_only_clock_incidental_timestamps() -> None:
+    row = "cleanup.ordinary.pre-retry-cleanup-fails"
+    path = f"$TARGET/copy.bin.synctmp-{audit.RUN_ID}-{1:032x}"
+    common = {
+        "kind": "file",
+        "size": 4,
+        "text": "copy",
+        "identity": "identity-2",
+        "readonly": False,
+    }
+    coincident = {path: {**common, "mtime": "time-3", "created": "time-3"}}
+    distinct = {path: {**common, "mtime": "time-3", "created": "time-4"}}
+
+    normalized_coincident = audit._normalize_clock_incidental_tree_timestamps(
+        row, coincident
+    )
+    normalized_distinct = audit._normalize_clock_incidental_tree_timestamps(
+        row, distinct
+    )
+
+    assert normalized_coincident == normalized_distinct
+    assert normalized_coincident[path] == {
+        **common,
+        "mtime": "$clock-incidental:mtime",
+        "created": "$clock-incidental:created",
+    }
+    assert coincident[path]["created"] == "time-3"
+    assert distinct[path]["created"] == "time-4"
+    assert audit._normalize_clock_incidental_tree_timestamps(
+        "success.all-nine", distinct
+    ) == distinct
+
+
+def test_clock_incidental_timestamp_catalog_is_exact_and_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    row = "cleanup.ordinary.pre-retry-cleanup-fails"
+    path = f"$TARGET/copy.bin.synctmp-{audit.RUN_ID}-{1:032x}"
+    assert audit._CLOCK_INCIDENTAL_TREE_TIMESTAMPS == {
+        row: {path: frozenset({"created", "mtime"})}
+    }
+    assert audit.manifest_errors() == []
+
+    with pytest.raises(audit.AuditError, match="names absent tree path"):
+        audit._normalize_clock_incidental_tree_timestamps(row, {})
+    with pytest.raises(audit.AuditError, match="names absent field"):
+        audit._normalize_clock_incidental_tree_timestamps(
+            row,
+            {path: {"mtime": "time-3"}},
+        )
+
+    monkeypatch.setattr(
+        audit,
+        "_CLOCK_INCIDENTAL_TREE_TIMESTAMPS",
+        {
+            **audit._CLOCK_INCIDENTAL_TREE_TIMESTAMPS,
+            "stale.clock-row": {path: frozenset({"created", "mtime"})},
+        },
+    )
+    assert any(
+        "exact clock-incidental tree timestamps contains stale rows" in error
+        for error in audit.manifest_errors()
+    )
+
+
 def test_representative_capture_is_oracle_clean_and_deterministic() -> None:
     capture = audit.capture_one("failure.move-precommit-unchanged", repeat=2)
 

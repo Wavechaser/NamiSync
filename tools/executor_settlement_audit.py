@@ -80,6 +80,13 @@ _BYTE_KINDS = frozenset(
     {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
 )
 _MISSING = {"$missing": True}
+_CLOCK_INCIDENTAL_TREE_TIMESTAMPS = {
+    "cleanup.ordinary.pre-retry-cleanup-fails": {
+        f"$TARGET/copy.bin.synctmp-{RUN_ID}-{1:032x}": frozenset(
+            {"created", "mtime"}
+        ),
+    },
+}
 
 
 class AuditError(RuntimeError):
@@ -1307,7 +1314,7 @@ def _build_report(
             "trace": filesystem.trace,
         },
         "timeline": timeline,
-        "tree": _tree_snapshot(source, target, filesystem),
+        "tree": _tree_snapshot(source, target, filesystem, row=row),
     }
 
 
@@ -1659,6 +1666,8 @@ def _tree_snapshot(
     source: Path,
     target: Path,
     normalizer: TracingFileSystem,
+    *,
+    row: str,
 ) -> dict[str, object]:
     snapshot: dict[str, object] = {}
     for root, label in ((source, "$SOURCE"), (target, "$TARGET")):
@@ -1698,7 +1707,36 @@ def _tree_snapshot(
                         attributes & stat_module.FILE_ATTRIBUTE_READONLY
                     ),
                 }
-    return dict(sorted(snapshot.items()))
+    return _normalize_clock_incidental_tree_timestamps(
+        row,
+        dict(sorted(snapshot.items())),
+    )
+
+
+def _normalize_clock_incidental_tree_timestamps(
+    row: str,
+    snapshot: Mapping[str, object],
+) -> dict[str, object]:
+    normalized = dict(snapshot)
+    for path, fields_to_exclude in _CLOCK_INCIDENTAL_TREE_TIMESTAMPS.get(
+        row, {}
+    ).items():
+        node = normalized.get(path)
+        if not isinstance(node, Mapping):
+            raise AuditError(
+                f"clock-incidental timestamp declaration names absent tree path: "
+                f"{row} {path}"
+            )
+        replacement = dict(node)
+        for field in fields_to_exclude:
+            if field not in replacement:
+                raise AuditError(
+                    "clock-incidental timestamp declaration names absent field: "
+                    f"{row} {path} {field}"
+                )
+            replacement[field] = f"$clock-incidental:{field}"
+        normalized[path] = replacement
+    return normalized
 
 
 def _created_ns(info: os.stat_result) -> int | None:
@@ -2955,7 +2993,12 @@ def _resume_same_execution_set(base: Path) -> list[dict[str, object]]:
             "reliable_events": reliable,
             "progress_final": progress,
             "recorder": {"trace": recorder.trace},
-            "tree": _tree_snapshot(source, target, filesystem),
+            "tree": _tree_snapshot(
+                source,
+                target,
+                filesystem,
+                row="resume.pause-same-execution-set",
+            ),
         }
         invocation = _policy_projection(snapshot)
         invocation["recorder_commands"] = [
@@ -6561,6 +6604,9 @@ def manifest_errors() -> list[str]:
         "extra tree directories": set(_EXTRA_TREE_DIRECTORIES),
         "extra tree readonly": set(_EXTRA_TREE_READONLY),
         "tree metadata relations": set(_TREE_METADATA_RELATIONS),
+        "clock-incidental tree timestamps": set(
+            _CLOCK_INCIDENTAL_TREE_TIMESTAMPS
+        ),
         "recorder trace schedules": set(_RECORDER_TRACE_SCHEDULES),
     }
     for name, labels in exact_catalogs.items():
