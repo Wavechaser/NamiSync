@@ -198,6 +198,15 @@ source predicate can authorize work or a retained target path can be touched.
 NOOP uses the same binding before recording correspondence, and trash parents
 are not created until the reviewed target root is re-admitted.
 
+Runtime derives each ephemeral `RootAuthority` directly from the fingerprinted
+plan root and reviewed volume facts at the existing guard. Native injects its
+process-cached Windows bindings into fresh anchor/volume probes and supplies
+the legacy executor component classifier to the shared core admission walk,
+then maps typed failures back to the existing `UnsafeExecutionPath` and native
+error vocabulary. Chain-only admission still omits a volume probe when the
+plan carries no expected `VolumeId`; no observation is cached or treated as
+authorization for a later touch.
+
 When changed content also carries an opted-in basename casing change, this same
 required update publishes at the source-spelled basename. Metadata-equal casing
 changes use the zero-byte recase operation below instead of copying content or

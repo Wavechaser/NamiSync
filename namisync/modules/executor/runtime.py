@@ -34,13 +34,18 @@ from namisync.core.execution import (
     Stop,
 )
 from namisync.core.models import EntryKind, FileStat, MANAGED_FILE_ATTRIBUTE_MASK
-from namisync.core.pathing import logical_error_text, normalize_relative_path
+from namisync.core.pathing import (
+    PathValidationError,
+    logical_error_text,
+    normalize_relative_path,
+)
 from namisync.core.planning import (
     OpId,
     OperationKind,
     OperationReason,
     PlanOperation,
 )
+from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -3152,15 +3157,15 @@ def _revalidate_target_root(
     xset: ExecutionSet,
     target_root: Path,
 ) -> None:
-    evidence = xset.plan.target_volume_evidence
+    authority = _target_root_authority(xset)
     fs.revalidate_root(
-        target_root,
+        Path(authority.logical_root),
         trusted_anchor=(
             None
-            if evidence is None or evidence.device_id is None
-            else Path(evidence.device_id)
+            if authority.reviewed_anchor is None
+            else Path(authority.reviewed_anchor)
         ),
-        expected_volume=xset.plan.target_volume_id,
+        expected_volume=authority.expected_volume_id,
     )
 
 
@@ -3169,16 +3174,48 @@ def _revalidate_source_root(
     xset: ExecutionSet,
     source_root: Path,
 ) -> None:
-    evidence = xset.plan.source_volume_evidence
+    authority = _source_root_authority(xset)
     fs.revalidate_root(
-        source_root,
+        Path(authority.logical_root),
         trusted_anchor=(
             None
-            if evidence is None or evidence.device_id is None
-            else Path(evidence.device_id)
+            if authority.reviewed_anchor is None
+            else Path(authority.reviewed_anchor)
         ),
-        expected_volume=xset.plan.source_volume_id,
+        expected_volume=authority.expected_volume_id,
     )
+
+
+def _target_root_authority(
+    xset: ExecutionSet,
+) -> RootAuthority:
+    evidence = xset.plan.target_volume_evidence
+    try:
+        return RootAuthority(
+            xset.plan.target_root.path,
+            None if evidence is None else evidence.device_id,
+            xset.plan.target_volume_id,
+        )
+    except PathValidationError as error:
+        raise UnsafeExecutionPath(
+            "reviewed root volume anchor changed before filesystem access"
+        ) from error
+
+
+def _source_root_authority(
+    xset: ExecutionSet,
+) -> RootAuthority:
+    evidence = xset.plan.source_volume_evidence
+    try:
+        return RootAuthority(
+            xset.plan.source_root.path,
+            None if evidence is None else evidence.device_id,
+            xset.plan.source_volume_id,
+        )
+    except PathValidationError as error:
+        raise UnsafeExecutionPath(
+            "reviewed root volume anchor changed before filesystem access"
+        ) from error
 
 
 def _stat_target_path(

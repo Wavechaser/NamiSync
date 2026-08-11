@@ -19,20 +19,30 @@ from namisync.core.models import (
     FileStat,
     MANAGED_FILE_ATTRIBUTE_MASK,
     MetadataSnapshot,
+    VolumeEvidence,
     VolumeId,
     owned_temp_run_id,
 )
 from namisync.core.pathing import (
+    PathValidationError,
     from_extended_length_path,
+    is_path_below,
     lexical_absolute_path,
     lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
-    trusted_volume_anchor,
     validate_relative_path,
 )
 from namisync.core.planning import OpId
+from namisync.core.root_authority import (
+    NativeVolumeInfo,
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_root,
+    admit_root_chain,
+)
 
 
 _READONLY = 0x00000001
@@ -215,6 +225,25 @@ class _UpdateBackupDuringCopyDrift(_UpdateBackupDrift):
     """The opened live target changed while its backup was copied."""
 
 
+class _RootChainNotDirectory(OSError):
+    """A root component failed the executor's second directory observation."""
+
+
+class _ExecutorRootStat:
+    """No-follow root facts limited to the executor's established policy."""
+
+    def __init__(self, observed: os.stat_result) -> None:
+        # The legacy chain guard treated its second ``Path.is_dir`` result as
+        # authoritative if the entry changed after the preceding lstat.
+        self.st_mode = stat_module.S_IFDIR
+        self.st_file_attributes = int(
+            getattr(observed, "st_file_attributes", 0)
+        )
+        # The legacy executor rejected symlink mode and the reparse attribute,
+        # but did not independently interpret a tag-only synthetic observation.
+        self.st_reparse_tag = 0
+
+
 class NativeFileSystem:
     """Native local-filesystem primitives retained by the executor machine."""
 
@@ -226,32 +255,95 @@ class NativeFileSystem:
         expected_volume: VolumeId | None = None,
     ) -> None:
         logical = _lexical_logical_path(root)
-        reviewed_anchor: Path | None = None
-        if trusted_anchor is not None:
-            reviewed_anchor = _lexical_logical_path(trusted_anchor)
-            try:
-                current_anchor = _lexical_logical_path(
-                    trusted_volume_anchor(logical)
+        try:
+            authority = RootAuthority(
+                str(logical),
+                (
+                    None
+                    if trusted_anchor is None
+                    else str(_lexical_logical_path(trusted_anchor))
+                ),
+                expected_volume,
+            )
+            if expected_volume is None:
+                admit_root_chain(
+                    authority,
+                    lstat=self._observe_root_component,
+                    anchor_probe=self._observe_root_anchor,
                 )
-            except (OSError, ValueError) as error:
-                raise UnsafeExecutionPath(logical_error_text(error)) from error
-            if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
-                os.path.normpath(reviewed_anchor)
-            ):
-                raise UnsafeExecutionPath(
-                    "reviewed root volume anchor changed before filesystem access"
+            else:
+                admit_root(
+                    authority,
+                    lstat=self._observe_root_component,
+                    anchor_probe=self._observe_root_anchor,
+                    volume_probe=self._observe_root_volume,
                 )
-        self._reject_reparse_chain(
-            logical,
-            trusted_anchor=reviewed_anchor,
-        )
-        if (
-            expected_volume is not None
-            and self._volume_id(logical) != expected_volume
+        except PathValidationError as error:
+            raise UnsafeExecutionPath(
+                "reviewed root volume anchor changed before filesystem access"
+            ) from error
+        except RootAuthorityError as error:
+            self._raise_root_authority_error(error)
+
+    def _observe_root_anchor(self, path: str) -> str:
+        logical = _lexical_logical_path(path)
+        if os.name != "nt":
+            anchor = logical.anchor
+            if not anchor:
+                raise PathValidationError("absolute path lacks a volume anchor")
+            return str(_lexical_logical_path(anchor))
+
+        assert _WINDOWS is not None
+        volume_path = ctypes.create_unicode_buffer(32768)
+        if not _WINDOWS.get_volume_path(
+            _win32_path(logical), volume_path, len(volume_path)
         ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        anchor = _lexical_logical_path(
+            from_extended_length_path(volume_path.value)
+        )
+        if not is_path_below(str(logical), str(anchor)):
+            raise PathValidationError(
+                "native volume root is outside the configured lexical path"
+            )
+        return str(anchor)
+
+    def _observe_root_component(self, path: str) -> os.stat_result:
+        current = Path(path)
+        observed = self._reject_reparse(current)
+        if not Path(_win32_path(current)).is_dir():
+            raise _RootChainNotDirectory(str(current))
+        return cast(os.stat_result, _ExecutorRootStat(observed))
+
+    def _raise_root_authority_error(self, error: RootAuthorityError) -> None:
+        cause = error.__cause__
+        if error.issue is RootAuthorityIssue.ANCHOR_CHANGED:
+            raise UnsafeExecutionPath(
+                "reviewed root volume anchor changed before filesystem access"
+            ) from error
+        if error.issue is RootAuthorityIssue.VOLUME_CHANGED:
             raise UnsafeExecutionPath(
                 "reviewed root volume changed before filesystem access"
-            )
+            ) from error
+        if error.issue in {
+            RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+            RootAuthorityIssue.REPARSE_COMPONENT,
+        }:
+            raise UnsafeExecutionPath(
+                f"reparse points are not executable: {error.logical_path}"
+            ) from error
+        if error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT or isinstance(
+            cause, _RootChainNotDirectory
+        ):
+            raise UnsafeExecutionPath(
+                "reviewed root chain contains a nondirectory: "
+                f"{error.logical_path}"
+            ) from error
+        if error.issue is RootAuthorityIssue.ANCHOR_UNAVAILABLE:
+            raise UnsafeExecutionPath(str(error)) from error
+        if cause is not None:
+            raise cause
+        raise UnsafeExecutionPath(str(error)) from error
 
     def resolve(self, root: Path, relative_path: str, *, must_exist: bool) -> Path:
         canonical = validate_relative_path(relative_path)
@@ -951,11 +1043,12 @@ class NativeFileSystem:
             else:
                 break
 
-    def _reject_reparse(self, path: Path) -> None:
+    def _reject_reparse(self, path: Path) -> os.stat_result:
         info = Path(_win32_path(path)).lstat()
         attributes = int(getattr(info, "st_file_attributes", 0))
         if stat_module.S_ISLNK(info.st_mode) or attributes & _REPARSE_POINT:
             raise UnsafeExecutionPath(f"reparse points are not executable: {path}")
+        return info
 
     def _reject_reparse_chain(
         self,
@@ -968,7 +1061,7 @@ class NativeFileSystem:
             anchor = (
                 str(trusted_anchor)
                 if trusted_anchor is not None
-                else trusted_volume_anchor(logical)
+                else self._observe_root_anchor(str(logical))
             )
             chain = lexical_path_chain(
                 logical,
@@ -1066,35 +1159,51 @@ class NativeFileSystem:
         finally:
             _WINDOWS.close_handle(handle)
 
-    def _volume_id(self, path: Path) -> VolumeId:
+    def _observe_root_volume(self, path: str) -> NativeVolumeInfo:
+        logical = _lexical_logical_path(path)
         if os.name != "nt":
-            return VolumeId(
-                f"{Path(_win32_path(path)).stat(follow_symlinks=False).st_dev:x}",
-                "UNKNOWN",
+            observed = Path(_win32_path(logical)).stat(follow_symlinks=False)
+            return NativeVolumeInfo(
+                VolumeId(f"{observed.st_dev:x}", "UNKNOWN"),
+                VolumeEvidence(device_id=self._observe_root_anchor(str(logical))),
+                255,
+                0,
             )
         assert _WINDOWS is not None
         volume_path = ctypes.create_unicode_buffer(32768)
         if not _WINDOWS.get_volume_path(
-            _win32_path(path), volume_path, len(volume_path)
+            _win32_path(logical), volume_path, len(volume_path)
         ):
             raise ctypes.WinError(ctypes.get_last_error())
         serial = wintypes.DWORD()
+        max_component = wintypes.DWORD()
+        flags = wintypes.DWORD()
         filesystem = ctypes.create_unicode_buffer(261)
         if not _WINDOWS.get_volume_information(
             volume_path.value,
             None,
             0,
             ctypes.byref(serial),
-            None,
-            None,
+            ctypes.byref(max_component),
+            ctypes.byref(flags),
             filesystem,
             len(filesystem),
         ):
             raise ctypes.WinError(ctypes.get_last_error())
-        return VolumeId(
-            f"{serial.value:08X}",
-            filesystem.value.upper() or "UNKNOWN",
+        return NativeVolumeInfo(
+            VolumeId(
+                f"{serial.value:08X}",
+                filesystem.value.upper() or "UNKNOWN",
+            ),
+            VolumeEvidence(
+                device_id=from_extended_length_path(volume_path.value)
+            ),
+            int(max_component.value),
+            int(flags.value),
         )
+
+    def _volume_id(self, path: Path) -> VolumeId:
+        return self._observe_root_volume(str(path)).volume_id
 
     def _volume_serial(self, path: Path) -> str:
         return self._volume_id(path).serial

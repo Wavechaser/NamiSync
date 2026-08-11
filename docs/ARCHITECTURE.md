@@ -798,6 +798,12 @@ precedence and capability policy; inventory and initial sync path validation
 reuse it without moving resolution/overlap policy; verifier uses it for the
 native reader's distinct final-touch root walk without replacing engine volume
 admission or handle-bound checks.
+Executor runtime derives source and target authority from the fingerprinted
+plan facts at each retained guard call. Its native adapter uses process-cached
+Windows bindings for fresh probes and supplies the executor's pre-existing
+component classification to the shared admission functions, preserves
+the anchor -> chain -> optional-volume probe order and legacy errors, and
+never carries an observation into a later guard.
 
 **Flesh.** None. Core is all bones by definition.
 

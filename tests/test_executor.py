@@ -9,11 +9,13 @@ import inspect
 import os
 from pathlib import Path
 import re
+import stat as stat_module
 import subprocess
 import sys
 from threading import Event, Lock
 import textwrap
 import time
+from types import SimpleNamespace
 from typing import Callable
 
 import pytest
@@ -42,6 +44,7 @@ from namisync.core.models import (
     FileStat,
     IgnoreSet,
     Root,
+    VolumeEvidence,
     VolumeId,
 )
 from namisync.core.pathing import to_extended_length_path
@@ -57,6 +60,7 @@ from namisync.core.planning import (
     PlanOperation,
     PreservationPolicy,
 )
+from namisync.core.root_authority import FILE_ATTRIBUTE_OFFLINE
 from namisync.core.session import Canceled, PauseRequested, RunContext, SessionState
 from namisync.modules.executor import (
     BoundedFailurePolicy,
@@ -277,14 +281,16 @@ def test_native_filesystem_rejects_lexical_root_before_resolving_children(
     configured = tmp_path / "configured-root"
     fs = NativeFileSystem()
     observed: list[Path] = []
+    reject_reparse = fs._reject_reparse
 
     def fail_if_followed(_path: Path, *, strict: bool) -> Path:
         raise AssertionError("configured root was followed before rejection")
 
-    def reject_root(path: Path) -> None:
+    def reject_root(path: Path) -> os.stat_result:
         observed.append(path)
         if path == configured:
             raise UnsafeExecutionPath("reparse points are not executable")
+        return reject_reparse(path)
 
     monkeypatch.setattr(executor_module, "_resolved_logical_path", fail_if_followed)
     monkeypatch.setattr(fs, "_reject_reparse", reject_root)
@@ -303,13 +309,13 @@ def test_native_filesystem_revalidates_an_empty_chain_mount_anchor(
     configured.mkdir()
     fs = NativeFileSystem()
     monkeypatch.setattr(
-        executor_module,
-        "trusted_volume_anchor",
+        fs,
+        "_observe_root_anchor",
         lambda _path: str(tmp_path),
     )
     monkeypatch.setattr(
         fs,
-        "_reject_reparse_chain",
+        "_observe_root_component",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("mismatched reviewed anchor must stop chain admission")
         ),
@@ -331,6 +337,201 @@ def test_native_filesystem_refuses_same_serial_with_different_filesystem(
 
     with pytest.raises(UnsafeExecutionPath, match="volume changed"):
         fs.revalidate_root(tmp_path, expected_volume=expected)
+
+
+def test_executor_derives_root_authority_from_reviewed_plan_facts(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_volume = VolumeId("SOURCE", "NTFS")
+    target_volume = VolumeId("TARGET", "NTFS")
+    plan = replace(
+        _plan(source, target, ()),
+        source_volume_id=source_volume,
+        target_volume_id=target_volume,
+        source_volume_evidence=VolumeEvidence(device_id=str(tmp_path)),
+        target_volume_evidence=VolumeEvidence(device_id=str(tmp_path)),
+    )
+    xset = _xset(plan)
+
+    source_authority = executor_runtime._source_root_authority(xset)
+    target_authority = executor_runtime._target_root_authority(xset)
+
+    assert source_authority.logical_root == plan.source_root.path
+    assert source_authority.reviewed_anchor == str(tmp_path)
+    assert source_authority.expected_volume_id == source_volume
+    assert target_authority.logical_root == plan.target_root.path
+    assert target_authority.reviewed_anchor == str(tmp_path)
+    assert target_authority.expected_volume_id == target_volume
+
+
+def test_native_filesystem_preserves_root_probe_order_and_volume_elision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs = NativeFileSystem()
+    reviewed_anchor = Path(fs._observe_root_anchor(str(tmp_path)))
+    reviewed_volume = fs._observe_root_volume(str(tmp_path)).volume_id
+    events: list[str] = []
+    observe_anchor = fs._observe_root_anchor
+    observe_component = fs._observe_root_component
+    observe_volume = fs._observe_root_volume
+
+    def anchor(path: str) -> str:
+        events.append("anchor")
+        return observe_anchor(path)
+
+    def component(path: str) -> os.stat_result:
+        events.append("component")
+        return observe_component(path)
+
+    def volume(path: str):
+        events.append("volume")
+        return observe_volume(path)
+
+    monkeypatch.setattr(fs, "_observe_root_anchor", anchor)
+    monkeypatch.setattr(fs, "_observe_root_component", component)
+    monkeypatch.setattr(fs, "_observe_root_volume", volume)
+
+    fs.revalidate_root(tmp_path, trusted_anchor=reviewed_anchor)
+
+    assert events[0] == "anchor"
+    assert events.count("anchor") == 1
+    assert events.count("component") >= 1
+    assert "volume" not in events
+
+    events.clear()
+    fs.revalidate_root(
+        tmp_path,
+        trusted_anchor=reviewed_anchor,
+        expected_volume=reviewed_volume,
+    )
+
+    assert events[0] == "anchor"
+    assert events.count("volume") == 1
+    volume_index = events.index("volume")
+    assert "component" in events[1:volume_index]
+    if os.name == "nt":
+        assert events[-1] == "volume"
+        assert events.count("anchor") == 1
+
+
+def test_native_filesystem_refuses_anchor_change_during_volume_observation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fs = NativeFileSystem()
+    reviewed_anchor = Path(fs._observe_root_anchor(str(tmp_path)))
+    reviewed_volume = fs._observe_root_volume(str(tmp_path))
+    changed = replace(
+        reviewed_volume,
+        evidence=VolumeEvidence(device_id=str(tmp_path / "changed-anchor")),
+    )
+    monkeypatch.setattr(fs, "_observe_root_volume", lambda _path: changed)
+
+    with pytest.raises(
+        UnsafeExecutionPath,
+        match="volume anchor changed before filesystem access",
+    ):
+        fs.revalidate_root(
+            tmp_path,
+            trusted_anchor=reviewed_anchor,
+            expected_volume=reviewed_volume.volume_id,
+        )
+
+
+def test_native_filesystem_maps_invalid_reviewed_anchor_to_unsafe_path(
+    tmp_path: Path,
+) -> None:
+    configured = tmp_path / "configured"
+    unrelated = tmp_path / "unrelated"
+    configured.mkdir()
+    unrelated.mkdir()
+
+    with pytest.raises(
+        UnsafeExecutionPath,
+        match="volume anchor changed before filesystem access",
+    ):
+        NativeFileSystem().revalidate_root(
+            configured,
+            trusted_anchor=unrelated,
+        )
+
+
+def test_executor_maps_invalid_plan_anchor_to_unsafe_path(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / "file.bin"
+    source_file.write_bytes(b"reviewed")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    plan = replace(
+        _plan(source, target, (operation,)),
+        target_volume_id=fs._volume_id(target),
+        target_volume_evidence=VolumeEvidence(device_id=str(source)),
+    )
+
+    result, events, recorder = _run(_xset(plan), fs=fs)
+
+    item = next(event for event in events if isinstance(event, ItemOutcome))
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == "unsafe-path"
+    assert not (target / "file.bin").exists()
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize(
+    ("mode", "attributes", "reparse_tag"),
+    (
+        pytest.param(
+            stat_module.S_IFDIR,
+            FILE_ATTRIBUTE_OFFLINE,
+            0,
+            id="offline-only",
+        ),
+        pytest.param(
+            stat_module.S_IFDIR,
+            0,
+            0xA000000C,
+            id="tag-only",
+        ),
+        pytest.param(
+            stat_module.S_IFREG,
+            0,
+            0,
+            id="regular-first-directory-second",
+        ),
+    ),
+)
+def test_native_filesystem_keeps_legacy_root_component_classification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: int,
+    attributes: int,
+    reparse_tag: int,
+) -> None:
+    fs = NativeFileSystem()
+    reviewed_anchor = Path(fs._observe_root_anchor(str(tmp_path)))
+    observed = SimpleNamespace(
+        st_mode=mode,
+        st_file_attributes=attributes,
+        st_reparse_tag=reparse_tag,
+    )
+    monkeypatch.setattr(fs, "_reject_reparse", lambda _path: observed)
+
+    fs.revalidate_root(tmp_path, trusted_anchor=reviewed_anchor)
 
 
 def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) -> None:
