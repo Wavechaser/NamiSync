@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from enum import Enum, StrEnum
 import os
 from pathlib import Path, PureWindowsPath
 import time
@@ -150,6 +151,175 @@ class _Settled:
     reason: ExecutionReason | None = None
     detail: dict[str, object] = field(default_factory=dict)
     published_evidence: PublishedCopyEvidence | None = None
+
+
+class _TerminalKind(Enum):
+    ORDINARY_FAILURE = "ordinary-failure"
+    CANCELLATION = "cancellation"
+
+
+class _PublicationClassification(Enum):
+    NOT_PUBLISHED = "not-published"
+    CONFIRMED = "confirmed"
+    UNVERIFIED = "unverified"
+
+
+class _MutationClassification(Enum):
+    UNCHANGED = "unchanged"
+    DURABLE = "durable"
+    AMBIGUOUS = "ambiguous"
+    UNREADABLE = "unreadable"
+
+
+class _TargetState(StrEnum):
+    UNEXPECTEDLY_PRESENT_BEFORE_PUBLISH = "unexpectedly-present-before-publish"
+    ABSENT_BEFORE_PUBLISH = "absent-before-publish"
+    MISSING_BEFORE_PUBLISH = "missing-before-publish"
+    CHANGED_BEFORE_PUBLISH = "changed-before-publish"
+    RETAINED_BEFORE_PUBLISH = "retained-before-publish"
+    PUBLISHED = "published"
+    CHANGED_AFTER_PUBLISH = "changed-after-publish"
+    MISSING_AFTER_PUBLISH = "missing-after-publish"
+    UNVERIFIED_AFTER_PUBLISH = "unverified-after-publish"
+    MISSING = "missing"
+    PRESENT = "present"
+
+
+class _TempState(StrEnum):
+    CHANGED_BEFORE_PUBLISH = "changed-before-publish"
+    MISSING = "missing"
+    UNEXPECTED = "unexpected"
+
+
+class _BackupState(StrEnum):
+    RETAINED = "retained"
+    CHANGED = "changed"
+    ABSENT = "absent"
+    UNVERIFIED = "unverified"
+
+
+class _MutationState(StrEnum):
+    NOT_COMMITTED = "not-committed"
+    COMMITTED = "committed"
+    UNVERIFIED = "unverified"
+
+
+class _EntryState(StrEnum):
+    REVIEWED = "reviewed"
+    ABSENT = "absent"
+    CHANGED = "changed"
+
+
+class _DurableState(StrEnum):
+    UNVERIFIED = "unverified"
+    PUBLICATION_UNVERIFIED = "publication-unverified"
+    TARGET_NOT_PUBLISHED = "target-not-published"
+    BACKUP_RETAINED = "backup-retained"
+    TARGET_PUBLISHED = "target-published"
+    TARGET_PUBLISHED_WITH_BACKUP = "target-published-with-backup"
+    TARGET_CHANGED_AFTER_PUBLISH = "target-changed-after-publish"
+    TARGET_MISSING_AFTER_PUBLISH = "target-missing-after-publish"
+    TARGET_UNVERIFIED_AFTER_PUBLISH = "target-unverified-after-publish"
+    NEW_AND_OLD = "new-and-old"
+    NEW_AND_TRASH = "new-and-trash"
+    NEW_OLD_AND_TRASH_UNVERIFIED = "new-old-and-trash-unverified"
+    NEW_AND_OLD_UNVERIFIED = "new-and-old-unverified"
+    RECASE_STATE_UNVERIFIED = "recase-state-unverified"
+    MOVE_STATE_UNVERIFIED = "move-state-unverified"
+    TRASH_STATE_UNVERIFIED = "trash-state-unverified"
+    DELETE_STATE_UNVERIFIED = "delete-state-unverified"
+    UPDATE_STATE_UNVERIFIED = "update-state-unverified"
+    MKDIR_STATE_UNVERIFIED = "mkdir-state-unverified"
+    SOURCE_RESTORED_AFTER_MOVE = "source-restored-after-move"
+    SOURCE_RESTORED_AFTER_TRASH = "source-restored-after-trash"
+    SOURCE_RETAINED = "source-retained"
+    TARGET_RENAMED = "target-renamed"
+    TARGET_TRASHED = "target-trashed"
+    MOVE_STATE_AMBIGUOUS = "move-state-ambiguous"
+    TRASH_STATE_AMBIGUOUS = "trash-state-ambiguous"
+    TARGET_RESTORED_AFTER_DELETE = "target-restored-after-delete"
+    TARGET_RETAINED = "target-retained"
+    TARGET_DELETED = "target-deleted"
+    TARGET_CHANGED_AFTER_DELETE_ATTEMPT = "target-changed-after-delete-attempt"
+    TARGET_MISSING_BEFORE_PUBLISH = "target-missing-before-publish"
+    TARGET_METADATA_CHANGED_BEFORE_PUBLISH = (
+        "target-metadata-changed-before-publish"
+    )
+    DIRECTORY_MISSING_AFTER_CREATE = "directory-missing-after-create"
+    DIRECTORY_ABSENT = "directory-absent"
+    DIRECTORY_CREATED = "directory-created"
+    DIRECTORY_PRESENT_AFTER_CREATE_ATTEMPT = (
+        "directory-present-after-create-attempt"
+    )
+    MKDIR_STATE_AMBIGUOUS = "mkdir-state-ambiguous"
+
+
+@dataclass(frozen=True, slots=True)
+class _ProbeDiagnostic:
+    reason: ExecutionReason
+    type_name: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class _BackupVerdict:
+    path: str
+    state: _BackupState
+    metadata: str | None = None
+    state_error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _MoveUpdateVerdict:
+    prior_path: str
+    durable_state: _DurableState
+    trash_path: str | None = None
+    old_state_error: _ProbeDiagnostic | None = None
+    trash_state_error: _ProbeDiagnostic | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _PublicationVerdict:
+    classification: _PublicationClassification
+    kind: OperationKind
+    published_path: str
+    base_detail: dict[str, object]
+    target_state: _TargetState | None = None
+    target_state_error: _ProbeDiagnostic | None = None
+    temp_state: _TempState | None = None
+    backup: _BackupVerdict | None = None
+    move_update: _MoveUpdateVerdict | None = None
+    prior_path: str | None = None
+    trash_path: str | None = None
+    probe_error: _ProbeDiagnostic | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _MutationVerdict:
+    classification: _MutationClassification
+    kind: OperationKind
+    mutation_state: _MutationState
+    durable_state: _DurableState
+    destination: str | None = None
+    source_state: _EntryState | None = None
+    destination_state: _EntryState | None = None
+    probe_error: _ProbeDiagnostic | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _TerminalCause:
+    kind: _TerminalKind
+    reason: ExecutionReason
+    error_type: str
+    message: str
+    retry_error_type: str | None = None
+    retry_error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _SettlementReduction:
+    settled: _Settled
+    degrade_recording: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -543,10 +713,11 @@ def execute(
                 except (Canceled, PauseRequested):
                     raise
                 except Exception as error:
-                    mutation_failure = _failed_after_mutation_settlement(
+                    mutation_failure = _failed_durable_settlement(
                         operation,
                         error,
                         fs,
+                        target_root,
                         state,
                         state.effects.snapshot(operation.op_id),
                     )
@@ -2380,10 +2551,11 @@ def _finalize_directories(
         except (Canceled, PauseRequested):
             raise
         except Exception as error:
-            mutation_failure = _failed_after_mutation_settlement(
+            mutation_failure = _failed_durable_settlement(
                 operation,
                 error,
                 fs,
+                target_root,
                 state,
                 state.effects.snapshot(operation.op_id),
             )
@@ -2577,6 +2749,815 @@ def _failure_reason_and_message(
     return reason, logical_error_text(error)
 
 
+def _probe_diagnostic(error: Exception) -> _ProbeDiagnostic:
+    return _ProbeDiagnostic(
+        reason=(
+            error.reason
+            if isinstance(error, OperationFailure)
+            else ExecutionReason.IO_ERROR
+        ),
+        type_name=type(error).__name__,
+        message=logical_error_text(error),
+    )
+
+
+def _observe_published_target(
+    target: Path,
+    expected: FileStat,
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+) -> tuple[_TargetState, _ProbeDiagnostic | None]:
+    try:
+        actual = _stat_target_path(fs, xset, target_root, target)
+    except Exception as error:
+        return _TargetState.UNVERIFIED_AFTER_PUBLISH, _probe_diagnostic(error)
+    if actual is None:
+        return _TargetState.MISSING_AFTER_PUBLISH, None
+    if _same_file_version(actual, expected):
+        return _TargetState.PUBLISHED, None
+    return _TargetState.CHANGED_AFTER_PUBLISH, None
+
+
+def _observe_update_backup(
+    continuation: _UpdateContinuation,
+    xset: ExecutionSet,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    relative_path: str,
+) -> _BackupVerdict | None:
+    backup = continuation.backup
+    if backup is None:
+        return None
+    backup_path = _target_relative_path(backup.path, target_root)
+    try:
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            relative_path,
+            backup.path,
+        )
+        actual = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            backup.path,
+        )
+    except Exception as error:
+        diagnostic = _probe_diagnostic(error)
+        return _BackupVerdict(
+            path=backup_path,
+            state=_BackupState.UNVERIFIED,
+            state_error=f"{diagnostic.type_name}: {diagnostic.message}",
+        )
+    if actual is None:
+        return _BackupVerdict(backup_path, _BackupState.ABSENT)
+    stable_identity = xset.plan.target_profile.stable_file_identity
+    if backup.published_stat is None:
+        if backup.created_stat is None:
+            return _BackupVerdict(
+                path=backup_path,
+                state=_BackupState.UNVERIFIED,
+                state_error="creation evidence unavailable",
+            )
+        retained = _same_unrepaired_publication(
+            actual,
+            backup.created_stat,
+            stable_identity,
+        )
+        metadata = "unrepaired"
+    else:
+        retained = _same_file_version(
+            _profiled_stat(actual, stable_identity),
+            backup.published_stat,
+        )
+        metadata = None
+    return _BackupVerdict(
+        path=backup_path,
+        state=(
+            _BackupState.RETAINED if retained else _BackupState.CHANGED
+        ),
+        metadata=metadata,
+    )
+
+
+def _observe_new_publication(
+    continuation: _CopyContinuation | _MoveUpdateContinuation,
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+) -> tuple[
+    _PublicationClassification,
+    _TargetState | None,
+    _ProbeDiagnostic | None,
+    _TempState | None,
+    _ProbeDiagnostic | None,
+]:
+    prepared = continuation.prepared
+    if continuation.published:
+        target_state, target_error = _observe_published_target(
+            prepared.target,
+            continuation.published_stat or continuation.prepared_stat,
+            fs,
+            xset,
+            target_root,
+        )
+        return (
+            _PublicationClassification.CONFIRMED,
+            target_state,
+            target_error,
+            None,
+            None,
+        )
+
+    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
+    target = _stat_target_path(fs, xset, target_root, prepared.target)
+    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            (
+                _TargetState.UNEXPECTEDLY_PRESENT_BEFORE_PUBLISH
+                if target is not None
+                else None
+            ),
+            None,
+            None,
+            None,
+        )
+    if temp is not None and target is None:
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            _TargetState.ABSENT_BEFORE_PUBLISH,
+            None,
+            _TempState.CHANGED_BEFORE_PUBLISH,
+            None,
+        )
+    if temp is None and target is not None:
+        return (
+            _PublicationClassification.CONFIRMED,
+            (
+                _TargetState.PUBLISHED
+                if _same_file_version(
+                    target,
+                    continuation.published_stat or continuation.prepared_stat,
+                )
+                else _TargetState.CHANGED_AFTER_PUBLISH
+            ),
+            None,
+            None,
+            None,
+        )
+    error = OperationFailure(
+        ExecutionReason.TARGET_MISSING if target is None else ExecutionReason.TARGET_DRIFT,
+        "cannot classify prepared versus published state during cancel settlement",
+    )
+    return (
+        _PublicationClassification.UNVERIFIED,
+        _TargetState.MISSING if target is None else _TargetState.PRESENT,
+        None,
+        _TempState.MISSING if temp is None else _TempState.UNEXPECTED,
+        _probe_diagnostic(error),
+    )
+
+
+def _observe_update_publication(
+    continuation: _UpdateContinuation,
+    fs: ExecutorFileSystem,
+    xset: ExecutionSet,
+    target_root: Path,
+) -> tuple[
+    _PublicationClassification,
+    _TargetState | None,
+    _ProbeDiagnostic | None,
+    _TempState | None,
+    _ProbeDiagnostic | None,
+]:
+    prepared = continuation.prepared
+    if continuation.published:
+        target_state, target_error = _observe_published_target(
+            prepared.target,
+            continuation.published_stat or continuation.prepared_stat,
+            fs,
+            xset,
+            target_root,
+        )
+        return (
+            _PublicationClassification.CONFIRMED,
+            target_state,
+            target_error,
+            None,
+            None,
+        )
+
+    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
+    target = _stat_target_path(fs, xset, target_root, prepared.target)
+    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
+        target_state = (
+            _TargetState.MISSING_BEFORE_PUBLISH
+            if target is None
+            else _TargetState.CHANGED_BEFORE_PUBLISH
+            if not _same_file_version(target, continuation.live_stat)
+            else None
+        )
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            target_state,
+            None,
+            None,
+            None,
+        )
+    if (
+        temp is not None
+        and target is not None
+        and _same_file_version(target, continuation.live_stat)
+    ):
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            _TargetState.RETAINED_BEFORE_PUBLISH,
+            None,
+            _TempState.CHANGED_BEFORE_PUBLISH,
+            None,
+        )
+    if temp is None and target is not None:
+        return (
+            _PublicationClassification.CONFIRMED,
+            (
+                _TargetState.PUBLISHED
+                if _same_file_version(
+                    target,
+                    continuation.published_stat or continuation.prepared_stat,
+                )
+                else _TargetState.CHANGED_AFTER_PUBLISH
+            ),
+            None,
+            None,
+            None,
+        )
+    error = OperationFailure(
+        ExecutionReason.TARGET_MISSING if target is None else ExecutionReason.TARGET_DRIFT,
+        "cannot classify live versus published update during cancel settlement",
+    )
+    return (
+        _PublicationClassification.UNVERIFIED,
+        _TargetState.MISSING if target is None else _TargetState.PRESENT,
+        None,
+        _TempState.MISSING if temp is None else _TempState.UNEXPECTED,
+        _probe_diagnostic(error),
+    )
+
+
+def _observe_move_update(
+    continuation: _MoveUpdateContinuation,
+    xset: ExecutionSet,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+) -> _MoveUpdateVerdict:
+    old_path = target_root.joinpath(
+        *PureWindowsPath(continuation.old_relative_path).parts
+    )
+    if continuation.trash is None:
+        try:
+            old = _stat_target_path(fs, xset, target_root, old_path)
+        except Exception as error:
+            return _MoveUpdateVerdict(
+                prior_path=continuation.old_relative_path,
+                durable_state=_DurableState.NEW_AND_OLD_UNVERIFIED,
+                old_state_error=_probe_diagnostic(error),
+            )
+        return _MoveUpdateVerdict(
+            prior_path=continuation.old_relative_path,
+            durable_state=(
+                _DurableState.NEW_AND_OLD
+                if old is not None
+                and _matches_expected(old, continuation.old_expected)
+                else _DurableState.NEW_AND_OLD_UNVERIFIED
+            ),
+        )
+
+    trash_path = _target_relative_path(continuation.trash, target_root)
+    try:
+        old = _stat_target_path(fs, xset, target_root, old_path)
+    except Exception as error:
+        return _MoveUpdateVerdict(
+            prior_path=continuation.old_relative_path,
+            trash_path=trash_path,
+            durable_state=_DurableState.NEW_AND_OLD_UNVERIFIED,
+            old_state_error=_probe_diagnostic(error),
+        )
+    try:
+        fs.revalidate_trash_destination(
+            target_root,
+            xset.run_id,
+            continuation.old_relative_path,
+            continuation.trash,
+        )
+        trash = _stat_target_path(
+            fs,
+            xset,
+            target_root,
+            continuation.trash,
+        )
+    except Exception as error:
+        return _MoveUpdateVerdict(
+            prior_path=continuation.old_relative_path,
+            trash_path=trash_path,
+            durable_state=_DurableState.NEW_AND_OLD_UNVERIFIED,
+            trash_state_error=_probe_diagnostic(error),
+        )
+    if old is not None and _matches_expected(old, continuation.old_expected):
+        durable_state = (
+            _DurableState.NEW_AND_OLD
+            if trash is None
+            else _DurableState.NEW_OLD_AND_TRASH_UNVERIFIED
+        )
+    elif old is None and trash is not None and _matches_expected(
+        trash,
+        continuation.old_expected,
+    ):
+        durable_state = _DurableState.NEW_AND_TRASH
+    else:
+        durable_state = _DurableState.NEW_AND_OLD_UNVERIFIED
+    return _MoveUpdateVerdict(
+        prior_path=continuation.old_relative_path,
+        trash_path=trash_path,
+        durable_state=durable_state,
+    )
+
+
+def _observe_publication(
+    operation: PlanOperation,
+    continuation: _ByteEffect,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    xset: ExecutionSet,
+) -> _PublicationVerdict:
+    backup: _BackupVerdict | None = None
+    try:
+        if isinstance(continuation, _UpdateContinuation):
+            backup = _observe_update_backup(
+                continuation,
+                xset,
+                fs,
+                target_root,
+                operation.target_rel_path,
+            )
+            (
+                classification,
+                target_state,
+                target_error,
+                temp_state,
+                probe_error,
+            ) = (
+                _observe_update_publication(
+                    continuation,
+                    fs,
+                    xset,
+                    target_root,
+                )
+            )
+        else:
+            (
+                classification,
+                target_state,
+                target_error,
+                temp_state,
+                probe_error,
+            ) = (
+                _observe_new_publication(
+                    continuation,
+                    fs,
+                    xset,
+                    target_root,
+                )
+            )
+    except Exception as error:
+        return _PublicationVerdict(
+            classification=_PublicationClassification.UNVERIFIED,
+            kind=operation.kind,
+            published_path=operation.target_rel_path,
+            base_detail=dict(continuation.detail),
+            backup=backup,
+            probe_error=_probe_diagnostic(error),
+        )
+
+    move_update: _MoveUpdateVerdict | None = None
+    prior_path: str | None = None
+    trash_path: str | None = None
+    if isinstance(continuation, _MoveUpdateContinuation):
+        prior_path = continuation.old_relative_path
+        if continuation.trash is not None:
+            trash_path = _target_relative_path(continuation.trash, target_root)
+        if (
+            classification is _PublicationClassification.CONFIRMED
+            and target_state is _TargetState.PUBLISHED
+        ):
+            move_update = _observe_move_update(
+                continuation,
+                xset,
+                fs,
+                target_root,
+            )
+    return _PublicationVerdict(
+        classification=classification,
+        kind=operation.kind,
+        published_path=operation.target_rel_path,
+        base_detail=dict(continuation.detail),
+        target_state=target_state,
+        target_state_error=target_error,
+        temp_state=temp_state,
+        backup=backup,
+        move_update=move_update,
+        prior_path=prior_path,
+        trash_path=trash_path,
+        probe_error=probe_error,
+    )
+
+
+def _failure_terminal_cause(error: Exception) -> _TerminalCause:
+    reason, message = _failure_reason_and_message(error)
+    return _TerminalCause(
+        kind=_TerminalKind.ORDINARY_FAILURE,
+        reason=reason,
+        error_type=type(error).__name__,
+        message=message,
+    )
+
+
+def _cancellation_terminal_cause(
+    retry_error: Exception | None,
+) -> _TerminalCause:
+    error = retry_error or Canceled()
+    return _TerminalCause(
+        kind=_TerminalKind.CANCELLATION,
+        reason=ExecutionReason.CANCELED,
+        error_type=type(error).__name__,
+        message=logical_error_text(error),
+        retry_error_type=(
+            None if retry_error is None else type(retry_error).__name__
+        ),
+        retry_error=(
+            None if retry_error is None else logical_error_text(retry_error)
+        ),
+    )
+
+
+def _inline_probe_error(error: _ProbeDiagnostic) -> str:
+    return f"{error.type_name}: {error.message}"
+
+
+def _add_publication_observations(
+    detail: dict[str, object],
+    verdict: _PublicationVerdict,
+) -> None:
+    if verdict.temp_state is not None:
+        detail["temp_state"] = verdict.temp_state.value
+    if verdict.target_state is not None:
+        detail["target_state"] = verdict.target_state.value
+    if verdict.target_state_error is not None:
+        detail["target_state_error"] = _inline_probe_error(
+            verdict.target_state_error
+        )
+    if verdict.backup is not None:
+        detail["backup_path"] = verdict.backup.path
+        detail["backup_state"] = verdict.backup.state.value
+        if verdict.backup.metadata is not None:
+            detail["backup_metadata"] = verdict.backup.metadata
+        if verdict.backup.state_error is not None:
+            detail["backup_state_error"] = verdict.backup.state_error
+
+
+def _target_durable_state(target_state: _TargetState | None) -> _DurableState:
+    states = {
+        _TargetState.PUBLISHED: _DurableState.TARGET_PUBLISHED,
+        _TargetState.CHANGED_AFTER_PUBLISH: (
+            _DurableState.TARGET_CHANGED_AFTER_PUBLISH
+        ),
+        _TargetState.MISSING_AFTER_PUBLISH: (
+            _DurableState.TARGET_MISSING_AFTER_PUBLISH
+        ),
+        _TargetState.UNVERIFIED_AFTER_PUBLISH: (
+            _DurableState.TARGET_UNVERIFIED_AFTER_PUBLISH
+        ),
+    }
+    try:
+        return states[target_state]
+    except KeyError as error:
+        raise RuntimeError(
+            "confirmed publication lacks a terminal target observation"
+        ) from error
+
+
+def _add_move_update_observations(
+    detail: dict[str, object],
+    verdict: _MoveUpdateVerdict,
+) -> None:
+    detail["prior_path"] = verdict.prior_path
+    if verdict.trash_path is not None:
+        detail["trash_path"] = verdict.trash_path
+    detail["durable_state"] = verdict.durable_state.value
+    if verdict.old_state_error is not None:
+        detail["old_state_error"] = _inline_probe_error(
+            verdict.old_state_error
+        )
+    if verdict.trash_state_error is not None:
+        detail["trash_state_error"] = _inline_probe_error(
+            verdict.trash_state_error
+        )
+
+
+def _reduce_publication(
+    cause: _TerminalCause,
+    verdict: _PublicationVerdict,
+) -> _SettlementReduction | None:
+    detail = (
+        dict(verdict.base_detail)
+        if cause.kind is _TerminalKind.ORDINARY_FAILURE
+        or verdict.kind is OperationKind.UPDATE
+        else {}
+    )
+    if cause.kind is _TerminalKind.ORDINARY_FAILURE:
+        detail.update(
+            {
+                "error_type": cause.error_type,
+                "message": cause.message,
+            }
+        )
+    elif cause.retry_error_type is not None:
+        detail["retry_error_type"] = cause.retry_error_type
+        detail["retry_error"] = cause.retry_error or ""
+    _add_publication_observations(detail, verdict)
+    retained_backup = (
+        verdict.backup is not None
+        and verdict.backup.state is _BackupState.RETAINED
+    )
+
+    if verdict.classification is _PublicationClassification.NOT_PUBLISHED:
+        if (
+            cause.kind is _TerminalKind.ORDINARY_FAILURE
+            and not retained_backup
+        ):
+            return None
+        detail["publish_state"] = "not-published"
+        detail["durable_state"] = (
+            _DurableState.BACKUP_RETAINED.value
+            if retained_backup
+            else _DurableState.TARGET_NOT_PUBLISHED.value
+        )
+        return _SettlementReduction(
+            _Settled(
+                (
+                    Outcome.FAILED
+                    if cause.kind is _TerminalKind.ORDINARY_FAILURE
+                    else Outcome.CANCELED
+                ),
+                cause.reason,
+                detail,
+            ),
+            degrade_recording=False,
+        )
+
+    if verdict.classification is _PublicationClassification.UNVERIFIED:
+        if verdict.probe_error is None:
+            raise RuntimeError("unverified publication lacks its probe error")
+        detail["publish_state"] = "unverified"
+        if cause.kind is _TerminalKind.ORDINARY_FAILURE:
+            detail["published_path"] = verdict.published_path
+            detail["durable_state"] = _DurableState.PUBLICATION_UNVERIFIED.value
+            detail["recording"] = RecordingStatus.DEGRADED.value
+            detail["recording_error"] = (
+                "filesystem mutation may have published but durable state "
+                "could not be verified"
+            )
+            reason = cause.reason
+            degrade = True
+        else:
+            detail["durable_state"] = (
+                _DurableState.BACKUP_RETAINED.value
+                if retained_backup
+                else _DurableState.UNVERIFIED.value
+            )
+            reason = verdict.probe_error.reason
+            degrade = False
+        detail["state_error_type"] = verdict.probe_error.type_name
+        detail["state_error"] = verdict.probe_error.message
+        return _SettlementReduction(
+            _Settled(Outcome.FAILED, reason, detail),
+            degrade_recording=degrade,
+        )
+
+    if verdict.classification is not _PublicationClassification.CONFIRMED:
+        raise RuntimeError("unsupported publication classification")
+    detail["publish_state"] = "published"
+    detail["published_path"] = verdict.published_path
+    target_durable_state = _target_durable_state(verdict.target_state)
+    if verdict.kind is OperationKind.UPDATE:
+        detail["durable_state"] = target_durable_state.value
+        if (
+            target_durable_state is _DurableState.TARGET_PUBLISHED
+            and verdict.backup is not None
+            and verdict.backup.state is _BackupState.RETAINED
+        ):
+            detail["durable_state"] = (
+                _DurableState.TARGET_PUBLISHED_WITH_BACKUP.value
+            )
+    elif verdict.kind is OperationKind.MOVE_UPDATE:
+        if target_durable_state is _DurableState.TARGET_PUBLISHED:
+            if verdict.move_update is None:
+                raise RuntimeError(
+                    "confirmed move-update lacks old/trash observation"
+                )
+            _add_move_update_observations(detail, verdict.move_update)
+        else:
+            if verdict.prior_path is None:
+                raise RuntimeError("move-update lacks its prior path")
+            detail["prior_path"] = verdict.prior_path
+            if verdict.trash_path is not None:
+                detail["trash_path"] = verdict.trash_path
+            detail["durable_state"] = target_durable_state.value
+    else:
+        detail["durable_state"] = target_durable_state.value
+    detail["recording"] = RecordingStatus.DEGRADED.value
+    detail["recording_error"] = (
+        "published filesystem mutation failed before ledger settlement"
+        if cause.kind is _TerminalKind.ORDINARY_FAILURE
+        else "cancellation interrupted settlement of a published filesystem mutation"
+    )
+    return _SettlementReduction(
+        _Settled(
+            Outcome.FAILED,
+            (
+                cause.reason
+                if cause.kind is _TerminalKind.ORDINARY_FAILURE
+                else ExecutionReason.CANCELED_AFTER_PUBLISH
+            ),
+            detail,
+        ),
+        degrade_recording=True,
+    )
+
+
+def _reduce_mutation(
+    cause: _TerminalCause,
+    verdict: _MutationVerdict,
+) -> _SettlementReduction | None:
+    if verdict.classification is _MutationClassification.UNCHANGED:
+        return None
+    if verdict.classification not in {
+        _MutationClassification.DURABLE,
+        _MutationClassification.AMBIGUOUS,
+        _MutationClassification.UNREADABLE,
+    }:
+        raise RuntimeError("unsupported mutation classification")
+    detail: dict[str, object] = {
+        "error_type": cause.error_type,
+        "message": (
+            cause.message
+            if cause.kind is _TerminalKind.ORDINARY_FAILURE
+            else "cancellation interrupted settlement after a mutation attempt"
+        ),
+    }
+    if verdict.kind is OperationKind.UPDATE:
+        detail["publish_state"] = "not-published"
+    if verdict.destination is not None:
+        detail["mutation_destination"] = verdict.destination
+    if verdict.source_state is not None:
+        detail["source_state"] = verdict.source_state.value
+    if verdict.destination_state is not None:
+        detail["destination_state"] = verdict.destination_state.value
+    detail["mutation_state"] = verdict.mutation_state.value
+    detail["durable_state"] = verdict.durable_state.value
+    if verdict.probe_error is not None:
+        detail["mutation_state_error"] = _inline_probe_error(
+            verdict.probe_error
+        )
+    detail["recording"] = RecordingStatus.DEGRADED.value
+    detail["recording_error"] = (
+        "filesystem mutation may have committed before ledger settlement"
+    )
+    return _SettlementReduction(
+        _Settled(
+            Outcome.FAILED,
+            (
+                cause.reason
+                if cause.kind is _TerminalKind.ORDINARY_FAILURE
+                else ExecutionReason.CANCELED_AFTER_MUTATION
+            ),
+            detail,
+        ),
+        degrade_recording=True,
+    )
+
+
+def _reduce_effect_settlement(
+    cause: _TerminalCause,
+    publication: _PublicationVerdict | None,
+    mutation: _MutationVerdict | None,
+) -> _SettlementReduction | None:
+    publication_reduction = (
+        None if publication is None else _reduce_publication(cause, publication)
+    )
+    if (
+        publication is not None
+        and publication.classification is _PublicationClassification.CONFIRMED
+    ):
+        return publication_reduction
+    mutation_reduction = (
+        None if mutation is None else _reduce_mutation(cause, mutation)
+    )
+    if publication_reduction is None:
+        return mutation_reduction
+    if mutation_reduction is None:
+        return publication_reduction
+
+    publication_detail = dict(publication_reduction.settled.detail)
+    mutation_detail = dict(mutation_reduction.settled.detail)
+    if cause.kind is _TerminalKind.ORDINARY_FAILURE:
+        for duplicate in ("error_type", "message", "publish_state"):
+            mutation_detail.pop(duplicate, None)
+        if publication_reduction.degrade_recording:
+            for duplicate in ("recording", "recording_error"):
+                mutation_detail.pop(duplicate, None)
+        mutation_durable_state = mutation_detail.pop("durable_state", None)
+        publication_detail.update(mutation_detail)
+        if mutation_durable_state is not None:
+            publication_detail["mutation_durable_state"] = (
+                mutation_durable_state
+            )
+        settled = replace(
+            publication_reduction.settled,
+            detail=publication_detail,
+        )
+    else:
+        mutation_detail.pop("publish_state", None)
+        mutation_durable_state = mutation_detail.pop("durable_state", None)
+        publication_detail.update(mutation_detail)
+        if mutation_durable_state is not None:
+            publication_detail["mutation_durable_state"] = (
+                mutation_durable_state
+            )
+        settled = replace(
+            mutation_reduction.settled,
+            detail=publication_detail,
+        )
+    return _SettlementReduction(
+        settled=settled,
+        degrade_recording=(
+            publication_reduction.degrade_recording
+            or mutation_reduction.degrade_recording
+        ),
+    )
+
+
+def _apply_settlement_reduction(
+    state: _ExecutionState,
+    reduction: _SettlementReduction | None,
+) -> _Settled | None:
+    if reduction is None:
+        return None
+    if reduction.degrade_recording:
+        state.recording = RecordingStatus.DEGRADED
+    return reduction.settled
+
+
+def _settle_durable_effects(
+    operation: PlanOperation,
+    cause: _TerminalCause,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    effects: _EffectSnapshot,
+) -> _Settled | None:
+    publication = (
+        None
+        if effects.byte is None
+        else _observe_publication(
+            operation,
+            effects.byte,
+            fs,
+            target_root,
+            state.execution_set,
+        )
+    )
+    mutation = (
+        None
+        if effects.mutation is None
+        or (
+            publication is not None
+            and publication.classification
+            is _PublicationClassification.CONFIRMED
+        )
+        else _observe_mutation(effects.mutation, fs, state)
+    )
+    return _apply_settlement_reduction(
+        state,
+        _reduce_effect_settlement(
+            cause,
+            publication,
+            mutation,
+        ),
+    )
+
+
 def _failed_durable_settlement(
     operation: PlanOperation,
     error: Exception,
@@ -2585,152 +3566,14 @@ def _failed_durable_settlement(
     state: _ExecutionState,
     effects: _EffectSnapshot,
 ) -> _Settled | None:
-    published = _failed_after_publish_settlement(
+    return _settle_durable_effects(
         operation,
-        error,
+        _failure_terminal_cause(error),
         fs,
         target_root,
         state,
         effects,
     )
-    if (
-        published is not None
-        and published.detail.get("publish_state") == "published"
-    ):
-        return published
-
-    mutation = _failed_after_mutation_settlement(
-        operation,
-        error,
-        fs,
-        state,
-        effects,
-    )
-    if published is None:
-        return mutation
-    if mutation is None:
-        return published
-
-    detail = dict(published.detail)
-    mutation_detail = dict(mutation.detail)
-    for duplicate in ("error_type", "message", "publish_state"):
-        mutation_detail.pop(duplicate, None)
-    for duplicate in ("recording", "recording_error"):
-        if duplicate in detail:
-            mutation_detail.pop(duplicate, None)
-    mutation_durable_state = mutation_detail.pop("durable_state", None)
-    detail.update(mutation_detail)
-    if mutation_durable_state is not None:
-        detail["mutation_durable_state"] = mutation_durable_state
-    return replace(published, detail=detail)
-
-
-def _failed_after_publish_settlement(
-    operation: PlanOperation,
-    error: Exception,
-    fs: ExecutorFileSystem,
-    target_root: Path,
-    state: _ExecutionState,
-    effects: _EffectSnapshot,
-) -> _Settled | None:
-    continuation = effects.byte
-    if continuation is None:
-        return None
-
-    reason, message = _failure_reason_and_message(error)
-    detail = dict(continuation.detail)
-    detail.update(
-        {
-            "error_type": type(error).__name__,
-            "message": message,
-            "publish_state": "published",
-            "published_path": operation.target_rel_path,
-        }
-    )
-    try:
-        if isinstance(continuation, _UpdateContinuation):
-            _describe_retained_update_backup(
-                continuation,
-                state.execution_set,
-                fs,
-                target_root,
-                operation.target_rel_path,
-                detail,
-            )
-            published = _update_publish_state(
-                continuation,
-                fs,
-                state.execution_set,
-                target_root,
-                detail,
-            )
-        else:
-            published = _new_publish_state(
-                continuation,
-                fs,
-                state.execution_set,
-                target_root,
-                detail,
-            )
-    except Exception as state_error:
-        detail["publish_state"] = "unverified"
-        detail["durable_state"] = "publication-unverified"
-        detail["state_error_type"] = type(state_error).__name__
-        detail["state_error"] = logical_error_text(state_error)
-        _mark_unrecorded_publish(
-            state,
-            detail,
-            message=(
-                "filesystem mutation may have published but durable state "
-                "could not be verified"
-            ),
-        )
-        return _Settled(Outcome.FAILED, reason, detail)
-    if not published:
-        if (
-            isinstance(continuation, _UpdateContinuation)
-            and continuation.backup is not None
-            and detail.get("backup_state") == "retained"
-        ):
-            detail["publish_state"] = "not-published"
-            detail.pop("published_path", None)
-            detail.setdefault("durable_state", "target-not-published")
-            return _Settled(Outcome.FAILED, reason, detail)
-        return None
-
-    target_durable_state = _published_target_durable_state(detail)
-    if isinstance(continuation, _UpdateContinuation):
-        detail["durable_state"] = target_durable_state
-        if (
-            target_durable_state == "target-published"
-            and detail.get("backup_state") == "retained"
-        ):
-            detail["durable_state"] = "target-published-with-backup"
-    elif isinstance(continuation, _MoveUpdateContinuation):
-        if target_durable_state == "target-published":
-            _describe_move_update_durable_state(
-                continuation,
-                state.execution_set,
-                fs,
-                target_root,
-                detail,
-            )
-        else:
-            detail["prior_path"] = continuation.old_relative_path
-            if continuation.trash is not None:
-                detail["trash_path"] = _target_relative_path(
-                    continuation.trash,
-                    target_root,
-                )
-            detail["durable_state"] = target_durable_state
-    else:
-        detail["durable_state"] = target_durable_state
-    _mark_unrecorded_publish(
-        state,
-        detail,
-        message="published filesystem mutation failed before ledger settlement",
-    )
-    return _Settled(Outcome.FAILED, reason, detail)
 
 
 def _retain_mutation_attempt(
@@ -2762,42 +3605,6 @@ def _retain_mutation_attempt(
     )
 
 
-def _failed_after_mutation_settlement(
-    operation: PlanOperation,
-    error: Exception,
-    fs: ExecutorFileSystem,
-    state: _ExecutionState,
-    effects: _EffectSnapshot,
-    *,
-    canceled: bool = False,
-) -> _Settled | None:
-    attempt = effects.mutation
-    if attempt is None:
-        return None
-
-    reason, message = _failure_reason_and_message(error)
-    detail: dict[str, object] = {
-        "error_type": type(error).__name__,
-        "message": message,
-    }
-    if attempt.kind is OperationKind.UPDATE:
-        detail["publish_state"] = "not-published"
-    if attempt.destination_relative is not None:
-        detail["mutation_destination"] = attempt.destination_relative
-    if not _describe_mutation_attempt(attempt, fs, state, detail):
-        return None
-
-    if canceled:
-        reason = ExecutionReason.CANCELED_AFTER_MUTATION
-        detail["message"] = "cancellation interrupted settlement after a mutation attempt"
-    _mark_unrecorded_mutation(
-        state,
-        detail,
-        message="filesystem mutation may have committed before ledger settlement",
-    )
-    return _Settled(Outcome.FAILED, reason, detail)
-
-
 def _stat_mutation_secondary(
     attempt: _MutationAttempt,
     fs: ExecutorFileSystem,
@@ -2820,24 +3627,50 @@ def _stat_mutation_secondary(
     return _stat_target_path(fs, xset, target_root, secondary)
 
 
-def _describe_mutation_attempt(
+def _mutation_unreadable_state(kind: OperationKind) -> _DurableState:
+    states = {
+        OperationKind.MOVE: _DurableState.MOVE_STATE_UNVERIFIED,
+        OperationKind.TRASH: _DurableState.TRASH_STATE_UNVERIFIED,
+        OperationKind.DELETE: _DurableState.DELETE_STATE_UNVERIFIED,
+        OperationKind.UPDATE: _DurableState.UPDATE_STATE_UNVERIFIED,
+        OperationKind.MKDIR: _DurableState.MKDIR_STATE_UNVERIFIED,
+    }
+    return states[kind]
+
+
+def _observed_entry_state(
+    actual: FileStat | None,
+    expected: FileStat,
+) -> _EntryState:
+    if actual is None:
+        return _EntryState.ABSENT
+    return (
+        _EntryState.REVIEWED
+        if _matches_expected(actual, expected)
+        else _EntryState.CHANGED
+    )
+
+
+def _observe_mutation(
     attempt: _MutationAttempt,
     fs: ExecutorFileSystem,
     state: _ExecutionState,
-    detail: dict[str, object],
-) -> bool:
-    committed_states = {
-        OperationKind.MOVE: "target-renamed",
-        OperationKind.TRASH: "target-trashed",
-    }
+) -> _MutationVerdict:
     if attempt.kind is OperationKind.RECASE:
-        # Both spellings address the same entry on Windows, so a path stat cannot
-        # distinguish a committed case-only rename from its exact pre-state.
-        detail["mutation_state"] = (
-            "committed" if attempt.committed else "unverified"
+        return _MutationVerdict(
+            classification=(
+                _MutationClassification.DURABLE
+                if attempt.committed
+                else _MutationClassification.AMBIGUOUS
+            ),
+            kind=attempt.kind,
+            mutation_state=(
+                _MutationState.COMMITTED
+                if attempt.committed
+                else _MutationState.UNVERIFIED
+            ),
+            durable_state=_DurableState.RECASE_STATE_UNVERIFIED,
         )
-        detail["durable_state"] = "recase-state-unverified"
-        return True
 
     stable_identity = state.execution_set.plan.target_profile.stable_file_identity
     target_root = Path(state.execution_set.plan.target_root.path)
@@ -2861,113 +3694,178 @@ def _describe_mutation_attempt(
             if secondary is None
             else _profiled_stat(secondary, stable_identity)
         )
-    except Exception as state_error:
-        detail["mutation_state"] = (
-            "committed" if attempt.committed else "unverified"
+    except Exception as error:
+        return _MutationVerdict(
+            classification=_MutationClassification.UNREADABLE,
+            kind=attempt.kind,
+            mutation_state=(
+                _MutationState.COMMITTED
+                if attempt.committed
+                else _MutationState.UNVERIFIED
+            ),
+            durable_state=_mutation_unreadable_state(attempt.kind),
+            destination=attempt.destination_relative,
+            probe_error=_probe_diagnostic(error),
         )
-        detail["durable_state"] = f"{attempt.kind.value}-state-unverified"
-        detail["mutation_state_error"] = (
-            f"{type(state_error).__name__}: {logical_error_text(state_error)}"
-        )
-        return True
 
     before = attempt.primary_before
     if attempt.kind in {OperationKind.MOVE, OperationKind.TRASH}:
         assert before is not None and attempt.secondary is not None
-        primary_matches = primary is not None and _matches_expected(primary, before)
-        secondary_matches = secondary is not None and _matches_expected(
-            secondary, before
-        )
-        detail["source_state"] = (
-            "reviewed" if primary_matches else "absent" if primary is None else "changed"
-        )
-        detail["destination_state"] = (
-            "reviewed"
-            if secondary_matches
-            else "absent"
-            if secondary is None
-            else "changed"
-        )
-        if primary_matches and secondary is None:
+        source_state = _observed_entry_state(primary, before)
+        destination_state = _observed_entry_state(secondary, before)
+        if (
+            source_state is _EntryState.REVIEWED
+            and destination_state is _EntryState.ABSENT
+        ):
             if attempt.committed:
-                detail["mutation_state"] = "committed"
-                detail["durable_state"] = (
-                    "source-restored-after-move"
-                    if attempt.kind is OperationKind.MOVE
-                    else "source-restored-after-trash"
+                return _MutationVerdict(
+                    classification=_MutationClassification.DURABLE,
+                    kind=attempt.kind,
+                    mutation_state=_MutationState.COMMITTED,
+                    durable_state=(
+                        _DurableState.SOURCE_RESTORED_AFTER_MOVE
+                        if attempt.kind is OperationKind.MOVE
+                        else _DurableState.SOURCE_RESTORED_AFTER_TRASH
+                    ),
+                    destination=attempt.destination_relative,
+                    source_state=source_state,
+                    destination_state=destination_state,
                 )
-                return True
-            detail["mutation_state"] = "not-committed"
-            detail["durable_state"] = "source-retained"
-            return False
-        if primary is None and secondary_matches:
-            detail["mutation_state"] = "committed"
-            detail["durable_state"] = committed_states[attempt.kind]
-            return True
-        detail["mutation_state"] = (
-            "committed" if attempt.committed else "unverified"
+            return _MutationVerdict(
+                classification=_MutationClassification.UNCHANGED,
+                kind=attempt.kind,
+                mutation_state=_MutationState.NOT_COMMITTED,
+                durable_state=_DurableState.SOURCE_RETAINED,
+                destination=attempt.destination_relative,
+                source_state=source_state,
+                destination_state=destination_state,
+            )
+        if (
+            source_state is _EntryState.ABSENT
+            and destination_state is _EntryState.REVIEWED
+        ):
+            return _MutationVerdict(
+                classification=_MutationClassification.DURABLE,
+                kind=attempt.kind,
+                mutation_state=_MutationState.COMMITTED,
+                durable_state=(
+                    _DurableState.TARGET_RENAMED
+                    if attempt.kind is OperationKind.MOVE
+                    else _DurableState.TARGET_TRASHED
+                ),
+                destination=attempt.destination_relative,
+                source_state=source_state,
+                destination_state=destination_state,
+            )
+        return _MutationVerdict(
+            classification=_MutationClassification.AMBIGUOUS,
+            kind=attempt.kind,
+            mutation_state=(
+                _MutationState.COMMITTED
+                if attempt.committed
+                else _MutationState.UNVERIFIED
+            ),
+            durable_state=(
+                _DurableState.MOVE_STATE_AMBIGUOUS
+                if attempt.kind is OperationKind.MOVE
+                else _DurableState.TRASH_STATE_AMBIGUOUS
+            ),
+            destination=attempt.destination_relative,
+            source_state=source_state,
+            destination_state=destination_state,
         )
-        detail["durable_state"] = f"{attempt.kind.value}-state-ambiguous"
-        return True
 
     if attempt.kind is OperationKind.DELETE:
         assert before is not None
         if primary is not None and _matches_expected(primary, before):
             if attempt.committed:
-                detail["mutation_state"] = "committed"
-                detail["durable_state"] = "target-restored-after-delete"
-                return True
-            detail["mutation_state"] = "not-committed"
-            detail["durable_state"] = "target-retained"
-            return False
-        detail["mutation_state"] = (
-            "committed"
-            if attempt.committed or primary is None
-            else "unverified"
+                return _MutationVerdict(
+                    classification=_MutationClassification.DURABLE,
+                    kind=attempt.kind,
+                    mutation_state=_MutationState.COMMITTED,
+                    durable_state=_DurableState.TARGET_RESTORED_AFTER_DELETE,
+                )
+            return _MutationVerdict(
+                classification=_MutationClassification.UNCHANGED,
+                kind=attempt.kind,
+                mutation_state=_MutationState.NOT_COMMITTED,
+                durable_state=_DurableState.TARGET_RETAINED,
+            )
+        return _MutationVerdict(
+            classification=(
+                _MutationClassification.DURABLE
+                if attempt.committed or primary is None
+                else _MutationClassification.AMBIGUOUS
+            ),
+            kind=attempt.kind,
+            mutation_state=(
+                _MutationState.COMMITTED
+                if attempt.committed or primary is None
+                else _MutationState.UNVERIFIED
+            ),
+            durable_state=(
+                _DurableState.TARGET_DELETED
+                if primary is None
+                else _DurableState.TARGET_CHANGED_AFTER_DELETE_ATTEMPT
+            ),
         )
-        detail["durable_state"] = (
-            "target-deleted"
-            if primary is None
-            else "target-changed-after-delete-attempt"
-        )
-        return True
 
     if attempt.kind is OperationKind.UPDATE:
         assert before is not None
         if primary is not None and _matches_expected(primary, before):
-            detail["mutation_state"] = "not-committed"
-            detail["durable_state"] = "target-retained"
-            return False
-        detail["mutation_state"] = "unverified"
-        detail["durable_state"] = (
-            "target-missing-before-publish"
-            if primary is None
-            else "target-metadata-changed-before-publish"
+            return _MutationVerdict(
+                classification=_MutationClassification.UNCHANGED,
+                kind=attempt.kind,
+                mutation_state=_MutationState.NOT_COMMITTED,
+                durable_state=_DurableState.TARGET_RETAINED,
+            )
+        return _MutationVerdict(
+            classification=_MutationClassification.AMBIGUOUS,
+            kind=attempt.kind,
+            mutation_state=_MutationState.UNVERIFIED,
+            durable_state=(
+                _DurableState.TARGET_MISSING_BEFORE_PUBLISH
+                if primary is None
+                else _DurableState.TARGET_METADATA_CHANGED_BEFORE_PUBLISH
+            ),
         )
-        return True
 
     if attempt.kind is OperationKind.MKDIR:
         if primary is None:
             if attempt.committed:
-                detail["mutation_state"] = "committed"
-                detail["durable_state"] = "directory-missing-after-create"
-                return True
-            detail["mutation_state"] = "not-committed"
-            detail["durable_state"] = "directory-absent"
-            return False
-        detail["mutation_state"] = (
-            "committed"
-            if attempt.committed
-            else "unverified"
+                return _MutationVerdict(
+                    classification=_MutationClassification.DURABLE,
+                    kind=attempt.kind,
+                    mutation_state=_MutationState.COMMITTED,
+                    durable_state=_DurableState.DIRECTORY_MISSING_AFTER_CREATE,
+                )
+            return _MutationVerdict(
+                classification=_MutationClassification.UNCHANGED,
+                kind=attempt.kind,
+                mutation_state=_MutationState.NOT_COMMITTED,
+                durable_state=_DurableState.DIRECTORY_ABSENT,
+            )
+        directory = primary.kind is EntryKind.DIRECTORY
+        return _MutationVerdict(
+            classification=(
+                _MutationClassification.DURABLE
+                if attempt.committed and directory
+                else _MutationClassification.AMBIGUOUS
+            ),
+            kind=attempt.kind,
+            mutation_state=(
+                _MutationState.COMMITTED
+                if attempt.committed
+                else _MutationState.UNVERIFIED
+            ),
+            durable_state=(
+                _DurableState.DIRECTORY_CREATED
+                if attempt.committed and directory
+                else _DurableState.DIRECTORY_PRESENT_AFTER_CREATE_ATTEMPT
+                if directory
+                else _DurableState.MKDIR_STATE_AMBIGUOUS
+            ),
         )
-        detail["durable_state"] = (
-            "directory-created"
-            if attempt.committed and primary.kind is EntryKind.DIRECTORY
-            else "directory-present-after-create-attempt"
-            if primary.kind is EntryKind.DIRECTORY
-            else "mkdir-state-ambiguous"
-        )
-        return True
 
     raise RuntimeError(f"unsupported mutation attempt kind: {attempt.kind}")
 
@@ -3025,284 +3923,14 @@ def _canceled_durable_settlement(
     state: _ExecutionState,
     effects: _EffectSnapshot,
 ) -> _Settled | None:
-    byte_settlement = _canceled_byte_settlement(
+    return _settle_durable_effects(
         operation,
+        _cancellation_terminal_cause(effects.retry_error),
         fs,
         target_root,
         state,
         effects,
     )
-    if (
-        byte_settlement is not None
-        and byte_settlement.detail.get("publish_state") == "published"
-    ):
-        return byte_settlement
-    mutation_settlement = _failed_after_mutation_settlement(
-        operation,
-        effects.retry_error or Canceled(),
-        fs,
-        state,
-        effects,
-        canceled=True,
-    )
-    if mutation_settlement is None:
-        return byte_settlement
-    if byte_settlement is None:
-        return mutation_settlement
-
-    detail = dict(byte_settlement.detail)
-    mutation_detail = dict(mutation_settlement.detail)
-    mutation_detail.pop("publish_state", None)
-    mutation_durable_state = mutation_detail.pop("durable_state", None)
-    detail.update(mutation_detail)
-    if mutation_durable_state is not None:
-        detail["mutation_durable_state"] = mutation_durable_state
-    return replace(mutation_settlement, detail=detail)
-
-
-def _canceled_byte_settlement(
-    operation: PlanOperation,
-    fs: ExecutorFileSystem,
-    target_root: Path,
-    state: _ExecutionState,
-    effects: _EffectSnapshot,
-) -> _Settled | None:
-    continuation = effects.byte
-    if continuation is None:
-        return None
-
-    detail: dict[str, object] = {}
-    retry_error = effects.retry_error
-    if retry_error is not None:
-        detail["retry_error_type"] = type(retry_error).__name__
-        detail["retry_error"] = logical_error_text(retry_error)
-
-    try:
-        if isinstance(continuation, _UpdateContinuation):
-            detail.update(continuation.detail)
-            _describe_retained_update_backup(
-                continuation,
-                state.execution_set,
-                fs,
-                target_root,
-                operation.target_rel_path,
-                detail,
-            )
-            published = _update_publish_state(
-                continuation,
-                fs,
-                state.execution_set,
-                target_root,
-                detail,
-            )
-        else:
-            published = _new_publish_state(
-                continuation,
-                fs,
-                state.execution_set,
-                target_root,
-                detail,
-            )
-    except Exception as error:
-        detail.setdefault("durable_state", "unverified")
-        detail["publish_state"] = "unverified"
-        detail["state_error_type"] = type(error).__name__
-        detail["state_error"] = logical_error_text(error)
-        return _Settled(
-            Outcome.FAILED,
-            (
-                error.reason
-                if isinstance(error, OperationFailure)
-                else ExecutionReason.IO_ERROR
-            ),
-            detail,
-        )
-
-    if not published:
-        detail["publish_state"] = "not-published"
-        detail.setdefault("durable_state", "target-not-published")
-        return _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail)
-
-    detail["publish_state"] = "published"
-    target_durable_state = _published_target_durable_state(detail)
-    if isinstance(continuation, _MoveUpdateContinuation):
-        if target_durable_state == "target-published":
-            _describe_move_update_durable_state(
-                continuation,
-                state.execution_set,
-                fs,
-                target_root,
-                detail,
-            )
-        else:
-            detail["prior_path"] = continuation.old_relative_path
-            if continuation.trash is not None:
-                detail["trash_path"] = _target_relative_path(
-                    continuation.trash,
-                    target_root,
-                )
-            detail["durable_state"] = target_durable_state
-    elif isinstance(continuation, _UpdateContinuation):
-        detail["durable_state"] = target_durable_state
-        if (
-            target_durable_state == "target-published"
-            and detail.get("backup_state") == "retained"
-        ):
-            detail["durable_state"] = "target-published-with-backup"
-    else:
-        detail["durable_state"] = target_durable_state
-    detail["published_path"] = operation.target_rel_path
-    _mark_unrecorded_publish(state, detail)
-    return _Settled(
-        Outcome.FAILED,
-        ExecutionReason.CANCELED_AFTER_PUBLISH,
-        detail,
-    )
-
-
-def _new_publish_state(
-    continuation: _CopyContinuation | _MoveUpdateContinuation,
-    fs: ExecutorFileSystem,
-    xset: ExecutionSet,
-    target_root: Path,
-    detail: dict[str, object],
-) -> bool:
-    prepared = continuation.prepared
-    if continuation.published:
-        _describe_published_target(
-            prepared.target,
-            continuation.published_stat or continuation.prepared_stat,
-            fs,
-            xset,
-            target_root,
-            detail,
-        )
-        return True
-
-    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
-    target = _stat_target_path(fs, xset, target_root, prepared.target)
-    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        if target is not None:
-            detail["target_state"] = "unexpectedly-present-before-publish"
-        return False
-    if temp is not None and target is None:
-        detail["temp_state"] = "changed-before-publish"
-        detail["target_state"] = "absent-before-publish"
-        return False
-    if temp is None and target is not None:
-        detail["target_state"] = (
-            "published"
-            if _same_file_version(
-                target,
-                continuation.published_stat or continuation.prepared_stat,
-            )
-            else "changed-after-publish"
-        )
-        return True
-    detail["temp_state"] = "missing" if temp is None else "unexpected"
-    detail["target_state"] = "missing" if target is None else "present"
-    raise OperationFailure(
-        (
-            ExecutionReason.TARGET_MISSING
-            if target is None
-            else ExecutionReason.TARGET_DRIFT
-        ),
-        "cannot classify prepared versus published state during cancel settlement",
-    )
-
-
-def _update_publish_state(
-    continuation: _UpdateContinuation,
-    fs: ExecutorFileSystem,
-    xset: ExecutionSet,
-    target_root: Path,
-    detail: dict[str, object],
-) -> bool:
-    prepared = continuation.prepared
-    if continuation.published:
-        _describe_published_target(
-            prepared.target,
-            continuation.published_stat or continuation.prepared_stat,
-            fs,
-            xset,
-            target_root,
-            detail,
-        )
-        return True
-
-    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
-    target = _stat_target_path(fs, xset, target_root, prepared.target)
-    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        if target is None:
-            detail["target_state"] = "missing-before-publish"
-        elif not _same_file_version(target, continuation.live_stat):
-            detail["target_state"] = "changed-before-publish"
-        return False
-    if (
-        temp is not None
-        and target is not None
-        and _same_file_version(target, continuation.live_stat)
-    ):
-        detail["temp_state"] = "changed-before-publish"
-        detail["target_state"] = "retained-before-publish"
-        return False
-    if temp is None and target is not None:
-        detail["target_state"] = (
-            "published"
-            if _same_file_version(
-                target,
-                continuation.published_stat or continuation.prepared_stat,
-            )
-            else "changed-after-publish"
-        )
-        return True
-    detail["temp_state"] = "missing" if temp is None else "unexpected"
-    detail["target_state"] = "missing" if target is None else "present"
-    raise OperationFailure(
-        (
-            ExecutionReason.TARGET_MISSING
-            if target is None
-            else ExecutionReason.TARGET_DRIFT
-        ),
-        "cannot classify live versus published update during cancel settlement",
-    )
-
-
-def _describe_published_target(
-    target: Path,
-    expected: FileStat,
-    fs: ExecutorFileSystem,
-    xset: ExecutionSet,
-    target_root: Path,
-    detail: dict[str, object],
-) -> None:
-    try:
-        actual = _stat_target_path(fs, xset, target_root, target)
-    except Exception as error:
-        detail["target_state"] = "unverified-after-publish"
-        detail["target_state_error"] = (
-            f"{type(error).__name__}: {logical_error_text(error)}"
-        )
-        return
-    if actual is None:
-        detail["target_state"] = "missing-after-publish"
-    elif _same_file_version(actual, expected):
-        detail["target_state"] = "published"
-    else:
-        detail["target_state"] = "changed-after-publish"
-
-
-def _published_target_durable_state(detail: dict[str, object]) -> str:
-    states = {
-        "published": "target-published",
-        "changed-after-publish": "target-changed-after-publish",
-        "missing-after-publish": "target-missing-after-publish",
-        "unverified-after-publish": "target-unverified-after-publish",
-    }
-    target_state = detail.get("target_state")
-    if target_state not in states:
-        raise RuntimeError("published target classification is incomplete")
-    return states[target_state]
 
 
 def _target_relative_path(path: Path, target_root: Path) -> str:
@@ -3419,154 +4047,6 @@ def _require_target_stat(
     if observed is None:
         raise FileNotFoundError(path)
     return observed
-
-
-def _describe_retained_update_backup(
-    continuation: _UpdateContinuation,
-    xset: ExecutionSet,
-    fs: ExecutorFileSystem,
-    target_root: Path,
-    relative_path: str,
-    detail: dict[str, object],
-) -> None:
-    backup = continuation.backup
-    if backup is None:
-        return
-    detail["backup_path"] = _target_relative_path(backup.path, target_root)
-    try:
-        fs.revalidate_trash_destination(
-            target_root,
-            xset.run_id,
-            relative_path,
-            backup.path,
-        )
-        actual = _stat_target_path(
-            fs,
-            xset,
-            target_root,
-            backup.path,
-        )
-    except Exception as error:
-        detail["backup_state"] = "unverified"
-        detail["backup_state_error"] = (
-            f"{type(error).__name__}: {logical_error_text(error)}"
-        )
-        return
-    if actual is None:
-        detail["backup_state"] = "absent"
-        return
-    stable_identity = xset.plan.target_profile.stable_file_identity
-    if backup.published_stat is None:
-        if backup.created_stat is None:
-            detail["backup_state"] = "unverified"
-            detail["backup_state_error"] = "creation evidence unavailable"
-            return
-        retained = _same_unrepaired_publication(
-            actual,
-            backup.created_stat,
-            stable_identity,
-        )
-        detail["backup_metadata"] = "unrepaired"
-    else:
-        retained = _same_file_version(
-            _profiled_stat(actual, stable_identity),
-            backup.published_stat,
-        )
-    detail["backup_state"] = "retained" if retained else "changed"
-    if retained:
-        detail["durable_state"] = "backup-retained"
-
-
-def _describe_move_update_durable_state(
-    continuation: _MoveUpdateContinuation,
-    xset: ExecutionSet,
-    fs: ExecutorFileSystem,
-    target_root: Path,
-    detail: dict[str, object],
-) -> None:
-    detail["prior_path"] = continuation.old_relative_path
-    old_path = target_root.joinpath(
-        *PureWindowsPath(continuation.old_relative_path).parts
-    )
-    if continuation.trash is None:
-        try:
-            old = _stat_target_path(fs, xset, target_root, old_path)
-        except Exception as error:
-            detail["durable_state"] = "new-and-old-unverified"
-            detail["old_state_error"] = (
-                f"{type(error).__name__}: {logical_error_text(error)}"
-            )
-            return
-        detail["durable_state"] = (
-            "new-and-old"
-            if old is not None and _matches_expected(old, continuation.old_expected)
-            else "new-and-old-unverified"
-        )
-        return
-    detail["trash_path"] = _target_relative_path(
-        continuation.trash,
-        target_root,
-    )
-    try:
-        old = _stat_target_path(fs, xset, target_root, old_path)
-    except Exception as error:
-        detail["durable_state"] = "new-and-old-unverified"
-        detail["old_state_error"] = (
-            f"{type(error).__name__}: {logical_error_text(error)}"
-        )
-        return
-    try:
-        fs.revalidate_trash_destination(
-            target_root,
-            xset.run_id,
-            continuation.old_relative_path,
-            continuation.trash,
-        )
-        trash = _stat_target_path(
-            fs,
-            xset,
-            target_root,
-            continuation.trash,
-        )
-    except Exception as error:
-        detail["durable_state"] = "new-and-old-unverified"
-        detail["trash_state_error"] = (
-            f"{type(error).__name__}: {logical_error_text(error)}"
-        )
-        return
-    if old is not None and _matches_expected(old, continuation.old_expected):
-        detail["durable_state"] = (
-            "new-and-old"
-            if trash is None
-            else "new-old-and-trash-unverified"
-        )
-    elif old is None and trash is not None and _matches_expected(
-        trash,
-        continuation.old_expected,
-    ):
-        detail["durable_state"] = "new-and-trash"
-    else:
-        detail["durable_state"] = "new-and-old-unverified"
-
-
-def _mark_unrecorded_publish(
-    state: _ExecutionState,
-    detail: dict[str, object],
-    *,
-    message: str = "cancellation interrupted settlement of a published filesystem mutation",
-) -> None:
-    _mark_unrecorded_mutation(state, detail, message=message)
-
-
-def _mark_unrecorded_mutation(
-    state: _ExecutionState,
-    detail: dict[str, object],
-    *,
-    message: str,
-) -> None:
-    state.recording = RecordingStatus.DEGRADED
-    detail["recording"] = RecordingStatus.DEGRADED.value
-    detail["recording_error"] = message
 
 
 def _guard_present(

@@ -407,8 +407,17 @@ optional owned temporary path. Failure and cancellation take one immutable
 snapshot before cleanup; owned-temp cleanup releases the claim before deletion,
 and terminal item settlement completes before the entry is retired. A retry
 error or temporary claim alone is not a durable effect and therefore does not
-latch pause. The observation and settlement classifiers remain unchanged at
-this checkpoint; central pure reduction is the next boundary.
+latch pause. Runtime observers now perform the failure-only filesystem probes
+and return typed publication and mutation verdicts. One pure reducer consumes
+those verdicts plus an ordinary-failure or cancellation cause; it alone selects
+precedence, outcome/reason vocabulary, detail composition, and recording
+degradation. Ordinary failure, cancellation, and both immediate and deferred
+MKDIR failures use that same reduction path. Confirmed publication suppresses
+subordinate mutation evidence; otherwise unchanged mutation is ignored while
+durable, ambiguous, and unreadable mutation classifications degrade recording.
+The reducer performs no I/O, does not mutate its verdict inputs, and cannot emit
+published success evidence. A compact direct policy matrix owns those reduction
+axes while operation tests retain filesystem-probe and call-timing coverage.
 
 ## Settlement Stability Gate
 

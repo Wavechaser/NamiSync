@@ -1092,20 +1092,24 @@ production; it never publishes, records, retries, or interprets an operation.
 Final-touch timing remains in runtime even when the observation mechanics are
 shared through core.
 
-**Implemented effect journal and next reducer boundary.** Runtime retains one
+**Implemented effect journal and settlement reducer.** Runtime retains one
 operation-keyed typed journal entry with independent byte/publication and
 non-byte mutation channels, the last retry error, and an optional owned
 temporary path. Typed mutation variants cover readonly clearing, rename/recase,
 trash rename, removal, and directory creation. Entries are snapshotted before
 cleanup and retired only after terminal item settlement; retry-error-only and
-temporary-only entries do not latch pause as durable effects. The existing
-settlement classifiers still consume those snapshots without policy changes.
-One pure settlement reducer remains next: it will preserve reason precedence,
-detail vocabulary, recording degradation, cleanup timing, and recorder
-ordering while replacing the operation-local composition branches. The journal
-migration and later reduction are contract-preserving maintenance: a discovered
-policy discrepancy is isolated as a separate bug fix rather than folded into
-the refactor.
+temporary-only entries do not latch pause as durable effects. Failure-only
+observers perform filesystem probes and return typed publication and mutation
+verdicts; they do not select terminal policy. One pure reducer consumes those
+verdicts and a typed terminal cause and owns reason precedence, outcome/detail
+vocabulary, recording degradation, and byte/mutation composition for ordinary
+failure, cancellation, and MKDIR settlement. Confirmed publication is
+authoritative; otherwise unchanged mutation is ignored and durable, ambiguous,
+or unreadable mutation evidence degrades recording. The reducer performs no
+I/O, leaves inputs unchanged, and never produces published success evidence.
+Cleanup timing, recorder ordering, retry/control behavior, and successful-path
+probes remain unchanged. A discovered policy discrepancy is still isolated as
+a separate bug fix rather than folded into this contract-preserving refactor.
 
 **Settlement stability barrier.** The monolithic corrected baseline is not
 declared stable merely because a differential run reproduces it. Before the

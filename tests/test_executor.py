@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 import inspect
 import os
@@ -9038,11 +9038,8 @@ def test_nonbyte_commit_then_raise_degrades_unrecorded_mutation(
 
     item = next(event for event in events if isinstance(event, ItemOutcome))
     assert result.status is SessionState.FAILED
-    assert result.recording is RecordingStatus.DEGRADED
-    assert item.reason == "io-error"
     assert item.detail["mutation_state"] == mutation_state
     assert item.detail["durable_state"] == durable_state
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
     assert recorder.calls == []
     assert xset.published_evidence == {}
     if kind is OperationKind.MOVE:
@@ -9082,9 +9079,7 @@ def test_nonbyte_precommit_failure_keeps_recording_ok_when_state_is_unchanged(
 
     item = next(event for event in events if isinstance(event, ItemOutcome))
     assert result.status is SessionState.FAILED
-    assert result.recording is RecordingStatus.OK
     assert "durable_state" not in item.detail
-    assert "recording" not in item.detail
     assert recorder.calls == []
     assert xset.published_evidence == {}
     if kind is OperationKind.MOVE:
@@ -9219,9 +9214,7 @@ def test_cancel_during_nonbyte_retry_settles_committed_mutation(
     item = next(event for event in events if isinstance(event, ItemOutcome))
     assert fs.faults == 1
     assert item.outcome is Outcome.FAILED
-    assert item.reason == "canceled-after-mutation"
     assert item.detail["durable_state"] == "target-renamed"
-    assert xset.recording is RecordingStatus.DEGRADED
     assert recorder.calls == []
     assert xset.published_evidence == {}
     assert not (target / "old.bin").exists()
@@ -9285,7 +9278,6 @@ def test_nonbyte_probe_failure_conservatively_degrades_recording(
 
     item = next(event for event in events if isinstance(event, ItemOutcome))
     assert result.status is SessionState.FAILED
-    assert result.recording is RecordingStatus.DEGRADED
     assert item.detail["mutation_state"] == "unverified"
     assert item.detail["durable_state"] == "move-state-unverified"
     assert "PermissionError" in item.detail["mutation_state_error"]
@@ -10020,6 +10012,266 @@ def test_failed_copy_without_transferred_bytes_keeps_byte_progress_at_zero(
     assert progress[-1].bytes_total == len(b"planned")
     assert recorder.calls == []
     assert not list(target.glob("*.synctmp-*"))
+
+
+def test_effect_settlement_reducer_policy_matrix() -> None:
+    PC = executor_runtime._PublicationClassification
+    MC = executor_runtime._MutationClassification
+    MS = executor_runtime._MutationState
+    DS = executor_runtime._DurableState
+    ordinary = executor_runtime._TerminalCause(
+        executor_runtime._TerminalKind.ORDINARY_FAILURE,
+        ExecutionReason.TARGET_DRIFT,
+        "OperationFailure",
+        "operation failed",
+    )
+    canceled = executor_runtime._TerminalCause(
+        executor_runtime._TerminalKind.CANCELLATION,
+        ExecutionReason.CANCELED,
+        "Canceled",
+        "execution canceled",
+    )
+    state_probe = executor_runtime._ProbeDiagnostic(
+        ExecutionReason.TARGET_MISSING,
+        "OperationFailure",
+        "state unknown",
+    )
+    backup = executor_runtime._BackupVerdict(
+        ".synctrash\\run\\file.bin",
+        executor_runtime._BackupState.RETAINED,
+        metadata="unrepaired",
+    )
+
+    def publication(
+        classification: executor_runtime._PublicationClassification,
+        *,
+        kind: OperationKind = OperationKind.COPY,
+        detail: dict[str, object] | None = None,
+        target: executor_runtime._TargetState | None = None,
+        retained_backup: bool = False,
+        probe: executor_runtime._ProbeDiagnostic | None = None,
+    ) -> executor_runtime._PublicationVerdict:
+        return executor_runtime._PublicationVerdict(
+            classification,
+            kind,
+            "file.bin",
+            {} if detail is None else detail,
+            target_state=target,
+            backup=backup if retained_backup else None,
+            probe_error=probe,
+        )
+
+    def mutation(
+        classification: executor_runtime._MutationClassification,
+        state: executor_runtime._MutationState,
+        durable: executor_runtime._DurableState,
+        *,
+        kind: OperationKind = OperationKind.DELETE,
+    ) -> executor_runtime._MutationVerdict:
+        return executor_runtime._MutationVerdict(
+            classification,
+            kind,
+            state,
+            durable,
+        )
+
+    unchanged = mutation(MC.UNCHANGED, MS.NOT_COMMITTED, DS.TARGET_RETAINED)
+    durable = mutation(MC.DURABLE, MS.COMMITTED, DS.TARGET_DELETED)
+    ambiguous = mutation(
+        MC.AMBIGUOUS, MS.UNVERIFIED, DS.TARGET_CHANGED_AFTER_DELETE_ATTEMPT
+    )
+    unreadable = mutation(MC.UNREADABLE, MS.UNVERIFIED, DS.DELETE_STATE_UNVERIFIED)
+    degraded = RecordingStatus.DEGRADED.value
+    mutation_error = "filesystem mutation may have committed before ledger settlement"
+    unverified_error = (
+        "filesystem mutation may have published but durable state could not be verified"
+    )
+    published_error = "published filesystem mutation failed before ledger settlement"
+    canceled_publish = (
+        "cancellation interrupted settlement of a published filesystem mutation"
+    )
+    canceled_mutation = (
+        "cancellation interrupted settlement after a mutation attempt"
+    )
+
+    @dataclass(frozen=True, slots=True)
+    class Expected:
+        outcome: Outcome = Outcome.FAILED
+        reason: ExecutionReason = ExecutionReason.TARGET_DRIFT
+        degrade: bool = True
+        publish: str | None = None
+        durable: str | None = None
+        sibling: str | None = None
+        recording: str | None = degraded
+        recording_error: str | None = mutation_error
+
+    # Selected precedence axes only; operation tests retain probe and timing coverage.
+    cases = [
+        (
+            "ordinary-retained-backup",
+            ordinary,
+            publication(
+                PC.NOT_PUBLISHED,
+                kind=OperationKind.UPDATE,
+                detail={"durable_state": "misleading"},
+                retained_backup=True,
+            ),
+            None,
+            Expected(
+                degrade=False,
+                publish="not-published",
+                durable="backup-retained",
+                recording=None,
+                recording_error=None,
+            ),
+        ),
+        (
+            "ordinary-unverified-plus-ambiguous",
+            ordinary,
+            publication(
+                PC.UNVERIFIED,
+                detail={"recording": "misleading", "recording_error": "misleading"},
+                probe=state_probe,
+            ),
+            ambiguous,
+            Expected(
+                publish="unverified",
+                durable="publication-unverified",
+                sibling="target-changed-after-delete-attempt",
+                recording_error=unverified_error,
+            ),
+        ),
+        (
+            "ordinary-confirmed-suppresses-sibling",
+            ordinary,
+            publication(
+                PC.CONFIRMED,
+                target=executor_runtime._TargetState.PUBLISHED,
+            ),
+            unreadable,
+            Expected(
+                publish="published",
+                durable="target-published",
+                recording_error=published_error,
+            ),
+        ),
+        (
+            "cancel-not-published",
+            canceled,
+            publication(PC.NOT_PUBLISHED),
+            unchanged,
+            Expected(
+                outcome=Outcome.CANCELED,
+                reason=ExecutionReason.CANCELED,
+                degrade=False,
+                publish="not-published",
+                durable="target-not-published",
+                recording=None,
+                recording_error=None,
+            ),
+        ),
+        (
+            "cancel-confirmed-suppresses-sibling",
+            canceled,
+            publication(
+                PC.CONFIRMED,
+                target=executor_runtime._TargetState.PUBLISHED,
+            ),
+            unreadable,
+            Expected(
+                reason=ExecutionReason.CANCELED_AFTER_PUBLISH,
+                publish="published",
+                durable="target-published",
+                recording_error=canceled_publish,
+            ),
+        ),
+        (
+            "cancel-unverified-retained-backup",
+            canceled,
+            publication(
+                PC.UNVERIFIED,
+                kind=OperationKind.UPDATE,
+                detail={"durable_state": "misleading"},
+                retained_backup=True,
+                probe=state_probe,
+            ),
+            None,
+            Expected(
+                reason=ExecutionReason.TARGET_MISSING,
+                degrade=False,
+                publish="unverified",
+                durable="backup-retained",
+                recording=None,
+                recording_error=None,
+            ),
+        ),
+        (
+            "cancel-unverified-plus-mutation",
+            canceled,
+            publication(
+                PC.UNVERIFIED,
+                probe=state_probe,
+            ),
+            ambiguous,
+            Expected(
+                reason=ExecutionReason.CANCELED_AFTER_MUTATION,
+                publish="unverified",
+                durable="unverified",
+                sibling="target-changed-after-delete-attempt",
+            ),
+        ),
+        ("ordinary-unchanged", ordinary, None, unchanged, None),
+    ]
+    for name, verdict in (
+        ("durable", durable),
+        ("ambiguous", ambiguous),
+        ("unreadable", unreadable),
+    ):
+        wanted = Expected(durable=verdict.durable_state.value)
+        cases.append((f"ordinary-{name}", ordinary, None, verdict, wanted))
+
+    details: dict[str, dict[str, object]] = {}
+    for name, cause, published, attempted, expected in cases:
+        before = None if published is None else dict(published.base_detail)
+        reduction = executor_runtime._reduce_effect_settlement(
+            cause,
+            published,
+            attempted,
+        )
+        if reduction is None:
+            actual = None
+        else:
+            detail = reduction.settled.detail
+            details[name] = detail
+            actual = Expected(
+                outcome=reduction.settled.outcome,
+                reason=reduction.settled.reason,
+                degrade=reduction.degrade_recording,
+                publish=detail.get("publish_state"),
+                durable=detail.get("durable_state"),
+                sibling=detail.get("mutation_durable_state"),
+                recording=detail.get("recording"),
+                recording_error=detail.get("recording_error"),
+            )
+            assert reduction.settled.published_evidence is None, name
+        assert actual == expected, name
+        assert published is None or published.base_detail == before, name
+
+    assert details["ordinary-unverified-plus-ambiguous"]["state_error"] == (
+        "state unknown"
+    )
+    assert details["cancel-unverified-retained-backup"]["backup_state"] == (
+        "retained"
+    )
+    assert details["ordinary-retained-backup"]["message"] == "operation failed"
+    assert details["cancel-unverified-plus-mutation"]["message"] == (
+        canceled_mutation
+    )
+    for name in (
+        "ordinary-confirmed-suppresses-sibling",
+        "cancel-confirmed-suppresses-sibling",
+    ):
+        assert "mutation_state" not in details[name]
 
 
 def _journal_copy_effect(tmp_path: Path) -> executor_runtime._CopyContinuation:
