@@ -1,6 +1,6 @@
 # Verifier Module
 
-Status: the verifier operation module and M1 Stage 3 location-centric
+Status: the verifier component package and M1 Stage 3 location-centric
 inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
@@ -20,6 +20,18 @@ outcome per file, and requests conditional persistence through `Recorder`.
 It does not inventory locations, choose repair actions, mutate file content,
 write SQL, reinterpret copy-stream hashes as readback verification, or require a
 paired source/target mapping.
+
+## Component Boundary
+
+`namisync.modules.verifier` is the stable facade and exports only
+`WindowsUnbufferedReader`, `baseline`, `rebaseline`, `verify`, and
+`verify_post_copy`. `engine.py` owns the public operations, selection
+classification, progress, cancellation, recording settlement, and outcome
+construction. `native.py` owns Windows root-chain admission, unbuffered reads,
+handle/volume work, and final-path-by-handle checks. Engine may import native;
+native imports only core contracts and the standard library and never imports
+engine. Tests patch the submodule that owns each collaborator; direct reader,
+handle, and cache-honesty cases live separately from engine policy tests.
 
 ## Entry Contracts
 
@@ -248,7 +260,8 @@ Implemented and directly verified in this module:
 - outcome-before-continuation pause/resume behavior;
 - monotonic throttled progress, including retried work after pause;
 - the real Windows unbuffered reader and disclosed unsupported path;
-- sibling-free imports (`namisync.modules.verifier` imports `core` only).
+- package ownership and import direction enforced by AST and import-linter
+  contracts while preserving the public facade.
 
 Implemented by the Stage 3 composition around this module:
 

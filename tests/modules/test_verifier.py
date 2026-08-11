@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import os
 import stat as stat_module
-import subprocess
-import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Iterator
 
 import pytest
 from xxhash import xxh3_128
 
-import namisync.modules.verifier as verifier_module
+import namisync.modules.verifier as verifier_facade
+import namisync.modules.verifier.engine as verifier_engine
+import namisync.modules.verifier.native as verifier_native
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -53,7 +55,6 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import (
-    from_extended_length_path,
     normalize_relative_path,
     validate_relative_path,
 )
@@ -61,8 +62,6 @@ from namisync.core.root_authority import (
     RootAuthority,
     RootAuthorityError,
     RootAuthorityIssue,
-    current_volume_anchor,
-    observe_native_volume,
 )
 from namisync.core.session import (
     Canceled,
@@ -82,6 +81,108 @@ from namisync.modules.verifier import (
 
 
 _NOW = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+
+
+def test_verifier_package_boundaries_match_component_ownership() -> None:
+    package = Path(__file__).parents[2] / "namisync" / "modules" / "verifier"
+    sources = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in package.glob("*.py")
+    }
+    assert set(sources) == {"__init__.py", "engine.py", "native.py"}
+
+    forbidden_components = (
+        "namisync.modules.executor",
+        "namisync.modules.planner",
+        "namisync.modules.preflight",
+        "namisync.modules.scanner",
+    )
+    assert all(
+        component not in text
+        for text in sources.values()
+        for component in forbidden_components
+    )
+
+    def relative_imports(name: str) -> set[str]:
+        tree = ast.parse(sources[name])
+        return {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level
+        }
+
+    def project_imports(name: str) -> set[str]:
+        tree = ast.parse(sources[name])
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                if node.module.startswith("namisync."):
+                    imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported.update(
+                    alias.name
+                    for alias in node.names
+                    if alias.name.startswith("namisync.")
+                )
+        return imported
+
+    assert relative_imports("__init__.py") == {"engine", "native"}
+    assert relative_imports("engine.py") == {"native"}
+    assert relative_imports("native.py") == set()
+    for name in ("engine.py", "native.py"):
+        assert project_imports(name)
+        assert all(
+            module.startswith("namisync.core.")
+            for module in project_imports(name)
+        )
+
+
+def test_verifier_public_facade_preserves_exact_exports_and_signatures() -> None:
+    assert verifier_facade.__all__ == [
+        "WindowsUnbufferedReader",
+        "baseline",
+        "rebaseline",
+        "verify",
+        "verify_post_copy",
+    ]
+    assert (
+        verifier_facade.WindowsUnbufferedReader
+        is verifier_native.WindowsUnbufferedReader
+    )
+    assert verifier_facade.baseline is verifier_engine.baseline
+    assert verifier_facade.rebaseline is verifier_engine.rebaseline
+    assert verifier_facade.verify is verifier_engine.verify
+    assert verifier_facade.verify_post_copy is verifier_engine.verify_post_copy
+
+    signatures = {
+        name: str(inspect.signature(getattr(verifier_facade, name)))
+        for name in verifier_facade.__all__
+    }
+    assert signatures == {
+        "WindowsUnbufferedReader": (
+            "(root_authority: 'RootAuthority | None' = None) -> 'None'"
+        ),
+        "baseline": (
+            "(selection: 'IntegritySelection', ctx: 'VerifierContext', "
+            "recorder: 'IntegrityRecorder', reader: 'VerificationReader | None' "
+            "= None) -> 'IntegrityRunResult'"
+        ),
+        "rebaseline": (
+            "(selection: 'IntegritySelection', ctx: 'VerifierContext', "
+            "recorder: 'IntegrityRecorder', reader: 'VerificationReader | None' "
+            "= None) -> 'IntegrityRunResult'"
+        ),
+        "verify": (
+            "(selection: 'IntegritySelection', ctx: 'VerifierContext', "
+            "recorder: 'IntegrityRecorder', reader: 'VerificationReader | None' "
+            "= None) -> 'IntegrityRunResult'"
+        ),
+        "verify_post_copy": (
+            "(selection: 'PostCopySelection', ctx: 'VerifierContext', "
+            "recorder: 'IntegrityRecorder', reader: 'VerificationReader | None' "
+            "= None) -> 'IntegrityRunResult'"
+        ),
+    }
 
 
 class _Clock:
@@ -267,17 +368,6 @@ def _context(
     )
 
 
-def _native_context(events: list[object], root: Path) -> VerifierContext:
-    volume = observe_native_volume(root)
-    return replace(
-        _context(events),
-        root_authority=RootAuthority(
-            logical_root=str(root),
-            reviewed_anchor=current_volume_anchor(root),
-            expected_volume_id=volume.volume_id,
-        ),
-    )
-
 
 def _integrity_events(events: list[object]) -> list[IntegrityOutcome]:
     return [event for event in events if isinstance(event, IntegrityOutcome)]
@@ -373,7 +463,7 @@ def _mock_reviewed_root_state(
                 "reviewed root volume identity changed",
             )
 
-    monkeypatch.setattr(verifier_module, "admit_root", admit)
+    monkeypatch.setattr(verifier_engine, "admit_root", admit)
 
 
 def test_verifier_refuses_remount_before_first_native_read(
@@ -591,7 +681,7 @@ def test_verifier_refuses_mismatched_selection_root_before_state_shortcuts(
         root_authority=RootAuthority(str(reviewed_root)),
     )
     monkeypatch.setattr(
-        verifier_module,
+        verifier_engine,
         "admit_root",
         lambda _authority: pytest.fail("mismatched root must not be admitted"),
     )
@@ -624,7 +714,7 @@ def test_invalid_path_precedes_wrong_root_and_state_shortcuts(
         root_authority=RootAuthority(str(tmp_path / "reviewed")),
     )
     monkeypatch.setattr(
-        verifier_module,
+        verifier_engine,
         "admit_root",
         lambda _authority: pytest.fail("invalid path must not be admitted"),
     )
@@ -651,7 +741,7 @@ def test_post_copy_refuses_mismatched_selection_root_before_read_or_record(
         root_authority=RootAuthority(str(tmp_path / "reviewed")),
     )
     monkeypatch.setattr(
-        verifier_module,
+        verifier_engine,
         "admit_root",
         lambda _authority: pytest.fail("mismatched root must not be admitted"),
     )
@@ -683,7 +773,7 @@ def test_post_copy_invalid_path_precedes_wrong_root_without_side_effects(
         root_authority=RootAuthority(str(tmp_path / "reviewed")),
     )
     monkeypatch.setattr(
-        verifier_module,
+        verifier_engine,
         "admit_root",
         lambda _authority: pytest.fail("invalid path must not be admitted"),
     )
@@ -737,12 +827,12 @@ def test_default_and_explicit_native_readers_require_root_authority(
         context,
         root_authority=RootAuthority(str(tmp_path)),
     )
-    selected = verifier_module._reader_for_context(
+    selected = verifier_engine._reader_for_context(
         bound_context,
         instrumented,
     )
     assert selected is instrumented
-    with verifier_module._open_reader(
+    with verifier_engine._open_reader(
         selected,
         tmp_path,
         "payload.bin",
@@ -790,27 +880,27 @@ def test_native_reader_keeps_full_and_final_touch_admissions_distinct(
         close=lambda _handle: calls.append("close"),
     )
 
-    monkeypatch.setattr(verifier_module, "admit_root", admit_full)
-    monkeypatch.setattr(verifier_module, "admit_root_chain", admit_chain)
+    monkeypatch.setattr(verifier_engine, "admit_root", admit_full)
+    monkeypatch.setattr(verifier_native, "admit_root_chain", admit_chain)
     monkeypatch.setattr(
-        verifier_module,
+        verifier_native,
         "_verification_lstat",
         observe_relative,
     )
     monkeypatch.setattr(
-        verifier_module,
+        verifier_native,
         "_WindowsApi",
         lambda: calls.append("api") or api,
     )
 
-    verifier_module._admit_verification_root(tmp_path, context)
+    verifier_engine._admit_verification_root(tmp_path, context)
     explicit_reader = WindowsUnbufferedReader()
-    reader = verifier_module._reader_for_context(
+    reader = verifier_engine._reader_for_context(
         context,
         explicit_reader,
     )
     assert reader is explicit_reader
-    with verifier_module._open_reader(
+    with verifier_engine._open_reader(
         reader,
         tmp_path,
         "payload.bin",
@@ -862,9 +952,9 @@ def test_native_reader_preserves_relative_admission_outcomes(
         baseline_evidence=None,
     )
 
-    monkeypatch.setattr(verifier_module, "admit_root", lambda _authority: None)
+    monkeypatch.setattr(verifier_engine, "admit_root", lambda _authority: None)
     monkeypatch.setattr(
-        verifier_module,
+        verifier_native,
         "admit_root_chain",
         lambda observed, **_kwargs: observed.reviewed_anchor or tmp_path.anchor,
     )
@@ -885,12 +975,12 @@ def test_native_reader_preserves_relative_admission_outcomes(
         )
 
     monkeypatch.setattr(
-        verifier_module,
+        verifier_native,
         "_verification_lstat",
         observe_relative,
     )
     monkeypatch.setattr(
-        verifier_module,
+        verifier_native,
         "_WindowsApi",
         lambda: pytest.fail("relative refusal reached Windows API setup"),
     )
@@ -996,9 +1086,9 @@ def test_private_classifier_needs_no_ledger_identity_or_recorder(
         raise AssertionError("ledger command construction is not classification")
 
     monkeypatch.setattr(
-        verifier_module, "IntegrityRecordCommand", forbidden_command
+        verifier_engine, "IntegrityRecordCommand", forbidden_command
     )
-    classification = verifier_module._classify_subject(
+    classification = verifier_engine._classify_subject(
         root=tmp_path,
         relative_path=path,
         expected_stat=expected,
@@ -1428,7 +1518,7 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
     ),
     (
         (
-            verifier_module._RecordingObservation(
+            verifier_engine._RecordingObservation(
                 disposition=RecordDisposition.APPLIED
             ),
             IntegrityReason.READ_DRIFT,
@@ -1437,7 +1527,7 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
             RecordDisposition.APPLIED,
         ),
         (
-            verifier_module._RecordingObservation(
+            verifier_engine._RecordingObservation(
                 disposition=RecordDisposition.NOOP
             ),
             IntegrityReason.READ_DRIFT,
@@ -1446,7 +1536,7 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
             RecordDisposition.NOOP,
         ),
         (
-            verifier_module._RecordingObservation(
+            verifier_engine._RecordingObservation(
                 disposition=RecordDisposition.STALE
             ),
             IntegrityReason.RECORDING_STALE,
@@ -1455,7 +1545,7 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
             RecordDisposition.STALE,
         ),
         (
-            verifier_module._RecordingObservation(
+            verifier_engine._RecordingObservation(
                 disposition=RecordDisposition.CONFLICT
             ),
             IntegrityReason.RECORDING_CONFLICT,
@@ -1464,7 +1554,7 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
             RecordDisposition.CONFLICT,
         ),
         (
-            verifier_module._RecordingObservation(
+            verifier_engine._RecordingObservation(
                 error_detail="OSError: sqlite unavailable"
             ),
             IntegrityReason.RECORDING_ERROR,
@@ -1476,19 +1566,19 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
     ids=("applied", "noop", "stale", "conflict", "error"),
 )
 def test_recording_settlement_reducer_is_pure_policy(
-    observation: verifier_module._RecordingObservation,
+    observation: verifier_engine._RecordingObservation,
     expected_reason: IntegrityReason,
     expected_detail: str | None,
     expected_recording: RecordingStatus,
     expected_disposition: RecordDisposition | None,
 ) -> None:
-    settlement = verifier_module._reduce_recording(
+    settlement = verifier_engine._reduce_recording(
         observation,
         reason=IntegrityReason.READ_DRIFT,
         detail="classification detail",
     )
 
-    assert settlement == verifier_module._RecordingSettlement(
+    assert settlement == verifier_engine._RecordingSettlement(
         expected_reason,
         expected_detail,
         expected_recording,
@@ -1920,334 +2010,17 @@ def test_fast_chunk_flood_is_throttled_and_progress_is_monotonic(tmp_path: Path)
     assert progress[-1].bytes_done == len(data)
 
 
-@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
-def test_windows_reader_uses_read_only_share_and_cache_honest_flags(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    path = tmp_path / "payload.bin"
-    path.write_bytes(b"flag contract")
-    expected = _stat(
-        size=path.stat().st_size,
-        mtime_ns=path.stat().st_mtime_ns,
-        identity=None,
-    )
-    calls: list[tuple[object, ...]] = []
-    closed: list[int] = []
-    native_api = verifier_module._WindowsApi
-
-    class _Kernel32:
-        def CreateFileW(self, *args: object) -> int:
-            calls.append(args)
-            return 73
-
-    class _CapturingApi(native_api):
-        def __init__(self) -> None:
-            self._kernel32 = _Kernel32()
-
-        def sector_size(self, candidate: Path) -> int:
-            assert candidate == path
-            return 4096
-
-        def require_expected_final_path(
-            self, root: Path, relative_path: str, file_handle: int
-        ) -> None:
-            assert root == tmp_path.resolve()
-            assert relative_path == path.name
-            assert file_handle == 73
-
-        def stat(self, handle: int) -> FileStat:
-            assert handle == 73
-            return expected
-
-        def close(self, handle: int) -> None:
-            closed.append(handle)
-
-    monkeypatch.setattr(verifier_module, "_WindowsApi", _CapturingApi)
-
-    with WindowsUnbufferedReader().open(tmp_path, path.name) as stream:
-        assert stream.strategy is ReadStrategy.WINDOWS_UNBUFFERED
-
-    assert len(calls) == 1
-    (
-        opened_path,
-        desired_access,
-        share_mode,
-        security_attributes,
-        creation_disposition,
-        flags,
-        template,
-    ) = calls[0]
-    assert opened_path == verifier_module._extended_path(path)
-    assert desired_access == verifier_module._GENERIC_READ
-    assert share_mode == verifier_module._FILE_SHARE_READ
-    assert share_mode & verifier_module._FILE_SHARE_WRITE == 0
-    assert share_mode & verifier_module._FILE_SHARE_DELETE == 0
-    assert security_attributes is None
-    assert creation_disposition == verifier_module._OPEN_EXISTING
-    assert flags == (
-        verifier_module._FILE_FLAG_NO_BUFFERING
-        | verifier_module._FILE_FLAG_SEQUENTIAL_SCAN
-        | verifier_module._FILE_FLAG_OPEN_REPARSE_POINT
-    )
-    assert template is None
-    assert closed == [73]
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
-def test_windows_reader_refuses_a_final_root_reparse_before_api_setup(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    root = tmp_path / "configured-root"
-    root.mkdir()
-    (root / "payload.bin").write_bytes(b"payload")
-    original_lstat = verifier_module.os.lstat
-
-    def root_reparse_lstat(path):
-        if Path(from_extended_length_path(str(path))) == root:
-            class _RootReparse:
-                st_mode = stat_module.S_IFDIR | 0o755
-                st_file_attributes = verifier_module._FILE_ATTRIBUTE_REPARSE_POINT
-                st_reparse_tag = 1
-
-            return _RootReparse()
-        return original_lstat(path)
-
-    class _UnexpectedApi:
-        def __init__(self) -> None:
-            raise AssertionError("Windows API setup must follow root rejection")
-
-    monkeypatch.setattr(verifier_module.os, "lstat", root_reparse_lstat)
-    monkeypatch.setattr(verifier_module, "_WindowsApi", _UnexpectedApi)
-
-    with pytest.raises(UnsupportedVerification, match="reparse location root"):
-        with WindowsUnbufferedReader().open(root, "payload.bin"):
-            raise AssertionError("unsafe root yielded a stream")
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
-def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback(
-    tmp_path: Path,
-) -> None:
-    payload = (b"NamiSync cache-honest verifier\n" * 262_144) + b"tail"
-    path = tmp_path / "payload.bin"
-    subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import os, sys\n"
-                "payload = (b'NamiSync cache-honest verifier\\n' * 262_144)"
-                " + b'tail'\n"
-                "with open(sys.argv[1], 'wb') as handle:\n"
-                "    handle.write(payload)\n"
-                "    handle.flush()\n"
-                "    os.fsync(handle.fileno())\n"
-            ),
-            str(path),
-        ],
-        check=True,
-    )
-    os_stat = path.stat()
-    expected = _stat(
-        size=len(payload),
-        mtime_ns=os_stat.st_mtime_ns,
-        identity=None,
-    )
-    events: list[object] = []
-    context = VerifierContext(
-        run=RunContext(emit=events.append, checkpoint=lambda: None),
-        clock=_Clock(),
-        hasher_factory=xxh3_128,
-        root_authority=_native_context([], tmp_path).root_authority,
-    )
-    assert context.chunk_size == 4 * 1024 * 1024
-    reader = WindowsUnbufferedReader()
-    item = _item(
-        tmp_path,
-        path="payload.bin",
-        expected_stat=expected,
-        baseline_evidence=_attestation(payload, expected),
-    )
-
-    result = verify(
-        IntegritySelection((item,)),
-        context,
-        _Recorder(),
-        reader,
-    )
-
-    outcome = result.outcomes[0]
-    assert outcome.result is IntegrityResult.VERIFIED
-    assert outcome.reason is None
-    assert outcome.read_strategy is ReadStrategy.WINDOWS_UNBUFFERED
-
-
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
 def test_verifier_error_detail_does_not_expose_native_prefix(
     tmp_path: Path,
 ) -> None:
     logical = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90) / "file.bin"
     assert len(str(logical)) > 260
-    native = verifier_module._extended_path(logical)
-    detail = verifier_module._error_detail(
+    native = verifier_native._extended_path(logical)
+    detail = verifier_engine._error_detail(
         PermissionError(13, "denied", native)
     )
 
     assert detail.startswith("PermissionError:")
     assert "file.bin" in detail
     assert "\\\\?\\" not in detail
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
-@pytest.mark.parametrize("rejection", ["reparse", "alignment", "containment"])
-def test_windows_reader_safety_rejections_classify_unsupported_never_verified(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    rejection: str,
-) -> None:
-    payload = b"guarded subject"
-    path = tmp_path / "payload.bin"
-    path.write_bytes(payload)
-    expected = _stat(
-        size=len(payload),
-        mtime_ns=path.stat().st_mtime_ns,
-        identity=None,
-    )
-    closed: list[int] = []
-    native_api = verifier_module._WindowsApi
-
-    if rejection == "reparse":
-        original_reject = verifier_module._reject_reparse_components
-        original_lstat = verifier_module.os.lstat
-
-        def report_reparse(
-            authority: RootAuthority,
-            relative_path: str,
-        ) -> None:
-            candidate = Path(authority.logical_root).joinpath(
-                *PureWindowsPath(relative_path).parts
-            )
-
-            def reparse_lstat(current: Path):
-                observed = original_lstat(current)
-                if Path(from_extended_length_path(str(current))) != candidate:
-                    return observed
-
-                class _ReportedReparse:
-                    st_mode = observed.st_mode
-                    st_file_attributes = (
-                        verifier_module._FILE_ATTRIBUTE_REPARSE_POINT
-                    )
-
-                return _ReportedReparse()
-
-            with monkeypatch.context() as patch:
-                patch.setattr(verifier_module.os, "lstat", reparse_lstat)
-                original_reject(authority, relative_path)
-
-        monkeypatch.setattr(
-            verifier_module, "_reject_reparse_components", report_reparse
-        )
-        expected_detail = "verification refuses reparse component"
-
-        class _RejectingApi:
-            def __init__(self) -> None:
-                raise AssertionError("reparse rejection must precede Windows API setup")
-
-    elif rejection == "alignment":
-        expected_detail = "volume reported an invalid sector size"
-
-        class _Kernel32:
-            def GetVolumePathNameW(
-                self, _path: str, volume_buffer, _size: int
-            ) -> int:
-                volume_buffer.value = tmp_path.anchor
-                return 1
-
-            def GetDiskFreeSpaceW(self, *_args: object) -> int:
-                return 1
-
-        class _RejectingApi(native_api):
-            def __init__(self) -> None:
-                self._kernel32 = _Kernel32()
-
-    else:
-        expected_detail = (
-            "the opened handle does not resolve to the selected root-relative path"
-        )
-
-        class _RejectingApi(native_api):
-            def __init__(self) -> None:
-                pass
-
-            def sector_size(self, candidate: Path) -> int:
-                assert candidate == path
-                return 4096
-
-            def open_file(self, candidate: Path) -> int:
-                assert candidate == path
-                return 73
-
-            def open_directory(self, root: Path) -> int:
-                assert root == tmp_path.resolve()
-                return 74
-
-            def final_path(self, handle: int) -> str:
-                return (
-                    r"\\?\C:\selected-root"
-                    if handle == 74
-                    else r"\\?\C:\escaped-root\payload.bin"
-                )
-
-            def close(self, handle: int) -> None:
-                closed.append(handle)
-
-    monkeypatch.setattr(verifier_module, "_WindowsApi", _RejectingApi)
-    recorder = _Recorder()
-    item = _item(
-        tmp_path,
-        path=path.name,
-        expected_stat=expected,
-        baseline_evidence=_attestation(payload, expected),
-    )
-
-    result = verify(
-        IntegritySelection((item,)),
-        _native_context([], tmp_path),
-        recorder,
-        WindowsUnbufferedReader(),
-    )
-
-    outcome = result.outcomes[0]
-    assert outcome.result is IntegrityResult.UNSUPPORTED
-    assert outcome.result is not IntegrityResult.VERIFIED
-    assert outcome.reason is IntegrityReason.UNSUPPORTED_READ
-    assert outcome.detail is not None and expected_detail in outcome.detail
-    assert recorder.commands == []
-    assert closed == ([74, 73] if rejection == "containment" else [])
-
-
-@pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
-def test_windows_reader_holds_selected_path_against_write_and_replacement(
-    tmp_path: Path,
-) -> None:
-    path = tmp_path / "payload.bin"
-    replacement = tmp_path / "replacement.bin"
-    path.write_bytes(b"selected subject")
-    replacement.write_bytes(b"replacement subject")
-
-    reader = WindowsUnbufferedReader()
-    try:
-        with reader.open(tmp_path, path.name) as stream:
-            with pytest.raises(PermissionError):
-                path.write_bytes(b"overwritten")
-            with pytest.raises(PermissionError):
-                os.replace(replacement, path)
-            assert stream.stat().size == len(b"selected subject")
-    except UnsupportedVerification as exc:
-        pytest.skip(f"unbuffered strategy unavailable: {exc}")
-
-    assert path.read_bytes() == b"selected subject"
-    assert replacement.read_bytes() == b"replacement subject"

@@ -83,10 +83,8 @@ verifier/native.py    -> core + stdlib
 ```
 
 `native.py` and `pipeline.py` are executor leaves: neither imports the other or
-`runtime.py`. Verifier `native.py` likewise never imports `engine.py`. The
-executor package now implements this boundary behind its unchanged public
-facade; the verifier package remains the settled target for its later
-behavior-preserving migration.
+`runtime.py`. Verifier `native.py` likewise never imports `engine.py`. Both
+component packages implement these boundaries behind unchanged public facades.
 
 ---
 
@@ -1347,13 +1345,15 @@ reader=None) -> IntegrityRunResult`. `VerifierContext` requires the same
 parameterless `HasherFactory` used by the copy backend. Records through
 `recorder`.
 
-**Settled component boundary (staged migration).** `verifier/__init__.py`
+**Implemented component boundary.** `verifier/__init__.py`
 preserves the existing public imports. `engine.py` owns selection processing,
 classification, progress, cancellation, conditional recording, settlement,
 and verifier outcome policy. `native.py` owns the Windows bindings and the
-cache-honest, handle-bound reader. The native leaf may use core root-authority
-mechanics but never imports the engine; the engine may call the native reader
-through the core protocol.
+cache-honest, handle-bound reader, including root-chain admission, handle
+volume corroboration, and final-path checks. The native leaf uses core
+root-authority mechanics but never imports the engine; the engine imports the
+native implementation at its reader boundary and otherwise operates through
+core protocols.
 
 Each production invocation is bound to one exact reviewed logical root, its
 reviewed anchor when available, and its expected `VolumeId`. Selection-root
