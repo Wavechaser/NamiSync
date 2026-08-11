@@ -133,6 +133,17 @@ never hides the other result axes in rendered output.
 
 ### M1 Hardening
 
+- Closed post-refactor effect-settlement and verifier authority seams without
+  weakening the stabilized package boundaries.
+  - **Executor:** generic collaborator failures now settle active effects and
+    pending directories from the original operation error before propagating;
+    source/target guards also bind the operational root to reviewed authority.
+  - **Verifier:** native subclasses and timing decorators use an explicit
+    authority-bound reader protocol, while engine retains selected-root and
+    opened-volume policy and sidecar shares the pure stat predicate.
+  - **Oracle and tests:** expanded the retained oracle to 30 scenarios and 70
+    exact rows for collaborator escapes and restored, missing, and unreadable
+    settlement states, then replaced its baseline and semantic pin separately.
 - Consolidated the recent safety hardening behind stable authority, execution,
   verification, and settlement boundaries without changing persisted contracts.
   - **Root authority:** centralized fresh ephemeral anchor, volume, and no-follow
