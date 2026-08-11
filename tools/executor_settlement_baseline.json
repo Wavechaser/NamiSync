@@ -7325,10 +7325,10 @@
               "text": "copy-payload"
             },
             "$TARGET/copy.bin.synctmp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00000000000000000000000000000001": {
-              "created": "time-3",
+              "created": "$clock-incidental:created",
               "identity": "identity-2",
               "kind": "file",
-              "mtime": "time-3",
+              "mtime": "$clock-incidental:mtime",
               "readonly": false,
               "sha256": "6f5a6034e770acbfb3f797e6a7eb7948d470d45f9928f92b7d72dc7c45e6d0cd",
               "size": 4,
