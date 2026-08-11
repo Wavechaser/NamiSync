@@ -1127,8 +1127,9 @@ or committed-snapshot difference. Any mismatch is investigated as a possible
 latent defect; a confirmed fix lands alone with a persistent regression and
 restarts the barrier. The oracle and committed baseline stay in `tools/`
 through package splitting, journal/reducer work, verifier restructuring, test
-consolidation, and final acceptance so later failures can still be attributed
-against the corrected monolith.
+consolidation, and final acceptance. Its original 58 rows preserve attribution
+to the corrected monolith; 12 independently reviewed post-refactor rows extend
+that corrected-baseline lineage without rewriting the earlier trace.
 
 Single-file throughput work belongs primarily in `pipeline.py`; Windows I/O
 flags and handle mechanics belong in `native.py`; multi-file scheduling and

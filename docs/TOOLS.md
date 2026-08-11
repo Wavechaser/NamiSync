@@ -82,9 +82,10 @@ operation error when failure policy or retry sleep raises, and a pending MKDIR
 to finalize when the next checkpoint raises; the collaborator injection itself
 must be consumed and its `RuntimeError` must still propagate.
 The JSON baseline separately retains the complete normalized collaborator and
-filesystem-boundary trace from the corrected monolith. `check` requires both
-the policy oracle and the historical trace to match; either can fail while the
-other passes.
+filesystem-boundary trace from the reviewed corrected-baseline lineage: 58
+unchanged rows from the corrected monolith plus 12 independently reviewed
+post-refactor stabilization rows. `check` requires both the policy oracle and
+the committed trace to match; either can fail while the other passes.
 
 `snapshot` requires at least three byte-identical complete runs, refuses every
 oracle mismatch, writes atomically, and will not replace an existing baseline

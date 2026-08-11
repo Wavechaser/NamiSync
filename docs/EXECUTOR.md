@@ -448,8 +448,10 @@ regression before the baseline is regenerated; that change resets the
 three-run gate. The oracle and its committed baseline remain under `tools/`
 through the executor split, typed journal, reducer, verifier split, and final
 test consolidation. They are intentionally not temporary checkpoint artifacts:
-the retained baseline answers whether a later settlement regression came from
-the refactor or already existed in the corrected monolith.
+the original 58 rows retain corrected-monolith attribution through the
+refactor, while the 12 later rows retain separately reviewed post-refactor
+stabilization behavior. Together they form the current corrected-baseline
+lineage for later regression checks.
 
 The retained baseline is `tools/executor_settlement_baseline.json`, currently
 with oracle `format_version: 1`. The resume gate is exactly:
