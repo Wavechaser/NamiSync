@@ -7,6 +7,7 @@ core protocols and the workflow/dispatcher layers.
 
 from __future__ import annotations
 
+import os
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -24,6 +25,7 @@ from namisync.core.evidence import (
 )
 from namisync.core.events import Progress
 from namisync.core.integrity import (
+    AuthorityBoundVerificationReader,
     IntegrityMode,
     IntegrityOutcome,
     IntegrityReason,
@@ -43,6 +45,7 @@ from namisync.core.integrity import (
     VerificationInvalidationCommand,
     VerificationInvalidationReason,
     VerifierContext,
+    matches_expected_stat,
 )
 from namisync.core.models import FileStat
 from namisync.core.pathing import (
@@ -59,12 +62,7 @@ from namisync.core.root_authority import (
     admit_root,
 )
 
-from .native import (
-    WindowsUnbufferedReader,
-    _require_reviewed_open_volume,
-    _same_logical_path,
-)
-
+from .native import WindowsUnbufferedReader
 
 
 def _reader_for_context(
@@ -77,12 +75,11 @@ def _reader_for_context(
                 "the default verification reader requires root authority"
             )
         return WindowsUnbufferedReader(ctx.root_authority)
-    if (
-        ctx.root_authority is None
-        and isinstance(reader, WindowsUnbufferedReader)
+    if ctx.root_authority is None and isinstance(
+        reader, AuthorityBoundVerificationReader
     ):
         raise ValueError(
-            "the native verification reader requires root authority"
+            "the authority-bound verification reader requires root authority"
         )
     return reader
 
@@ -93,14 +90,13 @@ def _open_reader(
     relative_path: str,
     ctx: VerifierContext,
 ) -> AbstractContextManager:
-    if type(reader) is WindowsUnbufferedReader:
+    if isinstance(reader, AuthorityBoundVerificationReader):
         authority = ctx.root_authority
         if authority is None:
             raise ValueError(
-                "the native verification reader requires root authority"
+                "the authority-bound verification reader requires root authority"
             )
-        return reader._open_with_authority(  # type: ignore[attr-defined]
-            root,
+        return reader.open_with_authority(
             relative_path,
             authority,
         )
@@ -707,7 +703,7 @@ def _classify_subject(
         with _open_reader(reader, root, relative_path, ctx) as stream:
             before = stream.stat()
             _require_reviewed_open_volume(before, ctx)
-            if not _matches_expected_stat(expected_stat, before):
+            if not matches_expected_stat(expected_stat, before):
                 return _SubjectClassification(
                     result=IntegrityResult.MODIFIED,
                     reason=IntegrityReason.STAT_CHANGED,
@@ -716,7 +712,7 @@ def _classify_subject(
             if (
                 mode is IntegrityMode.VERIFY
                 and baseline is not None
-                and not _matches_expected_stat(baseline.subject, before)
+                and not matches_expected_stat(baseline.subject, before)
             ):
                 return _SubjectClassification(
                     result=IntegrityResult.MODIFIED,
@@ -1048,14 +1044,6 @@ def _post_copy_outcome(
     )
 
 
-def _matches_expected_stat(expected: FileStat, actual: FileStat) -> bool:
-    if expected.kind is not actual.kind:
-        return False
-    if expected.size != actual.size or expected.mtime_ns != actual.mtime_ns:
-        return False
-    return expected.file_identity is None or expected.file_identity == actual.file_identity
-
-
 def _same_open_subject(before: FileStat, after: FileStat) -> bool:
     if before.kind is not after.kind:
         return False
@@ -1069,6 +1057,32 @@ def _same_open_subject(before: FileStat, after: FileStat) -> bool:
 def _error_detail(exc: BaseException) -> str:
     detail = logical_error_text(exc)
     return f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
+
+
+def _same_logical_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
+        os.path.normpath(right)
+    )
+
+
+def _require_reviewed_open_volume(
+    opened: FileStat,
+    ctx: VerifierContext,
+) -> None:
+    authority = ctx.root_authority
+    expected = None if authority is None else authority.expected_volume_id
+    identity = opened.file_identity
+    if expected is None:
+        return
+    if identity is None:
+        raise UnsupportedVerification(
+            "opened verification subject has no volume identity"
+        )
+    if identity.volume_serial.casefold() != expected.serial.casefold():
+        raise UnsupportedVerification(
+            "opened verification subject is on a different volume"
+        )
+
 
 def _require_selected_root(
     root: Path,

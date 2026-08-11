@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Iterator
 
 import pytest
 
+import namisync.modules.verifier.engine as verifier_engine
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -14,7 +17,12 @@ from namisync.core.evidence import (
     RecordingStatus,
 )
 from namisync.core.events import Progress
-from namisync.core.integrity import IntegrityResult, RecordDisposition
+from namisync.core.integrity import (
+    AuthorityBoundVerificationReader,
+    IntegrityResult,
+    ReadStrategy,
+    RecordDisposition,
+)
 from namisync.core.models import (
     EntryKind,
     FileIdentity,
@@ -25,8 +33,9 @@ from namisync.core.models import (
     ScanWarningCode,
 )
 from namisync.core.pathing import normalize_relative_path
+from namisync.core.root_authority import RootAuthority
 from tools import sidecar, verifier_rig
-from tools.seams import Tape
+from tools.seams import AuthorityBoundTappedReader, Tape, TappedReader
 
 
 def _stat(*, identity: bool = True, index: int = 1) -> FileStat:
@@ -79,6 +88,72 @@ def _read_document(path: Path) -> tuple[dict[str, object], list[dict[str, object
         json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
     ]
     return values[0], values[1:]
+
+
+def test_tapped_readers_preserve_the_wrapped_reader_authority_capability(
+    tmp_path: Path,
+) -> None:
+    bound_opened: list[tuple[str, RootAuthority]] = []
+    unbound_opened: list[tuple[Path, str]] = []
+
+    class BoundReader:
+        @contextmanager
+        def open(self, root: Path, relative_path: str) -> Iterator[object]:
+            raise AssertionError("bound dispatch must not use the legacy open seam")
+            yield object()
+
+        @contextmanager
+        def open_with_authority(
+            self,
+            relative_path: str,
+            authority: RootAuthority,
+        ) -> Iterator[object]:
+            bound_opened.append((relative_path, authority))
+            yield SimpleNamespace(strategy=ReadStrategy.WINDOWS_UNBUFFERED)
+
+    class UnboundReader:
+        @contextmanager
+        def open(self, root: Path, relative_path: str) -> Iterator[object]:
+            unbound_opened.append((root, relative_path))
+            yield SimpleNamespace(strategy=ReadStrategy.WINDOWS_UNBUFFERED)
+
+    authority = RootAuthority(str(tmp_path))
+    bound_reader = AuthorityBoundTappedReader(BoundReader())
+    assert isinstance(bound_reader, AuthorityBoundVerificationReader)
+    with pytest.raises(ValueError, match="authority-bound verification reader"):
+        verifier_engine._reader_for_context(
+            SimpleNamespace(root_authority=None),
+            bound_reader,
+        )
+
+    with verifier_engine._open_reader(
+        bound_reader,
+        tmp_path,
+        "A.TXT",
+        SimpleNamespace(root_authority=authority),
+    ):
+        pass
+
+    assert bound_opened == [("A.TXT", authority)]
+    assert len(bound_reader.samples) == 1
+    assert bound_reader.samples[0].relative_path == "A.TXT"
+
+    unbound_reader = TappedReader(UnboundReader())
+    assert not isinstance(unbound_reader, AuthorityBoundVerificationReader)
+    selected = verifier_engine._reader_for_context(
+        SimpleNamespace(root_authority=None),
+        unbound_reader,
+    )
+    with verifier_engine._open_reader(
+        selected,
+        tmp_path,
+        "B.TXT",
+        SimpleNamespace(root_authority=None),
+    ):
+        pass
+
+    assert unbound_opened == [(tmp_path, "B.TXT")]
+    assert isinstance(verifier_rig._reader(True), AuthorityBoundTappedReader)
 
 
 def test_sidecar_bound_round_trip_preserves_identity(tmp_path: Path) -> None:

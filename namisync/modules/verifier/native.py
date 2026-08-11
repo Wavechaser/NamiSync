@@ -13,7 +13,6 @@ from typing import Iterator
 from namisync.core.integrity import (
     ReadStrategy,
     UnsupportedVerification,
-    VerifierContext,
 )
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
 from namisync.core.pathing import (
@@ -67,19 +66,29 @@ class WindowsUnbufferedReader:
 
     @contextmanager
     def open(self, root: Path, relative_path: str) -> Iterator[_WindowsStream]:
-        with self._open_with_authority(
-            root,
+        with self._open_bound(
             relative_path,
             self._root_authority,
+            selected_root=root,
         ) as stream:
             yield stream
 
     @contextmanager
-    def _open_with_authority(
+    def open_with_authority(
         self,
-        root: Path,
+        relative_path: str,
+        authority: RootAuthority,
+    ) -> Iterator[_WindowsStream]:
+        with self._open_bound(relative_path, authority) as stream:
+            yield stream
+
+    @contextmanager
+    def _open_bound(
+        self,
         relative_path: str,
         root_authority: RootAuthority | None,
+        *,
+        selected_root: Path | None = None,
     ) -> Iterator[_WindowsStream]:
         if os.name != "nt":
             raise UnsupportedVerification(
@@ -87,9 +96,17 @@ class WindowsUnbufferedReader:
             )
 
         normalized = validate_relative_path(relative_path)
-        root_path = Path(lexical_absolute_path(root))
+        if selected_root is None:
+            if root_authority is None:  # internal contract; defensive only
+                raise TypeError("authority-bound open requires root authority")
+            logical_root: str | Path = root_authority.logical_root
+        else:
+            logical_root = selected_root
+        root_path = Path(lexical_absolute_path(logical_root))
         authority = root_authority or RootAuthority(str(root_path))
-        if not _same_logical_path(str(root_path), authority.logical_root):
+        if selected_root is not None and not _same_logical_path(
+            str(root_path), authority.logical_root
+        ):
             raise UnsupportedVerification(
                 "verification selection root does not match its reviewed root"
             )
@@ -157,25 +174,6 @@ def _same_logical_path(left: str, right: str) -> bool:
     return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
         os.path.normpath(right)
     )
-
-
-def _require_reviewed_open_volume(
-    opened: FileStat,
-    ctx: VerifierContext,
-) -> None:
-    authority = ctx.root_authority
-    expected = None if authority is None else authority.expected_volume_id
-    identity = opened.file_identity
-    if expected is None:
-        return
-    if identity is None:
-        raise UnsupportedVerification(
-            "opened verification subject has no volume identity"
-        )
-    if identity.volume_serial.casefold() != expected.serial.casefold():
-        raise UnsupportedVerification(
-            "opened verification subject is on a different volume"
-        )
 
 
 class _FileTime(ctypes.Structure):

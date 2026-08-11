@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from time import monotonic
-from typing import Callable, ClassVar, Iterator, Mapping, Protocol
+from typing import Callable, ClassVar, Iterator, Mapping, Protocol, runtime_checkable
 
 from .evidence import Attestation, HasherFactory, Provenance, RecordingStatus
 from .models import FileStat
@@ -494,6 +494,31 @@ class VerificationReader(Protocol):
         self, root: Path, relative_path: str
     ) -> AbstractContextManager[VerificationStream]:
         """Open the intended root-relative subject without unsafe reparse following."""
+
+
+@runtime_checkable
+class AuthorityBoundVerificationReader(VerificationReader, Protocol):
+    """Reader whose open is bound to one reviewed root authority."""
+
+    def open_with_authority(
+        self,
+        relative_path: str,
+        authority: RootAuthority,
+    ) -> AbstractContextManager[VerificationStream]:
+        """Open a subject relative to the authority's exact logical root."""
+
+
+def matches_expected_stat(expected: FileStat, actual: FileStat) -> bool:
+    """Return whether current stat evidence still matches a retained subject."""
+
+    if expected.kind is not actual.kind:
+        return False
+    if expected.size != actual.size or expected.mtime_ns != actual.mtime_ns:
+        return False
+    return (
+        expected.file_identity is None
+        or expected.file_identity == actual.file_identity
+    )
 
 
 @dataclass(frozen=True)

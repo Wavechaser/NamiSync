@@ -21,6 +21,7 @@ from namisync.core.execution import (
     RunId,
 )
 from namisync.core.integrity import (
+    AuthorityBoundVerificationReader,
     IntegrityRecordCommand,
     ReadStrategy,
     RecordDisposition,
@@ -28,6 +29,7 @@ from namisync.core.integrity import (
 from namisync.core.models import FileStat
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OpId, Plan
+from namisync.core.root_authority import RootAuthority
 from namisync.core.session import RunContext
 from namisync.modules.executor import CopyPipelineMetrics
 
@@ -281,6 +283,31 @@ class TappedReader:
         self.samples.append(sample)
         started = perf_counter()
         with self._inner.open(root, relative_path) as stream:
+            sample.open_seconds = perf_counter() - started
+            yield _TappedStream(stream, sample)
+
+
+class AuthorityBoundTappedReader(TappedReader):
+    """Preserve authority-bound opening while timing a capable reader."""
+
+    def __init__(self, inner: AuthorityBoundVerificationReader) -> None:
+        if not isinstance(inner, AuthorityBoundVerificationReader):
+            raise TypeError("authority-bound tap requires an authority-bound reader")
+        super().__init__(inner)
+        self._authority_reader = inner
+
+    @contextmanager
+    def open_with_authority(
+        self,
+        relative_path: str,
+        authority: RootAuthority,
+    ) -> Iterator[_TappedStream]:
+        sample = ReadSample(relative_path)
+        self.samples.append(sample)
+        started = perf_counter()
+        with self._authority_reader.open_with_authority(
+            relative_path, authority
+        ) as stream:
             sample.open_seconds = perf_counter() - started
             yield _TappedStream(stream, sample)
 

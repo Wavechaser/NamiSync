@@ -85,6 +85,10 @@ verifier/native.py    -> core + stdlib
 `native.py` and `pipeline.py` are executor leaves: neither imports the other or
 `runtime.py`. Verifier `native.py` likewise never imports `engine.py`. Both
 component packages implement these boundaries behind unchanged public facades.
+Verifier reader polymorphism crosses a core
+`AuthorityBoundVerificationReader` protocol: engine owns selected-root and
+opened-volume policy, while an authority-bound native open derives its only
+root from the supplied ephemeral authority.
 
 ---
 
@@ -1349,12 +1353,12 @@ parameterless `HasherFactory` used by the copy backend. Records through
 **Implemented component boundary.** `verifier/__init__.py`
 preserves the existing public imports. `engine.py` owns selection processing,
 classification, progress, cancellation, conditional recording, settlement,
-and verifier outcome policy. `native.py` owns the Windows bindings and the
-cache-honest, handle-bound reader, including root-chain admission, handle
-volume corroboration, and final-path checks. The native leaf uses core
-root-authority mechanics but never imports the engine; the engine imports the
-native implementation at its reader boundary and otherwise operates through
-core protocols.
+verifier outcome policy, selected-root admission, and opened-handle volume
+corroboration. `native.py` owns the Windows bindings and the cache-honest,
+handle-bound reader, including root-chain admission and final-path checks. The
+native leaf uses core root-authority mechanics but never imports the engine;
+the engine imports the native implementation at its reader boundary and
+otherwise operates through core protocols.
 
 Each production invocation is bound to one exact reviewed logical root, its
 reviewed anchor when available, and its expected `VolumeId`. Selection-root
@@ -1362,10 +1366,16 @@ equality is checked after existing display-path validation and before every
 inventory-state or existing-baseline shortcut, reader open, or evidence write.
 Authority is freshly admitted for each readable item and does not replace the
 reader's second root-chain walk, opened-handle volume check, or final-path
-check. The default native reader rejects an unbound context; unbound operation
-is reserved for explicitly injected fake/custom readers. Standalone and
-post-copy verification continue through the same ledger-neutral classifier;
-executor publication policy and verifier read policy remain independent.
+check. A runtime-checkable core reader protocol routes native subclasses and
+decorators through `open_with_authority(relative_path, authority)`; that method
+derives its root only from the authority, and engine rejects every such reader
+when the context is unbound. Unbound operation is reserved for explicitly
+injected fake/custom readers. The same pure core expected-stat matcher serves
+engine classification and tool sidecar validation; same-open read-drift
+matching remains stricter when only one observation has identity. Standalone
+and post-copy verification continue through the same ledger-neutral
+classifier; executor publication policy and verifier read policy remain
+independent.
 
 **Bones.** Per-file `IntegrityOutcome` emission (no silent-until-done); the
 cancel-unwind finalizer (§2.2a — canceled outcomes for in-flight and unreached

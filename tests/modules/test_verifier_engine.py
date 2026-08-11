@@ -26,6 +26,7 @@ from namisync.core.evidence import (
 )
 from namisync.core.events import Progress
 from namisync.core.integrity import (
+    AuthorityBoundVerificationReader,
     IntegrityMode,
     IntegrityOutcome,
     IntegrityReason,
@@ -575,7 +576,7 @@ def test_post_copy_root_and_path_admission_precede_side_effects(
     assert recorder.invalidation_commands == []
 
 
-def test_default_and_explicit_native_readers_require_root_authority(
+def test_default_and_authority_bound_readers_require_root_authority(
     tmp_path: Path,
 ) -> None:
     selection = IntegritySelection(())
@@ -587,11 +588,20 @@ def test_default_and_explicit_native_readers_require_root_authority(
     class InstrumentedNativeReader(WindowsUnbufferedReader):
         def __init__(self) -> None:
             super().__init__()
-            self.opened: list[tuple[Path, str]] = []
+            self.opened: list[tuple[str, RootAuthority]] = []
 
         @contextmanager
         def open(self, root: Path, relative_path: str) -> Iterator[object]:
-            self.opened.append((root, relative_path))
+            raise AssertionError("bound dispatch must not use the legacy open seam")
+            yield object()
+
+        @contextmanager
+        def open_with_authority(
+            self,
+            relative_path: str,
+            authority: RootAuthority,
+        ) -> Iterator[object]:
+            self.opened.append((relative_path, authority))
             yield object()
 
     instrumented = InstrumentedNativeReader()
@@ -603,12 +613,14 @@ def test_default_and_explicit_native_readers_require_root_authority(
         EmptyNativeReader(),
         instrumented,
     ):
-        with pytest.raises(ValueError, match="native verification reader"):
+        assert isinstance(reader, AuthorityBoundVerificationReader)
+        with pytest.raises(ValueError, match="authority-bound verification reader"):
             verify(selection, context, _Recorder(), reader)
 
+    authority = RootAuthority(str(tmp_path))
     bound_context = replace(
         context,
-        root_authority=RootAuthority(str(tmp_path)),
+        root_authority=authority,
     )
     selected = verifier_engine._reader_for_context(
         bound_context,
@@ -622,7 +634,7 @@ def test_default_and_explicit_native_readers_require_root_authority(
         bound_context,
     ):
         pass
-    assert instrumented.opened == [(tmp_path, "payload.bin")]
+    assert instrumented.opened == [("payload.bin", authority)]
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows reader admission order")

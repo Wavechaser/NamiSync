@@ -676,6 +676,21 @@ defect, and move implementation-level test choreography out of the log.
   present path's transition marker; fixed by reconciling both visible states
   and applying the same reappearance transition.
 
+## VERIFIER
+
+### M1 Hardening
+
+- MODERATE - FIXED (2026-08-11). Concrete-type authority routing. Engine sent
+  only the exact `WindowsUnbufferedReader` class through its reviewed-authority
+  open, so a subclass or timing decorator instead received the ordinary
+  `open(root, path)` call. Production's exact default type stayed safe, but an
+  extension could silently bypass the intended authority-bound route. Fixed
+  with a runtime-checkable core reader protocol, a public bound open whose root
+  comes only from the authority, structural engine dispatch and unbound
+  refusal, and forwarding by the tools timing decorator. Selected-root and
+  opened-volume policy remain in engine; final-path and native chain checks
+  remain independent.
+
 ## CORE AND SECURITY PROTOCOLS
 
 ### M1 Hardening

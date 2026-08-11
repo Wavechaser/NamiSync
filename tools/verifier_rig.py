@@ -54,6 +54,7 @@ from namisync.modules.verifier import (
 
 from . import sidecar
 from .seams import (
+    AuthorityBoundTappedReader,
     CapturingIntegrityRecorder,
     ReadSample,
     RigClock,
@@ -422,4 +423,4 @@ def run_post_copy(
 
 def _reader(tap: bool) -> TappedReader | WindowsUnbufferedReader:
     inner = WindowsUnbufferedReader()
-    return TappedReader(inner) if tap else inner
+    return AuthorityBoundTappedReader(inner) if tap else inner

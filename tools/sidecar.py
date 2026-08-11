@@ -21,6 +21,7 @@ import tempfile
 from typing import Mapping
 
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
+from namisync.core.integrity import matches_expected_stat
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
 
 
@@ -214,7 +215,7 @@ def validate(
         actual = live.get(key)
         if actual is None:
             missing.append(key)
-        elif _subject_matches(attestations[key].subject, actual):
+        elif matches_expected_stat(attestations[key].subject, actual):
             matched.append(key)
         else:
             drifted.append(key)
@@ -238,16 +239,6 @@ def load_validated(
             "Reseed it with --seed-baselines."
         )
     return attestations, report
-
-
-def _subject_matches(expected: FileStat, actual: FileStat) -> bool:
-    # Mirrors verifier.engine._matches_expected_stat: identity participates
-    # only when the stored subject carries one.
-    if expected.kind is not actual.kind:
-        return False
-    if expected.size != actual.size or expected.mtime_ns != actual.mtime_ns:
-        return False
-    return expected.file_identity is None or expected.file_identity == actual.file_identity
 
 
 def _encode(key: str, attestation: Attestation) -> dict[str, object]:

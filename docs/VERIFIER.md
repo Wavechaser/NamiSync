@@ -27,8 +27,9 @@ paired source/target mapping.
 `WindowsUnbufferedReader`, `baseline`, `rebaseline`, `verify`, and
 `verify_post_copy`. `engine.py` owns the public operations, selection
 classification, progress, cancellation, recording settlement, and outcome
-construction. `native.py` owns Windows root-chain admission, unbuffered reads,
-handle/volume work, and final-path-by-handle checks. Engine may import native;
+construction, including selected-root and opened-handle volume policy.
+`native.py` owns Windows root-chain admission, unbuffered reads, handle work,
+and final-path-by-handle checks. Engine may import native;
 native imports only core contracts and the standard library and never imports
 engine. Tests patch the submodule that owns each collaborator; direct reader,
 handle, and cache-honesty cases live in `test_verifier_native.py`, separately
@@ -95,15 +96,20 @@ reviewed mount anchor, and optional expected `VolumeId`. Every selected item,
 including retained missing/unsupported rows and already-baselined shortcuts,
 must name that exact logical root before reader or recorder work. Every readable
 subject then freshly admits the authority before open; the check is evidence at
-that point, not cached authorization. The native reader receives that authority
-at construction or at the exact engine/native open boundary, then performs its
-distinct chain-only final-touch check without another volume probe. Its
+that point, not cached authorization. Core exposes a runtime-checkable
+`AuthorityBoundVerificationReader` seam. Engine dispatches that seam
+structurally, so native subclasses and decorators cannot silently fall back to
+the unbound `open(root, path)` route; any authority-bound reader in an unbound
+context is refused. The bound open receives only the relative path and authority
+and derives its native root from `authority.logical_root`, so it cannot validate
+one root and open another. The native reader then performs its distinct
+chain-only final-touch check without another volume probe. Its
 root-relative no-follow walk retains raw missing/access behavior while using
 the shared reparse/placeholder classifiers. The default native reader requires
 bound authority, while an unbound context remains only an explicit fake/custom-
-reader test seam. Opened-handle volume identity and final-path-by-handle
-containment remain independent checks; a stream without required corroboration
-is unsupported rather than attestable.
+reader test seam. Engine checks opened-handle volume identity from the stream's
+first stat; native final-path-by-handle containment remains independent. A
+stream without required corroboration is unsupported rather than attestable.
 
 Negative verification evidence is guarded by the same row/location/path/scope,
 current-stat, baseline, and expected-invalidation facts as a positive write. A

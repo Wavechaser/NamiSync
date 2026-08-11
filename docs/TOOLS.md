@@ -202,7 +202,8 @@ selection. Priming requires exactly one applied attestation per scanned file.
 The default sidecar is `<corpus>.baseline.jsonl` beside the corpus. Writes use a
 same-directory temporary file and atomic replace. Loads require an explicit
 format and identity mode, exact row schemas without duplicate JSON members,
-XXH3-128 evidence, complete key coverage, and a fresh stat match.
+XXH3-128 evidence, complete key coverage, and a fresh stat match through the
+same pure core predicate used by verifier classification.
 
 `portable` identity compares kind, size, and mtime and survives relocation.
 `bound` additionally requires volume serial and file index for every row; it
@@ -222,7 +223,11 @@ baselines, both passes use that same hasher and still reach `VERIFIED`:
 Verifier sidecar plus `--null-hasher` is refused because a real sidecar and a
 constant digest would create a misleading mismatch. `--no-tap` removes the
 per-chunk reader timing when clean wall-clock measurements matter more than the
-open/read split.
+open/read split. The timing decorator forwards the authority-bound reader seam,
+so enabling the tap cannot downgrade a reviewed native read to the unbound
+custom-reader route. Its authority-bound subtype is used only when the wrapped
+reader supports that protocol; the base tap preserves an unbound custom
+reader's ordinary `open(root, path)` capability.
 
 ## Cache honesty
 
