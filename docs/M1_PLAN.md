@@ -12,6 +12,12 @@ the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. `M1_BRIDGE.md` records the landed bridge contract and the
 still-unimplemented Stage 6 desktop shell; `M1_SHELL.md` owns the remaining
 delivery order and beta-packaging placement.
+
+**Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
+verifier, root-authority, and test-maintenance cleanup is closed; its retained
+delivery record and ongoing settlement-oracle gate are in
+[`M1_MAINTENANCE_REFACTOR.md`](obsolete/M1_MAINTENANCE_REFACTOR.md).
+
 This is both
 the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,

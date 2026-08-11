@@ -40,8 +40,11 @@ replaying filesystem or recorder effects.
 - `0c4d9a9` atomically replaced the independently reviewed baseline and its
   semantic pin after all 58 prior rows were proven type-strict identical and
   exactly 12 authorized rows were added.
-- The final README/HANDOFF reconciliation is the delivery documentation commit
-  containing this file, so this file does not name its own hash.
+- `767c5e8` reconciled README and this handoff after the review; `dd5677b`
+  clarified the original-58/post-refactor-12 baseline lineage across the
+  active architecture, executor, and tools documents. The documentation-only
+  commit archiving and indexing the completed maintenance plan contains this
+  updated handoff, so this file does not name that commit.
 
 ## Corrected Baseline Provenance
 
@@ -117,3 +120,6 @@ commit.
 5. No maintenance checkpoint or structural split remains open. Resume product
    work from the active Stage 6 documents unless new evidence identifies a
    concrete stabilized-boundary failure.
+   `obsolete/M1_MAINTENANCE_REFACTOR.md` is the retained completed delivery
+   record, linked from `M1_PLAN.md`; its historical checkpoint wording does
+   not reopen maintenance work.
