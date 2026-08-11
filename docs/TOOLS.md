@@ -56,7 +56,7 @@ The portable resume gate is exactly:
 python -m tools.executor_settlement_audit check --repeat 3
 ```
 
-For the current 30-scenario, 58-row manifest, a successful gate ends with
+For the current 30-scenario, 70-row manifest, a successful gate ends with
 `settlement check passed: 30 scenarios x 3 runs`. `check` performs three fresh
 complete captures, requires every in-code policy row to pass, requires the
 three normalized traces to be byte-identical, and then compares that trace and
@@ -74,6 +74,13 @@ Every installed filesystem fault rule must fire its declared number of times;
 an unused or partly consumed rule invalidates the fixture. The cleanup matrix
 includes failed pre-retry temp cleanup and proves it settles immediately as
 `cleanup-failed`, without sleeping or entering another control checkpoint.
+The observer matrices also pin restored MOVE/TRASH/DELETE subjects, a
+disappeared committed MKDIR, unreadable DELETE/UPDATE state, and changed,
+missing, or unreadable targets after confirmed publication. Three fail-closed
+collaborator rows require a committed MOVE to settle from its original
+operation error when failure policy or retry sleep raises, and a pending MKDIR
+to finalize when the next checkpoint raises; the collaborator injection itself
+must be consumed and its `RuntimeError` must still propagate.
 The JSON baseline separately retains the complete normalized collaborator and
 filesystem-boundary trace from the corrected monolith. `check` requires both
 the policy oracle and the historical trace to match; either can fail while the

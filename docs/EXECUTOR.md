@@ -458,7 +458,7 @@ with oracle `format_version: 1`. The resume gate is exactly:
 python -m tools.executor_settlement_audit check --repeat 3
 ```
 
-For the current 30-scenario, 58-row manifest, success ends with
+For the current 30-scenario, 70-row manifest, success ends with
 `settlement check passed: 30 scenarios x 3 runs`. The command is read-only: it
 requires all independent policy expectations, three byte-identical normalized
 captures, and exact manifest/trace parity with the clean baseline at `HEAD`.
@@ -477,6 +477,14 @@ declared number of times. The cleanup matrix includes the failed pre-retry temp
 cleanup regression, requiring `cleanup-failed` settlement before retry sleep or
 another control checkpoint while retaining the exact-name partial temp for
 fresh-run recovery.
+
+The retained observer rows classify restored MOVE/TRASH/DELETE subjects, a
+disappeared committed MKDIR, unreadable DELETE/UPDATE probes, and changed,
+missing, or unreadable targets after confirmed publication. Separate
+collaborator rows prove that a committed MOVE still settles from the original
+operation error if failure policy or retry sleep raises, and that a pending
+MKDIR finalizes if the next checkpoint raises. Those injected `RuntimeError`s
+remain externally visible; unused collaborator injections fail the fixture.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from threading import Event
 from typing import Callable
 
@@ -4604,6 +4604,245 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
         "cancel-confirmed-suppresses-sibling",
     ):
         assert "mutation_state" not in details[name]
+
+
+class SettlementObservationFileSystem(NativeFileSystem):
+    def __init__(
+        self,
+        observations: dict[Path, FileStat | None | Exception],
+    ) -> None:
+        self.observations = {
+            os.path.normcase(os.path.normpath(str(path))): observed
+            for path, observed in observations.items()
+        }
+
+    def revalidate_root(self, root: Path, **_kwargs: object) -> None:
+        return None
+
+    def resolve(self, root: Path, relative_path: str, *, must_exist: bool) -> Path:
+        del must_exist
+        return root.joinpath(*PureWindowsPath(relative_path).parts)
+
+    def revalidate_trash_destination(self, *_args: object) -> None:
+        return None
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        key = os.path.normcase(os.path.normpath(str(path)))
+        if key not in self.observations:
+            raise AssertionError(f"unexpected settlement observation: {path}")
+        observed = self.observations[key]
+        if isinstance(observed, Exception):
+            raise observed
+        return observed
+
+
+def _ordinary_settlement_cause() -> executor_runtime._TerminalCause:
+    return executor_runtime._TerminalCause(
+        executor_runtime._TerminalKind.ORDINARY_FAILURE,
+        ExecutionReason.TARGET_DRIFT,
+        "OperationFailure",
+        "operation failed",
+    )
+
+
+def test_mutation_observer_and_reducer_cover_restored_missing_and_unreadable_states(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    reviewed_path = target / "reviewed.bin"
+    reviewed_path.write_bytes(b"reviewed")
+    reviewed = NativeFileSystem().stat(target, "reviewed.bin")
+    assert reviewed is not None
+    xset = _xset(_plan(source, target, ()))
+    state = executor_runtime._ExecutionState(xset, {})
+    trash_destination = target / ".synctrash" / str(RUN_ID) / "trash.bin"
+
+    cases = (
+        (
+            "move-restored",
+            executor_runtime._MutationAttempt(
+                OperationKind.MOVE,
+                target / "move-old.bin",
+                reviewed,
+                secondary=target / "move-new.bin",
+                destination_relative="move-new.bin",
+                committed=True,
+            ),
+            {
+                target / "move-old.bin": reviewed,
+                target / "move-new.bin": None,
+            },
+            executor_runtime._MutationClassification.DURABLE,
+            executor_runtime._DurableState.SOURCE_RESTORED_AFTER_MOVE,
+        ),
+        (
+            "trash-restored",
+            executor_runtime._MutationAttempt(
+                OperationKind.TRASH,
+                target / "trash.bin",
+                reviewed,
+                secondary=trash_destination,
+                destination_relative=f".synctrash\\{RUN_ID}\\trash.bin",
+                trash_source_relative="trash.bin",
+                committed=True,
+            ),
+            {
+                target / "trash.bin": reviewed,
+                trash_destination: None,
+            },
+            executor_runtime._MutationClassification.DURABLE,
+            executor_runtime._DurableState.SOURCE_RESTORED_AFTER_TRASH,
+        ),
+        (
+            "delete-restored",
+            executor_runtime._MutationAttempt(
+                OperationKind.DELETE,
+                target / "delete.bin",
+                reviewed,
+                committed=True,
+            ),
+            {target / "delete.bin": reviewed},
+            executor_runtime._MutationClassification.DURABLE,
+            executor_runtime._DurableState.TARGET_RESTORED_AFTER_DELETE,
+        ),
+        (
+            "mkdir-disappeared",
+            executor_runtime._MutationAttempt(
+                OperationKind.MKDIR,
+                target / "folder",
+                None,
+                committed=True,
+            ),
+            {target / "folder": None},
+            executor_runtime._MutationClassification.DURABLE,
+            executor_runtime._DurableState.DIRECTORY_MISSING_AFTER_CREATE,
+        ),
+        (
+            "delete-unreadable",
+            executor_runtime._MutationAttempt(
+                OperationKind.DELETE,
+                target / "delete-unreadable.bin",
+                reviewed,
+            ),
+            {
+                target / "delete-unreadable.bin": PermissionError(
+                    "delete state probe unavailable"
+                )
+            },
+            executor_runtime._MutationClassification.UNREADABLE,
+            executor_runtime._DurableState.DELETE_STATE_UNVERIFIED,
+        ),
+        (
+            "update-unreadable",
+            executor_runtime._MutationAttempt(
+                OperationKind.UPDATE,
+                target / "update-unreadable.bin",
+                reviewed,
+            ),
+            {
+                target / "update-unreadable.bin": PermissionError(
+                    "update state probe unavailable"
+                )
+            },
+            executor_runtime._MutationClassification.UNREADABLE,
+            executor_runtime._DurableState.UPDATE_STATE_UNVERIFIED,
+        ),
+    )
+
+    for name, attempt, observations, classification, durable_state in cases:
+        verdict = executor_runtime._observe_mutation(
+            attempt,
+            SettlementObservationFileSystem(observations),
+            state,
+        )
+        assert verdict.classification is classification, name
+        assert verdict.durable_state is durable_state, name
+
+        reduction = executor_runtime._reduce_effect_settlement(
+            _ordinary_settlement_cause(),
+            None,
+            verdict,
+        )
+        assert reduction is not None, name
+        assert reduction.degrade_recording, name
+        assert reduction.settled.outcome is Outcome.FAILED, name
+        assert reduction.settled.reason is ExecutionReason.TARGET_DRIFT, name
+        assert reduction.settled.detail["durable_state"] == durable_state.value, name
+        assert reduction.settled.detail["recording"] == "degraded", name
+        if classification is executor_runtime._MutationClassification.UNREADABLE:
+            assert reduction.settled.detail["mutation_state"] == "unverified", name
+            assert "mutation_state_error" in reduction.settled.detail, name
+
+
+def test_published_target_observer_and_reducer_cover_changed_missing_and_unreadable(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    reviewed_path = target / "reviewed.bin"
+    reviewed_path.write_bytes(b"reviewed")
+    changed_path = target / "changed.bin"
+    changed_path.write_bytes(b"changed-version")
+    native = NativeFileSystem()
+    reviewed = native.stat(target, "reviewed.bin")
+    changed = native.stat(target, "changed.bin")
+    assert reviewed is not None and changed is not None
+    xset = _xset(_plan(source, target, ()))
+    published_path = target / "published.bin"
+
+    cases = (
+        (
+            "changed",
+            changed,
+            executor_runtime._TargetState.CHANGED_AFTER_PUBLISH,
+            executor_runtime._DurableState.TARGET_CHANGED_AFTER_PUBLISH,
+        ),
+        (
+            "missing",
+            None,
+            executor_runtime._TargetState.MISSING_AFTER_PUBLISH,
+            executor_runtime._DurableState.TARGET_MISSING_AFTER_PUBLISH,
+        ),
+        (
+            "unreadable",
+            PermissionError("published target probe unavailable"),
+            executor_runtime._TargetState.UNVERIFIED_AFTER_PUBLISH,
+            executor_runtime._DurableState.TARGET_UNVERIFIED_AFTER_PUBLISH,
+        ),
+    )
+
+    for name, observed, target_state, durable_state in cases:
+        actual_state, diagnostic = executor_runtime._observe_published_target(
+            published_path,
+            reviewed,
+            SettlementObservationFileSystem({published_path: observed}),
+            xset,
+            target,
+        )
+        assert actual_state is target_state, name
+        assert (diagnostic is not None) is (name == "unreadable"), name
+
+        publication = executor_runtime._PublicationVerdict(
+            executor_runtime._PublicationClassification.CONFIRMED,
+            OperationKind.COPY,
+            "published.bin",
+            {},
+            target_state=actual_state,
+            target_state_error=diagnostic,
+        )
+        reduction = executor_runtime._reduce_effect_settlement(
+            _ordinary_settlement_cause(),
+            publication,
+            None,
+        )
+        assert reduction is not None, name
+        assert reduction.degrade_recording, name
+        assert reduction.settled.detail["publish_state"] == "published", name
+        assert reduction.settled.detail["target_state"] == target_state.value, name
+        assert reduction.settled.detail["durable_state"] == durable_state.value, name
+        if name == "unreadable":
+            assert reduction.settled.detail["target_state_error"] == (
+                "PermissionError: published target probe unavailable"
+            )
 
 
 def _journal_copy_effect(tmp_path: Path) -> executor_runtime._CopyContinuation:

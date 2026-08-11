@@ -412,16 +412,34 @@ class TrackingFailurePolicy:
         *,
         retries: int = 0,
         stop: bool = False,
+        raise_once: bool = False,
         timeline: list[str] | None = None,
     ) -> None:
         self.retries = retries
         self.stop = stop
+        self.raise_remaining = 1 if raise_once else 0
         self.trace: list[dict[str, object]] = []
         self._timeline = timeline if timeline is not None else []
 
     def on_item_failed(
         self, operation: PlanOperation, error: Exception, attempt: int
     ) -> Continue | Retry | Stop:
+        if self.raise_remaining:
+            self.raise_remaining -= 1
+            self.trace.append(
+                {
+                    "op": str(operation.op_id),
+                    "kind": operation.kind.value,
+                    "attempt": attempt,
+                    "error": type(error).__name__,
+                    "decision": "raise",
+                }
+            )
+            self._timeline.append(
+                "failure-policy:"
+                f"{operation.op_id}:attempt:{attempt}:raise:RuntimeError"
+            )
+            raise RuntimeError("injected failure-policy escape")
         if len(self.trace) < self.retries:
             decision: Continue | Retry | Stop = Retry(0)
             decision_name = "retry"
@@ -453,11 +471,14 @@ class TrackingControl:
         *,
         cancel_at: int | None = None,
         pause_at: int | None = None,
+        exception_at: int | None = None,
         retry_control: str | None = None,
         timeline: list[str] | None = None,
     ) -> None:
         self.cancel_at = cancel_at
         self.pause_at = pause_at
+        self.exception_at = exception_at
+        self.exception_remaining = 1 if exception_at is not None else 0
         self.retry_control = retry_control
         self.checkpoints = 0
         self.backoff_started = False
@@ -468,6 +489,10 @@ class TrackingControl:
         self.checkpoints += 1
         token = f"control:checkpoint:{self.checkpoints}"
         self._timeline.append(f"{token}:begin")
+        if self.exception_at == self.checkpoints:
+            self.exception_remaining -= 1
+            self._timeline.append(f"{token}:raise:RuntimeError")
+            raise RuntimeError("injected checkpoint infrastructure escape")
         if self.cancel_at == self.checkpoints:
             self._timeline.append(f"{token}:raise:Canceled")
             raise Canceled()
@@ -492,12 +517,14 @@ class TrackingPacing:
         self,
         *,
         cancel_on_sleep: bool = False,
+        raise_on_sleep: bool = False,
         control: TrackingControl | None = None,
         timeline: list[str] | None = None,
     ) -> None:
         self._ticks = itertools.count()
         self.sleeps: list[float] = []
         self.cancel_on_sleep = cancel_on_sleep
+        self.raise_remaining = 1 if raise_on_sleep else 0
         self.control = control
         self._timeline = timeline if timeline is not None else []
 
@@ -513,6 +540,10 @@ class TrackingPacing:
         if self.cancel_on_sleep:
             self._timeline.append(f"{token}:raise:Canceled")
             raise Canceled()
+        if self.raise_remaining:
+            self.raise_remaining -= 1
+            self._timeline.append(f"{token}:raise:RuntimeError")
+            raise RuntimeError("injected retry-sleep escape")
         self._timeline.append(f"{token}:end")
 
 
@@ -1036,9 +1067,12 @@ def _run_fixture(
     recorder_fail_once: frozenset[str] = frozenset(),
     retries: int = 0,
     stop: bool = False,
+    failure_policy_escape: bool = False,
     cancel_at: int | None = None,
     pause_at: int | None = None,
+    checkpoint_exception_at: int | None = None,
     cancel_on_sleep: bool = False,
+    retry_sleep_escape: bool = False,
     retry_control: str | None = None,
     hardlinks: bool = True,
     trash_on_update: bool = True,
@@ -1069,16 +1103,19 @@ def _run_fixture(
     failure = TrackingFailurePolicy(
         retries=retries,
         stop=stop,
+        raise_once=failure_policy_escape,
         timeline=timeline,
     )
     control = TrackingControl(
         cancel_at=cancel_at,
         pause_at=pause_at,
+        exception_at=checkpoint_exception_at,
         retry_control=retry_control,
         timeline=timeline,
     )
     pacing = TrackingPacing(
         cancel_on_sleep=cancel_on_sleep,
+        raise_on_sleep=retry_sleep_escape,
         control=control,
         timeline=timeline,
     )
@@ -1119,10 +1156,22 @@ def _run_fixture(
         )
     except (Canceled, PauseRequested) as error:
         raised = error
-    except BaseException as error:  # retained as evidence; the oracle rejects it
+    except BaseException as error:  # retained for exact terminal expectations
         raised = error
 
     filesystem.require_faults_consumed(row)
+    unused_injections = []
+    if failure.raise_remaining:
+        unused_injections.append("failure-policy escape")
+    if control.exception_remaining:
+        unused_injections.append("checkpoint exception")
+    if pacing.raise_remaining:
+        unused_injections.append("retry-sleep escape")
+    if unused_injections:
+        raise AuditError(
+            f"{row}: installed collaborator injections were not consumed: "
+            + ", ".join(unused_injections)
+        )
 
     return _build_report(
         row=row,
@@ -1777,11 +1826,11 @@ def _global_invariant_errors(report: Mapping[str, object]) -> list[str]:
             errors.append(f"global invariant: duplicate selected operation: {op}")
         selected_by_op[op] = entry.get("kind")
     termination = report.get("termination")
-    paused = (
+    partial_exception_exit = (
         isinstance(termination, Mapping)
-        and termination.get("raised") == "PauseRequested"
+        and termination.get("raised") not in {None, "Canceled"}
     )
-    if not paused and len(statuses) != selected:
+    if not partial_exception_exit and len(statuses) != selected:
         errors.append(
             f"global invariant: {len(statuses)} terminal statuses for {selected} selections"
         )
@@ -2216,6 +2265,50 @@ def _failure_byte_published(base: Path) -> list[dict[str, object]]:
                 rules=rules,
             )
         )
+
+    for target_state in ("changed", "missing", "unreadable"):
+        source, target, fs = _roots(base, f"target-{target_state}")
+        operation = _copy_operation(source, target, fs)
+        live = target / "copy.bin"
+        state = {"armed": False}
+
+        def fail_durability(
+            _args,
+            _kwargs,
+            _result,
+            *,
+            target_state: str = target_state,
+            live: Path = live,
+            state: dict[str, bool] = state,
+        ) -> None:
+            state["armed"] = True
+            if target_state == "changed":
+                live.write_bytes(b"foreign-published")
+            elif target_state == "missing":
+                live.unlink()
+            raise _io_error("injected durability failure after byte publication")
+
+        rules = (FaultRule("flush_directory", "before", fail_durability),)
+        if target_state == "unreadable":
+            rules += (
+                FaultRule(
+                    "stat_path",
+                    "before",
+                    _raise(lambda: PermissionError("published target probe unavailable")),
+                    predicate=lambda args, _kwargs, _result, live=live, state=state: (
+                        state["armed"] and bool(args) and Path(args[0]) == live
+                    ),
+                ),
+            )
+        reports.append(
+            _run_fixture(
+                source,
+                target,
+                (operation,),
+                row=f"failure.byte-published.target-{target_state}",
+                rules=rules,
+            )
+        )
     return reports
 
 
@@ -2261,6 +2354,87 @@ def _failure_nonbyte_commit(base: Path) -> list[dict[str, object]]:
                 rules=rules,
             )
         )
+
+    for kind in (OperationKind.MOVE, OperationKind.TRASH):
+        source, target, fs = _roots(base, f"{kind.value}-restored")
+        if kind is OperationKind.MOVE:
+            operation = _move_operation(source, target, fs)
+            original = target / "old.bin"
+            destination = target / "new.bin"
+        else:
+            operation = _trash_operation(source, target, fs)
+            original = target / "trash.bin"
+            destination = target / ".synctrash" / str(RUN_ID) / "trash.bin"
+
+        def restore_rename(
+            _args,
+            _kwargs,
+            _result,
+            *,
+            original: Path = original,
+            destination: Path = destination,
+        ) -> None:
+            destination.rename(original)
+            raise _io_error("injected failure after restored mutation")
+
+        reports.append(
+            _run_fixture(
+                source,
+                target,
+                (operation,),
+                row=f"failure.nonbyte-commit.{kind.value}-restored",
+                rules=(FaultRule("flush_directory", "before", restore_rename),),
+            )
+        )
+
+    source, target, fs = _roots(base, "delete-restored")
+    operation = _delete_operation(source, target, fs)
+    live = target / "delete.bin"
+    retained_link = base / "delete-restored-link.bin"
+    os.link(live, retained_link)
+    operation = replace(
+        operation,
+        target_expected=_stat(fs, target, "delete.bin"),
+    )
+
+    def restore_delete(_args, _kwargs, _result) -> None:
+        os.link(retained_link, live)
+        raise _io_error("injected failure after restored mutation")
+
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="failure.nonbyte-commit.delete-restored",
+            rules=(FaultRule("flush_directory", "before", restore_delete),),
+        )
+    )
+
+    source, target, fs = _roots(base, "delete-unreadable")
+    operation = _delete_operation(source, target, fs)
+    live = target / "delete.bin"
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="failure.nonbyte-unreadable.delete-precommit",
+            rules=(
+                FaultRule(
+                    "remove_file",
+                    "before",
+                    _raise(lambda: _io_error("injected delete failure before commit")),
+                ),
+                FaultRule(
+                    "stat_path",
+                    "before",
+                    _raise(lambda: PermissionError("delete state probe unavailable")),
+                    predicate=_path_argument_is(live),
+                ),
+            ),
+        )
+    )
     return reports
 
 
@@ -2465,7 +2639,7 @@ def _retry_committed_move(base: Path) -> list[dict[str, object]]:
             _raise(lambda: _sharing_error("injected committed move retry")),
         ),
     )
-    return [
+    reports = [
         _run_fixture(
             source,
             target,
@@ -2475,6 +2649,46 @@ def _retry_committed_move(base: Path) -> list[dict[str, object]]:
             retries=1,
         )
     ]
+
+    source, target, fs = _roots(base, "failure-policy-escape")
+    operation = _move_operation(source, target, fs)
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="retry.committed-move-failure-policy-escape",
+            rules=(
+                FaultRule(
+                    "rename_new",
+                    "after",
+                    _raise(lambda: _io_error("injected committed move failure")),
+                ),
+            ),
+            failure_policy_escape=True,
+        )
+    )
+
+    source, target, fs = _roots(base, "retry-sleep-escape")
+    operation = _move_operation(source, target, fs)
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="retry.committed-move-sleep-escape",
+            rules=(
+                FaultRule(
+                    "rename_new",
+                    "after",
+                    _raise(lambda: _sharing_error("injected committed move retry")),
+                ),
+            ),
+            retries=1,
+            retry_sleep_escape=True,
+        )
+    )
+    return reports
 
 
 def _cancel_before_effect(base: Path) -> list[dict[str, object]]:
@@ -2750,6 +2964,57 @@ def _update_sibling_matrix(base: Path) -> list[dict[str, object]]:
                     "replace",
                     "before",
                     _raise(lambda: PermissionError("pre-publication failure")),
+                ),
+            ),
+            trash_on_update=False,
+        )
+    )
+
+    source, target, fs = _roots(base, "unreadable-mutation")
+    operation = _update_operation(source, target, fs, readonly=True)
+    live = target / "update.bin"
+    state = {"armed": False, "target_probes": 0}
+
+    def fail_restore(_args, _kwargs, _result) -> None:
+        state["armed"] = True
+        raise PermissionError("injected readonly restoration failure")
+
+    def restoration(args, kwargs, _result) -> bool:
+        return (
+            bool(args)
+            and Path(args[0]) == live
+            and bool(kwargs.get("apply_readonly"))
+        )
+
+    def second_settlement_probe(args, _kwargs, _result) -> bool:
+        if not state["armed"] or not args or Path(args[0]) != live:
+            return False
+        state["target_probes"] += 1
+        return state["target_probes"] == 2
+
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="failure.update-sibling.unreadable-readonly-mutation",
+            rules=(
+                FaultRule(
+                    "replace",
+                    "before",
+                    _raise(lambda: PermissionError("injected update replace failure")),
+                ),
+                FaultRule(
+                    "apply_metadata",
+                    "before",
+                    fail_restore,
+                    predicate=restoration,
+                ),
+                FaultRule(
+                    "stat_path",
+                    "before",
+                    _raise(lambda: PermissionError("update state probe unavailable")),
+                    predicate=second_settlement_probe,
                 ),
             ),
             trash_on_update=False,
@@ -3172,6 +3437,26 @@ def _mkdir_matrix(base: Path) -> list[dict[str, object]]:
         )
     )
 
+    source, target, fs = _roots(base, "metadata-disappeared")
+    operation = _mkdir_operation(source, target, fs)
+    directory = target / "folder"
+
+    def remove_before_metadata(_args, _kwargs, _result) -> None:
+        directory.rmdir()
+        raise PermissionError("mkdir metadata target disappeared")
+
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (operation,),
+            row="mkdir.metadata-failure.disappeared-after-create",
+            rules=(
+                FaultRule("apply_metadata", "before", remove_before_metadata),
+            ),
+        )
+    )
+
     for name, control_name in (("child-cancel", "cancel"), ("child-pause", "pause")):
         source, target, fs = _roots(base, name)
         mkdir = _mkdir_operation(source, target, fs, number=1)
@@ -3200,6 +3485,29 @@ def _mkdir_matrix(base: Path) -> list[dict[str, object]]:
                 pause_at=2 if control_name == "pause" else None,
             )
         )
+
+    source, target, fs = _roots(base, "child-checkpoint-exception")
+    mkdir = _mkdir_operation(source, target, fs, number=1)
+    child = _copy_operation(
+        source,
+        target,
+        fs,
+        number=2,
+        relative="folder\\child.bin",
+        content=b"child",
+    )
+    refreshed = _stat(fs, source, "folder")
+    mkdir = replace(mkdir, source_expected=refreshed, intended=refreshed)
+    child = replace(child, dependencies=(mkdir.op_id,))
+    reports.append(
+        _run_fixture(
+            source,
+            target,
+            (mkdir, child),
+            row="mkdir.pending-child-checkpoint-exception",
+            checkpoint_exception_at=2,
+        )
+    )
 
     source, target, fs = _roots(base, "record-failure")
     operation = _mkdir_operation(source, target, fs)
@@ -3302,6 +3610,7 @@ _SOURCE_CONTENT = {
 _SOURCE_CONTENT_OVERRIDES: dict[tuple[str, int], bytes] = {
     ("mkdir.pending-child-cancel", 2): b"child",
     ("mkdir.pending-child-pause", 2): b"child",
+    ("mkdir.pending-child-checkpoint-exception", 2): b"child",
     ("resume.pause-same-execution-set", 1): b"first-payload",
     ("resume.pause-same-execution-set", 3): b"third-payload",
     ("failure.policy-stop-sweep", 1): b"failing-payload",
@@ -3339,6 +3648,9 @@ _ITEM_COORDINATES: dict[str, tuple[_ExpectedOperation, ...]] = {
         _op(2, OperationKind.COPY, "folder\\child.bin"),
     ),
     "mkdir.pending-child-pause": (_op(1, OperationKind.MKDIR),),
+    "mkdir.pending-child-checkpoint-exception": (
+        _op(1, OperationKind.MKDIR),
+    ),
     "recording.sticky-aggregate-degradation": (
         _op(1, OperationKind.COPY, "first.bin"),
         _op(2, OperationKind.COPY, "second.bin"),
@@ -3358,6 +3670,10 @@ _ITEM_COORDINATES: dict[str, tuple[_ExpectedOperation, ...]] = {
 _SELECTION_COORDINATES: dict[str, tuple[_ExpectedOperation, ...]] = {
     "pause.copy-prepared": (_op(1, OperationKind.COPY),),
     "mkdir.pending-child-pause": (
+        _op(1, OperationKind.MKDIR),
+        _op(2, OperationKind.COPY, "folder\\child.bin"),
+    ),
+    "mkdir.pending-child-checkpoint-exception": (
         _op(1, OperationKind.MKDIR),
         _op(2, OperationKind.COPY, "folder\\child.bin"),
     ),
@@ -3675,6 +3991,9 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
             "failure.copy-prepublish-cleanup-ok",
             "failure.policy-stop-sweep",
             "failure.byte-published.copy",
+            "failure.byte-published.target-changed",
+            "failure.byte-published.target-missing",
+            "failure.byte-published.target-unreadable",
             "failure.byte-published.move-update",
             "failure.nonbyte-commit.mkdir",
             "failure.noop-drift",
@@ -3690,6 +4009,7 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
             "mkdir.primitive-commit-then-raise",
             "mkdir.metadata-failure.available-probe",
             "mkdir.metadata-failure.unavailable-probe",
+            "mkdir.metadata-failure.disappeared-after-create",
         ),
         "flush",
     )
@@ -3701,6 +4021,10 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
             "failure.nonbyte-commit.recase",
             "failure.nonbyte-commit.trash",
             "failure.nonbyte-commit.delete",
+            "failure.nonbyte-commit.move-restored",
+            "failure.nonbyte-commit.trash-restored",
+            "failure.nonbyte-commit.delete-restored",
+            "failure.nonbyte-unreadable.delete-precommit",
             "update.backup-state.failure.retained",
             "update.backup-state.failure.changed",
             "update.backup-state.failure.absent",
@@ -3712,6 +4036,7 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
             "failure.update-sibling.publication-unverified-plus-readonly",
             "failure.update-sibling.confirmed-publication-suppresses-readonly",
             "failure.update-sibling.unchanged-readonly",
+            "failure.update-sibling.unreadable-readonly-mutation",
             "failure.move-update-new-and-trash",
             "cancel.committed-move",
             "cancel.update-composed-unverified-plus-readonly",
@@ -3751,6 +4076,14 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
         "flush",
     )
     add(
+        (
+            "retry.committed-move-failure-policy-escape",
+            "retry.committed-move-sleep-escape",
+        ),
+        "flush",
+        "flush",
+    )
+    add(
         ("resume.pause-same-execution-set",),
         "copied",
         "flush",
@@ -3762,7 +4095,11 @@ def _build_recorder_trace_schedules() -> dict[str, tuple[str, ...]]:
         "flush",
     )
     add(
-        ("mkdir.pending-child-cancel", "mkdir.pending-child-pause"),
+        (
+            "mkdir.pending-child-cancel",
+            "mkdir.pending-child-pause",
+            "mkdir.pending-child-checkpoint-exception",
+        ),
         "mkdir",
         "flush",
     )
@@ -4291,6 +4628,73 @@ _FAILURE_BYTE_PUBLISHED = (
         policy_decisions=("continue",),
         row="failure.byte-published.move-update",
     ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.COPY,
+            Outcome.FAILED,
+            "io-error",
+            detail=(
+                ("publish_state", "published"),
+                ("target_state", "changed-after-publish"),
+                ("durable_state", "target-changed-after-publish"),
+            ),
+        ),),
+        (),
+        tree_files=(("$TARGET/copy.bin", "foreign-published"),),
+        backend_calls=1,
+        policy_decisions=("continue",),
+        fs_counts=(("flush_directory", 1),),
+        row="failure.byte-published.target-changed",
+    ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.COPY,
+            Outcome.FAILED,
+            "io-error",
+            detail=(
+                ("publish_state", "published"),
+                ("target_state", "missing-after-publish"),
+                ("durable_state", "target-missing-after-publish"),
+            ),
+        ),),
+        (),
+        tree_absent=("$TARGET/copy.bin",),
+        backend_calls=1,
+        policy_decisions=("continue",),
+        fs_counts=(("flush_directory", 1),),
+        row="failure.byte-published.target-missing",
+    ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.COPY,
+            Outcome.FAILED,
+            "io-error",
+            detail=(
+                ("publish_state", "published"),
+                ("target_state", "unverified-after-publish"),
+                ("durable_state", "target-unverified-after-publish"),
+                (
+                    "target_state_error",
+                    "PermissionError: published target probe unavailable",
+                ),
+            ),
+        ),),
+        (),
+        tree_files=(("$TARGET/copy.bin", "copy-payload"),),
+        backend_calls=1,
+        policy_decisions=("continue",),
+        fs_counts=(("flush_directory", 1),),
+        row="failure.byte-published.target-unreadable",
+    ),
 )
 
 
@@ -4347,6 +4751,81 @@ _FAILURE_NONBYTE_COMMIT = (
         (),
         backend_calls=0,
         row="failure.nonbyte-commit.mkdir",
+    ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.MOVE,
+            Outcome.FAILED,
+            "io-error",
+            detail=(("durable_state", "source-restored-after-move"),),
+        ),),
+        (),
+        tree_files=(("$TARGET/old.bin", "move-payload"),),
+        tree_absent=("$TARGET/new.bin",),
+        backend_calls=0,
+        recorder_flushes=2,
+        policy_decisions=("continue",),
+        row="failure.nonbyte-commit.move-restored",
+    ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.TRASH,
+            Outcome.FAILED,
+            "io-error",
+            detail=(("durable_state", "source-restored-after-trash"),),
+        ),),
+        (),
+        tree_files=(("$TARGET/trash.bin", "trash-payload"),),
+        backend_calls=0,
+        recorder_flushes=2,
+        policy_decisions=("continue",),
+        row="failure.nonbyte-commit.trash-restored",
+    ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.DELETE,
+            Outcome.FAILED,
+            "io-error",
+            detail=(("durable_state", "target-restored-after-delete"),),
+        ),),
+        (),
+        tree_files=(("$TARGET/delete.bin", "delete-payload"),),
+        backend_calls=0,
+        recorder_flushes=2,
+        policy_decisions=("continue",),
+        row="failure.nonbyte-commit.delete-restored",
+    ),
+    ExpectedSettlement(
+        SessionState.FAILED.value,
+        None,
+        RecordingStatus.DEGRADED.value,
+        (_item(
+            OperationKind.DELETE,
+            Outcome.FAILED,
+            "io-error",
+            detail=(
+                ("durable_state", "delete-state-unverified"),
+                (
+                    "mutation_state_error",
+                    "PermissionError: delete state probe unavailable",
+                ),
+            ),
+        ),),
+        (),
+        tree_files=(("$TARGET/delete.bin", "delete-payload"),),
+        backend_calls=0,
+        recorder_flushes=2,
+        policy_decisions=("continue",),
+        row="failure.nonbyte-unreadable.delete-precommit",
     ),
 )
 
@@ -4636,6 +5115,33 @@ _UPDATE_SIBLING_MATRIX = (
         policy_decisions=("continue",),
         row="failure.update-sibling.unchanged-readonly",
     ),
+    ExpectedSettlement(
+        returned=SessionState.FAILED.value,
+        raised=None,
+        recording=RecordingStatus.DEGRADED.value,
+        items=(
+            _item(
+                OperationKind.UPDATE,
+                Outcome.FAILED,
+                "io-error",
+                detail=(
+                    ("publish_state", "not-published"),
+                    ("durable_state", "update-state-unverified"),
+                    ("mutation_state", "unverified"),
+                    (
+                        "mutation_state_error",
+                        "PermissionError: update state probe unavailable",
+                    ),
+                ),
+            ),
+        ),
+        recorder_commands=(),
+        tree_files=(("$TARGET/update.bin", "old-version"),),
+        backend_calls=1,
+        recorder_flushes=2,
+        policy_decisions=("continue",),
+        row="failure.update-sibling.unreadable-readonly-mutation",
+    ),
 )
 
 
@@ -4884,6 +5390,29 @@ _MKDIR_MATRIX = (
         row="mkdir.metadata-failure.unavailable-probe",
     ),
     ExpectedSettlement(
+        returned=SessionState.FAILED.value,
+        raised=None,
+        recording=RecordingStatus.DEGRADED.value,
+        items=(
+            _item(
+                OperationKind.MKDIR,
+                Outcome.FAILED,
+                "io-error",
+                detail=(
+                    ("durable_state", "directory-missing-after-create"),
+                    ("mutation_state", "committed"),
+                    ("recording", "degraded"),
+                ),
+            ),
+        ),
+        recorder_commands=(),
+        tree_absent=("$TARGET/folder",),
+        backend_calls=0,
+        recorder_flushes=1,
+        fs_counts=(("mkdir_new", 1), ("apply_metadata", 1), ("stat_path", 1)),
+        row="mkdir.metadata-failure.disappeared-after-create",
+    ),
+    ExpectedSettlement(
         returned=None,
         raised="Canceled",
         recording=RecordingStatus.OK.value,
@@ -4913,6 +5442,28 @@ _MKDIR_MATRIX = (
         fs_counts=(("mkdir_new", 1), ("apply_metadata", 1)),
         timeline_subsequence=("fs:mkdir_new:end", "recorder:mkdir", "recorder:flush"),
         row="mkdir.pending-child-pause",
+    ),
+    ExpectedSettlement(
+        returned=None,
+        raised="RuntimeError",
+        recording=RecordingStatus.OK.value,
+        items=(_item(OperationKind.MKDIR, Outcome.SUCCEEDED, None),),
+        recorder_commands=("mkdir",),
+        tree_directories=("$TARGET/folder",),
+        tree_absent=("$TARGET/folder/child.bin",),
+        backend_calls=0,
+        recorder_flushes=1,
+        control_checkpoints=2,
+        fs_counts=(("mkdir_new", 1), ("apply_metadata", 1)),
+        timeline_subsequence=(
+            "fs:mkdir_new:end",
+            "control:checkpoint:2:raise:RuntimeError",
+            "fs:apply_metadata:end",
+            "recorder:mkdir",
+            "emit:item:00000000000000000000000000000001:mkdir:succeeded",
+            "recorder:flush",
+        ),
+        row="mkdir.pending-child-checkpoint-exception",
     ),
     ExpectedSettlement(
         returned=SessionState.COMPLETED.value,
@@ -5021,6 +5572,9 @@ _RESULT_BYTES: dict[str, tuple[int, int]] = {
     "failure.byte-published.copy": (12, 12),
     "failure.byte-published.update": (11, 11),
     "failure.byte-published.move-update": (15, 15),
+    "failure.byte-published.target-changed": (12, 12),
+    "failure.byte-published.target-missing": (12, 12),
+    "failure.byte-published.target-unreadable": (12, 12),
     "update.backup-state.failure.retained": (11, 11),
     "update.backup-state.failure.changed": (11, 11),
     "update.backup-state.failure.absent": (11, 11),
@@ -5028,6 +5582,7 @@ _RESULT_BYTES: dict[str, tuple[int, int]] = {
     "failure.update-sibling.publication-unverified-plus-readonly": (11, 11),
     "failure.update-sibling.confirmed-publication-suppresses-readonly": (11, 11),
     "failure.update-sibling.unchanged-readonly": (11, 11),
+    "failure.update-sibling.unreadable-readonly-mutation": (11, 11),
     "failure.move-update-new-and-trash": (15, 15),
     "retry.copy-prepared": (12, 12),
     "retry.copy-published": (12, 12),
@@ -5070,6 +5625,10 @@ _EXTRA_TREE_FILES: dict[str, tuple[tuple[str, str], ...]] = {
 _EXTRA_TREE_DIRECTORIES: dict[str, tuple[str, ...]] = {
     "success.all-nine": ("$TARGET/folder",),
     "failure.nonbyte-commit.mkdir": ("$TARGET/folder",),
+    "failure.nonbyte-commit.trash-restored": (
+        "$TARGET/.synctrash",
+        f"$TARGET/.synctrash/{RUN_ID}",
+    ),
     "update.backup-state.failure.absent": (
         "$TARGET/.synctrash",
         f"$TARGET/.synctrash/{RUN_ID}",
@@ -5134,6 +5693,7 @@ def _build_tree_metadata_relations() -> dict[
     add(
         (
             "failure.byte-published.copy",
+            "failure.byte-published.target-unreadable",
             "retry.copy-prepared",
             "retry.copy-published",
             "cancel.copy-published",
@@ -5145,6 +5705,14 @@ def _build_tree_metadata_relations() -> dict[
         "$TARGET/copy.bin",
         1,
         "intended",
+        identity=False,
+    )
+    add(
+        ("failure.byte-published.target-changed",),
+        "$TARGET/copy.bin",
+        1,
+        "intended",
+        mtime=False,
         identity=False,
     )
     add(
@@ -5214,6 +5782,7 @@ def _build_tree_metadata_relations() -> dict[
             "update.backup-state.cancel.unverified",
             "failure.update-sibling.publication-unverified-plus-readonly",
             "failure.update-sibling.unchanged-readonly",
+            "failure.update-sibling.unreadable-readonly-mutation",
             "retry.control.pause-then-cancel",
             "cancel.update-composed-unverified-plus-readonly",
             "cleanup.ordinary.durable-verdict-plus-cleanup-failure",
@@ -5232,6 +5801,7 @@ def _build_tree_metadata_relations() -> dict[
     add(
         (
             "failure.move-precommit-unchanged",
+            "failure.nonbyte-commit.move-restored",
             "recording.pre-destructive-flush-refusal",
         ),
         "$TARGET/old.bin",
@@ -5242,12 +5812,29 @@ def _build_tree_metadata_relations() -> dict[
         (
             "failure.nonbyte-commit.move",
             "retry.committed-move-settles-once",
+            "retry.committed-move-failure-policy-escape",
+            "retry.committed-move-sleep-escape",
             "cancel.committed-move",
             "record.nonbyte-failure",
         ),
         "$TARGET/new.bin",
         1,
         "prior_target_expected",
+    )
+    add(
+        ("failure.nonbyte-commit.trash-restored",),
+        "$TARGET/trash.bin",
+        1,
+        "target_expected",
+    )
+    add(
+        (
+            "failure.nonbyte-commit.delete-restored",
+            "failure.nonbyte-unreadable.delete-precommit",
+        ),
+        "$TARGET/delete.bin",
+        1,
+        "target_expected",
     )
     add(
         ("success.all-nine",),
@@ -5322,6 +5909,7 @@ def _build_tree_metadata_relations() -> dict[
         (
             "mkdir.pending-child-cancel",
             "mkdir.pending-child-pause",
+            "mkdir.pending-child-checkpoint-exception",
             "mkdir.record-failure",
         ),
         "$TARGET/folder",
@@ -5510,6 +6098,43 @@ _EXACT_ITEM_DETAILS: dict[str, tuple[Mapping[str, object], ...]] = {
             target_state="published",
         ),
     ),
+    "failure.byte-published.target-changed": (
+        _details(
+            durable_state="target-changed-after-publish",
+            error_type="OSError",
+            message="injected durability failure after byte publication",
+            publish_state="published",
+            published_path="copy.bin",
+            recording="degraded",
+            recording_error="published filesystem mutation failed before ledger settlement",
+            target_state="changed-after-publish",
+        ),
+    ),
+    "failure.byte-published.target-missing": (
+        _details(
+            durable_state="target-missing-after-publish",
+            error_type="OSError",
+            message="injected durability failure after byte publication",
+            publish_state="published",
+            published_path="copy.bin",
+            recording="degraded",
+            recording_error="published filesystem mutation failed before ledger settlement",
+            target_state="missing-after-publish",
+        ),
+    ),
+    "failure.byte-published.target-unreadable": (
+        _details(
+            durable_state="target-unverified-after-publish",
+            error_type="OSError",
+            message="injected durability failure after byte publication",
+            publish_state="published",
+            published_path="copy.bin",
+            recording="degraded",
+            recording_error="published filesystem mutation failed before ledger settlement",
+            target_state="unverified-after-publish",
+            target_state_error="PermissionError: published target probe unavailable",
+        ),
+    ),
     "failure.nonbyte-commit.move": (
         _details(
             destination_state="reviewed",
@@ -5561,6 +6186,52 @@ _EXACT_ITEM_DETAILS: dict[str, tuple[Mapping[str, object], ...]] = {
             error_type="OSError",
             message="injected failure after mutation",
             mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+        ),
+    ),
+    "failure.nonbyte-commit.move-restored": (
+        _details(
+            destination_state="absent",
+            durable_state="source-restored-after-move",
+            error_type="OSError",
+            message="injected failure after restored mutation",
+            mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+            source_state="reviewed",
+        ),
+    ),
+    "failure.nonbyte-commit.trash-restored": (
+        _details(
+            destination_state="absent",
+            durable_state="source-restored-after-trash",
+            error_type="OSError",
+            message="injected failure after restored mutation",
+            mutation_destination=f".synctrash/{RUN_ID}/trash.bin",
+            mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+            source_state="reviewed",
+        ),
+    ),
+    "failure.nonbyte-commit.delete-restored": (
+        _details(
+            durable_state="target-restored-after-delete",
+            error_type="OSError",
+            message="injected failure after restored mutation",
+            mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+        ),
+    ),
+    "failure.nonbyte-unreadable.delete-precommit": (
+        _details(
+            durable_state="delete-state-unverified",
+            error_type="OSError",
+            message="injected delete failure before commit",
+            mutation_state="unverified",
+            mutation_state_error="PermissionError: delete state probe unavailable",
             recording="degraded",
             recording_error="filesystem mutation may have committed before ledger settlement",
         ),
@@ -5660,6 +6331,18 @@ _EXACT_ITEM_DETAILS: dict[str, tuple[Mapping[str, object], ...]] = {
     "failure.update-sibling.unchanged-readonly": (
         _details(error_type="PermissionError", message="pre-publication failure"),
     ),
+    "failure.update-sibling.unreadable-readonly-mutation": (
+        _details(
+            durable_state="update-state-unverified",
+            error_type="PermissionError",
+            message="injected readonly restoration failure",
+            mutation_state="unverified",
+            mutation_state_error="PermissionError: update state probe unavailable",
+            publish_state="not-published",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+        ),
+    ),
     "failure.move-update-new-and-trash": (
         _details(
             durable_state="new-and-trash",
@@ -5684,6 +6367,30 @@ _EXACT_ITEM_DETAILS: dict[str, tuple[Mapping[str, object], ...]] = {
             durable_state="target-renamed",
             error_type="OperationFailure",
             message="planned path is missing: old.bin",
+            mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+            source_state="absent",
+        ),
+    ),
+    "retry.committed-move-failure-policy-escape": (
+        _details(
+            destination_state="reviewed",
+            durable_state="target-renamed",
+            error_type="OSError",
+            message="injected committed move failure",
+            mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+            source_state="absent",
+        ),
+    ),
+    "retry.committed-move-sleep-escape": (
+        _details(
+            destination_state="reviewed",
+            durable_state="target-renamed",
+            error_type="OSError",
+            message="injected committed move retry",
             mutation_state="committed",
             recording="degraded",
             recording_error="filesystem mutation may have committed before ledger settlement",
@@ -5814,6 +6521,17 @@ _EXACT_ITEM_DETAILS: dict[str, tuple[Mapping[str, object], ...]] = {
             recording_error="filesystem mutation may have committed before ledger settlement",
         ),
     ),
+    "mkdir.metadata-failure.disappeared-after-create": (
+        _details(
+            durable_state="directory-missing-after-create",
+            error_type="PermissionError",
+            message="mkdir metadata target disappeared",
+            mutation_state="committed",
+            recording="degraded",
+            recording_error="filesystem mutation may have committed before ledger settlement",
+        ),
+    ),
+    "mkdir.pending-child-checkpoint-exception": ({},),
     "mkdir.record-failure": (
         _details(
             recording="degraded",
@@ -6167,6 +6885,56 @@ SCENARIOS: tuple[Scenario, ...] = (
                 fs_counts=(("rename_new", 1),),
                 row="retry.committed-move-settles-once",
             ),
+            ExpectedSettlement(
+                None,
+                "RuntimeError",
+                RecordingStatus.DEGRADED.value,
+                (_item(
+                    OperationKind.MOVE,
+                    Outcome.FAILED,
+                    "io-error",
+                    detail=(("durable_state", "target-renamed"),),
+                ),),
+                (),
+                tree_files=(("$TARGET/new.bin", "move-payload"),),
+                backend_calls=0,
+                recorder_flushes=2,
+                policy_decisions=("raise",),
+                fs_counts=(("rename_new", 1),),
+                timeline_subsequence=(
+                    "fs:rename_new:error",
+                    "failure-policy:00000000000000000000000000000001:attempt:1:raise:RuntimeError",
+                    "emit:item:00000000000000000000000000000001:move:failed",
+                    "recorder:flush",
+                ),
+                row="retry.committed-move-failure-policy-escape",
+            ),
+            ExpectedSettlement(
+                None,
+                "RuntimeError",
+                RecordingStatus.DEGRADED.value,
+                (_item(
+                    OperationKind.MOVE,
+                    Outcome.FAILED,
+                    "sharing-violation",
+                    detail=(("durable_state", "target-renamed"),),
+                ),),
+                (),
+                tree_files=(("$TARGET/new.bin", "move-payload"),),
+                backend_calls=0,
+                recorder_flushes=2,
+                control_checkpoints=2,
+                policy_decisions=("retry",),
+                fs_counts=(("rename_new", 1),),
+                timeline_subsequence=(
+                    "failure-policy:00000000000000000000000000000001:attempt:1:decision:retry",
+                    "control:checkpoint:2:end",
+                    "pacing:sleep:0:raise:RuntimeError",
+                    "emit:item:00000000000000000000000000000001:move:failed",
+                    "recorder:flush",
+                ),
+                row="retry.committed-move-sleep-escape",
+            ),
         ),
     ),
     Scenario(
@@ -6493,11 +7261,18 @@ _REQUIRED_ROWS = frozenset(
         "failure.byte-published.copy",
         "failure.byte-published.update",
         "failure.byte-published.move-update",
+        "failure.byte-published.target-changed",
+        "failure.byte-published.target-missing",
+        "failure.byte-published.target-unreadable",
         "failure.nonbyte-commit.move",
         "failure.nonbyte-commit.recase",
         "failure.nonbyte-commit.trash",
         "failure.nonbyte-commit.delete",
         "failure.nonbyte-commit.mkdir",
+        "failure.nonbyte-commit.move-restored",
+        "failure.nonbyte-commit.trash-restored",
+        "failure.nonbyte-commit.delete-restored",
+        "failure.nonbyte-unreadable.delete-precommit",
         "update.backup-state.failure.retained",
         "update.backup-state.failure.changed",
         "update.backup-state.failure.absent",
@@ -6509,6 +7284,7 @@ _REQUIRED_ROWS = frozenset(
         "failure.update-sibling.publication-unverified-plus-readonly",
         "failure.update-sibling.confirmed-publication-suppresses-readonly",
         "failure.update-sibling.unchanged-readonly",
+        "failure.update-sibling.unreadable-readonly-mutation",
         "failure.move-update-new-and-trash",
         "failure.noop-drift",
         "retry.copy-prepared",
@@ -6516,6 +7292,8 @@ _REQUIRED_ROWS = frozenset(
         "retry.update-after-backup",
         "retry.move-update-after-publish",
         "retry.committed-move-settles-once",
+        "retry.committed-move-failure-policy-escape",
+        "retry.committed-move-sleep-escape",
         "retry.control.pause",
         "retry.control.pause-then-cancel",
         "resume.pause-same-execution-set",
@@ -6536,8 +7314,10 @@ _REQUIRED_ROWS = frozenset(
         "mkdir.primitive-commit-then-raise",
         "mkdir.metadata-failure.available-probe",
         "mkdir.metadata-failure.unavailable-probe",
+        "mkdir.metadata-failure.disappeared-after-create",
         "mkdir.pending-child-cancel",
         "mkdir.pending-child-pause",
+        "mkdir.pending-child-checkpoint-exception",
         "mkdir.record-failure",
         "recording.pre-destructive-flush-refusal",
         "recording.final-flush-degradation",

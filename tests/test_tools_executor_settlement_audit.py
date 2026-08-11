@@ -58,11 +58,18 @@ _EXPECTED_ROWS = frozenset(
         "failure.byte-published.copy",
         "failure.byte-published.update",
         "failure.byte-published.move-update",
+        "failure.byte-published.target-changed",
+        "failure.byte-published.target-missing",
+        "failure.byte-published.target-unreadable",
         "failure.nonbyte-commit.move",
         "failure.nonbyte-commit.recase",
         "failure.nonbyte-commit.trash",
         "failure.nonbyte-commit.delete",
         "failure.nonbyte-commit.mkdir",
+        "failure.nonbyte-commit.move-restored",
+        "failure.nonbyte-commit.trash-restored",
+        "failure.nonbyte-commit.delete-restored",
+        "failure.nonbyte-unreadable.delete-precommit",
         "update.backup-state.failure.retained",
         "update.backup-state.failure.changed",
         "update.backup-state.failure.absent",
@@ -74,6 +81,7 @@ _EXPECTED_ROWS = frozenset(
         "failure.update-sibling.publication-unverified-plus-readonly",
         "failure.update-sibling.confirmed-publication-suppresses-readonly",
         "failure.update-sibling.unchanged-readonly",
+        "failure.update-sibling.unreadable-readonly-mutation",
         "failure.move-update-new-and-trash",
         "failure.noop-drift",
         "retry.copy-prepared",
@@ -81,6 +89,8 @@ _EXPECTED_ROWS = frozenset(
         "retry.update-after-backup",
         "retry.move-update-after-publish",
         "retry.committed-move-settles-once",
+        "retry.committed-move-failure-policy-escape",
+        "retry.committed-move-sleep-escape",
         "retry.control.pause",
         "retry.control.pause-then-cancel",
         "resume.pause-same-execution-set",
@@ -101,8 +111,10 @@ _EXPECTED_ROWS = frozenset(
         "mkdir.primitive-commit-then-raise",
         "mkdir.metadata-failure.available-probe",
         "mkdir.metadata-failure.unavailable-probe",
+        "mkdir.metadata-failure.disappeared-after-create",
         "mkdir.pending-child-cancel",
         "mkdir.pending-child-pause",
+        "mkdir.pending-child-checkpoint-exception",
         "mkdir.record-failure",
         "recording.pre-destructive-flush-refusal",
         "recording.final-flush-degradation",
@@ -266,7 +278,7 @@ def test_manifest_is_complete_labeled_and_has_no_escape_state() -> None:
         kind for scenario in audit.SCENARIOS for kind in scenario.kinds
     } == set(OperationKind)
     rows = [expected.row for scenario in audit.SCENARIOS for expected in scenario.expected]
-    assert len(rows) == 58
+    assert len(rows) == 70
     assert len(rows) == len(set(rows))
     assert frozenset(rows) == _EXPECTED_ROWS
     assert [
@@ -315,12 +327,16 @@ def test_manifest_rejects_empty_duplicate_missing_and_extra_rows(
             (
                 scenario.expected[0],
                 replace(scenario.expected[1], row=scenario.expected[0].row),
-                scenario.expected[2],
+                *scenario.expected[2:],
             ),
             ("has duplicate expected row labels", "missing=['failure.byte-published.update']"),
         ),
         (
-            scenario.expected[:-1],
+            (
+                scenario.expected[0],
+                scenario.expected[1],
+                *scenario.expected[3:],
+            ),
             ("missing=['failure.byte-published.move-update']",),
         ),
         (
@@ -423,6 +439,17 @@ def test_evidence_invariant_is_exact_and_status_authoritative() -> None:
     )
     assert kind_drift == [
         "global invariant: item/status kind disagreement for op-1"
+    ]
+
+
+def test_partial_selection_is_allowed_only_for_propagated_exception_modes() -> None:
+    report = _invariant_report(terminal=False)
+    report["termination"] = {"returned": None, "raised": "RuntimeError"}
+    assert audit._global_invariant_errors(report) == []
+
+    report["termination"] = {"returned": None, "raised": "Canceled"}
+    assert audit._global_invariant_errors(report) == [
+        "global invariant: 0 terminal statuses for 1 selections"
     ]
 
 
@@ -1123,6 +1150,116 @@ def test_representative_capture_is_oracle_clean_and_deterministic() -> None:
     ] == "failure.move-precommit-unchanged"
 
 
+@pytest.mark.parametrize(
+    ("scenario_id", "added_rows"),
+    (
+        (
+            "failure.byte-published",
+            {
+                "failure.byte-published.target-changed",
+                "failure.byte-published.target-missing",
+                "failure.byte-published.target-unreadable",
+            },
+        ),
+        (
+            "failure.nonbyte-commit",
+            {
+                "failure.nonbyte-commit.move-restored",
+                "failure.nonbyte-commit.trash-restored",
+                "failure.nonbyte-commit.delete-restored",
+                "failure.nonbyte-unreadable.delete-precommit",
+            },
+        ),
+        (
+            "failure.update-sibling-matrix",
+            {"failure.update-sibling.unreadable-readonly-mutation"},
+        ),
+        (
+            "retry.committed-move-settles-once",
+            {
+                "retry.committed-move-failure-policy-escape",
+                "retry.committed-move-sleep-escape",
+            },
+        ),
+        (
+            "mkdir.settlement-matrix",
+            {
+                "mkdir.metadata-failure.disappeared-after-create",
+                "mkdir.pending-child-checkpoint-exception",
+            },
+        ),
+    ),
+)
+def test_expanded_observer_and_collaborator_rows_are_exact_and_clean(
+    scenario_id: str,
+    added_rows: set[str],
+) -> None:
+    capture = audit.capture_one(scenario_id)
+
+    assert capture.ok
+    variants = capture.scenarios[scenario_id]["variants"]
+    assert added_rows <= {variant["row"] for variant in variants}
+
+
+def test_collaborator_escape_rows_preserve_operation_failure_and_partial_selection() -> None:
+    move_capture = audit.capture_one("retry.committed-move-settles-once")
+    move_variants = {
+        variant["row"]: variant
+        for variant in move_capture.scenarios[
+            "retry.committed-move-settles-once"
+        ]["variants"]
+    }
+    for row, reason, message, raised_token in (
+        (
+            "retry.committed-move-failure-policy-escape",
+            "io-error",
+            "injected committed move failure",
+            "failure-policy:00000000000000000000000000000001:attempt:1:raise:RuntimeError",
+        ),
+        (
+            "retry.committed-move-sleep-escape",
+            "sharing-violation",
+            "injected committed move retry",
+            "pacing:sleep:0:raise:RuntimeError",
+        ),
+    ):
+        report = move_variants[row]
+        assert report["termination"] == {"returned": None, "raised": "RuntimeError"}
+        assert len(report["execution_set"]["status"]) == 1
+        assert len(report["items"]) == 1
+        assert report["items"][0]["reason"] == reason
+        assert report["items"][0]["detail"]["message"] == message
+        assert report["items"][0]["detail"]["durable_state"] == "target-renamed"
+        assert report["tree"]["$TARGET/new.bin"]["text"] == "move-payload"
+        assert "$TARGET/old.bin" not in report["tree"]
+        assert raised_token in report["timeline"]
+
+    mkdir_capture = audit.capture_one("mkdir.settlement-matrix")
+    report = next(
+        variant
+        for variant in mkdir_capture.scenarios["mkdir.settlement-matrix"][
+            "variants"
+        ]
+        if variant["row"] == "mkdir.pending-child-checkpoint-exception"
+    )
+    assert report["termination"] == {"returned": None, "raised": "RuntimeError"}
+    assert len(report["execution_set"]["selection"]) == 2
+    assert len(report["execution_set"]["status"]) == 1
+    assert report["items"] == [
+        {
+            "op": f"{1:032x}",
+            "kind": "mkdir",
+            "path": "folder",
+            "outcome": "succeeded",
+            "reason": None,
+            "detail": {},
+        }
+    ]
+    assert "$TARGET/folder" in report["tree"]
+    assert "$TARGET/folder/child.bin" not in report["tree"]
+    assert "control:checkpoint:2:raise:RuntimeError" in report["timeline"]
+
+
 def test_cleanup_matrix_covers_failed_pre_retry_cleanup() -> None:
     capture = audit.capture_one("cleanup.ordinary-matrix")
 
@@ -1181,6 +1318,35 @@ def test_fixture_rejects_every_unconsumed_fault_rule(tmp_path: Path) -> None:
             (operation,),
             row="unused-fault",
             rules=(unused,),
+        )
+
+
+@pytest.mark.parametrize(
+    ("injection", "label"),
+    (
+        ({"failure_policy_escape": True}, "failure-policy escape"),
+        ({"checkpoint_exception_at": 999}, "checkpoint exception"),
+        ({"retry_sleep_escape": True}, "retry-sleep escape"),
+    ),
+)
+def test_fixture_rejects_every_unconsumed_collaborator_injection(
+    tmp_path: Path,
+    injection: dict[str, object],
+    label: str,
+) -> None:
+    source, target, fs = audit._roots(tmp_path)
+    operation = audit._copy_operation(source, target, fs)
+
+    with pytest.raises(
+        audit.AuditError,
+        match=f"installed collaborator injections were not consumed: {label}",
+    ):
+        audit._run_fixture(
+            source,
+            target,
+            (operation,),
+            row="unused-collaborator-injection",
+            **injection,
         )
 
 
