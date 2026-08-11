@@ -332,6 +332,11 @@ abandons/reclaims an in-flight temp through exact-name recovery, preserves
 completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
 without terminal; dispatcher then releases custody. Resume queues at the back,
 freshly re-observes/preflights in workflow, and continues only unreached work.
+Direct `PauseRequested` and unexpected `BaseException` unwinds attempt exact
+owned-temp cleanup but preserve the original control or exception and emit no
+terminal item from executor. A cleanup failure on those paths may leave the
+exact-name temp for fresh-run recovery; these unwind semantics are outside the
+terminal settlement reducer rather than being converted into an item result.
 
 The same durable-state rule applies when a confirmed publish is followed by a
 non-cancellation failure such as metadata repair exhaustion. The item remains
@@ -390,6 +395,22 @@ through the executor split, typed journal, reducer, verifier split, and final
 test consolidation. They are intentionally not temporary checkpoint artifacts:
 the retained baseline answers whether a later settlement regression came from
 the refactor or already existed in the corrected monolith.
+
+The retained baseline is `tools/executor_settlement_baseline.json`, currently
+with oracle `format_version: 1`. The resume gate is exactly:
+
+```powershell
+python -m tools.executor_settlement_audit check --repeat 3
+```
+
+For the current 30-scenario manifest, success ends with
+`settlement check passed: 30 scenarios x 3 runs`. The command is read-only: it
+requires all independent policy expectations, three byte-identical normalized
+captures, and exact manifest/trace parity with the committed baseline. Package
+split, journal, reducer, verifier-split, and immediate stabilization commits
+must not edit or regenerate that baseline. Only a separately reviewed and
+documented settlement-policy fix may replace it after its focused regression
+lands and the three-run gate is restarted.
 
 Published evidence is executor continuation state, not a second inventory
 selection. It round-trips exact post-publish stat/content/provenance plus the

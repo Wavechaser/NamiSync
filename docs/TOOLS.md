@@ -30,6 +30,74 @@ The package may import `core`, `modules`, and the pure
 `workflows.selection` helper. It does not import `db`, `dispatcher`,
 `interfaces`, or workflow runtime composition.
 
+## Executor settlement oracle
+
+`tools/executor_settlement_audit.py` is a retained maintenance gate for the
+executor settlement refactor. Unlike the measurement rig, it builds exact
+small plans through core contracts, injects a synchronous copy backend and
+public filesystem/recorder seams, and deliberately exercises success, failure,
+retry, cancellation, cleanup, and recording outcomes. It imports the executor
+only through the public `namisync.modules.executor` facade and does not import
+planner, scanner, preflight, workflow composition, tests, or executor-private
+symbols.
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit list
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit run failure.byte-published
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit oracle --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit snapshot --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit diff --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit check --repeat 3
+```
+
+The portable resume gate is exactly:
+
+```powershell
+python -m tools.executor_settlement_audit check --repeat 3
+```
+
+For the current 30-scenario manifest, a successful gate ends with
+`settlement check passed: 30 scenarios x 3 runs`. `check` performs three fresh
+complete captures, requires every in-code policy row to pass, requires the
+three normalized traces to be byte-identical, and then compares that trace and
+manifest with the committed baseline. It is read-only and never refreshes the
+baseline.
+
+The in-code oracle is independent of
+`tools/executor_settlement_baseline.json`. Each manifest row declares its
+expected terminal outcome, reason, recording state, durable-state detail,
+recorder behavior, retry/control behavior, cleanup, evidence, and final tree.
+The JSON baseline separately retains the complete normalized collaborator and
+filesystem-boundary trace from the corrected monolith. `check` requires both
+the policy oracle and the historical trace to match; either can fail while the
+other passes.
+
+`snapshot` requires at least three byte-identical complete runs, refuses every
+oracle mismatch, writes atomically, and will not replace an existing baseline
+unless `--replace` is explicit. `--baseline PATH` redirects snapshot/diff/check
+for tool testing. A snapshot is never an "accept current behavior" mechanism:
+when the oracle exposes a policy defect, fix and document that defect in its
+own commit, add its focused regression, restart the three-run gate, and only
+then replace the corrected baseline in a separate checkpoint. Executor split,
+journal, reducer, verifier, and test-consolidation commits run `check`; they do
+not refresh the snapshot to make a difference pass.
+
+Absolute roots, volatile timestamps, native identities, handles, and wall time
+are removed from retained output. Symbolic paths preserve source/target/temp/
+trash relationships, identity equality is retained without raw inode values,
+and reliable event, recorder, retry, checkpoint, cleanup, and public
+filesystem-call order remains exact. The manifest has no skip, expected-fail,
+or unclassified state. A missing committed baseline is a hard `check` failure,
+not permission to proceed. Keep the oracle and corrected baseline through final
+refactor acceptance and at least the following settlement-hardening window.
+
+The retained baseline currently uses `format_version: 1`. Executor package
+splitting, effect-journal/reducer work, verifier splitting, and their immediate
+stabilization commits must not edit or regenerate it. Only a separately
+reviewed policy correction may produce a replacement, after its focused
+regression and independent oracle expectations land and the three-run gate is
+restarted.
+
 ## Workspace safety
 
 Executor targets and generated corpora are tool-owned workspaces. A claim uses
