@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from xxhash import xxh3_128
 
-import namisync.modules.executor as executor_module
+import namisync.modules.executor.native as executor_module
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,

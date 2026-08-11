@@ -10,7 +10,7 @@ from time import monotonic, sleep
 import pytest
 from xxhash import xxh3_128
 
-import namisync.modules.executor as executor_module
+import namisync.modules.executor.native as executor_module
 import namisync.workflows.inventory as inventory_workflow
 from namisync.core.evidence import (
     Attestation,

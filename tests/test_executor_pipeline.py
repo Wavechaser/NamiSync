@@ -18,7 +18,7 @@ from xxhash import xxh3_128
 from namisync.core.evidence import HasherContractError
 from namisync.core.execution import CopyDigest
 from namisync.core.session import Canceled, PauseRequested
-import namisync.modules.executor as executor_module
+import namisync.modules.executor.pipeline as executor_module
 from namisync.modules.executor import NativeCopyBackend
 
 

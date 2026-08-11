@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-import namisync.modules.executor as executor_module
+import namisync.modules.executor.native as executor_module
 from namisync.core.execution import RunId
 from namisync.core.planning import OpId
 from namisync.modules.executor import NativeFileSystem

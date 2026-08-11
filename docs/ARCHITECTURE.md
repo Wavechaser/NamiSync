@@ -83,10 +83,10 @@ verifier/native.py    -> core + stdlib
 ```
 
 `native.py` and `pipeline.py` are executor leaves: neither imports the other or
-`runtime.py`. Verifier `native.py` likewise never imports `engine.py`. These
-package shapes are settled target boundaries; the behavior-preserving file
-migration may land in later checkpoints without changing the public component
-imports.
+`runtime.py`. Verifier `native.py` likewise never imports `engine.py`. The
+executor package now implements this boundary behind its unchanged public
+facade; the verifier package remains the settled target for its later
+behavior-preserving migration.
 
 ---
 
@@ -1074,22 +1074,23 @@ operation's direct preconditions against the live filesystem — preflight is
 one stage of TOCTOU prevention, never the last, because the world can change
 between preflight and touch. Records only through `recorder`.
 
-**Settled component boundary (staged migration).** `executor/__init__.py`
+**Implemented component boundary.** `executor/__init__.py`
 preserves the existing public imports. `runtime.py` remains the operations
 engine: dispatch, all operations, executor-specific path guards, retries,
-continuations and the typed effect journal, cancellation, recording,
-settlement, progress, and outcomes. `native.py` owns Windows filesystem
-primitives, metadata, handles, publication, trash, and adaptation of core root
+continuations, cancellation, recording, settlement, progress, and outcomes.
+`native.py` owns Windows filesystem primitives, metadata, handles, publication,
+trash, and adaptation of core root
 authority to executor errors. `pipeline.py` owns only the bounded one-file
 read/hash/write flow, queues, backpressure, teardown, metrics, and `CopyDigest`
 production; it never publishes, records, retries, or interprets an operation.
 Final-touch timing remains in runtime even when the observation mechanics are
 shared through core.
 
-The operation-keyed effect journal admits byte/publication state and non-byte
-mutation state simultaneously; neither may hide the other. Typed mutation
-variants cover readonly clearing, rename/recase, trash rename, removal, and
-directory creation. One settlement reducer consumes the journal for success,
+**Next settlement boundary.** The operation-keyed effect journal will admit
+byte/publication state and non-byte mutation state simultaneously; neither may
+hide the other. Typed mutation variants cover readonly clearing, rename/recase,
+trash rename, removal, and
+directory creation. One settlement reducer will consume the journal for success,
 ordinary failure, retry/pause, and cancellation while preserving existing
 reason precedence, detail vocabulary, recording degradation, cleanup timing,
 and recorder ordering. The package migration and journal reduction are

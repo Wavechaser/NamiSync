@@ -409,12 +409,13 @@ def test_xv_11_committed_plan_executes_every_original_semantic_default(
 
 def test_xv_11_execution_and_preflight_have_no_live_settings_dependency() -> None:
     root = Path(__file__).parents[1] / "namisync"
-    for relative in (
-        Path("modules") / "executor.py",
-        Path("modules") / "preflight.py",
-        Path("workflows") / "sync.py",
-    ):
-        source = (root / relative).read_text(encoding="utf-8")
+    executor_sources = tuple((root / "modules" / "executor").glob("*.py"))
+    sources = executor_sources + (
+        root / "modules" / "preflight.py",
+        root / "workflows" / "sync.py",
+    )
+    for source_path in sources:
+        source = source_path.read_text(encoding="utf-8")
         assert "namisync.db.settings" not in source
         assert "SemanticSettings" not in source
         assert "SemanticSettingsStore" not in source

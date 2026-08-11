@@ -21,6 +21,21 @@ It does not scan, plan, choose conflict resolutions, infer new destinations,
 write SQL, own volume locks, prompt a human, or treat a policy callback as an
 alternate execution engine.
 
+## Component Package
+
+`namisync.modules.executor` is a stable public facade over three ownership
+files. `runtime.py` owns operation dispatch and policy, final-touch guards,
+retries, continuations, cancellation, recording, settlement, progress, and
+outcomes. `native.py` owns Windows filesystem primitives, metadata, handles,
+publication, trash, and root-authority adaptation. `pipeline.py` owns the
+bounded one-file read/hash/write flow, queues, backpressure, teardown, metrics,
+and `CopyDigest` production.
+
+Runtime may import both leaves. Native and pipeline are mutually independent,
+never import runtime, and do not import sibling domain components. Code outside
+the executor imports this package facade; tests that patch an internal detail
+patch the file that owns it.
+
 ## Entry Contract
 
 ```python
@@ -579,13 +594,14 @@ attestation guard, and composite move-update gap.
 
 `namisync/core/execution.py` owns `ExecutionSet`, validated run identifiers,
 typed executor reasons and decisions, and the filesystem/copy/recorder
-protocols. `namisync/modules/executor.py` supplies `NativeFileSystem`,
-`NativeCopyBackend`, `BoundedFailurePolicy`, `ExecutorPolicies`, and `execute`.
-The module consumes a required parameterless hasher factory and has no
-third-party or sibling-module import; workflow composition owns the sole
-concrete `xxhash.xxh3_128` object and supplies the reviewed, freshly
-preflighted set. Dispatcher/session owns custody and terminal aggregation, and
-the run-bound recorder owns durable ledger interpretation.
+protocols. The `namisync.modules.executor` facade supplies `NativeFileSystem`,
+`NativeCopyBackend`, `BoundedFailurePolicy`, `ExecutorPolicies`, and `execute`
+from the owning package files described above. Pipeline consumes a required
+parameterless hasher factory and has no third-party or sibling-module import;
+workflow composition owns the sole concrete `xxhash.xxh3_128` object and
+supplies the reviewed, freshly preflighted set. Dispatcher/session owns custody
+and terminal aggregation, and the run-bound recorder owns durable ledger
+interpretation.
 
 The Stage 2 suite re-proves all nine operation kinds through the new path and
 pins every gate in `HASH_REFACTOR.md` §4.5: stage overlap and FIFO/byte bounds;

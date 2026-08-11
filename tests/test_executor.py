@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import replace
 from datetime import UTC, datetime
 import inspect
@@ -18,11 +19,15 @@ from typing import Callable
 import pytest
 from xxhash import xxh3_128
 
-import namisync.modules.executor as executor_module
+import namisync.modules.executor as executor_facade
+import namisync.modules.executor.native as executor_module
+import namisync.modules.executor.pipeline as executor_pipeline
+import namisync.modules.executor.runtime as executor_runtime
 from namisync.core.evidence import Outcome, Provenance, RecordingStatus
 from namisync.core.events import ItemOutcome, Progress, Terminal, result_item_to_dict
 from namisync.core.execution import (
     CopyDigest,
+    ExecutionReason,
     ExecutionSet,
     RecordedCopyIdentity,
     Retry,
@@ -60,10 +65,12 @@ from namisync.modules.executor import (
     NativeFileSystem,
     SystemClock,
     UnsafeExecutionPath,
+    execute,
+)
+from namisync.modules.executor.pipeline import (
     _PREALLOCATION_THRESHOLD,
     _allocation_size,
     _copy_chunk_size,
-    execute,
 )
 from namisync.modules.scanner import scan
 
@@ -2503,13 +2510,13 @@ def test_copied_backup_stays_serial_hashless_fixed_chunk_and_unallocated(
     )
     backend = CountingCopyBackend()
     worker_names: list[str | None] = []
-    real_thread = executor_module.Thread
+    real_thread = executor_pipeline.Thread
 
     def recording_thread(*args, **kwargs):
         worker_names.append(kwargs.get("name"))
         return real_thread(*args, **kwargs)
 
-    monkeypatch.setattr(executor_module, "Thread", recording_thread)
+    monkeypatch.setattr(executor_pipeline, "Thread", recording_thread)
 
     result, _, _ = _run(
         _xset(
@@ -2655,7 +2662,7 @@ def test_copied_backup_does_not_adopt_target_drift_after_reviewed_guard(
         target_expected=target_stat,
         intended=source_stat,
     )
-    real_require_stat_path = executor_module._require_stat_path
+    real_require_stat_path = executor_runtime._require_stat_path
     mutated = False
 
     def mutate_after_reviewed_guard(filesystem, path: Path) -> FileStat:
@@ -2666,7 +2673,7 @@ def test_copied_backup_does_not_adopt_target_drift_after_reviewed_guard(
         return real_require_stat_path(filesystem, path)
 
     monkeypatch.setattr(
-        executor_module,
+        executor_runtime,
         "_require_stat_path",
         mutate_after_reviewed_guard,
     )
@@ -3215,7 +3222,7 @@ def test_update_hardlink_backup_metadata_completes_before_attestation(
         fs.order.append("attestation")
         raise RuntimeError("injected attestation failure")
 
-    monkeypatch.setattr(executor_module, "_attestation", fail_attestation)
+    monkeypatch.setattr(executor_runtime, "_attestation", fail_attestation)
     result, _, recorder = _run(
         _xset(_plan(source, target, (operation,), hardlinks=True)),
         fs=fs,
@@ -3560,11 +3567,11 @@ def test_executor_failure_detail_does_not_expose_native_prefix(
     logical = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90) / "file.bin"
     assert len(str(logical)) > 260
     native = executor_module._win32_path(logical)
-    reason, detail = executor_module._failure_reason_and_message(
+    reason, detail = executor_runtime._failure_reason_and_message(
         PermissionError(13, "denied", native)
     )
 
-    assert reason is executor_module.ExecutionReason.IO_ERROR
+    assert reason is ExecutionReason.IO_ERROR
     assert "file.bin" in detail
     assert "\\\\?\\" not in detail
 
@@ -7566,7 +7573,7 @@ def test_a15_move_update_stage_faults_never_lose_both_versions_or_false_record(
     )
     if stage == "attestation":
         monkeypatch.setattr(
-            executor_module,
+            executor_runtime,
             "_attestation",
             lambda *_args, **_kwargs: fault("attestation"),
         )
@@ -9815,11 +9822,146 @@ def test_failed_copy_without_transferred_bytes_keeps_byte_progress_at_zero(
 
 
 def test_executor_imports_core_but_no_sibling_module() -> None:
-    source = Path(__file__).parents[1] / "namisync" / "modules" / "executor.py"
-    text = source.read_text(encoding="utf-8")
-    assert "namisync.modules." not in text
-    assert "namisync.core" in text
+    package = Path(__file__).parents[1] / "namisync" / "modules" / "executor"
+    sources = {
+        path.name: path.read_text(encoding="utf-8")
+        for path in package.glob("*.py")
+    }
+    assert set(sources) == {
+        "__init__.py",
+        "native.py",
+        "pipeline.py",
+        "runtime.py",
+    }
+
+    forbidden_components = (
+        "namisync.modules.planner",
+        "namisync.modules.preflight",
+        "namisync.modules.scanner",
+        "namisync.modules.verifier",
+    )
+    assert all(
+        component not in text
+        for text in sources.values()
+        for component in forbidden_components
+    )
+
+    def relative_imports(name: str) -> set[str]:
+        tree = ast.parse(sources[name])
+        return {
+            node.module or ""
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.level
+        }
+
+    def project_imports(name: str) -> set[str]:
+        tree = ast.parse(sources[name])
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and not node.level and node.module:
+                if node.module.startswith("namisync."):
+                    imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported.update(
+                    alias.name
+                    for alias in node.names
+                    if alias.name.startswith("namisync.")
+                )
+        return imported
+
+    assert relative_imports("__init__.py") == {"native", "pipeline", "runtime"}
+    assert relative_imports("runtime.py") == {"native", "pipeline"}
+    assert relative_imports("native.py") == set()
+    assert relative_imports("pipeline.py") == set()
+    for name in ("native.py", "pipeline.py", "runtime.py"):
+        assert project_imports(name)
+        assert all(
+            module.startswith("namisync.core.")
+            for module in project_imports(name)
+        )
+
     assert "WinDLL" not in inspect.getsource(NativeFileSystem)
+
+
+def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None:
+    assert executor_facade.__all__ == [
+        "BoundedFailurePolicy",
+        "CopyPipelineMetrics",
+        "ExecutorPolicies",
+        "NativeCopyBackend",
+        "NativeFileSystem",
+        "OperationFailure",
+        "SystemClock",
+        "UnsafeExecutionPath",
+        "execute",
+    ]
+    assert executor_facade.NativeFileSystem is executor_module.NativeFileSystem
+    assert (
+        executor_facade.UnsafeExecutionPath
+        is executor_module.UnsafeExecutionPath
+    )
+    assert executor_facade.NativeCopyBackend is executor_pipeline.NativeCopyBackend
+    assert (
+        executor_facade.CopyPipelineMetrics
+        is executor_pipeline.CopyPipelineMetrics
+    )
+    assert (
+        executor_facade.BoundedFailurePolicy
+        is executor_runtime.BoundedFailurePolicy
+    )
+    assert executor_facade.ExecutorPolicies is executor_runtime.ExecutorPolicies
+    assert executor_facade.OperationFailure is executor_runtime.OperationFailure
+    assert executor_facade.SystemClock is executor_runtime.SystemClock
+    assert executor_facade.execute is executor_runtime.execute
+    assert issubclass(executor_facade.UnsafeExecutionPath, OSError)
+
+    signatures = {
+        name: str(inspect.signature(getattr(executor_facade, name)))
+        for name in (
+            "execute",
+            "BoundedFailurePolicy",
+            "ExecutorPolicies",
+            "OperationFailure",
+            "SystemClock",
+            "NativeFileSystem",
+            "NativeCopyBackend",
+            "CopyPipelineMetrics",
+        )
+    }
+    assert signatures == {
+        "execute": (
+            "(xset: 'ExecutionSet', ctx: 'RunContext', recorder: 'Recorder', "
+            "policies: 'ExecutorPolicies', fs: 'ExecutorFileSystem') -> "
+            "'OperationResult'"
+        ),
+        "BoundedFailurePolicy": (
+            "(*, retries: 'int' = 3, initial_delay: 'float' = 0.05) -> "
+            "'None'"
+        ),
+        "ExecutorPolicies": (
+            "(copy_backend: 'CopyBackend', failure: 'FailurePolicy' = "
+            "<factory>, clock: 'Clock' = <factory>, max_chunk_size: 'int' = "
+            "4194304, max_retries: 'int' = 3, progress_interval_seconds: "
+            "'float' = 0.1, monotonic: 'Callable[[], float]' = <built-in "
+            "function monotonic>, sleep: 'Callable[[float], None]' = "
+            "<built-in function sleep>) -> None"
+        ),
+        "OperationFailure": (
+            "(reason: 'ExecutionReason', detail: 'str', *, cause: "
+            "'Exception | None' = None) -> 'None'"
+        ),
+        "SystemClock": "()",
+        "NativeFileSystem": "()",
+        "NativeCopyBackend": (
+            "(*, hasher_factory: 'HasherFactory', collect_metrics: 'bool' = "
+            "False) -> 'None'"
+        ),
+        "CopyPipelineMetrics": (
+            "(reader_blocked_seconds: 'float' = 0.0, writer_starved_seconds: "
+            "'float' = 0.0, payload_high_water: 'int' = 0, reserved_bytes: "
+            "'int' = 0) -> None"
+        ),
+    }
 
 
 def test_run_id_rejects_user_controlled_temp_name_material() -> None:

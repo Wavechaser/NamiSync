@@ -68,6 +68,23 @@ modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "Executor native and pipeline leaves are independent"
+type = "independence"
+modules = [
+    "namisync.modules.executor.native",
+    "namisync.modules.executor.pipeline",
+]
+
+[[tool.importlinter.contracts]]
+name = "Executor leaves do not import runtime"
+type = "forbidden"
+source_modules = [
+    "namisync.modules.executor.native",
+    "namisync.modules.executor.pipeline",
+]
+forbidden_modules = ["namisync.modules.executor.runtime"]
+
+[[tool.importlinter.contracts]]
 name = "Database imports only core"
 type = "forbidden"
 source_modules = ["namisync.db"]
