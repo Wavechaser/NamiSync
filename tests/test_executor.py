@@ -10022,6 +10022,186 @@ def test_failed_copy_without_transferred_bytes_keeps_byte_progress_at_zero(
     assert not list(target.glob("*.synctmp-*"))
 
 
+def _journal_copy_effect(tmp_path: Path) -> executor_runtime._CopyContinuation:
+    root = tmp_path / "journal"
+    root.mkdir()
+    source = root / "source.bin"
+    source.write_bytes(b"journal")
+    stat = NativeFileSystem().stat(root, "source.bin")
+    assert stat is not None
+    prepared = executor_runtime._PreparedCopy(
+        source=source,
+        target=root / "target.bin",
+        temp=root / "target.bin.synctmp-owned",
+        digest=CopyDigest(b"\x00" * 16, len(b"journal")),
+        intended=stat,
+        finalized=stat,
+    )
+    return executor_runtime._CopyContinuation(prepared, stat)
+
+
+def test_effect_journal_retains_independent_channels_until_settlement(
+    tmp_path: Path,
+) -> None:
+    op_id = OpId("1" * 32)
+    journal = executor_runtime._EffectJournal()
+    byte = _journal_copy_effect(tmp_path)
+    mutation = executor_runtime._MutationAttempt(
+        OperationKind.UPDATE,
+        byte.prepared.target,
+        byte.prepared_stat,
+    )
+    retry_error = PermissionError("retry")
+
+    journal.claim_temporary_path(op_id, byte.prepared.temp)
+    journal.install_byte(op_id, byte)
+    assert journal.retain_mutation(op_id, mutation) is mutation
+    journal.remember_retry_error(op_id, retry_error)
+
+    snapshot = journal.snapshot(op_id)
+    assert snapshot == executor_runtime._EffectSnapshot(
+        byte=byte,
+        mutation=mutation,
+        retry_error=retry_error,
+        temporary_path=byte.prepared.temp,
+    )
+    assert journal.has_retained_effect(op_id)
+    with pytest.raises(RuntimeError, match="still owns"):
+        journal.settle(op_id)
+    with pytest.raises(RuntimeError, match="not settled"):
+        journal.retire(op_id)
+
+    assert journal.release_temporary_path(
+        op_id,
+        expected=byte.prepared.temp,
+    ) == byte.prepared.temp
+    journal.settle(op_id)
+    journal.retire(op_id)
+    assert journal.snapshot(op_id) == executor_runtime._EffectSnapshot()
+
+
+def test_effect_journal_retry_error_and_temp_are_not_retained_effects(
+    tmp_path: Path,
+) -> None:
+    op_id = OpId("2" * 32)
+    other_op_id = OpId("3" * 32)
+    temp = tmp_path / "owned.temp"
+    journal = executor_runtime._EffectJournal()
+    retry_error = PermissionError("retry")
+
+    journal.remember_retry_error(op_id, retry_error)
+    journal.claim_temporary_path(op_id, temp)
+
+    assert not journal.has_retained_effect(op_id)
+    assert journal.snapshot(op_id).retry_error is retry_error
+    with pytest.raises(RuntimeError, match="already owns"):
+        journal.claim_temporary_path(other_op_id, tmp_path / "other.temp")
+    with pytest.raises(RuntimeError, match="ownership changed"):
+        journal.release_temporary_path(op_id, expected=tmp_path / "wrong.temp")
+    assert journal.release_temporary_path(op_id, expected=temp) == temp
+    journal.settle(op_id)
+    journal.retire(op_id)
+
+
+def test_effect_journal_reuses_only_the_same_mutation_attempt(tmp_path: Path) -> None:
+    op_id = OpId("4" * 32)
+    primary = tmp_path / "primary"
+    journal = executor_runtime._EffectJournal()
+    retained = executor_runtime._MutationAttempt(
+        OperationKind.MOVE,
+        primary,
+        None,
+        secondary=tmp_path / "secondary",
+    )
+    assert journal.retain_mutation(op_id, retained) is retained
+    retained.committed = True
+
+    equivalent = executor_runtime._MutationAttempt(
+        OperationKind.MOVE,
+        primary,
+        None,
+        secondary=tmp_path / "secondary",
+    )
+    assert journal.retain_mutation(op_id, equivalent) is retained
+    with pytest.raises(RuntimeError, match="changed during retry"):
+        journal.retain_mutation(
+            op_id,
+            executor_runtime._MutationAttempt(
+                OperationKind.MOVE,
+                primary,
+                None,
+                secondary=tmp_path / "different",
+            ),
+        )
+    journal.settle(op_id)
+    journal.retire(op_id)
+
+
+def test_effect_journal_retires_after_terminal_item_and_progress(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "file.bin").write_bytes(b"journal-order")
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    timeline: list[str] = []
+    retired_journals: list[executor_runtime._EffectJournal] = []
+    original_settle = executor_runtime._EffectJournal.settle
+    original_retire = executor_runtime._EffectJournal.retire
+
+    def tracked_settle(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+    ) -> None:
+        entry = journal._entries[op_id]
+        assert not entry.settled
+        timeline.append("settle")
+        original_settle(journal, op_id)
+
+    def tracked_retire(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+    ) -> None:
+        assert journal._entries[op_id].settled
+        timeline.append("retire")
+        retired_journals.append(journal)
+        original_retire(journal, op_id)
+
+    monkeypatch.setattr(executor_runtime._EffectJournal, "settle", tracked_settle)
+    monkeypatch.setattr(executor_runtime._EffectJournal, "retire", tracked_retire)
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            timeline.append("item")
+        elif isinstance(body, Progress) and body.items_done == 1:
+            timeline.append("progress")
+
+    result = execute(
+        xset,
+        RunContext(emit, lambda: None),
+        FakeRecorder(),
+        _policies(),
+        fs,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert timeline[:4] == ["item", "progress", "settle", "retire"]
+    assert len(retired_journals) == 1
+    assert operation.op_id not in retired_journals[0]._entries
+
+
 def test_executor_imports_core_but_no_sibling_module() -> None:
     package = Path(__file__).parents[1] / "namisync" / "modules" / "executor"
     sources = {

@@ -216,19 +216,150 @@ class _MutationAttempt:
     committed: bool = False
 
 
+_ByteEffect = _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
+
+
+@dataclass(frozen=True, slots=True)
+class _EffectSnapshot:
+    byte: _ByteEffect | None = None
+    mutation: _MutationAttempt | None = None
+    retry_error: Exception | None = None
+    temporary_path: Path | None = None
+
+
+@dataclass(slots=True)
+class _EffectJournalEntry:
+    byte: _ByteEffect | None = None
+    mutation: _MutationAttempt | None = None
+    retry_error: Exception | None = None
+    temporary_path: Path | None = None
+    settled: bool = False
+
+
+@dataclass(slots=True)
+class _EffectJournal:
+    _entries: dict[OpId, _EffectJournalEntry] = field(default_factory=dict)
+
+    def _active_entry(self, op_id: OpId) -> _EffectJournalEntry:
+        entry = self._entries.setdefault(op_id, _EffectJournalEntry())
+        if entry.settled:
+            raise RuntimeError("executor effect journal entry is already settled")
+        return entry
+
+    def retained_byte(self, op_id: OpId) -> _ByteEffect | None:
+        entry = self._entries.get(op_id)
+        return None if entry is None else entry.byte
+
+    def install_byte(self, op_id: OpId, effect: _ByteEffect) -> None:
+        if not isinstance(
+            effect,
+            (_CopyContinuation, _UpdateContinuation, _MoveUpdateContinuation),
+        ):
+            raise TypeError("executor byte effect has an unsupported type")
+        entry = self._active_entry(op_id)
+        if entry.byte is not None:
+            raise RuntimeError("executor byte effect is already installed")
+        entry.byte = effect
+
+    def retain_mutation(
+        self,
+        op_id: OpId,
+        attempt: _MutationAttempt,
+    ) -> _MutationAttempt:
+        if not isinstance(attempt, _MutationAttempt):
+            raise TypeError("executor mutation effect has an unsupported type")
+        entry = self._active_entry(op_id)
+        existing = entry.mutation
+        if existing is None:
+            entry.mutation = attempt
+            return attempt
+        if (
+            existing.kind is not attempt.kind
+            or existing.primary != attempt.primary
+            or existing.primary_before != attempt.primary_before
+            or existing.secondary != attempt.secondary
+            or existing.destination_relative != attempt.destination_relative
+            or existing.trash_source_relative != attempt.trash_source_relative
+        ):
+            raise RuntimeError("executor mutation attempt changed during retry")
+        return existing
+
+    def remember_retry_error(self, op_id: OpId, error: Exception) -> None:
+        if not isinstance(error, Exception):
+            raise TypeError("executor retry error must be an exception")
+        self._active_entry(op_id).retry_error = error
+
+    def has_retained_effect(self, op_id: OpId) -> bool:
+        entry = self._entries.get(op_id)
+        return entry is not None and (
+            entry.byte is not None or entry.mutation is not None
+        )
+
+    def claim_temporary_path(self, op_id: OpId, path: Path) -> None:
+        if not isinstance(path, Path):
+            raise TypeError("executor temporary path must be a Path")
+        for owner, entry in self._entries.items():
+            if entry.temporary_path is not None:
+                raise RuntimeError(
+                    "executor already owns a temporary path "
+                    f"for operation {owner}"
+                )
+        self._active_entry(op_id).temporary_path = path
+
+    def release_temporary_path(
+        self,
+        op_id: OpId,
+        *,
+        expected: Path | None = None,
+    ) -> Path | None:
+        entry = self._entries.get(op_id)
+        path = None if entry is None else entry.temporary_path
+        if expected is not None and path != expected:
+            raise RuntimeError("executor temporary path ownership changed")
+        if entry is not None:
+            if entry.settled:
+                raise RuntimeError("executor effect journal entry is already settled")
+            entry.temporary_path = None
+        return path
+
+    def snapshot(self, op_id: OpId) -> _EffectSnapshot:
+        entry = self._entries.get(op_id)
+        if entry is None:
+            return _EffectSnapshot()
+        return _EffectSnapshot(
+            byte=entry.byte,
+            mutation=entry.mutation,
+            retry_error=entry.retry_error,
+            temporary_path=entry.temporary_path,
+        )
+
+    def settle(self, op_id: OpId) -> None:
+        entry = self._entries.get(op_id)
+        if entry is None:
+            return
+        if entry.temporary_path is not None:
+            raise RuntimeError(
+                "executor effect journal still owns a terminal temporary path"
+            )
+        entry.settled = True
+
+    def retire(self, op_id: OpId) -> None:
+        entry = self._entries.get(op_id)
+        if entry is None:
+            return
+        if not entry.settled:
+            raise RuntimeError("executor effect journal entry is not settled")
+        del self._entries[op_id]
+
+
 @dataclass(slots=True)
 class _ExecutionState:
     execution_set: ExecutionSet
     outcomes: dict[OpId, ItemOutcome]
-    inflight_temp: Path | None = None
     pending_directories: list[PlanOperation] = field(default_factory=list)
     ready_directories: set[OpId] = field(default_factory=set)
     restore_directories: set[OpId] = field(default_factory=set)
-    retry_continuations: dict[
-        OpId, _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
-    ] = field(default_factory=dict)
-    retry_errors: dict[OpId, Exception] = field(default_factory=dict)
-    mutation_attempts: dict[OpId, _MutationAttempt] = field(default_factory=dict)
+    effects: _EffectJournal = field(default_factory=_EffectJournal)
     pause_latched: bool = False
     filesystem_failed: bool = False
 
@@ -417,8 +548,8 @@ def execute(
                         error,
                         fs,
                         state,
+                        state.effects.snapshot(operation.op_id),
                     )
-                    state.mutation_attempts.pop(operation.op_id, None)
                     if mutation_failure is None:
                         _settle_failure(xset, state, progress, ctx, operation, error)
                     else:
@@ -456,13 +587,14 @@ def execute(
                         isinstance(decision, Retry)
                         and attempt <= policies.max_retries
                     ):
-                        state.retry_errors[operation.op_id] = error
+                        state.effects.remember_retry_error(operation.op_id, error)
                         retry_cleanup_error: Exception | None = None
-                        if (
-                            operation.op_id not in state.retry_continuations
-                            and operation.op_id not in state.mutation_attempts
-                        ):
-                            retry_cleanup_error = _cleanup_inflight(state, fs)
+                        if not state.effects.has_retained_effect(operation.op_id):
+                            retry_cleanup_error = _cleanup_inflight(
+                                state,
+                                fs,
+                                operation.op_id,
+                            )
                         if retry_cleanup_error is None:
                             _retry_checkpoint(ctx, state, operation.op_id)
                             policies.sleep(decision.after)
@@ -480,8 +612,13 @@ def execute(
                         fs,
                         target_root,
                         state,
+                        state.effects.snapshot(operation.op_id),
                     )
-                    cleanup_error = _cleanup_inflight(state, fs)
+                    cleanup_error = _cleanup_inflight(
+                        state,
+                        fs,
+                        operation.op_id,
+                    )
                     if cleanup_error is not None:
                         if durable_failure is None:
                             error = OperationFailure(
@@ -499,9 +636,6 @@ def execute(
                                 durable_failure,
                                 detail=detail,
                             )
-                    state.retry_continuations.pop(operation.op_id, None)
-                    state.retry_errors.pop(operation.op_id, None)
-                    state.mutation_attempts.pop(operation.op_id, None)
                     if durable_failure is None:
                         _settle_failure(
                             xset,
@@ -528,9 +662,6 @@ def execute(
                         raise PauseRequested()
                     break
                 else:
-                    state.retry_continuations.pop(operation.op_id, None)
-                    state.retry_errors.pop(operation.op_id, None)
-                    state.mutation_attempts.pop(operation.op_id, None)
                     _settle(xset, state, progress, ctx, operation, settled)
                     if state.pause_latched:
                         state.pause_latched = False
@@ -554,17 +685,19 @@ def execute(
                 fs,
                 target_root,
                 state,
+                state.effects.snapshot(current.op_id),
             )
         )
-        cleanup_error = _cleanup_inflight(state, fs)
+        cleanup_error = _cleanup_inflight(
+            state,
+            fs,
+            None if current is None else current.op_id,
+        )
         if durable_settlement is not None and current is not None:
             detail = dict(durable_settlement.detail)
             if cleanup_error is not None:
                 detail["cleanup_error"] = logical_error_text(cleanup_error)
                 cleanup_error = None
-            state.retry_continuations.pop(current.op_id, None)
-            state.retry_errors.pop(current.op_id, None)
-            state.mutation_attempts.pop(current.op_id, None)
             _settle(
                 xset,
                 state,
@@ -573,8 +706,6 @@ def execute(
                 current,
                 replace(durable_settlement, detail=detail),
             )
-        if current is not None:
-            state.mutation_attempts.pop(current.op_id, None)
         _finalize_directories(
             xset, ctx, recorder, fs, target_root, state, progress
         )
@@ -598,7 +729,11 @@ def execute(
             state.recording = RecordingStatus.DEGRADED
         raise
     except PauseRequested:
-        _cleanup_inflight(state, fs)
+        _cleanup_inflight(
+            state,
+            fs,
+            None if current is None else current.op_id,
+        )
         _finalize_directories(
             xset, ctx, recorder, fs, target_root, state, progress
         )
@@ -609,7 +744,11 @@ def execute(
             state.recording = RecordingStatus.DEGRADED
         raise
     except BaseException:
-        _cleanup_inflight(state, fs)
+        _cleanup_inflight(
+            state,
+            fs,
+            None if current is None else current.op_id,
+        )
         try:
             recorder.flush()
         except Exception:
@@ -775,7 +914,7 @@ def _prepare_copy(
             f"cannot recover owned temp: {temp}",
             cause=error,
         ) from error
-    state.inflight_temp = temp
+    state.effects.claim_temporary_path(operation.op_id, temp)
     try:
         reviewed_size = operation.source_expected.size
         chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
@@ -1144,7 +1283,7 @@ def _copy(
     state: _ExecutionState,
     progress: _ProgressTracker,
 ) -> _Settled:
-    existing = state.retry_continuations.get(operation.op_id)
+    existing = state.effects.retained_byte(operation.op_id)
     resumed_published = existing is not None and existing.published
     if existing is None:
         prepared = _prepare_copy(
@@ -1162,7 +1301,7 @@ def _copy(
             prepared=prepared,
             prepared_stat=_require_stat_path(fs, prepared.temp),
         )
-        state.retry_continuations[operation.op_id] = continuation
+        state.effects.install_byte(operation.op_id, continuation)
     elif isinstance(existing, _CopyContinuation):
         continuation = existing
         prepared = continuation.prepared
@@ -1189,7 +1328,10 @@ def _copy(
                     "copy temp disappeared without the prepared file being published",
                 )
             continuation.published = True
-            state.inflight_temp = None
+            state.effects.release_temporary_path(
+                operation.op_id,
+                expected=prepared.temp,
+            )
         else:
             _revalidate_source_root(fs, xset, source_root)
             _guard_present(
@@ -1217,7 +1359,10 @@ def _copy(
                     "destination appeared before conditional publish",
                     cause=error,
                 ) from error
-            state.inflight_temp = None
+            state.effects.release_temporary_path(
+                operation.op_id,
+                expected=prepared.temp,
+            )
             continuation.published = True
 
     return _complete_published_byte_operation(
@@ -1252,7 +1397,7 @@ def _update(
         raise OperationFailure(
             ExecutionReason.TARGET_MISSING, "update has no displaced target evidence"
         )
-    existing = state.retry_continuations.get(operation.op_id)
+    existing = state.effects.retained_byte(operation.op_id)
     resumed_published = existing is not None and existing.published
     if existing is None:
         prepared = _prepare_copy(
@@ -1380,7 +1525,7 @@ def _update(
             backup=backup,
             detail=detail,
         )
-        state.retry_continuations[operation.op_id] = continuation
+        state.effects.install_byte(operation.op_id, continuation)
         if backup_error is not None:
             _observe_update_backup_creation(
                 continuation,
@@ -1462,7 +1607,10 @@ def _update(
                     "update temp disappeared without the prepared file being published",
                 )
             continuation.published = True
-            state.inflight_temp = None
+            state.effects.release_temporary_path(
+                operation.op_id,
+                expected=prepared.temp,
+            )
         else:
             _revalidate_source_root(fs, xset, source_root)
             _guard_present(
@@ -1516,9 +1664,11 @@ def _update(
                 _revalidate_source_root(fs, xset, source_root)
                 _revalidate_target_root(fs, xset, target_root)
                 fs.replace(prepared.temp, prepared.target)
-                state.inflight_temp = None
+                state.effects.release_temporary_path(
+                    operation.op_id,
+                    expected=prepared.temp,
+                )
                 continuation.published = True
-                state.mutation_attempts.pop(operation.op_id, None)
             finally:
                 live = _stat_target_path(
                     fs,
@@ -1800,7 +1950,7 @@ def _move_update(
     state: _ExecutionState,
     progress: _ProgressTracker,
 ) -> _Settled:
-    existing = state.retry_continuations.get(operation.op_id)
+    existing = state.effects.retained_byte(operation.op_id)
     resumed_published = existing is not None and existing.published
     if existing is None:
         old_rel, old_expected = _prior_target(operation)
@@ -1829,7 +1979,7 @@ def _move_update(
             old_relative_path=old_rel,
             old_expected=old_expected,
         )
-        state.retry_continuations[operation.op_id] = continuation
+        state.effects.install_byte(operation.op_id, continuation)
     elif isinstance(existing, _MoveUpdateContinuation):
         continuation = existing
         prepared = continuation.prepared
@@ -1859,7 +2009,10 @@ def _move_update(
                     "move-update temp disappeared without the prepared file being published",
                 )
             continuation.published = True
-            state.inflight_temp = None
+            state.effects.release_temporary_path(
+                operation.op_id,
+                expected=prepared.temp,
+            )
         else:
             _revalidate_source_root(fs, xset, source_root)
             _guard_present(
@@ -1895,7 +2048,10 @@ def _move_update(
                     "move-update destination appeared before conditional publish",
                     cause=error,
                 ) from error
-            state.inflight_temp = None
+            state.effects.release_temporary_path(
+                operation.op_id,
+                expected=prepared.temp,
+            )
             continuation.published = True
 
     return _complete_published_byte_operation(
@@ -2213,7 +2369,6 @@ def _finalize_directories(
                     operation.op_id, actual
                 ),
             )
-            state.mutation_attempts.pop(operation.op_id, None)
             _settle(
                 xset,
                 state,
@@ -2230,8 +2385,8 @@ def _finalize_directories(
                 error,
                 fs,
                 state,
+                state.effects.snapshot(operation.op_id),
             )
-            state.mutation_attempts.pop(operation.op_id, None)
             if mutation_failure is None:
                 _settle_failure(xset, state, progress, ctx, operation, error)
             else:
@@ -2345,6 +2500,8 @@ def _settle(
     settled: _Settled,
 ) -> None:
     if operation.op_id in xset.status:
+        state.effects.settle(operation.op_id)
+        state.effects.retire(operation.op_id)
         return
     byte_producing = operation.kind in {
         OperationKind.COPY,
@@ -2378,6 +2535,8 @@ def _settle(
     state.outcomes[operation.op_id] = event
     ctx.emit(event)
     progress.settled(operation, settled.outcome)
+    state.effects.settle(operation.op_id)
+    state.effects.retire(operation.op_id)
 
 
 def _settle_failure(
@@ -2424,6 +2583,7 @@ def _failed_durable_settlement(
     fs: ExecutorFileSystem,
     target_root: Path,
     state: _ExecutionState,
+    effects: _EffectSnapshot,
 ) -> _Settled | None:
     published = _failed_after_publish_settlement(
         operation,
@@ -2431,6 +2591,7 @@ def _failed_durable_settlement(
         fs,
         target_root,
         state,
+        effects,
     )
     if (
         published is not None
@@ -2443,6 +2604,7 @@ def _failed_durable_settlement(
         error,
         fs,
         state,
+        effects,
     )
     if published is None:
         return mutation
@@ -2469,8 +2631,9 @@ def _failed_after_publish_settlement(
     fs: ExecutorFileSystem,
     target_root: Path,
     state: _ExecutionState,
+    effects: _EffectSnapshot,
 ) -> _Settled | None:
-    continuation = state.retry_continuations.get(operation.op_id)
+    continuation = effects.byte
     if continuation is None:
         return None
 
@@ -2586,28 +2749,17 @@ def _retain_mutation_attempt(
         if primary_before is None
         else _profiled_stat(primary_before, stable_identity)
     )
-    existing = state.mutation_attempts.get(operation.op_id)
-    if existing is None:
-        attempt = _MutationAttempt(
+    return state.effects.retain_mutation(
+        operation.op_id,
+        _MutationAttempt(
             kind=operation.kind,
             primary=primary,
             primary_before=normalized_before,
             secondary=secondary,
             destination_relative=destination_relative,
             trash_source_relative=trash_source_relative,
-        )
-        state.mutation_attempts[operation.op_id] = attempt
-        return attempt
-    if (
-        existing.kind is not operation.kind
-        or existing.primary != primary
-        or existing.primary_before != normalized_before
-        or existing.secondary != secondary
-        or existing.destination_relative != destination_relative
-        or existing.trash_source_relative != trash_source_relative
-    ):
-        raise RuntimeError("executor mutation attempt changed during retry")
-    return existing
+        ),
+    )
 
 
 def _failed_after_mutation_settlement(
@@ -2615,10 +2767,11 @@ def _failed_after_mutation_settlement(
     error: Exception,
     fs: ExecutorFileSystem,
     state: _ExecutionState,
+    effects: _EffectSnapshot,
     *,
     canceled: bool = False,
 ) -> _Settled | None:
-    attempt = state.mutation_attempts.get(operation.op_id)
+    attempt = effects.mutation
     if attempt is None:
         return None
 
@@ -2820,12 +2973,15 @@ def _describe_mutation_attempt(
 
 
 def _cleanup_inflight(
-    state: _ExecutionState, fs: ExecutorFileSystem
+    state: _ExecutionState,
+    fs: ExecutorFileSystem,
+    op_id: OpId | None,
 ) -> Exception | None:
-    if state.inflight_temp is None:
+    if op_id is None:
         return None
-    temp = state.inflight_temp
-    state.inflight_temp = None
+    temp = state.effects.release_temporary_path(op_id)
+    if temp is None:
+        return None
     try:
         _revalidate_target_root(
             fs,
@@ -2848,10 +3004,7 @@ def _retry_checkpoint(
     try:
         ctx.checkpoint()
     except PauseRequested:
-        if (
-            op_id not in state.retry_continuations
-            and op_id not in state.mutation_attempts
-        ):
+        if not state.effects.has_retained_effect(op_id):
             raise
         state.pause_latched = True
 
@@ -2870,12 +3023,14 @@ def _canceled_durable_settlement(
     fs: ExecutorFileSystem,
     target_root: Path,
     state: _ExecutionState,
+    effects: _EffectSnapshot,
 ) -> _Settled | None:
     byte_settlement = _canceled_byte_settlement(
         operation,
         fs,
         target_root,
         state,
+        effects,
     )
     if (
         byte_settlement is not None
@@ -2884,9 +3039,10 @@ def _canceled_durable_settlement(
         return byte_settlement
     mutation_settlement = _failed_after_mutation_settlement(
         operation,
-        state.retry_errors.get(operation.op_id) or Canceled(),
+        effects.retry_error or Canceled(),
         fs,
         state,
+        effects,
         canceled=True,
     )
     if mutation_settlement is None:
@@ -2909,13 +3065,14 @@ def _canceled_byte_settlement(
     fs: ExecutorFileSystem,
     target_root: Path,
     state: _ExecutionState,
+    effects: _EffectSnapshot,
 ) -> _Settled | None:
-    continuation = state.retry_continuations.get(operation.op_id)
+    continuation = effects.byte
     if continuation is None:
         return None
 
     detail: dict[str, object] = {}
-    retry_error = state.retry_errors.get(operation.op_id)
+    retry_error = effects.retry_error
     if retry_error is not None:
         detail["retry_error_type"] = type(retry_error).__name__
         detail["retry_error"] = logical_error_text(retry_error)

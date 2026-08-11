@@ -400,6 +400,16 @@ path, method, and observed state as primary detail while independently naming
 any readonly mutation. Confirmed publication remains authoritative and
 suppresses that subordinate marker even when the retained backup is reported.
 
+Runtime now stores those process-local facts in one private typed effect journal
+entry per operation. The entry independently holds a COPY/UPDATE/MOVE_UPDATE
+byte continuation, a non-byte mutation marker, the last retry error, and an
+optional owned temporary path. Failure and cancellation take one immutable
+snapshot before cleanup; owned-temp cleanup releases the claim before deletion,
+and terminal item settlement completes before the entry is retired. A retry
+error or temporary claim alone is not a durable effect and therefore does not
+latch pause. The observation and settlement classifiers remain unchanged at
+this checkpoint; central pure reduction is the next boundary.
+
 ## Settlement Stability Gate
 
 Settlement refactoring is blocked on an independent retained oracle, not only

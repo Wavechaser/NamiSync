@@ -1092,16 +1092,20 @@ production; it never publishes, records, retries, or interprets an operation.
 Final-touch timing remains in runtime even when the observation mechanics are
 shared through core.
 
-**Next settlement boundary.** The operation-keyed effect journal will admit
-byte/publication state and non-byte mutation state simultaneously; neither may
-hide the other. Typed mutation variants cover readonly clearing, rename/recase,
-trash rename, removal, and
-directory creation. One settlement reducer will consume the journal for success,
-ordinary failure, retry/pause, and cancellation while preserving existing
-reason precedence, detail vocabulary, recording degradation, cleanup timing,
-and recorder ordering. The package migration and journal reduction are
-contract-preserving maintenance: a discovered policy discrepancy is isolated
-as a separate bug fix rather than folded into the refactor.
+**Implemented effect journal and next reducer boundary.** Runtime retains one
+operation-keyed typed journal entry with independent byte/publication and
+non-byte mutation channels, the last retry error, and an optional owned
+temporary path. Typed mutation variants cover readonly clearing, rename/recase,
+trash rename, removal, and directory creation. Entries are snapshotted before
+cleanup and retired only after terminal item settlement; retry-error-only and
+temporary-only entries do not latch pause as durable effects. The existing
+settlement classifiers still consume those snapshots without policy changes.
+One pure settlement reducer remains next: it will preserve reason precedence,
+detail vocabulary, recording degradation, cleanup timing, and recorder
+ordering while replacing the operation-local composition branches. The journal
+migration and later reduction are contract-preserving maintenance: a discovered
+policy discrepancy is isolated as a separate bug fix rather than folded into
+the refactor.
 
 **Settlement stability barrier.** The monolithic corrected baseline is not
 declared stable merely because a differential run reproduces it. Before the
