@@ -4500,6 +4500,17 @@ def test_failed_pre_retry_cleanup_settles_before_control_checkpoint(
         intended=source_stat,
     )
     sleeps: list[float] = []
+    decisions: list[tuple[OpId, int, type[Exception]]] = []
+
+    class RetryPolicy:
+        def on_item_failed(
+            self,
+            failed_operation: PlanOperation,
+            error: Exception,
+            attempt: int,
+        ) -> Retry:
+            decisions.append((failed_operation.op_id, attempt, type(error)))
+            return Retry(0)
 
     def checkpoint() -> None:
         if fs.cleanup_attempts:
@@ -4508,7 +4519,11 @@ def test_failed_pre_retry_cleanup_settles_before_control_checkpoint(
     result, events, recorder = _run(
         _xset(_plan(source, target, (operation,))),
         fs=fs,
-        policies=_policies(max_chunk_size=4, sleep=sleeps.append),
+        policies=_policies(
+            failure=RetryPolicy(),
+            max_chunk_size=4,
+            sleep=sleeps.append,
+        ),
         checkpoint=checkpoint,
     )
 
@@ -4524,6 +4539,7 @@ def test_failed_pre_retry_cleanup_settles_before_control_checkpoint(
     assert "injected retry cleanup failure" in outcome.detail["message"]
     assert fs.create_attempts == 1
     assert fs.cleanup_attempts == 1
+    assert decisions == [(operation.op_id, 1, OSError)]
     assert sleeps == []
     assert owned_temp.exists()
     assert not (target / "file.bin").exists()
