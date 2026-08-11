@@ -1,65 +1,114 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-10
+Date: 2026-08-11
 Branch: `milestone1`
 
 ## Session Outcome
 
-Closed the four actionable LOW findings selected from `M1_AUDIT_DSV4.md` and
-made the agreed opportunistic defensive cleanups. No schema or workflow-payload
-version changed.
+Completed the maintenance-refactor work through the retained settlement-oracle
+checkpoint and stopped before the executor package split. The corrected
+monolithic executor source is commit `d99743a`; checkpoint 8 has not started.
+There is no `namisync/modules/executor/` package, typed effect journal, settlement
+reducer, or verifier package split yet.
 
-- Planner and executor now consume one core-owned Windows managed-attribute
-  mask: readonly, hidden, system, and not-content-indexed. Full raw attribute
-  evidence remains intact, while ARCHIVE/TEMPORARY-only drift converges to
-  `NOOP` instead of scheduling an update the executor cannot reproduce.
-- A copied UPDATE backup now binds the reviewed live-target snapshot to pre/post
-  stats from one open read handle and to the exact copied byte count. Detectable
-  growth, truncation, or same-size metadata drift publishes neither the backup
-  nor the update; prepublication cleanup retains the existing owned-path guards.
-- Serialized SQLite retry classifies only primary `BUSY`/`LOCKED` result codes,
-  including extended-code masking. Message text can no longer delay or
-  misclassify another operational error.
-- Core path validation now rejects `CONIN$`, `CONOUT$`, and the documented
-  superscript-one/two/three COM/LPT aliases with the same case/extension rules as
-  other DOS devices.
-- Workflow payload JSON rejects `NaN` and positive/negative `Infinity`; recorder
-  corruption/malformed-noop paths raise typed rollback-safe errors; one dead
-  private dispatcher timeout override was removed without changing hub policy.
-- Active documentation now distinguishes these fixes from intentional LOW
-  behavior and deferred work, including physical verifier progress, fail-closed
-  orphan cleanup, retained recovery backups, schema-v3 defensive constraints,
-  startup/reset boundaries, preflight observation cost, and Stage 6 task-owned
-  process-artifact release.
+The work landed as these reviewable checkpoints:
 
-## Verification
+- `f31c83a` establishes component-package/import rules before restructuring.
+- `fd79a83` fixes ordinary failure composition of unverified publication and
+  sibling readonly-mutation evidence.
+- `6c2d61f` adds the ephemeral core `RootAuthority` substrate without changing
+  plans, fingerprints, payloads, databases, or other persisted contracts.
+- `e5a214f`, `1d220c1`, and `7350f72` harden scoped scanner admission,
+  preflight reviewed authority, and verifier exact-root binding respectively.
+- `0299db3` and `5a15f61` consolidate scanner and workflow root admission while
+  preserving consumer-specific timing and outcome policy.
+- `28d27de` records the settlement stability trigger that blocks structural
+  executor work until a corrected retained oracle is committed and green.
+- `f890c06`, `0b94d42`, and `eb5b556` fix the three settlement defects exposed
+  before freezing behavior: post-cleanup re-observation, retained UPDATE backup
+  composition, and failed pre-retry temporary cleanup.
+- `d99743a` makes the retry-cleanup regression explicitly prove a Retry decision.
+- `07f08fe` commits the independent public-facade settlement oracle, its focused
+  tests and AST import-boundary gate, and the operating documentation.
+- `840c183` commits the corrected normalized trace baseline separately from its
+  oracle implementation.
 
-- Combined changed-area regression gate: `520 passed, 1 skipped`.
-- Complete pytest gate: `1354 passed, 2 skipped`.
-- Import linter: `8 kept, 0 broken` across 50 files and 189 dependencies.
-- Python package compilation and `git diff --check` passed.
-- Two independent code/test reviews and one documentation review found no
-  remaining implementation blocker after the reviewed target-snapshot repair,
-  extended `LOCKED` coverage, rollback assertions, and active-document fixes.
+The oracle is retained project infrastructure, not a temporary differential
+harness. It exercises 30 scenario IDs and 57 exact policy rows through public
+executor/core contracts. Independent expectations cover outcomes, details,
+recording, evidence, filesystem trees and metadata relations, recorder/flush
+payloads and order, retries, controls, cleanup, Stop sweeping, and repeated use
+of one `ExecutionSet`. The historical baseline separately retains the normalized
+collaborator/filesystem trace.
 
-## Immediate Next Context
+## Corrected Baseline Provenance
 
-- The LOW audit review is closed for M1. `docs/M1_AUDIT_DSV4.md` remains
-  unchanged as point-in-time evidence; deferred notes do not require immediate
-  implementation.
-- Stage 6 task close still needs one facade-owned release of linked plan,
-  selection, execution/inventory detail, view/session, and receipt artifacts,
-  plus repeated create/close bounded-registry tests. `close_session()` alone
-  intentionally does not claim that broader ownership today.
-- A future ledger schema revision may tighten raw-SQL attestation/identity
-  constraints and defensive reads. A persistent multi-process service should
-  add a database-pair initialization gate. Neither warrants a v3 schema change
-  during this delivery.
-- Trash retention/purge, invocation-scoped preflight observation optimization,
-  and a reusable verifier chunk-buffer contract remain profile- or
-  maintenance-driven work. Failed UPDATE recovery backups must not be deleted
-  opportunistically by executor failure handling.
-- Copied-backup drift proof remains metadata/stat based. A deliberate mutation
-  that restores all reviewed evidence remains inside the documented external-
-  writer inference boundary and would require stronger handle/share semantics
-  or byte revalidation to close.
+- Corrected monolithic executor source: `d99743a`.
+- Oracle implementation and contract: `07f08fe`.
+- Baseline commit: `840c183` (its parent is the oracle implementation commit).
+- Baseline: `tools/executor_settlement_baseline.json`.
+- Oracle schema: `format_version: 1`.
+- Capture eligibility: `repeat: 3`, 30 scenarios, 57 rows, with all three
+  complete normalized captures byte-identical.
+- Committed baseline Git blob: `387ed7aeb377dbd9c43461e06da7239b95c68dde`.
+
+The exact resume gate is:
+
+```powershell
+python -m tools.executor_settlement_audit check --repeat 3
+```
+
+Expected final line:
+
+```text
+settlement check passed: 30 scenarios x 3 runs
+```
+
+Checkpoint 8 must not edit, regenerate, or replace the baseline. The same rule
+continues through the effect-journal/reducer work, verifier split, test
+consolidation, and the immediate post-refactor stabilization period. If the
+gate fails, diagnose the divergence against the committed baseline; do not use
+`snapshot --replace` to make structural drift pass. A real settlement-policy
+correction requires its own documented bug-fix commit and persistent regression,
+followed by a fresh adversarial review and restarted three-run gate before any
+separate baseline replacement is considered.
+
+## Final Verification
+
+- Retained oracle policy/stability gate: `30 scenarios x 3 runs` passed from
+  committed oracle source.
+- Committed-baseline resume gate: `30 scenarios x 3 runs` passed.
+- Focused oracle/tool tests: `54 passed`.
+- Retry-cleanup regression: passed with exactly one explicit Retry decision;
+  the broader cleanup/retry and control reviews found no remaining blocker.
+- Complete pytest gate: `1512 passed, 2 skipped` across 1514 collected tests.
+- Import linter: `8 kept, 0 broken` across 51 files and 199 dependencies.
+- `python -m compileall -q namisync tests tools` passed.
+- `git diff --check` passed; the worktree was clean before this handoff edit.
+- Independent adversarial review found no unresolved executor-settlement or
+  oracle-design blocker.
+
+## Immediate Resume Context
+
+1. Start by running the exact three-repeat `check` command above. Treat any
+   failure as a stop condition for structural executor work.
+2. Resume with checkpoint 8 only: atomically convert the monolithic executor to
+   `executor/__init__.py`, `runtime.py`, `native.py`, and `pipeline.py`, preserve
+   all public facade imports/signatures, and update tests to patch the owning
+   internal module. Do not leave both the file and package in the tree.
+3. Preserve runtime/native/pipeline ownership and import rules already recorded
+   in `AGENTS.md` and `docs/ARCHITECTURE.md`. In particular, final-touch checks
+   remain in runtime, Windows primitives and UPDATE backup drift mechanics live
+   in native, and pipeline never publishes, records, retries, or interprets an
+   operation.
+4. Apply shared root authority to executor native only after the structural
+   split boundary is stable, retaining every existing guard and syscall timing.
+   Do not cache an authority observation or treat a checked path as a durable
+   capability.
+5. Do not begin the typed effect journal or reducer until the executor package
+   split itself passes the retained oracle and the full checkpoint-8 gates.
+   Do not assume or introduce another executor subdivision.
+
+No README changelog entry was added at this intermediate maintenance checkpoint;
+the original plan reserves the compact project-level hardening/refactor entry
+for final documentation closure after all structural checkpoints stabilize.
