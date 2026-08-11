@@ -1110,8 +1110,13 @@ authoritative; otherwise unchanged mutation is ignored and durable, ambiguous,
 or unreadable mutation evidence degrades recording. The reducer performs no
 I/O, leaves inputs unchanged, and never produces published success evidence.
 Cleanup timing, recorder ordering, retry/control behavior, and successful-path
-probes remain unchanged. A discovered policy discrepancy is still isolated as
-a separate bug fix rather than folded into this contract-preserving refactor.
+probes remain unchanged. Ordinary collaborator exceptions cannot bypass this
+lifecycle: runtime reduces active effects from the original operation error,
+finalizes pending directory effects, and retires already-statused entries
+before propagating the collaborator exception. Process-fatal `BaseException`
+remains a nonterminal cleanup-only unwind. A discovered policy discrepancy is
+still isolated as a separate bug fix rather than folded into this
+contract-preserving refactor.
 
 **Settlement stability barrier.** The monolithic corrected baseline is not
 declared stable merely because a differential run reproduces it. Before the

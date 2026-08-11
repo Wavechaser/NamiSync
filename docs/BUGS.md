@@ -60,6 +60,22 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-11). Collaborator exception settlement escape. A
+  failure policy or retry sleep could raise after MOVE or another mutation had
+  committed, and a later checkpoint could raise with a completed MKDIR still
+  pending; the exception escaped with filesystem effects present but no item
+  outcome, execution status, or degraded recording truth. Cause: these calls
+  preceded durable reduction, while the outer generic unwind only cleaned the
+  current temp. Fixed with local original-error settlement and a generic
+  exception backstop that finalizes pending directories and retires every
+  active effect before propagation. Process-fatal `BaseException` retains its
+  cleanup-only contract.
+- MODERATE - FIXED (2026-08-11). Split root guard authority. Executor root
+  guards derived and admitted the reviewed plan root but ignored the root
+  argument that the following resolver used. Existing callers supplied the
+  same path, but an extension or future call-site error could validate one root
+  and touch another. Fixed by requiring lexical equality with the derived
+  source or target authority before any probe or resolution.
 - MODERATE - FIXED (2026-08-10). Pre-retry cleanup loss. A retryable copy
   failure before continuation installation attempted owned-temp cleanup but
   discarded its error and cleared process-local ownership. Cancellation at the

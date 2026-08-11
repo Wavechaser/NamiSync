@@ -37,6 +37,7 @@ from namisync.core.execution import (
 from namisync.core.models import EntryKind, FileStat, MANAGED_FILE_ATTRIBUTE_MASK
 from namisync.core.pathing import (
     PathValidationError,
+    lexical_absolute_path,
     logical_error_text,
     normalize_relative_path,
 )
@@ -465,6 +466,15 @@ class _EffectJournal:
             entry.byte is not None or entry.mutation is not None
         )
 
+    def has_active_entry(self, op_id: OpId) -> bool:
+        entry = self._entries.get(op_id)
+        return entry is not None and not entry.settled
+
+    def active_op_ids(self) -> tuple[OpId, ...]:
+        return tuple(
+            op_id for op_id, entry in self._entries.items() if not entry.settled
+        )
+
     def claim_temporary_path(self, op_id: OpId, path: Path) -> None:
         if not isinstance(path, Path):
             raise TypeError("executor temporary path must be a Path")
@@ -753,7 +763,25 @@ def execute(
                 except (Canceled, PauseRequested):
                     raise
                 except Exception as error:
-                    decision = policies.failure.on_item_failed(operation, error, attempt)
+                    try:
+                        decision = policies.failure.on_item_failed(
+                            operation, error, attempt
+                        )
+                    except (Canceled, PauseRequested):
+                        raise
+                    except Exception as collaborator_error:
+                        _settle_before_collaborator_escape(
+                            xset,
+                            ctx,
+                            fs,
+                            target_root,
+                            state,
+                            progress,
+                            operation,
+                            error,
+                            collaborator_error,
+                        )
+                        raise
                     if (
                         isinstance(decision, Retry)
                         and attempt <= policies.max_retries
@@ -767,9 +795,25 @@ def execute(
                                 operation.op_id,
                             )
                         if retry_cleanup_error is None:
-                            _retry_checkpoint(ctx, state, operation.op_id)
-                            policies.sleep(decision.after)
-                            _retry_checkpoint(ctx, state, operation.op_id)
+                            try:
+                                _retry_checkpoint(ctx, state, operation.op_id)
+                                policies.sleep(decision.after)
+                                _retry_checkpoint(ctx, state, operation.op_id)
+                            except (Canceled, PauseRequested):
+                                raise
+                            except Exception as collaborator_error:
+                                _settle_before_collaborator_escape(
+                                    xset,
+                                    ctx,
+                                    fs,
+                                    target_root,
+                                    state,
+                                    progress,
+                                    operation,
+                                    error,
+                                    collaborator_error,
+                                )
+                                raise
                             continue
                         error = OperationFailure(
                             ExecutionReason.CLEANUP_FAILED,
@@ -777,54 +821,16 @@ def execute(
                             f"{logical_error_text(retry_cleanup_error)}",
                             cause=error,
                         )
-                    durable_failure = _failed_durable_settlement(
-                        operation,
-                        error,
+                    _settle_ordinary_failure(
+                        xset,
+                        ctx,
                         fs,
                         target_root,
                         state,
-                        state.effects.snapshot(operation.op_id),
+                        progress,
+                        operation,
+                        error,
                     )
-                    cleanup_error = _cleanup_inflight(
-                        state,
-                        fs,
-                        operation.op_id,
-                    )
-                    if cleanup_error is not None:
-                        if durable_failure is None:
-                            error = OperationFailure(
-                                ExecutionReason.CLEANUP_FAILED,
-                                "operation failed and its owned temp could not be removed: "
-                                f"{logical_error_text(cleanup_error)}",
-                                cause=error,
-                            )
-                        else:
-                            detail = dict(durable_failure.detail)
-                            detail["cleanup_error"] = logical_error_text(
-                                cleanup_error
-                            )
-                            durable_failure = replace(
-                                durable_failure,
-                                detail=detail,
-                            )
-                    if durable_failure is None:
-                        _settle_failure(
-                            xset,
-                            state,
-                            progress,
-                            ctx,
-                            operation,
-                            error,
-                        )
-                    else:
-                        _settle(
-                            xset,
-                            state,
-                            progress,
-                            ctx,
-                            operation,
-                            durable_failure,
-                        )
                     if isinstance(decision, Stop):
                         stop_requested = True
                         state.pause_latched = False
@@ -848,71 +854,69 @@ def execute(
         except Exception:
             state.recording = RecordingStatus.DEGRADED
     except Canceled:
-        durable_settlement = (
-            None
-            if current is None or current.op_id in xset.status
-            else _canceled_durable_settlement(
-                current,
+        try:
+            _handle_canceled(
+                xset,
+                ctx,
+                recorder,
                 fs,
                 target_root,
                 state,
-                state.effects.snapshot(current.op_id),
+                progress,
+                current,
             )
-        )
-        cleanup_error = _cleanup_inflight(
-            state,
-            fs,
-            None if current is None else current.op_id,
-        )
-        if durable_settlement is not None and current is not None:
-            detail = dict(durable_settlement.detail)
-            if cleanup_error is not None:
-                detail["cleanup_error"] = logical_error_text(cleanup_error)
-                cleanup_error = None
-            _settle(
+        except Exception as escaped:
+            _unexpected_exception_backstop(
                 xset,
+                ctx,
+                recorder,
+                fs,
+                target_root,
                 state,
                 progress,
-                ctx,
                 current,
-                replace(durable_settlement, detail=detail),
+                escaped,
             )
-        _finalize_directories(
-            xset, ctx, recorder, fs, target_root, state, progress
-        )
-        _restore_completed_directory_metadata(xset, fs, target_root, state)
-        for operation in xset.plan.operations:
-            if operation.op_id in xset.selection and operation.op_id not in xset.status:
-                detail = {}
-                if cleanup_error is not None and operation is current:
-                    detail["cleanup_error"] = logical_error_text(cleanup_error)
-                _settle(
-                    xset,
-                    state,
-                    progress,
-                    ctx,
-                    operation,
-                    _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail),
-                )
-        try:
-            recorder.flush()
-        except Exception:
-            state.recording = RecordingStatus.DEGRADED
+            raise
         raise
     except PauseRequested:
-        _cleanup_inflight(
-            state,
-            fs,
-            None if current is None else current.op_id,
-        )
-        _finalize_directories(
-            xset, ctx, recorder, fs, target_root, state, progress
-        )
-        _restore_completed_directory_metadata(xset, fs, target_root, state)
         try:
-            recorder.flush()
-        except Exception:
-            state.recording = RecordingStatus.DEGRADED
+            _handle_pause(
+                xset,
+                ctx,
+                recorder,
+                fs,
+                target_root,
+                state,
+                progress,
+                current,
+            )
+        except Exception as escaped:
+            _unexpected_exception_backstop(
+                xset,
+                ctx,
+                recorder,
+                fs,
+                target_root,
+                state,
+                progress,
+                current,
+                escaped,
+            )
+            raise
+        raise
+    except Exception as escaped:
+        _unexpected_exception_backstop(
+            xset,
+            ctx,
+            recorder,
+            fs,
+            target_root,
+            state,
+            progress,
+            current,
+            escaped,
+        )
         raise
     except BaseException:
         _cleanup_inflight(
@@ -955,6 +959,238 @@ def execute(
         bytes_done=min(progress.bytes_done, progress.bytes_total),
         bytes_total=progress.bytes_total,
     )
+
+
+def _handle_canceled(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    recorder: Recorder,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    progress: _ProgressTracker,
+    current: PlanOperation | None,
+) -> None:
+    durable_settlement = (
+        None
+        if current is None or current.op_id in xset.status
+        else _canceled_durable_settlement(
+            current,
+            fs,
+            target_root,
+            state,
+            state.effects.snapshot(current.op_id),
+        )
+    )
+    cleanup_error = _cleanup_inflight(
+        state,
+        fs,
+        None if current is None else current.op_id,
+    )
+    if durable_settlement is not None and current is not None:
+        detail = dict(durable_settlement.detail)
+        if cleanup_error is not None:
+            detail["cleanup_error"] = logical_error_text(cleanup_error)
+            cleanup_error = None
+        _settle(
+            xset,
+            state,
+            progress,
+            ctx,
+            current,
+            replace(durable_settlement, detail=detail),
+        )
+    _finalize_directories(xset, ctx, recorder, fs, target_root, state, progress)
+    _restore_completed_directory_metadata(xset, fs, target_root, state)
+    for operation in xset.plan.operations:
+        if operation.op_id in xset.selection and operation.op_id not in xset.status:
+            detail = {}
+            if cleanup_error is not None and operation is current:
+                detail["cleanup_error"] = logical_error_text(cleanup_error)
+            _settle(
+                xset,
+                state,
+                progress,
+                ctx,
+                operation,
+                _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail),
+            )
+    try:
+        recorder.flush()
+    except Exception:
+        state.recording = RecordingStatus.DEGRADED
+
+
+def _handle_pause(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    recorder: Recorder,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    progress: _ProgressTracker,
+    current: PlanOperation | None,
+) -> None:
+    _cleanup_inflight(
+        state,
+        fs,
+        None if current is None else current.op_id,
+    )
+    _finalize_directories(xset, ctx, recorder, fs, target_root, state, progress)
+    _restore_completed_directory_metadata(xset, fs, target_root, state)
+    try:
+        recorder.flush()
+    except Exception:
+        state.recording = RecordingStatus.DEGRADED
+
+
+def _settle_before_collaborator_escape(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    progress: _ProgressTracker,
+    operation: PlanOperation,
+    operation_error: Exception,
+    collaborator_error: Exception,
+) -> None:
+    try:
+        _settle_ordinary_failure(
+            xset,
+            ctx,
+            fs,
+            target_root,
+            state,
+            progress,
+            operation,
+            operation_error,
+        )
+    except Exception as settlement_error:
+        collaborator_error.add_note(
+            "executor terminal settlement also failed: "
+            f"{logical_error_text(settlement_error)}"
+        )
+
+
+def _unexpected_exception_backstop(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    recorder: Recorder,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    progress: _ProgressTracker,
+    current: PlanOperation | None,
+    escaped: Exception,
+) -> None:
+    if (
+        current is not None
+        and state.effects.has_active_entry(current.op_id)
+        and current.op_id not in xset.status
+        and current.op_id not in state.ready_directories
+    ):
+        _backstop_operation(
+            xset,
+            ctx,
+            fs,
+            target_root,
+            state,
+            progress,
+            current,
+            escaped,
+        )
+    try:
+        _finalize_directories(
+            xset, ctx, recorder, fs, target_root, state, progress
+        )
+    except Exception as finalization_error:
+        escaped.add_note(
+            "executor directory finalization also failed: "
+            f"{logical_error_text(finalization_error)}"
+        )
+
+    operations = {operation.op_id: operation for operation in xset.plan.operations}
+    for op_id in state.effects.active_op_ids():
+        operation = operations.get(op_id)
+        if operation is None:
+            escaped.add_note(
+                f"executor effect journal contains unknown operation {op_id}"
+            )
+            continue
+        _backstop_operation(
+            xset,
+            ctx,
+            fs,
+            target_root,
+            state,
+            progress,
+            operation,
+            escaped,
+        )
+
+    try:
+        _restore_completed_directory_metadata(xset, fs, target_root, state)
+    except Exception as restoration_error:
+        escaped.add_note(
+            "executor directory metadata restoration also failed: "
+            f"{logical_error_text(restoration_error)}"
+        )
+    try:
+        recorder.flush()
+    except Exception:
+        state.recording = RecordingStatus.DEGRADED
+
+
+def _backstop_operation(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    progress: _ProgressTracker,
+    operation: PlanOperation,
+    escaped: Exception,
+) -> None:
+    try:
+        if operation.op_id in xset.status:
+            cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
+            if cleanup_error is not None:
+                escaped.add_note(
+                    "executor terminal cleanup also failed: "
+                    f"{logical_error_text(cleanup_error)}"
+                )
+            state.effects.settle(operation.op_id)
+            state.effects.retire(operation.op_id)
+            return
+        snapshot = state.effects.snapshot(operation.op_id)
+        _settle_ordinary_failure(
+            xset,
+            ctx,
+            fs,
+            target_root,
+            state,
+            progress,
+            operation,
+            snapshot.retry_error or escaped,
+        )
+    except Exception as settlement_error:
+        escaped.add_note(
+            "executor exception backstop also failed: "
+            f"{logical_error_text(settlement_error)}"
+        )
+        if (
+            operation.op_id in xset.status
+            and state.effects.has_active_entry(operation.op_id)
+        ):
+            cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
+            if cleanup_error is not None:
+                escaped.add_note(
+                    "executor terminal cleanup also failed: "
+                    f"{logical_error_text(cleanup_error)}"
+                )
+            state.effects.settle(operation.op_id)
+            state.effects.retire(operation.op_id)
 
 
 def _execute_operation(
@@ -2734,6 +2970,50 @@ def _settle_failure(
     )
 
 
+def _settle_ordinary_failure(
+    xset: ExecutionSet,
+    ctx: RunContext,
+    fs: ExecutorFileSystem,
+    target_root: Path,
+    state: _ExecutionState,
+    progress: _ProgressTracker,
+    operation: PlanOperation,
+    error: Exception,
+) -> None:
+    durable_failure = _failed_durable_settlement(
+        operation,
+        error,
+        fs,
+        target_root,
+        state,
+        state.effects.snapshot(operation.op_id),
+    )
+    cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
+    if cleanup_error is not None:
+        if durable_failure is None:
+            error = OperationFailure(
+                ExecutionReason.CLEANUP_FAILED,
+                "operation failed and its owned temp could not be removed: "
+                f"{logical_error_text(cleanup_error)}",
+                cause=error,
+            )
+        else:
+            detail = dict(durable_failure.detail)
+            detail["cleanup_error"] = logical_error_text(cleanup_error)
+            durable_failure = replace(durable_failure, detail=detail)
+    if durable_failure is None:
+        _settle_failure(xset, state, progress, ctx, operation, error)
+    else:
+        _settle(
+            xset,
+            state,
+            progress,
+            ctx,
+            operation,
+            durable_failure,
+        )
+
+
 def _failure_reason_and_message(
     error: Exception,
 ) -> tuple[ExecutionReason, str]:
@@ -3943,6 +4223,7 @@ def _revalidate_target_root(
     target_root: Path,
 ) -> None:
     authority = _target_root_authority(xset)
+    _require_reviewed_runtime_root(target_root, authority, role="target")
     fs.revalidate_root(
         Path(authority.logical_root),
         trusted_anchor=(
@@ -3960,6 +4241,7 @@ def _revalidate_source_root(
     source_root: Path,
 ) -> None:
     authority = _source_root_authority(xset)
+    _require_reviewed_runtime_root(source_root, authority, role="source")
     fs.revalidate_root(
         Path(authority.logical_root),
         trusted_anchor=(
@@ -3969,6 +4251,26 @@ def _revalidate_source_root(
         ),
         expected_volume=authority.expected_volume_id,
     )
+
+
+def _require_reviewed_runtime_root(
+    root: Path,
+    authority: RootAuthority,
+    *,
+    role: str,
+) -> None:
+    try:
+        logical_root = lexical_absolute_path(root)
+    except PathValidationError as error:
+        raise UnsafeExecutionPath(
+            f"executor {role} root does not match reviewed authority"
+        ) from error
+    if os.path.normcase(logical_root) != os.path.normcase(
+        authority.logical_root
+    ):
+        raise UnsafeExecutionPath(
+            f"executor {role} root does not match reviewed authority"
+        )
 
 
 def _target_root_authority(

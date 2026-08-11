@@ -2780,6 +2780,71 @@ def test_rename_final_guards_run_after_recorder_barrier(
     assert not trash.exists()
 
 
+class RootBindingCallSpyFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.revalidate_calls: list[Path] = []
+        self.resolve_calls: list[tuple[Path, str, bool]] = []
+
+    def revalidate_root(
+        self,
+        root: Path,
+        *args,
+        **kwargs,
+    ) -> None:
+        del args, kwargs
+        self.revalidate_calls.append(root)
+
+    def resolve(
+        self,
+        root: Path,
+        relative_path: str,
+        *,
+        must_exist: bool,
+    ) -> Path:
+        self.resolve_calls.append((root, relative_path, must_exist))
+        return root / relative_path
+
+
+def test_target_root_guard_refuses_mismatched_runtime_root_before_touch(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    xset = _xset(_plan(source, target, ()))
+    fs = RootBindingCallSpyFileSystem()
+
+    with pytest.raises(
+        UnsafeExecutionPath,
+        match="target root does not match reviewed authority",
+    ):
+        executor_runtime._resolve_target_path(
+            fs,
+            xset,
+            source,
+            source / "file.bin",
+            must_exist=False,
+        )
+
+    assert fs.revalidate_calls == []
+    assert fs.resolve_calls == []
+
+
+def test_source_root_guard_refuses_mismatched_runtime_root_before_touch(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    xset = _xset(_plan(source, target, ()))
+    fs = RootBindingCallSpyFileSystem()
+
+    with pytest.raises(
+        UnsafeExecutionPath,
+        match="source root does not match reviewed authority",
+    ):
+        executor_runtime._revalidate_source_root(fs, xset, target)
+
+    assert fs.revalidate_calls == []
+    assert fs.resolve_calls == []
+
+
 class ReviewedBindingSwapFileSystem(NativeFileSystem):
     def __init__(self, target_root: Path, *, swap_during_resolve: bool) -> None:
         self.target_root = target_root

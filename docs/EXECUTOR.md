@@ -209,6 +209,10 @@ then maps typed failures back to the existing `UnsafeExecutionPath` and native
 error vocabulary. Chain-only admission still omits a volume probe when the
 plan carries no expected `VolumeId`; no observation is cached or treated as
 authorization for a later touch.
+The operational root passed to a source or target guard must also lexically
+equal that authority's logical root before any probe or path resolution. This
+prevents a caller from validating the reviewed plan root and then touching a
+different supplied root.
 
 When changed content also carries an opted-in basename casing change, this same
 required update publishes at the source-spelled basename. Metadata-equal casing
@@ -359,11 +363,16 @@ abandons/reclaims an in-flight temp through exact-name recovery, preserves
 completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
 without terminal; dispatcher then releases custody. Resume queues at the back,
 freshly re-observes/preflights in workflow, and continues only unreached work.
-Direct `PauseRequested` and unexpected `BaseException` unwinds attempt exact
+Direct `PauseRequested` and process-fatal `BaseException` unwinds attempt exact
 owned-temp cleanup but preserve the original control or exception and emit no
 terminal item from executor. A cleanup failure on those paths may leave the
 exact-name temp for fresh-run recovery; these unwind semantics are outside the
 terminal settlement reducer rather than being converted into an item result.
+An ordinary `Exception` escaping a failure policy, retry/control callback,
+event sink, or other collaborator is different: before propagating it, runtime
+settles every active journal effect from the original operation failure,
+finalizes pending directories, and retires already-recorded effects without
+replaying their filesystem or recorder actions.
 
 The same durable-state rule applies when a confirmed publish is followed by a
 non-cancellation failure such as metadata repair exhaustion. The item remains

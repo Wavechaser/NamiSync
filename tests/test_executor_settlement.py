@@ -3550,6 +3550,165 @@ def test_nonbyte_sharing_retry_retains_committed_mutation_state(
     assert (target / "new.bin").read_bytes() == b"reviewed"
 
 
+@pytest.mark.parametrize(
+    ("escape_stage", "sharing", "expected_reason", "escaped_message"),
+    (
+        ("policy", False, "io-error", "injected failure-policy escape"),
+        (
+            "sleep",
+            True,
+            "sharing-violation",
+            "injected retry-sleep escape",
+        ),
+    ),
+)
+def test_collaborator_escape_settles_committed_move_from_original_error(
+    tmp_path: Path,
+    escape_stage: str,
+    sharing: bool,
+    expected_reason: str,
+    escaped_message: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NonByteMutationFaultFileSystem("rename", commit=True, sharing=sharing)
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = FakeRecorder()
+    events: list[object] = []
+
+    class RaisingFailurePolicy:
+        def on_item_failed(self, _operation, _error, _attempt):
+            raise RuntimeError(escaped_message)
+
+    def failing_sleep(_delay: float) -> None:
+        raise RuntimeError(escaped_message)
+
+    policies = _policies(
+        failure=(
+            RaisingFailurePolicy()
+            if escape_stage == "policy"
+            else BoundedFailurePolicy(retries=1)
+        ),
+        max_retries=1,
+        sleep=failing_sleep if escape_stage == "sleep" else lambda _delay: None,
+    )
+
+    with pytest.raises(RuntimeError, match=escaped_message):
+        execute(
+            xset,
+            RunContext(events.append, lambda: None),
+            recorder,
+            policies,
+            fs,
+        )
+
+    item = _item_outcome(events)
+    assert xset.status == {operation.op_id: Outcome.FAILED}
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert item.reason == expected_reason
+    assert item.detail["error_type"] == "OSError"
+    assert item.detail["message"] == "injected mutation fault"
+    assert item.detail["mutation_state"] == "committed"
+    assert item.detail["durable_state"] == "target-renamed"
+    assert recorder.calls == []
+    assert recorder.flushes == 2
+    assert not (target / "old.bin").exists()
+    assert (target / "new.bin").read_bytes() == b"reviewed"
+
+
+def test_checkpoint_exception_finalizes_pending_mkdir_before_propagating(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    mkdir = _nonbyte_mutation_operation(source, target, fs, OperationKind.MKDIR)
+    (source / "later.bin").write_bytes(b"later")
+    (target / "later.bin").write_bytes(b"later")
+    source_stat = fs.stat(source, "later.bin")
+    target_stat = fs.stat(target, "later.bin")
+    assert source_stat is not None and target_stat is not None
+    later = _operation(
+        2,
+        OperationKind.NOOP,
+        source_rel_path="later.bin",
+        target_rel_path="later.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (mkdir, later)))
+    recorder = FakeRecorder()
+    events: list[object] = []
+    checkpoints = 0
+
+    def checkpoint() -> None:
+        nonlocal checkpoints
+        checkpoints += 1
+        if checkpoints == 2:
+            raise RuntimeError("injected checkpoint infrastructure escape")
+
+    with pytest.raises(RuntimeError, match="checkpoint infrastructure"):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            recorder,
+            _policies(),
+            fs,
+        )
+
+    item = _item_outcome(events)
+    assert xset.status == {mkdir.op_id: Outcome.SUCCEEDED}
+    assert item.item_id == str(mkdir.op_id)
+    assert item.outcome is Outcome.SUCCEEDED
+    assert _recorder_names(recorder) == ["mkdir"]
+    assert recorder.flushes == 1
+    assert (target / "folder").is_dir()
+    assert (target / "later.bin").read_bytes() == b"later"
+
+
+def test_item_event_exception_retires_already_statused_effect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = FakeRecorder()
+    retired: list[tuple[executor_runtime._EffectJournal, OpId]] = []
+    original_retire = executor_runtime._EffectJournal.retire
+
+    def tracked_retire(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+    ) -> None:
+        original_retire(journal, op_id)
+        retired.append((journal, op_id))
+
+    monkeypatch.setattr(executor_runtime._EffectJournal, "retire", tracked_retire)
+
+    def emit(event: object) -> None:
+        if isinstance(event, ItemOutcome):
+            raise RuntimeError("injected item-event escape")
+
+    with pytest.raises(RuntimeError, match="item-event escape"):
+        execute(
+            xset,
+            RunContext(emit, lambda: None),
+            recorder,
+            _policies(),
+            fs,
+        )
+
+    assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
+    assert _recorder_names(recorder) == ["moved"]
+    assert recorder.flushes == 2
+    assert len(retired) == 1
+    journal, op_id = retired[0]
+    assert op_id == operation.op_id
+    assert not journal.has_active_entry(op_id)
+
+
 def test_cancel_during_nonbyte_retry_settles_committed_mutation(
     tmp_path: Path,
 ) -> None:
