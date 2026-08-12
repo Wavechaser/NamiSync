@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 from threading import Event, Thread
-from time import monotonic
+from time import monotonic, sleep
 
 import pytest
 
-from namisync.interfaces.service import PlanSession
+from namisync.core.events import ItemOutcome, Progress
+from namisync.core.evidence import Outcome
+from namisync.core.session import OperationResult, SessionState
+from namisync.dispatcher import (
+    Dispatcher,
+    PreparedSession,
+    SessionNotFound,
+    WorkflowRegistration,
+)
+from namisync.interfaces import service as service_module
+from namisync.interfaces.service import NamiSyncService, PlanSession
+from namisync.interfaces.web import drain as drain_module
 from namisync.interfaces.web.drain import (
     DrainBusyError,
     ObservationConflictError,
@@ -15,6 +28,7 @@ from namisync.interfaces.web.drain import (
     TaskRegistry,
     TaskUnavailableError,
 )
+from namisync.workflows import PLAN_KIND
 from namisync.workflows.views import SessionEventView, SessionRecordView
 
 
@@ -94,6 +108,360 @@ def _start(registry: TaskRegistry, command_id: str = "4" * 32):
         deletion_policy=None,
         command_id=command_id,
     )
+
+
+@dataclass
+class _IntegratedRun:
+    entered: Event
+    release: Event
+    progress_count: int = 0
+    reliable_count: int = 0
+    flood_done: Event | None = None
+    finish: Event | None = None
+
+
+@dataclass
+class _IntegratedInvocation:
+    name: str
+    run_state: _IntegratedRun
+
+    def run(self, context):
+        state = self.run_state
+        state.entered.set()
+        assert state.release.wait(2)
+        for index in range(state.progress_count):
+            context.emit(
+                Progress(
+                    items_done=index + 1,
+                    items_total=state.progress_count,
+                    bytes_done=index + 1,
+                    bytes_total=state.progress_count,
+                    current_path=f"{self.name}-progress-{index}",
+                )
+            )
+        for index in range(state.reliable_count):
+            context.emit(
+                ItemOutcome(
+                    item_id=f"{self.name}-item-{index}",
+                    kind="copy",
+                    path=f"{self.name}-{index}.txt",
+                    outcome=Outcome.SUCCEEDED,
+                )
+            )
+        if state.flood_done is not None:
+            state.flood_done.set()
+        if state.finish is not None:
+            assert state.finish.wait(2)
+        return OperationResult(SessionState.COMPLETED)
+
+    def snapshot(self) -> bytes:
+        return self.name.encode("utf-8")
+
+
+def _wait_terminal(dispatcher: Dispatcher, session_id: str) -> None:
+    deadline = monotonic() + 2
+    while monotonic() < deadline:
+        record = dispatcher.get(session_id)
+        if record.result is not None:
+            return
+        sleep(0.005)
+    raise AssertionError(f"session did not reach terminal truth: {session_id}")
+
+
+def _drain_until_record(
+    registry: TaskRegistry,
+    task_id: str,
+    session_id: str,
+    drain_ids,
+):
+    updates = []
+    for _ in range(8):
+        batch = registry.drain(
+            task_id,
+            session_id,
+            next(drain_ids),
+            replay_from=None,
+        )
+        updates.extend(batch.updates)
+        if any(update.update_type == "record" for update in batch.updates):
+            return updates
+    raise AssertionError("terminal task record was not drained")
+
+
+def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adopt_entered = Event()
+    adopt_release = Event()
+    adopted_session_ids = []
+    normal_release = Event()
+    overflow_release = Event()
+    overflow_finish = Event()
+    overflow_done = Event()
+    runs = {
+        "normal-0": _IntegratedRun(Event(), normal_release, 25, 3),
+        "normal-1": _IntegratedRun(Event(), normal_release, 25, 3),
+        "normal-2": _IntegratedRun(Event(), normal_release, 25, 2),
+        "normal-3": _IntegratedRun(Event(), normal_release, 25, 2),
+        "overflow": _IntegratedRun(
+            Event(),
+            overflow_release,
+            reliable_count=260,
+            flood_done=overflow_done,
+            finish=overflow_finish,
+        ),
+    }
+
+    def prepare_plan(request) -> PreparedSession:
+        name = Path(request.source_path).name
+        return PreparedSession(name.encode("utf-8"))
+
+    def open_plan(payload: bytes) -> _IntegratedInvocation:
+        name = payload.decode("utf-8")
+        return _IntegratedInvocation(name, runs[name])
+
+    dispatcher = Dispatcher(
+        {
+            PLAN_KIND: WorkflowRegistration(prepare_plan, open_plan),
+        }
+    )
+    monkeypatch.setattr(service_module, "_dispatcher", lambda _runtime: dispatcher)
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    real_adopt = service._observer.adopt
+
+    def instrumented_adopt(
+        session_id,
+        sink,
+        stream,
+        *,
+        from_sequence=1,
+    ):
+        rollback = real_adopt(
+            session_id,
+            sink,
+            stream,
+            from_sequence=from_sequence,
+        )
+        if not adopt_entered.is_set():
+            adopted_session_ids.append(session_id)
+            adopt_entered.set()
+            assert adopt_release.wait(2)
+        return rollback
+
+    monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
+    task_tokens = iter(f"{index:032x}" for index in range(1, 32))
+    registry = TaskRegistry(service, token=lambda: next(task_tokens), drain_wait=1.0)
+    drain_ids = iter(f"{index:032x}" for index in range(100, 500))
+
+    def roots(name: str) -> tuple[str, str]:
+        source = tmp_path / "sources" / name
+        target = tmp_path / "targets" / name
+        source.mkdir(parents=True)
+        target.mkdir(parents=True)
+        return str(source), str(target)
+
+    try:
+        assert dispatcher._replay_capacity == 128
+        assert dispatcher._subscriber_capacity == 64
+        assert drain_module._CAPACITY == 64
+
+        starts = []
+        source, target = roots("normal-0")
+        start_results = []
+        start_errors = []
+
+        def start_first() -> None:
+            try:
+                start_results.append(
+                    registry.start_plan(
+                        source,
+                        target,
+                        deletion_policy=None,
+                        command_id=f"{1:032x}",
+                    )
+                )
+            except BaseException as error:
+                start_errors.append(error)
+
+        start_thread = Thread(target=start_first)
+        start_thread.start()
+        assert adopt_entered.wait(1)
+        assert start_thread.is_alive()
+        with pytest.raises(SessionNotFound):
+            dispatcher.get(adopted_session_ids[0])
+        assert not runs["normal-0"].entered.wait(0.05)
+        adopt_release.set()
+        start_thread.join(2)
+        assert not start_thread.is_alive()
+        assert not start_errors
+        attached = start_results[0]
+        starts.append(attached)
+        assert runs["normal-0"].entered.wait(1)
+        pending = registry.drain(
+            attached.task_id,
+            attached.session_id,
+            next(drain_ids),
+            replay_from=None,
+        )
+        pending_events = [
+            (update.event.body_type, update.event.body)
+            for update in pending.updates
+            if update.update_type == "event"
+        ]
+        assert pending_events[0] == ("StateChanged", {"state": "pending"})
+        assert not any(body_type == "Gap" for body_type, _body in pending_events)
+
+        for index in range(1, 4):
+            source, target = roots(f"normal-{index}")
+            starts.append(
+                registry.start_plan(
+                    source,
+                    target,
+                    deletion_policy=None,
+                    command_id=f"{index + 1:032x}",
+                )
+            )
+            assert runs[f"normal-{index}"].entered.wait(1)
+
+        assert all(dispatcher.get(start.session_id).result is None for start in starts)
+
+        normal_release.set()
+        normal_updates = list(pending.updates)
+        for start in starts:
+            _wait_terminal(dispatcher, start.session_id)
+            normal_updates.extend(
+                _drain_until_record(
+                    registry,
+                    start.task_id,
+                    start.session_id,
+                    drain_ids,
+                )
+            )
+
+        normal_events = [
+            update.event
+            for update in normal_updates
+            if update.update_type == "event"
+        ]
+        assert not any(event.body_type == "Gap" for event in normal_events)
+        assert sum(event.body_type == "ItemOutcome" for event in normal_events) == 10
+        progress_events = [
+            event for event in normal_events if event.body_type == "Progress"
+        ]
+        assert len(progress_events) == 4
+        progress_by_session = {
+            event.session_id: event.body for event in progress_events
+        }
+        assert set(progress_by_session) == {
+            start.session_id for start in starts
+        }
+        for index, start in enumerate(starts):
+            assert progress_by_session[start.session_id] == {
+                "items_done": 25,
+                "items_total": 25,
+                "bytes_done": 25,
+                "bytes_total": 25,
+                "current_path": f"normal-{index}-progress-24",
+            }
+        assert all(
+            len(registry._tasks[start.task_id].queue) <= 64 for start in starts
+        )
+
+        source, target = roots("overflow")
+        overflow = registry.start_plan(
+            source,
+            target,
+            deletion_policy=None,
+            command_id=f"{5:032x}",
+        )
+        assert runs["overflow"].entered.wait(1)
+        overflow_release.set()
+        assert overflow_done.wait(2)
+        assert dispatcher.get(overflow.session_id).result is None
+
+        accepted_item_ids: set[str] = set()
+        ordinary_gap = None
+        first_batch = registry.drain(
+            overflow.task_id,
+            overflow.session_id,
+            next(drain_ids),
+            replay_from=None,
+        )
+        assert len(first_batch.updates) == 64
+        for _ in range(4):
+            batch = (
+                first_batch
+                if ordinary_gap is None and _ == 0
+                else registry.drain(
+                    overflow.task_id,
+                    overflow.session_id,
+                    next(drain_ids),
+                    replay_from=None,
+                )
+            )
+            for update in batch.updates:
+                if update.update_type != "event":
+                    continue
+                if update.event.body_type == "Gap":
+                    ordinary_gap = update.event
+                    break
+                if update.event.body_type == "ItemOutcome":
+                    accepted_item_ids.add(update.event.body["item_id"])
+            if ordinary_gap is not None:
+                break
+        assert ordinary_gap is not None
+        first_missed = ordinary_gap.body["first_missed_seq"]
+
+        recovery = registry.drain(
+            overflow.task_id,
+            overflow.session_id,
+            next(drain_ids),
+            replay_from=first_missed,
+        )
+        recovered_events = [
+            update.event for update in recovery.updates if update.update_type == "event"
+        ]
+        assert len(recovery.updates) == 64
+        assert recovered_events[0].body_type == "Gap"
+        assert recovered_events[0].body == {"first_missed_seq": first_missed}
+        retained_tail = [
+            event for event in recovered_events[1:] if event.body_type == "ItemOutcome"
+        ]
+        assert retained_tail
+        assert retained_tail[0].sequence > first_missed
+        accepted_item_ids.update(event.body["item_id"] for event in retained_tail)
+        emitted_item_ids = {f"overflow-item-{index}" for index in range(260)}
+        assert emitted_item_ids - accepted_item_ids
+
+        overflow_finish.set()
+        _wait_terminal(dispatcher, overflow.session_id)
+        terminal_updates = _drain_until_record(
+            registry,
+            overflow.task_id,
+            overflow.session_id,
+            drain_ids,
+        )
+        terminal = next(
+            update.record
+            for update in terminal_updates
+            if update.update_type == "record"
+        )
+        assert terminal.state == "completed"
+        assert terminal.result is not None
+        assert len(terminal.result.items) == 260
+        assert any(
+            update.update_type == "event" and update.event.body_type == "Terminal"
+            for update in terminal_updates
+        )
+    finally:
+        adopt_release.set()
+        normal_release.set()
+        overflow_release.set()
+        overflow_finish.set()
+        registry.begin_close()
+        registry.unsubscribe_all()
+        service.close(timeout=2)
 
 
 def test_sh_g_8_observation_attaches_before_start_returns_and_pending_is_drained() -> None:
