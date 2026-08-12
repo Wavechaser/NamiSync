@@ -8,21 +8,27 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
+from types import SimpleNamespace
 
 import pytest
 
 import namisync.interfaces.web.bridge as bridge_module
+from namisync.interfaces.service import NamiSyncService
 from namisync.interfaces.web.bridge import BRIDGE_SCHEMA_VERSION, BridgeDispatcher
 from namisync.interfaces.web.commands import (
     CommandAccess,
+    CommandConflictError,
     CommandPayloadError,
     CommandRetry,
     CommandSpec,
     CommandTimeout,
     FieldRequirement,
     PickerUnavailableError,
+    PlanningRefusedError,
 )
+from namisync.interfaces.web.commands import production_command_specs
+from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 
 
 REQUEST_ID = "a1" * 16
@@ -467,6 +473,35 @@ def test_br_g_32_handler_and_codec_failures_are_sanitized_and_logs_are_private(
     assert "code=internal_error" in caplog.text
 
 
+def test_br_g_32_base_exceptions_cannot_cross_handler_or_codec_boundary() -> None:
+    class ExitMapping(dict):
+        def items(self):
+            raise SystemExit("private codec termination detail")
+
+    handler_dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={
+            "probe": _spec(
+                lambda payload: (_ for _ in ()).throw(
+                    SystemExit("private handler termination detail")
+                )
+            )
+        },
+    )
+    codec_dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda payload: ExitMapping())},
+    )
+
+    expected = _failure(
+        REQUEST_ID,
+        "internal_error",
+        ERRORS["internal_error"],
+    )
+    assert handler_dispatcher.dispatch(_request()) == expected
+    assert codec_dispatcher.dispatch(_request()) == expected
+
+
 def test_br_g_32_picker_failure_uses_its_fixed_public_error() -> None:
     def fail_picker(payload: object) -> object:
         del payload
@@ -482,6 +517,184 @@ def test_br_g_32_picker_failure_uses_its_fixed_public_error() -> None:
         "picker_unavailable",
         "The folder picker could not open. Try again.",
     )
+
+
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (SlotUnavailableError("private slot"), "slot_unavailable"),
+        (CommandConflictError("private receipt"), "command_conflict"),
+        (PlanningRefusedError("C:\\private\\root"), "planning_refused"),
+    ],
+)
+def test_br_g_32_typed_command_refusals_use_only_fixed_public_errors(
+    error: Exception,
+    code: str,
+) -> None:
+    def refuse(payload: object) -> object:
+        del payload
+        raise error
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(refuse)},
+    )
+
+    assert dispatcher.dispatch(_request()) == _failure(
+        REQUEST_ID,
+        code,
+        ERRORS[code],
+    )
+
+
+def test_br_g_32_incidental_value_error_remains_internal_error() -> None:
+    def fail(payload: object) -> object:
+        del payload
+        raise ValueError("private incidental defect")
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(fail)},
+    )
+
+    assert dispatcher.dispatch(_request()) == _failure(
+        REQUEST_ID,
+        "internal_error",
+        ERRORS["internal_error"],
+    )
+
+
+def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    changed_source = tmp_path / "changed-source"
+    source.mkdir()
+    target.mkdir()
+    changed_source.mkdir()
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str | None]] = []
+
+        def create_plan_request(
+            self,
+            request_id: str,
+            source_path: str,
+            target_path: str,
+            *,
+            deletion_policy: str | None,
+        ) -> object:
+            self.calls.append((source_path, target_path, deletion_policy))
+            return SimpleNamespace(request_id=request_id)
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.submissions: list[object] = []
+
+        def submit(self, kind: str, request: object) -> str:
+            del kind
+            self.submissions.append(request)
+            return "5" * 32
+
+    runtime = Runtime()
+    service = object.__new__(NamiSyncService)
+    service._runtime = runtime
+    service._dispatcher = Dispatcher()
+    service._lock = Lock()
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._session_receipt_locks = tuple(Lock() for _ in range(64))
+    service._session_receipt_lifecycle = Lock()
+    service._closed = False
+
+    tokens = iter(f"{value:032x}" for value in range(10))
+    slots = FolderSlotTable(token=lambda: next(tokens))
+    source_id, _ = slots.store(str(source), purpose="source")
+    target_id, _ = slots.store(str(target), purpose="target")
+    replay_source_id, _ = slots.store(str(source), purpose="source")
+    replay_target_id, _ = slots.store(str(target), purpose="target")
+    changed_source_id, _ = slots.store(str(changed_source), purpose="source")
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=slots,
+        service=service,
+    )
+    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+    command_id = "c4" * 16
+
+    first = dispatcher.dispatch(
+        _request(
+            request_id="d1" * 16,
+            command="start_plan",
+            payload={
+                "command_id": command_id,
+                "source_id": source_id,
+                "target_id": target_id,
+                "deletion_policy": None,
+            },
+        )
+    )
+    replay = dispatcher.dispatch(
+        _request(
+            request_id="d2" * 16,
+            command="start_plan",
+            payload={
+                "command_id": command_id,
+                "source_id": replay_source_id,
+                "target_id": replay_target_id,
+                "deletion_policy": None,
+            },
+        )
+    )
+
+    assert first["request_id"] == "d1" * 16
+    assert replay["request_id"] == "d2" * 16
+    assert first["result"] == replay["result"]
+    assert first["result"] == {
+        "request_id": first["result"]["request_id"],
+        "session_id": "5" * 32,
+    }
+    assert runtime.calls == [(str(source), str(target), None)]
+    assert len(service._dispatcher.submissions) == 1
+
+    changed_root = dispatcher.dispatch(
+        _request(
+            request_id="d3" * 16,
+            command="start_plan",
+            payload={
+                "command_id": command_id,
+                "source_id": changed_source_id,
+                "target_id": target_id,
+                "deletion_policy": None,
+            },
+        )
+    )
+    changed_policy = dispatcher.dispatch(
+        _request(
+            request_id="d4" * 16,
+            command="start_plan",
+            payload={
+                "command_id": command_id,
+                "source_id": source_id,
+                "target_id": target_id,
+                "deletion_policy": "trash",
+            },
+        )
+    )
+
+    assert changed_root == _failure(
+        "d3" * 16,
+        "command_conflict",
+        ERRORS["command_conflict"],
+    )
+    assert changed_policy == _failure(
+        "d4" * 16,
+        "command_conflict",
+        ERRORS["command_conflict"],
+    )
+    assert runtime.calls == [(str(source), str(target), None)]
 
 
 def test_br_g_32_origin_and_close_refusals_do_not_inspect_untrusted_body() -> None:

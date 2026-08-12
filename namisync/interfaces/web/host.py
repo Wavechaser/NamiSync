@@ -32,6 +32,37 @@ _CLOSE_INCOMPLETE_MESSAGE = (
 )
 
 
+class _NativeFolderPicker:
+    """Late-bind the created window while using only pywebview's public API."""
+
+    def __init__(self, webview_module: object) -> None:
+        self._webview_module = webview_module
+        self._window: object | None = None
+        self._dialog_lock = Lock()
+
+    def bind(self, window: object) -> None:
+        if window is None:
+            raise ValueError("folder picker window must be present")
+        if self._window is not None:
+            raise RuntimeError("folder picker window is already bound")
+        self._window = window
+
+    def __call__(self) -> list[str] | tuple[str, ...] | None:
+        window = self._window
+        if window is None:
+            raise RuntimeError("folder picker window is not bound")
+        if not self._dialog_lock.acquire(blocking=False):
+            raise RuntimeError("folder picker is already active")
+        webview_module = self._webview_module
+        try:
+            return window.create_file_dialog(
+                webview_module.FileDialog.FOLDER,
+                allow_multiple=False,
+            )
+        finally:
+            self._dialog_lock.release()
+
+
 @dataclass(frozen=True, slots=True)
 class DesktopInstanceIdentity:
     """One injected mutex/title pair shared by holder and activator."""
@@ -486,7 +517,14 @@ def run_desktop(
             )
 
         document = _pending_document()
-        dispatcher = _closed_dispatcher(document)
+        slots = _folder_slots()
+        picker = _NativeFolderPicker(webview_module)
+        commands = _production_commands(
+            picker=picker,
+            slots=slots,
+            service=service,
+        )
+        dispatcher = _bridge_dispatcher(document, commands)
         window = webview_module.create_window(
             identity.window_title,
             _desktop_index_path(index_path),
@@ -494,6 +532,7 @@ def run_desktop(
         )
         if window is None:
             raise DesktopStartupError("NamiSync could not create its desktop window")
+        picker.bind(window)
 
         state = _StartupState()
         close_controller = _DesktopCloseController(
@@ -613,10 +652,31 @@ def _pending_document():
     return NativeDocumentState()
 
 
-def _closed_dispatcher(document: object):
+def _folder_slots():
+    from .slots import FolderSlotTable
+
+    return FolderSlotTable()
+
+
+def _production_commands(
+    *,
+    picker: object,
+    slots: object,
+    service: object,
+):
+    from .commands import production_command_specs
+
+    return production_command_specs(
+        picker=picker,
+        slots=slots,
+        service=service,
+    )
+
+
+def _bridge_dispatcher(document: object, commands: object):
     from .bridge import BridgeDispatcher
 
-    return BridgeDispatcher(document=document, commands={})
+    return BridgeDispatcher(document=document, commands=commands)
 
 
 def _desktop_close_hooks(dispatcher: object) -> _DesktopCloseHooks:

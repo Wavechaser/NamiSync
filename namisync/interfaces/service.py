@@ -91,6 +91,10 @@ class SyncPathInputError(ValueError):
     """A source/target pair failed interface-level path validation."""
 
 
+class CommandIdConflictError(ValueError):
+    """A receipted command id was reused for different admitted intent."""
+
+
 @dataclass(frozen=True, slots=True)
 class PlanSession:
     request_id: str
@@ -615,7 +619,7 @@ class NamiSyncService:
             )
             if prior_signature is not None:
                 if prior_signature != signature:
-                    raise ValueError(
+                    raise CommandIdConflictError(
                         "command_id was reused for a different selection mutation"
                     )
                 response = SelectionMutationView(
@@ -1493,7 +1497,9 @@ class NamiSyncService:
             if receipt is None:
                 return None
             if receipt.kind != kind or receipt.signature != signature:
-                raise ValueError("command_id was reused for a different command")
+                raise CommandIdConflictError(
+                    "command_id was reused for a different command"
+                )
             get_session = getattr(self._dispatcher, "get", None)
             if get_session is not None:
                 try:
@@ -1543,7 +1549,7 @@ class NamiSyncService:
                     return
                 existing = self._session_receipts.get(command_id)
                 if existing is not None and existing != receipt:
-                    raise ValueError(
+                    raise CommandIdConflictError(
                         "command_id raced with a different admitted session"
                     )
                 self._session_receipts[command_id] = receipt
@@ -1591,7 +1597,9 @@ class NamiSyncService:
                 raise RuntimeError("service is closed")
             existing = self._visibility_receipts.get(command_id)
             if existing is not None and existing != signature:
-                raise ValueError("command_id was reused for a different gesture")
+                raise CommandIdConflictError(
+                    "command_id was reused for a different gesture"
+                )
             self._visibility_receipts[command_id] = signature
         change = (
             self._runtime.acknowledge_inventory
@@ -1755,6 +1763,7 @@ def _location_resolution_view(resolution) -> LocationResolutionView:
 
 
 __all__ = [
+    "CommandIdConflictError",
     "ControlView",
     "DatabaseContractView",
     "ExecutionAdmissionView",

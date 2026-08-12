@@ -14,18 +14,22 @@ import pytest
 
 from namisync.interfaces import service as service_module
 from namisync.interfaces.service import (
+    CommandIdConflictError,
     ExecutionAdmissionView,
     ExecutionSession,
     PlanSession,
+    SyncPathInputError,
 )
 from namisync.interfaces.web.bridge import BridgeProtocolError, to_primitive_view
 from namisync.interfaces.web.commands import (
     CommandAccess,
+    CommandConflictError,
     CommandPayloadError,
     CommandRetry,
     CommandTimeout,
     FieldRequirement,
     PickerUnavailableError,
+    PlanningRefusedError,
     PUBLIC_VIEW_DATACLASSES,
     SERVICE_PUBLIC_VIEW_DATACLASSES,
     production_command_specs,
@@ -159,7 +163,10 @@ def test_br_g_32_folder_picker_cancel_creates_no_slot() -> None:
     assert slots.stored == []
 
 
-@pytest.mark.parametrize("selected", ["C:\\bare", (), ("one", "two"), (7,)])
+@pytest.mark.parametrize(
+    "selected",
+    ["C:\\bare", (), ("one", "two"), (7,), ("\ud800",)],
+)
 def test_br_g_32_folder_picker_refuses_invalid_native_results(
     selected: object,
 ) -> None:
@@ -168,6 +175,34 @@ def test_br_g_32_folder_picker_refuses_invalid_native_results(
     with pytest.raises(PickerUnavailableError):
         commands["pick_folder"].invoke({"purpose": "source"})
 
+    assert slots.stored == []
+
+
+def test_br_g_32_folder_picker_exception_is_typed_without_storing_a_slot() -> None:
+    private_detail = "C:\\private\\picker failure"
+
+    def refuse():
+        raise OSError(private_detail)
+
+    commands, slots, _ = _commands(picker=refuse)
+
+    with pytest.raises(PickerUnavailableError) as captured:
+        commands["pick_folder"].invoke({"purpose": "source"})
+
+    assert private_detail not in str(captured.value)
+    assert slots.stored == []
+
+
+def test_br_g_32_folder_picker_system_exit_cannot_cross_the_command_boundary() -> None:
+    def refuse():
+        raise SystemExit("private native termination detail")
+
+    commands, slots, _ = _commands(picker=refuse)
+
+    with pytest.raises(PickerUnavailableError) as captured:
+        commands["pick_folder"].invoke({"purpose": "source"})
+
+    assert "private" not in str(captured.value)
     assert slots.stored == []
 
 
@@ -215,6 +250,99 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
         (r"C:\private\source", r"D:\private\target", None, COMMAND_ID)
     ]
     assert "private" not in repr(payload)
+
+
+@pytest.mark.parametrize(
+    ("service_error", "adapter_error"),
+    [
+        (CommandIdConflictError("private conflict"), CommandConflictError),
+        (SyncPathInputError("C:\\private\\bad root"), PlanningRefusedError),
+    ],
+)
+def test_br_g_32_start_plan_maps_only_typed_service_refusals(
+    service_error: Exception,
+    adapter_error: type[Exception],
+) -> None:
+    class RefusingService(_Service):
+        def start_plan(self, *args: object, **kwargs: object) -> PlanSession:
+            del args, kwargs
+            raise service_error
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        service=RefusingService(),
+    )
+
+    with pytest.raises(adapter_error) as captured:
+        commands["start_plan"].invoke(
+            {
+                "command_id": COMMAND_ID,
+                "source_id": SOURCE_ID,
+                "target_id": TARGET_ID,
+                "deletion_policy": None,
+            }
+        )
+
+    assert "private" not in str(captured.value)
+
+
+def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None:
+    class BrokenService(_Service):
+        def start_plan(self, *args: object, **kwargs: object) -> PlanSession:
+            del args, kwargs
+            raise ValueError("incidental implementation defect")
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        service=BrokenService(),
+    )
+
+    with pytest.raises(ValueError, match="incidental implementation defect"):
+        commands["start_plan"].invoke(
+            {
+                "command_id": COMMAND_ID,
+                "source_id": SOURCE_ID,
+                "target_id": TARGET_ID,
+                "deletion_policy": None,
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        ExecutionSession(run_id="6" * 32, session_id="7" * 32),
+        PlanSession(request_id="A" * 32, session_id="5" * 32),
+        PlanSession(request_id="4" * 32, session_id="short"),
+        PlanSession(request_id=4, session_id="5" * 32),  # type: ignore[arg-type]
+        PlanSession(request_id="4" * 32, session_id=5),  # type: ignore[arg-type]
+    ],
+)
+def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
+    result: object,
+) -> None:
+    class InvalidService(_Service):
+        def start_plan(self, *args: object, **kwargs: object):
+            del args, kwargs
+            return result
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        service=InvalidService(),
+    )
+
+    with pytest.raises(RuntimeError, match="invalid data"):
+        commands["start_plan"].invoke(
+            {
+                "command_id": COMMAND_ID,
+                "source_id": SOURCE_ID,
+                "target_id": TARGET_ID,
+                "deletion_policy": None,
+            }
+        )
 
 
 @pytest.mark.parametrize(

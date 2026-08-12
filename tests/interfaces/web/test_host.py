@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from threading import Event, Lock, current_thread
+from threading import Event, Lock, Thread, current_thread
 from time import monotonic
 from types import SimpleNamespace
 
 import pytest
 
 import namisync.interfaces.web.host as host
+from namisync.interfaces.web.commands import PickerUnavailableError
 from namisync.interfaces.web.host import (
     DesktopInstanceAdmission,
     DesktopInstanceIdentity,
@@ -182,14 +183,46 @@ def _patch_primary(
         "_pending_document",
         lambda: order.append("pending_document") or document,
     )
+    slots = SimpleNamespace()
+    commands = SimpleNamespace()
     dispatcher = SimpleNamespace(
         _reject_new=lambda: order.append("reject_dispatch"),
         _wait_for_handlers=lambda: order.append("wait_handlers"),
     )
+
+    class Picker:
+        def __init__(self, actual_webview: object) -> None:
+            order.append(("native_picker", actual_webview))
+
+        def bind(self, window: object) -> None:
+            order.append(("bind_picker", window))
+
     monkeypatch.setattr(
         host,
-        "_closed_dispatcher",
-        lambda actual: order.append(("closed_dispatcher", actual)) or dispatcher,
+        "_folder_slots",
+        lambda: order.append(("folder_slots", slots)) or slots,
+    )
+    monkeypatch.setattr(host, "_NativeFolderPicker", Picker)
+    monkeypatch.setattr(
+        host,
+        "_production_commands",
+        lambda **dependencies: order.append(
+            ("production_commands", dependencies, commands)
+        )
+        or commands,
+    )
+    monkeypatch.setattr(
+        host,
+        "_bridge_dispatcher",
+        lambda actual_document, actual_commands: order.append(
+            (
+                "bridge_dispatcher",
+                actual_document,
+                actual_commands,
+                dispatcher,
+            )
+        )
+        or dispatcher,
     )
     monkeypatch.setattr(
         host,
@@ -289,9 +322,13 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "validate_databases",
         "initialize_databases",
         "pending_document",
-        "closed_dispatcher",
+        "folder_slots",
+        "native_picker",
+        "production_commands",
+        "bridge_dispatcher",
         "packaged_index",
         "create_window",
+        "bind_picker",
         "start",
         "bind_origin",
         "configure_security",
@@ -303,9 +340,171 @@ def test_host_prepares_before_create_and_starts_only_edge(
     created = next(item for item in order if isinstance(item, tuple) and item[0] == "create_window")
     assert created[1] == identity.window_title
     assert created[2] == "installed/assets/index.html"
+    slots_entry = next(item for item in order if item[0] == "folder_slots")
+    commands_entry = next(
+        item for item in order if item[0] == "production_commands"
+    )
+    bridge_entry = next(
+        item for item in order if item[0] == "bridge_dispatcher"
+    )
+    assert commands_entry[1]["slots"] is slots_entry[1]
+    assert bridge_entry[2] is commands_entry[2]
+    assert created[3] is bridge_entry[3]
     started = next(item for item in order if isinstance(item, tuple) and item[0] == "start")
     assert started[1] is webview
     assert started[2] == str(paths.webview2)
+
+
+def test_br_g_32_native_folder_picker_is_late_bound_and_uses_public_api() -> None:
+    folder_kind = object()
+    calls: list[tuple[object, ...]] = []
+    selected: object = (r"C:\private\selected",)
+
+    def create_file_dialog(kind: object, *, allow_multiple: bool) -> object:
+        calls.append((kind, allow_multiple))
+        return selected
+
+    window = SimpleNamespace(create_file_dialog=create_file_dialog)
+    webview = SimpleNamespace(FileDialog=SimpleNamespace(FOLDER=folder_kind))
+    picker = host._NativeFolderPicker(webview)
+
+    with pytest.raises(RuntimeError, match="not bound"):
+        picker()
+
+    picker.bind(window)
+    assert picker() == (r"C:\private\selected",)
+    assert calls == [(folder_kind, False)]
+
+    selected = None
+    assert picker() is None
+    assert calls == [(folder_kind, False), (folder_kind, False)]
+    with pytest.raises(RuntimeError, match="already bound"):
+        picker.bind(window)
+
+    source = Path(host.__file__).read_text(encoding="utf-8")
+    assert "webview.platforms" not in source
+    assert "webview.platforms.edgechromium" not in source
+
+
+def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
+    entered = Event()
+    release = Event()
+    active_lock = Lock()
+    active = 0
+    maximum_active = 0
+    calls = 0
+
+    def create_file_dialog(kind: object, *, allow_multiple: bool):
+        nonlocal active, maximum_active, calls
+        assert kind is folder_kind
+        assert allow_multiple is False
+        with active_lock:
+            calls += 1
+            active += 1
+            maximum_active = max(maximum_active, active)
+        try:
+            entered.set()
+            if calls == 1:
+                assert release.wait(2.0)
+            return (r"C:\private\selected",)
+        finally:
+            with active_lock:
+                active -= 1
+
+    class Slots:
+        def store(self, path: str, *, purpose: str) -> tuple[str, str]:
+            assert path == r"C:\private\selected"
+            assert purpose == "source"
+            return "slot-" + "1" * 32, "Selected"
+
+        def resolve_pair(self, source_id: str, target_id: str):
+            raise AssertionError((source_id, target_id))
+
+    folder_kind = object()
+    webview = SimpleNamespace(FileDialog=SimpleNamespace(FOLDER=folder_kind))
+    picker = host._NativeFolderPicker(webview)
+    picker.bind(SimpleNamespace(create_file_dialog=create_file_dialog))
+    commands = host._production_commands(
+        picker=picker,
+        slots=Slots(),
+        service=_Service([]),
+    )
+    first: list[object] = []
+    worker = Thread(
+        target=lambda: first.append(
+            commands["pick_folder"].invoke({"purpose": "source"})
+        )
+    )
+    worker.start()
+    assert entered.wait(1.0)
+
+    with pytest.raises(PickerUnavailableError):
+        commands["pick_folder"].invoke({"purpose": "source"})
+    assert maximum_active == 1
+
+    release.set()
+    worker.join(2.0)
+    assert not worker.is_alive()
+    assert first == [{"id": "slot-" + "1" * 32, "display": "Selected"}]
+
+    assert commands["pick_folder"].invoke({"purpose": "source"}) == {
+        "id": "slot-" + "1" * 32,
+        "display": "Selected",
+    }
+    assert calls == 2
+    assert maximum_active == 1
+
+
+@pytest.mark.parametrize(
+    "outcome",
+    [None, SystemExit("private native termination")],
+)
+def test_br_g_32_native_folder_picker_releases_single_flight_on_every_exit(
+    outcome: object,
+) -> None:
+    calls = 0
+    folder_kind = object()
+
+    def create_file_dialog(kind: object, *, allow_multiple: bool):
+        nonlocal calls
+        assert kind is folder_kind
+        assert allow_multiple is False
+        calls += 1
+        if calls == 1:
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return outcome
+        return (r"C:\private\later",)
+
+    picker = host._NativeFolderPicker(
+        SimpleNamespace(FileDialog=SimpleNamespace(FOLDER=folder_kind))
+    )
+    picker.bind(SimpleNamespace(create_file_dialog=create_file_dialog))
+
+    if isinstance(outcome, BaseException):
+        with pytest.raises(type(outcome)):
+            picker()
+    else:
+        assert picker() is None
+    assert picker() == (r"C:\private\later",)
+    assert calls == 2
+
+
+def test_br_g_32_host_helpers_build_exact_production_js_api() -> None:
+    document = SimpleNamespace(require_trusted=lambda: None)
+    slots = host._folder_slots()
+    commands = host._production_commands(
+        picker=lambda: None,
+        slots=slots,
+        service=_Service([]),
+    )
+    dispatcher = host._bridge_dispatcher(document, commands)
+
+    assert tuple(commands) == ("pick_folder", "start_plan")
+    assert tuple(dispatcher._commands) == ("pick_folder", "start_plan")
+    assert {name for name in dir(dispatcher) if not name.startswith("_")} == {
+        "dispatch"
+    }
 
 
 def test_host_accepts_only_a_construction_injected_local_index(

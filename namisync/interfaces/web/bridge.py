@@ -497,7 +497,7 @@ class BridgeDispatcher:
         try:
             try:
                 self._document.require_trusted()
-            except Exception:
+            except BaseException:
                 return self._failure(None, None, "bridge_unavailable")
 
             if type(command_json) is not str:
@@ -550,19 +550,31 @@ class BridgeDispatcher:
             except BridgeProtocolError:
                 return self._failure(request_id, name, "invalid_payload")
 
-            from .commands import CommandPayloadError, PickerUnavailableError
+            from .commands import (
+                CommandConflictError,
+                CommandPayloadError,
+                PickerUnavailableError,
+                PlanningRefusedError,
+            )
+            from .slots import SlotUnavailableError
 
             try:
                 result = spec.invoke(payload)
             except CommandPayloadError:
                 return self._failure(request_id, name, "invalid_payload")
+            except SlotUnavailableError:
+                return self._failure(request_id, name, "slot_unavailable")
             except PickerUnavailableError:
                 return self._failure(request_id, name, "picker_unavailable")
-            except Exception:
+            except CommandConflictError:
+                return self._failure(request_id, name, "command_conflict")
+            except PlanningRefusedError:
+                return self._failure(request_id, name, "planning_refused")
+            except BaseException:
                 return self._failure(request_id, name, "internal_error")
             try:
                 result = to_primitive_view(result)
-            except Exception:
+            except BaseException:
                 return self._failure(request_id, name, "internal_error")
             return {
                 "schema_version": BRIDGE_SCHEMA_VERSION,
@@ -570,7 +582,7 @@ class BridgeDispatcher:
                 "ok": True,
                 "result": result,
             }
-        except Exception:
+        except BaseException:
             return self._failure(None, None, "internal_error")
         finally:
             self._release()
@@ -588,7 +600,7 @@ class BridgeDispatcher:
                 command if command is not None else "-",
                 code,
             )
-        except Exception:
+        except BaseException:
             pass
         return {
             "schema_version": BRIDGE_SCHEMA_VERSION,

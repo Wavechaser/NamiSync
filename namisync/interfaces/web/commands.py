@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Protocol
 
 from namisync.interfaces.service import (
+    CommandIdConflictError,
     ControlView,
     DatabaseContractView,
     ExecutionAdmissionView,
@@ -31,6 +32,7 @@ from namisync.interfaces.service import (
     SessionEventView,
     SessionRecordView,
     ShutdownView,
+    SyncPathInputError,
 )
 from namisync.workflows.models import (
     ExecutionDetails,
@@ -110,6 +112,14 @@ class PickerUnavailableError(RuntimeError):
     """The native picker did not return its documented result shape."""
 
 
+class CommandConflictError(RuntimeError):
+    """A receipted bridge command no longer matches its first intent."""
+
+
+class PlanningRefusedError(RuntimeError):
+    """The service refused the selected roots before plan admission."""
+
+
 class CommandAccess(StrEnum):
     READ_ONLY = "read-only"
     MUTATING = "mutating"
@@ -151,7 +161,7 @@ class PlanningService(Protocol):
 
 PayloadValidator = Callable[[object], object]
 CommandHandler = Callable[[object], object]
-FolderPicker = Callable[[], Sequence[str] | None]
+FolderPicker = Callable[[], list[str] | tuple[str, ...] | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,17 +207,27 @@ def production_command_specs(
     def pick_folder(payload: object) -> object:
         if not isinstance(payload, _PickFolderPayload):
             raise TypeError("pick_folder received an unvalidated payload")
-        selected = picker()
+        try:
+            selected = picker()
+        except BaseException as error:
+            raise PickerUnavailableError(
+                "native folder picker could not open"
+            ) from error
         if selected is None:
             return None
         if (
-            isinstance(selected, (str, bytes))
-            or not isinstance(selected, Sequence)
+            type(selected) not in {list, tuple}
             or len(selected) != 1
-            or not isinstance(selected[0], str)
+            or type(selected[0]) is not str
             or not selected[0]
         ):
             raise PickerUnavailableError("native folder picker returned invalid data")
+        try:
+            selected[0].encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise PickerUnavailableError(
+                "native folder picker returned invalid data"
+            ) from error
         slot_id, display = slots.store(selected[0], purpose=payload.purpose)
         if (
             not isinstance(slot_id, str)
@@ -225,12 +245,30 @@ def production_command_specs(
         if not isinstance(payload, _StartPlanPayload):
             raise TypeError("start_plan received an unvalidated payload")
         source, target = slots.resolve_pair(payload.source_id, payload.target_id)
-        return service.start_plan(
-            source,
-            target,
-            deletion_policy=payload.deletion_policy,
-            command_id=payload.command_id,
-        )
+        try:
+            result = service.start_plan(
+                source,
+                target,
+                deletion_policy=payload.deletion_policy,
+                command_id=payload.command_id,
+            )
+        except CommandIdConflictError as error:
+            raise CommandConflictError(
+                "start_plan command id conflicts with retained intent"
+            ) from error
+        except SyncPathInputError as error:
+            raise PlanningRefusedError(
+                "start_plan roots were refused"
+            ) from error
+        if (
+            type(result) is not PlanSession
+            or type(result.request_id) is not str
+            or _OPAQUE_ID.fullmatch(result.request_id) is None
+            or type(result.session_id) is not str
+            or _OPAQUE_ID.fullmatch(result.session_id) is None
+        ):
+            raise RuntimeError("planning service returned invalid data")
+        return result
 
     return MappingProxyType(
         {

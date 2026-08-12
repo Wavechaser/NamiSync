@@ -20,6 +20,7 @@ from namisync.core.session import SessionState
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.dispatcher import SessionNotFound
 from namisync.interfaces.service import (
+    CommandIdConflictError,
     ExecutionAdmissionView,
     ExecutionSession,
     NamiSyncService,
@@ -557,6 +558,88 @@ def test_br_g_16_retry_receipts_apply_mutations_and_multirow_changes_once() -> N
     assert len(dispatcher.submissions) == 1
     session_service.close_session(admitted.session_id)
     assert "refresh-gesture" not in session_service._session_receipts
+
+
+def test_br_g_16_receipt_identity_mismatches_use_the_exact_typed_boundary() -> None:
+    copied = operation(OperationKind.COPY, source=file_stat())
+    selection_service = _service(_PlanRuntime(_artifact(plan((copied,)))))
+    selection_service.mutate_selection(
+        "request",
+        0,
+        deselect=(str(copied.op_id),),
+        command_id="selection-conflict",
+    )
+    with pytest.raises(CommandIdConflictError, match="selection mutation"):
+        selection_service.mutate_selection(
+            "request",
+            0,
+            reselect=(str(copied.op_id),),
+            command_id="selection-conflict",
+        )
+
+    session_service = _service(SimpleNamespace())
+    session_service._remember_session_receipt(
+        "session-conflict",
+        "plan",
+        ("source-a", "target-a", None),
+        "1" * 32,
+        "session-1",
+    )
+    with pytest.raises(CommandIdConflictError, match="different command"):
+        session_service._session_receipt(
+            "session-conflict",
+            "plan",
+            ("source-b", "target-a", None),
+        )
+
+    session_service._remember_session_receipt(
+        "publication-race",
+        "plan",
+        ("source-a", "target-a", None),
+        "2" * 32,
+        "session-2",
+    )
+    with pytest.raises(CommandIdConflictError, match="raced"):
+        session_service._remember_session_receipt(
+            "publication-race",
+            "plan",
+            ("source-b", "target-b", None),
+            "3" * 32,
+            "session-3",
+        )
+
+    rows = (_inventory_row("row-a", "a.bin"), _inventory_row("row-b", "b.bin"))
+
+    class VisibilityRuntime:
+        def list_inventory(self, location_id: int):
+            assert location_id == 7
+            return rows
+
+        def acknowledge_inventory(
+            self,
+            command_id: str,
+            location_id: int,
+            row_id: str,
+            *,
+            changed_at: datetime,
+        ) -> RecordDisposition:
+            del command_id, location_id, row_id, changed_at
+            return RecordDisposition.APPLIED
+
+    visibility_service = _service(VisibilityRuntime())
+    visibility_service.acknowledge_inventory(
+        "visibility-conflict",
+        7,
+        ("row-a",),
+        changed_at=NOW,
+    )
+    with pytest.raises(CommandIdConflictError, match="different gesture"):
+        visibility_service.acknowledge_inventory(
+            "visibility-conflict",
+            7,
+            ("row-b",),
+            changed_at=NOW,
+        )
 
 
 def test_br_g_16_concurrent_session_retry_admits_exactly_one_session() -> None:

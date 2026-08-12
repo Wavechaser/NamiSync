@@ -618,7 +618,8 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     document_holder: dict[str, object] = {}
     delayed_handler_started = threading.Event()
 
-    def closed_dispatcher(document: object) -> object:
+    def probe_dispatcher(document: object, commands: object) -> object:
+        del commands
         document_holder["value"] = document
 
         def native_probe(payload: Mapping[str, object]) -> object:
@@ -784,7 +785,9 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 _install_native_observer(host, recorder, runtime),
             )
         )
-        stack.enter_context(patch.object(host, "_closed_dispatcher", closed_dispatcher))
+        stack.enter_context(
+            patch.object(host, "_bridge_dispatcher", probe_dispatcher)
+        )
         stack.enter_context(patch.object(webbrowser, "open", browser_open))
         exit_code = host.run_desktop(
             AppPaths.from_root(arguments.data_dir),
@@ -978,7 +981,9 @@ def _run_packaged_popup(
 
         window.events.before_load += execute_packaged_probe
 
-    def closed_dispatcher(document: object) -> object:
+    def probe_dispatcher(document: object, commands: object) -> object:
+        del commands
+
         def packaged_probe(payload: Mapping[str, object]) -> object:
             recorder.event("dispatch", phase="packaged_popup")
             recorder.set("packaged_page", dict(payload))
@@ -1016,7 +1021,9 @@ def _run_packaged_popup(
         stack.enter_context(
             patch.object(host, "_configure_window_security", configure)
         )
-        stack.enter_context(patch.object(host, "_closed_dispatcher", closed_dispatcher))
+        stack.enter_context(
+            patch.object(host, "_bridge_dispatcher", probe_dispatcher)
+        )
         stack.enter_context(
             patch.object(
                 bridge._NativeNavigationGuard,
