@@ -18,7 +18,10 @@ dependencies = [
 ]
 
 [project.scripts]
-nami-sync = "namisync.interfaces.cli:main"
+nami-sync = "namisync.interfaces.launcher:main"
+
+[project.gui-scripts]
+nami-sync-gui = "namisync.interfaces.launcher:gui_main"
 
 [project.optional-dependencies]
 dev = [
