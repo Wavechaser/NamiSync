@@ -27,6 +27,25 @@ def test_canonical_package_imports() -> None:
     assert namisync.__name__ == "namisync"
 
 
+def test_entry_points_route_through_the_lazy_launcher() -> None:
+    project_root = Path(__file__).parents[1]
+    project = tomllib.loads(
+        (project_root / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    assert project["project"]["scripts"] == {
+        "nami-sync": "namisync.interfaces.launcher:main"
+    }
+    assert project["project"]["gui-scripts"] == {
+        "nami-sync-gui": "namisync.interfaces.launcher:gui_main"
+    }
+    module_entry = (project_root / "namisync" / "__main__.py").read_text(
+        encoding="utf-8"
+    )
+    assert "namisync.interfaces.launcher import main" in module_entry
+    assert "namisync.interfaces.cli" not in module_entry
+
+
 def test_declared_xxhash_dependency_is_importable() -> None:
     project = tomllib.loads(
         (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")

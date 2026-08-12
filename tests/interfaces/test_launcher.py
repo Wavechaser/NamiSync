@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,6 +35,34 @@ def test_console_launcher_delegates_explicit_arguments(
 
     assert launcher.main(["history", "--limit", "1"]) == 7
     assert seen == [["history", "--limit", "1"]]
+
+
+def test_explicit_cli_subprocess_loads_no_webview_module(tmp_path: Path) -> None:
+    history = tmp_path / "history.db"
+    script = """
+import json
+import sys
+from namisync.interfaces.launcher import main
+code = main(["history", "--history-database", sys.argv[1]])
+print("MODULES=" + json.dumps(sorted(
+    name for name in sys.modules
+    if name == "webview" or name.startswith("webview.")
+)))
+raise SystemExit(code)
+"""
+
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(history)],
+        cwd=Path(__file__).parents[2],
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    modules_line = next(
+        line for line in completed.stdout.splitlines() if line.startswith("MODULES=")
+    )
+    assert json.loads(modules_line.removeprefix("MODULES=")) == []
 
 
 @pytest.mark.parametrize(

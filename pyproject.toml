@@ -138,6 +138,7 @@ allow_indirect_imports = true
 name = "Interface adapters depend on the shared service"
 type = "layers"
 layers = [
+    "namisync.interfaces.launcher",
     "namisync.interfaces.cli | namisync.interfaces.web",
     "namisync.interfaces.service",
 ]
