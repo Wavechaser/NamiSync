@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
@@ -12,6 +13,7 @@ import pytest
 from conftest import BuiltWheel
 
 from test_wheel_assets import ASSET_ROOT, INITIAL_ASSETS
+from test_transport import _node_executable
 
 
 CSP = (
@@ -145,7 +147,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "\n".join(text for name, text in assets.items() if name.endswith(".js")),
     )
 
-    assert imports == ["./bridge.js"]
+    assert imports == ["./bridge.js", "./render.js"]
     assert all(value.startswith("./") and value.endswith(".js") for value in imports)
     assert all("innerHTML" not in text for text in assets.values())
 
@@ -156,6 +158,44 @@ def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
     source = "\n".join(_wheel_assets(built_wheel).values())
 
     assert _active_sink_hits(source) == ()
+
+
+def test_br_g_32_production_inert_text_helper_owns_text_writes(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    renderer = assets["render.js"]
+
+    assert renderer.count(".textContent =") == 1
+    assert "element.textContent = text;" in renderer
+    assert 'import { renderText } from "./render.js";' in assets["app.js"]
+    assert 'renderText(status, "Ready");' in assets["app.js"]
+    assert re.search(r"\.textContent\s*=(?!=)", assets["app.js"]) is None
+
+
+def test_br_g_32_inert_text_helper_rejects_before_setter_or_coercion() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the no-dependency render probe")
+    probe = PROJECT_ROOT / "tests" / "assets" / "render_text_probe.mjs"
+    renderer = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "render.js"
+    )
+
+    completed = subprocess.run(
+        [str(node), str(probe), str(renderer)],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 @pytest.mark.parametrize(
@@ -217,6 +257,23 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert "response.request_id !== requestId" in source
 
 
+def test_br_g_32_pick_folder_uses_neutral_interactive_transport() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    picker = source.split("export async function pickFolder(", 1)[1].split(
+        "export function dispatchInteractive(", 1
+    )[0]
+
+    assert "return dispatchInteractive(" in picker
+    assert "dispatchAttempt(" not in picker
+
+
 def test_br_g_32_response_id_accepts_null_only_for_structured_failures() -> None:
     source = (
         PROJECT_ROOT
@@ -265,8 +322,6 @@ def test_br_g_32_start_plan_deadline_includes_bridge_readiness() -> None:
     assert ready_attempt.index("await whenBridgeReady();") < ready_attempt.index(
         "const generation = bridgeGeneration;"
     )
-    assert '"pick_folder",\n    Object.freeze({ purpose })' in source
-    assert "validatePickFolderResult,\n    null," in source
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(
@@ -275,4 +330,4 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     app = _wheel_assets(built_wheel)["app.js"]
 
     assert 'status.textContent === "Starting..."' in app
-    assert app.count('status.textContent = "Ready"') == 1
+    assert app.count('renderText(status, "Ready")') == 1

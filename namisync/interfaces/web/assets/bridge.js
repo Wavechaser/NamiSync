@@ -1,6 +1,8 @@
 const SCHEMA_VERSION = 1;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
+const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const COMMAND_MAX_LENGTH = 64;
 const START_PLAN_TIMEOUT_MS = 30000;
 const ERROR_MESSAGES = Object.freeze({
   invalid_request: "The desktop request is invalid.",
@@ -74,12 +76,25 @@ export async function pickFolder(purpose) {
   if (purpose !== "source" && purpose !== "target") {
     throw new TypeError("purpose must be source or target");
   }
-  return dispatchAttempt(
+  return dispatchInteractive(
     "pick_folder",
     Object.freeze({ purpose }),
     validatePickFolderResult,
-    null,
   );
+}
+
+export function dispatchInteractive(command, payload, validateResult) {
+  if (
+    typeof command !== "string" ||
+    command.length > COMMAND_MAX_LENGTH ||
+    !COMMAND_PATTERN.test(command)
+  ) {
+    throw new TypeError("command must be a bounded lowercase snake name");
+  }
+  if (typeof validateResult !== "function") {
+    throw new TypeError("validateResult must be callable");
+  }
+  return dispatchAttempt(command, payload, validateResult, null);
 }
 
 export async function startPlan(sourceId, targetId, deletionPolicy = null) {

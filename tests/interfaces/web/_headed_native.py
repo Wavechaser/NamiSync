@@ -18,6 +18,8 @@ from uuid import uuid4
 
 _WM_CLOSE = 0x0010
 _BM_CLICK = 0x00F5
+_GW_OWNER = 4
+_DIALOG_WINDOW_CLASS = "#32770"
 _DEFAULT_SCENARIO_SECONDS = 45.0
 _CLEANUP_SECONDS = 3.0
 _LOCAL_DRIVE_TYPES = frozenset({2, 3, 5, 6})
@@ -409,6 +411,104 @@ def wait_for_dialog_text(
     return handle, dialog_text(handle)
 
 
+def select_folder_in_native_dialog(
+    process: HeadedProcess,
+    owner_handle: int,
+    path: Path,
+    *,
+    python: Path,
+    deadline: ScenarioDeadline,
+) -> dict[str, object]:
+    """Select one physical-local folder in the child-owned common dialog."""
+
+    selected_path = require_absolute_local_test_root(path)
+    dialog = _wait_for_owned_common_dialog(
+        process,
+        owner_handle,
+        deadline=deadline,
+    )
+    dialog_process_id = _window_process_id(dialog)
+    if dialog_process_id not in process.process_ids():
+        raise AssertionError("native folder dialog left the headed child job")
+    automation = start_headed_process(
+        (
+            python,
+            _HOST_CHILD,
+            "--uia-select-folder",
+            "--handle",
+            str(dialog),
+            "--owner-handle",
+            str(owner_handle),
+            "--process-id",
+            str(dialog_process_id),
+            "--path",
+            str(selected_path),
+            "--timeout",
+            str(deadline.remaining()),
+        ),
+        cwd=python.parent.parent,
+        environment=clean_child_environment(),
+        deadline=deadline,
+    )
+    completed = wait_for_process(automation, deadline=deadline)
+    try:
+        result = json.loads(completed.stdout.splitlines()[-1])
+    except (IndexError, json.JSONDecodeError) as error:
+        raise AssertionError(
+            "folder-dialog automation produced no valid result; "
+            f"stdout={completed.stdout!r}, stderr={completed.stderr!r}"
+        ) from error
+    if completed.returncode != 0 or result.get("selected") is not True:
+        raise AssertionError(
+            "folder-dialog automation did not select the requested folder; "
+            f"result={result!r}, stderr={completed.stderr!r}"
+        )
+    while _is_window(dialog):
+        remaining = deadline.remaining()
+        if process.poll() is not None:
+            completed_host = wait_for_process(process, deadline=deadline)
+            raise AssertionError(
+                "headed child exited while its native folder dialog was open\n"
+                f"stdout:\n{completed_host.stdout}\n"
+                f"stderr:\n{completed_host.stderr}"
+            )
+        time.sleep(min(0.025, remaining))
+    return result
+
+
+def _wait_for_owned_common_dialog(
+    process: HeadedProcess,
+    owner_handle: int,
+    *,
+    deadline: ScenarioDeadline,
+) -> int:
+    while True:
+        remaining = deadline.remaining()
+        process_ids = process.process_ids()
+        matches = tuple(
+            handle
+            for handle in _enumerate_windows()
+            if handle != owner_handle
+            and _window_process_id(handle) in process_ids
+            and _window_class(handle) == _DIALOG_WINDOW_CLASS
+            and _window_owner(handle) == owner_handle
+            and _is_window_visible(handle)
+        )
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise AssertionError(
+                "headed child exposed multiple owned common dialogs"
+            )
+        if process.poll() is not None:
+            completed = wait_for_process(process, deadline=deadline)
+            raise AssertionError(
+                "headed child exited before opening its native folder dialog\n"
+                f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+            )
+        time.sleep(min(0.025, remaining))
+
+
 def dismiss_ok_dialog(handle: int) -> None:
     """Post an asynchronous click; never block the test thread in user32."""
 
@@ -619,6 +719,25 @@ def _window_process_id(handle: int) -> int:
     return int(process_id.value)
 
 
+def _window_class(handle: int) -> str:
+    buffer = ctypes.create_unicode_buffer(256)
+    _user32().GetClassNameW(handle, buffer, len(buffer))
+    return buffer.value
+
+
+def _window_owner(handle: int) -> int | None:
+    owner = _user32().GetWindow(handle, _GW_OWNER)
+    return int(owner) if owner else None
+
+
+def _is_window(handle: int) -> bool:
+    return bool(_user32().IsWindow(handle))
+
+
+def _is_window_visible(handle: int) -> bool:
+    return bool(_user32().IsWindowVisible(handle))
+
+
 def _window_text(handle: int) -> str:
     user32 = _user32()
     length = user32.GetWindowTextLengthW(handle)
@@ -718,6 +837,12 @@ def _user32():
         ctypes.c_int,
     )
     user32.GetClassNameW.restype = ctypes.c_int
+    user32.GetWindow.argtypes = (wintypes.HWND, wintypes.UINT)
+    user32.GetWindow.restype = wintypes.HWND
+    user32.IsWindow.argtypes = (wintypes.HWND,)
+    user32.IsWindow.restype = wintypes.BOOL
+    user32.IsWindowVisible.argtypes = (wintypes.HWND,)
+    user32.IsWindowVisible.restype = wintypes.BOOL
     user32.PostMessageW.argtypes = (
         wintypes.HWND,
         wintypes.UINT,

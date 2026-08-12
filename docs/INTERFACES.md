@@ -6,9 +6,9 @@ semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
-database-pair facade, and secured product-host composition are implemented.
-The bridge command surface remains intentionally empty until Slice 2, and the
-API remains latent.
+database-pair facade, secured product-host composition, and Slice 2's exact
+`pick_folder`/`start_plan` transport are implemented. Event drain and the
+user-facing desktop surfaces remain; the API remains latent.
 
 ## Purpose
 
@@ -386,11 +386,12 @@ NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` to carry application data. Pinned pywebview does
 construct JavaScript internally for its exposed-function return transport;
 its escaping is therefore inside the tested security boundary, not evidence
-that the transport is system-wide script-free. The actual Stage 6 host must
-preserve the NamiSync-owned shape and add the bounded/coalesced event drain
-plus escaped DOM rendering.
+that the transport is system-wide script-free. The implemented host preserves
+the NamiSync-owned shape and strict shared text sink; Slice 3 adds the
+bounded/coalesced event drain, while Slices 5 and 6 add the production plan and
+inventory DOM renderers.
 
-The doc-first Slice 2 target keeps the production table to exactly
+The implemented Slice 2 production table contains exactly
 `pick_folder` and `start_plan`. The former owns one native user interaction and
 returns `null` or an opaque purpose-bound slot id plus inert display text; the
 latter accepts only one source slot, one target slot, an explicit
@@ -400,8 +401,11 @@ authority. `commands.py` owns immutable command rows and exact payload
 validation, `bridge.py` owns the v1 envelope/primitive codec/refusal boundary,
 and `slots.py` owns the locked 32-entry, 30-minute process-local path table.
 The exact envelopes, ids, messages, deadlines, and retry rule are normative in
-`M1_SHELL.md`; this paragraph does not mark the still-empty Slice 1 table as
-implemented.
+`M1_SHELL.md`. `assets/bridge.js` is the only `window.pywebview` owner and
+`assets/render.js` is the strict production `textContent` sink. Production has
+no runtime command registration: the headed gate adds `test_report` only by
+constructing a private immutable mapping under `tests/`, and that row and page
+are absent from the wheel.
 
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
 canceled or failed navigation, and rebuilds its in-flight return-callback
@@ -425,8 +429,8 @@ order. It acquires the fixed instance identity before logging or webview import,
 prepares the renderer before service/window construction, validates and if
 needed initializes the database pair before command admission, creates one
 pending `NativeDocumentState`, and binds its loopback origin once during the
-renderer-checked initialized callback. Slice 1 exposes an empty handler map, so
-even an attached page has no application command. Loaded attachment failure
+renderer-checked initialized callback. The host snapshots the exact two-row
+production mapping before exposing the page. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, shuts logging, releases
 the mutex, and preserves the initiating startup diagnosis.
@@ -444,6 +448,10 @@ complete shutdown permits programmatic destroy. Incomplete and exceptional
 attempts retain the page status and one owned native Retry/Cancel prompt; Retry
 alone starts another attempt, and the finalizer does not close an
 already-complete service twice.
+The loaded callback also binds the current fixed status element before any
+asynchronous close render. Repeated loads replace that cached presentation
+target, so a late worker never queries a destroyed document; missing/write
+failure is logged without changing the close phase or service result.
 
 ## Common Adapter Contract
 

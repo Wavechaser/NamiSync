@@ -18,11 +18,14 @@ M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
 history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
 classified launcher, coordinated database gate, packaged bootstrap page, fixed
 single-instance identity, secured local WebView2 product host, and nonblocking
-orderly-close/retry controller. Its bridge command surface remains closed until
-the transport slice, so workflow controls and product views are not yet
-available in the window. Clean-wheel Windows gates now exercise the real
-WebView2 host, packaged page, navigation/popup guards, runtime refusal,
-single-instance activation, isolated data root, and visible database refusal.
+orderly-close/retry controller. The transport slice is complete: production
+exposes exactly `pick_folder` and `start_plan`, with real paths retained behind
+opaque server slots and a strict inert-text return sink. Event drain and
+user-facing workflow controls/product views are not yet available in the
+window. Clean-wheel Windows gates exercise the real WebView2 host, packaged
+page, navigation/popup and per-dispatch origin guards, runtime refusal,
+single-instance activation, isolated data root, visible database refusal,
+native picker confinement, hostile-text transport, and log privacy.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -98,8 +101,9 @@ never hides the other result axes in rendered output.
 
 ## What is deliberately not promised yet
 
-- No desktop workflow-command surface, durable plan/session queue, or
-  restart-resume; the current headed host is a secured bootstrap boundary.
+- No user-facing desktop workflow-control surface, event drain, durable
+  plan/session queue, or restart-resume; the current headed page remains a
+  secured transport bootstrap boundary.
 - No cross-process desktop task visibility, background integrity, concurrent
   file execution, general database migration, backup, or history retention.
 - No automatic execution or bypass of reviewed-plan confirmation.
@@ -122,6 +126,20 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 — Gertrud Transport Checkpoint
+
+- Completed the desktop shell foundation through Slice 2 without claiming the
+  later product UI or beta package.
+  - **Host:** retained the secured installed-wheel WebView2 composition and
+    hardened repeated-load close status so late workers do not query a destroyed
+    document or let presentation failure change shutdown truth.
+  - **Transport:** added exact strict v1 envelopes, the two-row
+    `pick_folder`/`start_plan` allowlist, bounded purpose-bound path slots, and
+    receipt-safe uncertain-delivery replay.
+  - **Frontend and evidence:** added the sole strict `render.js` text sink and
+    constructor-only headed harness; real WebView2 gates cover native picker
+    confinement, independent off-origin refusal, hostile text, and log privacy.
 
 ### Development Tooling
 

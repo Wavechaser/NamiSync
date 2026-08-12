@@ -285,6 +285,10 @@ class _DesktopCloseController:
         self._render_status = (
             _render_close_status if render_status is None else render_status
         )
+        self._uses_bound_status = (
+            self._render_status is _ORIGINAL_CLOSE_STATUS_RENDERER
+        )
+        self._status_target: object | None = None
         self._retry_prompt = (
             (lambda: _show_retry_close_prompt(self._window_title))
             if retry_prompt is None
@@ -335,6 +339,7 @@ class _DesktopCloseController:
         return False
 
     def _mark_loaded(self) -> None:
+        self._bind_status_target()
         start_attempt = False
         with self._lock:
             if self._phase is _ClosePhase.STARTING:
@@ -467,9 +472,33 @@ class _DesktopCloseController:
                 if self._phase is not phase:
                     return
             try:
-                self._render_status(self._window, phase)
+                if self._uses_bound_status:
+                    status = self._status_target
+                    if status is None:
+                        logging.getLogger("namisync").error(
+                            "shutdown.status_target_unavailable"
+                        )
+                        return
+                    _render_close_status_target(status, phase)
+                else:
+                    self._render_status(self._window, phase)
             except Exception as error:
-                _log_cleanup_failure("shutdown.status_render_failed", error)
+                _log_presentation_failure("shutdown.status_render_failed", error)
+
+    def _bind_status_target(self) -> None:
+        if not self._uses_bound_status:
+            return
+        try:
+            status = self._window.dom.get_element("#host-status")
+        except Exception as error:
+            _log_presentation_failure("shutdown.status_bind_failed", error)
+            status = None
+        if status is None:
+            logging.getLogger("namisync").error(
+                "shutdown.status_target_unavailable"
+            )
+        with self._presentation_lock:
+            self._status_target = status
 
 
 def run_desktop(
@@ -743,6 +772,13 @@ def _start_webview(
 
 
 def _render_close_status(window: object, phase: _ClosePhase) -> None:
+    status = window.dom.get_element("#host-status")
+    if status is None:
+        raise RuntimeError("desktop close status element is unavailable")
+    _render_close_status_target(status, phase)
+
+
+def _render_close_status_target(status: object, phase: _ClosePhase) -> None:
     messages = {
         _ClosePhase.CLOSING: "Closing safely…",
         _ClosePhase.RETRYABLE: (
@@ -753,10 +789,10 @@ def _render_close_status(window: object, phase: _ClosePhase) -> None:
         message = messages[phase]
     except KeyError as error:
         raise ValueError("unsupported desktop close presentation state") from error
-    status = window.dom.get_element("#host-status")
-    if status is None:
-        raise RuntimeError("desktop close status element is unavailable")
     status.text = message
+
+
+_ORIGINAL_CLOSE_STATUS_RENDERER = _render_close_status
 
 
 def _show_retry_close_prompt(window_title: str) -> bool:
@@ -843,6 +879,14 @@ def _log_cleanup_failure(
         event,
         type(error).__name__,
         exc_info=(type(error), error, error.__traceback__),
+    )
+
+
+def _log_presentation_failure(event: str, error: Exception) -> None:
+    logging.getLogger("namisync").error(
+        "%s exception_type=%s",
+        event,
+        type(error).__name__,
     )
 
 

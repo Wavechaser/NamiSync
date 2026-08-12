@@ -395,6 +395,39 @@ def test_br_g_32_timed_out_pre_ready_attempt_cannot_dispatch_later() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_br_g_32_interactive_wrapper_is_neutral_bounded_and_single_attempt() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the no-dependency bridge probe")
+    probe = Path(__file__).parents[2] / "assets" / "bridge_interactive_probe.mjs"
+    bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
+
+    completed = subprocess.run(
+        [str(node), str(probe), str(bridge)],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=SimpleNamespace(),
+        service=SimpleNamespace(),
+    )
+    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+
+    assert dispatcher.dispatch(_request(command="test_report")) == _failure(
+        REQUEST_ID,
+        "unknown_command",
+        "This desktop action is not available.",
+    )
+
+
 def test_br_g_32_utf8_limit_is_inclusive_and_oversize_is_predecode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -6,9 +6,10 @@ switch, role-free inventory, standalone integrity workflows, generic history
 items, production dispatcher registrations, and optional post-execution
 compound verification. The CLI and Stage 5.5 facade/tree/selection/subtree
 surfaces are implemented. `M1_BRIDGE.md` remains the decision and acceptance
-record for the implemented Stage 5.5 prerequisite and the still-unimplemented
-Stage 6 headed desktop shell; `M1_SHELL.md` owns its delivery order and
-beta-package closure.
+record for the implemented Stage 5.5 prerequisite and active Stage 6 headed
+desktop shell. Stage 6's host and command-transport slices are implemented;
+event drain and product surfaces remain. `M1_SHELL.md` owns their delivery
+order and beta-package closure.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -324,7 +325,8 @@ Stage 5 location activities through the shared service.
 - **M1 Facade And CLI Implemented**. One process-local service owns the exact registry, runtime/dispatcher lifecycle, sink-only observation, primitive settings/inventory/result views, and both database overrides. The CLI adds all four location commands, optional execute-to-verify, actionable five-state binding, guarded selected rebaseline, typed phase/item rendering, and deterministic exit codes.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
-- **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Its application-command allowlist remains empty until the transport slice.
+- **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure.
+- **Desktop Command Transport Implemented**. The immutable production allowlist is exactly `pick_folder` and `start_plan`. Strict v1 envelopes, bounded opaque purpose-bound folder slots, receipted one-replay plan start, sanitized failures, and a production `textContent` sink have ordinary and real-WebView2 coverage. The native picker keeps real paths server-side; test-only reporting exists only through constructor composition outside the wheel. Event drain and user-facing plan/inventory controls remain later slices.
 
 ## DESKTOP UI
 

@@ -1378,6 +1378,115 @@ def test_close_status_uses_only_fixed_page_text() -> None:
     )
 
 
+def test_close_status_binds_each_loaded_document_before_async_render() -> None:
+    first = SimpleNamespace(text="first")
+    second = SimpleNamespace(text="second")
+    elements = iter((first, second))
+    selectors: list[str] = []
+    window = SimpleNamespace(
+        dom=SimpleNamespace(
+            get_element=lambda selector: selectors.append(selector)
+            or next(elements)
+        )
+    )
+    controller = host._DesktopCloseController(
+        window,
+        SimpleNamespace(),
+        host._DesktopCloseHooks(
+            reject_dispatch=lambda: None,
+            wake_waiters=lambda: None,
+            wait_for_handlers=lambda: None,
+            unsubscribe_observations=lambda: None,
+        ),
+        window_title="NamiSync Test",
+    )
+
+    controller._mark_loaded()
+    controller._mark_loaded()
+    window.dom.get_element = lambda _selector: pytest.fail(
+        "the close worker must not query a destroyed document"
+    )
+    with controller._lock:
+        controller._phase = host._ClosePhase.CLOSING
+    controller._show_status(host._ClosePhase.CLOSING)
+
+    assert selectors == ["#host-status", "#host-status"]
+    assert first.text == "first"
+    assert second.text == "Closing safely\u2026"
+
+
+def test_close_status_write_failure_is_sanitized_and_does_not_change_truth(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class FailedStatus:
+        @property
+        def text(self) -> str:
+            return "Ready"
+
+        @text.setter
+        def text(self, _value: str) -> None:
+            raise RuntimeError(r"C:\private\status-sentinel")
+
+    window = SimpleNamespace(
+        dom=SimpleNamespace(get_element=lambda _selector: FailedStatus())
+    )
+    controller = host._DesktopCloseController(
+        window,
+        SimpleNamespace(),
+        host._DesktopCloseHooks(
+            reject_dispatch=lambda: None,
+            wake_waiters=lambda: None,
+            wait_for_handlers=lambda: None,
+            unsubscribe_observations=lambda: None,
+        ),
+        window_title="NamiSync Test",
+    )
+    controller._mark_loaded()
+    with controller._lock:
+        controller._phase = host._ClosePhase.CLOSING
+    caplog.set_level("ERROR", logger="namisync")
+
+    controller._show_status(host._ClosePhase.CLOSING)
+
+    record = next(
+        item
+        for item in caplog.records
+        if item.getMessage().startswith("shutdown.status_render_failed")
+    )
+    assert record.exc_info is None
+    assert "RuntimeError" in record.getMessage()
+    assert "status-sentinel" not in caplog.text
+    assert "Traceback" not in caplog.text
+    with controller._lock:
+        assert controller._phase is host._ClosePhase.CLOSING
+
+
+def test_missing_bound_close_status_does_not_block_loaded_state(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("ERROR", logger="namisync")
+    controller = host._DesktopCloseController(
+        SimpleNamespace(
+            dom=SimpleNamespace(get_element=lambda _selector: None)
+        ),
+        SimpleNamespace(),
+        host._DesktopCloseHooks(
+            reject_dispatch=lambda: None,
+            wake_waiters=lambda: None,
+            wait_for_handlers=lambda: None,
+            unsubscribe_observations=lambda: None,
+        ),
+        window_title="NamiSync Test",
+    )
+
+    controller._mark_loaded()
+
+    with controller._lock:
+        assert controller._phase is host._ClosePhase.OPEN
+    assert "shutdown.status_target_unavailable" in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+
+
 def test_native_retry_prompt_is_owned_and_has_no_force_close_choice(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

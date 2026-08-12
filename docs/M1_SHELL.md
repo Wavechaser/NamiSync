@@ -9,13 +9,14 @@ the database file-pair matrix, in-loop startup teardown, the normative CSP
 gate, the GUI argument grammar, and constructor-only command composition; the
 2026-08-08 revision adds the Fluent visual design language (§1.9), motion
 (§1.10), and the two GUI Breaks that bound the visual work.
-Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slice 1 are complete.
-The installed-wheel and real WebView2 gates now cover the secured empty-surface
-product host, bounded startup finalizer, nonblocking user-close/retry state
-machine, fixed single-instance boundary, and coordinated database refusal.
-Slice 2 command transport is next. NamiSync remains version `0.1.0` until M1 is
-complete. Finishing M1 makes the product beta-ready; any later version change
-is a separate release decision.
+Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-2 are complete.
+The installed-wheel and real WebView2 gates now cover the secured product host,
+bounded startup finalizer, nonblocking user-close/retry state machine, fixed
+single-instance boundary, coordinated database refusal, exact two-command
+transport, real native picker confinement, committed-origin refusal, and
+hostile-text/privacy return path. Slice 3 event drain is next. NamiSync remains
+version `0.1.0` until M1 is complete. Finishing M1 makes the product beta-ready;
+any later version change is a separate release decision.
 
 ## Standing
 
@@ -255,6 +256,7 @@ namisync/interfaces/web/
         components.css
         app.js
         bridge.js
+        render.js
         tree.js
         rail.js
         panels.js
@@ -263,8 +265,9 @@ namisync/interfaces/web/
         history.js
 namisync/interfaces/launcher.py
 tests/assets/
-    headed_harness.html
-    headed_harness.js
+    bridge_interactive_probe.mjs
+    render_text_probe.mjs
+    transport_gate/
 ```
 
 `visible_sequence.py` owns tree-agnostic flatten/window/search/filter/anchor
@@ -275,6 +278,12 @@ server; it never reconstructs hierarchy or filters an already-windowed page.
 design tokens (section 1.9), `components.css` the Fluent control set built on
 them, and `app.css` layout only; surface renderers consume tokens and
 components and define no color of their own.
+
+At Slice 2 closure the exact shipped asset set is `index.html`, `app.css`,
+`app.js`, `bridge.js`, and `render.js`; later entries in the target layout do
+not ship until their owning slices. `render.js` owns the strict production
+`textContent` sink. The browserless probes and headed `transport_gate/` page
+remain under `tests/assets/` and are excluded from package data.
 
 The production host resolves its index from package resources. A
 Python-construction-only override accepts an absolute local index path for
@@ -583,8 +592,10 @@ installation, not yet the final PyInstaller artifact.
 
 ### Slice 2 - Command transport, slots, and headed harness
 
-The following is the normative Slice 2 transport target. It is a contract for
-the next implementation slice, not a claim that Slice 2 is complete.
+The following is the normative, implemented Slice 2 transport contract. Its
+closure covers transport, picker, committed-origin refusal, static sinks, and
+SH-G-3 logging/privacy; it does not claim the later plan or inventory DOM
+portions of BR-G-32.
 
 **Wire envelopes and limits.** The JavaScript wrapper sends one JSON string to
 `dispatch(command_json)`. Its UTF-8 encoding must be at most 65,536 bytes before
@@ -699,6 +710,18 @@ or bridge traffic cannot enable it. The harness uses the same v1 envelope and
 production `bridge.js`, but its whole-scenario parent deadline owns test
 timeout; there is no product `test_report` retry class.
 
+The neutral browser primitive
+`dispatchInteractive(command, payload, validator)` accepts only a 1--64 ASCII
+lowercase-snake command name matching
+`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$` and a callable result validator, then makes
+one transport attempt with no client deadline and no automatic retry. Payload
+validation remains the selected Python command row's responsibility. Both
+`pickFolder` and the constructor-only headed `test_report` client use this
+primitive. It formats a request; it does not register or allow a command, so
+Python's immutable constructor-supplied mapping remains the sole allowlist and
+the `test_report` literal, payload schema, result schema, and handler remain
+under `tests/` and absent from package data.
+
 Slice 3 owns the event-drain command; Slice 5 owns plan-review, selection,
 execution, and control commands; Slice 6 owns inventory commands; and Slice 7
 owns settings, history, and lifecycle commands. Those names and payload schemas
@@ -768,6 +791,25 @@ named and owned as follows:
 - Slice 5's production plan surface and Slice 6's production inventory surface
   add their own BR-G-32 named nodes; the Slice 2 nodes do not claim those DOM
   clauses early.
+
+Slice 2's headed child uses an absolute physical local data/page root, unique
+test-only window and mutex identity, a hard parent deadline, and a kill-on-close
+Job Object. It drives the real native folder dialog without a foreground-forcing
+API, localized-label lookup, or keystroke automation, proves the browser sees
+only `{id, display}` while the service receives the selected paths, commits a
+second loopback origin to prove
+per-dispatch refusal without handler entry, and round-trips the hostile corpus
+through production `renderText`. The harness extends the exact production
+mapping only by constructor composition; `test_report` and every harness asset
+remain absent from the wheel. Emitted records prove the native renderer version
+and omit request bodies, real paths, hostile sentinels, tracebacks, exception
+text, and the human-facing `NICKNAME`, closing SH-G-3.
+
+The close-status hardening discovered while exercising repeated native loads is
+also retained: each loaded document binds its current fixed `#host-status`
+target before an asynchronous close attempt can render. A late worker never
+queries a destroyed/replaced document, and a missing or failed presentation
+target is logged without changing shutdown truth.
 
 ### Slice 3 - Event drain
 

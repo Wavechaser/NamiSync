@@ -2,9 +2,9 @@
 
 Status (2026-07-30, implementation updated 2026-08-12): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
-Stage 6 (web desktop shell). Stage 6's installed, secured product-host slice is
-complete; command transport and the later presentation slices remain. Stage
-5.5 landed its tree substrate, recursive scan scope, selection
+Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
+command-transport slices are complete; event drain and the later presentation
+slices remain. Stage 5.5 landed its tree substrate, recursive scan scope, selection
 semantics, and facade integration without taking Stage 6 presentation work. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
 computes where, how large plans and inventories reach the client, how
@@ -33,11 +33,11 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host foundation are promoted into the active focused documents and
-README. The complete Stage 6 UI remains unshipped; `M1_SHELL.md` and
-`DESKTOP_UI.md` record the remaining transport and presentation work and
-packaging decisions, while slice 8 still performs the final as-built pass over
-every active document and `ui_mockup/`.
+secured host and two-command transport foundation are promoted into the active
+focused documents and README. The complete Stage 6 UI remains unshipped;
+`M1_SHELL.md` and `DESKTOP_UI.md` record the remaining event-drain and
+presentation work and packaging decisions, while slice 8 still performs the
+final as-built pass over every active document and `ui_mockup/`.
 
 ---
 
@@ -1906,6 +1906,35 @@ lifecycle commands are not reserved or allowlisted until their owning slices
 land each row with its schema, receipt/revision rule, deadline, retry policy,
 and gate.
 
+`bridge.js` exports the neutral browser transport primitive
+`dispatchInteractive(command, payload, validator)`. It accepts only a 1--64
+ASCII lowercase-snake wire name matching
+`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$` and a callable result validator, and performs
+one attempt with no client deadline and no automatic retry; payload validation
+belongs to the constructor-supplied Python command row. `pickFolder` and the
+headed harness's constructor-only `test_report` client share this primitive.
+The primitive only formats and submits a request: it neither registers nor
+allows the name. The Python mapping remains the sole allowlist, while the
+`test_report` literal, validator, payload/result schemas, and handler remain
+tests-only and absent from the wheel.
+
+At Slice 2 closure the exact packaged frontend set is `index.html`, `app.css`,
+`app.js`, `bridge.js`, and `render.js`. The last owns the strict production
+`renderText(element, text)` sink and writes only validated string data through
+`textContent`. Browserless transport/render probes and the headed transport
+page live under `tests/assets/`, not package data.
+
+The headed gate composes its single `test_report` row only through the same
+dispatcher constructor used by production, under a unique test identity and an
+absolute physical local page/data root. It automates the real native folder
+picker without a foreground-forcing API, localized-label lookup, or keystroke
+input, proves selected paths stay behind purpose-bound ids, commits an
+independent second loopback origin and verifies zero handler calls, and
+round-trips the hostile corpus through the real pinned return transport and
+production sink. Renderer/log evidence is read from native
+`BrowserVersionString`; logs contain neither request bodies,
+real paths, hostile sentinels, tracebacks, exception text, nor `NICKNAME`.
+
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
 as the GUI-owned counterpart to `db/settings.json` — recents, window geometry,
 column and sort state — and this document's slice 7 is where it is finally
@@ -1972,6 +2001,8 @@ The split evidence has concrete homes:
 
 Thus Slice 2 closes BR-G-32's transport, picker, origin-refusal, and static-sink
 portion of XV-19 without claiming that transport alone proves a later DOM sink.
+It also closes SH-G-3. The production plan and inventory DOM clauses remain
+open for Slices 5 and 6, so BR-G-32 as a whole remains open.
 
 ### DR-BR-26 — The node tree is a pure function
 

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import logging
+import os
+import platform
 import re
 import subprocess
 import sys
 import threading
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,38 +41,209 @@ def _flush() -> None:
     logging_config._handler.flush()
 
 
-def test_logging_is_eager_shared_bounded_and_idempotent(tmp_path: Path) -> None:
+def test_sh_g_3_configure_twice_owns_one_handler_hooks_and_logger_policy(
+    tmp_path: Path,
+) -> None:
     paths = AppPaths.from_root(tmp_path / "app")
     root = logging.getLogger()
     root_state = (tuple(root.handlers), root.level, root.propagate)
+    logger_handlers: dict[str, tuple[logging.Handler, ...]] = {}
+    foreign_handlers: dict[str, logging.Handler] = {}
+    for name in ("namisync", "pywebview"):
+        logger = logging.getLogger(name)
+        logger_handlers[name] = tuple(logger.handlers)
+        foreign = logging.NullHandler()
+        foreign_handlers[name] = foreign
+        logger.addHandler(foreign)
     prior_sys_hook = sys.excepthook
     prior_thread_hook = threading.excepthook
 
-    first = logging_config.configure_logging(paths)
-    handler = logging_config._handler
-    process_wrapper = sys.excepthook
-    thread_wrapper = threading.excepthook
-    second = logging_config.configure_logging(paths)
+    try:
+        first = logging_config.configure_logging(paths)
+        handler = logging_config._handler
+        process_wrapper = sys.excepthook
+        thread_wrapper = threading.excepthook
+        second = logging_config.configure_logging(paths)
 
-    assert first == second == paths.log_file.resolve()
-    assert paths.log_file.is_file()
-    assert handler is not None
-    assert handler.delay is False
-    assert handler.maxBytes == 5 * 1024 * 1024
-    assert handler.backupCount == 5
-    assert handler.encoding.lower().replace("-", "") == "utf8"
-    assert handler.errors == "backslashreplace"
-    assert handler.level == logging.INFO
-    for name in ("namisync", "pywebview"):
-        logger = logging.getLogger(name)
-        assert logger.level == logging.INFO
-        assert logger.propagate is False
-        assert logger.handlers.count(handler) == 1
-    assert (tuple(root.handlers), root.level, root.propagate) == root_state
-    assert sys.excepthook is not prior_sys_hook
-    assert threading.excepthook is not prior_thread_hook
-    assert sys.excepthook is process_wrapper
-    assert threading.excepthook is thread_wrapper
+        assert first == second == paths.log_file.resolve()
+        assert paths.log_file.is_file()
+        assert handler is not None
+        assert logging_config._handler is handler
+        assert handler.delay is False
+        assert handler.maxBytes == 5 * 1024 * 1024
+        assert handler.backupCount == 5
+        assert handler.encoding.lower().replace("-", "") == "utf8"
+        assert handler.errors == "backslashreplace"
+        assert handler.level == logging.INFO
+        for name in ("namisync", "pywebview"):
+            logger = logging.getLogger(name)
+            assert logger.level == logging.INFO
+            assert logger.propagate is False
+            assert tuple(logger.handlers) == (
+                *logger_handlers[name],
+                foreign_handlers[name],
+                handler,
+            )
+        assert (tuple(root.handlers), root.level, root.propagate) == root_state
+        assert sys.excepthook is not prior_sys_hook
+        assert threading.excepthook is not prior_thread_hook
+        assert sys.excepthook is process_wrapper
+        assert threading.excepthook is thread_wrapper
+    finally:
+        for name, foreign in foreign_handlers.items():
+            logging.getLogger(name).removeHandler(foreign)
+
+
+def test_sh_g_3_child_gui_path_emits_exact_startup_and_dependency_records(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "child-app"
+    script = """
+import logging
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+from namisync.interfaces import launcher
+from namisync.interfaces.web import host
+
+
+class Hook:
+    def __init__(self):
+        self.handlers = []
+
+    def __iadd__(self, handler):
+        self.handlers.append(handler)
+        return self
+
+    def emit(self):
+        for handler in tuple(self.handlers):
+            handler()
+
+
+class Window:
+    def __init__(self):
+        self.real_url = "http://127.0.0.1:41700/assets/index.html"
+        self.events = SimpleNamespace(closing=Hook(), loaded=Hook())
+        self.dom = SimpleNamespace(
+            get_element=lambda selector: (
+                SimpleNamespace(text="Ready")
+                if selector == "#host-status"
+                else None
+            )
+        )
+
+    def destroy(self):
+        pass
+
+
+class Webview:
+    def __init__(self):
+        self.window = Window()
+
+    def create_window(self, _title, _url, *, js_api):
+        assert js_api is not None
+        return self.window
+
+
+class LeaseNative:
+    def close_handle(self, _handle):
+        pass
+
+
+class Service:
+    def validate_database_contracts(self):
+        return SimpleNamespace(state="ready", reason=None, reset_direction=None)
+
+    def start_plan(self, *_args, **_kwargs):
+        raise AssertionError("planning is outside this startup witness")
+
+    def close(self):
+        return SimpleNamespace(complete=True, unfinished=(), custody_released=True)
+
+
+webview = Webview()
+lease = host.DesktopInstanceLease(object(), LeaseNative())
+host.acquire_desktop_instance = lambda _identity, native=None: (
+    host.DesktopInstanceAdmission(lease, False, None)
+)
+
+
+def load_webview():
+    assert (Path(sys.argv[1]) / "logs" / "namisync.log").is_file()
+    return webview
+
+
+def configure_security(window, url, document, _renderer_callback):
+    assert window is webview.window
+    document._mark_attached(url)
+    logging.getLogger("pywebview").warning("child-renderer-record")
+
+
+def start_webview(webview_module, *, on_initialized, storage_path):
+    assert webview_module is webview
+    assert Path(storage_path) == Path(sys.argv[1]) / "webview2"
+    on_initialized()
+    webview.window.events.loaded.emit()
+
+
+host._load_webview = load_webview
+host._prepare_webview_host = lambda _module: None
+host._create_service = lambda _paths: Service()
+host._configure_window_security = configure_security
+host._start_webview = start_webview
+startup_errors = []
+launcher._report_startup_error = startup_errors.append
+
+assert launcher.gui_main(["--data-dir", sys.argv[1]]) == 0
+assert startup_errors == []
+    """
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    started_at = datetime.now(UTC) - timedelta(milliseconds=1)
+    completed = subprocess.run(
+        [sys.executable, "-c", script, str(root)],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+    finished_at = datetime.now(UTC) + timedelta(milliseconds=1)
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    log_path = root / "logs" / "namisync.log"
+    assert log_path.is_file()
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 4
+    assert all(HEADER.fullmatch(line) for line in lines)
+    for line in lines:
+        timestamp = line.split(" ", 1)[0]
+        parsed = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f%z")
+        assert parsed.utcoffset() == timedelta(0)
+        assert started_at <= parsed <= finished_at
+
+    startup = next(line for line in lines if "startup.begin" in line)
+    assert f"product_version={VERSION}" in startup
+    assert f"python_version={platform.python_version()}" in startup
+    assert f"os_version={platform.platform()}" in startup
+    assert NICKNAME not in startup
+    assert any(
+        line.endswith("logger=pywebview: child-renderer-record") for line in lines
+    )
+    dependencies = next(
+        line for line in lines if "startup.dependencies" in line
+    )
+    for label, distribution in (
+        ("pywebview", "pywebview"),
+        ("pythonnet", "pythonnet"),
+        ("clr_loader", "clr-loader"),
+        ("bottle", "bottle"),
+    ):
+        assert f"{label}={importlib.metadata.version(distribution)}" in dependencies
 
 
 def test_emitted_records_have_exact_header_and_version_only_startup(
@@ -119,7 +294,21 @@ def test_dependency_record_reads_distribution_metadata_without_importing_hosts(
     assert "bottle=installed-bottle" in text
 
 
-def test_rotation_and_unicode_fallback_are_emitted_without_internal_error(
+def test_sh_g_3_ascii_rollover_creates_the_numbered_backup(
+    tmp_path: Path,
+) -> None:
+    paths = AppPaths.from_root(tmp_path / "app")
+    logging_config.configure_logging(paths)
+    logger = logging.getLogger("namisync.test")
+
+    logger.info("a" * (3 * 1024 * 1024))
+    logger.info("b" * (3 * 1024 * 1024))
+    _flush()
+
+    assert (paths.logs / "namisync.log.1").is_file()
+
+
+def test_sh_g_3_unicode_and_surrogate_fallback_emit_without_internal_error(
     tmp_path: Path,
 ) -> None:
     paths = AppPaths.from_root(tmp_path / "app")
@@ -128,24 +317,45 @@ def test_rotation_and_unicode_fallback_are_emitted_without_internal_error(
 
     logger.info("snowman=\N{SNOWMAN}")
     logger.info("surrogate=\udcff")
-    logger.info("a" * (3 * 1024 * 1024))
-    logger.info("b" * (3 * 1024 * 1024))
     _flush()
 
-    assert (paths.logs / "namisync.log.1").is_file()
     payload = b"".join(path.read_bytes() for path in paths.logs.iterdir())
     decoded = payload.decode("utf-8")
     assert "snowman=\N{SNOWMAN}" in decoded
     assert r"surrogate=\udcff" in decoded
 
 
-def test_process_and_thread_hooks_log_once_and_delegate_once(
+def test_sh_g_3_process_hook_logs_once_and_delegates_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     process_calls: list[tuple[object, ...]] = []
-    thread_calls: list[object] = []
     monkeypatch.setattr(sys, "excepthook", lambda *args: process_calls.append(args))
+    paths = AppPaths.from_root(tmp_path / "app")
+    logging_config.configure_logging(paths)
+    process_hook = sys.excepthook
+    logging_config.configure_logging(paths)
+    assert sys.excepthook is process_hook
+    error = ValueError("synthetic")
+    try:
+        raise error
+    except ValueError as caught:
+        process_hook(ValueError, caught, caught.__traceback__)
+    _flush()
+
+    assert len(process_calls) == 1
+    assert process_calls[0][2] is not None
+    text = paths.log_file.read_text(encoding="utf-8")
+    assert text.count("unhandled.process exception_type=ValueError") == 1
+    assert "Traceback (most recent call last):" in text
+    assert "ValueError: synthetic" in text
+
+
+def test_sh_g_3_thread_hook_logs_once_and_delegates_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    thread_calls: list[object] = []
     monkeypatch.setattr(
         threading,
         "excepthook",
@@ -153,31 +363,30 @@ def test_process_and_thread_hooks_log_once_and_delegate_once(
     )
     paths = AppPaths.from_root(tmp_path / "app")
     logging_config.configure_logging(paths)
-    process_hook = sys.excepthook
     thread_hook = threading.excepthook
     logging_config.configure_logging(paths)
-    assert sys.excepthook is process_hook
     assert threading.excepthook is thread_hook
-    error = ValueError("synthetic")
-
-    process_hook(ValueError, error, None)
-    thread_args = SimpleNamespace(
-        exc_type=RuntimeError,
-        exc_value=RuntimeError("thread-synthetic"),
-        exc_traceback=None,
-        thread=None,
-    )
-    thread_hook(thread_args)
+    try:
+        raise RuntimeError("thread-synthetic")
+    except RuntimeError as caught:
+        thread_args = SimpleNamespace(
+            exc_type=RuntimeError,
+            exc_value=caught,
+            exc_traceback=caught.__traceback__,
+            thread=threading.current_thread(),
+        )
+        thread_hook(thread_args)
     _flush()
 
-    assert len(process_calls) == 1
     assert thread_calls == [thread_args]
+    assert thread_args.exc_traceback is not None
     text = paths.log_file.read_text(encoding="utf-8")
-    assert text.count("unhandled.process exception_type=ValueError") == 1
     assert text.count("unhandled.thread exception_type=RuntimeError") == 1
+    assert "Traceback (most recent call last):" in text
+    assert "RuntimeError: thread-synthetic" in text
 
 
-def test_later_write_failure_cannot_change_shutdown_truth(
+def test_sh_g_3_later_write_failure_does_not_escape_or_change_shutdown_truth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

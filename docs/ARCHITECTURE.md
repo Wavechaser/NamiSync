@@ -2012,8 +2012,9 @@ The implemented host composition acquires its fixed instance mutex before any
 local artifact or diagnostic ownership, then prepares pywebview, constructs the
 shared service, validates/initializes the coordinated database pair, and only
 then resolves the wheel-packaged page and creates a window. A pending document
-authority and empty command map keep dispatch closed until later transport
-slices. Initialized failure aborts before native creation; UI-thread guard or
+authority keeps dispatch closed until native guard attachment; once trusted,
+the host exposes exactly the snapshotted `pick_folder` and `start_plan` rows.
+Initialized failure aborts before native creation; UI-thread guard or
 loaded-watchdog failure destroys once. One finalizer owns service, logging, and
 mutex release without allowing cleanup failure to replace startup truth.
 For a normal user close, a private bridge-admission gate first rejects new
@@ -2022,6 +2023,10 @@ the service close off the WinForms thread. Only a complete shutdown permits one
 recursive-safe programmatic destroy. Incomplete or exceptional attempts retain
 the window and expose a fixed native Retry/Cancel action; another title-bar X
 can reopen that action but cannot itself retry or force destruction.
+The loaded callback binds the current fixed status element before asynchronous
+close presentation. Repeated loads replace that cached target, avoiding a late
+DOM lookup against a destroyed document; a presentation failure is sanitized
+and cannot alter shutdown state.
 The native folder picker is the sole path-input exception: the host retains the
 real path in a server slot and returns only an opaque id plus display string.
 `pywebview` is an M1 runtime dependency, not an optional GUI extra. One
@@ -2079,14 +2084,16 @@ native committed-origin dispatch recheck, strict versioned allowlist, and
 structured return boundary. Pywebview 6.2.1 is pinned from the Stage 6
 reality run. Classified launchers, exact-CSP wheel assets, fixed instance
 identity, database-pair gate, and secured product host are now composed. The
-host intentionally has no command transport or event drain yet.
+host was promoted with no commands; Slice 2 now supplies its command transport,
+while event drain remains next.
 Installed native probes can inject an absolute physical local index file at
 Python construction only; product launch retains the package-resource index and
 has no external override surface.
 
-**Stage 6 Slice 2 ownership target.** `interfaces/web/commands.py` is the sole
-owner of immutable production command rows and their exact payload policies;
-its initial table is exactly `pick_folder` and `start_plan`.
+**Stage 6 Slice 2 status (completed 2026-08-12).**
+`interfaces/web/commands.py` is the sole owner of immutable production command
+rows and their exact payload policies;
+its production table is exactly `pick_folder` and `start_plan`.
 `interfaces/web/bridge.py` remains domain-blind and owns strict v1 parsing,
 origin/admission checks, the recursive primitive-view codec, and sanitized
 response envelopes. `interfaces/web/slots.py` alone retains picker paths in a
@@ -2096,8 +2103,16 @@ mapping; it does not duplicate their rules. `assets/bridge.js` alone touches
 `window.pywebview` and owns transport ids, the 30-second uncertain-delivery
 retry for receipted `start_plan`, and response validation. Test-only
 `test_report` composition remains under `tests/`; no runtime registration or
-external composition surface exists. This is the documented next state, not a
-claim that Slice 1's empty table already implements it.
+external composition surface exists. This completed slice is not a claim that
+later command families exist. The wheel's exact current frontend set is
+`index.html`, `app.css`, `app.js`, `bridge.js`, and `render.js`; the last is
+the strict production `textContent` sink. Browserless probes and the headed
+page stay under `tests/assets/`. Ordinary and real-WebView2 evidence covers the
+64 KiB boundary, sanitized refusal/exception paths, receipted retry, slot
+expiry/LRU, the real native picker, independent committed-origin refusal, and
+hostile-text/log privacy. This closes SH-G-3 and only the transport/picker/
+origin/static-sink portion of BR-G-32; production plan and inventory DOM
+closure remains with Slices 5 and 6.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.

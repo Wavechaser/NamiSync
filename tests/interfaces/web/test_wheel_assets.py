@@ -19,6 +19,7 @@ INITIAL_ASSETS = {
     "app.js",
     "bridge.js",
     "index.html",
+    "render.js",
 }
 
 
@@ -40,6 +41,19 @@ def test_sh_g_6_built_wheel_contains_exact_initial_web_assets(
         }
 
     assert assets == INITIAL_ASSETS
+
+
+def test_br_g_32_built_wheel_contains_no_test_report_implementation(
+    built_wheel: BuiltWheel,
+) -> None:
+    with zipfile.ZipFile(built_wheel.path) as wheel:
+        containing_literal = [
+            name
+            for name in wheel.namelist()
+            if not name.endswith("/") and b"test_report" in wheel.read(name)
+        ]
+
+    assert containing_literal == []
 
 
 def test_installed_wheel_resolves_index_with_package_resources(

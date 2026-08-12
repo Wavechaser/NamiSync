@@ -2,11 +2,13 @@
 
 Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
-seams. The classified launchers, initial wheel-packaged bootstrap assets, and
-secured product-host composition now exist; its empty bridge surface exposes no
-workflow command until Slice 2. Its clean-wheel, real-WebView2 host, isolation,
-runtime-refusal, popup/navigation, and single-instance gates are closed.
-`M1_SHELL.md` owns the remaining implementation order and beta-package closure.
+seams. The classified launchers, wheel-packaged bootstrap assets, secured
+product-host composition, and exact `pick_folder`/`start_plan` command
+transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
+runtime refusal, popup/navigation guards, single-instance behavior, native
+picker path confinement, committed-origin refusal, hostile text, and logging
+privacy. Event drain and user-facing product views remain; `M1_SHELL.md` owns
+their implementation order and beta-package closure.
 
 ## Purpose
 
@@ -50,9 +52,12 @@ host. The host acquires the fixed per-logon instance mutex before creating any
 directory or logger; only the primary configures file logging and imports
 pywebview. Explicit CLI work never imports or initializes pywebview.
 
-NamiSync remains version `0.1.0` until M1 is complete. One runtime version
-constant supplies project metadata, About/runtime display, logging, and later
-frozen-file metadata. The host stack pins pywebview 6.2.1 and pythonnet 3.1.0;
+NamiSync remains version `0.1.0` until M1 is complete. The runtime `VERSION`
+alone supplies project/package metadata, logging, protocol-independent version
+checks, and later frozen-file metadata. `NICKNAME` is `Gertrud` and is only a
+human-facing label for About, release notes, and changelog headings; it never
+enters filenames, databases, mutexes, CLI behavior, protocols, or compatibility
+logic. The host stack pins pywebview 6.2.1 and pythonnet 3.1.0;
 Bottle has a floor of 0.13.4, the reality-tested server version. NamiSync uses
 pythonnet's default Windows .NET Framework (`netfx`) runtime and refuses a
 conflicting runtime override. The existing read-only .NET Framework check is
@@ -73,7 +78,8 @@ the shared database-pair facade. Fresh state initializes ledger then history;
 ready state continues; refused state runs the bounded finalizer and shows the
 coordinated reset action through the stable native startup dialog. It then
 resolves `index.html` from package resources, creates one pending native
-document and an empty-allowlist dispatcher, and starts only Edge Chromium with
+document and a dispatcher snapshotted from exactly `pick_folder` and
+`start_plan`, and starts only Edge Chromium with
 the packaged page served on a random loopback origin. The initialized callback
 binds that exact origin once. Renderer/origin failure aborts before native
 window creation; guard/load failure destroys the created window exactly once.
@@ -86,8 +92,10 @@ exposes that construction-only seam through arguments, environment, page data,
 or bridge traffic, and the test page is never package data.
 
 Frontend assets are setuptools package data and use plain same-origin ES
-modules. There is no npm, framework, bundler, transpiler, source map, inline
-script, or inline event handler. The first running shell and installed-wheel
+modules. The Slice 2 wheel contains exactly `index.html`, `app.css`, `app.js`,
+`bridge.js`, and `render.js`; `render.js` owns the strict `textContent` sink.
+There is no npm, framework, bundler, transpiler, source map, inline script, or
+inline event handler. The first running shell and installed-wheel
 proof precede PyInstaller work. The frozen specification, dependency lock, CI,
 third-party notices, and exact-source release material close in the final beta
 packaging slice.
@@ -136,6 +144,9 @@ programmatic destroy. An incomplete result or exception keeps the window open,
 sets fixed retry guidance in the packaged status element, and presents an owned
 native Retry/Cancel dialog. Only its Retry choice starts another worker; another
 title-bar close can reopen the dialog but neither retries nor force-closes.
+Each loaded document binds its current status element before a close worker may
+render, so a late worker never queries a destroyed or replaced document;
+presentation failure is sanitized and cannot change shutdown truth.
 `classify_result()` supplies the single headline and independent filesystem,
 integrity, recording, audit, disposition, and cancellation axes. The frontend
 renders those facts; it never reimplements headline precedence or parses
@@ -173,7 +184,7 @@ The exact pythonnet 3.1.0 pin is equally part of that boundary because native
 delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
 through it.
 
-Slice 2's fixed interaction target adds only two production actions.
+Slice 2 implements exactly two production actions.
 `pick_folder` is intentionally user-paced: it has no application timeout or
 automatic retry, and cancel is a normal `null` result. A selection becomes a
 server-held `slot-<32-lowercase-hex>` plus display-only text. `start_plan`
@@ -182,8 +193,11 @@ accepts one live source slot, one live target slot, deletion policy
 response deadline does not cancel Python work, and one uncertain-delivery retry
 uses a new transport request id with the same command id and payload. Fixed
 structured errors guide the next user action without exposing exception text or
-paths. No plan-review, execution, inventory, history, settings, lifecycle, or
-drain command appears before its owning slice.
+paths. The browser wrapper and strict `renderText` sink have browserless and
+real-WebView2 hostile-data coverage. A constructor-only headed composition adds
+`test_report` under `tests/`; production has no runtime registration or
+external composition surface. No plan-review, execution, inventory, history,
+settings, lifecycle, or drain command appears before its owning slice.
 
 Live state uses one bounded, coalescing `next_events` pull/drain request. The
 host preserves reliable item and terminal ordering, allows replaceable progress
