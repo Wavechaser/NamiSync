@@ -179,13 +179,24 @@ def test_modules_use_only_local_explicit_js_imports(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
-    imports = re.findall(
-        r"\bfrom\s+[\"']([^\"']+)[\"']",
-        "\n".join(text for name, text in assets.items() if name.endswith(".js")),
-    )
+    imports = {
+        name: re.findall(r"\bfrom\s+[\"']([^\"']+)[\"']", text)
+        for name, text in assets.items()
+        if name.endswith(".js")
+    }
 
-    assert imports == ["./bridge.js", "./render.js"]
-    assert all(value.startswith("./") and value.endswith(".js") for value in imports)
+    assert imports == {
+        "app.js": ["./bridge.js", "./render.js"],
+        "bridge.js": [],
+        "icons.js": [],
+        "render.js": [],
+        "tree.js": ["./render.js"],
+    }
+    assert all(
+        value.startswith("./") and value.endswith(".js")
+        for values in imports.values()
+        for value in values
+    )
     assert all("innerHTML" not in text for text in assets.values())
 
 
@@ -202,12 +213,105 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
 ) -> None:
     assets = _wheel_assets(built_wheel)
     renderer = assets["render.js"]
+    tree = assets["tree.js"]
 
     assert renderer.count(".textContent =") == 1
     assert "element.textContent = text;" in renderer
     assert 'import { renderText } from "./render.js";' in assets["app.js"]
     assert 'renderText(status, "Ready");' in assets["app.js"]
     assert re.search(r"\.textContent\s*=(?!=)", assets["app.js"]) is None
+    assert 'import { renderText } from "./render.js";' in tree
+    assert "renderText(label, row.display);" in tree
+    assert re.search(r"\.textContent\s*=(?!=)", tree) is None
+
+
+def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    css = "\n".join(
+        text for name, text in assets.items() if name.endswith(".css")
+    )
+    tree = assets["tree.js"]
+
+    css_row_heights = re.findall(r"--row-h:\s*(\d+)px;", css)
+    javascript_row_heights = re.findall(
+        r"export const ROW_H\s*=\s*(\d+);",
+        tree,
+    )
+    assert css_row_heights == ["28"]
+    assert javascript_row_heights == ["28"]
+    assert int(css_row_heights[0]) == int(javascript_row_heights[0])
+
+    app_css = assets["app.css"]
+    row_rule = re.search(r"\.nami-tree-row\s*\{([^}]+)\}", app_css)
+    assert row_rule is not None
+    declarations = row_rule.group(1)
+    for required in (
+        "animation: none;",
+        "block-size: var(--row-h);",
+        "box-sizing: border-box;",
+        "margin-block: 0;",
+        "max-block-size: var(--row-h);",
+        "min-block-size: var(--row-h);",
+        "overflow: hidden;",
+        "transition: none;",
+    ):
+        assert required in declarations
+    label_rule = re.search(
+        r"\.nami-tree-row__label\s*\{([^}]+)\}",
+        app_css,
+    )
+    assert label_rule is not None
+    for required in (
+        "min-inline-size: 0;",
+        "overflow: hidden;",
+        "text-overflow: ellipsis;",
+        "white-space: nowrap;",
+    ):
+        assert required in label_rule.group(1)
+
+    for forbidden in (
+        "window.pywebview",
+        '"./bridge.js"',
+        "current_path",
+        "rel_path",
+        "canonical",
+        "search",
+        "filter",
+        "collapse",
+        "ancestor",
+        "parent_index",
+    ):
+        assert forbidden not in tree
+    assert "256" not in tree
+    assert ".slice(" not in tree
+    assert "Object.keys(" not in tree
+
+
+def test_sh_g_7_browserless_tree_probe_uses_production_modules() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the no-dependency tree probe")
+    probe = PROJECT_ROOT / "tests" / "assets" / "tree_probe.mjs"
+    asset_root = (
+        PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    )
+
+    completed = subprocess.run(
+        [
+            str(node),
+            str(probe),
+            str(asset_root / "tree.js"),
+            str(asset_root / "render.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_br_g_32_inert_text_helper_rejects_before_setter_or_coercion() -> None:

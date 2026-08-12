@@ -29,6 +29,7 @@ INITIAL_ASSETS = {
     "index.html",
     "render.js",
     "tokens.css",
+    "tree.js",
 }
 
 

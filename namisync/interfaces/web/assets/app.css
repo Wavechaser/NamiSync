@@ -13,3 +13,33 @@ body {
   padding: var(--space-6);
   text-align: center;
 }
+
+.nami-tree {
+  overflow: auto;
+}
+
+.nami-tree__spacer {
+  block-size: 0;
+  pointer-events: none;
+}
+
+.nami-tree-row {
+  animation: none;
+  block-size: var(--row-h);
+  box-sizing: border-box;
+  margin-block: 0;
+  max-block-size: var(--row-h);
+  min-block-size: var(--row-h);
+  overflow: hidden;
+  padding-inline-start: calc(
+    var(--space-3) + var(--nami-tree-depth) * var(--space-3)
+  );
+  transition: none;
+}
+
+.nami-tree-row__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
