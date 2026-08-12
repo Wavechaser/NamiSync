@@ -7,7 +7,7 @@ import math
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Lock
+from threading import Condition, Lock
 from typing import Protocol
 from urllib.parse import SplitResult, urlsplit
 
@@ -450,46 +450,74 @@ class BridgeDispatcher:
             raise TypeError("every bridge command handler must be callable")
         self._document = document
         self._handlers = dict(handlers)
+        self._admission = Condition(Lock())
+        self._accepting = True
+        self._admitted = 0
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Validate one command and return ordinary structured data."""
 
-        self._document.require_trusted()
-        if not isinstance(command_json, str):
-            raise BridgeProtocolError("bridge command must be a JSON string")
+        self._admit()
         try:
-            command_size = len(command_json.encode("utf-8"))
-        except UnicodeEncodeError as error:
-            raise BridgeProtocolError(
-                "bridge command must contain valid Unicode"
-            ) from error
-        if command_size > _MAX_COMMAND_BYTES:
-            raise BridgeProtocolError("bridge command exceeds the size limit")
-        try:
-            raw = json.loads(
-                command_json,
-                object_pairs_hook=_unique_object,
-                parse_constant=lambda value: _reject_json_constant(value),
-            )
-        except (json.JSONDecodeError, ValueError) as error:
-            raise BridgeProtocolError("bridge command is not valid JSON") from error
-        command = _validate_command(raw)
-        name = command["command"]
-        handler = self._handlers.get(name)
-        if handler is None:
-            raise BridgeProtocolError(f"bridge command is not allowed: {name}")
-        result = handler(command["payload"])
-        try:
-            _require_json_value(result)
-        except BridgeProtocolError as error:
-            raise BridgeProtocolError(
-                f"bridge handler returned non-JSON data: {name}"
-            ) from error
-        return {
-            "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": command["request_id"],
-            "result": result,
-        }
+            self._document.require_trusted()
+            if not isinstance(command_json, str):
+                raise BridgeProtocolError("bridge command must be a JSON string")
+            try:
+                command_size = len(command_json.encode("utf-8"))
+            except UnicodeEncodeError as error:
+                raise BridgeProtocolError(
+                    "bridge command must contain valid Unicode"
+                ) from error
+            if command_size > _MAX_COMMAND_BYTES:
+                raise BridgeProtocolError("bridge command exceeds the size limit")
+            try:
+                raw = json.loads(
+                    command_json,
+                    object_pairs_hook=_unique_object,
+                    parse_constant=lambda value: _reject_json_constant(value),
+                )
+            except (json.JSONDecodeError, ValueError) as error:
+                raise BridgeProtocolError("bridge command is not valid JSON") from error
+            command = _validate_command(raw)
+            name = command["command"]
+            handler = self._handlers.get(name)
+            if handler is None:
+                raise BridgeProtocolError(f"bridge command is not allowed: {name}")
+            result = handler(command["payload"])
+            try:
+                _require_json_value(result)
+            except BridgeProtocolError as error:
+                raise BridgeProtocolError(
+                    f"bridge handler returned non-JSON data: {name}"
+                ) from error
+            return {
+                "schema_version": BRIDGE_SCHEMA_VERSION,
+                "request_id": command["request_id"],
+                "result": result,
+            }
+        finally:
+            self._release()
+
+    def _admit(self) -> None:
+        with self._admission:
+            if not self._accepting:
+                raise BridgeProtocolError("bridge is closing")
+            self._admitted += 1
+
+    def _release(self) -> None:
+        with self._admission:
+            self._admitted -= 1
+            if self._admitted == 0:
+                self._admission.notify_all()
+
+    def _reject_new(self) -> None:
+        with self._admission:
+            self._accepting = False
+
+    def _wait_for_handlers(self) -> None:
+        with self._admission:
+            while self._admitted:
+                self._admission.wait()
 
 
 def _validate_command(value: object) -> dict[str, object]:

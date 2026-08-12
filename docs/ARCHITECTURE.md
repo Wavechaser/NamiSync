@@ -2016,6 +2016,12 @@ authority and empty command map keep dispatch closed until later transport
 slices. Initialized failure aborts before native creation; UI-thread guard or
 loaded-watchdog failure destroys once. One finalizer owns service, logging, and
 mutex release without allowing cleanup failure to replace startup truth.
+For a normal user close, a private bridge-admission gate first rejects new
+calls, wakes the later drain hooks, waits for already-admitted calls, then runs
+the service close off the WinForms thread. Only a complete shutdown permits one
+recursive-safe programmatic destroy. Incomplete or exceptional attempts retain
+the window and expose a fixed native Retry/Cancel action; another title-bar X
+can reopen that action but cannot itself retry or force destruction.
 The native folder picker is the sole path-input exception: the host retains the
 real path in a server slot and returns only an opaque id plus display string.
 `pywebview` is an M1 runtime dependency, not an optional GUI extra. One

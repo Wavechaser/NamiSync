@@ -413,6 +413,16 @@ destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, shuts logging, releases
 the mutex, and preserves the initiating startup diagnosis.
 
+Normal window close is a separate host-owned state machine. A private admission
+condition around `BridgeDispatcher.dispatch` rejects new calls and waits for
+every admitted call without adding another JavaScript-facing method. The
+synchronous WinForms callback only claims one worker and vetoes; that worker
+performs reject, wake, wait, unsubscribe, and service close in order. Only a
+complete shutdown permits programmatic destroy. Incomplete and exceptional
+attempts retain the page status and one owned native Retry/Cancel prompt; Retry
+alone starts another attempt, and the finalizer does not close an
+already-complete service twice.
+
 ## Common Adapter Contract
 
 - Validate syntax/presence early and report actionable path/input errors; domain

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Event, Lock, current_thread
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -25,19 +27,20 @@ class _Hook:
         self.handlers.append(handler)
         return self
 
-    def emit(self) -> None:
-        for handler in tuple(self.handlers):
-            handler()
+    def emit(self) -> list[object]:
+        return [handler() for handler in tuple(self.handlers)]
 
 
 class _Window:
     def __init__(self) -> None:
         self.real_url = "http://127.0.0.1:41700/assets/index.html"
-        self.events = SimpleNamespace(loaded=_Hook())
+        self.events = SimpleNamespace(closing=_Hook(), loaded=_Hook())
         self.destroy_count = 0
+        self.destroyed = Event()
 
     def destroy(self) -> None:
         self.destroy_count += 1
+        self.destroyed.set()
 
 
 class _Webview:
@@ -178,7 +181,10 @@ def _patch_primary(
         "_pending_document",
         lambda: order.append("pending_document") or document,
     )
-    dispatcher = object()
+    dispatcher = SimpleNamespace(
+        _reject_new=lambda: order.append("reject_dispatch"),
+        _wait_for_handlers=lambda: order.append("wait_handlers"),
+    )
     monkeypatch.setattr(
         host,
         "_closed_dispatcher",
@@ -229,6 +235,16 @@ def _patch_primary(
         host,
         "_shutdown_logging",
         lambda: order.append("shutdown_logging"),
+    )
+    monkeypatch.setattr(
+        host,
+        "_render_close_status",
+        lambda _window, phase: order.append(("close_status", phase.value)),
+    )
+    monkeypatch.setattr(
+        host,
+        "_show_retry_close_prompt",
+        lambda _title: pytest.fail("unexpected close retry prompt"),
     )
     monkeypatch.setattr(
         host,
@@ -512,3 +528,571 @@ def test_loaded_watchdog_records_destroy_failure_without_raising(
         "RuntimeError",
         None,
     ) in order
+
+
+def _close_hooks(order: list[str]) -> host._DesktopCloseHooks:
+    return host._DesktopCloseHooks(
+        reject_dispatch=lambda: order.append("reject"),
+        wake_waiters=lambda: order.append("wake"),
+        wait_for_handlers=lambda: order.append("wait"),
+        unsubscribe_observations=lambda: order.append("unsubscribe"),
+    )
+
+
+class _ControllerWindow:
+    def __init__(self, order: list[str]) -> None:
+        self.order = order
+        self.controller: host._DesktopCloseController | None = None
+        self.destroy_count = 0
+        self.destroyed = Event()
+        self.recursive_close_results: list[bool | None] = []
+
+    def destroy(self) -> None:
+        self.order.append("destroy")
+        assert self.controller is not None
+        result = self.controller._on_closing()
+        self.recursive_close_results.append(result)
+        if result is False:
+            return
+        self.destroy_count += 1
+        self.destroyed.set()
+
+
+class _ControllerService:
+    def __init__(
+        self,
+        order: list[str],
+        outcomes: list[object],
+        *,
+        entered: Event | None = None,
+        release: Event | None = None,
+    ) -> None:
+        self.order = order
+        self.outcomes = outcomes
+        self.entered = entered
+        self.release = release
+        self.close_threads: list[object] = []
+        self.close_count = 0
+
+    def close(self):
+        self.order.append("service.close")
+        self.close_threads.append(current_thread())
+        self.close_count += 1
+        if self.entered is not None:
+            self.entered.set()
+        if self.release is not None:
+            assert self.release.wait(2.0)
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def _shutdown_view(*, complete: bool):
+    return SimpleNamespace(
+        complete=complete,
+        unfinished=() if complete else ("admitted",),
+        custody_released=complete,
+    )
+
+
+def _wait_until(predicate, *, timeout: float = 2.0) -> None:
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        if predicate():
+            return
+        Event().wait(0.005)
+    raise AssertionError("condition did not become true before timeout")
+
+
+def test_close_callback_is_nonblocking_and_quiesces_in_exact_order() -> None:
+    order: list[str] = []
+    entered = Event()
+    release = Event()
+    window = _ControllerWindow(order)
+    service = _ControllerService(
+        order,
+        [_shutdown_view(complete=True)],
+        entered=entered,
+        release=release,
+    )
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: pytest.fail("healthy close prompted for retry"),
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    started = monotonic()
+    assert controller._on_closing() is False
+    elapsed = monotonic() - started
+
+    assert elapsed < 0.1
+    assert entered.wait(1.0)
+    assert controller._on_closing() is False
+    assert service.close_count == 1
+    release.set()
+    assert window.destroyed.wait(1.0)
+    assert order == [
+        "reject",
+        "wake",
+        "wait",
+        "unsubscribe",
+        "service.close",
+        "destroy",
+    ]
+    assert service.close_threads[0] is not current_thread()
+    assert window.destroy_count == 1
+    assert window.recursive_close_results == [None]
+    assert controller.service_shutdown_complete
+
+
+def test_incomplete_close_requires_explicit_retry_and_second_x_does_not_retry() -> None:
+    order: list[str] = []
+    prompts: list[int] = []
+    prompt_lock = Lock()
+    window = _ControllerWindow(order)
+    service = _ControllerService(
+        order,
+        [_shutdown_view(complete=False), _shutdown_view(complete=True)],
+    )
+
+    def retry_prompt() -> bool:
+        with prompt_lock:
+            prompts.append(len(prompts) + 1)
+            return len(prompts) == 2
+
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, phase: order.append(
+            f"status.{phase.value}"
+        ),
+        retry_prompt=retry_prompt,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    _wait_until(
+        lambda: service.close_count == 1
+        and prompts == [1]
+        and not controller._prompt_active
+    )
+    assert window.destroy_count == 0
+    assert not controller.service_shutdown_complete
+
+    assert controller._on_closing() is False
+    assert window.destroyed.wait(1.0)
+
+    assert prompts == [1, 2]
+    assert service.close_count == 2
+    assert window.destroy_count == 1
+    assert order.count("service.close") == 2
+    first_close = order.index("service.close")
+    second_close = order.index("service.close", first_close + 1)
+    assert first_close < order.index("status.retryable") < second_close
+
+
+def test_close_exception_uses_the_same_retry_path_without_force_destroy() -> None:
+    order: list[str] = []
+    prompted = Event()
+    allow_retry = Event()
+    window = _ControllerWindow(order)
+    service = _ControllerService(
+        order,
+        [RuntimeError("synthetic close failure"), _shutdown_view(complete=True)],
+    )
+
+    def retry_prompt() -> bool:
+        prompted.set()
+        return allow_retry.wait(1.0)
+
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=retry_prompt,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    assert prompted.wait(1.0)
+    assert window.destroy_count == 0
+    assert controller._on_closing() is False
+    assert service.close_count == 1
+
+    allow_retry.set()
+    assert window.destroyed.wait(1.0)
+    assert service.close_count == 2
+    assert window.destroy_count == 1
+
+
+def test_bridge_rejection_precedes_a_blocked_close_status_render() -> None:
+    order: list[str] = []
+    rejected = Event()
+    render_entered = Event()
+    release_render = Event()
+    release_service = Event()
+    window = _ControllerWindow(order)
+    service = _ControllerService(
+        order,
+        [_shutdown_view(complete=True)],
+        release=release_service,
+    )
+    hooks = host._DesktopCloseHooks(
+        reject_dispatch=lambda: (order.append("reject"), rejected.set()),
+        wake_waiters=lambda: order.append("wake"),
+        wait_for_handlers=lambda: order.append("wait"),
+        unsubscribe_observations=lambda: order.append("unsubscribe"),
+    )
+
+    def blocked_render(_window: object, _phase: host._ClosePhase) -> None:
+        render_entered.set()
+        assert release_render.wait(1.0)
+
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        hooks,
+        window_title="NamiSync Test Close",
+        render_status=blocked_render,
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    started = monotonic()
+    assert controller._on_closing() is False
+
+    assert monotonic() - started < 0.1
+    assert rejected.wait(0.2)
+    assert render_entered.wait(0.2)
+    _wait_until(lambda: service.close_count == 1)
+    assert order[:4] == ["reject", "wake", "wait", "unsubscribe"]
+    release_service.set()
+    assert window.destroyed.wait(1.0)
+    release_render.set()
+
+
+def test_closing_status_can_render_while_an_admitted_handler_is_still_waiting() -> None:
+    order: list[str] = []
+    waiting = Event()
+    release_wait = Event()
+    status_visible = Event()
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    hooks = host._DesktopCloseHooks(
+        reject_dispatch=lambda: order.append("reject"),
+        wake_waiters=lambda: order.append("wake"),
+        wait_for_handlers=lambda: (
+            waiting.set(),
+            release_wait.wait(1.0),
+            order.append("wait"),
+        ),
+        unsubscribe_observations=lambda: order.append("unsubscribe"),
+    )
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        hooks,
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, phase: (
+            order.append(f"status.{phase.value}"),
+            status_visible.set(),
+        ),
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    assert waiting.wait(1.0)
+    assert status_visible.wait(0.2)
+
+    assert service.close_count == 0
+    assert order[:2] == ["reject", "wake"]
+    release_wait.set()
+    assert window.destroyed.wait(1.0)
+
+
+def test_retry_claim_registers_the_next_attempt_before_releasing_state() -> None:
+    order: list[str] = []
+    retry_entered = Event()
+    release_retry = Event()
+    service = _ControllerService(
+        order,
+        [_shutdown_view(complete=False), _shutdown_view(complete=True)],
+    )
+    window = _ControllerWindow(order)
+
+    def retry_prompt() -> bool:
+        retry_entered.set()
+        assert release_retry.wait(1.0)
+        return True
+
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=retry_prompt,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+    original_start = controller._start_attempt
+    claim_observed = Event()
+    release_start = Event()
+
+    def paused_start() -> None:
+        claim_observed.set()
+        assert release_start.wait(1.0)
+        original_start()
+
+    controller._start_attempt = paused_start
+
+    # Start the first attempt without pausing its worker creation.
+    controller._start_attempt = original_start
+    assert controller._on_closing() is False
+    assert retry_entered.wait(1.0)
+    controller._start_attempt = paused_start
+    release_retry.set()
+    assert claim_observed.wait(1.0)
+
+    assert not controller._attempt_done.is_set()
+    waiter_done = Event()
+    waiter = host.Thread(
+        target=lambda: (controller._wait_for_attempt(), waiter_done.set()),
+        daemon=True,
+    )
+    waiter.start()
+    assert not waiter_done.wait(0.05)
+
+    release_start.set()
+    assert waiter_done.wait(1.0)
+    assert service.close_count == 2
+    assert window.destroy_count == 1
+
+
+def test_worker_start_failure_cannot_block_the_closing_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_thread = host.Thread
+    attempts = 0
+
+    class FailedThread:
+        def __init__(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+        def start(self) -> None:
+            raise RuntimeError("synthetic thread-start failure")
+
+    def first_start_fails(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return FailedThread()
+        return real_thread(*args, **kwargs)
+
+    order: list[str] = []
+    prompt_visible = Event()
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    monkeypatch.setattr(host, "Thread", first_start_fails)
+    monkeypatch.setattr(host, "_log_cleanup_failure", lambda *_args: None)
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, phase: order.append(
+            f"status.{phase.value}"
+        ),
+        retry_prompt=lambda: prompt_visible.set() or False,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    started = monotonic()
+    assert controller._on_closing() is False
+
+    assert monotonic() - started < 0.1
+    assert service.close_count == 0
+    assert prompt_visible.wait(1.0)
+    assert "status.retryable" in order
+
+
+def test_user_close_during_startup_waits_for_loaded_guard_success() -> None:
+    order: list[str] = []
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+
+    assert controller._on_closing() is False
+    assert service.close_count == 0
+    assert window.destroy_count == 0
+
+    controller._mark_loaded()
+    assert window.destroyed.wait(1.0)
+    assert service.close_count == 1
+
+
+def test_user_close_during_startup_refusal_uses_the_startup_finalizer() -> None:
+    order: list[str] = []
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+
+    assert controller._on_closing() is False
+    assert controller._mark_startup_refused()
+    window.destroy()
+
+    assert window.destroy_count == 1
+    assert service.close_count == 0
+    assert controller._on_closing() is None
+
+
+def test_destroy_exception_after_complete_shutdown_never_retries_service() -> None:
+    order: list[str] = []
+
+    class FailedDestroyWindow(_ControllerWindow):
+        def destroy(self) -> None:
+            self.order.append("destroy")
+            self.destroy_count += 1
+            raise RuntimeError("synthetic destroy failure")
+
+    window = FailedDestroyWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: pytest.fail("complete shutdown requested a retry"),
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    controller._wait_for_attempt()
+
+    assert controller.service_shutdown_complete
+    assert controller._on_closing() is None
+    assert service.close_count == 1
+    assert window.destroy_count == 1
+
+
+def test_startup_refused_close_bypasses_the_user_close_worker() -> None:
+    order: list[str] = []
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+
+    controller._mark_startup_refused()
+
+    assert controller._on_closing() is None
+    assert service.close_count == 0
+    assert order == []
+
+
+def test_normal_user_close_does_not_close_the_service_twice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def close_during_loop(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        webview.window.events.loaded.emit()
+        assert webview.window.events.closing.emit() == [False]
+        assert webview.window.destroyed.wait(1.0)
+
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=close_during_loop,
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 0
+    assert reports == []
+    assert order.count("service.close") == 1
+    assert order.index("service.close") < order.index("shutdown_logging")
+
+
+def test_close_status_uses_only_fixed_page_text() -> None:
+    element = SimpleNamespace(text="Ready")
+    selectors: list[str] = []
+    window = SimpleNamespace(
+        dom=SimpleNamespace(
+            get_element=lambda selector: selectors.append(selector) or element
+        )
+    )
+
+    host._render_close_status(window, host._ClosePhase.CLOSING)
+    assert element.text == "Closing safely…"
+    host._render_close_status(window, host._ClosePhase.RETRYABLE)
+
+    assert selectors == ["#host-status", "#host-status"]
+    assert element.text == (
+        "Close did not finish. Choose Retry in the close dialog to try again."
+    )
+
+
+def test_native_retry_prompt_is_owned_and_has_no_force_close_choice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+    user32 = SimpleNamespace(
+        FindWindowW=lambda class_name, title: calls.append(
+            ("find", class_name, title)
+        )
+        or 714,
+        MessageBoxW=lambda *arguments: calls.append(("message", *arguments))
+        or host._ID_RETRY,
+    )
+    monkeypatch.setattr(host.ctypes, "windll", SimpleNamespace(user32=user32))
+
+    assert host._show_retry_close_prompt("NamiSync Fixed Title")
+    assert calls[0] == ("find", None, "NamiSync Fixed Title")
+    assert calls[1][1:4] == (
+        714,
+        host._CLOSE_INCOMPLETE_MESSAGE,
+        host._CLOSE_INCOMPLETE_CAPTION,
+    )
+    assert calls[1][4] & host._MB_RETRYCANCEL

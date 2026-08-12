@@ -3,5 +3,7 @@ import { whenBridgeReady } from "./bridge.js";
 const status = document.querySelector("#host-status");
 
 whenBridgeReady().then(() => {
-  status.textContent = "Ready";
+  if (status.textContent === "Starting...") {
+    status.textContent = "Ready";
+  }
 });

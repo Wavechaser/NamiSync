@@ -17,9 +17,10 @@ separate facts.
 M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
 history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
 classified launcher, coordinated database gate, packaged bootstrap page, fixed
-single-instance identity, and secured local WebView2 product host. Its bridge
-command surface remains closed until the transport slice, so workflow controls
-and product views are not yet available in the window.
+single-instance identity, secured local WebView2 product host, and nonblocking
+orderly-close/retry controller. Its bridge command surface remains closed until
+the transport slice, so workflow controls and product views are not yet
+available in the window.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as

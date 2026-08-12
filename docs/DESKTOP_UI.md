@@ -122,7 +122,14 @@ is marked unresponsive by Windows within a few seconds. The close handler
 returns `False` to veto the immediate close, shows a determinate closing
 affordance, runs the ordered teardown off the UI thread, and closes the window
 programmatically when the `ShutdownView` returns. An incomplete shutdown stays
-visible rather than being swallowed by window destruction.
+visible rather than being swallowed by window destruction. The implemented
+controller rejects new bridge admission, wakes the later drain/capacity hooks,
+waits for admitted calls, runs the currently empty observation-unsubscribe
+hook, then calls the service. A complete result permits one recursive-safe
+programmatic destroy. An incomplete result or exception keeps the window open,
+sets fixed retry guidance in the packaged status element, and presents an owned
+native Retry/Cancel dialog. Only its Retry choice starts another worker; another
+title-bar close can reopen the dialog but neither retries nor force-closes.
 `classify_result()` supplies the single headline and independent filesystem,
 integrity, recording, audit, disposition, and cancellation axes. The frontend
 renders those facts; it never reimplements headline precedence or parses

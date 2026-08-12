@@ -8,8 +8,9 @@ import importlib.resources
 import logging
 from ctypes import wintypes
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock, Thread
 from typing import Callable, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,6 +21,15 @@ _ERROR_ALREADY_EXISTS = 183
 _SW_RESTORE = 9
 _EXIT_SUCCESS = 0
 _EXIT_STARTUP = 1
+_ID_RETRY = 4
+_MB_RETRYCANCEL = 0x00000005
+_MB_ICONWARNING = 0x00000030
+_MB_SETFOREGROUND = 0x00010000
+_CLOSE_INCOMPLETE_CAPTION = "NamiSync - Close Incomplete"
+_CLOSE_INCOMPLETE_MESSAGE = (
+    "NamiSync could not finish closing safely.\n\n"
+    "Choose Retry to try the orderly close again. Cancel keeps NamiSync open."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,6 +217,230 @@ class _StartupState:
             _log_cleanup_failure("startup.window_destroy_failed", error)
 
 
+class _ClosePhase(Enum):
+    STARTING = "starting"
+    OPEN = "open"
+    CLOSING = "closing"
+    RETRYABLE = "retryable"
+    PROGRAMMATIC_CLOSE = "programmatic_close"
+    STARTUP_REFUSED = "startup_refused"
+
+
+@dataclass(frozen=True, slots=True)
+class _DesktopCloseHooks:
+    reject_dispatch: Callable[[], None]
+    wake_waiters: Callable[[], None]
+    wait_for_handlers: Callable[[], None]
+    unsubscribe_observations: Callable[[], None]
+
+
+class _DesktopCloseController:
+    """Veto synchronous user closes while one orderly worker owns teardown."""
+
+    def __init__(
+        self,
+        window: object,
+        service: object,
+        hooks: _DesktopCloseHooks,
+        *,
+        window_title: str,
+        render_status: Callable[[object, _ClosePhase], None] | None = None,
+        retry_prompt: Callable[[], bool] | None = None,
+    ) -> None:
+        self._window = window
+        self._service = service
+        self._hooks = hooks
+        self._window_title = window_title
+        self._render_status = (
+            _render_close_status if render_status is None else render_status
+        )
+        self._retry_prompt = (
+            (lambda: _show_retry_close_prompt(self._window_title))
+            if retry_prompt is None
+            else retry_prompt
+        )
+        self._lock = Lock()
+        self._presentation_lock = Lock()
+        self._phase = _ClosePhase.STARTING
+        self._startup_close_requested = False
+        self._prompt_active = False
+        self._attempt_done = Event()
+        self._attempt_done.set()
+        self._service_shutdown_complete = False
+
+    @property
+    def service_shutdown_complete(self) -> bool:
+        with self._lock:
+            return self._service_shutdown_complete
+
+    def _wait_for_attempt(self) -> None:
+        self._attempt_done.wait()
+
+    def _on_closing(self) -> bool | None:
+        start_attempt = False
+        start_prompt = False
+        with self._lock:
+            if self._phase in {
+                _ClosePhase.PROGRAMMATIC_CLOSE,
+                _ClosePhase.STARTUP_REFUSED,
+            }:
+                return None
+            if self._phase is _ClosePhase.STARTING:
+                self._startup_close_requested = True
+            elif self._phase is _ClosePhase.OPEN:
+                self._phase = _ClosePhase.CLOSING
+                self._attempt_done.clear()
+                start_attempt = True
+            elif (
+                self._phase is _ClosePhase.RETRYABLE
+                and not self._prompt_active
+            ):
+                self._prompt_active = True
+                start_prompt = True
+        if start_attempt:
+            self._start_attempt()
+        elif start_prompt:
+            self._start_prompt()
+        return False
+
+    def _mark_loaded(self) -> None:
+        start_attempt = False
+        with self._lock:
+            if self._phase is _ClosePhase.STARTING:
+                if self._startup_close_requested:
+                    self._phase = _ClosePhase.CLOSING
+                    self._attempt_done.clear()
+                    start_attempt = True
+                else:
+                    self._phase = _ClosePhase.OPEN
+        if start_attempt:
+            self._start_attempt()
+
+    def _mark_startup_refused(self) -> bool:
+        with self._lock:
+            if self._phase is _ClosePhase.PROGRAMMATIC_CLOSE:
+                return False
+            self._phase = _ClosePhase.STARTUP_REFUSED
+            return True
+
+    def _start_attempt(self) -> None:
+        try:
+            Thread(
+                target=self._run_attempt,
+                name="namisync-desktop-close",
+                daemon=True,
+            ).start()
+        except Exception as error:
+            self._attempt_done.set()
+            _log_cleanup_failure("shutdown.worker_start_failed", error)
+            self._become_retryable()
+
+    def _run_attempt(self) -> None:
+        retryable = False
+        try:
+            self._hooks.reject_dispatch()
+            self._hooks.wake_waiters()
+            self._start_status(_ClosePhase.CLOSING)
+            self._hooks.wait_for_handlers()
+            self._hooks.unsubscribe_observations()
+            shutdown = self._service.close()
+        except Exception as error:
+            _log_cleanup_failure("shutdown.attempt_failed", error)
+            retryable = True
+        else:
+            retryable = self._settle_attempt(shutdown)
+        finally:
+            self._attempt_done.set()
+        if retryable:
+            self._become_retryable()
+
+    def _settle_attempt(self, shutdown: object) -> bool:
+        if not shutdown.complete:
+            logging.getLogger("namisync").error(
+                "shutdown.incomplete unfinished_count=%d custody_released=%s",
+                len(shutdown.unfinished),
+                shutdown.custody_released,
+            )
+            return True
+
+        should_destroy = False
+        with self._lock:
+            self._service_shutdown_complete = True
+            if self._phase is not _ClosePhase.STARTUP_REFUSED:
+                self._phase = _ClosePhase.PROGRAMMATIC_CLOSE
+                should_destroy = True
+        if not should_destroy:
+            return False
+        try:
+            self._window.destroy()
+        except Exception as error:
+            _log_cleanup_failure("shutdown.window_destroy_failed", error)
+        return False
+
+    def _become_retryable(self) -> None:
+        start_prompt = False
+        with self._lock:
+            if self._phase is _ClosePhase.STARTUP_REFUSED:
+                return
+            self._phase = _ClosePhase.RETRYABLE
+            if not self._prompt_active:
+                self._prompt_active = True
+                start_prompt = True
+        self._start_status(_ClosePhase.RETRYABLE)
+        if start_prompt:
+            self._start_prompt()
+
+    def _start_status(self, phase: _ClosePhase) -> None:
+        try:
+            Thread(
+                target=self._show_status,
+                args=(phase,),
+                name="namisync-close-status",
+                daemon=True,
+            ).start()
+        except Exception as error:
+            _log_cleanup_failure("shutdown.status_worker_start_failed", error)
+
+    def _start_prompt(self) -> None:
+        try:
+            Thread(
+                target=self._run_prompt,
+                name="namisync-close-retry",
+                daemon=True,
+            ).start()
+        except Exception as error:
+            with self._lock:
+                self._prompt_active = False
+            _log_cleanup_failure("shutdown.retry_prompt_start_failed", error)
+
+    def _run_prompt(self) -> None:
+        retry = False
+        try:
+            retry = bool(self._retry_prompt())
+        except Exception as error:
+            _log_cleanup_failure("shutdown.retry_prompt_failed", error)
+
+        start_attempt = False
+        with self._lock:
+            self._prompt_active = False
+            if retry and self._phase is _ClosePhase.RETRYABLE:
+                self._phase = _ClosePhase.CLOSING
+                self._attempt_done.clear()
+                start_attempt = True
+        if start_attempt:
+            self._start_attempt()
+
+    def _show_status(self, phase: _ClosePhase) -> None:
+        with self._presentation_lock:
+            with self._lock:
+                if self._phase is not phase:
+                    return
+            try:
+                self._render_status(self._window, phase)
+            except Exception as error:
+                _log_cleanup_failure("shutdown.status_render_failed", error)
+
+
 def run_desktop(
     paths: AppPaths,
     identity: DesktopInstanceIdentity,
@@ -218,6 +452,7 @@ def run_desktop(
 
     lease: DesktopInstanceLease | None = None
     service = None
+    close_controller: _DesktopCloseController | None = None
     logging_configured = False
     failure: Exception | None = None
     try:
@@ -260,6 +495,12 @@ def run_desktop(
             raise DesktopStartupError("NamiSync could not create its desktop window")
 
         state = _StartupState()
+        close_controller = _DesktopCloseController(
+            window,
+            service,
+            _desktop_close_hooks(dispatcher),
+            window_title=identity.window_title,
+        )
 
         def initialize_security() -> None:
             try:
@@ -278,6 +519,7 @@ def run_desktop(
         def loaded_watchdog() -> None:
             attachment_error = document.attachment_error
             if document.is_attached and attachment_error is None:
+                close_controller._mark_loaded()
                 return
             if attachment_error is None:
                 error = DesktopStartupError(
@@ -289,8 +531,10 @@ def run_desktop(
                     f"{attachment_error}"
                 )
             state.refuse(error)
-            state.destroy_once(window)
+            if close_controller._mark_startup_refused():
+                state.destroy_once(window)
 
+        window.events.closing += close_controller._on_closing
         window.events.loaded += loaded_watchdog
         _start_webview(
             webview_module,
@@ -302,8 +546,15 @@ def run_desktop(
     except Exception as error:
         failure = error
     finally:
+        if close_controller is not None:
+            close_controller._wait_for_attempt()
         cleanup_failure = _finalize_primary(
             service,
+            service_shutdown_complete=(
+                close_controller.service_shutdown_complete
+                if close_controller is not None
+                else False
+            ),
             logging_configured=logging_configured,
             log_path=paths.log_file if logging_configured else None,
             lease=lease,
@@ -367,6 +618,19 @@ def _closed_dispatcher(document: object):
     return BridgeDispatcher(document=document, handlers={})
 
 
+def _desktop_close_hooks(dispatcher: object) -> _DesktopCloseHooks:
+    return _DesktopCloseHooks(
+        reject_dispatch=dispatcher._reject_new,
+        wake_waiters=_noop_close_hook,
+        wait_for_handlers=dispatcher._wait_for_handlers,
+        unsubscribe_observations=_noop_close_hook,
+    )
+
+
+def _noop_close_hook() -> None:
+    return None
+
+
 def _packaged_index_path() -> str:
     package = importlib.resources.files("namisync.interfaces.web")
     return str(package / "assets" / "index.html")
@@ -409,15 +673,45 @@ def _start_webview(
     )
 
 
+def _render_close_status(window: object, phase: _ClosePhase) -> None:
+    messages = {
+        _ClosePhase.CLOSING: "Closing safely…",
+        _ClosePhase.RETRYABLE: (
+            "Close did not finish. Choose Retry in the close dialog to try again."
+        ),
+    }
+    try:
+        message = messages[phase]
+    except KeyError as error:
+        raise ValueError("unsupported desktop close presentation state") from error
+    status = window.dom.get_element("#host-status")
+    if status is None:
+        raise RuntimeError("desktop close status element is unavailable")
+    status.text = message
+
+
+def _show_retry_close_prompt(window_title: str) -> bool:
+    user32 = ctypes.windll.user32
+    owner = user32.FindWindowW(None, window_title)
+    result = user32.MessageBoxW(
+        owner or None,
+        _CLOSE_INCOMPLETE_MESSAGE,
+        _CLOSE_INCOMPLETE_CAPTION,
+        _MB_RETRYCANCEL | _MB_ICONWARNING | _MB_SETFOREGROUND,
+    )
+    return int(result) == _ID_RETRY
+
+
 def _finalize_primary(
     service: object | None,
     *,
+    service_shutdown_complete: bool,
     logging_configured: bool,
     log_path: Path | None,
     lease: DesktopInstanceLease | None,
 ) -> Exception | None:
     failure: Exception | None = None
-    if service is not None:
+    if service is not None and not service_shutdown_complete:
         try:
             shutdown = service.close()
             if not shutdown.complete:

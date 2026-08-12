@@ -9,11 +9,11 @@ gate, the GUI argument grammar, and constructor-only command composition; the
 2026-08-08 revision adds the Fluent visual design language (§1.9), motion
 (§1.10), and the two GUI Breaks that bound the visual work.
 Stages 1-5.5, Phase 0, the WebView2 reality spike, Slice 1 steps 1-4 and 7, and
-step 8's shared service/CLI database-pair boundary are complete. Slice 1 step 5
-is implemented through the secured empty-surface product host, including its
-database refusal/finalizer paths; native headed evidence and step 6's user-close
-state machine remain before Slice 1 gate closure. NamiSync remains version
-`0.1.0` until M1 is
+step 8's shared service/CLI database-pair boundary are complete. Slice 1 steps
+5-6 are implemented through the secured empty-surface product host, bounded
+startup finalizer, and nonblocking user-close/retry state machine. Native
+installed/headed evidence remains before Slice 1 gate closure. NamiSync remains
+version `0.1.0` until M1 is
 complete. Finishing M1 makes the product beta-ready; any later version change
 is a separate release decision.
 

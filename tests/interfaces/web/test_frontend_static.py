@@ -122,3 +122,12 @@ def test_modules_use_only_local_explicit_js_imports(
     assert imports == ["./bridge.js"]
     assert all(value.startswith("./") and value.endswith(".js") for value in imports)
     assert all("innerHTML" not in text for text in assets.values())
+
+
+def test_ready_transition_cannot_overwrite_a_native_close_status(
+    built_wheel: BuiltWheel,
+) -> None:
+    app = _wheel_assets(built_wheel)["app.js"]
+
+    assert 'status.textContent === "Starting..."' in app
+    assert app.count('status.textContent = "Ready"') == 1

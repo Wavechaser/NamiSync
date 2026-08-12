@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 from pathlib import Path
+from threading import Event, Thread
 from types import SimpleNamespace
 
 import pytest
@@ -1069,6 +1070,48 @@ def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> No
             )
     with pytest.raises(TypeError, match="must be callable"):
         BridgeDispatcher(document=document, handlers={"ping": object()})
+
+
+def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
+    entered = Event()
+    release = Event()
+    finished = Event()
+
+    def slow_handler(payload):
+        entered.set()
+        assert release.wait(1.0)
+        return payload
+
+    bridge = BridgeDispatcher(
+        document=_trusted_document(),
+        handlers={"slow": slow_handler},
+    )
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "admitted-before-close",
+            "command": "slow",
+            "payload": {"value": 1},
+        }
+    )
+    dispatch_thread = Thread(target=lambda: bridge.dispatch(command))
+    dispatch_thread.start()
+    assert entered.wait(1.0)
+
+    bridge._reject_new()
+    waiter = Thread(target=lambda: (bridge._wait_for_handlers(), finished.set()))
+    waiter.start()
+
+    assert not finished.wait(0.05)
+    with pytest.raises(BridgeProtocolError, match="bridge is closing"):
+        bridge.dispatch(command)
+    release.set()
+    dispatch_thread.join(1.0)
+    waiter.join(1.0)
+
+    assert not dispatch_thread.is_alive()
+    assert not waiter.is_alive()
+    assert finished.is_set()
 
 
 def test_namisync_bridge_module_constructs_no_javascript() -> None:
