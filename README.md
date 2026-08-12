@@ -127,7 +127,7 @@ never hides the other result axes in rendered output.
 
 ## Changelog
 
-### M1 Stage 6 — Gertrud Transport Checkpoint
+### M1 Stage 6 — Transport Checkpoint
 
 - Completed the desktop shell foundation through Slice 2 without claiming the
   later product UI or beta package.
