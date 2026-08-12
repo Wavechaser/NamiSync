@@ -114,3 +114,45 @@ print(json.dumps({
     assert Path(result["distribution_root"]).is_relative_to(
         installed_wheel.root
     )
+
+
+def test_sh_g_4_startup_log_uses_installed_product_version(
+    installed_wheel: InstalledWheel,
+    tmp_path: Path,
+) -> None:
+    log_root = tmp_path / "app"
+    script = """
+import importlib.metadata
+import json
+import sys
+from pathlib import Path
+from namisync.interfaces.web.logging_config import configure_logging
+from namisync.interfaces.web.paths import AppPaths
+from namisync.version import NICKNAME, VERSION
+
+paths = AppPaths.from_root(Path(sys.argv[1]))
+configure_logging(paths)
+print(json.dumps({
+    "constant": VERSION,
+    "metadata": importlib.metadata.version("namisync"),
+    "nickname": NICKNAME,
+    "log": paths.log_file.read_text(encoding="utf-8"),
+}))
+"""
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+
+    completed = subprocess.run(
+        [installed_wheel.python, "-c", script, str(log_root)],
+        cwd=installed_wheel.root,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = json.loads(completed.stdout)
+    assert result["constant"] == result["metadata"] == "0.1.0"
+    assert result["nickname"] == "Gertrud"
+    assert "startup.begin product_version=0.1.0" in result["log"]
+    assert "Gertrud" not in result["log"]

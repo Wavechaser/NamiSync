@@ -287,9 +287,11 @@ hostile-name round trip. Before `create_window`, host preparation pins
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
 `debug=False`, and performs a read-only registry probe for the WebView2 runtime.
 
-Before the Stage 6 host imports pywebview, Phase 0 adds one runtime version
-source, an injectable `%LOCALAPPDATA%\NamiSync` path set, and rotating file
-logging shared by the `namisync` and `pywebview` loggers. Pythonnet 3.1.0 is an
+Phase 0 now supplies the dependency-free runtime version source, injectable
+`%LOCALAPPDATA%\NamiSync` path set, and rotating file logging shared by the
+`namisync` and `pywebview` loggers before pywebview import. Startup diagnostics
+use the product `VERSION` only; the human-facing release nickname is never log
+or compatibility authority. Pythonnet 3.1.0 is an
 exact Windows dependency because delegate subscription, WinForms thread
 marshaling, and `CoreWebView2` access are part of the proven boundary. Bottle
 has a floor of 0.13.4. The supported pythonnet runtime is its default Windows
