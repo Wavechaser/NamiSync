@@ -6,13 +6,13 @@ ledger v3 verification-invalidation boundary and history v5 receipt journal in
 `DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
 unbounded history getter remains.
 
-Status (updated 2026-08-12): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (updated 2026-08-13): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
-implemented. Stage 6's secured host and transport through Slice 3 and its GUI
-Break 1 foundation are also implemented. `M1_BRIDGE.md` records the landed
-bridge contract; `M1_SHELL.md` owns the remaining presentation slices and
-beta-packaging placement.
+implemented. Stage 6's secured host and transport through Slice 3, GUI Break 1
+foundation, and Slice 4 presentation core and honest shell frame are also
+implemented. `M1_BRIDGE.md` records the landed bridge contract; `M1_SHELL.md`
+owns the remaining product-surface slices and beta-packaging placement.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained
@@ -1081,6 +1081,18 @@ The exact eight implementation slices, dependency graph, 44 BR-G gates,
 regression watchlist, reference-machine latency/memory budgets, and 100k-file /
 120k-node / one-million-history-item scale envelope live in `M1_BRIDGE.md` and
 are normative for this stage.
+
+**Implementation checkpoint (2026-08-13).** Stage 6 is complete through Slice
+4. The one pure `visible_sequence.py` implementation owns strict structure,
+literal display search, caller-supplied filter counts, collapse, 1..256-row
+windows, and visible-ancestor anchoring. The installed tree renderer owns only
+fixed 28-pixel rows, two virtual spacers, accessible rendering through the
+inert text sink, and stale-generation refusal. The shipped page adds truthful
+empty task-navigation and work regions but no task, session, plan, inventory,
+history item, or control. Production therefore still exposes exactly
+`pick_folder`, `start_plan`, and `next_events`. Clean-wheel SH-G-7 closes the
+Slice 4 shell/tree gate; Slice 5's real plan surface is next, and the remaining
+product UI, release, and beta claims stay open.
 
 ---
 

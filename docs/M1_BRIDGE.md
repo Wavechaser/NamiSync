@@ -1,10 +1,12 @@
 # M1 Bridge and Presentation Contract
 
-Status (2026-07-30, implementation updated 2026-08-12): design, decision, and
+Status (2026-07-30, implementation updated 2026-08-13): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
-transport chain through Slice 3 and GUI Break 1's foundation are complete; the
-later presentation slices remain. Stage 5.5 landed its tree substrate,
+transport chain through Slice 3, GUI Break 1's foundation, and Slice 4
+presentation core and honest shell frame are complete; Slices 5-8 and GUI
+Break 2 remain.
+Stage 5.5 landed its tree substrate,
 recursive scan scope, selection semantics, and facade integration without
 taking Stage 6 presentation work. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
@@ -34,10 +36,11 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host and three-command transport foundation are promoted into the active
-focused documents and README. The complete Stage 6 UI remains unshipped;
-`M1_SHELL.md` and `DESKTOP_UI.md` record the remaining GUI-break,
-presentation, and packaging work, while slice 8 still performs the
+secured host, three-command transport, GUI foundation, and Slice 4 presentation
+foundation are promoted into the active focused documents and README. The
+complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
+the remaining product-surface, second GUI-break, and packaging work, while
+slice 8 still performs the
 final as-built pass over every active document and `ui_mockup/`.
 
 ---
@@ -1246,6 +1249,16 @@ Offset is an exact nonnegative integer, limit is an exact 1..256 integer, and
 the pure derived sequence is replaced rather than cached as a parameter-keyed
 family. Domain command rows and projection revisions remain with their first
 Slice 5/6 consumers.
+
+**Implemented in Slice 4 (2026-08-13).** `interfaces/web/visible_sequence.py`
+now owns this one tree-agnostic pure implementation: strict pre-order structure
+validation, collapse after match retention, literal case-folded display search,
+caller-supplied sparse direct-match counts, exact 1..256 windows, and
+deepest-visible ancestor anchoring. It retains no projection, path, domain
+filter vocabulary, or active-view cache. The installed frontend consumes only
+the generic `{offset,total,rows}` window through a fixed-height renderer with
+two spacers and stale-generation refusal. Plan and inventory command rows and
+projection ownership remain unimplemented until Slices 5 and 6.
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
@@ -3186,7 +3199,7 @@ a parallel pair.
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
 | GUI 1 | Presentation foundation | Native material behavior; exact authored palette and semantic status/operation aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, and SH-G-13 foundations plus SH-G-14; exact contract in `M1_SHELL.md` |
-| 4 | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver over Lane A's ordered array | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34 |
+| 4 (complete) | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver over Lane A's ordered array; bounded installed tree renderer and honest accessible shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
 | 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |

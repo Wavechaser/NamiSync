@@ -1871,8 +1871,11 @@ and final headline/exit classification. **Flesh — implemented through M1 Stage
 Reusable pure node-tree/index construction, recursive subtree
 scan/reconciliation, typed inventory warning projection, user-selection
 provenance and re-derivation, and the facade commands/review state needed by the
-desktop. **Flesh — planned M1 Stage 6.** The web desktop shell and presentation
-projections.
+desktop. **Flesh — implemented through M1 Stage 6 Slice 4.** The secured web
+desktop host, bounded three-command transport, shared design foundation, pure
+visible-sequence presentation core, bounded tree renderer, and honest empty
+shell frame. **Flesh — planned remainder of M1 Stage 6.** Plan, inventory,
+history, settings, and lifecycle presentation projections and controls.
 **Flesh — deferred.** Queue-driven durable second sessions;
 replay-from-history; DB maintenance/retention session; undo/repair (each
 generated as an ordinary plan through the same pipeline — the
@@ -2177,16 +2180,35 @@ and inert document appearance publication. `host.py` registers appearance after
 the security boundary and closes it before task/service/window teardown.
 `tokens.css`, `components.css`, `icons.js`, and the fixed package-local icon
 assets implement the color, component, motion, and icon authority described
-above. The current wheel adds exactly those three top-level files, four pinned
-SVGs, and their `SOURCE.json` and `LICENSE.txt` records to Slice 2's five
-assets; the gallery scenario remains test-only. The clean-installed-wheel
+above. At GUI Break 1 closure the wheel added exactly those three top-level
+files, four pinned SVGs, and their `SOURCE.json` and `LICENSE.txt` records to
+Slice 2's five assets; the gallery scenario remains test-only. The
+clean-installed-wheel
 gallery proves SH-G-11/13/14 foundation
 behavior across light, dark, forced-colors, and reduced-motion modes. Real
 installed-wheel SH-G-12 evidence records actual DWM backdrop/dark-mode
 readbacks, transparent renderer seams over opaque cards, and two injected
 fallback sequences that finish opaque without changing frame or dispatch
-health. SH-G-14's infrastructure boundary is closed; SH-G-11/12/13 remain open
-only for the production-surface clauses that land with Slices 4–6.
+health. SH-G-14's infrastructure boundary is closed. Slice 4 now supplies its
+shell/tree production ownership evidence; SH-G-11/12/13 remain open only for
+the plan and inventory surface clauses that land with Slices 5 and 6.
+
+**Stage 6 Slice 4 status (completed 2026-08-13).**
+`interfaces/web/visible_sequence.py` is the sole tree-agnostic presentation
+owner for strict workflow-array validation, collapse/search/caller-decided
+filter retention, exact 1..256 windows, and deepest-visible ancestor anchoring.
+Its frozen values and pure functions retain no path, domain vocabulary,
+projection lifecycle, or active cache. The installed `tree.js` consumes only
+the already-decided generic window, renders a fixed 28-pixel accessible tree
+with exactly two spacers, writes labels through `render.js`, and refuses stale
+generations before reading their payload. `rail.js` and `panels.js` add only
+focusable labelled task-navigation and work regions with truthful empty text;
+they create no task, session, plan, inventory, or history state. The bridge
+allowlist remains exactly `pick_folder`, `start_plan`, and `next_events`.
+Clean-wheel SH-G-7 evidence covers keyboard focus, native 200% zoom reflow,
+forced-colors focus, hostile and long text, exact row geometry and DOM bounds,
+and stale-window nonreplacement. Slice 5 remains the first owner of the real
+plan surface, and broader Stage 6/beta closure remains open.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.

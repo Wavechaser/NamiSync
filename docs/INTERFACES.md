@@ -8,8 +8,10 @@ classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and the exact Slice 3
 `pick_folder`/`start_plan`/`next_events` transport are implemented.
-GUI Break 1's foundation is implemented; the user-facing desktop surfaces
-remain, and the API remains latent.
+GUI Break 1's foundation and Slice 4's pure visible sequence, bounded tree
+renderer, and honest accessible shell frame are implemented; the user-facing
+plan, inventory, history, and control surfaces remain, and the API remains
+latent.
 
 ## Purpose
 
@@ -434,6 +436,20 @@ visible, stops later ordinary-batch updates, and resubscribes from its
 prefix unavailable and permits the retained tail without looping; numeric holes are legal progress
 coalescing. Terminal plan sessions cease being live/active-rail work but remain
 task-owned recovery authority until task close.
+
+Slice 4 adds presentation only and does not change that table. Frozen adapter
+values and pure functions in `visible_sequence.py` validate one workflow-owned
+pre-order array and derive collapse/search/caller-filter retention, exact
+1..256 windows, and deepest-visible ancestor anchors without retaining a view
+or importing domain policy. The installed `tree.js` consumes only
+`{offset,total,rows}`, renders at most 256 accessible 28-pixel rows between two
+fixed spacers through the inert text sink, and rejects stale generations. The
+installed page now exposes focusable labelled task navigation and work regions
+with truthful empty text and no fabricated task, session, plan, inventory, or
+history data. SH-G-7 exercises those exact wheel assets with renderer keyboard
+events, native 200% zoom, forced colors, hostile/long labels, row/DOM bounds,
+and stale-window refusal. Slices 5 and 6 remain the first owners of domain
+projection commands and real rows.
 
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
 canceled or failed navigation, and rebuilds its in-flight return-callback

@@ -1,6 +1,6 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, implementation updated 2026-08-12): plan and progress for
+Status (2026-08-04, implementation updated 2026-08-13): plan and progress for
 the remaining M1 desktop shell. The 2026-08-06 revision folded in the
 bounded-history and terminal-cleanup contracts now recorded in `HISTORY.md`
 and `DISPATCHER.md` and added sections 5-8; the 2026-08-07 revision settles
@@ -17,7 +17,8 @@ transport, real native picker confinement, committed-origin refusal, and
 hostile-text/privacy return path. The Slice 3 event drain, transactional
 pre-schedule observation, bounded task registry, and reincarnation recovery are
 implemented. GUI Break 1's token, component, icon, motion, and native-material
-foundation is complete; Slice 4 is next. NamiSync remains version `0.1.0` until
+foundation and Slice 4's presentation core and honest shell frame are complete;
+Slice 5 is next. NamiSync remains version `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
 
@@ -1112,9 +1113,10 @@ the gallery covers every control state and the fixed icon foundation; Mica and
 its fallback are proven on the pinned stack; the design language is frozen.
 The completed checkpoint closes the SH-G-11/12/13 gallery/material foundation
 and all of SH-G-14. It does not close SH-G-11/12/13's production-surface
-clauses; those remain with the Slice 4–6 trees and renderers.
+clauses. Slice 4 now supplies the honest shell/tree ownership evidence; the
+remaining plan and inventory surface clauses stay with Slices 5 and 6.
 
-### Slice 4 - Presentation core and shell frame
+### Slice 4 - Presentation core and shell frame (completed 2026-08-13)
 
 Implement `visible_sequence.py` plus the minimal rail/panel/tree frontend.
 Plan and inventory share the same pure flatten/window/search/filter/anchor
@@ -1194,6 +1196,23 @@ production inert-text helper. Row creation/removal has no animation. `rail.js`
 and `panels.js` build the accessible task-navigation and work-panel frame with
 honest empty states; they fabricate no task, plan, inventory, or session. The
 standard native title frame remains.
+
+The completed implementation follows that boundary without widening transport.
+`visible_sequence.py` supplies the frozen values and pure derivation, window,
+and anchor functions above, including the 256-row ceiling. The installed
+`tree.js` keeps exactly two virtual spacers, a 28-CSS-pixel fixed row,
+accessible tree/treeitem semantics, and generation-based stale-window refusal.
+`rail.js` and
+`panels.js` expose keyboard-focusable labelled task navigation and work regions
+with truthful empty guidance. The page creates no task, session, plan,
+inventory, history item, or domain control, and the production command table
+remains exactly the three Slice 3 rows. Installed-wheel SH-G-7 evidence proves
+renderer-level Tab traversal, usable stacked reflow at native 200% zoom,
+system-color focus under forced colors, hostile and long text through the real
+text sink, exact row geometry and DOM bounds, and a stale older generation
+leaving the newer 256-row window unchanged. This closes Slice 4 and SH-G-7;
+the product surfaces and their remaining cross-slice gates stay with Slices
+5-7.
 
 ### Slice 5 - Sync surface
 

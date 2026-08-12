@@ -27,12 +27,22 @@ inert-text return sink. GUI Break 1's design foundation is also complete:
 `components.css` supplies the shared control states, a fixed local Fluent icon
 registry owns four pinned foundation glyphs, and native appearance follows
 Windows theme/material capability with an opaque fallback. User-facing workflow
-controls/product views are not yet available in the window. Clean-wheel Windows
-gates exercise the real WebView2 host, packaged page and design assets,
+controls/product views are not yet available in the window. Slice 4's shared
+presentation foundation is complete: one pure visible-sequence implementation
+owns strict structure, literal display search, caller-decided filtering,
+collapse, bounded windows, and visible anchoring; the installed renderer owns
+only accessible fixed-height rows, two virtual spacers, inert labels, and stale
+generation refusal. The shipped frame now shows truthful focusable empty task
+navigation and work regions without fabricating a task or widening the exact
+three-command bridge. Clean-wheel Windows gates exercise the real WebView2
+host, packaged page and design assets,
 navigation/popup and per-dispatch origin guards, runtime refusal,
 single-instance activation, isolated data root, visible database refusal,
 native picker confinement, hostile-text transport, log privacy, the four-mode
-component gallery, and real native material apply/fallback paths.
+component gallery, real native material apply/fallback paths, and Slice 4
+keyboard, 200%-zoom reflow, forced-colors focus, hostile/long tree text,
+28-pixel row bounds, and stale-generation behavior. The plan, inventory,
+history, lifecycle, packaging, and beta closures remain open.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -133,6 +143,21 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 — Presentation Checkpoint
+
+- Completed Slice 4 without claiming the later product surfaces or beta
+  package.
+  - **Shared presentation core:** added the frozen tree-agnostic visible
+    sequence, strict structural/search/filter contracts, exact 256-row windows,
+    and visible-ancestor anchoring.
+  - **Installed shell:** added the accessible fixed-28-pixel tree renderer with
+    two spacers and stale-generation refusal, plus labelled focusable task/work
+    regions with honest empty states and no synthetic domain data or new bridge
+    command.
+  - **Evidence:** installed-wheel SH-G-7 covers renderer-level shell Tab traversal,
+    native 200% zoom reflow, forced-colors focus, hostile and long labels,
+    row/DOM bounds, and an older response unable to replace a newer window.
 
 ### M1 Stage 6 — GUI Foundation
 

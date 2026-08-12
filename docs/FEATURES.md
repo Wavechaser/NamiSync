@@ -1,6 +1,6 @@
 # Features
 
-Implementation note (updated 2026-08-12): M1 Stages 1-5.5 have landed their
+Implementation note (updated 2026-08-13): M1 Stages 1-5.5 have landed their
 contract, schema/settings/security prerequisites, pipelined XXH3-128
 executor/verifier switch, role-free inventory, standalone integrity workflows,
 generic history items, production dispatcher registrations, and optional
@@ -8,9 +8,10 @@ post-execution compound verification. The CLI and Stage 5.5
 facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` remains
 the decision and acceptance record for the implemented Stage 5.5 prerequisite
 and active Stage 6 headed desktop shell. Stage 6's host and transport through
-Slice 3 are implemented, and GUI Break 1's foundation is complete; product
-surfaces remain. `M1_SHELL.md` owns their delivery order and beta-package
-closure.
+Slice 3 are implemented, GUI Break 1's foundation is complete, and Slice 4 has
+landed the shared presentation core and honest empty shell frame. Product plan,
+inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
+delivery order and beta-package closure.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -331,6 +332,16 @@ Stage 5 location activities through the shared service.
 
 ## DESKTOP UI
 
+- **Desktop Presentation Foundation Implemented**. One pure tree-agnostic
+  `visible_sequence.py` validates workflow pre-order arrays and owns literal
+  case-folded display search, caller-decided filter counts, collapse, exact
+  1..256 windows, and visible-ancestor anchoring without domain policy or
+  retained projections. The installed `tree.js` renders only those decided
+  windows as an accessible fixed-height tree with two spacers, an exact
+  28-pixel row, inert full labels, and stale-generation refusal. The production
+  shell exposes keyboard-focusable labelled task navigation and work regions
+  with honest empty guidance; it fabricates no task, session, or product row
+  and adds no command beyond `pick_folder`, `start_plan`, and `next_events`.
 - **Task Rail**. The window provides a scrollable newest-first rail of adapter-owned task cards with status, paths, completion date, close controls, and mini progress bars. A task may hold a reviewed plan without a live session; closing a busy task confirms, cancels, waits for a terminal record, then unsubscribes and closes the session. Stage 6 must also release every process-local plan, execution, inventory, selection, and presentation artifact owned by that task; repeated create/close cycles must keep all registries bounded.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
 - **Folder Selection**. Source and destination support editable recent-folder dropdowns and folder browser buttons.

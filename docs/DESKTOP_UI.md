@@ -10,8 +10,10 @@ picker path confinement, committed-origin refusal, hostile text, and logging
 privacy; Slice 3 evidence additionally covers transactional observation,
 bounded drain behavior, recovery, and repeated bridge readiness. GUI Break 1's
 token, component, icon, motion, and native-material foundation is complete.
-User-facing product views remain; `M1_SHELL.md` owns their implementation order
-and beta-package closure.
+Slice 4's shared visible-sequence logic, bounded tree renderer, and honest
+accessible shell frame are also complete. User-facing plan, inventory, history,
+and control surfaces remain; `M1_SHELL.md` owns their implementation order and
+beta-package closure.
 
 ## Purpose
 
@@ -340,6 +342,16 @@ searches a path, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree
 evidence live in `M1_SHELL.md` Slice 4 and SH-G-7.
+
+The shipped Slice 4 frame has exactly two focusable labelled regions beneath
+the header: task navigation stating that no tasks are available and a work
+region stating that no task is selected. The clean-installed-wheel SH-G-7 run
+uses renderer key events, native 200% WebView zoom, and forced-colors emulation
+against those production assets. It verifies focus order and visibility,
+usable stacked reflow without horizontal overflow, system-color focus,
+hostile and long labels through `render.js`, exact 28-pixel rows, no more than
+256 rows plus two spacers, and stale-generation refusal. It adds no bridge
+command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The task rail is a presentation grouping over live service sessions and
 retained history, not a new durable task model. It shows activity kind, source
