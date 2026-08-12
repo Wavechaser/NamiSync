@@ -9,14 +9,16 @@ the database file-pair matrix, in-loop startup teardown, the normative CSP
 gate, the GUI argument grammar, and constructor-only command composition; the
 2026-08-08 revision adds the Fluent visual design language (§1.9), motion
 (§1.10), and the two GUI Breaks that bound the visual work.
-Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-2 are complete.
+Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-3 are complete.
 The installed-wheel and real WebView2 gates now cover the secured product host,
 bounded startup finalizer, nonblocking user-close/retry state machine, fixed
-single-instance boundary, coordinated database refusal, exact two-command
+single-instance boundary, coordinated database refusal, exact three-command
 transport, real native picker confinement, committed-origin refusal, and
-hostile-text/privacy return path. Slice 3 event drain is next. NamiSync remains
-version `0.1.0` until M1 is complete. Finishing M1 makes the product beta-ready;
-any later version change is a separate release decision.
+hostile-text/privacy return path. The Slice 3 event drain, transactional
+pre-schedule observation, bounded task registry, and reincarnation recovery are
+implemented; GUI Break 1 is next. NamiSync remains version `0.1.0` until M1 is
+complete. Finishing M1 makes the product beta-ready; any later version change
+is a separate release decision.
 
 ## Standing
 
@@ -736,7 +738,7 @@ same sanitized `slot_unavailable` error. No bridge request contains a path, and
 no response makes `display` authoritative.
 
 **Harness composition and deferrals.** `test_report` is not a production row.
-The headed harness constructs a new immutable mapping from the production two
+The headed harness constructs a new immutable mapping from the production three
 rows plus one test-owned `test_report` spec; its validator, handler, payload,
 and result schema live under `tests/`, and product argv, environment, page data,
 or bridge traffic cannot enable it. The harness uses the same v1 envelope and

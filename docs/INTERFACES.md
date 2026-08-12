@@ -6,9 +6,9 @@ semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
-database-pair facade, secured product-host composition, and Slice 2's exact
-`pick_folder`/`start_plan` transport are implemented. Event drain and the
-user-facing desktop surfaces remain; the API remains latent.
+database-pair facade, secured product-host composition, and the exact Slice 3
+`pick_folder`/`start_plan`/`next_events` transport are implemented. GUI Break 1
+and the user-facing desktop surfaces remain; the API remains latent.
 
 ## Purpose
 
@@ -392,12 +392,12 @@ NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 construct JavaScript internally for its exposed-function return transport;
 its escaping is therefore inside the tested security boundary, not evidence
 that the transport is system-wide script-free. The implemented host preserves
-the NamiSync-owned shape and strict shared text sink; Slice 3 adds the
+the NamiSync-owned shape and strict shared text sink; Slice 3 implements the
 bounded/coalesced event drain, while Slices 5 and 6 add the production plan and
 inventory DOM renderers.
 
-The implemented Slice 2 production table contains exactly
-`pick_folder` and `start_plan`. The former owns one native user interaction and
+The current production table contains exactly three rows. Slice 2 owns
+`pick_folder` and `start_plan`; the former owns one native user interaction and
 returns `null` or an opaque purpose-bound slot id plus inert display text; the
 latter accepts only one source slot, one target slot, an explicit
 `null`/`trash`/`additive` deletion choice, and a gesture `command_id`, then
@@ -412,8 +412,8 @@ no runtime command registration: the headed gate adds `test_report` only by
 constructing a private immutable mapping under `tests/`, and that row and page
 are absent from the wheel.
 
-Slice 3 adds adapter-owned `task-<32-lowercase-hex>` identity and exactly one
-production row, `next_events`; task ids never enter the task-agnostic service
+Slice 3 owns the third row, `next_events`, and implements adapter-owned
+`task-<32-lowercase-hex>` identity; task ids never enter the task-agnostic service
 or dispatcher. `start_plan` adds that task id to its web result and replays it
 with the same command receipt. `next_events` returns at most 64 exact
 event/record tagged updates from one 64-entry task queue. Progress may replace
@@ -449,7 +449,7 @@ order. It acquires the fixed instance identity before logging or webview import,
 prepares the renderer before service/window construction, validates and if
 needed initializes the database pair before command admission, creates one
 pending `NativeDocumentState`, and binds its loopback origin once during the
-renderer-checked initialized callback. The host snapshots the exact two-row
+renderer-checked initialized callback. The host snapshots the exact three-row
 production mapping before exposing the page. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, shuts logging, releases

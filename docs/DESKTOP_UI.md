@@ -3,12 +3,14 @@
 Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
 seams. The classified launchers, wheel-packaged bootstrap assets, secured
-product-host composition, and exact `pick_folder`/`start_plan` command
+product-host composition, and exact `pick_folder`/`start_plan`/`next_events`
 transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
 runtime refusal, popup/navigation guards, single-instance behavior, native
 picker path confinement, committed-origin refusal, hostile text, and logging
-privacy. Event drain and user-facing product views remain; `M1_SHELL.md` owns
-their implementation order and beta-package closure.
+privacy; Slice 3 evidence additionally covers transactional observation,
+bounded drain behavior, recovery, and repeated bridge readiness. User-facing
+product views remain; `M1_SHELL.md` owns GUI Break 1, their implementation
+order, and beta-package closure.
 
 ## Purpose
 
@@ -159,9 +161,9 @@ returns `False` to veto the immediate close, shows a determinate closing
 affordance, runs the ordered teardown off the UI thread, and closes the window
 programmatically when the `ShutdownView` returns. An incomplete shutdown stays
 visible rather than being swallowed by window destruction. The implemented
-controller rejects new bridge admission, wakes the later drain/capacity hooks,
-waits for admitted calls, runs the currently empty observation-unsubscribe
-hook, then calls the service. A complete result permits one recursive-safe
+controller rejects new bridge admission, closes the task registry to wake
+drains and capacity-blocked sinks, waits for admitted calls, unsubscribes task
+observations, then calls the service. A complete result permits one recursive-safe
 programmatic destroy. An incomplete result or exception keeps the window open,
 sets fixed retry guidance in the packaged status element, and presents an owned
 native Retry/Cancel dialog. Only its Retry choice starts another worker; another

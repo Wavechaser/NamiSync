@@ -7,9 +7,9 @@ items, production dispatcher registrations, and optional post-execution
 compound verification. The CLI and Stage 5.5 facade/tree/selection/subtree
 surfaces are implemented. `M1_BRIDGE.md` remains the decision and acceptance
 record for the implemented Stage 5.5 prerequisite and active Stage 6 headed
-desktop shell. Stage 6's host and command-transport slices are implemented;
-event drain and product surfaces remain. `M1_SHELL.md` owns their delivery
-order and beta-package closure.
+desktop shell. Stage 6's host and transport chain through Slice 3 are
+implemented; GUI Break 1 and product surfaces remain. `M1_SHELL.md` owns their
+delivery order and beta-package closure.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -326,7 +326,7 @@ Stage 5 location activities through the shared service.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 - **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure.
-- **Desktop Command Transport Implemented**. Slice 2's immutable production allowlist is exactly `pick_folder` and `start_plan`. Strict v1 envelopes, bounded opaque purpose-bound folder slots, receipted one-replay plan start, sanitized failures, and a production `textContent` sink have ordinary and real-WebView2 coverage. Slice 3's settled contract adds only `next_events`: one adapter-owned task, transactional pre-schedule observation, a 64-update progress-coalescing/reliable-backpressure queue, one bounded drain, and explicit-Gap/transport recovery without acknowledgments. User-facing plan/inventory controls remain later slices.
+- **Desktop Command Transport Implemented**. The immutable production allowlist is exactly `pick_folder`, `start_plan`, and `next_events`. Strict v1 envelopes, bounded opaque purpose-bound folder slots, receipted one-replay plan start, sanitized failures, and a production `textContent` sink have ordinary and real-WebView2 coverage. Slice 3 adds adapter-owned tasks, transactional pre-schedule observation, a 64-update progress-coalescing/reliable-backpressure queue, one bounded drain per task, and explicit-Gap/transport recovery without acknowledgments. User-facing plan/inventory controls remain later slices.
 
 ## DESKTOP UI
 

@@ -1,9 +1,11 @@
 # Dispatcher Module
 
-Status: M0 implemented and acceptance-tested. M1 Stage 4 adds a generic
-registration-owned canceled-settlement seam for already-started opaque work;
-the dispatcher remains domain-blind. M2 durable queue ownership, SQLite session
-persistence, and startup reconciliation remain deferred.
+Status: M0 implemented and acceptance-tested. M1 Stage 4's generic
+registration-owned canceled-settlement seam for already-started opaque work is
+implemented. Stage 6 Slice 3 adds the domain-blind transactional admission
+`attach` seam used by desktop task observation; the dispatcher remains
+domain-blind. M2 durable queue ownership, SQLite session persistence, and
+startup reconciliation remain deferred.
 
 ## Purpose
 

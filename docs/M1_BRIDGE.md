@@ -3,8 +3,8 @@
 Status (2026-07-30, implementation updated 2026-08-12): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
-command-transport slices are complete; event drain and the later presentation
-slices remain. Stage 5.5 landed its tree substrate, recursive scan scope, selection
+transport chain through Slice 3 are complete; GUI Break 1 and the later
+presentation slices remain. Stage 5.5 landed its tree substrate, recursive scan scope, selection
 semantics, and facade integration without taking Stage 6 presentation work. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
 computes where, how large plans and inventories reach the client, how
@@ -33,10 +33,10 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host and two-command transport foundation are promoted into the active
+secured host and three-command transport foundation are promoted into the active
 focused documents and README. The complete Stage 6 UI remains unshipped;
-`M1_SHELL.md` and `DESKTOP_UI.md` record the remaining event-drain and
-presentation work and packaging decisions, while slice 8 still performs the
+`M1_SHELL.md` and `DESKTOP_UI.md` record the remaining GUI-break,
+presentation, and packaging work, while slice 8 still performs the
 final as-built pass over every active document and `ui_mockup/`.
 
 ---
@@ -1907,13 +1907,13 @@ Fabricated, expired, evicted, and wrong-purpose ids have the same sanitized
 `slot_unavailable` result. The browser receives only `{id, display}`, sends only
 ids back, and can never promote `display` to filesystem authority.
 
-The immutable production command mapping is exactly `pick_folder` plus
-`start_plan`. `test_report` is a test-owned constructor-only harness row: the
-harness builds a new immutable mapping from those production rows plus its own
+The immutable production command mapping is exactly `pick_folder`,
+`start_plan`, and `next_events`. `test_report` is a test-owned constructor-only
+harness row: the harness builds a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
 environment, page value, or bridge request can enable it, and it has no product
-retry class. Event drain and later plan, inventory, settings, history, and
-lifecycle commands are not reserved or allowlisted until their owning slices
+retry class. Later plan, inventory, settings, history, and lifecycle commands
+are not reserved or allowlisted until their owning slices
 land each row with its schema, receipt/revision rule, deadline, retry policy,
 and gate.
 
@@ -2839,9 +2839,10 @@ because its local tests are easier.
   importing `web` lazily from `cli`.
 - **BR-G-32 — The transport is one allowlisted, inert-data channel.** Slice 2
   proves every public view type round-trips through the production JSON codec
-  and the one exposed `dispatch(command_json)`; the production allowlist is
-  exactly `pick_folder` and `start_plan`, while `test_report` is possible only
-  through test-owned constructor composition. Unknown versions, commands,
+  and the one exposed `dispatch(command_json)`; the two Slice 2 rows are exactly
+  `pick_folder` and `start_plan`, and the current allowlist adds only Slice 3's
+  `next_events`, while `test_report` is possible only through test-owned
+  constructor composition. Unknown versions, commands,
   fields, malformed opaque ids, and input above 65,536 UTF-8 bytes are refused
   before handler invocation. Errors expose no filesystem path or internals even
   though pywebview otherwise returns Python tracebacks. The native picker keeps
@@ -3045,7 +3046,8 @@ because its local tests are easier.
 Stage 6 follows the same collision rule as Stage 5.5. Host/transport tests live
 under `tests/interfaces/web/` in `test_host.py`, `test_native_host_gates.py`,
 `test_slice1_headed.py`, `test_commands.py`, `test_transport.py`,
-`test_slots.py`, `test_transport_headed.py`, and `test_events.py`; detector
+`test_slots.py`, `test_transport_headed.py`, `test_drain.py`, and
+`test_frontend_static.py`; detector
 parity lives in `tests/test_pywebview_runtime.py`; pure presentation tests live
 in `test_visible_sequence.py`;
 sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,

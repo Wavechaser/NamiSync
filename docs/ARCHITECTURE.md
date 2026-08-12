@@ -2013,13 +2013,15 @@ local artifact or diagnostic ownership, then prepares pywebview, constructs the
 shared service, validates/initializes the coordinated database pair, and only
 then resolves the wheel-packaged page and creates a window. A pending document
 authority keeps dispatch closed until native guard attachment; once trusted,
-the host exposes exactly the snapshotted `pick_folder` and `start_plan` rows.
+the host exposes exactly the snapshotted `pick_folder`, `start_plan`, and
+`next_events` rows.
 Initialized failure aborts before native creation; UI-thread guard or
 loaded-watchdog failure destroys once. One finalizer owns service, logging, and
 mutex release without allowing cleanup failure to replace startup truth.
 For a normal user close, a private bridge-admission gate first rejects new
-calls, wakes the later drain hooks, waits for already-admitted calls, then runs
-the service close off the WinForms thread. Only a complete shutdown permits one
+calls, closes the task registry to wake drains and capacity-blocked sinks,
+waits for already-admitted calls, then runs the service close off the WinForms
+thread. Only a complete shutdown permits one
 recursive-safe programmatic destroy. Incomplete or exceptional attempts retain
 the window and expose a fixed native Retry/Cancel action; another title-bar X
 can reopen that action but cannot itself retry or force destruction.
@@ -2108,8 +2110,8 @@ native committed-origin dispatch recheck, strict versioned allowlist, and
 structured return boundary. Pywebview 6.2.1 is pinned from the Stage 6
 reality run. Classified launchers, exact-CSP wheel assets, fixed instance
 identity, database-pair gate, and secured product host are now composed. The
-host was promoted with no commands; Slice 2 now supplies its command transport,
-while event drain remains next.
+host was promoted with no commands; Slice 2 supplied its initial command
+transport, and Slice 3 now supplies the event drain.
 Installed native probes can inject an absolute physical local index file at
 Python construction only; product launch retains the package-resource index and
 has no external override surface.
@@ -2137,6 +2139,20 @@ expiry/LRU, the real native picker, independent committed-origin refusal, and
 hostile-text/log privacy. This closes SH-G-3 and only the transport/picker/
 origin/static-sink portion of BR-G-32; production plan and inventory DOM
 closure remains with Slices 5 and 6.
+
+**Stage 6 Slice 3 status (completed 2026-08-12).** The production command map
+is now exactly `pick_folder`, `start_plan`, and `next_events`. Adapter-owned
+tasks attach their observation transactionally before dispatcher publication,
+retain one bounded 64-update queue, and expose at most one 25-second server
+drain under the browser's 30-second deadline. Progress is replaceable while
+reliable events and terminal records retain ordering and backpressure. The
+generation-counted browser manager validates whole responses, treats explicit
+`Gap` as visible recovery state, resumes transport uncertainty from the first
+unaccepted sequence, and re-arms exactly one drain for each nonterminal task
+after repeated `pywebviewready`. Host shutdown closes the registry before
+service observation teardown, waking both long polls and blocked producers.
+This closes SH-G-8 and BR-G-33 while leaving production plan and inventory DOM
+closure to Slices 5 and 6.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
