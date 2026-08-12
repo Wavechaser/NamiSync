@@ -69,7 +69,7 @@ sequence is:
    vocabulary, settings semantics, and the post-execution state machine. This
    stage decides compound-session semantics but does not merge unused
    compound-only abstractions.
-2. **Executor refactor according to `HASH_REFACTOR.md`.** Land Track 1's full
+2. **Executor refactor according to `obsolete/M1_HASH_REFACTOR.md`.** Land Track 1's full
    adaptive pipeline and IO/finalization reductions first. Land Track 2's
    wholesale XXH3-128 replacement second, including both executor and verifier
    consumers; production integrity-workflow wiring remains in the next stage.
@@ -222,7 +222,7 @@ file drift, capacity.
 `worker_count` is not semantic intent, but before Stage 1 it was embedded in
 both `SyncOptions` and `Plan`, so the full plan fingerprint bound it
 accidentally. Stage 1 removed it rather than relocating it to another public setting: concurrent
-file execution is deferred by `HASH_REFACTOR.md`, and a dormant tuning knob
+file execution is deferred by `obsolete/M1_HASH_REFACTOR.md`, and a dormant tuning knob
 would serve no current behavior.
 
 **Precision:** one canonical fingerprint function in `core/`, used identically
@@ -304,7 +304,7 @@ readable.
 
 **DR-M1-09 — Ledger/history schema reset, or migration?**
 Tagged `ResultItem` values and generic phase summaries need a home in history
-detail, while `HASH_REFACTOR.md` makes existing main-ledger content evidence
+detail, while `obsolete/M1_HASH_REFACTOR.md` makes existing main-ledger content evidence
 incompatible by replacing SHA-256 with the single `xxh3_128` contract. History
 was v2 with one narrow v1→v2 migration before Stage 1; the main ledger was v1.
 
@@ -825,10 +825,10 @@ consumers, retained different executor/verifier opener strategies, reconstructed
 stored algorithms without relabeling, and joined the final marked
 ledger-v2/history-v3 reset boundary. No file-level concurrency or alternate
 content algorithm was added. Final measured tables and acceptance status remain
-recorded in `HASH_REFACTOR.md`.
+recorded in `obsolete/M1_HASH_REFACTOR.md`.
 
 0. **Precondition — validate the fixed chunk bands and measure allocation.**
-   `HASH_REFACTOR.md` DR-HASH-07 fixes the M1 copy policy at 256 KiB below
+   `obsolete/M1_HASH_REFACTOR.md` DR-HASH-07 fixes the M1 copy policy at 256 KiB below
    8 MiB, 1 MiB from 8 MiB through less than 32 MiB, and 4 MiB from 32 MiB
    upward. Before landing step 1, run the standard synthetic distribution
    (1,000×4 KiB, 512×128 KiB, 64×4 MiB, 4×128 MiB, 1×4 GiB) cross-volume,
@@ -836,14 +836,14 @@ recorded in `HASH_REFACTOR.md`.
    per-size operations/second, fixed finalization time, and the measured
    preallocation crossover. Revising a fixed band requires evidence; choosing
    bands ad hoc during implementation does not satisfy this stage.
-1. Land all of `HASH_REFACTOR.md` Track 1, not merely "the pipeline":
+1. Land all of `obsolete/M1_HASH_REFACTOR.md` Track 1, not merely "the pipeline":
    the fixed 256 KiB / 1 MiB / 4 MiB adaptive chunk policy, the combined
    32 MiB byte budget and 32-entry FIFO caps, immutable linear
    reader/hasher/writer handoff, conditional preallocation, sequential source
    hint, hoisted Win32 bindings, one temp flush, combined
    metadata/finalization handle, conditional post-publish repair, backup-loop
    boundaries, and attestation size invariants.
-2. Land `HASH_REFACTOR.md` Track 2 after Track 1: replace content SHA-256 with
+2. Land `obsolete/M1_HASH_REFACTOR.md` Track 2 after Track 1: replace content SHA-256 with
    XXH3-128 in both copy and verifier implementations, add the one concrete
    factory at composition, update repositories/fixtures, and apply the
    coordinated ledger/history reset. The verifier implementation and
@@ -1084,7 +1084,7 @@ are normative for this stage.
 - Observer thread multiplexing — not needed at M1/M2 scale; sink API keeps it
   swappable (DR-M1-19)
 - Concurrent file execution, multithreaded verification, background
-  integrity, and repair guidance — deferred; `HASH_REFACTOR.md` requires new
+  integrity, and repair guidance — deferred; `obsolete/M1_HASH_REFACTOR.md` requires new
   post-XXH3 utilization evidence before file-level workers are introduced
 
 ---
@@ -1096,7 +1096,7 @@ a named failure-injection or regression test per behavior, not just "tested."
 The following are milestone gates because they are easy to skip:
 
 **Implementation checkpoints (2026-07-24/25).** Stage 2 satisfies the Track 2
-composition gates through C1–C11 in `HASH_REFACTOR.md`, including a single
+composition gates through C1–C11 in `obsolete/M1_HASH_REFACTOR.md`, including a single
 production-composition proof of exact factory identity plus distinct
 `O_SEQUENTIAL` executor and Windows-unbuffered verifier openers, and a direct
 plus optimized-`python -O` attestation-size invariant. Stage 3 has executable
@@ -1113,7 +1113,7 @@ resumed-preflight refusal against the same unfinished run.
 
 - The XXH3-128 replacement and copy pipeline satisfy every collaborator,
   vector, acknowledgement, failure, and cancellation test listed in
-  `HASH_REFACTOR.md`; M1 does not weaken that document's gates.
+  `obsolete/M1_HASH_REFACTOR.md`; M1 does not weaken that document's gates.
 - "Pipeline every size" is validated end to end, not only by microbench. The
   standard synthetic distribution (1,000×4 KiB, 512×128 KiB, 64×4 MiB,
   4×128 MiB, 1×4 GiB) runs cross-volume, and the small-file band's end-to-end
@@ -1124,10 +1124,10 @@ resumed-preflight refusal against the same unfinished run.
   become an end-to-end small-file regression. All 15 current-tip corpus rows,
   fixed finalization time, stage starvation, payload high-water, serial
   comparisons, and the allocation sweep are recorded in
-  `HASH_REFACTOR.md` §2.8. A green correctness-only pipeline test does not
+  `obsolete/M1_HASH_REFACTOR.md` §2.8. A green correctness-only pipeline test does not
   satisfy this bullet: the measurement is a named gate with recorded numbers,
   and a regression past the accepted margin blocks the stage
-  (`HASH_REFACTOR.md` §2.7(7), DR-HASH-07).
+  (`obsolete/M1_HASH_REFACTOR.md` §2.7(7), DR-HASH-07).
 - Ledger v1, history v1, and history v2 are all refused with the same
   actionable reset posture; the old history migrator cannot label a partially
   migrated database as v3, and reset setup recreates both databases together
@@ -1198,7 +1198,7 @@ failure mode the plan most fears is two modules that each pass their own tests
 while disagreeing about a shared contract — a disagreement that only surfaces
 at Stage 4 integration. Each gate below names both sides of a seam and the test
 that makes a disagreement fail *before* they are wired together. The anti-slack
-rules from `HASH_REFACTOR.md` §4.5 apply verbatim: inject the named divergence,
+rules from `obsolete/M1_HASH_REFACTOR.md` §4.5 apply verbatim: inject the named divergence,
 assert the typed result, and reject any test that would still pass if the two
 sides were mis-wired.
 
@@ -1336,7 +1336,7 @@ ledger query and silently drop every candidate whose copy-ledger write was
 #### XXH3 / attestation / factory seam (cross-module composition)
 
 - **XV-16 — Both consumers wired in one track, same factory, right openers.**
-  This seam is proven by `HASH_REFACTOR.md` §4.5 gates C4 (copy→verify
+  This seam is proven by `obsolete/M1_HASH_REFACTOR.md` §4.5 gates C4 (copy→verify
   round-trip = `verified`), C5 (same hasher object, different openers at
   composition), C6 (global size invariant on the readback path), C7
   (self-describing reconstruction), and C8 (import law + required backend). The

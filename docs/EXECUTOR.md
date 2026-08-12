@@ -655,7 +655,7 @@ set. Dispatcher/session owns custody and terminal aggregation, and the
 run-bound recorder owns durable ledger interpretation.
 
 The Stage 2 suite re-proves all nine operation kinds through the new path and
-pins every gate in `HASH_REFACTOR.md` §4.5: stage overlap and FIFO/byte bounds;
+pins every gate in `obsolete/M1_HASH_REFACTOR.md` §4.5: stage overlap and FIFO/byte bounds;
 exact first-error teardown; growth/shrink, cancellation, pause, and callback
 paths; adaptive-band wiring; allocation allowlist; exact temp grammar and
 recovery isolation; one finalization handle/flush; conditional repair;
@@ -671,7 +671,7 @@ The final production-shaped benchmark ran all five standard corpora from
 `F:` NAND to separate `G:` NAND, `E:` Optane, and `J:` HDD targets. It records
 operations/s, throughput, fixed finalization time, stage starvation, payload
 high-water, legacy serial comparisons, and the allocation sweep in
-`HASH_REFACTOR.md` §2.8. The measured 8 MiB allocation threshold and adaptive
+`obsolete/M1_HASH_REFACTOR.md` §2.8. The measured 8 MiB allocation threshold and adaptive
 chunk bands remain private constants, not settings.
 
 ## Acceptance Criteria

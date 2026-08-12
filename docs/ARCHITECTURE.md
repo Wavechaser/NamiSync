@@ -2140,7 +2140,7 @@ desktop surfaces, and other interfaces behind the same facade.
      two-database reset boundary, split settings ownership, and facade/bridge
      security contracts;
   2. executor refactor — first the complete adaptive pipeline and Windows
-     IO/finalization reductions from `HASH_REFACTOR.md` Track 1, then the
+     IO/finalization reductions from `obsolete/M1_HASH_REFACTOR.md` Track 1, then the
      coordinated executor+verifier XXH3-128 replacement and the ledger-v2
      reset from Track 2; history has since advanced to the reset-only v5
      receipt-journal contract;

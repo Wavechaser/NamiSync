@@ -1,5 +1,9 @@
 # NamiSync — Milestone 1 Branch Core-Logic Audit
 
+**Status: closed historical audit (2026-08-08).** The report remains a
+point-in-time record of `417aab5`; active behavior and future work are governed
+by the focused architecture, module, and M1-stage documents.
+
 - **Branch audited:** `milestone1`
 - **Head commit:** `417aab5` (Add Claude Code project config)
 - **Audit date:** 2026-08-07

@@ -17,6 +17,10 @@ independent M1 performance tracks:
 an adaptive single-file copy backend with cheaper finalization, and the
 wholesale replacement of SHA-256 content hashing with XXH3-128.
 
+Closed status (2026-08-12): retained as the historical implementation and
+acceptance record; active behavior is governed by the focused module and
+architecture documents.
+
 **Standing.** This document remains the detailed hash-throughput decision and
 acceptance record after implementation. `FEATURES.md` owns
 behavior, `ARCHITECTURE.md` owns contracts, and module documents are
