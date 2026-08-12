@@ -513,6 +513,8 @@ def run_desktop(
 
     lease: DesktopInstanceLease | None = None
     service = None
+    registry = None
+    dispatcher = None
     close_controller: _DesktopCloseController | None = None
     logging_configured = False
     failure: Exception | None = None
@@ -544,6 +546,7 @@ def run_desktop(
             raise DesktopStartupError(
                 f"NamiSync database pair refused ({reason}). {direction}"
             )
+        registry = _task_registry(service)
 
         document = _pending_document()
         slots = _folder_slots()
@@ -551,7 +554,7 @@ def run_desktop(
         commands = _production_commands(
             picker=picker,
             slots=slots,
-            service=service,
+            registry=registry,
         )
         dispatcher = _bridge_dispatcher(document, commands)
         window = webview_module.create_window(
@@ -567,7 +570,7 @@ def run_desktop(
         close_controller = _DesktopCloseController(
             window,
             service,
-            _desktop_close_hooks(dispatcher),
+            _desktop_close_hooks(dispatcher, registry),
             window_title=identity.window_title,
         )
 
@@ -619,6 +622,8 @@ def run_desktop(
             close_controller._wait_for_attempt()
         cleanup_failure = _finalize_primary(
             service,
+            dispatcher=dispatcher,
+            registry=registry,
             service_shutdown_complete=(
                 close_controller.service_shutdown_complete
                 if close_controller is not None
@@ -687,18 +692,24 @@ def _folder_slots():
     return FolderSlotTable()
 
 
+def _task_registry(service: object):
+    from .drain import TaskRegistry
+
+    return TaskRegistry(service)
+
+
 def _production_commands(
     *,
     picker: object,
     slots: object,
-    service: object,
+    registry: object,
 ):
     from .commands import production_command_specs
 
     return production_command_specs(
         picker=picker,
         slots=slots,
-        service=service,
+        registry=registry,
     )
 
 
@@ -708,17 +719,16 @@ def _bridge_dispatcher(document: object, commands: object):
     return BridgeDispatcher(document=document, commands=commands)
 
 
-def _desktop_close_hooks(dispatcher: object) -> _DesktopCloseHooks:
+def _desktop_close_hooks(
+    dispatcher: object,
+    registry: object,
+) -> _DesktopCloseHooks:
     return _DesktopCloseHooks(
         reject_dispatch=dispatcher._reject_new,
-        wake_waiters=_noop_close_hook,
+        wake_waiters=registry.begin_close,
         wait_for_handlers=dispatcher._wait_for_handlers,
-        unsubscribe_observations=_noop_close_hook,
+        unsubscribe_observations=registry.unsubscribe_all,
     )
-
-
-def _noop_close_hook() -> None:
-    return None
 
 
 def _packaged_index_path() -> str:
@@ -810,6 +820,8 @@ def _show_retry_close_prompt(window_title: str) -> bool:
 def _finalize_primary(
     service: object | None,
     *,
+    dispatcher: object | None,
+    registry: object | None,
     service_shutdown_complete: bool,
     logging_configured: bool,
     log_path: Path | None,
@@ -817,6 +829,39 @@ def _finalize_primary(
 ) -> Exception | None:
     failure: Exception | None = None
     if service is not None and not service_shutdown_complete:
+        teardown_steps: tuple[tuple[str, Callable[[], None]], ...] = tuple(
+            (event, callback)
+            for event, callback in (
+                (
+                    "startup.dispatch_rejection_failed",
+                    dispatcher._reject_new if dispatcher is not None else None,
+                ),
+                (
+                    "startup.registry_wake_failed",
+                    registry.begin_close if registry is not None else None,
+                ),
+                (
+                    "startup.handler_wait_failed",
+                    (
+                        dispatcher._wait_for_handlers
+                        if dispatcher is not None
+                        else None
+                    ),
+                ),
+                (
+                    "startup.observation_cleanup_failed",
+                    registry.unsubscribe_all if registry is not None else None,
+                ),
+            )
+            if callback is not None
+        )
+        for event, callback in teardown_steps:
+            try:
+                callback()
+            except Exception as error:
+                _log_cleanup_failure(event, error)
+                if failure is None:
+                    failure = error
         try:
             shutdown = service.close()
             if not shutdown.complete:
@@ -826,12 +871,14 @@ def _finalize_primary(
                     len(shutdown.unfinished),
                     shutdown.custody_released,
                 )
-                failure = DesktopStartupError(
-                    "NamiSync desktop cleanup did not complete"
-                )
+                if failure is None:
+                    failure = DesktopStartupError(
+                        "NamiSync desktop cleanup did not complete"
+                    )
         except Exception as error:
             _log_cleanup_failure("startup.service_cleanup_failed", error)
-            failure = error
+            if failure is None:
+                failure = error
     if logging_configured:
         try:
             _shutdown_logging()

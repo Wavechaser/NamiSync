@@ -84,6 +84,7 @@ testWindow.pywebview = {
         request_id: request.request_id,
         ok: true,
         result: {
+          task_id: `task-${"2".repeat(32)}`,
           request_id: "3".repeat(32),
           session_id: "4".repeat(32),
         },
@@ -94,6 +95,7 @@ testWindow.pywebview = {
 testWindow.emit("pywebviewready");
 
 assert.deepEqual(await planning, {
+  task_id: `task-${"2".repeat(32)}`,
   request_id: "3".repeat(32),
   session_id: "4".repeat(32),
 });

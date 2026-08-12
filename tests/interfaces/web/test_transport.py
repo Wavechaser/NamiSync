@@ -28,7 +28,19 @@ from namisync.interfaces.web.commands import (
     PlanningRefusedError,
 )
 from namisync.interfaces.web.commands import production_command_specs
+from namisync.interfaces.web.drain import (
+    TaskDrainView,
+    TaskEventUpdateView,
+    TaskRecordUpdateView,
+    TaskStartView,
+)
+from namisync.interfaces.web.drain import (
+    DrainBusyError,
+    ObservationConflictError,
+    TaskUnavailableError,
+)
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.workflows.views import SessionEventView, SessionRecordView
 
 
 REQUEST_ID = "a1" * 16
@@ -50,6 +62,13 @@ ERRORS = {
     "planning_refused": (
         "NamiSync could not start a plan for those folders. Review both folders "
         "and try again."
+    ),
+    "task_unavailable": "That desktop task is no longer available.",
+    "drain_busy": (
+        "That desktop task already has an event request in progress."
+    ),
+    "observation_conflict": (
+        "That desktop task is already observing different work."
     ),
     "bridge_unavailable": (
         "NamiSync is closing or this desktop page is no longer trusted."
@@ -417,7 +436,7 @@ def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
     commands = production_command_specs(
         picker=lambda: None,
         slots=SimpleNamespace(),
-        service=SimpleNamespace(),
+        registry=SimpleNamespace(),
     )
     dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
 
@@ -426,6 +445,133 @@ def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
         "unknown_command",
         "This desktop action is not available.",
     )
+
+
+def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views() -> None:
+    task_id = "task-" + "2" * 32
+    session_id = "3" * 32
+    drain_id = "4" * 32
+    event = SessionEventView(
+        session_id,
+        7,
+        "2026-08-12T11:00:00Z",
+        "StateChanged",
+        {"state": "running"},
+    )
+    record = SessionRecordView(
+        session_id,
+        "plan",
+        "pending",
+        False,
+        "2026-08-12T10:59:59Z",
+        None,
+        None,
+        None,
+    )
+
+    class Registry:
+        def drain(self, *args: object, **kwargs: object) -> TaskDrainView:
+            assert args == (task_id, session_id, drain_id)
+            assert kwargs == {"replay_from": None}
+            return TaskDrainView(
+                task_id,
+                session_id,
+                drain_id,
+                (
+                    TaskEventUpdateView("event", event),
+                    TaskRecordUpdateView("record", record),
+                ),
+            )
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=SimpleNamespace(),
+        registry=Registry(),
+    )
+    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+
+    response = dispatcher.dispatch(
+        _request(
+            command="next_events",
+            payload={
+                "task_id": task_id,
+                "session_id": session_id,
+                "drain_id": drain_id,
+                "replay_from": None,
+            },
+        )
+    )
+
+    assert response == {
+        "schema_version": 1,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": {
+            "task_id": task_id,
+            "session_id": session_id,
+            "drain_id": drain_id,
+            "updates": [
+                {
+                    "update_type": "event",
+                    "event": {
+                        "session_id": session_id,
+                        "sequence": 7,
+                        "at": "2026-08-12T11:00:00Z",
+                        "body_type": "StateChanged",
+                        "body": {"state": "running"},
+                    },
+                },
+                {
+                    "update_type": "record",
+                    "record": {
+                        "session_id": session_id,
+                        "kind": "plan",
+                        "state": "pending",
+                        "supports_pause": False,
+                        "created_at": "2026-08-12T10:59:59Z",
+                        "started_at": None,
+                        "ended_at": None,
+                        "result": None,
+                    },
+                },
+            ],
+        },
+    }
+
+
+def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None:
+    class Registry:
+        def drain(self, *args: object, **kwargs: object) -> object:
+            del args, kwargs
+            raise TaskUnavailableError("private task detail")
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=production_command_specs(
+            picker=lambda: None,
+            slots=SimpleNamespace(),
+            registry=Registry(),
+        ),
+    )
+
+    response = dispatcher.dispatch(
+        _request(
+            command="next_events",
+            payload={
+                "task_id": "task-" + "2" * 32,
+                "session_id": "3" * 32,
+                "drain_id": "4" * 32,
+                "replay_from": 1,
+            },
+        )
+    )
+
+    assert response == _failure(
+        REQUEST_ID,
+        "task_unavailable",
+        ERRORS["task_unavailable"],
+    )
+    assert "private" not in repr(response)
 
 
 def test_br_g_32_utf8_limit_is_inclusive_and_oversize_is_predecode(
@@ -558,6 +704,12 @@ def test_br_g_32_picker_failure_uses_its_fixed_public_error() -> None:
         (SlotUnavailableError("private slot"), "slot_unavailable"),
         (CommandConflictError("private receipt"), "command_conflict"),
         (PlanningRefusedError("C:\\private\\root"), "planning_refused"),
+        (TaskUnavailableError("private task"), "task_unavailable"),
+        (DrainBusyError("private drain"), "drain_busy"),
+        (
+            ObservationConflictError("private observation"),
+            "observation_conflict",
+        ),
     ],
 )
 def test_br_g_32_typed_command_refusals_use_only_fixed_public_errors(
@@ -642,6 +794,15 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
     service._session_receipt_lifecycle = Lock()
     service._closed = False
 
+    class Registry:
+        def start_plan(self, *args: object, **kwargs: object) -> TaskStartView:
+            plan = service.start_plan(*args, **kwargs)
+            return TaskStartView(
+                "task-" + "6" * 32,
+                plan.request_id,
+                plan.session_id,
+            )
+
     tokens = iter(f"{value:032x}" for value in range(10))
     slots = FolderSlotTable(token=lambda: next(tokens))
     source_id, _ = slots.store(str(source), purpose="source")
@@ -652,7 +813,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
     commands = production_command_specs(
         picker=lambda: None,
         slots=slots,
-        service=service,
+        registry=Registry(),
     )
     dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
     command_id = "c4" * 16
@@ -686,6 +847,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
     assert replay["request_id"] == "d2" * 16
     assert first["result"] == replay["result"]
     assert first["result"] == {
+        "task_id": "task-" + "6" * 32,
         "request_id": first["result"]["request_id"],
         "session_id": "5" * 32,
     }

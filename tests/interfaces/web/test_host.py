@@ -184,6 +184,10 @@ def _patch_primary(
         lambda: order.append("pending_document") or document,
     )
     slots = SimpleNamespace()
+    registry = SimpleNamespace(
+        begin_close=lambda: order.append("registry.begin_close"),
+        unsubscribe_all=lambda: order.append("registry.unsubscribe_all"),
+    )
     commands = SimpleNamespace()
     dispatcher = SimpleNamespace(
         _reject_new=lambda: order.append("reject_dispatch"),
@@ -201,6 +205,12 @@ def _patch_primary(
         host,
         "_folder_slots",
         lambda: order.append(("folder_slots", slots)) or slots,
+    )
+    monkeypatch.setattr(
+        host,
+        "_task_registry",
+        lambda actual: order.append(("task_registry", actual, registry))
+        or registry,
     )
     monkeypatch.setattr(host, "_NativeFolderPicker", Picker)
     monkeypatch.setattr(
@@ -321,6 +331,7 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "create_service",
         "validate_databases",
         "initialize_databases",
+        "task_registry",
         "pending_document",
         "folder_slots",
         "native_picker",
@@ -333,6 +344,10 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "bind_origin",
         "configure_security",
         "renderer",
+        "reject_dispatch",
+        "registry.begin_close",
+        "wait_handlers",
+        "registry.unsubscribe_all",
         "service.close",
         "shutdown_logging",
         "lease.close",
@@ -348,6 +363,9 @@ def test_host_prepares_before_create_and_starts_only_edge(
         item for item in order if item[0] == "bridge_dispatcher"
     )
     assert commands_entry[1]["slots"] is slots_entry[1]
+    assert commands_entry[1]["registry"] is next(
+        item for item in order if item[0] == "task_registry"
+    )[2]
     assert bridge_entry[2] is commands_entry[2]
     assert created[3] is bridge_entry[3]
     started = next(item for item in order if isinstance(item, tuple) and item[0] == "start")
@@ -427,7 +445,7 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
     commands = host._production_commands(
         picker=picker,
         slots=Slots(),
-        service=_Service([]),
+        registry=host._task_registry(_Service([])),
     )
     first: list[object] = []
     worker = Thread(
@@ -496,12 +514,16 @@ def test_br_g_32_host_helpers_build_exact_production_js_api() -> None:
     commands = host._production_commands(
         picker=lambda: None,
         slots=slots,
-        service=_Service([]),
+        registry=host._task_registry(_Service([])),
     )
     dispatcher = host._bridge_dispatcher(document, commands)
 
-    assert tuple(commands) == ("pick_folder", "start_plan")
-    assert tuple(dispatcher._commands) == ("pick_folder", "start_plan")
+    assert tuple(commands) == ("pick_folder", "start_plan", "next_events")
+    assert tuple(dispatcher._commands) == (
+        "pick_folder",
+        "start_plan",
+        "next_events",
+    )
     assert {name for name in dir(dispatcher) if not name.startswith("_")} == {
         "dispatch"
     }
@@ -679,6 +701,79 @@ def test_database_refusal_finalizes_before_visible_error(
     ]
     assert "history-contract" in order[-1][1]
     assert "both database files together" in order[-1][1]
+
+
+def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
+    order: list[str] = []
+    dispatcher = SimpleNamespace(
+        _reject_new=lambda: order.append("reject"),
+        _wait_for_handlers=lambda: order.append("wait"),
+    )
+    registry = SimpleNamespace(
+        begin_close=lambda: order.append("wake"),
+        unsubscribe_all=lambda: order.append("unsubscribe"),
+    )
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+
+    failure = host._finalize_primary(
+        service,
+        dispatcher=dispatcher,
+        registry=registry,
+        service_shutdown_complete=False,
+        logging_configured=False,
+        log_path=None,
+        lease=None,
+    )
+
+    assert failure is None
+    assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
+
+
+def test_startup_finalizer_preserves_first_quiesce_error_and_still_closes_service(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+    first = RuntimeError("first cleanup failure")
+
+    def fail_wake() -> None:
+        order.append("wake")
+        raise first
+
+    dispatcher = SimpleNamespace(
+        _reject_new=lambda: order.append("reject"),
+        _wait_for_handlers=lambda: order.append("wait"),
+    )
+    registry = SimpleNamespace(
+        begin_close=fail_wake,
+        unsubscribe_all=lambda: order.append("unsubscribe"),
+    )
+    service = _ControllerService(
+        order,
+        [RuntimeError("later service failure")],
+    )
+    logged: list[str] = []
+    monkeypatch.setattr(
+        host,
+        "_log_cleanup_failure",
+        lambda event, _error, **_options: logged.append(event),
+    )
+
+    failure = host._finalize_primary(
+        service,
+        dispatcher=dispatcher,
+        registry=registry,
+        service_shutdown_complete=False,
+        logging_configured=False,
+        log_path=None,
+        lease=None,
+    )
+
+    assert failure is first
+    assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
+    assert logged == [
+        "startup.registry_wake_failed",
+        "startup.service_cleanup_failed",
+    ]
 
 
 def test_initialized_refusal_aborts_without_destroy(

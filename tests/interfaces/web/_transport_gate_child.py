@@ -21,6 +21,7 @@ from unittest.mock import patch
 
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _SLOT_ID = re.compile(r"slot-[0-9a-f]{32}")
+_TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 
 
 class _Recorder:
@@ -152,7 +153,9 @@ def _test_spec(
                 and type(source_display) is str
                 and type(target_display) is str
                 and type(plan) is dict
-                and set(plan) == {"request_id", "session_id"}
+                and set(plan) == {"task_id", "request_id", "session_id"}
+                and type(plan["task_id"]) is str
+                and _TASK_ID.fullmatch(plan["task_id"]) is not None
                 and type(plan["request_id"]) is str
                 and _OPAQUE_ID.fullmatch(plan["request_id"]) is not None
                 and type(plan["session_id"]) is str
@@ -288,6 +291,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         *,
         deletion_policy: str | None = None,
         command_id: str | None = None,
+        observation_sink=None,
     ) -> object:
         recorder.append(
             "service_start_plan_calls",
@@ -304,6 +308,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             target,
             deletion_policy=deletion_policy,
             command_id=command_id,
+            observation_sink=observation_sink,
         )
 
     def log_renderer(browser_version: str) -> None:

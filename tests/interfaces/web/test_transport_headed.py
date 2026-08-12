@@ -546,8 +546,13 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert dom["image_count"] == 0
     assert dom["script_count_after"] == dom["script_count_before"]
     assert dom["hostile_marker_defined"] is False
-    assert result["production_command_names"] == ["pick_folder", "start_plan"]
+    assert result["production_command_names"] == [
+        "next_events",
+        "pick_folder",
+        "start_plan",
+    ]
     assert result["combined_command_names"] == [
+        "next_events",
         "pick_folder",
         "start_plan",
         "test_report",
@@ -606,7 +611,11 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     assert result["final_document_url"].startswith("http://127.0.0.1:")
     assert result["final_document_url"].endswith("/off_origin.html")
     assert result["final_document_url"] in result["committed_sources"]
-    assert result["production_command_names"] == ["pick_folder", "start_plan"]
+    assert result["production_command_names"] == [
+        "next_events",
+        "pick_folder",
+        "start_plan",
+    ]
     assert result["dispatcher_type"] == (
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )

@@ -47,6 +47,13 @@ _ERROR_MESSAGES = {
         "NamiSync could not start a plan for those folders. Review both folders "
         "and try again."
     ),
+    "task_unavailable": "That desktop task is no longer available.",
+    "drain_busy": (
+        "That desktop task already has an event request in progress."
+    ),
+    "observation_conflict": (
+        "That desktop task is already observing different work."
+    ),
     "bridge_unavailable": (
         "NamiSync is closing or this desktop page is no longer trusted."
     ),
@@ -556,6 +563,11 @@ class BridgeDispatcher:
                 PickerUnavailableError,
                 PlanningRefusedError,
             )
+            from .drain import (
+                DrainBusyError,
+                ObservationConflictError,
+                TaskUnavailableError,
+            )
             from .slots import SlotUnavailableError
 
             try:
@@ -570,6 +582,12 @@ class BridgeDispatcher:
                 return self._failure(request_id, name, "command_conflict")
             except PlanningRefusedError:
                 return self._failure(request_id, name, "planning_refused")
+            except TaskUnavailableError:
+                return self._failure(request_id, name, "task_unavailable")
+            except DrainBusyError:
+                return self._failure(request_id, name, "drain_busy")
+            except ObservationConflictError:
+                return self._failure(request_id, name, "observation_conflict")
             except BaseException:
                 return self._failure(request_id, name, "internal_error")
             try:

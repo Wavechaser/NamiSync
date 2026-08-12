@@ -9,6 +9,13 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Protocol
 
+from namisync.interfaces.web.drain import (
+    TaskDrainView,
+    TaskEventUpdateView,
+    TaskIntentConflictError,
+    TaskRecordUpdateView,
+    TaskStartView,
+)
 from namisync.interfaces.service import (
     CommandIdConflictError,
     ControlView,
@@ -55,6 +62,7 @@ from namisync.workflows.views import (
 
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _SLOT_ID = re.compile(r"slot-[0-9a-f]{32}")
+_TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 
 SERVICE_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
     {
@@ -98,8 +106,18 @@ NESTED_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
         RefusalView,
     }
 )
+ADAPTER_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
+    {
+        TaskDrainView,
+        TaskEventUpdateView,
+        TaskRecordUpdateView,
+        TaskStartView,
+    }
+)
 PUBLIC_VIEW_DATACLASSES = (
-    SERVICE_PUBLIC_VIEW_DATACLASSES | NESTED_PUBLIC_VIEW_DATACLASSES
+    SERVICE_PUBLIC_VIEW_DATACLASSES
+    | NESTED_PUBLIC_VIEW_DATACLASSES
+    | ADAPTER_PUBLIC_VIEW_DATACLASSES
 )
 PUBLIC_VIEW_ENUMS: frozenset[type[object]] = frozenset()
 
@@ -133,6 +151,7 @@ class FieldRequirement(StrEnum):
 class CommandTimeout(StrEnum):
     INTERACTIVE = "interactive"
     MUTATION_30_SECONDS = "mutation-30-seconds"
+    DRAIN_30_SECONDS = "drain-30-seconds"
 
 
 class CommandRetry(StrEnum):
@@ -148,15 +167,24 @@ class FolderSlotAuthority(Protocol):
     def resolve_pair(self, source_id: str, target_id: str) -> tuple[str, str]: ...
 
 
-class PlanningService(Protocol):
+class TaskAuthority(Protocol):
     def start_plan(
         self,
         source: str,
         target: str,
         *,
         deletion_policy: str | None = None,
-        command_id: str | None = None,
-    ) -> object: ...
+        command_id: str,
+    ) -> TaskStartView: ...
+
+    def drain(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> TaskDrainView: ...
 
 
 PayloadValidator = Callable[[object], object]
@@ -193,13 +221,21 @@ class _StartPlanPayload:
     deletion_policy: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class _NextEventsPayload:
+    task_id: str
+    session_id: str
+    drain_id: str
+    replay_from: int | None
+
+
 def production_command_specs(
     *,
     picker: FolderPicker,
     slots: FolderSlotAuthority,
-    service: PlanningService,
+    registry: TaskAuthority,
 ) -> Mapping[str, CommandSpec]:
-    """Bind the exact two production rows to process-local dependencies."""
+    """Bind the exact three production rows to process-local dependencies."""
 
     if not callable(picker):
         raise TypeError("picker must be callable")
@@ -246,13 +282,13 @@ def production_command_specs(
             raise TypeError("start_plan received an unvalidated payload")
         source, target = slots.resolve_pair(payload.source_id, payload.target_id)
         try:
-            result = service.start_plan(
+            result = registry.start_plan(
                 source,
                 target,
                 deletion_policy=payload.deletion_policy,
                 command_id=payload.command_id,
             )
-        except CommandIdConflictError as error:
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
             raise CommandConflictError(
                 "start_plan command id conflicts with retained intent"
             ) from error
@@ -261,13 +297,33 @@ def production_command_specs(
                 "start_plan roots were refused"
             ) from error
         if (
-            type(result) is not PlanSession
+            type(result) is not TaskStartView
+            or type(result.task_id) is not str
+            or _TASK_ID.fullmatch(result.task_id) is None
             or type(result.request_id) is not str
             or _OPAQUE_ID.fullmatch(result.request_id) is None
             or type(result.session_id) is not str
             or _OPAQUE_ID.fullmatch(result.session_id) is None
         ):
             raise RuntimeError("planning service returned invalid data")
+        return result
+
+    def next_events(payload: object) -> object:
+        if not isinstance(payload, _NextEventsPayload):
+            raise TypeError("next_events received an unvalidated payload")
+        result = registry.drain(
+            payload.task_id,
+            payload.session_id,
+            payload.drain_id,
+            replay_from=payload.replay_from,
+        )
+        if (
+            type(result) is not TaskDrainView
+            or result.task_id != payload.task_id
+            or result.session_id != payload.session_id
+            or result.drain_id != payload.drain_id
+        ):
+            raise RuntimeError("task registry returned invalid drain data")
         return result
 
     return MappingProxyType(
@@ -289,6 +345,15 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_COMMAND_ONCE,
+            ),
+            "next_events": CommandSpec(
+                validate_payload=_validate_next_events,
+                handler=next_events,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.DRAIN_30_SECONDS,
+                retry=CommandRetry.NONE,
             ),
         }
     )
@@ -332,3 +397,28 @@ def _validate_start_plan(value: object) -> _StartPlanPayload:
         target_id=target_id,
         deletion_policy=deletion_policy,
     )
+
+
+def _validate_next_events(value: object) -> _NextEventsPayload:
+    if not isinstance(value, dict) or set(value) != {
+        "task_id",
+        "session_id",
+        "drain_id",
+        "replay_from",
+    }:
+        raise CommandPayloadError("next_events payload is invalid")
+    task_id = value["task_id"]
+    session_id = value["session_id"]
+    drain_id = value["drain_id"]
+    replay_from = value["replay_from"]
+    if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+        raise CommandPayloadError("next_events payload is invalid")
+    if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
+        raise CommandPayloadError("next_events payload is invalid")
+    if type(drain_id) is not str or _OPAQUE_ID.fullmatch(drain_id) is None:
+        raise CommandPayloadError("next_events payload is invalid")
+    if replay_from is not None and (
+        type(replay_from) is not int or replay_from < 1
+    ):
+        raise CommandPayloadError("next_events payload is invalid")
+    return _NextEventsPayload(task_id, session_id, drain_id, replay_from)

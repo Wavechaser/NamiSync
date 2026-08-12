@@ -8,7 +8,7 @@ from dataclasses import FrozenInstanceError, dataclass, is_dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -18,10 +18,12 @@ from namisync.interfaces.service import (
     ExecutionAdmissionView,
     ExecutionSession,
     PlanSession,
+    SessionRecordView,
     SyncPathInputError,
 )
 from namisync.interfaces.web.bridge import BridgeProtocolError, to_primitive_view
 from namisync.interfaces.web.commands import (
+    ADAPTER_PUBLIC_VIEW_DATACLASSES,
     CommandAccess,
     CommandConflictError,
     CommandPayloadError,
@@ -34,11 +36,22 @@ from namisync.interfaces.web.commands import (
     SERVICE_PUBLIC_VIEW_DATACLASSES,
     production_command_specs,
 )
+from namisync.interfaces.web.drain import (
+    TaskDrainView,
+    TaskEventUpdateView,
+    TaskIntentConflictError,
+    TaskRecordUpdateView,
+    TaskStartView,
+)
+from namisync.workflows.views import SessionEventView
 
 
 SOURCE_ID = "slot-11111111111111111111111111111111"
 TARGET_ID = "slot-22222222222222222222222222222222"
 COMMAND_ID = "a3" * 16
+TASK_ID = "task-" + "3" * 32
+SESSION_ID = "5" * 32
+DRAIN_ID = "d6" * 16
 
 
 class _Slots:
@@ -67,19 +80,33 @@ class _Service:
         *,
         deletion_policy: str | None = None,
         command_id: str | None = None,
-    ) -> PlanSession:
+    ) -> TaskStartView:
         self.calls.append((source, target, deletion_policy, command_id))
-        return PlanSession(
+        return TaskStartView(
+            task_id=TASK_ID,
             request_id="4" * 32,
             session_id="5" * 32,
         )
+
+    def drain(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> TaskDrainView:
+        self.calls.append(
+            ("drain", task_id, session_id, drain_id, replay_from)
+        )
+        return TaskDrainView(task_id, session_id, drain_id, ())
 
 
 def _commands(*, picker=lambda: None):
     slots = _Slots()
     service = _Service()
     return (
-        production_command_specs(picker=picker, slots=slots, service=service),
+        production_command_specs(picker=picker, slots=slots, registry=service),
         slots,
         service,
     )
@@ -88,7 +115,7 @@ def _commands(*, picker=lambda: None):
 def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete() -> None:
     commands, _, _ = _commands()
 
-    assert tuple(commands) == ("pick_folder", "start_plan")
+    assert tuple(commands) == ("pick_folder", "start_plan", "next_events")
     assert "test_report" not in commands
     assert (
         commands["pick_folder"].access,
@@ -116,6 +143,19 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandTimeout.MUTATION_30_SECONDS,
         CommandRetry.SAME_COMMAND_ONCE,
     )
+    assert (
+        commands["next_events"].access,
+        commands["next_events"].command_id,
+        commands["next_events"].revision,
+        commands["next_events"].timeout,
+        commands["next_events"].retry,
+    ) == (
+        CommandAccess.READ_ONLY,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.DRAIN_30_SECONDS,
+        CommandRetry.NONE,
+    )
 
     with pytest.raises(TypeError):
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
@@ -132,7 +172,7 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         )
     )
 
-    assert tuple(signature.parameters) == ("picker", "slots", "service")
+    assert tuple(signature.parameters) == ("picker", "slots", "registry")
     assert all(
         parameter.kind is inspect.Parameter.KEYWORD_ONLY
         for parameter in signature.parameters.values()
@@ -226,7 +266,7 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
     commands = production_command_specs(
         picker=lambda: (r"C:\private",),
         slots=slots,
-        service=_Service(),
+        registry=_Service(),
     )
 
     with pytest.raises(RuntimeError, match="slot authority"):
@@ -244,7 +284,11 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
 
     result = commands["start_plan"].invoke(payload)
 
-    assert result == PlanSession(request_id="4" * 32, session_id="5" * 32)
+    assert result == TaskStartView(
+        task_id=TASK_ID,
+        request_id="4" * 32,
+        session_id="5" * 32,
+    )
     assert slots.resolved == [(SOURCE_ID, TARGET_ID)]
     assert service.calls == [
         (r"C:\private\source", r"D:\private\target", None, COMMAND_ID)
@@ -252,10 +296,107 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
     assert "private" not in repr(payload)
 
 
+def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() -> None:
+    commands, slots, registry = _commands()
+
+    result = commands["next_events"].invoke(
+        {
+            "task_id": TASK_ID,
+            "session_id": SESSION_ID,
+            "drain_id": DRAIN_ID,
+            "replay_from": 17,
+        }
+    )
+
+    assert result == TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, ())
+    assert registry.calls == [
+        ("drain", TASK_ID, SESSION_ID, DRAIN_ID, 17)
+    ]
+    assert slots.resolved == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {
+            "task_id": TASK_ID,
+            "session_id": SESSION_ID,
+            "drain_id": DRAIN_ID,
+            "replay_from": None,
+            "cursor": 1,
+        },
+        {
+            "task_id": SESSION_ID,
+            "session_id": SESSION_ID,
+            "drain_id": DRAIN_ID,
+            "replay_from": None,
+        },
+        {
+            "task_id": TASK_ID,
+            "session_id": "task-" + "5" * 32,
+            "drain_id": DRAIN_ID,
+            "replay_from": None,
+        },
+        *[
+            {
+                "task_id": TASK_ID,
+                "session_id": SESSION_ID,
+                "drain_id": DRAIN_ID,
+                "replay_from": value,
+            }
+            for value in (False, 0, -1, 1.5, "1")
+        ],
+    ],
+)
+def test_br_g_33_next_events_refuses_nonexact_payloads(payload: object) -> None:
+    commands, _slots, registry = _commands()
+
+    with pytest.raises(CommandPayloadError):
+        commands["next_events"].invoke(payload)
+
+    assert registry.calls == []
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        object(),
+        TaskDrainView("task-" + "9" * 32, SESSION_ID, DRAIN_ID, ()),
+        TaskDrainView(TASK_ID, "9" * 32, DRAIN_ID, ()),
+        TaskDrainView(TASK_ID, SESSION_ID, "9" * 32, ()),
+    ],
+)
+def test_br_g_33_next_events_refuses_invalid_or_mismatched_registry_result(
+    result: object,
+) -> None:
+    class InvalidRegistry(_Service):
+        def drain(self, *args: object, **kwargs: object) -> object:
+            del args, kwargs
+            return result
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=InvalidRegistry(),
+    )
+
+    with pytest.raises(RuntimeError, match="invalid drain data"):
+        commands["next_events"].invoke(
+            {
+                "task_id": TASK_ID,
+                "session_id": SESSION_ID,
+                "drain_id": DRAIN_ID,
+                "replay_from": None,
+            }
+        )
+
+
 @pytest.mark.parametrize(
     ("service_error", "adapter_error"),
     [
         (CommandIdConflictError("private conflict"), CommandConflictError),
+        (TaskIntentConflictError("private task conflict"), CommandConflictError),
         (SyncPathInputError("C:\\private\\bad root"), PlanningRefusedError),
     ],
 )
@@ -271,7 +412,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
     commands = production_command_specs(
         picker=lambda: None,
         slots=_Slots(),
-        service=RefusingService(),
+        registry=RefusingService(),
     )
 
     with pytest.raises(adapter_error) as captured:
@@ -296,7 +437,7 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
     commands = production_command_specs(
         picker=lambda: None,
         slots=_Slots(),
-        service=BrokenService(),
+        registry=BrokenService(),
     )
 
     with pytest.raises(ValueError, match="incidental implementation defect"):
@@ -314,10 +455,12 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
     "result",
     [
         ExecutionSession(run_id="6" * 32, session_id="7" * 32),
-        PlanSession(request_id="A" * 32, session_id="5" * 32),
-        PlanSession(request_id="4" * 32, session_id="short"),
-        PlanSession(request_id=4, session_id="5" * 32),  # type: ignore[arg-type]
-        PlanSession(request_id="4" * 32, session_id=5),  # type: ignore[arg-type]
+        PlanSession(request_id="4" * 32, session_id="5" * 32),
+        SimpleNamespace(
+            task_id=TASK_ID,
+            request_id="4" * 32,
+            session_id="5" * 32,
+        ),
     ],
 )
 def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
@@ -331,7 +474,7 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
     commands = production_command_specs(
         picker=lambda: None,
         slots=_Slots(),
-        service=InvalidService(),
+        registry=InvalidService(),
     )
 
     with pytest.raises(RuntimeError, match="invalid data"):
@@ -457,6 +600,69 @@ def test_br_g_32_public_view_codec_manifest_tracks_service_exports() -> None:
 
     assert SERVICE_PUBLIC_VIEW_DATACLASSES == exported_dataclasses
     assert SERVICE_PUBLIC_VIEW_DATACLASSES <= PUBLIC_VIEW_DATACLASSES
+
+
+def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
+    event = SessionEventView(
+        SESSION_ID,
+        9,
+        "2026-08-12T10:00:00Z",
+        "StateChanged",
+        {"state": "running"},
+    )
+    drain = TaskDrainView(
+        TASK_ID,
+        SESSION_ID,
+        DRAIN_ID,
+        (TaskEventUpdateView("event", event),),
+    )
+
+    assert ADAPTER_PUBLIC_VIEW_DATACLASSES == {
+        TaskStartView,
+        TaskDrainView,
+        TaskEventUpdateView,
+        TaskRecordUpdateView,
+    }
+    assert to_primitive_view(drain) == {
+        "task_id": TASK_ID,
+        "session_id": SESSION_ID,
+        "drain_id": DRAIN_ID,
+        "updates": [
+            {
+                "update_type": "event",
+                "event": {
+                    "session_id": SESSION_ID,
+                    "sequence": 9,
+                    "at": "2026-08-12T10:00:00Z",
+                    "body_type": "StateChanged",
+                    "body": {"state": "running"},
+                },
+            }
+        ],
+    }
+    record = SessionRecordView(
+        SESSION_ID,
+        "plan",
+        "pending",
+        False,
+        "2026-08-12T10:00:00Z",
+        None,
+        None,
+        None,
+    )
+    assert to_primitive_view(TaskRecordUpdateView("record", record)) == {
+        "update_type": "record",
+        "record": {
+            "session_id": SESSION_ID,
+            "kind": "plan",
+            "state": "pending",
+            "supports_pause": False,
+            "created_at": "2026-08-12T10:00:00Z",
+            "started_at": None,
+            "ended_at": None,
+            "result": None,
+        },
+    }
 
 
 @pytest.mark.parametrize(

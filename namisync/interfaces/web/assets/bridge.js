@@ -1,6 +1,7 @@
 const SCHEMA_VERSION = 1;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
+const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
 const START_PLAN_TIMEOUT_MS = 30000;
@@ -17,6 +18,10 @@ const ERROR_MESSAGES = Object.freeze({
     "This action no longer matches its first attempt. Start the action again.",
   planning_refused:
     "NamiSync could not start a plan for those folders. Review both folders and try again.",
+  task_unavailable: "That desktop task is no longer available.",
+  drain_busy: "That desktop task already has an event request in progress.",
+  observation_conflict:
+    "That desktop task is already observing different work.",
   bridge_unavailable:
     "NamiSync is closing or this desktop page is no longer trusted.",
   internal_error: "NamiSync could not complete the desktop action.",
@@ -293,9 +298,11 @@ function validatePickFolderResult(value) {
 
 function validateStartPlanResult(value) {
   return (
-    isExactObject(value, ["request_id", "session_id"]) &&
+    isExactObject(value, ["task_id", "request_id", "session_id"]) &&
+    typeof value.task_id === "string" &&
     typeof value.request_id === "string" &&
     typeof value.session_id === "string" &&
+    TASK_PATTERN.test(value.task_id) &&
     ID_PATTERN.test(value.request_id) &&
     ID_PATTERN.test(value.session_id)
   );
