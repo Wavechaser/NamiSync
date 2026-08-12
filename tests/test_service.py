@@ -908,6 +908,144 @@ def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
     observer.close()
 
 
+def test_adopt_rollback_is_idempotent_and_cannot_remove_replacement() -> None:
+    first_stream = _BlockingStream("first-generation")
+    second_stream = _BlockingStream("second-generation")
+
+    class Dispatcher:
+        pass
+
+    observer = SessionObserver(Dispatcher())
+    first_rollback = observer.adopt(
+        "same-session",
+        lambda _update: None,
+        first_stream,
+    )
+    assert first_stream.entered.wait(0.5)
+    first_rollback()
+
+    second_rollback = observer.adopt(
+        "same-session",
+        lambda _update: None,
+        second_stream,
+    )
+    assert second_stream.entered.wait(0.5)
+    replacement = observer._observations["same-session"]
+
+    first_rollback()
+
+    assert observer._observations["same-session"] is replacement
+    assert not second_stream.closed
+    second_rollback()
+    assert observer._observations == {}
+    observer.close()
+
+
+def test_reobserve_replaces_stream_from_exact_positive_sequence() -> None:
+    first_stream = _BlockingStream("initial")
+    replacement_stream = _BlockingStream("replacement")
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.subscribe_calls: list[int | None] = []
+
+        def get(self, session_id: str) -> SessionRecord:
+            return _record(session_id)
+
+        def subscribe(self, session_id: str, from_seq=None):
+            del session_id
+            self.subscribe_calls.append(from_seq)
+            return (
+                first_stream
+                if len(self.subscribe_calls) == 1
+                else replacement_stream
+            )
+
+    dispatcher = Dispatcher()
+    observer = SessionObserver(dispatcher)
+    observer.observe("recovering", lambda _update: None)
+    assert first_stream.entered.wait(0.5)
+
+    current = observer.reobserve(
+        "recovering",
+        lambda _update: None,
+        7,
+    )
+
+    assert current.result is None
+    assert dispatcher.subscribe_calls == [None, 7]
+    assert first_stream.closed
+    assert replacement_stream.entered.wait(0.5)
+    observer.close()
+
+
+@pytest.mark.parametrize("from_sequence", (0, -1, True, 1.5, "1"))
+def test_reobserve_rejects_nonpositive_or_noninteger_sequence(
+    from_sequence: object,
+) -> None:
+    observer = SessionObserver(SimpleNamespace())
+
+    with pytest.raises(ValueError, match="positive integer"):
+        observer.reobserve(
+            "invalid-sequence",
+            lambda _update: None,
+            from_sequence,
+        )
+
+    observer.close()
+
+
+def test_invalid_reobserve_preserves_existing_observation() -> None:
+    stream = _BlockingStream("retained")
+
+    class Dispatcher:
+        def get(self, session_id: str) -> SessionRecord:
+            return _record(session_id)
+
+        def subscribe(self, session_id: str, from_seq=None):
+            del session_id, from_seq
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    observer.observe("retained", lambda _update: None)
+    assert stream.entered.wait(0.5)
+    retained = observer._observations["retained"]
+
+    with pytest.raises(ValueError, match="positive integer"):
+        observer.reobserve("retained", lambda _update: None, 0)
+
+    assert observer._observations["retained"] is retained
+    assert not stream.closed
+
+    with pytest.raises(TypeError, match="callable"):
+        observer.reobserve("retained", object(), 1)
+
+    assert observer._observations["retained"] is retained
+    assert not stream.closed
+    observer.close()
+
+
+def test_reobserve_terminal_session_installs_no_stream() -> None:
+    class Dispatcher:
+        def get(self, session_id: str) -> SessionRecord:
+            return _record(session_id, terminal=True)
+
+        def subscribe(self, session_id: str, from_seq=None):
+            raise AssertionError("terminal reobserve must not subscribe")
+
+    observer = SessionObserver(Dispatcher())
+
+    current = observer.reobserve(
+        "already-terminal",
+        lambda _update: None,
+        3,
+    )
+
+    assert current.result is not None
+    assert observer._observations == {}
+    observer.close()
+
+
 def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
     log: list[str] = []
 

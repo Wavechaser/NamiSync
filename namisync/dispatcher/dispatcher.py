@@ -58,6 +58,10 @@ from namisync.dispatcher.event_bus import (
 from namisync.dispatcher.store import InMemorySessionStore
 
 
+_AdmissionRollback = Callable[[], None]
+_AdmissionAttach = Callable[[SessionId, EventStream], _AdmissionRollback]
+
+
 class _Control:
     def __init__(self) -> None:
         self._pause = False
@@ -123,6 +127,30 @@ class _WorkerAttempt:
     thread: Thread
 
 
+@dataclass(slots=True)
+class _AdmissionCleanup:
+    """Retained ownership for an unpublished admission that failed cleanup."""
+
+    session_id: SessionId
+    hub: EventHub
+    stream: EventStream | None
+    rollback: _AdmissionRollback | None
+    rollback_done: bool
+    stream_done: bool
+    hub_done: bool
+    store_done: bool
+    failures: tuple[BaseException, ...] = ()
+
+    @property
+    def complete(self) -> bool:
+        return (
+            self.rollback_done
+            and self.stream_done
+            and self.hub_done
+            and self.store_done
+        )
+
+
 class _StaleWorkerAttempt(BaseException):
     """Stop a superseded private worker without creating a second result."""
 
@@ -176,6 +204,7 @@ class Dispatcher:
         self._admitting = 0
         self._admission_order = 0
         self._accepting = True
+        self._admission_cleanups: dict[SessionId, _AdmissionCleanup] = {}
         self._store_failures: list[BaseException] = []
         self._custody_failures: list[BaseException] = []
         self._scheduler = Thread(
@@ -185,7 +214,13 @@ class Dispatcher:
         )
         self._scheduler.start()
 
-    def submit(self, kind: str, request: object) -> SessionId:
+    def submit(
+        self,
+        kind: str,
+        request: object,
+        *,
+        attach: _AdmissionAttach | None = None,
+    ) -> SessionId:
         with self._condition:
             if not self._accepting:
                 raise AdmissionClosed("dispatcher is no longer accepting sessions")
@@ -195,14 +230,19 @@ class Dispatcher:
         if registration is None:
             raise UnknownWorkflowKind(kind)
         try:
-            return self._admit(kind, request, registration)
+            return self._admit(kind, request, registration, attach=attach)
         finally:
             with self._condition:
                 self._admitting -= 1
                 self._condition.notify_all()
 
     def _admit(
-        self, kind: str, request: object, registration: WorkflowRegistration
+        self,
+        kind: str,
+        request: object,
+        registration: WorkflowRegistration,
+        *,
+        attach: _AdmissionAttach | None,
     ) -> SessionId:
         prepared = registration.prepare(request)
         resources = tuple(sorted(prepared.resources))
@@ -237,32 +277,129 @@ class Dispatcher:
             audit_offer_timeout=self._audit_offer_timeout,
             audit_flush_interval=self._audit_flush_interval,
         )
-        try:
-            self._store.put(record)
-        except BaseException:
-            hub.close(self._audit_timeout)
-            raise
+        stream: EventStream | None = None
+        rollback: _AdmissionRollback | None = None
+        store_touched = False
         publication_lock = Lock()
-        with publication_lock:
-            with self._condition:
-                stopped = not self._accepting
-                if not stopped:
-                    self._records[session_id] = record
-                    self._controls[session_id] = _Control()
-                    self._hubs[session_id] = hub
-                    self._state_publication_locks[session_id] = publication_lock
-                    self._item_events[session_id] = []
-                    self._pending.append(session_id)
-            if stopped:
-                try:
-                    self._store.drop(session_id)
-                finally:
-                    hub.close(self._audit_timeout)
-                raise AdmissionClosed("dispatcher stopped during admission")
-            hub.emit(StateChanged(SessionState.PENDING))
-        with self._condition:
-            self._condition.notify_all()
+        try:
+            store_touched = True
+            self._store.put(record)
+            if attach is not None:
+                stream = hub.subscribe()
+                attached_rollback = attach(session_id, stream)
+                if not callable(attached_rollback):
+                    raise TypeError(
+                        "admission attach callback must return a rollback callback"
+                    )
+                rollback = attached_rollback
+            with publication_lock:
+                with self._condition:
+                    if not self._accepting:
+                        raise AdmissionClosed(
+                            "dispatcher stopped during admission"
+                        )
+                    # Keep the acceptance decision, first observable event,
+                    # and map/pending publication in one transaction.  An
+                    # adopted sink may react to PENDING immediately; any
+                    # dispatcher lookup it makes must wait until publication
+                    # completes instead of observing an unpublished session.
+                    hub.emit(StateChanged(SessionState.PENDING))
+                    try:
+                        self._records[session_id] = record
+                        self._controls[session_id] = _Control()
+                        self._hubs[session_id] = hub
+                        self._state_publication_locks[session_id] = publication_lock
+                        self._item_events[session_id] = []
+                        self._pending.append(session_id)
+                    except BaseException:
+                        self._pending = deque(
+                            item for item in self._pending if item != session_id
+                        )
+                        self._item_events.pop(session_id, None)
+                        self._state_publication_locks.pop(session_id, None)
+                        self._hubs.pop(session_id, None)
+                        self._controls.pop(session_id, None)
+                        self._records.pop(session_id, None)
+                        raise
+                    self._condition.notify_all()
+        except BaseException:
+            cleanup = _AdmissionCleanup(
+                session_id=session_id,
+                hub=hub,
+                stream=stream,
+                rollback=rollback,
+                rollback_done=rollback is None,
+                stream_done=stream is None,
+                hub_done=False,
+                store_done=not store_touched,
+            )
+            self._attempt_admission_cleanup(cleanup, self._audit_timeout)
+            if not cleanup.complete:
+                with self._condition:
+                    self._admission_cleanups[session_id] = cleanup
+                    self._condition.notify_all()
+            raise
         return session_id
+
+    def _attempt_admission_cleanup(
+        self,
+        cleanup: _AdmissionCleanup,
+        timeout: float,
+    ) -> None:
+        failures: list[BaseException] = []
+        if not cleanup.rollback_done:
+            assert cleanup.rollback is not None
+            try:
+                cleanup.rollback()
+            except BaseException as error:
+                failures.append(error)
+            else:
+                cleanup.rollback_done = True
+        if not cleanup.stream_done:
+            assert cleanup.stream is not None
+            try:
+                cleanup.stream.close()
+            except BaseException as error:
+                failures.append(error)
+            else:
+                cleanup.stream_done = True
+        if not cleanup.hub_done:
+            try:
+                close_status = cleanup.hub.close(timeout)
+            except BaseException as error:
+                failures.append(error)
+            else:
+                if close_status is EventHubCloseStatus.COMPLETE:
+                    cleanup.hub_done = True
+                else:
+                    failures.append(
+                        TimeoutError(
+                            "failed admission event cleanup remains pending: "
+                            f"{cleanup.session_id}"
+                        )
+                    )
+        if not cleanup.store_done:
+            try:
+                self._store.drop(cleanup.session_id)
+            except BaseException as error:
+                failures.append(error)
+            else:
+                cleanup.store_done = True
+        cleanup.failures = tuple(failures)
+
+    def _retry_admission_cleanups(self, deadline: float) -> None:
+        with self._condition:
+            pending = tuple(self._admission_cleanups.values())
+        for cleanup in pending:
+            self._attempt_admission_cleanup(
+                cleanup,
+                max(0.0, deadline - monotonic()),
+            )
+            if cleanup.complete:
+                with self._condition:
+                    if self._admission_cleanups.get(cleanup.session_id) is cleanup:
+                        self._admission_cleanups.pop(cleanup.session_id, None)
+                    self._condition.notify_all()
 
     def get(self, session_id: SessionId) -> SessionRecord:
         with self._condition:
@@ -624,6 +761,10 @@ class Dispatcher:
                 if remaining <= 0:
                     break
                 self._condition.wait(remaining)
+
+        self._retry_admission_cleanups(deadline)
+
+        with self._condition:
             unfinished = tuple(
                 dict.fromkeys(
                     (
@@ -636,7 +777,16 @@ class Dispatcher:
             worker_unfinished = tuple(
                 dict.fromkeys(key.session_id for key in self._workers)
             )
-            unfinished = tuple(dict.fromkeys((*unfinished, *worker_unfinished)))
+            admission_cleanup_unfinished = tuple(self._admission_cleanups)
+            unfinished = tuple(
+                dict.fromkeys(
+                    (
+                        *unfinished,
+                        *worker_unfinished,
+                        *admission_cleanup_unfinished,
+                    )
+                )
+            )
             custody_released = not self._leases and not self._reserved
 
         remaining = max(0.0, deadline - monotonic())
@@ -679,12 +829,14 @@ class Dispatcher:
             admitting = self._admitting
             workers_retired = not self._workers and not self._current_workers
             custody_released = not self._leases and not self._reserved
+            admissions_clean = not self._admission_cleanups
         complete = (
             not all_unfinished
             and custody_released
             and workers_retired
             and not self._scheduler.is_alive()
             and admitting == 0
+            and admissions_clean
         )
         return ShutdownResult(complete, all_unfinished, custody_released)
 

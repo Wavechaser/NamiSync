@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from threading import Event, Lock, Thread, get_ident
 from time import monotonic, sleep
 
 import pytest
 
 from namisync.core.evidence import RecordingStatus
-from namisync.core.events import ItemOutcome, PhaseChanged, StateChanged, Terminal
+from namisync.core.events import Gap, ItemOutcome, PhaseChanged, StateChanged, Terminal
 from namisync.core.evidence import Outcome
 from namisync.core.session import (
     Canceled,
@@ -2169,6 +2170,190 @@ def test_admission_failures_leave_no_live_session() -> None:
         dispatcher.submit("broken", object())
     assert dispatcher.list() == ()
     assert dispatcher.shutdown().complete
+
+
+def test_observed_admission_emits_pending_before_workflow_can_enter() -> None:
+    attached = Event()
+    pending_seen = Event()
+    workflow_entered = Event()
+    reader_done = Event()
+    bodies: list[object] = []
+
+    def run(context):
+        del context
+        assert attached.is_set()
+        workflow_entered.set()
+        assert pending_seen.wait(1)
+        return OperationResult(SessionState.COMPLETED)
+
+    def attach(session_id, stream):
+        attached.set()
+
+        def read() -> None:
+            try:
+                while True:
+                    envelope = stream.next()
+                    assert envelope.session_id == session_id
+                    bodies.append(envelope.body)
+                    if (
+                        isinstance(envelope.body, StateChanged)
+                        and envelope.body.state is SessionState.PENDING
+                    ):
+                        pending_seen.set()
+                    if isinstance(envelope.body, Terminal):
+                        return
+            finally:
+                reader_done.set()
+
+        thread = Thread(target=read, daemon=True)
+        thread.start()
+
+        def rollback() -> None:
+            stream.close()
+            thread.join(1)
+
+        return rollback
+
+    dispatcher = Dispatcher({"observed": registration(lambda payload: run)})
+    session_id = dispatcher.submit("observed", b"payload", attach=attach)
+
+    assert workflow_entered.wait(1)
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert reader_done.wait(1)
+    assert isinstance(bodies[0], StateChanged)
+    assert bodies[0].state is SessionState.PENDING
+    assert not any(isinstance(body, Gap) for body in bodies)
+    assert dispatcher.shutdown().complete
+
+
+def test_observed_attach_failure_is_never_published_or_scheduled() -> None:
+    ran = Event()
+    captured = []
+
+    def run(context):
+        del context
+        ran.set()
+        return OperationResult(SessionState.COMPLETED)
+
+    def reject(session_id, stream):
+        captured.append((session_id, stream))
+        raise ValueError("attach refused")
+
+    store = InMemorySessionStore()
+    dispatcher = Dispatcher(
+        {"observed": registration(lambda payload: run)},
+        store=store,
+    )
+
+    with pytest.raises(ValueError, match="attach refused"):
+        dispatcher.submit("observed", b"payload", attach=reject)
+
+    assert not ran.wait(0.05)
+    assert dispatcher.list() == ()
+    assert store.snapshot() == ()
+    with pytest.raises(StopIteration):
+        captured[0][1].next()
+    assert dispatcher.shutdown().complete
+
+
+def test_shutdown_racing_observed_attach_rolls_back_without_scheduling() -> None:
+    attach_entered = Event()
+    release_attach = Event()
+    rollback_called = Event()
+    ran = Event()
+    errors: list[BaseException] = []
+    adopted_streams = []
+
+    def run(context):
+        del context
+        ran.set()
+        return OperationResult(SessionState.COMPLETED)
+
+    def attach(session_id, stream):
+        del session_id
+        adopted_streams.append(stream)
+        attach_entered.set()
+        assert release_attach.wait(2)
+
+        def rollback() -> None:
+            rollback_called.set()
+            stream.close()
+
+        return rollback
+
+    dispatcher = Dispatcher({"observed": registration(lambda payload: run)})
+
+    def submit() -> None:
+        try:
+            dispatcher.submit("observed", b"payload", attach=attach)
+        except BaseException as error:
+            errors.append(error)
+
+    thread = Thread(target=submit)
+    thread.start()
+    assert attach_entered.wait(1)
+    first_shutdown = dispatcher.shutdown(timeout=0.05)
+    assert not first_shutdown.complete
+    release_attach.set()
+    thread.join(2)
+
+    assert not thread.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], AdmissionClosed)
+    assert rollback_called.is_set()
+    with pytest.raises(StopIteration):
+        adopted_streams[0].next()
+    assert not ran.is_set()
+    assert dispatcher.list() == ()
+    assert dispatcher.shutdown(timeout=2).complete
+
+
+def test_pending_emission_failure_preserves_error_and_rolls_back_attach() -> None:
+    rollback_attempts = 0
+    calls = 0
+    attached_session_ids = []
+
+    class FailingClock:
+        def now(self):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("pending clock failed")
+            return datetime.now(timezone.utc)
+
+    def attach(session_id, stream):
+        attached_session_ids.append(session_id)
+
+        def rollback() -> None:
+            nonlocal rollback_attempts
+            rollback_attempts += 1
+            if rollback_attempts < 3:
+                raise OSError("rollback cleanup failed")
+            stream.close()
+
+        return rollback
+
+    store = InMemorySessionStore()
+    dispatcher = Dispatcher(
+        {"observed": registration(lambda payload: completed)},
+        store=store,
+        clock=FailingClock(),
+    )
+
+    with pytest.raises(RuntimeError, match="pending clock failed"):
+        dispatcher.submit("observed", b"payload", attach=attach)
+
+    assert rollback_attempts == 1
+    assert dispatcher.list() == ()
+    assert store.snapshot() == ()
+    assert len(dispatcher._admission_cleanups) == 1
+    incomplete = dispatcher.shutdown(timeout=1)
+    assert not incomplete.complete
+    assert incomplete.unfinished == (attached_session_ids[0],)
+    assert rollback_attempts == 2
+    assert dispatcher.shutdown(timeout=2).complete
+    assert rollback_attempts == 3
+    assert dispatcher._admission_cleanups == {}
 
 
 def test_shutdown_reports_inflight_admission_and_waits_for_cleanup() -> None:

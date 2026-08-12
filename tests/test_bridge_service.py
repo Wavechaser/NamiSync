@@ -816,6 +816,137 @@ def test_br_g_16_plan_retry_replays_before_paths_are_revalidated(
     assert len(dispatcher.submissions) == 1
 
 
+def test_plan_receipt_replay_ignores_sink_and_does_not_reattach(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+
+    class Runtime:
+        def create_plan_request(
+            self,
+            request_id: str,
+            source_path: str,
+            target_path: str,
+            *,
+            deletion_policy: str | None,
+        ):
+            return SimpleNamespace(
+                request_id=request_id,
+                source_path=source_path,
+                target_path=target_path,
+                deletion_policy=deletion_policy,
+            )
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.submissions = []
+
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            self.submissions.append((kind, request, attach))
+            if attach is not None:
+                attach("observed-session", object())
+            return "observed-session"
+
+    class Observer:
+        def __init__(self) -> None:
+            self.adoptions = []
+
+        def adopt(self, session_id, sink, stream):
+            self.adoptions.append((session_id, sink, stream))
+            return lambda: None
+
+        def unsubscribe(self, session_id):
+            del session_id
+
+    dispatcher = Dispatcher()
+    observer = Observer()
+    service = _service(Runtime(), dispatcher)
+    service._observer = observer
+    first_sink = lambda _update: None
+    replay_sink = lambda _update: None
+
+    first = service.start_plan(
+        str(source),
+        str(target),
+        command_id="observed-plan",
+        observation_sink=first_sink,
+    )
+    replay = service.start_plan(
+        str(source),
+        str(target),
+        command_id="observed-plan",
+        observation_sink=replay_sink,
+    )
+
+    assert replay == first
+    assert len(dispatcher.submissions) == 1
+    assert len(observer.adoptions) == 1
+    assert observer.adoptions[0][0] == "observed-session"
+    assert observer.adoptions[0][1] is first_sink
+
+
+def test_observed_plan_attach_failure_leaves_no_receipt_or_submission_artifact(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+
+    class Runtime:
+        def create_plan_request(
+            self,
+            request_id: str,
+            source_path: str,
+            target_path: str,
+            *,
+            deletion_policy: str | None,
+        ):
+            return SimpleNamespace(
+                request_id=request_id,
+                source_path=source_path,
+                target_path=target_path,
+                deletion_policy=deletion_policy,
+            )
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.accepted = []
+
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            assert attach is not None
+            attach("failed-session", object())
+            self.accepted.append((kind, request))
+            return "failed-session"
+
+    class Observer:
+        def adopt(self, session_id, sink, stream):
+            del session_id, sink, stream
+            raise RuntimeError("attach failed")
+
+        def unsubscribe(self, session_id):
+            del session_id
+
+    dispatcher = Dispatcher()
+    service = _service(Runtime(), dispatcher)
+    service._observer = Observer()
+
+    with pytest.raises(RuntimeError, match="attach failed"):
+        service.start_plan(
+            str(source),
+            str(target),
+            command_id="failed-observed-plan",
+            observation_sink=lambda _update: None,
+        )
+
+    assert dispatcher.accepted == []
+    assert service._session_receipts == {}
+    assert service._receipt_ids_by_session == {}
+
+
 def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     entered = Event()
     release = Event()

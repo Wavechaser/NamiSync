@@ -241,6 +241,7 @@ class _Observation:
     session_id: str
     sink: SessionSink
     stream: EventStream
+    from_sequence: int = 1
     streams: list[EventStream] = field(default_factory=list)
     stop: Event = field(default_factory=Event)
     done: Event = field(default_factory=Event)
@@ -299,11 +300,31 @@ class SessionObserver:
             if finished.result is None:
                 raise
             return finished
+        self.adopt(session_id, sink, stream)
+        return current
 
+    def adopt(
+        self,
+        session_id: str,
+        sink: SessionSink,
+        stream: EventStream,
+        *,
+        from_sequence: int = 1,
+    ) -> Callable[[], None]:
+        """Adopt a preopened stream and return its identity-bound rollback."""
+
+        try:
+            if not callable(sink):
+                raise TypeError("session sink must be callable")
+            self._require_positive_sequence(from_sequence)
+        except BaseException:
+            stream.close()
+            raise
         observation = _Observation(
             session_id=session_id,
             sink=sink,
             stream=stream,
+            from_sequence=from_sequence,
             streams=[stream],
         )
         thread = Thread(
@@ -313,15 +334,64 @@ class SessionObserver:
             daemon=True,
         )
         observation.thread = thread
+        try:
+            with self._lock:
+                if self._closed:
+                    raise RuntimeError("session observer is closed")
+                if session_id in self._observations:
+                    raise ValueError(
+                        f"session is already observed: {session_id}"
+                    )
+                self._observations[session_id] = observation
+                try:
+                    thread.start()
+                except BaseException:
+                    if self._observations.get(session_id) is observation:
+                        self._observations.pop(session_id, None)
+                    raise
+        except BaseException:
+            observation.stop.set()
+            stream.close()
+            raise
+
+        def rollback() -> None:
+            self._rollback(observation)
+
+        return rollback
+
+    def reobserve(
+        self,
+        session_id: str,
+        sink: SessionSink,
+        from_sequence: int,
+    ) -> SessionRecordView:
+        """Replace one observation and replay from a positive first sequence."""
+
+        if not callable(sink):
+            raise TypeError("session sink must be callable")
+        self._require_positive_sequence(from_sequence)
+        self.unsubscribe(session_id)
         with self._lock:
             if self._closed:
-                stream.close()
                 raise RuntimeError("session observer is closed")
-            if session_id in self._observations:
-                stream.close()
-                raise ValueError(f"session is already observed: {session_id}")
-            self._observations[session_id] = observation
-            thread.start()
+
+        record = self._dispatcher.get(session_id)
+        current = session_record_view(record)
+        if current.result is not None:
+            return current
+        try:
+            stream = self._dispatcher.subscribe(session_id, from_sequence)
+        except (SessionCleanupPending, SessionNotFound):
+            finished = session_record_view(self._dispatcher.get(session_id))
+            if finished.result is None:
+                raise
+            return finished
+        self.adopt(
+            session_id,
+            sink,
+            stream,
+            from_sequence=from_sequence,
+        )
         return current
 
     def unsubscribe(self, session_id: str) -> None:
@@ -329,12 +399,15 @@ class SessionObserver:
             observation = self._observations.get(session_id)
         if observation is None:
             return
+        self._rollback(observation)
+
+    def _rollback(self, observation: _Observation) -> None:
         observation.stop.set()
         self._close_streams((observation,))
         self._join_threads((observation,))
         with self._lock:
-            if self._observations.get(session_id) is observation:
-                self._observations.pop(session_id, None)
+            if self._observations.get(observation.session_id) is observation:
+                self._observations.pop(observation.session_id, None)
 
     def wait(self, session_id: str) -> SessionRecordView:
         with self._lock:
@@ -387,7 +460,7 @@ class SessionObserver:
 
     def _run(self, observation: _Observation) -> None:
         stream = observation.stream
-        next_sequence = 1
+        next_sequence = observation.from_sequence
         try:
             while not observation.stop.is_set():
                 try:
@@ -440,6 +513,15 @@ class SessionObserver:
             for opened in observation.streams:
                 opened.close()
             observation.done.set()
+
+    @staticmethod
+    def _require_positive_sequence(from_sequence: int) -> None:
+        if (
+            isinstance(from_sequence, bool)
+            or not isinstance(from_sequence, int)
+            or from_sequence < 1
+        ):
+            raise ValueError("from_sequence must be a positive integer")
 
     @staticmethod
     def _close_streams(observations: tuple[_Observation, ...]) -> None:
@@ -515,6 +597,7 @@ class NamiSyncService:
         *,
         deletion_policy: str | None = None,
         command_id: str | None = None,
+        observation_sink: SessionSink | None = None,
     ) -> PlanSession:
         signature = (
             source,
@@ -539,7 +622,24 @@ class NamiSyncService:
                 str(target_path),
                 deletion_policy=deletion_policy,
             )
-            session_id = self._dispatcher.submit(PLAN_KIND, request)
+            if observation_sink is None:
+                session_id = self._dispatcher.submit(PLAN_KIND, request)
+            else:
+                def attach(
+                    session_id: SessionId,
+                    stream: EventStream,
+                ) -> Callable[[], None]:
+                    return self._observer.adopt(
+                        str(session_id),
+                        observation_sink,
+                        stream,
+                    )
+
+                session_id = self._dispatcher.submit(
+                    PLAN_KIND,
+                    request,
+                    attach=attach,
+                )
             result = PlanSession(request.request_id, str(session_id))
             self._remember_session_receipt(
                 command_id,
@@ -977,6 +1077,15 @@ class NamiSyncService:
     def observe(self, session_id: str, sink: SessionSink) -> SessionRecordView:
         self._require_open()
         return self._observer.observe(session_id, sink)
+
+    def reobserve(
+        self,
+        session_id: str,
+        sink: SessionSink,
+        from_sequence: int,
+    ) -> SessionRecordView:
+        self._require_open()
+        return self._observer.reobserve(session_id, sink, from_sequence)
 
     def unsubscribe(self, session_id: str) -> None:
         self._observer.unsubscribe(session_id)
