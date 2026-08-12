@@ -353,6 +353,12 @@ Stage 5 location activities through the shared service.
   progressive native enhancement; opaque high-contrast/no-material fallbacks
   preserve readability, focus, and status semantics without relying on color
   alone.
+- **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
+  red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
+  `tokens.css` only; yellow and purple intentionally have no `light` input.
+  Gallery-tested status and operation aliases, not palette names, feed controls
+  and later surfaces. Light/dark pairings are contrast-tested, forced colors use
+  Windows system colors, and every meaning retains text and non-color cues.
 - **History Dialog**. The desktop UI lists history runs and shows retained activity detail. Retention controls remain absent from the M1 shell until coordinated maintenance exists.
 - **Bridge Responsiveness Envelope**. The M1 bridge is measured on the documented reference machine at up to roughly 100,000 file-backed subjects, 120,000 tree nodes, 50 history runs/1,000,000 detail items, and 256-row pages. Execute/control feedback is immediate, progress may be late but never incorrect, and `M1_BRIDGE.md` owns the exact latency and memory gates.
 

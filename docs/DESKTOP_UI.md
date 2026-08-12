@@ -100,6 +100,23 @@ proof precede PyInstaller work. The frozen specification, dependency lock, CI,
 third-party notices, and exact-source release material close in the final beta
 packaging slice.
 
+GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
+adds the design-token foundation. `tokens.css` is the only source file allowed
+to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`, and
+available `light` palette values specified by `M1_SHELL.md`; yellow and purple
+deliberately have no `light` input. It also owns meaning-named semantic aliases
+for statuses and operation categories. `components.css` consumes only those
+aliases for badges, banners, status pills, progress indicators, and related
+controls; Slice 4-7 renderers consume component/semantic contracts and contain
+neither raw color literals nor direct palette references. The component gallery
+settles light/dark mappings with visual and numeric contrast evidence rather
+than inferring theme roles from swatch names. Forced colors use Windows system
+colors, and text plus icon/shape/state cues keep every status understandable
+without color. The gallery resolves production HTML/CSS from a clean installed
+wheel and records exact installed `tokens.css`/`components.css` bytes; its own
+page remains tests-only. Computed pairs must reach 4.5:1 for normal text and
+3:1 for large text and non-text UI indicators/boundaries.
+
 M1 does not bundle or automatically invoke the Evergreen WebView2 Bootstrapper.
 The supported target remains Windows 11; missing WebView2 is refused read-only
 with an official installation direction. M1 beta binaries may be unsigned and

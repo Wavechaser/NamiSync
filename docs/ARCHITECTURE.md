@@ -2044,6 +2044,16 @@ shutdown quiesces handlers and wakes drains/producers before closing observers
 and the service. A second GUI launch activates the existing window and exits
 successfully; activation failure is visible.
 
+Presentation color has one dependency direction. GUI Break 1 places the exact
+13 authored palette primitives and all status/operation semantic aliases in
+`interfaces/web/assets/tokens.css`; yellow and purple have no authored `light`
+primitive. `components.css` may consume semantic aliases but never raw colors or
+palette primitives, and Slice 4-7 surface renderers may consume only semantic
+and component contracts. Gallery contrast/visual evidence selects theme pairs;
+primitive names are not theme policy. Windows forced colors replace the authored
+palette with system colors, and status views retain non-color cues. This makes a
+palette change a token-boundary change rather than a renderer-wide rewrite.
+
 Each open plan or inventory view uses one canonical server projection. Workflow code
 owns generic node structure, subtree membership, rollups, and opaque id lookup;
 `interfaces/web` owns tree-agnostic flatten/filter/search/window/anchor

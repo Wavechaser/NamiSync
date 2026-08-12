@@ -369,6 +369,36 @@ not preselected here.
   Microsoft Fluent 2 Figma kit and Microsoft's published Fluent tokens are the
   authoritative source these values are transcribed from; no Fluent code is
   imported (section 1.6 forbids the toolchain that would need).
+  NamiSync's authored status/operation palette is a separate, exact input owned
+  only by that file:
+
+  ```css
+  --palette-red-main: #EE6666;
+  --palette-red-dark: #551111;
+  --palette-red-light: #FFAACC;
+  --palette-green-main: #33DD99;
+  --palette-green-dark: #004422;
+  --palette-green-light: #99EEDD;
+  --palette-blue-main: #33AAEE;
+  --palette-blue-dark: #002255;
+  --palette-blue-light: #99CCFF;
+  --palette-yellow-main: #FFDD44;
+  --palette-yellow-dark: #553300;
+  --palette-purple-main: #BB88EE;
+  --palette-purple-dark: #331155;
+  ```
+
+  These are exactly 13 palette primitives; yellow and purple intentionally have
+  no `light` primitive. No implementation may invent either missing swatch or a
+  substitute without first discussing that change with the product author;
+  deriving or disguising one through `color-mix()`, alpha/transparency, another
+  color function, or an alternate alias is equally prohibited.
+  Semantic status and operation aliases in `tokens.css`, never palette names,
+  are the contract consumed by controls and surfaces. The `main`/`dark`/`light`
+  labels identify authored swatches, not theme assignments: GUI Break 1 chooses
+  light- and dark-theme semantic pairs only after visual and numeric contrast
+  checks. Under Windows forced colors, semantic aliases resolve to appropriate
+  system colors rather than forcing this palette.
 - **Components.** Because there is no framework or bundler, the control set is a
   compact hand-authored Fluent 2 CSS system in `components.css` on those tokens:
   button, dropdown, tri-state checkbox, determinate and indeterminate progress,
@@ -1003,11 +1033,25 @@ Deliverables:
    unchanged by material application.
 2. `tokens.css`: the Fluent color/type/spacing/radius/elevation and motion
    tokens, theme-agnostic, with system light/dark/high-contrast following and the
-   accent read-and-observe plumbing.
+   accent read-and-observe plumbing. It also owns the exact 13 authored palette
+   primitives from section 1.9 and semantic aliases for status meanings and
+   operation categories. The authored swatch names do not prescribe theme
+   pairing; the gallery settles those aliases through light/dark visual review
+   and numeric contrast checks. Forced-colors aliases use Windows system colors.
 3. `components.css`: the section 1.9 control set on those tokens, every state
    present, demonstrated on a non-shipped component-gallery page that runs
    through the production host and headed harness. The gallery is a dev/test
-   artifact and never package data.
+   artifact and never package data. Badges, banners, status pills, progress
+   indicators, and related controls consume semantic aliases only. Gallery rows
+   settle complete/success, failure/error, warning/degraded/incomplete, active,
+   paused, canceled, mismatch, blocked/deferred, neutral/no-op, and every M1
+   `OperationKind` value (`copy`, `update`, `move`, `move_update`, `recase`,
+   `mkdir`, `trash`, `delete`, and `noop`), with visible text and
+   icon/shape/state cues so color is never the sole carrier of meaning.
+   The headed gallery runs from a clean installed wheel: production
+   `index.html`, `tokens.css`, and `components.css` resolve through the installed
+   package, and evidence records exact installed CSS bytes; only the gallery
+   page/scenario code stays outside package data.
 
 Calibration is the tinkering part: get Mica, tokens, and components reading
 correctly in all three themes and freeze the language. Time-box it to
@@ -1262,11 +1306,30 @@ carry the `headed` marker; all are collected by the release command.
   shares the production namespace.
 - **SH-G-11 — Tokens own color; surfaces borrow it.** `tokens.css` defines the
   color/type/spacing/radius/elevation variables in light, dark, and
-  high-contrast; a static scan proves no surface stylesheet or renderer module
-  defines a raw color literal, and a contrast check proves the token
-  text/background pairs meet the accessibility bar in each theme. *Not satisfied
-  by* a single-theme token set or a scan that allows inline hex in
-  `components.css` or a surface module.
+  high-contrast. It contains exactly the 13 authored `--palette-*-main|dark|light`
+  primitives from section 1.9, with no invented yellow/purple `light` value, and
+  maps them through status- and operation-named semantic aliases. Headed gallery
+  evidence records computed light/dark pairs and visible non-color cues for
+  complete/success, failure/error, warning/degraded/incomplete, active, paused,
+  canceled, mismatch, blocked/deferred, neutral/no-op, and every M1 operation
+  type — exactly `copy`, `update`, `move`, `move_update`, `recase`, `mkdir`,
+  `trash`, `delete`, and `noop`; computed light/dark checks require at least
+  4.5:1 for normal text and 3:1 for large text, non-text indicators, and
+  focus/control boundaries. Forced-colors evidence proves those aliases use
+  system colors instead of the authored palette. A static ownership scan proves
+  raw color literals and
+  direct `--palette-*` consumption occur only in `tokens.css`: neither
+  `components.css` nor any Slice 4-7 stylesheet/renderer may contain raw colors
+  or consume a palette primitive directly. *Not satisfied by* a single-theme
+  token set, treating a `light` primitive as an automatic light-theme foreground,
+  color-only status meaning, invented or derived/disguised yellow/purple light
+  swatches (including mixing, alpha, color functions, or alternate aliases), or
+  a scan that allows inline color in `components.css` or a surface module.
+  The headed gallery resolves production `index.html`, `tokens.css`, and
+  `components.css` from a clean installed wheel and records their exact bytes;
+  a source-tree stylesheet or copied/reimplemented component sheet is not
+  release evidence. The gallery page itself remains tests-only and absent from
+  the wheel.
 - **SH-G-12 — Native materials apply or degrade, never break.** On a capable
   system the DWM Mica backdrop and immersive dark title bar are applied and the
   WebView2 background is transparent; Mica shows through the intended seams —
@@ -1354,6 +1417,7 @@ against the changed configuration before the change lands.
 | Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
 | Fluent 2 design language, token source, and the standard M1 window frame | Section 1.9 | Re-transcribe tokens (rerun SH-G-11); a frame change re-runs BR-G-31's native-surface proof |
+| Exact 13-swatch authored palette, semantic status/operation aliases, and system-color forced-colors override | Section 1.9 and GUI Break 1 | Preserve the authored values and missing yellow/purple `light` inputs; rerun SH-G-11 gallery, contrast, token-ownership, and no-raw-surface-color evidence |
 | Whole-window Mica base, opaque content cards (material visible only in chrome/seams), and the high-contrast/no-material fallback | Section 1.9 | Rerun SH-G-12 headed on any pywebview/WebView2/Windows-build change |
 | Motion tokens and guardrails (reduced-motion; no virtualized-row animation) | Section 1.10 | Rerun SH-G-13 |
 
