@@ -195,6 +195,13 @@ Runtime/About/logging expose the same value, and a test compares it with
 installed distribution metadata. The value stays `0.1.0` throughout M1; this
 plan does not preselect the next version or a suffix.
 
+The same module contains the human-facing release nickname `NICKNAME`, set to
+`Gertrud` for this release line. It may appear in About, release notes, and a
+changelog heading. It is not packaging or compatibility authority: package
+metadata, logs, filenames, database markers, mutex names, CLI behavior,
+protocol/schema checks, and every version comparison remain tied only to
+`VERSION` or to their existing contract-owned versions.
+
 Database schemas, settings, event envelopes, workflow payloads, bridge
 messages, semantic policies, contract markers, dependency constraints, and
 native-runtime floors keep independent versions beside the contracts that own
