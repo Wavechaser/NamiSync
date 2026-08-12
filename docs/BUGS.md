@@ -537,6 +537,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-12). Appearance-publication UI-thread deadlock. The
+  first loaded desktop window could apply its native backdrop and then stop
+  responding before publishing theme, accent, and material state to the page.
+  Cause: NamiSync marshaled pywebview's synchronous public DOM API onto the
+  WinForms UI thread; the pinned WebView2 backend scheduled its script
+  continuation back to that same thread and waited. Fixed by retaining UI-thread
+  marshaling only for native DWM/controller work and serializing public DOM
+  publication on the owned background publisher, with a regression that refuses
+  native-UI reentry and proves publication occurs on that worker.
 - MINOR - FIXED (2026-08-03). WebView2 prerequisite diagnosis. A missing .NET
   Framework release key was reported as missing WebView2, obscuring the actual
   .NET 4.6.2 prerequisite. Cause: the side-effect-free detector returned one

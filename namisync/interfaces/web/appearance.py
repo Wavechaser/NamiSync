@@ -575,25 +575,18 @@ class WindowAppearanceController:
                     return
                 presentation = self._presentation
                 revision = self._presentation_revision
-                native_window = self._native_window
-                if presentation is None or native_window is None:
+                if presentation is None:
                     self._publish_running = False
                     self._publish_thread = None
                     return
-            try:
-                self._native.invoke(
-                    native_window,
-                    lambda: self._publish_on_ui(presentation, revision),
-                )
-            except Exception as error:
-                _log_failure("appearance.ui_dispatch_failed", error)
+            self._publish_document(presentation, revision)
             with self._lock:
                 if self._closed or revision == self._presentation_revision:
                     self._publish_running = False
                     self._publish_thread = None
                     return
 
-    def _publish_on_ui(
+    def _publish_document(
         self,
         presentation: _Presentation,
         revision: int,

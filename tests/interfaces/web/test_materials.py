@@ -690,6 +690,36 @@ def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -
     controller.close()
 
 
+def test_document_publication_stays_off_the_native_ui_dispatcher() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=True, accent="#A1B2C3"))
+    publisher_threads: list[str] = []
+    original_update = window.dom.attributes.update
+
+    def update(values: dict[str, Any]) -> None:
+        publisher_threads.append(current_thread().name)
+        original_update(values)
+
+    def refuse_ui_reentry(_native_window: object, _callback: object) -> None:
+        raise AssertionError("DOM publication re-entered the native UI dispatcher")
+
+    window.dom.attributes.update = update
+    native.invoke = refuse_ui_reentry
+    controller = configure_window_appearance(window, native=native)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    assert window.dom.attributes.updated.wait(1.0)
+    assert publisher_threads == ["namisync-appearance-publish"]
+    assert window.dom.attributes.updates[-1] == {
+        "data-theme": "dark",
+        "data-window-material": "mica",
+        "style": "--color-accent: #A1B2C3",
+    }
+    controller.close()
+
+
 def test_preference_change_reasserts_native_state_after_existing_handler() -> None:
     order: list[str] = []
     window = _window()
