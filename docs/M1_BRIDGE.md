@@ -3,9 +3,10 @@
 Status (2026-07-30, implementation updated 2026-08-12): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
-transport chain through Slice 3 are complete; GUI Break 1 and the later
-presentation slices remain. Stage 5.5 landed its tree substrate, recursive scan scope, selection
-semantics, and facade integration without taking Stage 6 presentation work. It
+transport chain through Slice 3 and GUI Break 1's foundation are complete; the
+later presentation slices remain. Stage 5.5 landed its tree substrate,
+recursive scan scope, selection semantics, and facade integration without
+taking Stage 6 presentation work. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
 computes where, how large plans and inventories reach the client, how
 selection binds, and what the bridge may carry. Closing that seam necessarily

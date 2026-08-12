@@ -453,10 +453,18 @@ def test_transport_gate_uia_subcommands_parse_their_exact_headless_shapes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    probe_source = inspect.getsource(headed_host_child._run_uia_probe)
+    lookup_source = inspect.getsource(headed_host_child._automation_has_name)
+    observed_probes: list[tuple[int, str]] = []
+
+    def has_name(handle: int, expected: str) -> bool:
+        observed_probes.append((handle, expected))
+        return True
+
     monkeypatch.setattr(
         headed_host_child,
-        "_automation_names",
-        lambda handle: ("expected",) if handle == 41 else (),
+        "_automation_has_name",
+        has_name,
     )
     assert headed_host_child._run_uia_probe(
         [
@@ -468,6 +476,11 @@ def test_transport_gate_uia_subcommands_parse_their_exact_headless_shapes(
             "0.1",
         ]
     ) == 0
+    assert observed_probes == [(41, "expected")]
+    assert "_automation_names" not in probe_source
+    assert "FindFirst" in lookup_source
+    assert "NameProperty" in lookup_source
+    assert "FindAll" not in lookup_source
 
     observed: dict[str, object] = {}
 

@@ -125,7 +125,13 @@ class _WindowsAppearanceNative:
         native_window: object,
         system: SystemAppearance,
     ) -> Literal["mica", "opaque"] | None:
-        if system.high_contrast or not system.supports_mica:
+        if not system.supports_mica:
+            return (
+                "opaque"
+                if self.force_opaque(native_window, system)
+                else None
+            )
+        if system.high_contrast:
             return (
                 "opaque"
                 if self.force_opaque(native_window, system)
@@ -176,12 +182,20 @@ class _WindowsAppearanceNative:
         native_window: object,
         system: SystemAppearance,
     ) -> bool:
-        operations = (
-            lambda: self._set_dwm_attribute(
-                native_window,
-                _DWMWA_SYSTEMBACKDROP_TYPE,
-                _DWMSBT_NONE,
-            ),
+        return self._force_opaque(
+            native_window,
+            system,
+            require_backdrop_reset=system.supports_mica,
+        )
+
+    def _force_opaque(
+        self,
+        native_window: object,
+        system: SystemAppearance,
+        *,
+        require_backdrop_reset: bool,
+    ) -> bool:
+        operations = [
             lambda: self._set_client_glass(native_window, enabled=False),
             lambda: self._set_dwm_attribute(
                 native_window,
@@ -193,7 +207,16 @@ class _WindowsAppearanceNative:
                 system,
                 transparent=False,
             ),
-        )
+        ]
+        if require_backdrop_reset:
+            operations.insert(
+                0,
+                lambda: self._set_dwm_attribute(
+                    native_window,
+                    _DWMWA_SYSTEMBACKDROP_TYPE,
+                    _DWMSBT_NONE,
+                ),
+            )
         results: list[bool] = []
         for operation in operations:
             try:
@@ -205,8 +228,13 @@ class _WindowsAppearanceNative:
             logging.getLogger("namisync").warning(
                 "appearance.opaque_fallback_incomplete"
             )
-        backdrop_reset, _glass_reset, _dark_mode_set, opaque_landed = results
-        return backdrop_reset and opaque_landed
+        if require_backdrop_reset:
+            backdrop_reset, _glass_reset, _dark_mode_set, opaque_landed = (
+                results
+            )
+            return backdrop_reset and opaque_landed
+        _glass_reset, _dark_mode_set, opaque_landed = results
+        return opaque_landed
 
     def invoke(
         self,

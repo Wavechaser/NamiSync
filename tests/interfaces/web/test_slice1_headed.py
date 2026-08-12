@@ -137,13 +137,18 @@ def test_sh_g_6_installed_wheel_packaged_page_smoke(
     )
     try:
         handle = wait_for_window(process, title, deadline=deadline)
-        names = wait_for_accessible_text(
+        wait_for_accessible_text(
             handle,
             "Ready",
             python=headed_installed_wheel.python,
             deadline=deadline,
         )
-        assert "NamiSync" in names
+        wait_for_accessible_text(
+            handle,
+            "NamiSync",
+            python=headed_installed_wheel.python,
+            deadline=deadline,
+        )
         close_window(handle)
         completed = wait_for_process(process, deadline=deadline)
         assert completed.returncode == 0, completed.stdout + completed.stderr

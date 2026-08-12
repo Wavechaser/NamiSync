@@ -7,8 +7,9 @@ retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and the exact Slice 3
-`pick_folder`/`start_plan`/`next_events` transport are implemented. GUI Break 1
-and the user-facing desktop surfaces remain; the API remains latent.
+`pick_folder`/`start_plan`/`next_events` transport are implemented.
+GUI Break 1's foundation is implemented; the user-facing desktop surfaces
+remain, and the API remains latent.
 
 ## Purpose
 

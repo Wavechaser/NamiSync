@@ -16,9 +16,10 @@ single-instance boundary, coordinated database refusal, exact three-command
 transport, real native picker confinement, committed-origin refusal, and
 hostile-text/privacy return path. The Slice 3 event drain, transactional
 pre-schedule observation, bounded task registry, and reincarnation recovery are
-implemented; GUI Break 1 is next. NamiSync remains version `0.1.0` until M1 is
-complete. Finishing M1 makes the product beta-ready; any later version change
-is a separate release decision.
+implemented. GUI Break 1's token, component, icon, motion, and native-material
+foundation is complete; Slice 4 is next. NamiSync remains version `0.1.0` until
+M1 is complete. Finishing M1 makes the product beta-ready; any later version
+change is a separate release decision.
 
 ## Standing
 
@@ -247,6 +248,7 @@ namisync/interfaces/web/
     logging_config.py
     paths.py
     host.py
+    appearance.py
     commands.py
     drain.py
     slots.py
@@ -256,6 +258,14 @@ namisync/interfaces/web/
         app.css
         tokens.css
         components.css
+        icons.js
+        icons/
+            LICENSE.txt
+            SOURCE.json
+            checkmark_circle_20_regular.svg
+            dismiss_circle_20_regular.svg
+            info_20_regular.svg
+            warning_20_regular.svg
         app.js
         bridge.js
         render.js
@@ -286,6 +296,9 @@ At Slice 2 closure the exact shipped asset set is `index.html`, `app.css`,
 not ship until their owning slices. `render.js` owns the strict production
 `textContent` sink. The browserless probes and headed `transport_gate/` page
 remain under `tests/assets/` and are excluded from package data.
+GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, and the exact four
+SVGs plus source/license records under `assets/icons/`; its component-gallery
+scenario remains test-only and absent from the wheel.
 
 The production host resolves its index from package resources. A
 Python-construction-only override accepts an absolute local index path for
@@ -1040,7 +1053,7 @@ envelope surface `Gap`, replay only the tail still retained, and reconcile
 terminal truth. Missing reliable events remain visibly missing; recovery never
 pretends full continuity or justifies invented replay headroom.
 
-### GUI Break 1 - Establish the look (after Slice 3, before Slice 4)
+### GUI Break 1 - Establish the look (completed 2026-08-12)
 
 A GUI Break is a deliberate stop to build and calibrate the visual system, not a
 fraction of an assembly line. Break 1 builds the foundation every later surface
@@ -1097,6 +1110,9 @@ retain only the cross-slice production-surface clauses. Exit criterion:
 tokens correct in light, dark, and high contrast;
 the gallery covers every control state and the fixed icon foundation; Mica and
 its fallback are proven on the pinned stack; the design language is frozen.
+The completed checkpoint closes the SH-G-11/12/13 gallery/material foundation
+and all of SH-G-14. It does not close SH-G-11/12/13's production-surface
+clauses; those remain with the Slice 4–6 trees and renderers.
 
 ### Slice 4 - Presentation core and shell frame
 
@@ -1432,11 +1448,15 @@ headed BR-G-32 transport evidence),
 `tests/interfaces/web/test_drain.py` (SH-G-8),
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
-`tests/interfaces/web/test_design_tokens.py` (SH-G-11),
-`tests/interfaces/web/test_materials.py` (SH-G-12), and
-`tests/interfaces/web/test_motion.py` (SH-G-13), plus
-`tests/interfaces/web/test_icons.py` and the installed-wheel component gallery
-(SH-G-14). A gate test may live elsewhere
+`tests/interfaces/web/test_design_tokens.py` (ordinary SH-G-11),
+`tests/interfaces/web/test_materials.py` plus
+`tests/interfaces/web/test_materials_headed.py`
+(ordinary and real-stack SH-G-12),
+`tests/interfaces/web/test_motion.py` (ordinary SH-G-13), plus
+`tests/interfaces/web/test_icons.py` and
+`tests/interfaces/web/test_component_gallery_headed.py` (installed-wheel
+headed SH-G-11/13/14).
+A gate test may live elsewhere
 only when the owning slice updates this list in the same change.
 Release evidence records the collected `test_sh_g_*` node ids alongside the
 BR-G ids; the cleared-`addopts` release command, not the default headless suite,

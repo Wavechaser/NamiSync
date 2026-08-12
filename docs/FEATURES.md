@@ -1,15 +1,16 @@
 # Features
 
-Implementation note (2026-07-30): M1 Stages 1-5.5 have landed their contract,
-schema/settings/security prerequisites, pipelined XXH3-128 executor/verifier
-switch, role-free inventory, standalone integrity workflows, generic history
-items, production dispatcher registrations, and optional post-execution
-compound verification. The CLI and Stage 5.5 facade/tree/selection/subtree
-surfaces are implemented. `M1_BRIDGE.md` remains the decision and acceptance
-record for the implemented Stage 5.5 prerequisite and active Stage 6 headed
-desktop shell. Stage 6's host and transport chain through Slice 3 are
-implemented; GUI Break 1 and product surfaces remain. `M1_SHELL.md` owns their
-delivery order and beta-package closure.
+Implementation note (updated 2026-08-12): M1 Stages 1-5.5 have landed their
+contract, schema/settings/security prerequisites, pipelined XXH3-128
+executor/verifier switch, role-free inventory, standalone integrity workflows,
+generic history items, production dispatcher registrations, and optional
+post-execution compound verification. The CLI and Stage 5.5
+facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` remains
+the decision and acceptance record for the implemented Stage 5.5 prerequisite
+and active Stage 6 headed desktop shell. Stage 6's host and transport through
+Slice 3 are implemented, and GUI Break 1's foundation is complete; product
+surfaces remain. `M1_SHELL.md` owns their delivery order and beta-package
+closure.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward

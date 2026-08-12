@@ -321,6 +321,62 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert ":indeterminate" in source
     assert '[aria-selected="true"]' in source
     assert '[aria-disabled="true"]' in source
+    assert """.nami-row:not([aria-disabled="true"]):hover,
+.nami-list-row:not([aria-disabled="true"]):hover,
+.nami-tree-row:not([aria-disabled="true"]):hover {""" in source
+    assert """.nami-row:not([aria-disabled="true"]):active,
+.nami-list-row:not([aria-disabled="true"]):active,
+.nami-tree-row:not([aria-disabled="true"]):active {""" in source
+    assert ".nami-row:hover," not in source
+    assert ".nami-row:active," not in source
+    forced = _block(source, "@media (forced-colors: active)")
+    declaration = "color: var(--color-accent-foreground);"
+    declaration_at = forced.index(declaration)
+    rule_open = forced.rfind("{", 0, declaration_at)
+    selector_start = forced.rfind("}", 0, rule_open) + 1
+    paired_interactions = {
+        selector.strip()
+        for selector in forced[selector_start:rule_open].split(",")
+    }
+    assert paired_interactions == {
+        ".nami-button:not(:disabled):hover",
+        ".nami-button:not(:disabled):active",
+        ".nami-checkbox:not(:disabled):hover",
+        ".nami-toggle__control:not(:disabled):hover",
+        ".nami-chip:not(:disabled):hover",
+        ".nami-chip:not(:disabled):active",
+        ".nami-icon-button:not(:disabled):hover",
+        ".nami-icon-button:not(:disabled):active",
+        '.nami-row:not([aria-disabled="true"]):hover',
+        '.nami-row:not([aria-disabled="true"]):active',
+        '.nami-list-row:not([aria-disabled="true"]):hover',
+        '.nami-list-row:not([aria-disabled="true"]):active',
+        '.nami-tree-row:not([aria-disabled="true"]):hover',
+        '.nami-tree-row:not([aria-disabled="true"]):active',
+        '.nami-card:not([aria-disabled="true"]):active',
+        '.nami-dialog:not([aria-disabled="true"]):active',
+        ".nami-menu__item:not(:disabled):hover",
+        ".nami-menu__item:not(:disabled):active",
+        ".nami-segmented__item:not(:disabled):hover",
+        ".nami-segmented__item:not(:disabled):active",
+    }
+    toggle_thumb = _block(
+        forced,
+        ".nami-toggle__control:not(:disabled):hover::after",
+    )
+    assert "background: var(--color-accent-foreground);" in toggle_thumb
+    for selector in (
+        ".nami-input:not(:disabled):hover",
+        ".nami-select:not(:disabled):hover",
+        '.nami-card:not([aria-disabled="true"]):hover',
+        '.nami-dialog:not([aria-disabled="true"]):hover',
+        '.nami-progress:not([aria-disabled="true"]):hover',
+        '.nami-progress:not([aria-disabled="true"]):active',
+    ):
+        assert selector in forced
+    row_focus = _block(source, ".nami-row:focus-visible")
+    assert "box-shadow: 0 0 0 2px var(--color-focus-ring);" in row_focus
+    assert "outline: none;" in row_focus
 
     for status in STATUSES:
         assert f'[data-status="{status}"]' in source
@@ -363,15 +419,6 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         r"\.nami-icon\s*\{\s*forced-color-adjust:\s*none;\s*\}",
         forced,
     )
-    for selector in (
-        ".nami-input:hover",
-        ".nami-select:hover",
-        ".nami-card:hover",
-        ".nami-dialog:hover",
-        ".nami-progress:hover",
-        ".nami-progress:active",
-    ):
-        assert selector in forced
 
 
 def test_sh_g_11_shipped_page_loads_tokens_components_then_layout() -> None:

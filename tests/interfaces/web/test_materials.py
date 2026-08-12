@@ -362,12 +362,7 @@ def test_sh_g_12_unsupported_or_high_contrast_is_opaque_and_system_owned(
     material = native.apply(object(), system)
 
     assert material == "opaque"
-    assert calls == [
-        (
-            "dwm",
-            appearance._DWMWA_SYSTEMBACKDROP_TYPE,
-            appearance._DWMSBT_NONE,
-        ),
+    expected_calls = [
         ("glass", False),
         (
             "dwm",
@@ -376,6 +371,74 @@ def test_sh_g_12_unsupported_or_high_contrast_is_opaque_and_system_owned(
         ),
         ("controller", False),
     ]
+    if system.supports_mica:
+        expected_calls.insert(
+            0,
+            (
+                "dwm",
+                appearance._DWMWA_SYSTEMBACKDROP_TYPE,
+                appearance._DWMSBT_NONE,
+            ),
+        )
+    assert calls == expected_calls
+
+
+def test_sh_g_12_pre_material_opaque_skips_unsupported_backdrop_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Color:
+        @staticmethod
+        def FromArgb(alpha: int, red: int, green: int, blue: int):
+            return alpha, red, green, blue
+
+    control = SimpleNamespace(DefaultBackgroundColor=None)
+    native_window = SimpleNamespace(
+        BackColor=None,
+        browser=SimpleNamespace(webview=control),
+    )
+    native = appearance._WindowsAppearanceNative()
+    calls: list[tuple[object, ...]] = []
+
+    def dwm(_window: object, attribute: int, value: int) -> bool:
+        calls.append(("dwm", attribute, value))
+        return attribute != appearance._DWMWA_SYSTEMBACKDROP_TYPE
+
+    def glass(_window: object, *, enabled: bool) -> bool:
+        calls.append(("glass", enabled))
+        return True
+
+    monkeypatch.setitem(sys.modules, "System.Drawing", SimpleNamespace(Color=Color))
+    monkeypatch.setattr(appearance, "_system_color", lambda _index: "#010203")
+    monkeypatch.setattr(native, "_set_dwm_attribute", dwm)
+    monkeypatch.setattr(native, "_set_client_glass", glass)
+
+    system = _system(dark=True, build=22000)
+    assert native.apply(native_window, system) == "opaque"
+    assert calls == [
+        ("glass", False),
+        (
+            "dwm",
+            appearance._DWMWA_USE_IMMERSIVE_DARK_MODE,
+            1,
+        ),
+    ]
+    assert native_window.BackColor == (255, 1, 2, 3)
+    assert control.DefaultBackgroundColor == (255, 1, 2, 3)
+
+    calls.clear()
+    native_window.BackColor = None
+    control.DefaultBackgroundColor = None
+    assert native.force_opaque(native_window, system) is True
+    assert calls == [
+        ("glass", False),
+        (
+            "dwm",
+            appearance._DWMWA_USE_IMMERSIVE_DARK_MODE,
+            1,
+        ),
+    ]
+    assert native_window.BackColor == (255, 1, 2, 3)
+    assert control.DefaultBackgroundColor == (255, 1, 2, 3)
 
 
 def test_sh_g_12_transparency_failure_never_attempts_mica(

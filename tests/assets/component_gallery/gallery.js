@@ -10,6 +10,7 @@ const FAILURE_TYPES = Object.freeze(new Set([
   "TypeError",
 ]));
 let galleryStage = "module_import";
+const PSEUDO_STATE_SETTLE_MS = 350;
 
 function validAccepted(value) {
   return value !== null &&
@@ -380,6 +381,7 @@ async function reportFailure(error) {
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+  await new Promise((resolve) => setTimeout(resolve, PSEUDO_STATE_SETTLE_MS));
 
   galleryStage = "measurement";
   const controls = [];

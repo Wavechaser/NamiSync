@@ -8,9 +8,10 @@ transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
 runtime refusal, popup/navigation guards, single-instance behavior, native
 picker path confinement, committed-origin refusal, hostile text, and logging
 privacy; Slice 3 evidence additionally covers transactional observation,
-bounded drain behavior, recovery, and repeated bridge readiness. User-facing
-product views remain; `M1_SHELL.md` owns GUI Break 1, their implementation
-order, and beta-package closure.
+bounded drain behavior, recovery, and repeated bridge readiness. GUI Break 1's
+token, component, icon, motion, and native-material foundation is complete.
+User-facing product views remain; `M1_SHELL.md` owns their implementation order
+and beta-package closure.
 
 ## Purpose
 
@@ -80,8 +81,8 @@ the shared database-pair facade. Fresh state initializes ledger then history;
 ready state continues; refused state runs the bounded finalizer and shows the
 coordinated reset action through the stable native startup dialog. It then
 resolves `index.html` from package resources, creates one pending native
-document and a dispatcher snapshotted from exactly `pick_folder` and
-`start_plan`, and starts only Edge Chromium with
+document and a dispatcher snapshotted from exactly `pick_folder`, `start_plan`,
+and `next_events`, and starts only Edge Chromium with
 the packaged page served on a random loopback origin. The initialized callback
 binds that exact origin once. Renderer/origin failure aborts before native
 window creation; guard/load failure destroys the created window exactly once.
@@ -94,20 +95,24 @@ exposes that construction-only seam through arguments, environment, page data,
 or bridge traffic, and the test page is never package data.
 
 Frontend assets are setuptools package data and use plain same-origin ES
-modules. The Slice 2 wheel contains exactly `index.html`, `app.css`, `app.js`,
-`bridge.js`, and `render.js`; `render.js` owns the strict `textContent` sink.
+modules. At Slice 2 closure the wheel contained exactly `index.html`, `app.css`,
+`app.js`, `bridge.js`, and `render.js`; `render.js` owns the strict
+`textContent` sink. GUI Break 1 adds exactly `tokens.css`, `components.css`,
+`icons.js`, four pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
+records under `assets/icons/`. The component-gallery scenario remains test-only
+and absent from the wheel.
 There is no npm, framework, bundler, transpiler, source map, inline script, or
 inline event handler. The first running shell and installed-wheel
 proof precede PyInstaller work. The frozen specification, dependency lock, CI,
 third-party notices, and exact-source release material close in the final beta
 packaging slice.
 
-GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
-adds the design-token foundation. `tokens.css` is the only source file allowed
-to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`, and
-available `light` palette values specified by `M1_SHELL.md`; yellow and purple
-deliberately have no authored `light` input in the current foundation. A future
-hardcoded or derived color value is possible only after an explicit product-
+GUI Break 1, completed after Slice 3 and before production surfaces begin,
+establishes the design-token foundation. `tokens.css` is the only source file
+allowed to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`,
+and available `light` palette values specified by `M1_SHELL.md`; yellow and
+purple deliberately have no authored `light` input in the current foundation.
+A future hardcoded or derived color value is possible only after an explicit product-
 author design decision and a same-change contract/token/evidence update; it is
 not silently synthesized by a renderer. `tokens.css` also owns meaning-named
 semantic aliases for statuses and operation categories; neutral and accent
@@ -227,7 +232,9 @@ The exact pythonnet 3.1.0 pin is equally part of that boundary because native
 delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
 through it.
 
-Slice 2 implements exactly two production actions.
+Slice 2 introduced exactly two production actions, `pick_folder` and
+`start_plan`; Slice 3 added `next_events`, making the current immutable
+production table exactly three rows.
 `pick_folder` is intentionally user-paced: it has no application timeout or
 automatic retry, and cancel is a normal `null` result. A selection becomes a
 server-held `slot-<32-lowercase-hex>` plus display-only text. `start_plan`
@@ -240,7 +247,7 @@ paths. The browser wrapper and strict `renderText` sink have browserless and
 real-WebView2 hostile-data coverage. A constructor-only headed composition adds
 `test_report` under `tests/`; production has no runtime registration or
 external composition surface. No plan-review, execution, inventory, history,
-settings, lifecycle, or drain command appears before its owning slice.
+settings, or lifecycle command appears before its owning slice.
 
 Live state uses one bounded, coalescing `next_events` pull/drain request. Its
 exact task/session/drain/replay payload, tagged event/record result, 64-update

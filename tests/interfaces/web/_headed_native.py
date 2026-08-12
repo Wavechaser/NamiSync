@@ -362,18 +362,19 @@ def wait_for_accessible_text(
 ) -> tuple[str, ...]:
     """Run potentially blocking UI Automation behind its own hard job boundary."""
 
+    command = (
+        python,
+        _HOST_CHILD,
+        "--uia-probe",
+        "--handle",
+        str(handle),
+        "--expected",
+        expected,
+        "--timeout",
+        str(deadline.remaining()),
+    )
     process = start_headed_process(
-        (
-            python,
-            _HOST_CHILD,
-            "--uia-probe",
-            "--handle",
-            str(handle),
-            "--expected",
-            expected,
-            "--timeout",
-            str(deadline.remaining()),
-        ),
+        command,
         cwd=python.parent.parent,
         environment=clean_child_environment(),
         deadline=deadline,

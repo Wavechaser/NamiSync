@@ -6,12 +6,13 @@ ledger v3 verification-invalidation boundary and history v5 receipt journal in
 `DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
 unbounded history getter remains.
 
-Status (2026-07-30): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (updated 2026-08-12): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
-implemented. `M1_BRIDGE.md` records the landed bridge contract and the
-still-unimplemented Stage 6 desktop shell; `M1_SHELL.md` owns the remaining
-delivery order and beta-packaging placement.
+implemented. Stage 6's secured host and transport through Slice 3 and its GUI
+Break 1 foundation are also implemented. `M1_BRIDGE.md` records the landed
+bridge contract; `M1_SHELL.md` owns the remaining presentation slices and
+beta-packaging placement.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained

@@ -22,11 +22,17 @@ orderly-close/retry controller. The transport chain through Slice 3 is
 complete: production exposes exactly `pick_folder`, `start_plan`, and
 `next_events`, with real paths retained behind opaque server slots, task
 observation attached before work can start, a bounded event drain, and a strict
-inert-text return sink. User-facing workflow controls/product views are not yet
-available in the window. Clean-wheel Windows gates exercise the real WebView2
-host, packaged page, navigation/popup and per-dispatch origin guards, runtime refusal,
+inert-text return sink. GUI Break 1's design foundation is also complete:
+`tokens.css` owns the exact authored palette and semantic mappings,
+`components.css` supplies the shared control states, a fixed local Fluent icon
+registry owns four pinned foundation glyphs, and native appearance follows
+Windows theme/material capability with an opaque fallback. User-facing workflow
+controls/product views are not yet available in the window. Clean-wheel Windows
+gates exercise the real WebView2 host, packaged page and design assets,
+navigation/popup and per-dispatch origin guards, runtime refusal,
 single-instance activation, isolated data root, visible database refusal,
-native picker confinement, hostile-text transport, and log privacy.
+native picker confinement, hostile-text transport, log privacy, the four-mode
+component gallery, and real native material apply/fallback paths.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -127,6 +133,20 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 — GUI Foundation
+
+- Completed GUI Break 1 without claiming the later product surfaces or beta
+  package.
+  - **Design system:** added the exact authored palette, contrast-tested semantic
+    status/operation aliases, shared Fluent controls and motion guardrails, plus
+    a fixed four-glyph local Fluent icon registry with pinned provenance.
+  - **Native appearance:** added system theme/accent observation, progressive
+    Mica and immersive-dark handling, and a system-color opaque fallback while
+    preserving the secured host lifecycle.
+  - **Evidence:** clean-wheel headed gates cover light, dark, forced-colors, and
+    reduced-motion gallery modes; real DWM readbacks and renderer transparency
+    prove the capable path and two injected opaque fallback sequences.
 
 ### M1 Stage 6 — Transport Checkpoint
 

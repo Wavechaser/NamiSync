@@ -91,6 +91,7 @@ body {
 .nami-tree-row:focus-visible,
 .nami-segmented__item:focus-visible {
   box-shadow: 0 0 0 2px var(--color-focus-ring);
+  outline: none;
 }
 
 .nami-button:disabled,
@@ -357,15 +358,15 @@ body {
   padding: var(--space-2) var(--space-3);
 }
 
-.nami-row:hover,
-.nami-list-row:hover,
-.nami-tree-row:hover {
+.nami-row:not([aria-disabled="true"]):hover,
+.nami-list-row:not([aria-disabled="true"]):hover,
+.nami-tree-row:not([aria-disabled="true"]):hover {
   background: var(--color-neutral-surface-hover);
 }
 
-.nami-row:active,
-.nami-list-row:active,
-.nami-tree-row:active {
+.nami-row:not([aria-disabled="true"]):active,
+.nami-list-row:not([aria-disabled="true"]):active,
+.nami-tree-row:not([aria-disabled="true"]):active {
   background: var(--color-neutral-surface-pressed);
 }
 
@@ -882,19 +883,46 @@ body {
     forced-color-adjust: none;
   }
 
-  .nami-input:hover,
-  .nami-select:hover,
-  .nami-card:hover,
-  .nami-dialog:hover {
+  .nami-button:not(:disabled):hover,
+  .nami-button:not(:disabled):active,
+  .nami-checkbox:not(:disabled):hover,
+  .nami-toggle__control:not(:disabled):hover,
+  .nami-chip:not(:disabled):hover,
+  .nami-chip:not(:disabled):active,
+  .nami-icon-button:not(:disabled):hover,
+  .nami-icon-button:not(:disabled):active,
+  .nami-row:not([aria-disabled="true"]):hover,
+  .nami-row:not([aria-disabled="true"]):active,
+  .nami-list-row:not([aria-disabled="true"]):hover,
+  .nami-list-row:not([aria-disabled="true"]):active,
+  .nami-tree-row:not([aria-disabled="true"]):hover,
+  .nami-tree-row:not([aria-disabled="true"]):active,
+  .nami-card:not([aria-disabled="true"]):active,
+  .nami-dialog:not([aria-disabled="true"]):active,
+  .nami-menu__item:not(:disabled):hover,
+  .nami-menu__item:not(:disabled):active,
+  .nami-segmented__item:not(:disabled):hover,
+  .nami-segmented__item:not(:disabled):active {
+    color: var(--color-accent-foreground);
+  }
+
+  .nami-toggle__control:not(:disabled):hover::after {
+    background: var(--color-accent-foreground);
+  }
+
+  .nami-input:not(:disabled):hover,
+  .nami-select:not(:disabled):hover,
+  .nami-card:not([aria-disabled="true"]):hover,
+  .nami-dialog:not([aria-disabled="true"]):hover {
     border-color: var(--color-focus-ring);
     outline: 1px solid var(--color-focus-ring);
   }
 
-  .nami-progress:hover {
+  .nami-progress:not([aria-disabled="true"]):hover {
     outline: 1px solid var(--color-focus-ring);
   }
 
-  .nami-progress:active {
+  .nami-progress:not([aria-disabled="true"]):active {
     outline: 2px solid var(--color-focus-ring);
   }
 

@@ -628,7 +628,10 @@ def _schedule_pseudo_states(
     def css_enabled(_result: dict[str, object]) -> None:
         protocol("DOM.getDocument", {"depth": 0}, document_ready)
 
-    on_ui(lambda: protocol("CSS.enable", {}, css_enabled))
+    def dom_enabled(_result: dict[str, object]) -> None:
+        protocol("CSS.enable", {}, css_enabled)
+
+    on_ui(lambda: protocol("DOM.enable", {}, dom_enabled))
 
 
 def _execute_script_checked(
@@ -716,46 +719,76 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )
 
         def inject_after_load() -> None:
-            native = window.native
-            if native.InvokeRequired:
-                raise RuntimeError("component gallery injection left the UI thread")
-            core = native.browser.webview.CoreWebView2
-            pseudo_scheduler["value"] = lambda targets: _schedule_pseudo_states(
-                native,
-                core,
-                targets,
-                recorder,
-                retained_delegates,
-            )
-            task = core.CallDevToolsProtocolMethodAsync(
-                "Emulation.setEmulatedMedia",
-                _media_parameters(arguments.mode),
-            )
-
             from System import Action
 
-            def after_media() -> None:
-                if task.IsFaulted or task.IsCanceled:
-                    recorder.set("media_emulation_failed", True)
-                    recorder.write()
-                    return
+            native = window.native
+            if native is None:
+                recorder.set(
+                    "native_script_failure",
+                    {
+                        "stage": "loaded_ui_dispatch",
+                        "type": "NativeWindowUnavailable",
+                    },
+                )
+                recorder.write()
+                return
 
-                def inject() -> None:
-                    _execute_script_checked(
-                        core,
-                        scenario,
-                        stage="scenario_injection",
-                        recorder=recorder,
-                        retained_delegates=retained_delegates,
+            def begin_injection_on_ui() -> None:
+                try:
+                    if native.InvokeRequired:
+                        raise RuntimeError(
+                            "component gallery UI dispatch did not reach the UI thread"
+                        )
+                    core = native.browser.webview.CoreWebView2
+                    pseudo_scheduler["value"] = (
+                        lambda targets: _schedule_pseudo_states(
+                            native,
+                            core,
+                            targets,
+                            recorder,
+                            retained_delegates,
+                        )
+                    )
+                    task = core.CallDevToolsProtocolMethodAsync(
+                        "Emulation.setEmulatedMedia",
+                        _media_parameters(arguments.mode),
                     )
 
-                injection = Action(inject)
-                retained_delegates.append(injection)
-                native.BeginInvoke(injection)
+                    def after_media() -> None:
+                        if task.IsFaulted or task.IsCanceled:
+                            recorder.set("media_emulation_failed", True)
+                            recorder.write()
+                            return
 
-            completion = Action(after_media)
-            retained_delegates.append(completion)
-            task.GetAwaiter().OnCompleted(completion)
+                        def inject() -> None:
+                            _execute_script_checked(
+                                core,
+                                scenario,
+                                stage="scenario_injection",
+                                recorder=recorder,
+                                retained_delegates=retained_delegates,
+                            )
+
+                        injection = Action(inject)
+                        retained_delegates.append(injection)
+                        native.BeginInvoke(injection)
+
+                    completion = Action(after_media)
+                    retained_delegates.append(completion)
+                    task.GetAwaiter().OnCompleted(completion)
+                except BaseException as error:
+                    recorder.set(
+                        "native_script_failure",
+                        {
+                            "stage": "loaded_ui_dispatch",
+                            "type": type(error).__name__,
+                        },
+                    )
+                    recorder.write()
+
+            injection_start = Action(begin_injection_on_ui)
+            retained_delegates.append(injection_start)
+            native.BeginInvoke(injection_start)
 
         window.events.loaded += inject_after_load
 

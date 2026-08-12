@@ -8,9 +8,12 @@ import inspect
 import json
 import math
 import re
+import sys
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -155,6 +158,12 @@ def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() ->
     assert "evaluate_js" not in child
     assert "CallDevToolsProtocolMethodAsync" in child
     assert '"Emulation.setEmulatedMedia"' in child
+    assert 'protocol("DOM.enable", {}, dom_enabled)' in child
+    assert 'protocol("CSS.enable", {}, css_enabled)' in child
+    assert 'protocol("DOM.getDocument", {"depth": 0}, document_ready)' in child
+    assert "def begin_injection_on_ui()" in child
+    assert "native.BeginInvoke(injection_start)" in child
+    assert "component gallery injection left the UI thread" not in child
 
 
 def test_component_gallery_child_preserves_production_host_and_bridge() -> None:
@@ -342,8 +351,67 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/bridge.js")' in script
     assert 'import("/render.js")' in script
     assert 'import("/icons.js")' in script
+    assert "const PSEUDO_STATE_SETTLE_MS = 350;" in script
+    assert "setTimeout(resolve, PSEUDO_STATE_SETTLE_MS)" in script
     assert "window.pywebview" not in script
     assert "innerHTML" not in script
+
+
+def test_component_gallery_enables_dom_before_css_pseudo_state_agent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    system = ModuleType("System")
+    setattr(system, "Action", lambda callback: callback)
+    monkeypatch.setitem(sys.modules, "System", system)
+
+    class CompletedTask:
+        IsFaulted = False
+        IsCanceled = False
+
+        def __init__(self, result: str) -> None:
+            self.Result = result
+
+        def GetAwaiter(self) -> CompletedTask:
+            return self
+
+        def OnCompleted(self, callback: Callable[[], None]) -> None:
+            callback()
+
+    class Core:
+        def __init__(self) -> None:
+            self.methods: list[str] = []
+            self.scripts: list[str] = []
+
+        def CallDevToolsProtocolMethodAsync(
+            self,
+            method: str,
+            _parameters: str,
+        ) -> CompletedTask:
+            self.methods.append(method)
+            result = '{"root":{"nodeId":1}}' if method == "DOM.getDocument" else "{}"
+            return CompletedTask(result)
+
+        def ExecuteScriptAsync(self, source: str) -> CompletedTask:
+            self.scripts.append(source)
+            return CompletedTask("null")
+
+    class Native:
+        @staticmethod
+        def BeginInvoke(callback: Callable[[], None]) -> None:
+            callback()
+
+    core = Core()
+    component_gallery_child._schedule_pseudo_states(
+        Native(),
+        core,
+        [],
+        component_gallery_child._Recorder(tmp_path / "result.json", "light"),
+        [],
+    )
+
+    assert core.methods == ["DOM.enable", "CSS.enable", "DOM.getDocument"]
+    assert core.scripts == ["globalThis.__namiGalleryPseudoReady = true;"]
 
 
 @pytest.mark.headed
@@ -764,9 +832,12 @@ def _assert_icon_registry_evidence(icons: dict[str, object]) -> None:
         _CONTROL_STATES
     )
     assert all(sample["inherits"] is True for sample in icons["state_samples"])
+    # Inactive controls are exempt from non-text contrast; their currentColor
+    # inheritance and fixed local mask remain required above.
     assert all(
         _contrast(sample["icon_color"], sample["control_background"]) >= 3.0
         for sample in icons["state_samples"]
+        if sample["state"] != "disabled"
     )
     expected_files = {
         "checkmark-circle": "checkmark_circle_20_regular.svg",

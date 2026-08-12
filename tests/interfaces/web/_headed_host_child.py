@@ -118,8 +118,8 @@ def _run_uia_probe(argv: list[str]) -> int:
     last: tuple[str, ...] = ()
     try:
         while time.monotonic() < deadline:
-            last = _automation_names(arguments.handle)
-            if arguments.expected in last:
+            if _automation_has_name(arguments.handle, arguments.expected):
+                last = (arguments.expected,)
                 print(json.dumps({"names": last}))
                 return 0
             time.sleep(0.1)
@@ -130,24 +130,20 @@ def _run_uia_probe(argv: list[str]) -> int:
     return 1
 
 
-def _automation_names(handle: int) -> tuple[str, ...]:
+def _automation_has_name(handle: int, expected: str) -> bool:
     import clr
 
     clr.AddReference(_UI_AUTOMATION_CLIENT)
     from System import IntPtr
-    from System.Windows.Automation import AutomationElement, Condition, TreeScope
+    from System.Windows.Automation import (
+        AutomationElement,
+        PropertyCondition,
+        TreeScope,
+    )
 
     root = AutomationElement.FromHandle(IntPtr(handle))
-    elements = root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
-    names: list[str] = []
-    for index in range(elements.Count):
-        try:
-            name = str(elements[index].Current.Name)
-        except Exception:
-            continue
-        if name:
-            names.append(name)
-    return tuple(names)
+    condition = PropertyCondition(AutomationElement.NameProperty, expected)
+    return root.FindFirst(TreeScope.Descendants, condition) is not None
 
 
 def _run_uia_select_folder(argv: list[str]) -> int:

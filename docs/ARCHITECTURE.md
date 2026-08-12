@@ -2134,7 +2134,8 @@ has no external override surface.
 **Stage 6 Slice 2 status (completed 2026-08-12).**
 `interfaces/web/commands.py` is the sole owner of immutable production command
 rows and their exact payload policies;
-its production table is exactly `pick_folder` and `start_plan`.
+at Slice 2 closure its production table contained exactly `pick_folder` and
+`start_plan`.
 `interfaces/web/bridge.py` remains domain-blind and owns strict v1 parsing,
 origin/admission checks, the recursive primitive-view codec, and sanitized
 response envelopes. `interfaces/web/slots.py` alone retains picker paths in a
@@ -2144,11 +2145,11 @@ mapping; it does not duplicate their rules. `assets/bridge.js` alone touches
 `window.pywebview` and owns transport ids, the 30-second uncertain-delivery
 retry for receipted `start_plan`, and response validation. Test-only
 `test_report` composition remains under `tests/`; no runtime registration or
-external composition surface exists. This completed slice is not a claim that
-later command families exist. The wheel's exact current frontend set is
-`index.html`, `app.css`, `app.js`, `bridge.js`, and `render.js`; the last is
-the strict production `textContent` sink. Browserless probes and the headed
-page stay under `tests/assets/`. Ordinary and real-WebView2 evidence covers the
+external composition surface exists. At that checkpoint this did not claim
+later command families. At Slice 2 closure the wheel's exact frontend set was
+`index.html`, `app.css`, `app.js`, `bridge.js`, and `render.js`; the last is the
+strict production `textContent` sink. Browserless probes and the headed page
+stay under `tests/assets/`. Ordinary and real-WebView2 evidence covers the
 64 KiB boundary, sanitized refusal/exception paths, receipted retry, slot
 expiry/LRU, the real native picker, independent committed-origin refusal, and
 hostile-text/log privacy. This closes SH-G-3 and only the transport/picker/
@@ -2168,6 +2169,24 @@ after repeated `pywebviewready`. Host shutdown closes the registry before
 service observation teardown, waking both long polls and blocked producers.
 This closes SH-G-8 and BR-G-33 while leaving production plan and inventory DOM
 closure to Slices 5 and 6.
+
+**Stage 6 GUI Break 1 status (completed 2026-08-12).**
+`interfaces/web/appearance.py` owns Windows preference probes and observation,
+native DWM/WebView material application with an opaque system-color fallback,
+and inert document appearance publication. `host.py` registers appearance after
+the security boundary and closes it before task/service/window teardown.
+`tokens.css`, `components.css`, `icons.js`, and the fixed package-local icon
+assets implement the color, component, motion, and icon authority described
+above. The current wheel adds exactly those three top-level files, four pinned
+SVGs, and their `SOURCE.json` and `LICENSE.txt` records to Slice 2's five
+assets; the gallery scenario remains test-only. The clean-installed-wheel
+gallery proves SH-G-11/13/14 foundation
+behavior across light, dark, forced-colors, and reduced-motion modes. Real
+installed-wheel SH-G-12 evidence records actual DWM backdrop/dark-mode
+readbacks, transparent renderer seams over opaque cards, and two injected
+fallback sequences that finish opaque without changing frame or dispatch
+health. SH-G-14's infrastructure boundary is closed; SH-G-11/12/13 remain open
+only for the production-surface clauses that land with Slices 4–6.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
