@@ -658,6 +658,9 @@ otherwise it is `null`. The server error vocabulary is exact:
 | `picker_unavailable` | `The folder picker could not open. Try again.` |
 | `command_conflict` | `This action no longer matches its first attempt. Start the action again.` |
 | `planning_refused` | `NamiSync could not start a plan for those folders. Review both folders and try again.` |
+| `task_unavailable` | `That desktop task is no longer available.` |
+| `drain_busy` | `That desktop task already has an event request in progress.` |
+| `observation_conflict` | `That desktop task is already observing different work.` |
 | `bridge_unavailable` | `NamiSync is closing or this desktop page is no longer trusted.` |
 | `internal_error` | `NamiSync could not complete the desktop action.` |
 
@@ -676,7 +679,7 @@ placeholder handler lands in Slice 2.
 | Command | Exact payload | Exact success `result` | Identity / revision | Timeout and retry |
 | --- | --- | --- | --- | --- |
 | `pick_folder` | `{"purpose":"source"}` or `{"purpose":"target"}` | user cancel: `null`; selection: `{"id":"slot-<32-lowercase-hex>","display":"<valid Unicode string>"}` | no `command_id`; no revision | interactive native operation; no client deadline and no automatic retry; a later user gesture is a new attempt with a fresh request id |
-| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same exact key set with `"trash"` or `"additive"` | `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because this creates a session rather than mutating a revisioned view | 30,000 ms response deadline; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay uses a fresh request id and the same command name, payload, and command id; a still-uncertain result exposes Retry, which retains that same command id |
+| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same exact key set with `"trash"` or `"additive"` | Slice 2: `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}`; Slice 3 atomically expands it to `{"task_id":"task-<32-lowercase-hex>","request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because this creates a session rather than mutating a revisioned view; Slice 3 retains the adapter-owned task id with the same command receipt | 30,000 ms response deadline; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay uses a fresh request id and the same command name, payload, and command id; a still-uncertain result exposes Retry, which retains that same command id |
 
 `display` is presentation-only inert text; Python never accepts it back as
 authority. `null` means use the service's current semantic deletion setting;
@@ -813,9 +816,161 @@ target is logged without changing shutdown truth.
 
 ### Slice 3 - Event drain
 
-Implement `drain.py`: bounded queue, replaceable progress coalescing, reliable
-backpressure, one server-enforced drain per task, bounded long-poll wait,
-sequence-gap recovery, terminal-record reconciliation, and shutdown wakeups.
+Slice 3 adds exactly one production command, `next_events`, and expands
+`start_plan`'s result with an adapter-owned task id. A task id matches
+`^task-[0-9a-f]{32}$`; a session id, transport request id, command id, and drain
+id each match `^[0-9a-f]{32}$`. These opaque kinds are not interchangeable.
+The web adapter mints the task id once before the first plan admission and
+retains `command_id -> task_id` beside its task state, so replay of the same
+resolved `start_plan` intent returns the same task, request, and session ids.
+Task identity does not enter the service, dispatcher, workflow request,
+database, or compatibility protocol below the web adapter.
+
+The Slice 3 production command table is therefore exactly the two Slice 2 rows
+plus this row; there is no dormant control or presentation command:
+
+| Command | Exact payload | Exact success `result` | Identity / revision | Deadline and retry |
+| --- | --- | --- | --- | --- |
+| `next_events` | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","replay_from":null}` or the same exact key set with `replay_from` as the positive integer sequence of the first desired event | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","updates":[<zero to 64 exact tagged updates>]}` | no `command_id`; no revision; every long-poll attempt has a fresh drain id and the server echoes it only in that attempt's success | the server waits at most 25,000 ms; the browser deadline is 30,000 ms; success, including an empty timeout result, arms a fresh drain; transport/protocol uncertainty recovers from the first sequence after the last accepted non-`Gap` event, while an explicit `Gap` recovers from its exact positive `first_missed_seq`; no response is retried or cached |
+
+The `updates` array is ordered and contains only these exact tagged-union
+members. `event` is the existing primitive `SessionEventView` JSON shape;
+`record` is the existing primitive `SessionRecordView` JSON shape. Neither arm
+accepts extra keys.
+
+```json
+{"update_type":"event","event":{"session_id":"0123456789abcdef0123456789abcdef","sequence":1,"at":"<UTC ISO-8601 string>","body_type":"StateChanged","body":{"state":"pending"}}}
+```
+
+```json
+{"update_type":"record","record":{"session_id":"0123456789abcdef0123456789abcdef","kind":"plan","state":"completed","supports_pause":false,"created_at":"<UTC ISO-8601 string>","started_at":"<UTC ISO-8601 string or null>","ended_at":"<UTC ISO-8601 string or null>","result":"<OperationResultView object or null>"}}
+```
+
+`replay_from=null` is the ordinary drain. After transport/protocol uncertainty,
+the positive value is the last accepted non-`Gap` sequence plus one. After an
+explicit `Gap`, it is that event body's exact positive `first_missed_seq`, even
+when earlier numeric holes were legal coalesced progress. It means the first
+desired dispatcher sequence, not an acknowledgment. The response has no
+cursor, receipt, `has_more`, or echoed replay value. The client advances its
+local accepted sequence only after validating and accepting a non-`Gap` event.
+It does not advance on `Gap` or on a terminal record. On an ordinary or
+uncertainty-recovery response, a `Gap` stays visible, stops application of the
+remaining updates, and arms recovery from its `first_missed_seq`. A recovery
+response may instead start with the same `Gap` whose `first_missed_seq` equals
+that attempt's `replay_from`; this is proof that prefix is no longer retained,
+not another recovery trigger. The client keeps it visible, applies the
+available tail after it, and does not loop. Any later/different `Gap` stops that
+batch and becomes the next recovery point. Sequence numbers may jump
+because `Progress` is replaceable in both dispatcher replay and the adapter
+queue. A numeric hole alone is therefore legal and never triggers recovery.
+Recovery never claims that a missing reliable event was restored: an explicit
+`Gap` stays visible, available replay is applied, and the terminal record is
+the final lifecycle truth.
+
+`drain.py` owns one `TaskState` per adapter task. Its update queue has an exact
+capacity of 64. It stores `SessionEventView | SessionRecordView`, never raw
+dispatcher envelopes or workflow objects. On a new `Progress`, it removes an
+older queued `Progress` and appends the new snapshot; if all 64 entries are
+reliable, it discards the new progress. Before enqueuing a reliable update it
+may remove queued progress, but it never removes or reorders reliable updates;
+if 64 reliable entries remain, the observation sink blocks on capacity until a
+drain or shutdown wakes it. A drain removes at most 64 entries in FIFO order,
+returns immediately when any are available, otherwise waits on the task
+condition for at most 25 seconds, and releases the one-drain claim in `finally`.
+No `TaskState` lock spans a service call or JSON encoding. A second admitted
+drain for the same task marks the incumbent long poll superseded, wakes it,
+waits under the same 25-second server bound until that claim's `finally` has
+released it, and only then returns `drain_busy`. The browser therefore has a
+bounded proof that one re-arm cannot collide with the abandoned claim; it does
+not spin or depend on a promise lost during bridge reinjection. An absent/closed task or mismatched
+task/session pair returns `task_unavailable`; a competing attach/recovery
+generation returns `observation_conflict`. Their messages are the fixed table
+in Slice 2's envelope section.
+
+Plan-start task identity is single-flight per command id and resolved intent.
+After atomically resolving both slots, the first caller installs one provisional
+`STARTING` command/task entry under the registry lock, then releases that lock
+before calling the facade. Same-intent concurrent calls wait for that entry and
+never call the facade; a different resolved source, target, or policy is
+`command_conflict`. Success atomically binds the task to the returned request
+and session ids and wakes every waiter, which returns those same three ids.
+Facade, admission, or attach failure aborts the provisional task, wakes all
+same-intent waiters with the same sanitized refusal, and removes the command and
+task entries after those waiters release them. A later explicit attempt may
+then create a new provisional task; no failed task id is exposed or retained.
+If the facade returned a session but adapter binding itself cannot complete,
+the adapter compensates outside its lock by unsubscribing, closing that session,
+and dropping its plan before removing the provisional entry.
+
+Normal-path continuity is established transactionally instead of guessed from
+replay headroom. `NamiSyncService.start_plan` gains the keyword-only optional
+`observation_sink` input, excluded from command-receipt identity, and
+`SessionObserver` gains a resubscribe operation whose `from_sequence` is the
+positive first desired sequence. The dispatcher remains domain-blind: its
+optional admission attach callback receives only `(session_id, preopened
+EventStream)` and returns an idempotent rollback callback. The dispatcher
+prepares the record, hub, store row, and stream while the session is still
+unpublished and unschedulable. The adapter callback adopts the stream into the
+already-created task observation. Only after adoption succeeds does dispatcher
+emit `PENDING` while the session remains unschedulable, then atomically publish
+the session maps, append the pending entry, and notify the scheduler under the
+admission/publication gates. Every exception from stream creation through
+`PENDING` emission and atomic publication takes the same rollback path. The
+attach callback is atomic from dispatcher ownership: it either returns the
+rollback after a complete adoption, or raises only after self-reverting every
+partial observer entry/thread it created. If adoption returned successfully,
+dispatcher first invokes its rollback, which
+signals stop, closes the adopted stream, and joins/removes that exact
+observation; dispatcher then closes its remaining stream/hub ownership and
+drops the store row. If attach raised before returning, dispatcher owns and
+closes the stream directly. Cleanup never replaces the initiating exception. A
+store-drop or cleanup failure is retained as dispatcher cleanup-pending
+ownership, keeps shutdown incomplete, and can never make the row schedulable.
+This seam contains no task vocabulary and
+does not alter ordinary callers that omit it.
+
+Recovery replaces only the task's observation generation. It clears queued
+updates from the uncertain generation, calls the facade resubscribe outside the
+task lock with `from_sequence=replay_from`, then adopts the replacement only if
+the generation is still current. A concurrent recovery/attach is the named
+`observation_conflict`; a slow facade call holds no task lock. The facade method
+returns `SessionRecordView`: a nonterminal result means the replacement sink is
+installed, while an already-terminal result installs no stream and the registry
+enqueues that returned record itself. Close/recovery is serialized per task; if
+close wins while the facade call is outside the lock, the registry unsubscribes
+the just-installed session outside the lock before completing close. Terminal plan
+sessions remain dispatcher-retained, including their replay and command
+receipt, until task close. They are no longer live work and are not rendered as
+an active rail entry, but early session close is forbidden because it would
+destroy the recovery authority for a lost reliable or terminal bridge response.
+Task close performs unsubscribe, `close_session`, and `drop_plan`; no drain
+response cache, client acknowledgment, or second receipt is introduced.
+
+`bridge.js` owns one generation-counted drain manager per task. Repeated
+`pywebviewready` installs no duplicate listener and invalidates/re-arms at most
+one drain for each retained task. Every attempt mints a drain id; stale promise
+settlement cannot mutate the accepted cursor, render updates, or arm a second
+loop. A valid success applies its tagged updates in order and then arms one
+ordinary drain. Timeout, malformed/mismatched success, or bridge reincarnation
+invalidates that generation and arms one recovery drain from the last accepted
+non-`Gap` sequence plus one. An explicit `Gap` remains visible, ends that batch,
+and arms recovery from its `first_missed_seq`, except for the matching leading
+`Gap` of that recovery attempt, after which the retained tail is applied.
+Acceptance of a terminal record stops that task's drain loop and suppresses all
+further re-arms, even when it follows a matching recovery `Gap`. `drain_busy` is returned only
+after the superseded incumbent has released its server claim, so one bounded
+re-arm is enough; other structured refusals
+are definitive and visible. No path relies on a raw numeric sequence hole.
+
+Host shutdown follows one exact ownership order: reject new bridge admission;
+close the drain registry and wake long-poll waiters and capacity-blocked sinks;
+wait for already-admitted bridge handlers; unsubscribe every service
+observation; then call `NamiSyncService.close()`. A task close uses the same
+per-task wake-before-unsubscribe order. All waits are off the presentation
+thread. Registry close marks provisional tasks closing but retains their
+observations until the admitted-handler wait completes, so a close beginning
+after attach cannot remove the observer before dispatcher publication.
+
 Fault-inject lost reliable and terminal responses and repeat
 `pywebviewready` while a drain is outstanding. This closes BR-G-33 and retains
 XV-18 shutdown behavior.

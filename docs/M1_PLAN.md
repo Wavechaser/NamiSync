@@ -300,6 +300,13 @@ its terminal record, and closes observation/session. Repeated create/close tests
 must keep every registry bounded while retained database history remains
 readable.
 
+Slice 3 refines the terminal lifecycle without changing task-close ownership:
+a terminal plan session is no longer live or shown as active rail work, but its
+dispatcher record/replay, observation recovery source, and command receipt stay
+task-owned until task close. This is required to recover a lost reliable or
+terminal bridge response without a drain-response cache, acknowledgment, or
+second receipt. Task close still performs the release sequence above.
+
 ### History and event schema
 
 **DR-M1-09 — Ledger/history schema reset, or migration?**
@@ -698,9 +705,14 @@ class at the bridge boundary without creating a host-to-JS execution channel.
 `M1_BRIDGE.md` makes “paged” concrete: one canonical server projection per
 view, backend filtering/search/windowing, a common 256-row response limit with
 257 refused, a six-entry immutable inventory-projection LRU, and history detail
-paged by SQL rather than after whole-run decoding. Lost-response recovery uses
-the client-local last accepted envelope sequence and the existing
-resubscribe/terminal-record route; it adds no client acknowledgement or second
+paged by SQL rather than after whole-run decoding. Lost-response recovery after
+transport uncertainty uses the sequence after the last client-accepted
+non-`Gap` event. An ordinary delivery's explicit `Gap` stays visible and starts
+recovery from its exact `first_missed_seq`; the recovery subscription may return
+that same leading `Gap` as proof the missing prefix is no longer retained, then
+applies the available tail without looping. Numeric holes alone may be
+coalesced progress and do not trigger recovery. The existing
+resubscribe/terminal-record route adds no client acknowledgement or second
 server cursor.
 
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
@@ -708,7 +720,7 @@ canceled and failed navigation, and recreates its return-callback table. The
 renderer can trigger this repeatedly. The frontend consequently treats
 `pywebviewready` as repeatable: initialization is idempotent, listener
 registration is not duplicated, and every firing ensures exactly one
-`next_events` drain is armed per task. A lost mutation result is retried with
+`next_events` drain is armed per nonterminal task. A lost mutation result is retried with
 the original gesture `command_id`; a lost drain follows the sequence recovery
 above.
 
@@ -1039,7 +1051,8 @@ Stage 6 presentation helper.
   `dispatch(command_json)` method. All data uses structured pull/RPC; live
   events use one bounded `next_events` drain that coalesces only replaceable
   progress, preserves reliable events, permits one concurrent request, and
-  recovers sequence gaps through the existing observer path.
+  recovers transport uncertainty or an explicit `Gap` through the existing
+  observer path; numeric holes from coalesced progress are not recovery signals.
 - Force Edge Chromium; fail actionably without WebView2. Install native
   cancellation hooks for untrusted navigation/new windows and reject every
   dispatch outside the exact packaged origin.

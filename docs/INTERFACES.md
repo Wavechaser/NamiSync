@@ -101,7 +101,8 @@ The current public service surface includes:
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
 validate_database_contracts() -> DatabaseContractView
 initialize_database_contracts() -> DatabaseContractView
-start_plan(source, target, *, deletion_policy=None, command_id=None) -> PlanSession
+start_plan(source, target, *, deletion_policy=None, command_id=None,
+           observation_sink=None) -> PlanSession
 preview_selection(request_id) -> SelectionPreviewView
 mutate_selection(request_id, expected_revision, *,
                  deselect=(), reselect=(), command_id=None)
@@ -255,7 +256,11 @@ get-before-subscribe check, returns an already-terminal view without opening a
 stream, and otherwise forwards only primitive session event/record views to the
 sink. Its worker blocks on `EventStream.next()` without polling, recovers an
 ejected stream from the first undelivered sequence, and never exposes the raw
-stream. Unsubscribe closes every stream before joining its worker. Service
+stream. Slice 3 adds an explicit positive-first-desired-sequence resubscribe
+seam. Plan start may transactionally adopt a preopened stream before `PENDING`
+and schedulable publication; that sink is excluded from receipt identity, and
+attach failure or a shutdown race rolls back the unpublished session and starts
+no work. Unsubscribe closes every stream before joining its worker. Service
 shutdown closes all observer streams and joins all observer threads before
 dispatcher shutdown, then closes the workflow runtime last so audit finalization
 cannot reach a closed history store. A join timeout retains the unjoined
@@ -407,6 +412,21 @@ no runtime command registration: the headed gate adds `test_report` only by
 constructing a private immutable mapping under `tests/`, and that row and page
 are absent from the wheel.
 
+Slice 3 adds adapter-owned `task-<32-lowercase-hex>` identity and exactly one
+production row, `next_events`; task ids never enter the task-agnostic service
+or dispatcher. `start_plan` adds that task id to its web result and replays it
+with the same command receipt. `next_events` returns at most 64 exact
+event/record tagged updates from one 64-entry task queue. Progress may replace
+progress or yield to reliable data; reliable updates never displace one another
+and backpressure until drain or close. One server drain per task waits at most
+25 seconds under a 30-second browser deadline. Only transport/protocol
+uncertainty resubscribes after the last accepted event; explicit `Gap` remains
+visible, stops later ordinary-batch updates, and resubscribes from its
+`first_missed_seq`. A matching leading gap in that recovery result proves the
+prefix unavailable and permits the retained tail without looping; numeric holes are legal progress
+coalescing. Terminal plan sessions cease being live/active-rail work but remain
+task-owned recovery authority until task close.
+
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
 canceled or failed navigation, and rebuilds its in-flight return-callback
 table. The renderer can trigger this repeatedly. Frontend initialization must
@@ -443,7 +463,7 @@ Normal window close is a separate host-owned state machine. A private admission
 condition around `BridgeDispatcher.dispatch` rejects new calls and waits for
 every admitted call without adding another JavaScript-facing method. The
 synchronous WinForms callback only claims one worker and vetoes; that worker
-performs reject, wake, wait, unsubscribe, and service close in order. Only a
+  performs reject, close/wake, wait, unsubscribe, and service close in order. Only a
 complete shutdown permits programmatic destroy. Incomplete and exceptional
 attempts retain the page status and one owned native Retry/Cancel prompt; Retry
 alone starts another attempt, and the finalizer does not close an

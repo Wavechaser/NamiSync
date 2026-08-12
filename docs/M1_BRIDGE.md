@@ -1609,11 +1609,16 @@ disabled during the drain, cancellation remains available, and either `paused`
 or a legal terminal state may follow. This is presentation of an existing
 bridge value, not a payload/schema addition.
 
-**Plan sessions close as soon as their terminal result is delivered.** The
-plan *artifact* lives in the runtime keyed by request id and is what
-`get_plan_review` reads; the session record is only the delivery vehicle, and
-leaving it open would show a permanent dead entry per task. `drop_plan`
-happens at task close, not at plan-session close.
+**Slice 3 supersedes the earlier immediate-close rule for plan sessions.** Once
+its terminal record is delivered, a plan session is no longer live work and is
+not rendered as an active rail entry, but its task retains the dispatcher
+record, replay, observation recovery source, and service command receipt until
+task close. A lost reliable or terminal bridge response must be recoverable
+from those authorities; closing the session immediately would destroy them and
+would force a forbidden drain-response cache, acknowledgment, or second
+receipt. The plan *artifact* still lives independently in the runtime keyed by
+request id. Task close unsubscribes, calls `close_session`, then drops that
+artifact; ordinary terminal delivery does none of those early.
 
 For a compound execute-then-verify run, the two phases are one session
 producing one result with ordered `PhaseResultView`s. The rail summarizes the
@@ -1713,31 +1718,33 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   `EventStream` ejects it with a visible `Gap`, and the observer's established
   resubscribe/terminal-record path reconciles. The bridge does not synthesize a
   competing gap vocabulary.
-- **Lost drain response** — adds no acknowledgment protocol, delivery cursor,
-  or server-side per-client receipt. The client already knows the last sequence
-  it accepted. If a drain request fails or the next accepted batch starts after
-  the expected sequence, it immediately takes the existing
-  resubscribe/terminal-record reconciliation path from that last accepted
-  sequence. A lost terminal batch is recovered from the terminal record; live
-  replaceable progress may arrive late after resubscribe but never fabricates
-  continuity. This asks the least of the server and avoids a second delivery
-  state machine whose acknowledgments could themselves be lost or reordered.
+- **Lost drain response** — adds no acknowledgment protocol, echoed delivery
+  cursor, response cache, or server-side per-client receipt. The client knows
+  the last non-`Gap` sequence it accepted. Transport/protocol uncertainty or an
+  explicit `Gap` takes the existing resubscribe/terminal-record reconciliation
+  path from its exact `first_missed_seq`; uncertainty without a `Gap` starts at
+  the first sequence after the accepted value. A numeric sequence
+  hole is legal because queued/replayed `Progress` may coalesce, and never by
+  itself triggers recovery. A lost terminal batch is recovered from the
+  retained terminal record; live replaceable progress may arrive late after
+  resubscribe but never fabricates continuity.
 - **Bridge reinjection** — pywebview reinjects after every
   `NavigationCompleted`, including canceled or failed navigation, and rebuilds
   the in-flight return-callback table. The renderer can trigger this
   repeatedly. `pywebviewready` is therefore repeatable: frontend
   initialization is idempotent, listener registration is not duplicated, and
-  every firing ensures exactly one drain is re-armed per task. A lost mutation
+  every firing ensures exactly one drain is re-armed per nonterminal task. A lost mutation
   response retries with the original gesture `command_id`; a lost drain uses
   the sequence recovery above.
 - **Subscription registry** — `SessionObserver.observe` raises when a session
   is already observed, so concurrent task opens must be guarded rather than
   treated as impossible.
-- **Shutdown ordering** — stop accepting dispatches **and wait for every handler
-  already past that gate to return**, wake every outstanding drain **and every
-  reliable producer waiting for bridge capacity**, close observations, then close
-  the service. Wrong order hangs exit, the same failure XV-18 catches one layer
-  down. The quiesce barrier is the part an accept-flag alone misses: a dispatch
+- **Shutdown ordering** — stop accepting dispatches, close the task/drain
+  registry and wake every outstanding drain **and every reliable producer
+  waiting for bridge capacity**, wait for every handler already past that gate
+  to return, close every observation, then close the service. Wrong order hangs
+  exit, the same failure XV-18 catches one layer down. The quiesce barrier is
+  the part an accept-flag alone misses: a dispatch
   that passed the gate a microsecond earlier can still be mid-`start_execution`
   when the service closes, admitting work nobody observes and then cancelling it
   half-applied. The dispatcher already has the pattern to copy — it waits on an
@@ -1752,10 +1759,13 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   `CoreWebView2.Source` remains trusted. This lock is bridge-global and never
   nests inside a `TaskState` or service lock.
 
-**Shape:** one `TaskState` per task holding queue, subscription, and view
-state, with a single lock. **Never hold a task lock across I/O.** DR-BR-11's
-deterministic ids remove what would otherwise have been a node-table lock
-site, since a concurrent rebuild produces identical output.
+**Shape:** one `TaskState` per adapter-owned `task-<32-lowercase-hex>` holding a
+64-update queue, observation generation, drain claim, and view state, with a
+single lock/condition. Progress is the only replaceable member; reliable event
+and record updates are ordered and backpressure at capacity. **Never hold a task
+lock across a facade call, JSON encoding, or other I/O.** DR-BR-11's
+deterministic ids remove what would otherwise have been a node-table lock site,
+since a concurrent rebuild produces identical output.
 
 ---
 
@@ -1858,7 +1868,8 @@ its grammar; otherwise it is `null`. The exact code/message vocabulary is the
 table in `M1_SHELL.md` Slice 2: `invalid_request`, `unsupported_version`,
 `unknown_command`, `invalid_payload`, `request_too_large`,
 `slot_unavailable`, `picker_unavailable`, `command_conflict`,
-`planning_refused`, `bridge_unavailable`, and `internal_error`. Retry policy is
+`planning_refused`, `task_unavailable`, `drain_busy`,
+`observation_conflict`, `bridge_unavailable`, and `internal_error`. Retry policy is
 owned by the immutable command row and browser wrapper, not returned as handler
 data. A structured refusal is definitive; only uncertain transport delivery or
 `internal_error` from an admitted receipted command may trigger that row's one
@@ -1874,7 +1885,7 @@ name.
 | Command | Exact payload | Exact success `result` | Identity / revision | Deadline and retry |
 | --- | --- | --- | --- | --- |
 | `pick_folder` | `{"purpose":"source"}` or `{"purpose":"target"}` | cancel: `null`; selection: `{"id":"slot-<32-lowercase-hex>","display":"<valid Unicode string>"}` | no `command_id`; no revision | interactive native operation; no client deadline and no automatic retry; another gesture is a fresh attempt |
-| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same key set with `"trash"` or `"additive"` | `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because it creates a session rather than acting on a revisioned view | 30,000 ms; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay has a fresh request id and the identical command, payload, and command id; an exposed manual Retry retains that command id |
+| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same key set with `"trash"` or `"additive"` | Slice 2: `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}`; Slice 3: `{"task_id":"task-<32-lowercase-hex>","request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because it creates a session rather than acting on a revisioned view; Slice 3's adapter task receipt returns the same task id on replay | 30,000 ms; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay has a fresh request id and the identical command, payload, and command id; an exposed manual Retry retains that command id |
 
 `null` consumes the service's current semantic deletion setting; `mirror` is
 not accepted here. Automatic replay uses the identical payload. The service
@@ -1917,6 +1928,76 @@ The primitive only formats and submits a request: it neither registers nor
 allows the name. The Python mapping remains the sole allowlist, while the
 `test_report` literal, validator, payload/result schemas, and handler remain
 tests-only and absent from the wheel.
+
+**Slice 3's wire extension is exact.** It adds only `next_events`; the
+production mapping then contains `pick_folder`, `start_plan`, and
+`next_events`. Its payload is exactly
+`{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","replay_from":null}`,
+or the same keys with a positive integer first-desired sequence. Its result is
+exactly the echoed task/session/drain ids plus `updates`, an array of zero to 64
+members. Each member is exactly
+`{"update_type":"event","event":<SessionEventView>}` or
+`{"update_type":"record","record":<SessionRecordView>}`. The server wait is
+25 seconds and the browser deadline is 30 seconds. Empty timeout success arms
+the next ordinary drain. Transport/protocol uncertainty uses a fresh drain id
+and `replay_from=last accepted non-Gap sequence + 1`; an ordinary explicit
+`Gap` remains visible, stops later updates, and uses its exact positive
+`first_missed_seq`;
+numeric holes caused by legal progress coalescing do not. The response contains
+no acknowledgment, cursor, receipt, `has_more`, or echoed replay value.
+
+The browser validates the whole response before applying it. On an ordinary or
+uncertainty-recovery response, the first `Gap` remains visible, stops application
+of later updates, and arms recovery from its `first_missed_seq`. A recovery
+response may begin with the matching `Gap` whose `first_missed_seq` equals that
+attempt's `replay_from`; this proves the prefix is no longer retained, so the
+browser preserves the gap, applies the available tail, and does not loop. A
+later or different `Gap` becomes a new recovery point. Accepting a terminal
+record stops the task's drain loop even when it follows that matching leading
+gap; terminal truth never erases the visible loss.
+
+The adapter queue is exactly 64 updates. A new `Progress` replaces an older
+queued progress or is discarded when reliable data owns every slot. Reliable
+events and terminal records may evict progress but never another reliable
+update; an all-reliable full queue blocks its observation sink until drain or
+shutdown. Exactly one drain per task removes up to 64 FIFO entries. A second
+marks the incumbent superseded, wakes it, waits
+under the same 25-second bound for its claim to release, then returns
+`drain_busy`; reinjection therefore has a bounded one-rearm convergence rule.
+Unknown/closed or mismatched task/session authority is
+`task_unavailable`; a competing observation attach/recovery generation is
+`observation_conflict`. The fixed messages live in `M1_SHELL.md`.
+
+Task start is single-flight per `(command_id, resolved source, resolved target,
+deletion policy)`. One provisional adapter task exists while the facade call is
+outside the task lock; same-intent callers wait and different intent conflicts.
+Success binds and returns one task/request/session triple. Facade, admission, or
+attach failure wakes same-intent waiters with the same sanitized refusal and
+removes every provisional task/command entry after they release it; no failed
+task id is exposed or retained. Failure after facade success compensates by
+unsubscribing, closing the session, and dropping its plan outside the task lock.
+
+Normal attachment precedes schedulability. The service plan start accepts an
+optional sink excluded from its command-receipt signature. The domain-blind
+dispatcher constructs an unpublished record/hub/store row and preopened stream,
+passes `(session_id, stream)` to an optional attach callback, and receives an
+idempotent rollback. Only after adoption succeeds does it emit `PENDING` while
+the session remains unschedulable, then atomically publish the maps, append
+pending, and notify the scheduler under its gates. Every exception through
+`PENDING` emission and atomic publication takes the same path. Attach is atomic
+from dispatcher ownership: it returns rollback only after complete adoption,
+or raises after self-reverting every partial observer entry/thread. Once
+ownership transferred, dispatcher invokes rollback first so it signals, closes, joins,
+and identity-removes that adopted observation, then closes remaining
+stream/hub ownership and drops the store row. Cleanup failure never replaces
+the initiating error; it remains dispatcher cleanup-pending ownership, makes
+shutdown incomplete, and can never become schedulable. Recovery uses
+the service observer's explicit positive `from_sequence` resubscribe seam and
+replaces one adapter observation generation without holding a task lock over
+the facade call. Reobserve returns `SessionRecordView`: nonterminal means the
+replacement sink is installed; terminal means no stream was installed and the
+registry enqueues that record. Per-task serialization ensures close can clean a
+replacement that returned after its generation became stale.
 
 At Slice 2 closure the exact packaged frontend set is `index.html`, `app.css`,
 `app.js`, `bridge.js`, and `render.js`. The last owns the strict production
@@ -2190,10 +2271,14 @@ require a later schema-version decision rather than an M1 fallback
    subject becomes one visible `unsupported` result, the run stays explicitly
    verification-incomplete, and every other eligible frozen subject proceeds.
    Non-subject-specific incompleteness still refuses before hashing.
-3. **Drain recovery is sequence-gap recovery.** No client acknowledgment,
-   echoed cursor, or second server receipt is added. A failed drain or observed
-   sequence discontinuity takes the existing resubscribe/terminal-record path
-   from the last sequence the client accepted.
+3. **Drain recovery is explicit-gap/uncertainty recovery.** No client
+   acknowledgment, echoed cursor, response cache, or second server receipt is
+   added. A failed/malformed drain takes the existing
+   resubscribe/terminal-record path from the sequence after the last accepted
+   non-`Gap` event; an explicit `Gap` uses its exact `first_missed_seq`, with a
+   matching leading recovery gap proving the missing prefix unavailable rather
+   than causing another loop. Numeric sequence holes are legal when
+   replaceable progress coalesces and do not themselves trigger recovery.
 4. **M1's scale envelope is 100,000 file-backed subjects, with concrete
    reference budgets.** This matches the current user's upper bound; ordinary
    directories are expected to be in the thousands to tens of thousands. The
@@ -2774,14 +2859,23 @@ because its local tests are easier.
   returning a real picker path, an `innerHTML`-only source scan, or treating the
   Slice 2 harness as proof of a later production surface.
 - **BR-G-33 — Event delivery remains ordered, bounded, recoverable, and
-  stoppable.** Concurrent drains cannot reorder or split one task's sequence;
+  stoppable.** Admission-time observation is adopted before `PENDING` emission;
+  `PENDING` reaches that stream while work remains unschedulable, and only then
+  are maps/pending publication and scheduler notification atomic. An
+  attach/shutdown race rolls back the unpublished session and starts no work. Concurrent drains
+  cannot reorder or split one task's sequence;
   progress coalesces without displacing reliable data; a reliable flood reaches
   the existing visible `Gap`/resubscribe path and terminal truth is recovered;
   shutdown refuses new handlers, waits for admitted handlers, and wakes drains
-  and capacity-blocked producers before closing observations. A failed drain or
-  a sequence discontinuity resubscribes from the last client-accepted sequence
+  and capacity-blocked producers before closing observations. A failed drain
+  without a `Gap` resubscribes after the last client-accepted non-`Gap`
+  sequence. An ordinary explicit `Gap` remains visible, stops later updates,
+  and resubscribes from its exact `first_missed_seq`; a recovery response's
+  matching leading `Gap` proves the prefix unavailable and permits its retained
+  tail without another loop
   and recovers terminal truth without a client acknowledgment, echoed cursor,
-  or new server receipt. Fault-inject a lost response containing reliable data
+  or new server receipt. Numeric sequence holes are legal progress coalescing
+  and do not themselves recover. Fault-inject a lost response containing reliable data
   and a separate lost response containing the terminal delivery; both reconcile
   through the production resubscribe/terminal-record path, while replaceable
   progress may coalesce to the latest truthful snapshot. Concurrent
@@ -2882,8 +2976,9 @@ because its local tests are easier.
   *Not satisfied by* a compatibility getter that materializes a whole run, or
   by matching only the final headline of an uncomplicated run.
 - **BR-G-41 — Task and process lifecycle lose neither work nor authority.** A
-  reviewed task exists without a session; a plan session closes after terminal
-  delivery while its artifact survives until task close; compound phases remain
+  reviewed task exists without live work; a terminal plan session is absent
+  from the active rail but its record/replay/receipt and plan artifact survive
+  until task close so drain recovery retains authority; compound phases remain
   one session with independent counters. Closing a live task asks once, enters
   visible closing, cancels, waits for a terminal **record**, then unsubscribes,
   closes, and releases the exact task-owned plan, selection, execution/inventory

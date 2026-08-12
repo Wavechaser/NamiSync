@@ -16,7 +16,7 @@ workflows.
 ## Public Contract
 
 ```python
-submit(kind, request) -> SessionId
+submit(kind, request, *, attach=None) -> SessionId
 pause(session_id) -> ControlResult
 resume(session_id) -> ControlResult
 cancel(session_id) -> ControlResult
@@ -34,6 +34,19 @@ with `run(ctx)` and `snapshot()` methods. The dispatcher calls those methods but
 never decodes, reflects over, or otherwise interprets the payload. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
+
+The optional domain-blind admission `attach` callback receives only a newly
+allocated session id and preopened `EventStream`, and returns an idempotent
+rollback callback after adopting the stream. The record, hub, and store row are
+still unpublished and unschedulable. Dispatcher emits `PENDING` to the adopted
+stream, then atomically publishes its maps/pending entry and notifies the
+scheduler. Every exception through `PENDING` emission and publication takes
+the same cleanup path. After adoption, dispatcher invokes the returned rollback
+first so it signals, closes, joins, and identity-removes that observation, then
+closes its remaining stream/hub ownership and drops the store row. Cleanup
+failure is retained as non-schedulable cleanup-pending ownership and makes
+shutdown incomplete without replacing the initiating exception. No task
+identity or interface policy enters dispatcher.
 
 One optional registration callback,
 `settle_canceled(payload, disposition) -> OperationResult`, handles cancellation

@@ -2060,17 +2060,31 @@ participate in no rollup, and carry their count on the filter chip; only an
 `APPLIED` visibility mutation reflows/refetches the list. M1 never auto-scans.
 
 Bridge handlers are concurrent: service review/projection state and adapter
-task state have explicit locks, no task lock spans I/O, and only one event drain
-runs concurrently. Mutating commands use revision guards and retained receipts;
-lost-response recovery uses the client-local last accepted event sequence plus
-the existing resubscribe/terminal-record path, not acknowledgements or a second
-server cursor. `Progress` supplies paired item identity for row updates.
+task state have explicit locks, no task lock spans a facade call or encoding,
+and only one event drain runs per task. Each adapter-owned task has one
+64-update queue: progress is replaceable; reliable updates are ordered and
+backpressure at full reliable capacity. The drain waits 25 seconds on the
+server under a 30-second browser deadline and returns no acknowledgment or
+server cursor. Transport/protocol uncertainty recovers from the first sequence
+after the last accepted non-`Gap` event. An ordinary explicit `Gap` remains
+visible, stops later updates, and recovers from its exact `first_missed_seq`; a
+matching leading recovery gap permits its retained tail without looping. Numeric sequence
+holes are legal progress coalescing and do not recover. `Progress` supplies paired item identity for row updates.
 Visibility receipts use a reproducible per-(gesture,row) key and one
 caller-supplied timestamp. Session-creating commands instead retain
 `command_id -> (request_id, session_id)` in the service until `close_session`
 or shutdown. Plan/inventory/integrity receipt lookup, mutable scope resolution,
 admission, and publication are single-flight per command id; a recognized raw
 ID-gesture receipt is checked before mutable inventory is read again.
+
+For an adapter-requested admission observation, dispatcher remains
+domain-blind. It creates an unpublished record/hub/store row and preopened
+stream while unschedulable, lets a callback adopt `(session_id, stream)` and
+return idempotent rollback, emits `PENDING` into that stream, then atomically
+publishes maps/pending and notifies the scheduler. Attach failure or shutdown
+before publication rolls back the adoption, stream, hub, and store row and
+starts no work. A terminal plan session is no longer live rail work but its
+record/replay/receipt remains task-owned until task close.
 
 Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting,
 collapsed paths, filter chips) directly. It persists no request, session, task,

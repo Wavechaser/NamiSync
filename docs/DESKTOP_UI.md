@@ -115,7 +115,8 @@ dispatcher, runtime, workflow request, repository, or recorder.
 The service already provides the desktop's command surface:
 
 ```python
-start_plan(source, target, *, deletion_policy=None) -> PlanSession
+start_plan(source, target, *, deletion_policy=None, command_id=None,
+           observation_sink=None) -> PlanSession
 start_execution(request_id, *, verify_after_execute=False) -> ExecutionSession
 start_inventory(...), start_baseline(...), start_verify(...), start_rebaseline(...)
 read_semantic_settings() -> SemanticSettingsView
@@ -123,8 +124,12 @@ commit_semantic_settings(patch) -> SemanticSettingsView
 ```
 
 `SessionObserver.observe(session_id, sink)` supplies primitive current-state
-and event/record views. The desktop owns the bounded presentation queue fed by
-that sink; it does not expose raw dispatcher streams to JavaScript. It must
+and event/record views; its Slice 3 resubscribe form takes the positive first
+desired sequence after transport uncertainty, or an explicit `Gap` body's exact
+`first_missed_seq`. Plan start's
+optional sink is attached transactionally before the session can run and is
+excluded from command receipt identity. The desktop owns the bounded
+presentation queue fed by that sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe on task close and close every observation before service shutdown.
 
 `NamiSyncService.close()` is bounded but not instantaneous: its derived
@@ -199,16 +204,21 @@ real-WebView2 hostile-data coverage. A constructor-only headed composition adds
 external composition surface. No plan-review, execution, inventory, history,
 settings, lifecycle, or drain command appears before its owning slice.
 
-Live state uses one bounded, coalescing `next_events` pull/drain request. The
-host preserves reliable item and terminal ordering, allows replaceable progress
-snapshots to collapse, and makes a gap or disconnected task visible instead of
-inventing history. A JavaScript call must never block indefinitely waiting for
-an event, and the frontend must keep at most one outstanding event drain per
-task. Pywebview may reinject its bridge after any `NavigationCompleted`,
+Live state uses one bounded, coalescing `next_events` pull/drain request. Its
+exact task/session/drain/replay payload, tagged event/record result, 64-update
+queue/batch, and 25-second server/30-second browser bounds live in
+`M1_SHELL.md`. The host preserves reliable item and terminal ordering, allows
+replaceable progress snapshots to collapse, and makes an explicit `Gap` or
+disconnected task visible instead of inventing history. A numeric sequence
+hole is legal progress coalescing, not by itself loss. A JavaScript call must
+never block indefinitely waiting for an event, and the frontend must keep at
+most one outstanding event drain per task. Pywebview may reinject its bridge after any `NavigationCompleted`,
 including a canceled or failed navigation, and discard in-flight return
 callbacks. `pywebviewready` is therefore a repeatable event: initialization is
 idempotent, does not duplicate listeners, and every firing ensures exactly one
-drain is re-armed per task.
+drain is re-armed per nonterminal task. A matching leading recovery `Gap`
+remains visible while its retained tail is applied; accepting a terminal record
+stops re-arming without releasing the task-owned recovery artifacts early.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
