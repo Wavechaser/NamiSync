@@ -288,6 +288,12 @@ hostile-name round trip. Before `create_window`, host preparation pins
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
 `debug=False`, and performs a read-only registry probe for the WebView2 runtime.
 
+`interfaces/web/host.py` owns the per-logon single-instance primitive. The
+production identity is always `Local\NamiSync.Desktop` with activation title
+`NamiSync`; neither product version, nickname, data root, argv, environment,
+nor page state can select a different namespace. Tests inject private identities
+only through Python construction.
+
 Phase 0 now supplies the dependency-free runtime version source, injectable
 `%LOCALAPPDATA%\NamiSync` path set, and rotating file logging shared by the
 `namisync` and `pywebview` loggers before pywebview import. Startup diagnostics
