@@ -29,6 +29,10 @@ class _Hook:
         self.handlers.append(handler)
         return self
 
+    def __isub__(self, handler):
+        self.handlers.remove(handler)
+        return self
+
     def emit(self) -> list[object]:
         return [handler() for handler in tuple(self.handlers)]
 
@@ -50,8 +54,25 @@ class _Webview:
         self.order = order
         self.window = _Window()
 
-    def create_window(self, title: str, url: str, *, js_api: object):
-        self.order.append(("create_window", title, url, js_api))
+    def create_window(
+        self,
+        title: str,
+        url: str,
+        *,
+        js_api: object,
+        background_color: str,
+        transparent: bool,
+    ):
+        self.order.append(
+            (
+                "create_window",
+                title,
+                url,
+                js_api,
+                background_color,
+                transparent,
+            )
+        )
         return self.window
 
 
@@ -239,6 +260,11 @@ def _patch_primary(
         "_packaged_index_path",
         lambda: order.append("packaged_index") or "installed/assets/index.html",
     )
+    monkeypatch.setattr(
+        host,
+        "_opaque_window_background",
+        lambda: order.append("opaque_background") or "#F3F3F3",
+    )
 
     def default_security(window, url, actual_document, renderer_callback):
         order.append(("configure_security", window, url, actual_document))
@@ -249,6 +275,17 @@ def _patch_primary(
         host,
         "_configure_window_security",
         default_security if configure_security is None else configure_security,
+    )
+
+    class Appearance:
+        def close(self) -> None:
+            order.append("appearance.close")
+
+    monkeypatch.setattr(
+        host,
+        "_configure_window_appearance",
+        lambda window: order.append(("configure_appearance", window))
+        or Appearance(),
     )
     monkeypatch.setattr(
         host,
@@ -338,12 +375,15 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "production_commands",
         "bridge_dispatcher",
         "packaged_index",
+        "opaque_background",
         "create_window",
         "bind_picker",
         "start",
         "bind_origin",
         "configure_security",
         "renderer",
+        "configure_appearance",
+        "appearance.close",
         "reject_dispatch",
         "registry.begin_close",
         "wait_handlers",
@@ -368,6 +408,8 @@ def test_host_prepares_before_create_and_starts_only_edge(
     )[2]
     assert bridge_entry[2] is commands_entry[2]
     assert created[3] is bridge_entry[3]
+    assert created[4] == "#F3F3F3"
+    assert created[5] is False
     started = next(item for item in order if isinstance(item, tuple) and item[0] == "start")
     assert started[1] is webview
     assert started[2] == str(paths.webview2)
@@ -796,6 +838,117 @@ def test_initialized_refusal_aborts_without_destroy(
     assert reports == ["origin was unavailable"]
 
 
+def test_appearance_configuration_failure_is_nonfatal_after_security(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    paths, order, _webview, document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        host,
+        "_configure_window_appearance",
+        lambda _window: (_ for _ in ()).throw(
+            RuntimeError("injected material failure")
+        ),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 0
+    assert reports == []
+    assert document.is_attached
+    assert "service.close" in order
+    assert "appearance.configuration_failed" in caplog.text
+
+
+def test_appearance_cleanup_failure_is_nonfatal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+    )
+
+    class Appearance:
+        def close(self) -> None:
+            order.append("appearance.close")
+            raise RuntimeError("injected unsubscribe failure")
+
+    monkeypatch.setattr(
+        host,
+        "_configure_window_appearance",
+        lambda _window: Appearance(),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 0
+    assert reports == []
+    assert order.index("appearance.close") < order.index("service.close")
+    assert "appearance.cleanup_failed" in caplog.text
+
+
+def test_security_failure_never_attempts_appearance_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_security(*_args) -> None:
+        raise RuntimeError("security failure")
+
+    paths, _order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        configure_security=fail_security,
+    )
+    configured: list[object] = []
+    monkeypatch.setattr(
+        host,
+        "_configure_window_appearance",
+        lambda window: configured.append(window),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["security failure"]
+    assert configured == []
+
+
+def test_close_hooks_stop_appearance_before_observation_unsubscribe() -> None:
+    order: list[str] = []
+    dispatcher = SimpleNamespace(
+        _reject_new=lambda: order.append("reject"),
+        _wait_for_handlers=lambda: order.append("wait"),
+    )
+    registry = SimpleNamespace(
+        begin_close=lambda: order.append("wake"),
+        unsubscribe_all=lambda: order.append("unsubscribe"),
+    )
+
+    hooks = host._desktop_close_hooks(
+        dispatcher,
+        registry,
+        close_appearance=lambda: order.append("appearance.close"),
+    )
+    hooks.reject_dispatch()
+    hooks.wake_waiters()
+    hooks.wait_for_handlers()
+    hooks.unsubscribe_observations()
+
+    assert order == [
+        "reject",
+        "wake",
+        "wait",
+        "appearance.close",
+        "unsubscribe",
+    ]
+
+
 def test_guard_or_loaded_refusal_destroys_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -807,10 +960,17 @@ def test_guard_or_loaded_refusal_destroys_once(
     def start(webview, *, on_initialized, storage_path) -> None:
         del storage_path
         on_initialized()
+        original_destroy = webview.window.destroy
+
+        def destroy() -> None:
+            order.append("destroy")
+            original_destroy()
+
+        webview.window.destroy = destroy
         webview.window.events.loaded.emit()
         webview.window.events.loaded.emit()
 
-    paths, _order, webview, _document, reports = _patch_primary(
+    paths, order, webview, _document, reports = _patch_primary(
         monkeypatch,
         tmp_path,
         configure_security=failed_attachment,
@@ -821,6 +981,7 @@ def test_guard_or_loaded_refusal_destroys_once(
 
     assert result == 1
     assert webview.window.destroy_count == 1
+    assert order.index("appearance.close") < order.index("destroy")
     assert reports == [
         "WebView2 security guards could not attach: "
         "native event subscription failed"

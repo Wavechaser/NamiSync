@@ -141,8 +141,18 @@ class Webview:
     def __init__(self):
         self.window = Window()
 
-    def create_window(self, _title, _url, *, js_api):
+    def create_window(
+        self,
+        _title,
+        _url,
+        *,
+        js_api,
+        background_color,
+        transparent,
+    ):
         assert js_api is not None
+        assert background_color == "#F3F3F3"
+        assert transparent is False
         return self.window
 
 
@@ -191,6 +201,10 @@ host._load_webview = load_webview
 host._prepare_webview_host = lambda _module: None
 host._create_service = lambda _paths: Service()
 host._configure_window_security = configure_security
+host._opaque_window_background = lambda: "#F3F3F3"
+host._configure_window_appearance = lambda _window: SimpleNamespace(
+    close=lambda: None
+)
 host._start_webview = start_webview
 startup_errors = []
 launcher._report_startup_error = startup_errors.append

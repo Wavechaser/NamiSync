@@ -516,6 +516,7 @@ def run_desktop(
     registry = None
     dispatcher = None
     close_controller: _DesktopCloseController | None = None
+    appearance_controller = None
     logging_configured = False
     failure: Exception | None = None
     try:
@@ -561,20 +562,39 @@ def run_desktop(
             identity.window_title,
             _desktop_index_path(index_path),
             js_api=dispatcher,
+            background_color=_opaque_window_background(),
+            transparent=False,
         )
         if window is None:
             raise DesktopStartupError("NamiSync could not create its desktop window")
         picker.bind(window)
 
         state = _StartupState()
+
+        def close_appearance() -> None:
+            nonlocal appearance_controller
+            controller = appearance_controller
+            if controller is None:
+                return
+            appearance_controller = None
+            try:
+                controller.close()
+            except Exception as error:
+                _log_presentation_failure("appearance.cleanup_failed", error)
+
         close_controller = _DesktopCloseController(
             window,
             service,
-            _desktop_close_hooks(dispatcher, registry),
+            _desktop_close_hooks(
+                dispatcher,
+                registry,
+                close_appearance=close_appearance,
+            ),
             window_title=identity.window_title,
         )
 
         def initialize_security() -> None:
+            nonlocal appearance_controller
             try:
                 real_url = window.real_url
                 _bind_document_origin(document, real_url)
@@ -587,6 +607,13 @@ def run_desktop(
             except Exception as error:
                 state.refuse(error)
                 raise
+            try:
+                appearance_controller = _configure_window_appearance(window)
+            except Exception as error:
+                _log_presentation_failure(
+                    "appearance.configuration_failed",
+                    error,
+                )
 
         def loaded_watchdog() -> None:
             attachment_error = document.attachment_error
@@ -604,6 +631,7 @@ def run_desktop(
                 )
             state.refuse(error)
             if close_controller._mark_startup_refused():
+                close_appearance()
                 state.destroy_once(window)
 
         window.events.closing += close_controller._on_closing
@@ -620,6 +648,8 @@ def run_desktop(
     finally:
         if close_controller is not None:
             close_controller._wait_for_attempt()
+        if appearance_controller is not None:
+            close_appearance()
         cleanup_failure = _finalize_primary(
             service,
             dispatcher=dispatcher,
@@ -722,12 +752,19 @@ def _bridge_dispatcher(document: object, commands: object):
 def _desktop_close_hooks(
     dispatcher: object,
     registry: object,
+    *,
+    close_appearance: Callable[[], None] | None = None,
 ) -> _DesktopCloseHooks:
+    def unsubscribe_observations() -> None:
+        if close_appearance is not None:
+            close_appearance()
+        registry.unsubscribe_all()
+
     return _DesktopCloseHooks(
         reject_dispatch=dispatcher._reject_new,
         wake_waiters=registry.begin_close,
         wait_for_handlers=dispatcher._wait_for_handlers,
-        unsubscribe_observations=registry.unsubscribe_all,
+        unsubscribe_observations=unsubscribe_observations,
     )
 
 
@@ -758,6 +795,18 @@ def _configure_window_security(
         document=document,
         on_browser_version=renderer_callback,
     )
+
+
+def _opaque_window_background() -> str:
+    from .appearance import opaque_window_background
+
+    return opaque_window_background()
+
+
+def _configure_window_appearance(window: object):
+    from .appearance import configure_window_appearance
+
+    return configure_window_appearance(window)
 
 
 def _bind_document_origin(document: object, trusted_url: str) -> None:
