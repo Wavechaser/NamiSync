@@ -13,6 +13,7 @@ from urllib.parse import SplitResult, urlsplit
 from .pywebview_runtime import (
     WebView2RefusalReason,
     probe_webview2_runtime,
+    require_supported_pythonnet_runtime,
 )
 
 
@@ -283,6 +284,7 @@ def harden_pywebview_settings(webview_module: _WebviewModule) -> None:
 def prepare_pywebview_host(webview_module: _WebviewModule) -> None:
     """Harden pywebview and refuse a missing WebView2 before window creation."""
 
+    require_supported_pythonnet_runtime()
     harden_pywebview_settings(webview_module)
     # Presence probe only. The detector reads the value itself; this turns a
     # pywebview that dropped the key into the same actionable settings error as

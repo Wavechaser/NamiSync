@@ -551,8 +551,9 @@ defect, and move implementation-level test choreography out of the log.
   `webview.start()` imported pywebview's MSHTML fallback before NamiSync's
   renderer check. Fixed with a read-only, pywebview-compatible registry preflight
   before `create_window`, repeated before initialization, and behavior-tested
-  against the pinned upstream detector. A configured fixed runtime bypasses the
-  probe; the synchronous Edge Chromium check remains defense in depth. The
+  against the pinned upstream detector. A configured fixed runtime bypasses
+  Edge-channel discovery but not the shared .NET/netfx prerequisite read; the
+  synchronous Edge Chromium check remains defense in depth. The
   `86.0.622.0` argument is pywebview's WinForms compatibility gate, not a
   NamiSync security-patch minimum.
 - SEVERE - FIXED (2026-07-31). Native-guard attachment state. Pywebview swallowed

@@ -167,7 +167,8 @@ accepted Edge channels, and HKCU/HKLM architecture routing, with executable
 upstream parity coverage. The `86.0.622.0` token is retained because that
 backend passes it to its compatibility helper; NamiSync mirrors the helper's
 actual comparison and makes no security-patch freshness claim. A configured
-`WEBVIEW2_RUNTIME_PATH` bypasses that probe. One typed probe snapshot supplies
+`WEBVIEW2_RUNTIME_PATH` bypasses only Edge-channel discovery, not the shared
+.NET/netfx prerequisite read. One typed probe snapshot supplies
 both availability and refusal reason: an absent prerequisite names .NET or
 WebView2, while an unreadable or malformed registry state reports detection
 failure and recommends repair instead of falsely claiming a component is

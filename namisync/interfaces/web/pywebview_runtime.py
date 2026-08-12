@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import winreg
 from dataclasses import dataclass
 from enum import StrEnum
@@ -21,6 +22,7 @@ DOTNET_RELEASE_REGISTRY_PATH = (
     r"SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full"
 )
 MINIMUM_DOTNET_RELEASE = 394802
+SUPPORTED_PYTHONNET_RUNTIME = "netfx"
 
 
 class WebView2RefusalReason(StrEnum):
@@ -37,6 +39,20 @@ class WebView2RuntimeProbe:
 
     available: bool
     refusal_reason: WebView2RefusalReason | None
+
+
+def require_supported_pythonnet_runtime(
+    environment: Mapping[str, str] | None = None,
+) -> None:
+    """Refuse a pythonnet runtime override that conflicts with the tested host."""
+
+    values = os.environ if environment is None else environment
+    selected = values.get("PYTHONNET_RUNTIME")
+    if selected is not None and selected != SUPPORTED_PYTHONNET_RUNTIME:
+        raise RuntimeError(
+            "NamiSync supports pythonnet's Windows netfx runtime only; "
+            "remove the conflicting PYTHONNET_RUNTIME override and restart NamiSync."
+        )
 
 
 def probe_webview2_runtime(
@@ -57,14 +73,14 @@ def probe_webview2_runtime(
     malformed registry value without probing the registry a second time.
     """
 
-    if settings["WEBVIEW2_RUNTIME_PATH"]:
-        return WebView2RuntimeProbe(available=True, refusal_reason=None)
     dotnet_refusal = _dotnet_refusal_reason()
     if dotnet_refusal is not None:
         return WebView2RuntimeProbe(
             available=False,
             refusal_reason=dotnet_refusal,
         )
+    if settings["WEBVIEW2_RUNTIME_PATH"]:
+        return WebView2RuntimeProbe(available=True, refusal_reason=None)
 
     selected_architecture = machine() if architecture is None else architecture
     detection_failed = False

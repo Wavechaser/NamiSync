@@ -294,7 +294,9 @@ exact Windows dependency because delegate subscription, WinForms thread
 marshaling, and `CoreWebView2` access are part of the proven boundary. Bottle
 has a floor of 0.13.4. The supported pythonnet runtime is its default Windows
 .NET Framework (`netfx`) path, so the existing read-only .NET Framework probe
-covers both native-host prerequisites. The product WebView2 data directory is
+covers both native-host prerequisites. An unset `PYTHONNET_RUNTIME` or the exact
+`netfx` value is accepted; any conflicting override is refused before native
+host preparation. The product WebView2 data directory is
 the explicit `%LOCALAPPDATA%\NamiSync\webview2` path, not pywebview's temporary
 private-mode default.
 GUI roots are resolved to a physical local drive: UNC and mapped-network roots
@@ -306,7 +308,8 @@ behavioral parity tests execute the upstream detector functions without
 importing WinForms. Its `86.0.622.0` token is the exact argument used by the
 pinned backend's compatibility helper; the mirror preserves that helper's
 actual comparison and does not claim current security patching. A configured
-`WEBVIEW2_RUNTIME_PATH` short-circuits that probe. One typed probe result carries
+`WEBVIEW2_RUNTIME_PATH` short-circuits only Edge-channel discovery; the shared
+.NET/netfx prerequisite is still read once. One typed probe result carries
 availability and the refusal reason from the same registry snapshot; host
 preparation does not repeat the .NET read to choose a message. Missing .NET or
 WebView2 receives its specific install action, while malformed or unreadable

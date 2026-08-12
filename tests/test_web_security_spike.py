@@ -358,6 +358,18 @@ def test_pywebview_popup_chain_keeps_packaged_document_and_bridge() -> None:
     assert bridge.dispatch(command)["result"] == {"still": "trusted"}
 
 
+def test_prepare_pywebview_host_refuses_a_conflicting_pythonnet_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONNET_RUNTIME", "coreclr")
+    webview = SimpleNamespace(settings={})
+
+    with pytest.raises(RuntimeError, match="PYTHONNET_RUNTIME"):
+        prepare_pywebview_host(webview)
+
+    assert webview.settings == {}
+
+
 def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -479,13 +491,29 @@ def test_prepare_pywebview_host_reports_malformed_dotnet_probe(
     assert queries == 1
 
 
-def test_prepare_pywebview_host_accepts_a_fixed_runtime_without_registry(
+def test_prepare_pywebview_host_fixed_runtime_reads_only_dotnet_prerequisite(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    opened: list[str] = []
+
+    class RegistryKey:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            del args
+
+    def open_key(hive: object, path: str, reserved: int, access: int):
+        del hive, reserved, access
+        opened.append(path)
+        assert path == pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH
+        return RegistryKey()
+
+    monkeypatch.setattr(pywebview_runtime.winreg, "OpenKey", open_key)
     monkeypatch.setattr(
         pywebview_runtime.winreg,
-        "OpenKey",
-        lambda *args, **kwargs: pytest.fail("fixed runtime should skip the registry"),
+        "QueryValueEx",
+        lambda key, name: (pywebview_runtime.MINIMUM_DOTNET_RELEASE, 1),
     )
     webview = SimpleNamespace(
         settings={
@@ -500,6 +528,7 @@ def test_prepare_pywebview_host_accepts_a_fixed_runtime_without_registry(
     prepare_pywebview_host(webview)
 
     assert webview.settings["WEBVIEW2_RUNTIME_PATH"] == r"runtime\WebView2"
+    assert opened == [pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH]
 
 
 @pytest.mark.parametrize(

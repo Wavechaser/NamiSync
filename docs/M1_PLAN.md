@@ -639,8 +639,9 @@ security-equivalent.** Four gaps this decision originally left open:
    `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, then use read-only
    registry access through one side-effect-free, upstream-parity compatibility
    module to preflight the WebView2 runtime before pywebview can import its
-   mutating MSHTML fallback. A configured `WEBVIEW2_RUNTIME_PATH` bypasses
-   that probe. Repeat preparation before startup, pass `debug=False`, verify the
+   mutating MSHTML fallback. A configured `WEBVIEW2_RUNTIME_PATH` bypasses only
+   Edge-channel discovery, not the shared .NET/netfx prerequisite read. Repeat
+   preparation before startup, pass `debug=False`, verify the
    renderer before host setup during synchronous `initialized`, and
    **fail actionably** if the WebView2 runtime is unavailable — a clear install
    prompt, never a degraded silent fallback. Unrelated startup exceptions keep

@@ -1980,8 +1980,8 @@ It includes pywebview's .NET prerequisite, four accepted Edge channels, and
 HKCU/HKLM architecture routing. The `86.0.622.0` token is retained because the
 pinned backend passes that exact value to its compatibility helper; NamiSync
 mirrors the helper's actual comparison and does not treat it as a security
-patch-freshness claim. A configured
-`WEBVIEW2_RUNTIME_PATH` short-circuits the registry probe. One pre-start
+patch-freshness claim. A configured `WEBVIEW2_RUNTIME_PATH` short-circuits only
+Edge-channel discovery; the shared .NET/netfx prerequisite is still read. One pre-start
 zero-argument `initialized` callback first refuses any non-Edge-Chromium
 backend and only then invokes the host callback, which derives the origin from
 the complete `window.real_url` with `urlsplit` after the asset server chooses

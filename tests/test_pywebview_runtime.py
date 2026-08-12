@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,6 +9,9 @@ import pytest
 import webview
 
 import namisync.interfaces.web.pywebview_runtime as runtime
+
+
+PROJECT_ROOT = Path(__file__).parents[1]
 
 
 class RegistryKey:
@@ -51,6 +55,37 @@ class FakeRegistry:
 
     def CloseKey(self, key: RegistryKey) -> None:
         del key
+
+
+def test_native_host_dependencies_are_declared_directly() -> None:
+    project = tomllib.loads(
+        (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+
+    dependencies = project["project"]["dependencies"]
+    assert [item for item in dependencies if item.startswith("pywebview")] == [
+        "pywebview==6.2.1"
+    ]
+    assert [item for item in dependencies if item.startswith("pythonnet")] == [
+        "pythonnet==3.1.0; sys_platform == 'win32'"
+    ]
+    assert [item for item in dependencies if item.startswith("bottle")] == [
+        "bottle>=0.13.4"
+    ]
+
+
+@pytest.mark.parametrize("environment", [{}, {"PYTHONNET_RUNTIME": "netfx"}])
+def test_tested_pythonnet_runtime_is_accepted(environment: dict[str, str]) -> None:
+    runtime.require_supported_pythonnet_runtime(environment)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["", "coreclr", "mono", "NETFX", " netfx"],
+)
+def test_conflicting_pythonnet_runtime_is_refused(value: str) -> None:
+    with pytest.raises(RuntimeError, match="PYTHONNET_RUNTIME"):
+        runtime.require_supported_pythonnet_runtime({"PYTHONNET_RUNTIME": value})
 
 
 def _upstream_detector(fake: FakeRegistry, *, architecture: str, fixed=None):
@@ -146,7 +181,7 @@ def test_side_effect_free_detector_matches_pinned_pywebview_registry_choices(
     assert all(access in {None, fake.KEY_READ} for *_, access in fake.opens)
 
 
-def test_detector_matches_fixed_runtime_and_missing_dotnet_contract(
+def test_fixed_runtime_skips_edge_discovery_but_not_the_dotnet_prerequisite(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake = FakeRegistry(
@@ -160,24 +195,32 @@ def test_detector_matches_fixed_runtime_and_missing_dotnet_contract(
     )
     monkeypatch.setattr(runtime, "winreg", fake)
 
+    refused_probe = runtime.probe_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": r"runtime\\WebView2"},
+        architecture="AMD64",
+    )
+    assert not refused_probe.available
+    assert (
+        refused_probe.refusal_reason
+        is runtime.WebView2RefusalReason.DOTNET_FRAMEWORK
+    )
+    assert _upstream_detector(
+        fake, architecture="AMD64", fixed=r"runtime\\WebView2"
+    )
+
+    fake.values[
+        (
+            fake.HKEY_LOCAL_MACHINE,
+            runtime.DOTNET_RELEASE_REGISTRY_PATH,
+            "Release",
+        )
+    ] = runtime.MINIMUM_DOTNET_RELEASE
     fixed_probe = runtime.probe_webview2_runtime(
         {"WEBVIEW2_RUNTIME_PATH": r"runtime\\WebView2"},
         architecture="AMD64",
     )
     assert fixed_probe.available
     assert fixed_probe.refusal_reason is None
-    assert _upstream_detector(
-        fake, architecture="AMD64", fixed=r"runtime\\WebView2"
-    )
-    missing_probe = runtime.probe_webview2_runtime(
-        {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
-    )
-    assert not missing_probe.available
-    assert (
-        missing_probe.refusal_reason
-        is runtime.WebView2RefusalReason.DOTNET_FRAMEWORK
-    )
-    assert not _upstream_detector(fake, architecture="AMD64")
 
 
 def test_absent_dotnet_key_is_the_one_deliberate_upstream_divergence(

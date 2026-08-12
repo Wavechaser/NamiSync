@@ -1788,7 +1788,8 @@ wheel-shipped file equals this policy byte-for-byte.
 The Stage 6 reality run refines how that posture is implemented. A pre-window
 preparation step hardens pywebview and probes the WebView2 runtime through one
 read-only compatibility module behavior-checked against the pinned pywebview
-6.2.1 detector; a configured fixed runtime bypasses the probe. The
+6.2.1 detector; a configured fixed runtime bypasses Edge-channel discovery but
+not the shared .NET/netfx prerequisite read. The
 start wrapper repeats preparation before pywebview initialization, then its
 single zero-argument `initialized` callback refuses a non-Edge-Chromium
 renderer before invoking host initialization. The host observes
