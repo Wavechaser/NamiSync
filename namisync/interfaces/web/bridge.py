@@ -1,4 +1,4 @@
-"""Stage 6 proof of the pywebview/WebView2 host security boundary."""
+"""Pywebview/WebView2 host security and structured bridge boundary."""
 
 from __future__ import annotations
 

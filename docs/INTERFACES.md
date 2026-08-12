@@ -276,8 +276,9 @@ cosmetic window/column/sort mappings. Atomic replacement prevents torn JSON;
 cross-process semantic write coordination deliberately remains in the database
 settings store.
 
-`interfaces/web/security_spike.py` proves the security-sensitive host shape
-without shipping a desktop. The supported host dependency is pinned to the
+`interfaces/web/bridge.py` owns the promoted security-sensitive host boundary;
+the product window composes it without changing the proven guard behavior. The
+supported host dependency is pinned to the
 reality-tested pywebview 6.2.1. That exact pin is security-relevant:
 pywebview internally returns exposed-function results through
 `webview.util.js_bridge_call` and `Window.evaluate_js`, so any version change

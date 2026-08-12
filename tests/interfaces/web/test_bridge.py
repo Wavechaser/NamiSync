@@ -7,8 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.web.pywebview_runtime as pywebview_runtime
-import namisync.interfaces.web.security_spike as security_spike
-from namisync.interfaces.web.security_spike import (
+from namisync.interfaces.web.bridge import (
     BRIDGE_SCHEMA_VERSION,
     BridgeDispatcher,
     BridgeOriginError,
@@ -907,8 +906,8 @@ def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> N
 def test_namisync_bridge_module_constructs_no_javascript() -> None:
     source = inspect.getsource(
         __import__(
-            "namisync.interfaces.web.security_spike",
-            fromlist=["security_spike"],
+            "namisync.interfaces.web.bridge",
+            fromlist=["bridge"],
         )
     )
     assert "evaluate_js" not in source
