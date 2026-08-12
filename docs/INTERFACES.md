@@ -5,9 +5,10 @@ sync/history adapter, explicit inventory/baseline/verify/rebaseline commands,
 semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
-storage, tested WebView2 security seam, classified launchers, and coordinated
-database-pair facade remain the desktop foundation; the product window is not
-yet composed, and the API remains latent.
+storage, tested WebView2 security seam, classified launchers, coordinated
+database-pair facade, and secured product-host composition are implemented.
+The bridge command surface remains intentionally empty until Slice 2, and the
+API remains latent.
 
 ## Purpose
 
@@ -400,6 +401,17 @@ pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced t
 subscription, observed a random loopback asset origin, and confirmed that
 bridge handlers receive a Python `str` URL off-thread while also exposing the
 canceled-navigation discrepancy above.
+
+The promoted product host now applies that boundary in the exact startup
+order. It acquires the fixed instance identity before logging or webview import,
+prepares the renderer before service/window construction, validates and if
+needed initializes the database pair before command admission, creates one
+pending `NativeDocumentState`, and binds its loopback origin once during the
+renderer-checked initialized callback. Slice 1 exposes an empty handler map, so
+even an attached page has no application command. Loaded attachment failure
+destroys the window once; pre-native initialization failure does not call
+destroy. One finalizer closes any constructed service, shuts logging, releases
+the mutex, and preserves the initiating startup diagnosis.
 
 ## Common Adapter Contract
 

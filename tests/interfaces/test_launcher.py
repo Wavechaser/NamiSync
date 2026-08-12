@@ -127,6 +127,33 @@ def test_gui_parser_accepts_both_absolute_data_dir_spellings(
     ) == launcher.GuiArguments(expected)
 
 
+def test_gui_launcher_constructs_the_fixed_production_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.interfaces.web import host
+
+    seen: list[tuple[object, ...]] = []
+    identity = host.production_instance_identity()
+    monkeypatch.setattr(host, "production_instance_identity", lambda: identity)
+    monkeypatch.setattr(
+        host,
+        "run_desktop",
+        lambda paths, actual_identity, *, startup_error: seen.append(
+            (paths, actual_identity, startup_error)
+        )
+        or 0,
+    )
+
+    result = launcher.gui_main(["--data-dir", str(tmp_path / "isolated")])
+
+    assert result == 0
+    assert len(seen) == 1
+    assert seen[0][0].root == (tmp_path / "isolated").resolve()
+    assert seen[0][1] is identity
+    assert seen[0][2] is launcher._report_startup_error
+
+
 def test_native_startup_reporter_uses_stable_caption(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

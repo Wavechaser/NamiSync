@@ -2,8 +2,9 @@
 
 Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
-seams. The classified launchers and initial wheel-packaged bootstrap assets now
-exist; no headed product window or workflow surface has shipped yet.
+seams. The classified launchers, initial wheel-packaged bootstrap assets, and
+secured product-host composition now exist; its empty bridge surface exposes no
+workflow command until Slice 2, and native headed closure remains pending.
 `M1_SHELL.md` owns the remaining implementation order and beta-package closure.
 
 ## Purpose
@@ -43,8 +44,10 @@ The console and desktop entry points deliberately remain separate Windows
 subsystems over one implementation. `nami-sync` and `python -m namisync` always
 route through `interfaces/launcher.py` to the CLI; with no subcommand they print
 usage, point to `nami-sync-gui`, and exit with the existing usage status.
-`nami-sync-gui` configures local paths and logging, then lazily imports the web
-host. Explicit CLI work never imports or initializes pywebview.
+`nami-sync-gui` resolves its one path authority, then lazily imports the web
+host. The host acquires the fixed per-logon instance mutex before creating any
+directory or logger; only the primary configures file logging and imports
+pywebview. Explicit CLI work never imports or initializes pywebview.
 
 NamiSync remains version `0.1.0` until M1 is complete. One runtime version
 constant supplies project metadata, About/runtime display, logging, and later
@@ -63,6 +66,18 @@ The `namisync` and `pywebview` loggers share the file handler, which is installe
 before pywebview import. Pywebview starts with `private_mode=True` and the
 explicit `webview2` storage path; browser state never becomes plan, task, or
 filesystem authority.
+
+Before window creation, the primary host constructs the service and consumes
+the shared database-pair facade. Fresh state initializes ledger then history;
+ready state continues; refused state runs the bounded finalizer and shows the
+coordinated reset action through the stable native startup dialog. It then
+resolves `index.html` from package resources, creates one pending native
+document and an empty-allowlist dispatcher, and starts only Edge Chromium with
+the packaged page served on a random loopback origin. The initialized callback
+binds that exact origin once. Renderer/origin failure aborts before native
+window creation; guard/load failure destroys the created window exactly once.
+Both paths close the service, logging, and mutex without replacing the original
+failure diagnosis.
 
 Frontend assets are setuptools package data and use plain same-origin ES
 modules. There is no npm, framework, bundler, transpiler, source map, inline

@@ -54,9 +54,18 @@ def gui_main(argv: list[str] | None = None) -> int:
         return _EXIT_USAGE
 
     try:
-        from namisync.interfaces.web.host import run_desktop
+        from namisync.interfaces.web.host import (
+            production_instance_identity,
+            run_desktop,
+        )
 
-        return int(run_desktop(paths, startup_error=_report_startup_error))
+        return int(
+            run_desktop(
+                paths,
+                production_instance_identity(),
+                startup_error=_report_startup_error,
+            )
+        )
     except Exception as error:
         _report_startup_error(_startup_failure_message(error))
         return _EXIT_STARTUP

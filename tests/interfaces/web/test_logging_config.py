@@ -200,6 +200,45 @@ def test_later_write_failure_cannot_change_shutdown_truth(
     assert logging_config._handler is None
 
 
+def test_post_shutdown_cleanup_failure_reaches_the_owned_log(
+    tmp_path: Path,
+) -> None:
+    paths = AppPaths.from_root(tmp_path / "app")
+    logging_config.configure_logging(paths)
+    logging_config.shutdown_logging()
+
+    logging_config.record_late_cleanup_failure(
+        paths.log_file,
+        "startup.mutex_cleanup_failed",
+        RuntimeError("native handle detail is not retained"),
+    )
+
+    text = paths.log_file.read_text(encoding="utf-8")
+    assert "startup.mutex_cleanup_failed exception_type=RuntimeError" in text
+    assert "native handle detail is not retained" not in text
+
+
+def test_post_shutdown_diagnostic_io_failure_cannot_escape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths = AppPaths.from_root(tmp_path / "app")
+    paths.ensure_directories()
+    monkeypatch.setattr(
+        logging_config,
+        "_OwnedRotatingFileHandler",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RuntimeError("synthetic late-open failure")
+        ),
+    )
+
+    logging_config.record_late_cleanup_failure(
+        paths.log_file,
+        "startup.mutex_cleanup_failed",
+        RuntimeError("mutex release failed"),
+    )
+
+
 def test_configuration_for_another_root_is_refused(tmp_path: Path) -> None:
     logging_config.configure_logging(AppPaths.from_root(tmp_path / "first"))
 

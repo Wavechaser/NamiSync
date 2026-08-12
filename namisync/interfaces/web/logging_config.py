@@ -135,6 +135,46 @@ def shutdown_logging() -> None:
     _release_configuration(close_handler=False)
 
 
+def record_late_cleanup_failure(
+    log_path: Path,
+    event: str,
+    error: Exception,
+) -> None:
+    """Best-effort one bounded record after the shared handler has closed."""
+
+    handler: _OwnedRotatingFileHandler | None = None
+    try:
+        handler = _OwnedRotatingFileHandler(
+            Path(log_path),
+            mode="a",
+            maxBytes=_LOG_BYTES,
+            backupCount=_LOG_BACKUPS,
+            encoding="utf-8",
+            delay=False,
+            errors="backslashreplace",
+        )
+        handler.setLevel(logging.ERROR)
+        handler.setFormatter(_FORMATTER)
+        record = logging.LogRecord(
+            "namisync",
+            logging.ERROR,
+            __file__,
+            0,
+            "%s exception_type=%s",
+            (event, type(error).__name__),
+            None,
+        )
+        handler.handle(record)
+    except Exception:
+        return
+    finally:
+        if handler is not None:
+            try:
+                handler.close()
+            except Exception:
+                pass
+
+
 def _distribution_version(name: str) -> str:
     try:
         return importlib.metadata.version(name)

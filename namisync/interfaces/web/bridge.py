@@ -6,6 +6,7 @@ import json
 import math
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
+from pathlib import Path
 from threading import Lock
 from typing import Protocol
 from urllib.parse import SplitResult, urlsplit
@@ -61,7 +62,16 @@ class _WebviewModule(Protocol):
     renderer: str | None
     windows: list[object]
 
-    def start(self, func=None, *, gui: str, debug: bool) -> None: ...
+    def start(
+        self,
+        func=None,
+        *,
+        gui: str,
+        debug: bool,
+        http_server: bool = True,
+        private_mode: bool = True,
+        storage_path: str | Path | None = None,
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,12 +128,15 @@ class ExactOrigin:
 class NativeDocumentState:
     """Thread-safe native attachment and top-level document state."""
 
-    def __init__(self, origin: ExactOrigin) -> None:
+    def __init__(self, origin: ExactOrigin | None = None) -> None:
+        if origin is not None and not isinstance(origin, ExactOrigin):
+            raise TypeError("native document origin must be an ExactOrigin")
         self._origin = origin
         self._lock = Lock()
         self._current_url = ""
         self._attached = False
         self._attachment_error: str | None = None
+        self._security_configuration_claimed = False
 
     @property
     def is_attached(self) -> bool:
@@ -135,8 +148,19 @@ class NativeDocumentState:
         with self._lock:
             return self._attachment_error
 
+    def bind_origin(self, origin: ExactOrigin) -> None:
+        """Bind the one packaged origin that can authorize this document."""
+
+        if not isinstance(origin, ExactOrigin):
+            raise TypeError("native document origin must be an ExactOrigin")
+        with self._lock:
+            if self._origin is not None:
+                raise RuntimeError("native document origin is already bound")
+            self._origin = origin
+
     def require_trusted(self) -> None:
         with self._lock:
+            origin = self._origin
             attached = self._attached
             attachment_error = self._attachment_error
             current_url = self._current_url
@@ -145,11 +169,39 @@ class NativeDocumentState:
                 "bridge unavailable because WebView2 security attachment failed: "
                 f"{attachment_error}"
             )
+        if origin is None:
+            raise BridgeOriginError(
+                "bridge unavailable because packaged document origin is pending"
+            )
         if not attached:
             raise BridgeOriginError(
                 "bridge unavailable because WebView2 security guards are not attached"
             )
-        self._origin.require(current_url)
+        origin.require(current_url)
+
+    def _require_bound_origin(self, expected: ExactOrigin) -> ExactOrigin:
+        with self._lock:
+            origin = self._origin
+        if origin is None:
+            raise RuntimeError(
+                "bind the packaged document origin before configuring WebView2 security"
+            )
+        if origin != expected:
+            raise ValueError(
+                "trusted URL does not match the bound packaged document origin"
+            )
+        return origin
+
+    def _claim_security_configuration(self) -> bool:
+        with self._lock:
+            if self._security_configuration_claimed:
+                return False
+            self._security_configuration_claimed = True
+            return True
+
+    def _release_security_configuration(self) -> None:
+        with self._lock:
+            self._security_configuration_claimed = False
 
     def _mark_attached(self, current_url: str) -> None:
         with self._lock:
@@ -213,12 +265,23 @@ class _NativeNavigationGuard:
 
 
 def configure_pywebview2_security(
-    window: object, trusted_url: str
+    window: object,
+    trusted_url: str,
+    *,
+    document: NativeDocumentState | None = None,
+    on_browser_version: Callable[[str], None] | None = None,
 ) -> NativeDocumentState:
     """Attach native guards synchronously before pywebview exposes its API."""
 
     origin = ExactOrigin.from_url(trusted_url)
-    document = NativeDocumentState(origin)
+    if document is None:
+        document = NativeDocumentState(origin)
+    elif not isinstance(document, NativeDocumentState):
+        raise TypeError("document must be a NativeDocumentState")
+    else:
+        origin = document._require_bound_origin(origin)
+    if not document._claim_security_configuration():
+        return document
     guard = _NativeNavigationGuard(origin, document)
     attempted = False
 
@@ -243,6 +306,8 @@ def configure_pywebview2_security(
                 ) from error
             if core is None:
                 raise _AttachmentError("WebView2 is not initialized")
+            if on_browser_version is not None:
+                on_browser_version(str(core.Environment.BrowserVersionString))
             guard.attach(core)
         except Exception as error:
             document._record_attachment_failure(
@@ -253,6 +318,7 @@ def configure_pywebview2_security(
     try:
         window.events.before_load += attach_before_load
     except AttributeError as error:
+        document._release_security_configuration()
         raise RuntimeError(
             "pywebview does not expose the synchronous before_load event"
         ) from error
@@ -315,6 +381,7 @@ def start_edge_chromium(
     setup: Callable[[], None] | None = None,
     *,
     on_initialized: Callable[[], None] | None = None,
+    storage_path: str | Path | None = None,
 ) -> None:
     """Force pywebview's Edge Chromium renderer; never accept MSHTML fallback."""
 
@@ -346,7 +413,17 @@ def start_edge_chromium(
         return None
 
     initialized_event += initialize_host_if_edge_chromium
-    webview_module.start(setup, gui="edgechromium", debug=False)
+    if storage_path is None:
+        webview_module.start(setup, gui="edgechromium", debug=False)
+    else:
+        webview_module.start(
+            setup,
+            gui="edgechromium",
+            debug=False,
+            http_server=True,
+            private_mode=True,
+            storage_path=storage_path,
+        )
     if renderer_error is not None:
         raise renderer_error
     if host_initialization_error is not None:
@@ -364,7 +441,7 @@ class BridgeDispatcher:
         document: NativeDocumentState,
         handlers: Mapping[str, Callable[[Mapping[str, object]], object]],
     ) -> None:
-        if not handlers or any(
+        if any(
             not isinstance(name, str) or not name or name.startswith("_")
             for name in handlers
         ):

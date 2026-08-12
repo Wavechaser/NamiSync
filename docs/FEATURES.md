@@ -345,7 +345,11 @@ Stage 5 location activities through the shared service.
 - **Cooperative UI Workers**. Long-running operations run through cancellable worker sessions with guarded cleanup and release handling, independent of whichever UI toolkit hosts them.
 - **GUI Single Instance**. A second desktop launch activates the existing window and exits successfully; activation failure is visible. Read-only CLI commands and non-conflicting CLI mutations are not subject to the GUI-instance restriction.
 - **Mismatch Severity**. A mismatched-hash row — content differing from recorded evidence while its stats look unchanged — renders distinctly from an ordinary modified row, with a persistent badge on the location until acknowledged; it is the one signal this application exists to surface and it never reads as just another list row.
-- **Dark Theme**. The desktop shell uses a dark-only theme with status colors, operation-kind colors, alternating tree rows, and styled progress controls, regardless of the underlying UI toolkit.
+- **System Theme And Accessibility**. The desktop shell follows Windows light,
+  dark, high-contrast, accent, and reduced-motion preferences. Mica is a
+  progressive native enhancement; opaque high-contrast/no-material fallbacks
+  preserve readability, focus, and status semantics without relying on color
+  alone.
 - **History Dialog**. The desktop UI lists history runs and shows retained activity detail. Retention controls remain absent from the M1 shell until coordinated maintenance exists.
 - **Bridge Responsiveness Envelope**. The M1 bridge is measured on the documented reference machine at up to roughly 100,000 file-backed subjects, 120,000 tree nodes, 50 history runs/1,000,000 detail items, and 256-row pages. Execute/control feedback is immediate, progress may be late but never incorrect, and `M1_BRIDGE.md` owns the exact latency and memory gates.
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ from namisync.interfaces.web.bridge import (
     BridgeOriginError,
     BridgeProtocolError,
     ExactOrigin,
+    NativeDocumentState,
     WebView2Unavailable,
     configure_pywebview2_security,
     prepare_pywebview_host,
@@ -134,6 +136,77 @@ def _trusted_document(
     )
     window.events.before_load.emit()
     return document
+
+
+def test_pending_document_binds_one_exact_origin_and_keeps_dispatch_closed() -> None:
+    document = NativeDocumentState()
+    bridge = BridgeDispatcher(document=document, handlers={})
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "pending-document",
+            "command": "ping",
+            "payload": {},
+        }
+    )
+
+    with pytest.raises(BridgeOriginError, match="origin is pending"):
+        bridge.dispatch(command)
+
+    origin = ExactOrigin.from_url("http://127.0.0.1:41700/index.html")
+    document.bind_origin(origin)
+
+    with pytest.raises(RuntimeError, match="already bound"):
+        document.bind_origin(origin)
+    with pytest.raises(BridgeOriginError, match="not attached"):
+        bridge.dispatch(command)
+
+
+def test_existing_pending_document_is_bound_then_attached_without_window_rewrite() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+    window._js_api = "host-owned"
+    document = NativeDocumentState()
+    document.bind_origin(
+        ExactOrigin.from_url("http://127.0.0.1:41700/index.html")
+    )
+
+    configured = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+        document=document,
+    )
+
+    assert configured is document
+    assert window._js_api == "host-owned"
+    window.events.before_load.emit()
+    assert document.is_attached
+
+
+def test_existing_document_security_configuration_is_idempotent() -> None:
+    core = FakeCoreWebView2()
+    window = _window(core)
+    document = NativeDocumentState()
+    document.bind_origin(
+        ExactOrigin.from_url("http://127.0.0.1:41700/index.html")
+    )
+
+    first = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+        document=document,
+    )
+    second = configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+        document=document,
+    )
+
+    assert first is document
+    assert second is document
+    assert len(window.events.before_load.handlers) == 1
+    window.events.before_load.emit()
+    assert len(core.NavigationStarting.handlers) == 1
 
 
 def test_native_installation_waits_for_synchronous_ui_before_load() -> None:
@@ -259,6 +332,32 @@ def test_native_installation_records_an_unavailable_document_source() -> None:
     assert not document.is_attached
     assert document.attachment_error == "WebView2 document source is unavailable"
     assert len(window.events.before_load.errors) == 1
+
+
+def test_before_load_reports_native_browser_version_on_the_ui_thread() -> None:
+    core = FakeCoreWebView2()
+    core.Environment = SimpleNamespace(BrowserVersionString="150.0.4078.105")
+    window = _window(core)
+    reported: list[str] = []
+
+    def report(browser_version: str) -> None:
+        assert window._on_ui_thread
+        assert len(core.NavigationStarting.handlers) == 0
+        assert len(core.FrameNavigationStarting.handlers) == 0
+        assert len(core.NewWindowRequested.handlers) == 0
+        assert len(core.SourceChanged.handlers) == 0
+        reported.append(browser_version)
+
+    configure_pywebview2_security(
+        window,
+        "http://127.0.0.1:41700/index.html",
+        on_browser_version=report,
+    )
+
+    window.events.before_load.emit()
+    window.events.before_load.emit()
+
+    assert reported == ["150.0.4078.105"]
 
 
 def test_native_webview2_hooks_cancel_untrusted_navigation_frames_and_popups() -> None:
@@ -659,6 +758,51 @@ def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
     assert raised.value is host_error
 
 
+def test_start_forwards_private_http_server_storage_options(tmp_path: Path) -> None:
+    calls: list[tuple[object, ...]] = []
+    storage = tmp_path / "webview2"
+
+    class Webview:
+        settings = {
+            "OPEN_EXTERNAL_LINKS_IN_BROWSER": True,
+            "ALLOW_FILE_URLS": True,
+            "ALLOW_DOWNLOADS": True,
+            "REMOTE_DEBUGGING_PORT": 9222,
+            "WEBVIEW2_RUNTIME_PATH": r"runtime\WebView2",
+        }
+        renderer = "edgechromium"
+        windows = [
+            SimpleNamespace(events=SimpleNamespace(initialized=InitializedHook()))
+        ]
+
+        @staticmethod
+        def start(
+            func=None,
+            *,
+            gui: str,
+            debug: bool,
+            http_server: bool,
+            private_mode: bool,
+            storage_path: Path,
+        ) -> None:
+            calls.append(
+                (
+                    func,
+                    gui,
+                    debug,
+                    http_server,
+                    private_mode,
+                    storage_path,
+                )
+            )
+            assert not Webview.windows[0].events.initialized.emit()
+
+    setup = lambda: None
+    start_edge_chromium(Webview, setup, storage_path=storage)
+
+    assert calls == [(setup, "edgechromium", False, True, True, storage)]
+
+
 def test_start_refuses_missing_security_settings_before_native_startup() -> None:
     started = False
 
@@ -901,6 +1045,30 @@ def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> N
     )
     with pytest.raises(BridgeProtocolError, match="not allowed"):
         bridge.dispatch(command)
+
+
+def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> None:
+    document = _trusted_document()
+    bridge = BridgeDispatcher(document=document, handlers={})
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "closed-slice-one-surface",
+            "command": "ping",
+            "payload": {},
+        }
+    )
+
+    with pytest.raises(BridgeProtocolError, match="not allowed"):
+        bridge.dispatch(command)
+    for invalid_name in ("", "_private", 7):
+        with pytest.raises(ValueError, match="public command names"):
+            BridgeDispatcher(
+                document=document,
+                handlers={invalid_name: lambda payload: payload},
+            )
+    with pytest.raises(TypeError, match="must be callable"):
+        BridgeDispatcher(document=document, handlers={"ping": object()})
 
 
 def test_namisync_bridge_module_constructs_no_javascript() -> None:

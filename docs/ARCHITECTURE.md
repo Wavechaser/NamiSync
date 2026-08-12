@@ -2008,6 +2008,14 @@ tree, inventory tree, and history dialog consume service/workflow views only.
 NamiSync-owned code never constructs JavaScript for application data; pinned
 pywebview's internal exposed-function return escaper remains a version-audited,
 real-browser-tested part of the security boundary.
+The implemented host composition acquires its fixed instance mutex before any
+local artifact or diagnostic ownership, then prepares pywebview, constructs the
+shared service, validates/initializes the coordinated database pair, and only
+then resolves the wheel-packaged page and creates a window. A pending document
+authority and empty command map keep dispatch closed until later transport
+slices. Initialized failure aborts before native creation; UI-thread guard or
+loaded-watchdog failure destroys once. One finalizer owns service, logging, and
+mutex release without allowing cleanup failure to replace startup truth.
 The native folder picker is the sole path-input exception: the host retains the
 real path in a server slot and returns only an opaque id plus display string.
 `pywebview` is an M1 runtime dependency, not an optional GUI extra. One
@@ -2063,9 +2071,9 @@ store and promoted hostile-navigation/bridge boundary implement and test the
 forced-renderer call shape, UI-thread-only native `CoreWebView2` guards,
 native committed-origin dispatch recheck, strict versioned allowlist, and
 structured return boundary. Pywebview 6.2.1 is pinned from the Stage 6
-reality run. Classified launchers and the exact-CSP bootstrap assets are now
-wheel package data; these foundations do not yet create the product window or
-event drain.
+reality run. Classified launchers, exact-CSP wheel assets, fixed instance
+identity, database-pair gate, and secured product host are now composed. The
+host intentionally has no command transport or event drain yet.
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
 

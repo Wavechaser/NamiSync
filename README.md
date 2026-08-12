@@ -15,11 +15,11 @@ separate facts.
 ## Current state
 
 M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
-history, dispatcher, and service/CLI surfaces are usable; M1 Stage 6, the
-headed local WebView2 desktop, is next. History now commits bounded reliable
-receipt windows during a run and exposes bounded summary/item/event reads for the
-future UI. The desktop's service facade and bridge security foundation already
-exist, but no GUI host has shipped.
+history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
+classified launcher, coordinated database gate, packaged bootstrap page, fixed
+single-instance identity, and secured local WebView2 product host. Its bridge
+command surface remains closed until the transport slice, so workflow controls
+and product views are not yet available in the window.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -48,7 +48,7 @@ Run the tests and check the import boundaries:
 .\.venv\Scripts\lint-imports.exe
 ```
 
-M1's future desktop additionally requires Microsoft Edge WebView2 Runtime.
+M1's desktop host additionally requires Microsoft Edge WebView2 Runtime.
 Declaring pywebview does not make explicit CLI commands initialize a GUI; the
 Stage 6 host contract performs a read-only runtime preflight before window
 creation, then refuses pywebview's silent older-engine fallback with an install
@@ -95,7 +95,8 @@ never hides the other result axes in rendered output.
 
 ## What is deliberately not promised yet
 
-- No headed desktop host, durable plan/session queue, or restart-resume.
+- No desktop workflow-command surface, durable plan/session queue, or
+  restart-resume; the current headed host is a secured bootstrap boundary.
 - No cross-process desktop task visibility, background integrity, concurrent
   file execution, general database migration, backup, or history retention.
 - No automatic execution or bypass of reviewed-plan confirmation.
