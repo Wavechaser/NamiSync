@@ -414,6 +414,24 @@ def test_br_g_32_timed_out_pre_ready_attempt_cannot_dispatch_later() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
+def test_br_g_33_browser_drain_generation_recovers_without_duplication() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the no-dependency drain probe")
+    probe = Path(__file__).parents[2] / "assets" / "drain_manager_probe.mjs"
+    bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
+
+    completed = subprocess.run(
+        [str(node), str(probe), str(bridge)],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
 def test_br_g_32_interactive_wrapper_is_neutral_bounded_and_single_attempt() -> None:
     node = _node_executable()
     if node is None:

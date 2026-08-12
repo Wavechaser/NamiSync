@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import zipfile
@@ -11,6 +12,22 @@ from pathlib import Path
 import pytest
 
 from conftest import BuiltWheel
+
+from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.integrity import (
+    IntegrityMode,
+    IntegrityReason,
+    IntegrityResult,
+    ReadStrategy,
+    RecordDisposition,
+)
+from namisync.core.session import (
+    Disposition,
+    PhaseStatus,
+    SessionState,
+    TERMINAL_STATES,
+)
+from namisync.workflows.views import ResultCategory
 
 from test_wheel_assets import ASSET_ROOT, INITIAL_ASSETS
 from test_transport import _node_executable
@@ -43,6 +60,18 @@ def _active_sink_hits(source: str) -> tuple[str, ...]:
         for pattern in _FORBIDDEN_ACTIVE_SINKS
         if re.search(pattern, source, re.IGNORECASE)
     )
+
+
+def _javascript_frozen_array(source: str, name: str) -> tuple[str, ...]:
+    match = re.search(
+        rf"const {re.escape(name)} = Object\.freeze\((\[[\s\S]*?\])\);",
+        source,
+    )
+    assert match is not None, name
+    value = json.loads(re.sub(r",\s*]", "]", match.group(1)))
+    assert isinstance(value, list)
+    assert all(isinstance(item, str) for item in value)
+    return tuple(value)
 
 
 class _DocumentAudit(HTMLParser):
@@ -306,13 +335,13 @@ def test_br_g_32_start_plan_deadline_includes_bridge_readiness() -> None:
         / "bridge.js"
     ).read_text(encoding="utf-8")
     attempt = source.split(
-        "async function dispatchAttempt(", 1
+        "function createDispatchAttempt(", 1
     )[1].split("async function dispatchReadyAttempt(", 1)[0]
     ready_attempt = source.split(
         "async function dispatchReadyAttempt(", 1
     )[1].split("async function withDeadline(", 1)[0]
 
-    assert "return withDeadline(" in attempt
+    assert "promise: withDeadline(" in attempt
     assert (
         "dispatchReadyAttempt(request, requestId, validateResult, attempt)"
         in attempt
@@ -322,6 +351,48 @@ def test_br_g_32_start_plan_deadline_includes_bridge_readiness() -> None:
     assert ready_attempt.index("await whenBridgeReady();") < ready_attempt.index(
         "const generation = bridgeGeneration;"
     )
+
+
+def test_br_g_33_browser_event_vocabulary_matches_python_owners() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+
+    expected = {
+        "SESSION_STATES": tuple(item.value for item in SessionState),
+        "TERMINAL_STATES": tuple(item.value for item in TERMINAL_STATES),
+        "RECORDING_STATES": tuple(item.value for item in RecordingStatus),
+        "DISPOSITIONS": tuple(item.value for item in Disposition),
+        "PHASE_STATES": tuple(item.value for item in PhaseStatus),
+        "OPERATION_OUTCOMES": tuple(item.value for item in Outcome),
+        "INTEGRITY_MODES": tuple(item.value for item in IntegrityMode),
+        "INTEGRITY_RESULTS": tuple(item.value for item in IntegrityResult),
+        "INTEGRITY_REASONS": tuple(item.value for item in IntegrityReason),
+        "READ_STRATEGIES": tuple(item.value for item in ReadStrategy),
+        "RECORD_DISPOSITIONS": tuple(
+            item.value for item in RecordDisposition
+        ),
+        "RESULT_HEADLINES": tuple(item.value for item in ResultCategory),
+        "RESULT_INTEGRITY_STATES": (
+            "mismatch",
+            "incomplete",
+            "not-run",
+            "modified",
+            "missing",
+            "baselined",
+            "verified",
+        ),
+    }
+
+    for name, values in expected.items():
+        actual = _javascript_frozen_array(source, name)
+        assert len(actual) == len(values)
+        assert set(actual) == set(values)
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(

@@ -1,0 +1,557 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+
+class TestWindow {
+  constructor() {
+    this.listeners = new Map();
+    this.pywebview = undefined;
+  }
+
+  addEventListener(name, handler, options = {}) {
+    const listeners = this.listeners.get(name) ?? [];
+    listeners.push({ handler, once: options.once === true });
+    this.listeners.set(name, listeners);
+  }
+
+  removeEventListener(name, handler) {
+    const listeners = this.listeners.get(name) ?? [];
+    this.listeners.set(
+      name,
+      listeners.filter((listener) => listener.handler !== handler),
+    );
+  }
+
+  emit(name) {
+    for (const listener of [...(this.listeners.get(name) ?? [])]) {
+      if (listener.once) {
+        this.removeEventListener(name, listener.handler);
+      }
+      listener.handler();
+    }
+  }
+
+  listenerCount(name) {
+    return (this.listeners.get(name) ?? []).length;
+  }
+}
+
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((accept, refuse) => {
+    resolve = accept;
+    reject = refuse;
+  });
+  return { promise, resolve, reject };
+}
+
+
+async function turns(count = 12) {
+  for (let index = 0; index < count; index += 1) {
+    await Promise.resolve();
+  }
+}
+
+
+const timers = new Map();
+let nextTimer = 1;
+globalThis.setTimeout = (callback, milliseconds) => {
+  assert.equal(milliseconds, 30000);
+  const token = nextTimer;
+  nextTimer += 1;
+  timers.set(token, callback);
+  return token;
+};
+globalThis.clearTimeout = (token) => timers.delete(token);
+
+let nextId = 1;
+Object.defineProperty(globalThis, "crypto", {
+  configurable: true,
+  value: {
+    randomUUID() {
+      const value = (nextId++).toString(16).padStart(32, "0");
+      return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+    },
+  },
+});
+
+const testWindow = new TestWindow();
+globalThis.window = testWindow;
+const requests = [];
+testWindow.pywebview = {
+  api: {
+    dispatch(requestJson) {
+      const pending = deferred();
+      requests.push({ request: JSON.parse(requestJson), ...pending });
+      return pending.promise;
+    },
+  },
+};
+
+const modulePath = process.argv[2];
+assert.ok(modulePath, "bridge module path is required");
+const source = await readFile(modulePath, "utf8");
+const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+const bridge = await import(moduleUrl);
+
+const session = (digit) => digit.repeat(32);
+const task = (digit) => `task-${digit.repeat(32)}`;
+const at = "2026-08-12T00:00:00Z";
+const event = (sessionId, sequence, bodyType = "StateChanged", body = { state: "running" }) => ({
+  update_type: "event",
+  event: {
+    session_id: sessionId,
+    sequence,
+    at,
+    body_type: bodyType,
+    body,
+  },
+});
+const operationResult = Object.freeze({
+  headline: "success",
+  filesystem: "completed",
+  integrity: "verified",
+  recording: "ok",
+  audit: "ok",
+  disposition: "ran",
+  canceled: false,
+  items: [],
+  phases: [],
+  bytes_done: 0,
+  bytes_total: 0,
+  error: null,
+});
+const coreOperationResult = Object.freeze({
+  status: "completed",
+  recording: "ok",
+  audit: "ok",
+  disposition: "ran",
+  canceled: false,
+  items: [],
+  phases: [],
+  bytes_done: 0,
+  bytes_total: 0,
+  error: null,
+});
+const terminalRecord = (sessionId, result = operationResult) => ({
+  update_type: "record",
+  record: {
+    session_id: sessionId,
+    kind: "plan",
+    state: "completed",
+    supports_pause: false,
+    created_at: at,
+    started_at: at,
+    ended_at: at,
+    result,
+  },
+});
+
+function success(pending, updates) {
+  const { request } = pending;
+  pending.resolve({
+    schema_version: 1,
+    request_id: request.request_id,
+    ok: true,
+    result: {
+      task_id: request.payload.task_id,
+      session_id: request.payload.session_id,
+      drain_id: request.payload.drain_id,
+      updates,
+    },
+  });
+}
+
+function refusal(pending, code, message) {
+  pending.resolve({
+    schema_version: 1,
+    request_id: pending.request.request_id,
+    ok: false,
+    error: { code, message },
+  });
+}
+
+async function nextRequest(index) {
+  for (let turn = 0; turn < 40 && requests.length <= index; turn += 1) {
+    await turns(2);
+  }
+  assert.ok(requests.length > index, `request ${index} was not armed`);
+  const pending = requests[index];
+  assert.deepEqual(Object.keys(pending.request).sort(), [
+    "command",
+    "payload",
+    "request_id",
+    "schema_version",
+  ]);
+  assert.equal(pending.request.command, "next_events");
+  assert.deepEqual(Object.keys(pending.request.payload).sort(), [
+    "drain_id",
+    "replay_from",
+    "session_id",
+    "task_id",
+  ]);
+  return pending;
+}
+
+// Numeric holes are legal, and bridge reincarnation recovers from the first
+// sequence after the last accepted event. A matching leading Gap remains
+// visible, permits its retained tail, and a terminal record suppresses rearm.
+const acceptedOne = [];
+const refusedOne = [];
+const stopOne = bridge.startTaskDrain(
+  task("a"),
+  session("1"),
+  (update) => acceptedOne.push(update),
+  (error) => refusedOne.push(error),
+);
+const one0 = await nextRequest(0);
+assert.equal(one0.request.payload.replay_from, null);
+success(one0, [
+  event(session("1"), 1),
+  event(session("1"), 3, "Progress", {
+    items_done: 3,
+    items_total: 3,
+    bytes_done: 0,
+    bytes_total: null,
+    current_path: null,
+  }),
+]);
+const one1 = await nextRequest(1);
+assert.equal(one1.request.payload.replay_from, null);
+testWindow.emit("pywebviewready");
+const one2 = await nextRequest(2);
+assert.equal(one2.request.payload.replay_from, 4);
+success(one1, [event(session("1"), 4)]);
+success(one2, [
+  event(session("1"), 4, "Gap", { first_missed_seq: 4 }),
+  event(session("1"), 6),
+  event(session("1"), 7, "Terminal", { result: coreOperationResult }),
+  terminalRecord(session("1"), null),
+]);
+await turns();
+assert.deepEqual(
+  acceptedOne.map((update) =>
+    update.update_type === "event" ? update.event.body_type : "record"),
+  [
+    "StateChanged",
+    "Progress",
+    "Gap",
+    "StateChanged",
+    "Terminal",
+    "record",
+  ],
+);
+assert.equal(refusedOne.length, 0);
+const countAfterTerminal = requests.length;
+testWindow.emit("pywebviewready");
+await turns();
+assert.equal(requests.length, countAfterTerminal);
+
+// An ordinary Gap stops its batch. The matching leading recovery Gap permits
+// only the later recovery tail, without treating sequence holes as loss.
+const acceptedTwo = [];
+const stopTwo = bridge.startTaskDrain(
+  task("b"),
+  session("2"),
+  (update) => acceptedTwo.push(update),
+  assert.fail,
+);
+const two0 = await nextRequest(countAfterTerminal);
+success(two0, [
+  event(session("2"), 10, "Gap", { first_missed_seq: 10 }),
+  event(session("2"), 11),
+]);
+const two1 = await nextRequest(countAfterTerminal + 1);
+assert.equal(two1.request.payload.replay_from, 10);
+success(two1, [
+  event(session("2"), 10, "Gap", { first_missed_seq: 10 }),
+  event(session("2"), 12),
+]);
+const two2 = await nextRequest(countAfterTerminal + 2);
+assert.equal(two2.request.payload.replay_from, null);
+success(two2, [terminalRecord(session("2"))]);
+await turns();
+assert.deepEqual(
+  acceptedTwo.map((update) =>
+    update.update_type === "event" ? update.event.body_type : "record"),
+  ["Gap", "Gap", "StateChanged", "record"],
+);
+stopTwo();
+
+// Mismatched authority and malformed batches are rejected before any callback.
+// Malformed cases include an extra union key, out-of-order event sequences,
+// unknown bodies, arbitrary record results, and the exact 64-update cap.
+const acceptedThree = [];
+const stopThree = bridge.startTaskDrain(
+  task("c"),
+  session("3"),
+  (update) => acceptedThree.push(update),
+  assert.fail,
+);
+const three0 = await nextRequest(countAfterTerminal + 3);
+three0.resolve({
+  schema_version: 1,
+  request_id: three0.request.request_id,
+  ok: true,
+  result: {
+    task_id: task("f"),
+    session_id: three0.request.payload.session_id,
+    drain_id: three0.request.payload.drain_id,
+    updates: [],
+  },
+});
+const threeIdentityRecovery = await nextRequest(countAfterTerminal + 4);
+assert.equal(threeIdentityRecovery.request.payload.replay_from, 1);
+assert.equal(acceptedThree.length, 0);
+success(threeIdentityRecovery, [
+  event(session("3"), 1),
+  { ...terminalRecord(session("3")), extra: true },
+]);
+const three1 = await nextRequest(requests.length);
+assert.equal(three1.request.payload.replay_from, 1);
+assert.equal(acceptedThree.length, 0);
+success(three1, [event(session("3"), 10), event(session("3"), 5)]);
+const three2 = await nextRequest(requests.length);
+assert.equal(three2.request.payload.replay_from, 1);
+assert.equal(acceptedThree.length, 0);
+success(three2, [event(session("3"), 1, "UnknownBody", {})]);
+const three3 = await nextRequest(requests.length);
+assert.equal(three3.request.payload.replay_from, 1);
+assert.equal(acceptedThree.length, 0);
+success(three3, [
+  {
+    ...terminalRecord(session("3")),
+    record: {
+      ...terminalRecord(session("3")).record,
+      result: { headline: "not an OperationResultView" },
+    },
+  },
+]);
+const three4 = await nextRequest(requests.length);
+assert.equal(three4.request.payload.replay_from, 1);
+assert.equal(acceptedThree.length, 0);
+success(
+  three4,
+  Array.from({ length: 65 }, (_, index) =>
+    event(session("3"), index + 1)),
+);
+const three5 = await nextRequest(requests.length);
+assert.equal(three5.request.payload.replay_from, 1);
+assert.equal(acceptedThree.length, 0);
+stopThree();
+
+// Bridge reincarnation resets the one drain-busy convergence allowance. A busy
+// reply from the freshly abandoned call therefore cannot prematurely stop the
+// current generation.
+const busyRefusals = [];
+const stopFour = bridge.startTaskDrain(
+  task("d"),
+  session("4"),
+  () => {},
+  (error) => busyRefusals.push(error),
+);
+const four0 = await nextRequest(requests.length);
+refusal(
+  four0,
+  "drain_busy",
+  "That desktop task already has an event request in progress.",
+);
+const four1 = await nextRequest(requests.length);
+testWindow.emit("pywebviewready");
+const four2 = await nextRequest(requests.length);
+refusal(
+  four1,
+  "drain_busy",
+  "That desktop task already has an event request in progress.",
+);
+refusal(
+  four2,
+  "drain_busy",
+  "That desktop task already has an event request in progress.",
+);
+const four3 = await nextRequest(requests.length);
+success(four3, [terminalRecord(session("4"))]);
+await turns();
+assert.deepEqual(
+  busyRefusals.map((error) => [error.name, error.code, error.message]),
+  [],
+);
+
+// A second busy result in one uninterrupted generation is definitive and the
+// stopped entry is removed so an explicit later observation can be created.
+const definitiveBusyRefusals = [];
+const stopDefinitiveBusy = bridge.startTaskDrain(
+  task("8"),
+  session("8"),
+  assert.fail,
+  (error) => definitiveBusyRefusals.push(error),
+);
+const busy0 = await nextRequest(requests.length);
+refusal(
+  busy0,
+  "drain_busy",
+  "That desktop task already has an event request in progress.",
+);
+const busy1 = await nextRequest(requests.length);
+refusal(
+  busy1,
+  "drain_busy",
+  "That desktop task already has an event request in progress.",
+);
+await turns();
+assert.equal(definitiveBusyRefusals.length, 1);
+assert.equal(definitiveBusyRefusals[0].code, "drain_busy");
+const stopFourReplacement = bridge.startTaskDrain(
+  task("8"),
+  session("8"),
+  assert.fail,
+  assert.fail,
+);
+await nextRequest(requests.length);
+stopFourReplacement();
+stopDefinitiveBusy();
+
+// Repeated readiness while one call is outstanding invalidates it but coalesces
+// into one current recovery arm. A terminal record lost with the stale response
+// is reconciled by the current recovery response and then suppresses rearm.
+const acceptedFive = [];
+const stopFive = bridge.startTaskDrain(
+  task("e"),
+  session("5"),
+  (update) => acceptedFive.push(update),
+  assert.fail,
+);
+const fiveIndex = requests.length;
+const five0 = await nextRequest(fiveIndex);
+testWindow.emit("pywebviewready");
+testWindow.emit("pywebviewready");
+const five1 = await nextRequest(fiveIndex + 1);
+await turns();
+assert.equal(requests.length, fiveIndex + 2);
+assert.equal(five1.request.payload.replay_from, 1);
+success(five0, [terminalRecord(session("5"))]);
+await turns();
+assert.equal(acceptedFive.length, 0);
+success(five1, [terminalRecord(session("5"), null)]);
+await turns();
+assert.equal(acceptedFive.length, 1);
+assert.equal(acceptedFive[0].update_type, "record");
+const countAfterRecoveredTerminal = requests.length;
+testWindow.emit("pywebviewready");
+await turns();
+assert.equal(requests.length, countAfterRecoveredTerminal);
+
+// A stale nonterminal reliable response is not applied. Recovery may return
+// that retained event without a Gap, and it is then delivered exactly once.
+const acceptedReliable = [];
+const stopReliable = bridge.startTaskDrain(
+  task("9"),
+  session("9"),
+  (update) => acceptedReliable.push(update),
+  assert.fail,
+);
+const reliable0 = await nextRequest(requests.length);
+testWindow.emit("pywebviewready");
+const reliable1 = await nextRequest(requests.length);
+success(reliable0, [event(session("9"), 1, "PhaseChanged", { phase: "scan" })]);
+await turns();
+assert.equal(acceptedReliable.length, 0);
+success(reliable1, [
+  event(session("9"), 1, "PhaseChanged", { phase: "scan" }),
+  terminalRecord(session("9")),
+]);
+await turns();
+assert.deepEqual(
+  acceptedReliable.map((update) =>
+    update.update_type === "event" ? update.event.body_type : "record"),
+  ["PhaseChanged", "record"],
+);
+
+// Cursor acceptance precedes presentation. If a callback synchronously
+// observes bridge reincarnation, recovery starts at sequence+1 and the stale
+// tail from that just-invalidated batch cannot render.
+const acceptedCursor = [];
+const stopCursor = bridge.startTaskDrain(
+  task("0"),
+  session("0"),
+  (update) => {
+    acceptedCursor.push(update);
+    if (acceptedCursor.length === 1) {
+      testWindow.emit("pywebviewready");
+    }
+  },
+  assert.fail,
+);
+const cursor0 = await nextRequest(requests.length);
+success(cursor0, [event(session("0"), 1), event(session("0"), 2)]);
+const cursor1 = await nextRequest(requests.length);
+assert.equal(cursor1.request.payload.replay_from, 2);
+assert.deepEqual(
+  acceptedCursor.map((update) => update.event.sequence),
+  [1],
+);
+success(cursor1, [terminalRecord(session("0"))]);
+await turns();
+assert.equal(acceptedCursor.length, 2);
+
+// Consumer failure stops before it can rearm and reports one bounded local
+// transport refusal. Duplicate task registration is refused synchronously.
+const callbackRefusals = [];
+const stopSix = bridge.startTaskDrain(
+  task("f"),
+  session("6"),
+  () => {
+    throw new Error("private consumer detail");
+  },
+  (error) => callbackRefusals.push(error),
+);
+assert.throws(
+  () => bridge.startTaskDrain(task("f"), session("6"), () => {}, () => {}),
+  TypeError,
+);
+const six0 = await nextRequest(requests.length);
+success(six0, [event(session("6"), 1)]);
+await turns();
+assert.equal(callbackRefusals.length, 1);
+assert.equal(callbackRefusals[0].name, "BridgeTransportError");
+assert.ok(!callbackRefusals[0].message.includes("private"));
+
+// Failure while minting an attempt id is surfaced once from the queued arm,
+// does not become an unhandled rejection, and releases the task-map entry.
+const originalRandomUUID = globalThis.crypto.randomUUID;
+const mintRefusals = [];
+globalThis.crypto.randomUUID = () => "invalid";
+const stopSeven = bridge.startTaskDrain(
+  task("7"),
+  session("7"),
+  assert.fail,
+  (error) => mintRefusals.push(error),
+);
+await turns();
+assert.equal(mintRefusals.length, 1);
+assert.equal(mintRefusals[0].name, "BridgeTransportError");
+globalThis.crypto.randomUUID = originalRandomUUID;
+const stopSevenReplacement = bridge.startTaskDrain(
+  task("7"),
+  session("7"),
+  assert.fail,
+  assert.fail,
+);
+await nextRequest(requests.length);
+stopSevenReplacement();
+
+stopOne();
+stopOne();
+stopTwo();
+stopThree();
+stopFour();
+stopFive();
+stopSix();
+stopSeven();
+stopReliable();
+stopCursor();
+await turns();
+assert.equal(testWindow.listenerCount("pywebviewready"), 1);
+assert.equal(timers.size, 0);

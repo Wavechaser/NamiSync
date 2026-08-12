@@ -5,6 +5,96 @@ const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
 const START_PLAN_TIMEOUT_MS = 30000;
+const DRAIN_TIMEOUT_MS = 30000;
+const DRAIN_MAX_UPDATES = 64;
+const SESSION_STATES = Object.freeze([
+  "pending",
+  "running",
+  "pausing",
+  "paused",
+  "canceling",
+  "completed",
+  "failed",
+  "canceled",
+  "refused",
+  "interrupted",
+]);
+const TERMINAL_STATES = Object.freeze([
+  "completed",
+  "failed",
+  "canceled",
+  "refused",
+]);
+const RECORDING_STATES = Object.freeze(["ok", "degraded"]);
+const DISPOSITIONS = Object.freeze(["ran", "unrun"]);
+const PHASE_STATES = Object.freeze([
+  "completed",
+  "failed",
+  "canceled",
+  "incomplete",
+]);
+const OPERATION_OUTCOMES = Object.freeze([
+  "succeeded",
+  "skipped",
+  "failed",
+  "canceled",
+  "deferred",
+  "blocked",
+]);
+const INTEGRITY_MODES = Object.freeze(["baseline", "verify", "rebaseline"]);
+const INTEGRITY_RESULTS = Object.freeze([
+  "verified",
+  "baselined",
+  "mismatched",
+  "modified",
+  "missing",
+  "unsupported",
+  "canceled",
+  "error",
+]);
+const INTEGRITY_REASONS = Object.freeze([
+  "path-invalid",
+  "inventory-missing",
+  "inventory-unsupported",
+  "not-found",
+  "unsupported-read",
+  "stat-changed",
+  "read-drift",
+  "hash-mismatch",
+  "baseline-exists",
+  "read-error",
+  "recording-stale",
+  "recording-conflict",
+  "recording-error",
+  "canceled",
+]);
+const READ_STRATEGIES = Object.freeze(["windows-unbuffered"]);
+const RECORD_DISPOSITIONS = Object.freeze([
+  "applied",
+  "noop",
+  "stale",
+  "conflict",
+]);
+const RESULT_HEADLINES = Object.freeze([
+  "failed",
+  "partial",
+  "refused",
+  "mismatch",
+  "canceled",
+  "verification-incomplete",
+  "degraded",
+  "all-noop",
+  "success",
+]);
+const RESULT_INTEGRITY_STATES = Object.freeze([
+  "mismatch",
+  "incomplete",
+  "not-run",
+  "modified",
+  "missing",
+  "baselined",
+  "verified",
+]);
 const ERROR_MESSAGES = Object.freeze({
   invalid_request: "The desktop request is invalid.",
   unsupported_version: "Restart NamiSync to load a compatible desktop page.",
@@ -29,6 +119,7 @@ const ERROR_MESSAGES = Object.freeze({
 let readiness;
 let resolveReadiness;
 let bridgeGeneration = 0;
+const taskDrains = new Map();
 
 window.addEventListener("pywebviewready", () => {
   bridgeGeneration += 1;
@@ -36,6 +127,12 @@ window.addEventListener("pywebviewready", () => {
   readiness = undefined;
   resolveReadiness = undefined;
   resolve?.();
+  for (const task of taskDrains.values()) {
+    if (!task.stopped && !task.terminal) {
+      task.busyRearmUsed = false;
+      rearmTask(task, task.lastAcceptedSequence + 1);
+    }
+  }
 });
 
 export class BridgeCommandError extends Error {
@@ -148,6 +245,57 @@ export async function startPlan(sourceId, targetId, deletionPolicy = null) {
   return submit();
 }
 
+export function startTaskDrain(
+  taskId,
+  sessionId,
+  acceptUpdate,
+  acceptRefusal,
+) {
+  if (
+    typeof taskId !== "string" ||
+    typeof sessionId !== "string" ||
+    !TASK_PATTERN.test(taskId) ||
+    !ID_PATTERN.test(sessionId)
+  ) {
+    throw new TypeError("startTaskDrain requires task and session ids");
+  }
+  if (typeof acceptUpdate !== "function" || typeof acceptRefusal !== "function") {
+    throw new TypeError("startTaskDrain requires update and refusal callbacks");
+  }
+  if (taskDrains.has(taskId)) {
+    throw new TypeError("that task already has a browser drain");
+  }
+  const task = {
+    taskId,
+    sessionId,
+    acceptUpdate,
+    acceptRefusal,
+    epoch: 0,
+    active: null,
+    armScheduled: false,
+    desiredReplayFrom: null,
+    lastAcceptedSequence: 0,
+    busyRearmUsed: false,
+    terminal: false,
+    stopped: false,
+  };
+  taskDrains.set(taskId, task);
+  rearmTask(task, null);
+
+  return () => {
+    if (!task.stopped) {
+      task.stopped = true;
+      task.epoch += 1;
+      task.active?.control.cancel();
+      task.active = null;
+      task.armScheduled = false;
+    }
+    if (taskDrains.get(taskId) === task) {
+      taskDrains.delete(taskId);
+    }
+  };
+}
+
 function startPlanAttempt(payload) {
   return dispatchAttempt(
     "start_plan",
@@ -158,6 +306,10 @@ function startPlanAttempt(payload) {
 }
 
 async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
+  return createDispatchAttempt(command, payload, validateResult, timeoutMs).promise;
+}
+
+function createDispatchAttempt(command, payload, validateResult, timeoutMs) {
   const requestId = mintId();
   const attempt = {
     cancelled: false,
@@ -169,11 +321,14 @@ async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
     command,
     payload,
   });
-  return withDeadline(
-    dispatchReadyAttempt(request, requestId, validateResult, attempt),
-    timeoutMs,
-    () => cancelAttempt(attempt),
-  );
+  return {
+    promise: withDeadline(
+      dispatchReadyAttempt(request, requestId, validateResult, attempt),
+      timeoutMs,
+      () => cancelAttempt(attempt),
+    ),
+    cancel: () => cancelAttempt(attempt),
+  };
 }
 
 async function dispatchReadyAttempt(request, requestId, validateResult, attempt) {
@@ -305,6 +460,541 @@ function validateStartPlanResult(value) {
     TASK_PATTERN.test(value.task_id) &&
     ID_PATTERN.test(value.request_id) &&
     ID_PATTERN.test(value.session_id)
+  );
+}
+
+function rearmTask(task, replayFrom) {
+  if (task.stopped || task.terminal) {
+    return;
+  }
+  task.epoch += 1;
+  task.desiredReplayFrom = replayFrom;
+  task.active?.control.cancel();
+  task.active = null;
+  if (task.armScheduled) {
+    return;
+  }
+  task.armScheduled = true;
+  queueMicrotask(() => {
+    task.armScheduled = false;
+    if (task.stopped || task.terminal || taskDrains.get(task.taskId) !== task) {
+      return;
+    }
+    try {
+      runTaskDrain(task, task.epoch, task.desiredReplayFrom);
+    } catch (_error) {
+      stopTaskWithRefusal(task, new BridgeTransportError());
+    }
+  });
+}
+
+function runTaskDrain(task, epoch, replayFrom) {
+  const drainId = mintId();
+  const control = createDispatchAttempt(
+    "next_events",
+    Object.freeze({
+      task_id: task.taskId,
+      session_id: task.sessionId,
+      drain_id: drainId,
+      replay_from: replayFrom,
+    }),
+    (value) => validateTaskDrainResult(value, task, drainId),
+    DRAIN_TIMEOUT_MS,
+  );
+  const active = { epoch, replayFrom, drainId, control };
+  task.active = active;
+  void control.promise.then(
+    (result) => settleTaskDrain(task, active, result),
+    (error) => refuseTaskDrain(task, active, error),
+  );
+}
+
+function isCurrentTaskDrain(task, active) {
+  return (
+    !task.stopped &&
+    !task.terminal &&
+    taskDrains.get(task.taskId) === task &&
+    task.epoch === active.epoch &&
+    task.active === active
+  );
+}
+
+function settleTaskDrain(task, active, result) {
+  if (!isCurrentTaskDrain(task, active)) {
+    return;
+  }
+  task.active = null;
+  task.busyRearmUsed = false;
+  for (let index = 0; index < result.updates.length; index += 1) {
+    if (task.stopped || task.terminal || task.epoch !== active.epoch) {
+      return;
+    }
+    const update = result.updates[index];
+    if (update.update_type === "record") {
+      task.terminal = true;
+      if (!deliverTaskUpdate(task, update)) {
+        return;
+      }
+      return;
+    }
+    const event = update.event;
+    if (event.body_type === "Gap") {
+      if (!deliverTaskUpdate(task, update)) {
+        return;
+      }
+      const missed = event.body.first_missed_seq;
+      const matchingLeadingRecoveryGap =
+        index === 0 &&
+        active.replayFrom !== null &&
+        missed === active.replayFrom;
+      if (matchingLeadingRecoveryGap) {
+        continue;
+      }
+      rearmTask(task, missed);
+      return;
+    }
+    if (event.sequence <= task.lastAcceptedSequence) {
+      continue;
+    }
+    task.lastAcceptedSequence = event.sequence;
+    if (!deliverTaskUpdate(task, update)) {
+      return;
+    }
+  }
+  rearmTask(task, null);
+}
+
+function deliverTaskUpdate(task, update) {
+  try {
+    task.acceptUpdate(update);
+    return true;
+  } catch (_error) {
+    stopTaskWithRefusal(
+      task,
+      new BridgeTransportError("The desktop update could not be applied."),
+    );
+    return false;
+  }
+}
+
+function refuseTaskDrain(task, active, error) {
+  if (!isCurrentTaskDrain(task, active)) {
+    return;
+  }
+  task.active = null;
+  if (error instanceof BridgeCommandError) {
+    if (error.code === "drain_busy" && !task.busyRearmUsed) {
+      task.busyRearmUsed = true;
+      rearmTask(task, active.replayFrom);
+      return;
+    }
+    stopTaskWithRefusal(task, error);
+    return;
+  }
+  task.busyRearmUsed = false;
+  rearmTask(task, task.lastAcceptedSequence + 1);
+}
+
+function stopTaskWithRefusal(task, error) {
+  task.stopped = true;
+  task.epoch += 1;
+  task.active?.control.cancel();
+  task.active = null;
+  task.armScheduled = false;
+  if (taskDrains.get(task.taskId) === task) {
+    taskDrains.delete(task.taskId);
+  }
+  try {
+    task.acceptRefusal(error);
+  } catch (_callbackError) {
+    // The task is already stopped; a presentation failure cannot restart it.
+  }
+}
+
+function validateTaskDrainResult(value, task, drainId) {
+  return (
+    isExactObject(value, ["task_id", "session_id", "drain_id", "updates"]) &&
+    value.task_id === task.taskId &&
+    value.session_id === task.sessionId &&
+    value.drain_id === drainId &&
+    Array.isArray(value.updates) &&
+    value.updates.length <= DRAIN_MAX_UPDATES &&
+    validateTaskUpdates(
+      value.updates,
+      task.sessionId,
+      task.lastAcceptedSequence,
+    )
+  );
+}
+
+function validateTaskUpdates(updates, sessionId, lastAcceptedSequence) {
+  let lastSequence = lastAcceptedSequence;
+  let sawTerminalEvent = false;
+  let sawRecord = false;
+  for (let index = 0; index < updates.length; index += 1) {
+    const update = updates[index];
+    if (!validateTaskUpdate(update, sessionId)) {
+      return false;
+    }
+    if (update.update_type === "record") {
+      if (sawRecord || index !== updates.length - 1) {
+        return false;
+      }
+      sawRecord = true;
+      continue;
+    }
+    if (
+      sawRecord ||
+      sawTerminalEvent ||
+      update.event.sequence <= lastSequence
+    ) {
+      return false;
+    }
+    if (
+      update.event.body_type === "Gap" &&
+      (update.event.body.first_missed_seq <= lastSequence ||
+        update.event.body.first_missed_seq > update.event.sequence)
+    ) {
+      return false;
+    }
+    lastSequence = update.event.sequence;
+    if (update.event.body_type === "Terminal") {
+      sawTerminalEvent = true;
+    }
+  }
+  return true;
+}
+
+function validateTaskUpdate(update, sessionId) {
+  if (
+    isExactObject(update, ["update_type", "event"]) &&
+    update.update_type === "event"
+  ) {
+    return validateSessionEvent(update.event, sessionId);
+  }
+  if (
+    isExactObject(update, ["update_type", "record"]) &&
+    update.update_type === "record"
+  ) {
+    return validateSessionRecord(update.record, sessionId);
+  }
+  return false;
+}
+
+function validateSessionEvent(event, sessionId) {
+  if (
+    !isExactObject(event, ["session_id", "sequence", "at", "body_type", "body"]) ||
+    event.session_id !== sessionId ||
+    !Number.isSafeInteger(event.sequence) ||
+    event.sequence < 1 ||
+    !isUtcTimestamp(event.at) ||
+    !isPlainJsonObject(event.body)
+  ) {
+    return false;
+  }
+  switch (event.body_type) {
+    case "StateChanged":
+      return (
+        isExactObject(event.body, ["state"]) &&
+        isOneOf(event.body.state, SESSION_STATES)
+      );
+    case "PhaseChanged":
+      return (
+        isExactObject(event.body, ["phase"]) &&
+        isValidNonemptyText(event.body.phase)
+      );
+    case "Progress":
+      return validateProgress(event.body);
+    case "ItemOutcome":
+      return validateOperationItem(event.body);
+    case "IntegrityOutcome":
+      return validateIntegrityItem(event.body);
+    case "Gap":
+      return (
+        isExactObject(event.body, ["first_missed_seq"]) &&
+        Number.isSafeInteger(event.body.first_missed_seq) &&
+        event.body.first_missed_seq > 0
+      );
+    case "Terminal":
+      return (
+        isExactObject(event.body, ["result"]) &&
+        validateCoreOperationResult(event.body.result)
+      );
+    default:
+      return false;
+  }
+}
+
+function validateSessionRecord(record, sessionId) {
+  return (
+    isExactObject(record, [
+      "session_id",
+      "kind",
+      "state",
+      "supports_pause",
+      "created_at",
+      "started_at",
+      "ended_at",
+      "result",
+    ]) &&
+    record.session_id === sessionId &&
+    record.kind === "plan" &&
+    isOneOf(record.state, TERMINAL_STATES) &&
+    record.supports_pause === false &&
+    isUtcTimestamp(record.created_at) &&
+    (record.started_at === null || isUtcTimestamp(record.started_at)) &&
+    isUtcTimestamp(record.ended_at) &&
+    (record.result === null ||
+      (validateOperationResultView(record.result) &&
+        record.state ===
+          (record.result.canceled ? "canceled" : record.result.filesystem)))
+  );
+}
+
+function validateProgress(value) {
+  return (
+    isExactObject(value, [
+      "items_done",
+      "items_total",
+      "bytes_done",
+      "bytes_total",
+      "current_path",
+    ]) &&
+    isNonnegativeInteger(value.items_done) &&
+    isNullableNonnegativeInteger(value.items_total) &&
+    isNonnegativeInteger(value.bytes_done) &&
+    isNullableNonnegativeInteger(value.bytes_total) &&
+    (value.items_total === null || value.items_done <= value.items_total) &&
+    (value.bytes_total === null || value.bytes_done <= value.bytes_total) &&
+    isNullableText(value.current_path)
+  );
+}
+
+function validateOperationItem(value) {
+  return (
+    isExactObject(value, [
+      "item_type",
+      "phase",
+      "item_id",
+      "kind",
+      "path",
+      "result",
+      "reason",
+      "detail",
+    ]) &&
+    value.item_type === "operation" &&
+    value.phase === "execute" &&
+    isValidNonemptyText(value.item_id) &&
+    isValidNonemptyText(value.kind) &&
+    isValidText(value.path) &&
+    isOneOf(value.result, OPERATION_OUTCOMES) &&
+    isNullableText(value.reason) &&
+    isPlainJsonObject(value.detail) &&
+    isJsonValue(value.detail)
+  );
+}
+
+function validateIntegrityItem(value) {
+  return (
+    isExactObject(value, [
+      "item_type",
+      "phase",
+      "item_id",
+      "row_id",
+      "location_id",
+      "kind",
+      "path",
+      "result",
+      "reason",
+      "detail",
+      "read_strategy",
+      "recording",
+      "record_disposition",
+    ]) &&
+    value.item_type === "integrity" &&
+    isOneOf(value.phase, INTEGRITY_MODES) &&
+    isValidNonemptyText(value.item_id) &&
+    ((value.row_id === null && value.location_id === null) ||
+      (isValidNonemptyText(value.row_id) &&
+        isValidNonemptyText(value.location_id))) &&
+    value.kind === "integrity" &&
+    isValidNonemptyText(value.path) &&
+    isOneOf(value.result, INTEGRITY_RESULTS) &&
+    (value.reason === null || isOneOf(value.reason, INTEGRITY_REASONS)) &&
+    isNullableText(value.detail) &&
+    (value.read_strategy === null ||
+      isOneOf(value.read_strategy, READ_STRATEGIES)) &&
+    isOneOf(value.recording, RECORDING_STATES) &&
+    (value.record_disposition === null ||
+      isOneOf(value.record_disposition, RECORD_DISPOSITIONS))
+  );
+}
+
+function validatePhaseResult(value) {
+  return (
+    isExactObject(value, [
+      "phase",
+      "status",
+      "items_done",
+      "items_total",
+      "bytes_done",
+      "bytes_total",
+      "error",
+    ]) &&
+    isValidNonemptyText(value.phase) &&
+    isOneOf(value.status, PHASE_STATES) &&
+    isNonnegativeInteger(value.items_done) &&
+    isNullableNonnegativeInteger(value.items_total) &&
+    isNonnegativeInteger(value.bytes_done) &&
+    isNullableNonnegativeInteger(value.bytes_total) &&
+    (value.items_total === null || value.items_done <= value.items_total) &&
+    (value.bytes_total === null || value.bytes_done <= value.bytes_total) &&
+    isNullableText(value.error)
+  );
+}
+
+function validateCoreOperationResult(value) {
+  return (
+    isExactObject(value, [
+      "status",
+      "recording",
+      "audit",
+      "disposition",
+      "canceled",
+      "items",
+      "phases",
+      "bytes_done",
+      "bytes_total",
+      "error",
+    ]) &&
+    isOneOf(value.status, TERMINAL_STATES) &&
+    isOneOf(value.recording, RECORDING_STATES) &&
+    isOneOf(value.audit, RECORDING_STATES) &&
+    isOneOf(value.disposition, DISPOSITIONS) &&
+    typeof value.canceled === "boolean" &&
+    Array.isArray(value.items) &&
+    value.items.every(validateResultItem) &&
+    Array.isArray(value.phases) &&
+    value.phases.every(validatePhaseResult) &&
+    isNonnegativeInteger(value.bytes_done) &&
+    isNonnegativeInteger(value.bytes_total) &&
+    value.bytes_done <= value.bytes_total &&
+    (value.status !== "canceled" || value.canceled) &&
+    !(value.status === "refused" && value.canceled) &&
+    (value.status !== "refused" || value.disposition === "unrun") &&
+    (value.error === null ||
+      (isExactObject(value.error, ["type_name", "message"]) &&
+        isValidText(value.error.type_name) &&
+        isValidText(value.error.message)))
+  );
+}
+
+function validateOperationResultView(value) {
+  return (
+    isExactObject(value, [
+      "headline",
+      "filesystem",
+      "integrity",
+      "recording",
+      "audit",
+      "disposition",
+      "canceled",
+      "items",
+      "phases",
+      "bytes_done",
+      "bytes_total",
+      "error",
+    ]) &&
+    isOneOf(value.headline, RESULT_HEADLINES) &&
+    isOneOf(value.filesystem, TERMINAL_STATES) &&
+    isOneOf(value.integrity, RESULT_INTEGRITY_STATES) &&
+    isOneOf(value.recording, RECORDING_STATES) &&
+    isOneOf(value.audit, RECORDING_STATES) &&
+    isOneOf(value.disposition, DISPOSITIONS) &&
+    typeof value.canceled === "boolean" &&
+    Array.isArray(value.items) &&
+    value.items.every(validateResultItem) &&
+    Array.isArray(value.phases) &&
+    value.phases.every(validatePhaseResult) &&
+    isNonnegativeInteger(value.bytes_done) &&
+    isNonnegativeInteger(value.bytes_total) &&
+    value.bytes_done <= value.bytes_total &&
+    (value.filesystem !== "canceled" || value.canceled) &&
+    !(value.filesystem === "refused" && value.canceled) &&
+    (value.filesystem !== "refused" || value.disposition === "unrun") &&
+    isNullableText(value.error)
+  );
+}
+
+function validateResultItem(value) {
+  if (!isPlainJsonObject(value)) {
+    return false;
+  }
+  return value.item_type === "operation"
+    ? validateOperationItem(value)
+    : value.item_type === "integrity" && validateIntegrityItem(value);
+}
+
+function isNonnegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function isNullableNonnegativeInteger(value) {
+  return value === null || isNonnegativeInteger(value);
+}
+
+function isValidText(value) {
+  return typeof value === "string" && isValidUnicode(value);
+}
+
+function isNullableText(value) {
+  return value === null || isValidText(value);
+}
+
+function isValidNonemptyText(value) {
+  return isValidText(value) && value.length > 0;
+}
+
+function isOneOf(value, choices) {
+  return typeof value === "string" && choices.includes(value);
+}
+
+function isUtcTimestamp(value) {
+  return (
+    typeof value === "string" &&
+    isValidUnicode(value) &&
+    (value.endsWith("Z") || value.endsWith("+00:00")) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function isPlainJsonObject(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
+}
+
+function isJsonValue(value) {
+  if (value === null || typeof value === "boolean") {
+    return true;
+  }
+  if (typeof value === "string") {
+    return isValidUnicode(value);
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  if (!isPlainJsonObject(value)) {
+    return false;
+  }
+  return Object.entries(value).every(
+    ([key, item]) => isValidUnicode(key) && isJsonValue(item),
   );
 }
 
