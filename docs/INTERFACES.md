@@ -396,6 +396,13 @@ the NamiSync-owned shape and strict shared text sink; Slice 3 implements the
 bounded/coalesced event drain, while Slices 5 and 6 add the production plan and
 inventory DOM renderers.
 
+GUI Break 1's icon helper is presentation-only and never becomes another bridge
+or asset-authority surface. It resolves one exact visual glyph name through a
+frozen source-owned `icons.js` registry to fixed inert CSS classes. Those
+classes select package-local CSS-mask SVGs and inherit `currentColor`; no view,
+payload, command, or returned string can supply markup, a class, URL, path, or
+registration. Unknown names and sizes are refused before DOM mutation.
+
 The current production table contains exactly three rows. Slice 2 owns
 `pick_folder` and `start_plan`; the former owns one native user interaction and
 returns `null` or an opaque purpose-bound slot id plus inert display text; the

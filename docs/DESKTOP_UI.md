@@ -119,6 +119,19 @@ wheel and records exact installed `tokens.css`/`components.css` bytes; its own
 page remains tests-only. Computed pairs must reach 4.5:1 for normal text and
 3:1 for large text and non-text UI indicators/boundaries.
 
+The same break establishes only the icon infrastructure, not the later surface
+icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored
+locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
+per-file SHA-256 hashes, and license. A frozen
+`icons.js` registry maps visual glyph names to fixed component classes; the
+classes use fixed local CSS masks painted with `currentColor`. `tokens.css`
+owns exact 16/20/24 px `sm`/`md`/`lg` icon sizes and `components.css` owns
+alignment and states.
+There is no remote load, icon font, runtime registration, inline/generated SVG,
+or data-derived class/asset path. Icons remain decorative beside visible text;
+icon-only controls require their own accessible name. Later slices extend the
+fixed set only when their real controls make a glyph necessary.
+
 M1 does not bundle or automatically invoke the Evergreen WebView2 Bootstrapper.
 The supported target remains Windows 11; missing WebView2 is refused read-only
 with an official installation direction. M1 beta binaries may be unsigned and

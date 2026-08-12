@@ -3162,7 +3162,7 @@ a parallel pair.
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
-| GUI 1 | Presentation foundation | Native material behavior; exact authored palette and semantic status/operation aliases in `tokens.css`; alias-only controls and headed component gallery | 3 | SH-G-11, SH-G-12, and SH-G-13 foundations; exact contract in `M1_SHELL.md` |
+| GUI 1 | Presentation foundation | Native material behavior; exact authored palette and semantic status/operation aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, and SH-G-13 foundations plus SH-G-14; exact contract in `M1_SHELL.md` |
 | 4 | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver over Lane A's ordered array | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34 |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
@@ -3175,7 +3175,8 @@ before later host/transport or vertical slices rely on assumptions no code has
 verified against a real runtime. Slices 1→2→3 are serial within the
 host/transport departments. GUI Break 1 closes after Slice 3 and before Slice 4;
 its exact 13-swatch palette, semantic mappings, contrast/forced-colors evidence,
-and no-raw-surface-color rule are normative in `M1_SHELL.md`.
+no-raw-surface-color rule, and closed local Fluent icon foundation are
+normative in `M1_SHELL.md`.
 Slice 4 additionally needs GUI Break 1, while its Lane A logic may be prepared
 earlier. **Slices 5 and 6 are a parallel pair**
 only once the host/transport chain through slice 3, slice 4, and Lane D are all

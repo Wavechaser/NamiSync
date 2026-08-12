@@ -359,6 +359,12 @@ Stage 5 location activities through the shared service.
   Gallery-tested status and operation aliases, not palette names, feed controls
   and later surfaces. Light/dark pairings are contrast-tested, forced colors use
   Windows system colors, and every meaning retains text and non-color cues.
+- **Closed Fluent Icon Foundation**. GUI Break 1 seeds a minimal frozen registry
+  with four pinned local regular Microsoft Fluent SVG masks and their source,
+  hash, and license record. Icons inherit `currentColor`; tokens own shared
+  sizes and components own alignment/states. Remote loading, runtime
+  registration, icon fonts, generated SVG, and data-derived asset paths are
+  absent. Later surfaces add only the glyphs their real controls need.
 - **History Dialog**. The desktop UI lists history runs and shows retained activity detail. Retention controls remain absent from the M1 shell until coordinated maintenance exists.
 - **Bridge Responsiveness Envelope**. The M1 bridge is measured on the documented reference machine at up to roughly 100,000 file-backed subjects, 120,000 tree nodes, 50 history runs/1,000,000 detail items, and 256-row pages. Execute/control feedback is immediate, progress may be late but never incorrect, and `M1_BRIDGE.md` owns the exact latency and memory gates.
 

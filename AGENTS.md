@@ -38,6 +38,13 @@ reused by CLI, queue, or service entry points.
   event fan-out. It imports `core`, never modules or workflows.
 - `namisync/interfaces/`: CLI, API, and desktop adapters. It imports workflows
   and the dispatcher through the composition root and owns no domain policy.
+- `namisync/interfaces/web/assets/icons/`: fixed local monochrome icon assets
+  selected from pinned `@fluentui/svg-icons@1.1.334`. Upstream filenames,
+  exact package/file URLs, version, per-file SHA-256 hashes, and MIT license
+  stay with the assets.
+  Runtime registration, remote loading, generated SVG/path markup, and
+  data-derived asset paths are forbidden; adding an icon is a source change to
+  the fixed registry, CSS mask class, provenance, package manifest, and tests.
 - `tests/`: pytest tests mirroring package boundaries where practical.
 - Active focused documentation lives in `docs/`:
   - `BUGS.md` for substantive defects, verified fixes, and current status.

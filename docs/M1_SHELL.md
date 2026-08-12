@@ -408,6 +408,26 @@ not preselected here.
   Sync|Integrity segmented control. Each control carries its rest, hover,
   pressed, disabled, and focused states. Surface renderers consume tokens and
   components and define no color of their own.
+- **Icons.** Microsoft Fluent System Icons are the default source. GUI Break 1
+  vendors only the four regular 20 px foundation glyphs it needs to prove the
+  system (`checkmark_circle`, `dismiss_circle`, `warning`, and `info`) from one
+  pinned `@fluentui/svg-icons@1.1.334` package, retaining the upstream
+  filenames, per-file SHA-256 hashes, MIT license, exact package/file source
+  URLs, and package version under `assets/icons/`.
+  `icons.js` owns one frozen code-only registry whose public names are visual
+  glyph names, not workflow or status policy. A registry entry selects one
+  fixed CSS class; the class selects one fixed local SVG as a CSS mask.
+  `tokens.css` owns only the shared `--icon-size-sm: 16px`,
+  `--icon-size-md: 20px`, and `--icon-size-lg: 24px` sizes. `components.css`
+  owns mask alignment, sizing classes,
+  `background-color: currentColor`, and interaction/disabled behavior. The
+  helper creates only an inert span with allowlisted classes: it never emits or
+  parses SVG markup, accepts a URL/path, constructs a class or asset name from
+  data, fetches remotely, or exposes runtime registration. An unknown glyph or
+  size is refused instead of falling back. Icons are decorative by default and
+  accompany visible text; an icon-only control must own an accessible name.
+  Later slices add the exact surface glyphs and mappings as ordinary source
+  changes to the registry, CSS, provenance, package manifest, and tests.
 - **Information architecture.** The rail-plus-panel layout, task cards, the
   Sync|Integrity toggle, and the setup-form-versus-summary flow follow
   `DESKTOP_UI.md` and the `ui_mockup/` reference. The mockup is a look and IA
@@ -1054,16 +1074,25 @@ Deliverables:
    `index.html`, `tokens.css`, and `components.css` resolve through the installed
    package, and evidence records exact installed CSS bytes; only the gallery
    page/scenario code stays outside package data.
+4. The minimal icon foundation from section 1.9: a frozen `icons.js` registry,
+   the four pinned local Fluent SVG masks plus their source/license record, and
+   gallery evidence that registry refusal is closed, every shipped asset is
+   local and package-owned, all three size tokens compute exactly, and the same
+   glyph inherits `currentColor` across light, dark, forced-colors, disabled,
+   and interactive component states. Break 1 does not choose the later plan,
+   inventory, history, or settings icon vocabulary.
 
 Calibration is the tinkering part: get Mica, tokens, and components reading
 correctly in all three themes and freeze the language. Time-box it to
 language-and-gallery, not gold-plating — polishing against fixtures that must
 then survive real data is wasted work. GUI Break 1 closes the SH-G-11/12/13
 *foundation* — tokens, materials, and motion proven on the gallery — while each
-gate's production-surface clause finalizes as the trees and renderers land
-(Slices 4-6). Exit criterion: tokens correct in light, dark, and high contrast;
-the gallery covers every control state; Mica and its fallback are proven on the
-pinned stack; the design language is frozen.
+gate's production-surface clause finalizes as the trees and renderers land.
+It closes SH-G-14's icon-infrastructure boundary completely here; Slices 4-6
+retain only the cross-slice production-surface clauses. Exit criterion:
+tokens correct in light, dark, and high contrast;
+the gallery covers every control state and the fixed icon foundation; Mica and
+its fallback are proven on the pinned stack; the design language is frozen.
 
 ### Slice 4 - Presentation core and shell frame
 
@@ -1349,12 +1378,38 @@ carry the `headed` marker; all are collected by the release command.
   plan or inventory tree. *Not satisfied by* asserting the media query exists
   without a reduced-motion render, or by checking only a non-virtualized list.
 
+- **SH-G-14 — Icons are local, closed, and token-colored.** The installed wheel
+  contains the exact four pinned Fluent regular SVGs from
+  `@fluentui/svg-icons@1.1.334`, their exact package/file URLs and version,
+  per-file SHA-256 hashes, and MIT license, plus a frozen `icons.js` registry with exactly the
+  four section 1.9 glyph names at GUI Break 1. A production helper accepts only
+  a registered glyph and `sm`/`md`/`lg`, creates no SVG/path markup, and returns
+  an inert decorative element with fixed classes; unknown, path-shaped, URL,
+  case-variant, and prototype-key inputs are refused without DOM mutation.
+  Static evidence finds no registry mutation API, remote/data URL, dynamic SVG
+  string, data-derived mask/class/path, or icon asset outside the package-owned
+  directory. XML evidence rejects scripts, event-handler attributes,
+  `foreignObject`, external `href`, and any CSS `url()`. `tokens.css` is the
+  sole icon-size owner at exact 16/20/24 px and `components.css` is
+  the sole mask/alignment/interaction owner. In the clean-installed-wheel
+  gallery the same glyph has the exact three computed sizes and inherits its
+  surrounding `currentColor` in light, dark, forced-colors, interactive, and
+  disabled states, while visible text or an accessible control name still
+  carries meaning. *Not satisfied by* an icon font, CDN/package-manager runtime,
+  inline/generated SVG, a mutable map, concatenating a request value into a
+  class or URL, testing a copied source-tree asset, or treating an icon as the
+  only status cue. Later slices may extend the registry only through reviewed
+  source, asset/provenance, packaging, and test changes.
+
 SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
 themes with contrast, Mica apply/degrade, and reduced-motion with the motion
 tokens — is proven on GUI Break 1's gallery, while their production-surface
 clauses (no raw color in a surface renderer, the virtualized tree on an opaque
 card, and no animation on row recycling) finalize as `tree.js` and the
 plan/inventory renderers land in Slices 4-6.
+SH-G-14's closed registry and package foundation lands entirely in GUI Break 1;
+later glyph choices are ordinary Slice 4-7 surface work and must not reopen its
+runtime or asset-authority boundaries.
 
 The concrete homes: `tests/interfaces/web/test_slice1_headed.py` (headed
 SH-G-1/2/5/6/10 and BR-G-31 activation),
@@ -1374,7 +1429,9 @@ headed BR-G-32 transport evidence),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
 `tests/interfaces/web/test_design_tokens.py` (SH-G-11),
 `tests/interfaces/web/test_materials.py` (SH-G-12), and
-`tests/interfaces/web/test_motion.py` (SH-G-13). A gate test may live elsewhere
+`tests/interfaces/web/test_motion.py` (SH-G-13), plus
+`tests/interfaces/web/test_icons.py` and the installed-wheel component gallery
+(SH-G-14). A gate test may live elsewhere
 only when the owning slice updates this list in the same change.
 Release evidence records the collected `test_sh_g_*` node ids alongside the
 BR-G ids; the cleared-`addopts` release command, not the default headless suite,
@@ -1389,7 +1446,7 @@ clause lands:
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
 | Slice 3 | SH-G-8 |
-| GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation) |
+| GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
 | Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
 | Slice 7 | SH-G-9 |
@@ -1416,6 +1473,7 @@ against the changed configuration before the change lands.
 | Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
 | Reliable readback semantics: sparse inclusive `through_seq`, empty terminal page | `namisync/interfaces/service.py`, `docs/HISTORY.md` | Rerun SH-G-9 and the service page tests |
 | Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
+| Pinned Fluent SVG provenance, fixed icon registry, local CSS-mask authority, and icon size ownership | Section 1.9 and GUI Break 1 | Add or change glyphs only with the asset/source/license hash, registry/CSS/package manifest, SH-G-14, and headed gallery evidence in one reviewed change |
 | Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
 | Fluent 2 design language, token source, and the standard M1 window frame | Section 1.9 | Re-transcribe tokens (rerun SH-G-11); a frame change re-runs BR-G-31's native-surface proof |

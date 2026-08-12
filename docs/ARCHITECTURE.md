@@ -2056,6 +2056,18 @@ primitive names are not theme policy. Windows forced colors replace the authored
 palette with system colors, and status views retain non-color cues. This makes a
 palette change a token-boundary change rather than a renderer-wide rewrite.
 
+Icon authority follows the same one-way boundary. `assets/icons/` contains
+exactly four locally shipped monochrome SVGs selected from
+`@fluentui/svg-icons@1.1.334`, plus their MIT license and a source record with
+exact package/file URLs, version, and per-file SHA-256 hashes. `icons.js` is a
+frozen source-owned glyph-name-to-class registry; it has no registration seam
+and never contains or constructs markup, a URL, or a filesystem/web path.
+`components.css` alone maps those fixed classes to local CSS masks and paints
+them with `currentColor`; `tokens.css` alone owns shared icon sizes. Renderers
+may choose a registered visual glyph but cannot make returned data authoritative
+over a class, asset path, or SVG payload. Extending the set is a reviewed source,
+provenance, package-manifest, and test change, not runtime composition.
+
 Each open plan or inventory view uses one canonical server projection. Workflow code
 owns generic node structure, subtree membership, rollups, and opaque id lookup;
 `interfaces/web` owns tree-agnostic flatten/filter/search/window/anchor
