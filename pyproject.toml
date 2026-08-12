@@ -32,6 +32,9 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["namisync*"]
 
+[tool.setuptools.package-data]
+"namisync.interfaces.web" = ["assets/*"]
+
 [tool.setuptools.dynamic]
 version = {attr = "namisync.version.VERSION"}
 

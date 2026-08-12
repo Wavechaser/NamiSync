@@ -2,8 +2,9 @@
 
 Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
-seams; no headed desktop host or frontend has shipped yet. `M1_SHELL.md` owns
-the remaining implementation order and beta-package closure.
+seams. The classified launchers and initial wheel-packaged bootstrap assets now
+exist; no headed product window or workflow surface has shipped yet.
+`M1_SHELL.md` owns the remaining implementation order and beta-package closure.
 
 ## Purpose
 

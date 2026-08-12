@@ -2051,13 +2051,14 @@ collapsed paths, filter chips) directly. It persists no request, session, task,
 selection, view id, or projection revision; it is separate from database-owned
 semantic settings and needs no cross-interface writer mutex.
 
-**Stage 1 implementation status (updated 2026-07-30).** The isolated UI-state
-store and hostile-navigation/bridge spike implement and test the
+**Stage 1 implementation status (updated 2026-08-12).** The isolated UI-state
+store and promoted hostile-navigation/bridge boundary implement and test the
 forced-renderer call shape, UI-thread-only native `CoreWebView2` guards,
 native committed-origin dispatch recheck, strict versioned allowlist, and
 structured return boundary. Pywebview 6.2.1 is pinned from the Stage 6
-reality run. These foundations do not yet create the product window, packaged
-frontend assets, or event drain.
+reality run. Classified launchers and the exact-CSP bootstrap assets are now
+wheel package data; these foundations do not yet create the product window or
+event drain.
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
 

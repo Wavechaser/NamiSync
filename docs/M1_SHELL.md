@@ -8,8 +8,9 @@ the database file-pair matrix, in-loop startup teardown, the normative CSP
 gate, the GUI argument grammar, and constructor-only command composition; the
 2026-08-08 revision adds the Fluent visual design language (§1.9), motion
 (§1.10), and the two GUI Breaks that bound the visual work.
-Stages 1-5.5 and the WebView2 reality spike are complete; no product window or
-packaged frontend has shipped. NamiSync remains version `0.1.0` until M1 is
+Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slice 1 steps 1-4 are
+complete. The classified launchers and initial wheel-packaged bootstrap page
+exist; no product window has shipped. NamiSync remains version `0.1.0` until M1 is
 complete. Finishing M1 makes the product beta-ready; any later version change
 is a separate release decision.
 
