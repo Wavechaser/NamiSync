@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
+import re
 from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from threading import Condition, Lock
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from urllib.parse import SplitResult, urlsplit
 
 from .pywebview_runtime import (
@@ -19,9 +21,37 @@ from .pywebview_runtime import (
     require_supported_pythonnet_runtime,
 )
 
+if TYPE_CHECKING:
+    from .commands import CommandSpec
+
 
 BRIDGE_SCHEMA_VERSION = 1
 _MAX_COMMAND_BYTES = 64 * 1024
+_OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
+_ERROR_MESSAGES = {
+    "invalid_request": "The desktop request is invalid.",
+    "unsupported_version": (
+        "Restart NamiSync to load a compatible desktop page."
+    ),
+    "unknown_command": "This desktop action is not available.",
+    "invalid_payload": "The desktop action contains invalid data.",
+    "request_too_large": "The desktop request is too large.",
+    "slot_unavailable": (
+        "That folder selection is no longer available. Choose both folders again."
+    ),
+    "picker_unavailable": "The folder picker could not open. Try again.",
+    "command_conflict": (
+        "This action no longer matches its first attempt. Start the action again."
+    ),
+    "planning_refused": (
+        "NamiSync could not start a plan for those folders. Review both folders "
+        "and try again."
+    ),
+    "bridge_unavailable": (
+        "NamiSync is closing or this desktop page is no longer trusted."
+    ),
+    "internal_error": "NamiSync could not complete the desktop action.",
+}
 _REQUIRED_WEBVIEW_SETTINGS: tuple[tuple[str, object], ...] = (
     ("OPEN_EXTERNAL_LINKS_IN_BROWSER", False),
     ("ALLOW_FILE_URLS", False),
@@ -441,70 +471,141 @@ class BridgeDispatcher:
         self,
         *,
         document: NativeDocumentState,
-        handlers: Mapping[str, Callable[[Mapping[str, object]], object]],
+        commands: Mapping[str, CommandSpec],
     ) -> None:
+        from .commands import CommandSpec
+
+        snapshot = dict(commands)
         if any(
             not isinstance(name, str) or not name or name.startswith("_")
-            for name in handlers
+            for name in snapshot
         ):
-            raise ValueError("bridge handlers require explicit public command names")
-        if any(not callable(handler) for handler in handlers.values()):
-            raise TypeError("every bridge command handler must be callable")
+            raise ValueError("bridge commands require explicit public command names")
+        if any(type(spec) is not CommandSpec for spec in snapshot.values()):
+            raise TypeError("every bridge command must be an exact CommandSpec")
         self._document = document
-        self._handlers = dict(handlers)
+        self._commands = snapshot
         self._admission = Condition(Lock())
         self._accepting = True
         self._admitted = 0
 
     def dispatch(self, command_json: str) -> dict[str, object]:
-        """Validate one command and return ordinary structured data."""
+        """Return one exact response envelope; never export a Python failure."""
 
-        self._admit()
+        if not self._admit():
+            return self._failure(None, None, "bridge_unavailable")
         try:
-            self._document.require_trusted()
-            if not isinstance(command_json, str):
-                raise BridgeProtocolError("bridge command must be a JSON string")
+            try:
+                self._document.require_trusted()
+            except Exception:
+                return self._failure(None, None, "bridge_unavailable")
+
+            if type(command_json) is not str:
+                return self._failure(None, None, "invalid_request")
             try:
                 command_size = len(command_json.encode("utf-8"))
-            except UnicodeEncodeError as error:
-                raise BridgeProtocolError(
-                    "bridge command must contain valid Unicode"
-                ) from error
+            except UnicodeEncodeError:
+                return self._failure(None, None, "invalid_request")
             if command_size > _MAX_COMMAND_BYTES:
-                raise BridgeProtocolError("bridge command exceeds the size limit")
+                return self._failure(None, None, "request_too_large")
             try:
                 raw = json.loads(
                     command_json,
                     object_pairs_hook=_unique_object,
                     parse_constant=lambda value: _reject_json_constant(value),
                 )
-            except (json.JSONDecodeError, ValueError) as error:
-                raise BridgeProtocolError("bridge command is not valid JSON") from error
-            command = _validate_command(raw)
-            name = command["command"]
-            handler = self._handlers.get(name)
-            if handler is None:
-                raise BridgeProtocolError(f"bridge command is not allowed: {name}")
-            result = handler(command["payload"])
+            except Exception:
+                return self._failure(None, None, "invalid_request")
+
+            request_id = _recover_request_id(raw)
+            if (
+                type(raw) is not dict
+                or set(raw)
+                != {"schema_version", "request_id", "command", "payload"}
+                or request_id is None
+            ):
+                return self._failure(request_id, None, "invalid_request")
+            if (
+                type(raw["schema_version"]) is not int
+                or raw["schema_version"] != BRIDGE_SCHEMA_VERSION
+            ):
+                return self._failure(request_id, None, "unsupported_version")
+
+            name = raw["command"]
             try:
-                _require_json_value(result)
-            except BridgeProtocolError as error:
-                raise BridgeProtocolError(
-                    f"bridge handler returned non-JSON data: {name}"
-                ) from error
+                _require_json_value(name)
+            except BridgeProtocolError:
+                return self._failure(request_id, None, "invalid_request")
+            if type(name) is not str or not name:
+                return self._failure(request_id, None, "invalid_request")
+            spec = self._commands.get(name)
+            if spec is None:
+                return self._failure(request_id, None, "unknown_command")
+
+            payload = raw["payload"]
+            if type(payload) is not dict:
+                return self._failure(request_id, name, "invalid_payload")
+            try:
+                _require_json_value(payload)
+            except BridgeProtocolError:
+                return self._failure(request_id, name, "invalid_payload")
+
+            from .commands import CommandPayloadError, PickerUnavailableError
+
+            try:
+                result = spec.invoke(payload)
+            except CommandPayloadError:
+                return self._failure(request_id, name, "invalid_payload")
+            except PickerUnavailableError:
+                return self._failure(request_id, name, "picker_unavailable")
+            except Exception:
+                return self._failure(request_id, name, "internal_error")
+            try:
+                result = to_primitive_view(result)
+            except Exception:
+                return self._failure(request_id, name, "internal_error")
             return {
                 "schema_version": BRIDGE_SCHEMA_VERSION,
-                "request_id": command["request_id"],
+                "request_id": request_id,
+                "ok": True,
                 "result": result,
             }
+        except Exception:
+            return self._failure(None, None, "internal_error")
         finally:
             self._release()
 
-    def _admit(self) -> None:
+    def _failure(
+        self,
+        request_id: str | None,
+        command: str | None,
+        code: str,
+    ) -> dict[str, object]:
+        try:
+            logging.getLogger("namisync").info(
+                "bridge.refused request_id=%s command=%s code=%s",
+                request_id if request_id is not None else "-",
+                command if command is not None else "-",
+                code,
+            )
+        except Exception:
+            pass
+        return {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": request_id,
+            "ok": False,
+            "error": {
+                "code": code,
+                "message": _ERROR_MESSAGES[code],
+            },
+        }
+
+    def _admit(self) -> bool:
         with self._admission:
             if not self._accepting:
-                raise BridgeProtocolError("bridge is closing")
+                return False
             self._admitted += 1
+            return True
 
     def _release(self) -> None:
         with self._admission:
@@ -638,41 +739,13 @@ def _to_primitive_view(
     raise BridgeProtocolError("structured bridge data is not JSON-compatible")
 
 
-def _validate_command(value: object) -> dict[str, object]:
-    if not isinstance(value, dict) or set(value) != {
-        "schema_version",
-        "request_id",
-        "command",
-        "payload",
-    }:
-        raise BridgeProtocolError("bridge command has missing or unknown fields")
-    if (
-        type(value["schema_version"]) is not int
-        or value["schema_version"] != BRIDGE_SCHEMA_VERSION
-    ):
-        raise BridgeProtocolError(
-            f"unsupported bridge schema version: {value['schema_version']}"
-        )
-    request_id = value["request_id"]
-    command = value["command"]
-    payload = value["payload"]
-    if not isinstance(request_id, str) or not request_id:
-        raise BridgeProtocolError("bridge request_id must be a non-empty string")
-    if not isinstance(command, str) or not command:
-        raise BridgeProtocolError("bridge command name must be a non-empty string")
-    if not isinstance(payload, dict) or not all(
-        isinstance(key, str) for key in payload
-    ):
-        raise BridgeProtocolError("bridge payload must be a string-keyed object")
-    _require_json_value(request_id)
-    _require_json_value(command)
-    _require_json_value(payload)
-    return {
-        "schema_version": BRIDGE_SCHEMA_VERSION,
-        "request_id": request_id,
-        "command": command,
-        "payload": payload,
-    }
+def _recover_request_id(value: object) -> str | None:
+    if type(value) is not dict:
+        return None
+    request_id = value.get("request_id")
+    if type(request_id) is not str or _OPAQUE_ID.fullmatch(request_id) is None:
+        return None
+    return request_id
 
 
 def _reject_json_constant(value: str) -> None:
@@ -706,11 +779,17 @@ def _require_json_value(value: object) -> None:
             return
         raise BridgeProtocolError("structured bridge data contains a non-finite number")
     if isinstance(value, Mapping):
-        if not all(isinstance(key, str) for key in value):
-            raise BridgeProtocolError(
-                "structured bridge data contains a non-string object key"
-            )
-        for item in value.values():
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise BridgeProtocolError(
+                    "structured bridge data contains a non-string object key"
+                )
+            try:
+                key.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise BridgeProtocolError(
+                    "structured bridge data contains invalid Unicode"
+                ) from error
             _require_json_value(item)
         return
     if isinstance(value, (list, tuple)):

@@ -139,13 +139,28 @@ function startPlanAttempt(payload) {
 
 async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
   const requestId = mintId();
+  const attempt = {
+    cancelled: false,
+    rejectCancellation: null,
+  };
   const request = JSON.stringify({
     schema_version: SCHEMA_VERSION,
     request_id: requestId,
     command,
     payload,
   });
+  return withDeadline(
+    dispatchReadyAttempt(request, requestId, validateResult, attempt),
+    timeoutMs,
+    () => cancelAttempt(attempt),
+  );
+}
+
+async function dispatchReadyAttempt(request, requestId, validateResult, attempt) {
   await whenBridgeReady();
+  if (attempt.cancelled) {
+    throw new BridgeTransportError();
+  }
   const generation = bridgeGeneration;
   let onReincarnation;
   const reincarnated = new Promise((resolve, reject) => {
@@ -153,27 +168,30 @@ async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
     onReincarnation = () => reject(new BridgeTransportError());
     window.addEventListener("pywebviewready", onReincarnation, { once: true });
   });
-  const api = bridgeApi();
-  if (
-    generation !== bridgeGeneration ||
-    typeof api?.dispatch !== "function"
-  ) {
-    window.removeEventListener("pywebviewready", onReincarnation);
-    throw new BridgeTransportError();
-  }
-
+  const cancelled = new Promise((resolve, reject) => {
+    void resolve;
+    attempt.rejectCancellation = reject;
+  });
   let response;
   try {
-    response = await withDeadline(
-      Promise.race([api.dispatch(request), reincarnated]),
-      timeoutMs,
-    );
+    const api = bridgeApi();
+    if (
+      attempt.cancelled ||
+      generation !== bridgeGeneration ||
+      typeof api?.dispatch !== "function"
+    ) {
+      throw new BridgeTransportError();
+    }
+    // No await occurs between this final cancellation check and dispatch.
+    const transport = api.dispatch(request);
+    response = await Promise.race([transport, reincarnated, cancelled]);
   } catch (error) {
     if (error instanceof BridgeTransportError) {
       throw error;
     }
     throw new BridgeTransportError();
   } finally {
+    attempt.rejectCancellation = null;
     window.removeEventListener("pywebviewready", onReincarnation);
   }
   if (generation !== bridgeGeneration) {
@@ -182,7 +200,15 @@ async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
   return validateResponse(response, requestId, validateResult);
 }
 
-async function withDeadline(value, timeoutMs) {
+function cancelAttempt(attempt) {
+  if (attempt.cancelled) {
+    return;
+  }
+  attempt.cancelled = true;
+  attempt.rejectCancellation?.(new BridgeTransportError());
+}
+
+async function withDeadline(value, timeoutMs, onDeadline) {
   if (timeoutMs === null) {
     return value;
   }
@@ -192,7 +218,10 @@ async function withDeadline(value, timeoutMs) {
       value,
       new Promise((resolve, reject) => {
         void resolve;
-        timer = setTimeout(() => reject(new BridgeTransportError()), timeoutMs);
+        timer = setTimeout(() => {
+          onDeadline();
+          reject(new BridgeTransportError());
+        }, timeoutMs);
       }),
     ]);
   } finally {
@@ -209,18 +238,25 @@ function validateResponse(response, requestId, validateResult) {
   }
   if (
     response.schema_version !== SCHEMA_VERSION ||
-    response.request_id !== requestId ||
     typeof response.ok !== "boolean"
   ) {
     throw new BridgeTransportError();
   }
   if (response.ok) {
-    if (!("result" in response) || !validateResult(response.result)) {
+    if (
+      response.request_id !== requestId ||
+      !("result" in response) ||
+      !validateResult(response.result)
+    ) {
       throw new BridgeTransportError();
     }
     return response.result;
   }
-  if (!("error" in response) || !isExactObject(response.error, ["code", "message"])) {
+  if (
+    (response.request_id !== requestId && response.request_id !== null) ||
+    !("error" in response) ||
+    !isExactObject(response.error, ["code", "message"])
+  ) {
     throw new BridgeTransportError();
   }
   const expectedMessage = ERROR_MESSAGES[response.error.code];

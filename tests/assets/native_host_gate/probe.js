@@ -33,7 +33,7 @@
     );
     return window.pywebview.api.dispatch(JSON.stringify({
       schema_version: 1,
-      request_id: "native-gate-" + state.request,
+      request_id: state.request.toString(16).padStart(32, "0"),
       command: "native_probe",
       payload: payload,
     }));

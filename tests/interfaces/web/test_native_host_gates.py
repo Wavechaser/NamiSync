@@ -396,8 +396,17 @@ def test_br_g_31_installed_host_composition_preserves_security_boundaries(
         "injected_committed_source_refusal"
     ]
     assert refusal == {
-        "type": "BridgeOriginError",
-        "message": "bridge dispatch rejected outside packaged origin",
+        "response": {
+            "schema_version": 1,
+            "request_id": None,
+            "ok": False,
+            "error": {
+                "code": "bridge_unavailable",
+                "message": (
+                    "NamiSync is closing or this desktop page is no longer trusted."
+                ),
+            },
+        },
         "inner_handler_called": False,
     }
     assert page["initial_url"] == page["final_url"]

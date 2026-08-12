@@ -616,7 +616,7 @@ def _pending_document():
 def _closed_dispatcher(document: object):
     from .bridge import BridgeDispatcher
 
-    return BridgeDispatcher(document=document, handlers={})
+    return BridgeDispatcher(document=document, commands={})
 
 
 def _desktop_close_hooks(dispatcher: object) -> _DesktopCloseHooks:

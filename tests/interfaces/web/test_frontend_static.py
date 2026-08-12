@@ -217,6 +217,58 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert "response.request_id !== requestId" in source
 
 
+def test_br_g_32_response_id_accepts_null_only_for_structured_failures() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    validator = source.split("function validateResponse(", 1)[1].split(
+        "function validatePickFolderResult(", 1
+    )[0]
+
+    success = validator.split("if (response.ok) {", 1)[1].split(
+        "return response.result;", 1
+    )[0]
+    failure = validator.split("return response.result;", 1)[1]
+    assert "response.request_id !== requestId" in success
+    assert "response.request_id !== requestId && response.request_id !== null" in failure
+    assert "response.request_id === null" not in success
+
+
+def test_br_g_32_start_plan_deadline_includes_bridge_readiness() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    attempt = source.split(
+        "async function dispatchAttempt(", 1
+    )[1].split("async function dispatchReadyAttempt(", 1)[0]
+    ready_attempt = source.split(
+        "async function dispatchReadyAttempt(", 1
+    )[1].split("async function withDeadline(", 1)[0]
+
+    assert "return withDeadline(" in attempt
+    assert (
+        "dispatchReadyAttempt(request, requestId, validateResult, attempt)"
+        in attempt
+    )
+    assert "() => cancelAttempt(attempt)" in attempt
+    assert "await whenBridgeReady();" not in attempt
+    assert ready_attempt.index("await whenBridgeReady();") < ready_attempt.index(
+        "const generation = bridgeGeneration;"
+    )
+    assert '"pick_folder",\n    Object.freeze({ purpose })' in source
+    assert "validatePickFolderResult,\n    null," in source
+
+
 def test_ready_transition_cannot_overwrite_a_native_close_status(
     built_wheel: BuiltWheel,
 ) -> None:

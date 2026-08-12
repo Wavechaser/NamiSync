@@ -57,7 +57,7 @@ _PACKAGED_POPUP_SCRIPT = r"""
     state.stage = 2;
     const response = await window.pywebview.api.dispatch(JSON.stringify({
       schema_version: 1,
-      request_id: "packaged-popup-fresh-dispatch",
+      request_id: "6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c",
       command: "packaged_probe",
       payload: {
         initial_url: state.initialUrl,
@@ -486,10 +486,28 @@ def _install_native_observer(
 
 def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     from namisync.interfaces.web import bridge, host
+    from namisync.interfaces.web.commands import (
+        CommandAccess,
+        CommandRetry,
+        CommandSpec,
+        CommandTimeout,
+        FieldRequirement,
+    )
     from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
     runtime: dict[str, Any] = {}
+
+    def test_spec(handler: Callable[[object], object]) -> CommandSpec:
+        return CommandSpec(
+            validate_payload=lambda payload: payload,
+            handler=handler,
+            access=CommandAccess.READ_ONLY,
+            command_id=FieldRequirement.FORBIDDEN,
+            revision=FieldRequirement.FORBIDDEN,
+            timeout=CommandTimeout.INTERACTIVE,
+            retry=CommandRetry.NONE,
+        )
     recorder.set("runtime", _runtime_identity())
     recorder.set("input_index", str(arguments.index.resolve()))
     recorder.set("input_data_root", str(arguments.data_dir.resolve()))
@@ -677,20 +695,18 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     recorder.get("off_origin_inner_handler_called", False)
                 )
                 try:
-                    dispatcher_holder["value"].dispatch(
+                    refusal = dispatcher_holder["value"].dispatch(
                         json.dumps(
                             {
                                 "schema_version": 1,
-                                "request_id": "native-gate-inner",
+                                "request_id": "7b" * 16,
                                 "command": "native_probe",
                                 "payload": {"phase": "inner_must_not_run"},
                             }
                         )
                     )
-                except Exception as error:
                     result["injected_committed_source_refusal"] = {
-                        "type": type(error).__name__,
-                        "message": str(error),
+                        "response": refusal,
                         "inner_handler_called": bool(
                             recorder.get(
                                 "off_origin_inner_handler_called",
@@ -699,8 +715,6 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                         )
                         and not nested_called_before,
                     }
-                else:
-                    result["injected_committed_source_refusal"] = None
                 finally:
                     document._record(previous)
 
@@ -711,7 +725,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
 
         dispatcher = bridge.BridgeDispatcher(
             document=document,
-            handlers={"native_probe": native_probe},
+            commands={"native_probe": test_spec(native_probe)},
         )
         dispatcher_holder["value"] = dispatcher
         return dispatcher
@@ -897,6 +911,13 @@ def _run_packaged_popup(
     """Invoke the real popup chain from the wheel's packaged index page."""
 
     from namisync.interfaces.web import bridge, host
+    from namisync.interfaces.web.commands import (
+        CommandAccess,
+        CommandRetry,
+        CommandSpec,
+        CommandTimeout,
+        FieldRequirement,
+    )
     from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
@@ -963,9 +984,18 @@ def _run_packaged_popup(
             recorder.set("packaged_page", dict(payload))
             return {"token": "packaged-popup-ok"}
 
+        spec = CommandSpec(
+            validate_payload=lambda payload: payload,
+            handler=packaged_probe,
+            access=CommandAccess.READ_ONLY,
+            command_id=FieldRequirement.FORBIDDEN,
+            revision=FieldRequirement.FORBIDDEN,
+            timeout=CommandTimeout.INTERACTIVE,
+            retry=CommandRetry.NONE,
+        )
         return bridge.BridgeDispatcher(
             document=document,
-            handlers={"packaged_probe": packaged_probe},
+            commands={"packaged_probe": spec},
         )
 
     def browser_open(*values: object, **keywords: object) -> bool:

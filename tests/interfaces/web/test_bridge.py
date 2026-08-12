@@ -21,6 +21,35 @@ from namisync.interfaces.web.bridge import (
     prepare_pywebview_host,
     start_edge_chromium,
 )
+from namisync.interfaces.web.commands import (
+    CommandAccess,
+    CommandRetry,
+    CommandSpec,
+    CommandTimeout,
+    FieldRequirement,
+)
+
+
+_REQUEST_ID = "1a" * 16
+
+
+def _test_spec(handler) -> CommandSpec:
+    return CommandSpec(
+        validate_payload=lambda payload: payload,
+        handler=handler,
+        access=CommandAccess.READ_ONLY,
+        command_id=FieldRequirement.FORBIDDEN,
+        revision=FieldRequirement.FORBIDDEN,
+        timeout=CommandTimeout.INTERACTIVE,
+        retry=CommandRetry.NONE,
+    )
+
+
+def _dispatcher(document, handlers) -> BridgeDispatcher:
+    return BridgeDispatcher(
+        document=document,
+        commands={name: _test_spec(handler) for name, handler in handlers.items()},
+    )
 
 
 class EventHook:
@@ -141,26 +170,24 @@ def _trusted_document(
 
 def test_pending_document_binds_one_exact_origin_and_keeps_dispatch_closed() -> None:
     document = NativeDocumentState()
-    bridge = BridgeDispatcher(document=document, handlers={})
+    bridge = BridgeDispatcher(document=document, commands={})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "pending-document",
+            "request_id": _REQUEST_ID,
             "command": "ping",
             "payload": {},
         }
     )
 
-    with pytest.raises(BridgeOriginError, match="origin is pending"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
     origin = ExactOrigin.from_url("http://127.0.0.1:41700/index.html")
     document.bind_origin(origin)
 
     with pytest.raises(RuntimeError, match="already bound"):
         document.bind_origin(origin)
-    with pytest.raises(BridgeOriginError, match="not attached"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
 
 def test_existing_pending_document_is_bound_then_attached_without_window_rewrite() -> None:
@@ -222,20 +249,16 @@ def test_native_installation_waits_for_synchronous_ui_before_load() -> None:
     assert window.managed_webview.core_accesses == 0
     assert len(core.NavigationStarting.handlers) == 0
 
-    bridge = BridgeDispatcher(
-        document=document,
-        handlers={"ping": lambda payload: payload},
-    )
+    bridge = _dispatcher(document, {"ping": lambda payload: payload})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "before-native-attach",
+            "request_id": _REQUEST_ID,
             "command": "ping",
             "payload": {},
         }
     )
-    with pytest.raises(BridgeOriginError, match="not attached"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
     window.events.before_load.emit()
     window.events.before_load.emit()
@@ -268,20 +291,16 @@ def test_native_installation_refuses_an_off_ui_before_load_callback() -> None:
     assert window.managed_webview.core_accesses == 0
     assert len(core.NavigationStarting.handlers) == 0
 
-    bridge = BridgeDispatcher(
-        document=document,
-        handlers={"ping": lambda payload: payload},
-    )
+    bridge = _dispatcher(document, {"ping": lambda payload: payload})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "failed-native-attach",
+            "request_id": _REQUEST_ID,
             "command": "ping",
             "payload": {},
         }
     )
-    with pytest.raises(BridgeOriginError, match="attachment failed.*UI thread"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
 
 def test_native_installation_failure_is_sticky_after_a_partial_subscription() -> None:
@@ -386,14 +405,11 @@ def test_native_webview2_hooks_cancel_untrusted_navigation_frames_and_popups() -
     assert external_frame.Cancel
     assert popup.Handled
 
-    bridge = BridgeDispatcher(
-        document=document,
-        handlers={"ping": lambda payload: payload},
-    )
+    bridge = _dispatcher(document, {"ping": lambda payload: payload})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "after-cancelled-navigation",
+            "request_id": _REQUEST_ID,
             "command": "ping",
             "payload": {},
         }
@@ -402,8 +418,7 @@ def test_native_webview2_hooks_cancel_untrusted_navigation_frames_and_popups() -
 
     core.Source = "https://example.com/"
     core.SourceChanged.emit(SimpleNamespace(), sender=core)
-    with pytest.raises(BridgeOriginError):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
 
 def test_pywebview_popup_chain_keeps_packaged_document_and_bridge() -> None:
@@ -433,14 +448,11 @@ def test_pywebview_popup_chain_keeps_packaged_document_and_bridge() -> None:
         "http://127.0.0.1:41700/index.html",
     )
     window.events.before_load.emit()
-    bridge = BridgeDispatcher(
-        document=document,
-        handlers={"ping": lambda payload: payload},
-    )
+    bridge = _dispatcher(document, {"ping": lambda payload: payload})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "after-window-open",
+            "request_id": _REQUEST_ID,
             "command": "ping",
             "payload": {"still": "trusted"},
         }
@@ -999,14 +1011,14 @@ def test_dispatch_rechecks_origin_and_returns_hostile_text_as_data() -> None:
     )
     window.events.before_load.emit()
     hostile = '</script><img src=x onerror="alert(1)">'
-    bridge = BridgeDispatcher(
-        document=document,
-        handlers={"next_events": lambda payload: [{"path": payload["path"]}]},
+    bridge = _dispatcher(
+        document,
+        {"next_events": lambda payload: [{"path": payload["path"]}]},
     )
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "request-1",
+            "request_id": _REQUEST_ID,
             "command": "next_events",
             "payload": {"path": hostile},
         }
@@ -1014,20 +1026,20 @@ def test_dispatch_rechecks_origin_and_returns_hostile_text_as_data() -> None:
 
     assert bridge.dispatch(command) == {
         "schema_version": BRIDGE_SCHEMA_VERSION,
-        "request_id": "request-1",
+        "request_id": _REQUEST_ID,
+        "ok": True,
         "result": [{"path": hostile}],
     }
 
     core.Source = "https://example.com/"
     core.SourceChanged.emit(SimpleNamespace(), sender=core)
-    with pytest.raises(BridgeOriginError):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
 
 def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> None:
-    bridge = BridgeDispatcher(
-        document=_trusted_document(),
-        handlers={"ping": lambda payload: payload},
+    bridge = _dispatcher(
+        _trusted_document(),
+        {"ping": lambda payload: payload},
     )
     public_methods = {
         name
@@ -1039,37 +1051,38 @@ def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> N
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "request-2",
+            "request_id": _REQUEST_ID,
             "command": "unknown",
             "payload": {},
         }
     )
-    with pytest.raises(BridgeProtocolError, match="not allowed"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "unknown_command"
 
 
 def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> None:
     document = _trusted_document()
-    bridge = BridgeDispatcher(document=document, handlers={})
+    bridge = BridgeDispatcher(document=document, commands={})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "closed-slice-one-surface",
+            "request_id": _REQUEST_ID,
             "command": "ping",
             "payload": {},
         }
     )
 
-    with pytest.raises(BridgeProtocolError, match="not allowed"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "unknown_command"
     for invalid_name in ("", "_private", 7):
         with pytest.raises(ValueError, match="public command names"):
             BridgeDispatcher(
                 document=document,
-                handlers={invalid_name: lambda payload: payload},
+                commands={invalid_name: _test_spec(lambda payload: payload)},
             )
-    with pytest.raises(TypeError, match="must be callable"):
-        BridgeDispatcher(document=document, handlers={"ping": object()})
+    with pytest.raises(TypeError, match="exact CommandSpec"):
+        BridgeDispatcher(
+            document=document,
+            commands={"ping": lambda payload: payload},
+        )
 
 
 def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
@@ -1082,14 +1095,11 @@ def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
         assert release.wait(1.0)
         return payload
 
-    bridge = BridgeDispatcher(
-        document=_trusted_document(),
-        handlers={"slow": slow_handler},
-    )
+    bridge = _dispatcher(_trusted_document(), {"slow": slow_handler})
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "admitted-before-close",
+            "request_id": _REQUEST_ID,
             "command": "slow",
             "payload": {"value": 1},
         }
@@ -1103,8 +1113,7 @@ def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
     waiter.start()
 
     assert not finished.wait(0.05)
-    with pytest.raises(BridgeProtocolError, match="bridge is closing"):
-        bridge.dispatch(command)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
     release.set()
     dispatch_thread.join(1.0)
     waiter.join(1.0)
@@ -1127,64 +1136,60 @@ def test_namisync_bridge_module_constructs_no_javascript() -> None:
 
 
 def test_bridge_rejects_nonstandard_json_and_non_json_handler_results() -> None:
-    bridge = BridgeDispatcher(
-        document=_trusted_document(),
-        handlers={
+    bridge = _dispatcher(
+        _trusted_document(),
+        {
             "echo": lambda payload: payload,
             "bad_result": lambda payload: {"nested": {1: payload}},
         },
     )
     invalid_number = (
-        '{"schema_version":1,"request_id":"request-3",'
+        f'{{"schema_version":1,"request_id":"{_REQUEST_ID}",'
         '"command":"echo","payload":{"value":NaN}}'
     )
-    with pytest.raises(BridgeProtocolError, match="not valid JSON"):
-        bridge.dispatch(invalid_number)
+    assert bridge.dispatch(invalid_number)["error"]["code"] == "invalid_request"
 
     duplicate_command = (
-        '{"schema_version":1,"request_id":"request-duplicate",'
+        f'{{"schema_version":1,"request_id":"{_REQUEST_ID}",'
         '"command":"echo","command":"echo","payload":{}}'
     )
-    with pytest.raises(BridgeProtocolError, match="not valid JSON"):
-        bridge.dispatch(duplicate_command)
+    assert bridge.dispatch(duplicate_command)["error"]["code"] == "invalid_request"
 
     for invalid_version in (True, 1.0, "1"):
-        with pytest.raises(BridgeProtocolError, match="schema version"):
-            bridge.dispatch(
-                json.dumps(
-                    {
-                        "schema_version": invalid_version,
-                        "request_id": "request-version",
-                        "command": "echo",
-                        "payload": {},
-                    }
-                )
+        response = bridge.dispatch(
+            json.dumps(
+                {
+                    "schema_version": invalid_version,
+                    "request_id": _REQUEST_ID,
+                    "command": "echo",
+                    "payload": {},
+                }
             )
+        )
+        assert response["error"]["code"] == "unsupported_version"
 
-    with pytest.raises(BridgeProtocolError, match="Unicode"):
-        bridge.dispatch("\ud800")
+    assert bridge.dispatch("\ud800")["error"]["code"] == "invalid_request"
 
     bad_result = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
-            "request_id": "request-4",
+            "request_id": _REQUEST_ID,
             "command": "bad_result",
             "payload": {},
         }
     )
-    with pytest.raises(BridgeProtocolError, match="returned non-JSON"):
-        bridge.dispatch(bad_result)
+    assert bridge.dispatch(bad_result)["error"]["code"] == "internal_error"
 
 
 @pytest.mark.parametrize(
     "command_json",
     [
         (
-            '{"schema_version":1,"request_id":"overflow",'
+            f'{{"schema_version":1,"request_id":"{_REQUEST_ID}",'
             '"command":"echo","payload":{"value":1e999}}'
         ),
         (
-            '{"schema_version":1,"request_id":"surrogate",'
+            f'{{"schema_version":1,"request_id":"{_REQUEST_ID}",'
             '"command":"echo","payload":{"value":"\\ud800"}}'
         ),
     ],
@@ -1193,12 +1198,8 @@ def test_bridge_rejects_non_json_payload_values_before_handler(
     command_json: str,
 ) -> None:
     handled: list[object] = []
-    bridge = BridgeDispatcher(
-        document=_trusted_document(),
-        handlers={"echo": handled.append},
-    )
+    bridge = _dispatcher(_trusted_document(), {"echo": handled.append})
 
-    with pytest.raises(BridgeProtocolError):
-        bridge.dispatch(command_json)
+    assert bridge.dispatch(command_json)["error"]["code"] == "invalid_payload"
 
     assert handled == []
