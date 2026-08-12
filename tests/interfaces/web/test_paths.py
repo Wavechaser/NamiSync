@@ -9,7 +9,11 @@ from pathlib import Path
 import pytest
 
 import namisync.interfaces.web.paths as paths_module
-from namisync.interfaces.web.paths import AppPathError, AppPaths
+from namisync.interfaces.web.paths import (
+    AppPathError,
+    AppPaths,
+    resolve_local_index_path,
+)
 
 
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -63,9 +67,12 @@ def test_production_root_uses_local_app_data() -> None:
         "relative",
         r"..\relative",
         r"\\server\share\NamiSync",
+        "/posix-spelling",
     ],
 )
-def test_nonlocal_or_relative_root_is_refused_without_creation(value: str) -> None:
+def test_sh_g_2_nonlocal_or_relative_root_is_refused_without_creation(
+    value: str,
+) -> None:
     with pytest.raises(AppPathError, match="absolute local path"):
         AppPaths.from_root(value)
 
@@ -100,6 +107,42 @@ def test_resolved_root_is_rechecked_for_locality(
         AppPaths.from_root(root)
 
     assert not root.exists()
+
+
+def test_construction_index_override_requires_an_absolute_local_file(
+    tmp_path: Path,
+) -> None:
+    index = tmp_path / "headed-test.html"
+    index.write_text("<!doctype html>", encoding="utf-8")
+
+    assert resolve_local_index_path(index) == index.resolve()
+
+    for value in ("relative.html", r"\\server\share\test.html", "/test.html"):
+        with pytest.raises(AppPathError, match="absolute local path"):
+            resolve_local_index_path(value)
+
+    with pytest.raises(AppPathError, match="local file"):
+        resolve_local_index_path(tmp_path / "missing.html")
+    with pytest.raises(AppPathError, match="local file"):
+        resolve_local_index_path(tmp_path)
+
+
+def test_construction_index_override_rechecks_physical_locality(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    index = tmp_path / "headed-test.html"
+    index.write_text("<!doctype html>", encoding="utf-8")
+    monkeypatch.setattr(paths_module, "_drive_type", lambda path: 4)
+
+    with pytest.raises(AppPathError, match="absolute local path"):
+        resolve_local_index_path(index)
+
+    observed = iter((3, 4))
+    monkeypatch.setattr(paths_module, "_drive_type", lambda path: next(observed))
+
+    with pytest.raises(AppPathError, match="absolute local path"):
+        resolve_local_index_path(index)
 
 
 def test_directory_creation_is_idempotent(tmp_path: Path) -> None:

@@ -20,7 +20,9 @@ classified launcher, coordinated database gate, packaged bootstrap page, fixed
 single-instance identity, secured local WebView2 product host, and nonblocking
 orderly-close/retry controller. Its bridge command surface remains closed until
 the transport slice, so workflow controls and product views are not yet
-available in the window.
+available in the window. Clean-wheel Windows gates now exercise the real
+WebView2 host, packaged page, navigation/popup guards, runtime refusal,
+single-instance activation, isolated data root, and visible database refusal.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as

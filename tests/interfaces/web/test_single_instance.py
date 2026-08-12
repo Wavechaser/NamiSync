@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
 from uuid import uuid4
 
+import pytest
+
+from namisync.interfaces import launcher
 from namisync.interfaces.web.host import (
     DesktopInstanceIdentity,
     WindowsInstanceNative,
@@ -64,6 +69,69 @@ def test_production_identity_is_fixed_and_version_independent() -> None:
         window_title="NamiSync",
     )
     assert "0.1.0" not in first.mutex_name
+
+
+def test_sh_g_10_production_namespace_has_no_external_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for arguments in (
+        ["--mutex", r"Local\NamiSync.Test.Override"],
+        ["--window-title", "NamiSync Test Override"],
+        ["--instance-identity", "override"],
+        ["--data-dir", r"C:\isolated", "--mutex=override"],
+    ):
+        with pytest.raises(launcher.GuiArgumentError):
+            launcher._parse_gui_arguments(arguments)
+
+    for name in (
+        "NAMISYNC_MUTEX",
+        "NAMISYNC_WINDOW_TITLE",
+        "NAMISYNC_INSTANCE_IDENTITY",
+    ):
+        monkeypatch.setenv(name, "override")
+    assert production_instance_identity() == DesktopInstanceIdentity(
+        mutex_name=r"Local\NamiSync.Desktop",
+        window_title="NamiSync",
+    )
+
+    project_root = Path(__file__).parents[3]
+    launcher_source = Path(launcher.__file__).read_text(encoding="utf-8")
+    host_source = (project_root / "namisync/interfaces/web/host.py").read_text(
+        encoding="utf-8"
+    )
+    assert "os.environ" not in launcher_source + host_source
+    assert "os.getenv" not in launcher_source + host_source
+
+    launcher_tree = ast.parse(launcher_source)
+    host_calls = [
+        node
+        for node in ast.walk(launcher_tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "run_desktop"
+    ]
+    assert len(host_calls) == 1
+    assert isinstance(host_calls[0].args[1], ast.Call)
+    assert isinstance(host_calls[0].args[1].func, ast.Name)
+    assert host_calls[0].args[1].func.id == "production_instance_identity"
+
+    browser_surface = (
+        project_root / "namisync/interfaces/web/bridge.py"
+    ).read_text(encoding="utf-8")
+    assets = project_root / "namisync/interfaces/web/assets"
+    browser_surface += "".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(assets.iterdir())
+        if path.is_file()
+    )
+    for forbidden in (
+        r"Local\NamiSync.Desktop",
+        "DesktopInstanceIdentity",
+        "instance_identity",
+        "mutex_name",
+        "window_title",
+    ):
+        assert forbidden not in browser_surface
 
 
 def test_primary_holds_one_mutex_until_idempotent_release() -> None:

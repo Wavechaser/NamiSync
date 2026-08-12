@@ -2072,7 +2072,7 @@ collapsed paths, filter chips) directly. It persists no request, session, task,
 selection, view id, or projection revision; it is separate from database-owned
 semantic settings and needs no cross-interface writer mutex.
 
-**Stage 1 implementation status (updated 2026-08-12).** The isolated UI-state
+**Stage 6 host Slice 1 status (updated 2026-08-12).** The isolated UI-state
 store and promoted hostile-navigation/bridge boundary implement and test the
 forced-renderer call shape, UI-thread-only native `CoreWebView2` guards,
 native committed-origin dispatch recheck, strict versioned allowlist, and
@@ -2080,6 +2080,10 @@ structured return boundary. Pywebview 6.2.1 is pinned from the Stage 6
 reality run. Classified launchers, exact-CSP wheel assets, fixed instance
 identity, database-pair gate, and secured product host are now composed. The
 host intentionally has no command transport or event drain yet.
+Installed native probes can inject an absolute physical local index file at
+Python construction only; product launch retains the package-resource index and
+has no external override surface.
+
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
 

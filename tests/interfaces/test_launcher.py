@@ -75,6 +75,8 @@ raise SystemExit(code)
         ["--data-dir"],
         ["--data-dir="],
         ["--data-dir", "--other"],
+        ["--index-path", r"C:\headed-probe.html"],
+        [r"--index-path=C:\headed-probe.html"],
         ["--data-dir=C:\\one", "--data-dir=C:\\two"],
         ["--data-dir", "C:\\one", "extra"],
     ],

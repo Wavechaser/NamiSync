@@ -39,8 +39,12 @@ include = ["namisync*"]
 version = {attr = "namisync.version.VERSION"}
 
 [tool.pytest.ini_options]
+addopts = '-m "not headed"'
 testpaths = ["tests"]
 filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+markers = [
+    "headed: requires an interactive Windows desktop and the real WebView2 host",
+]
 
 [tool.importlinter]
 root_package = "namisync"

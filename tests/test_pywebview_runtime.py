@@ -144,7 +144,7 @@ def _values(
         ("x86", 0, "machine"),
     ],
 )
-def test_side_effect_free_detector_matches_pinned_pywebview_registry_choices(
+def test_br_g_31_detector_matches_pinned_pywebview_with_read_only_registry_access(
     monkeypatch: pytest.MonkeyPatch,
     architecture: str,
     channel_index: int,

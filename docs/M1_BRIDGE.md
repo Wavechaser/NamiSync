@@ -1,8 +1,10 @@
 # M1 Bridge and Presentation Contract
 
-Status (2026-07-30): design, decision, and acceptance log for implemented M1
-Stage 5.5 (facade completion) and still-unimplemented Stage 6 (web desktop
-shell). Stage 5.5 landed its tree substrate, recursive scan scope, selection
+Status (2026-07-30, implementation updated 2026-08-12): design, decision, and
+acceptance log for implemented M1 Stage 5.5 (facade completion) and active
+Stage 6 (web desktop shell). Stage 6's installed, secured product-host slice is
+complete; command transport and the later presentation slices remain. Stage
+5.5 landed its tree substrate, recursive scan scope, selection
 semantics, and facade integration without taking Stage 6 presentation work. It
 governs the seam between `NamiSyncService` and the packaged frontend: what
 computes where, how large plans and inventories reach the client, how
@@ -30,9 +32,10 @@ when its numbered acceptance gates, decision prerequisites, regression rows,
 and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
-**Propagation is implementation-gated.** Stage 5.5 behavior is now promoted
-into the active focused documents and README. Stage 6 remains unshipped;
-`M1_SHELL.md` and `DESKTOP_UI.md` now record the pre-implementation host and
+**Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
+secured host foundation are promoted into the active focused documents and
+README. The complete Stage 6 UI remains unshipped; `M1_SHELL.md` and
+`DESKTOP_UI.md` record the remaining transport and presentation work and
 packaging decisions, while slice 8 still performs the final as-built pass over
 every active document and `ui_mockup/`.
 
@@ -2793,8 +2796,10 @@ because its local tests are easier.
   preserve green.
 
 Stage 6 follows the same collision rule as Stage 5.5. Host/transport tests live
-under `tests/interfaces/web/test_host.py`, `test_transport.py`, and
-`test_events.py`; pure presentation tests live in `test_visible_sequence.py`;
+under `tests/interfaces/web/` in `test_host.py`, `test_native_host_gates.py`,
+`test_slice1_headed.py`, `test_transport.py`, and `test_events.py`; detector
+parity lives in `tests/test_pywebview_runtime.py`; pure presentation tests live
+in `test_visible_sequence.py`;
 sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
 `test_inventory_surface.py`, and `test_lifecycle.py`; scale tests live in
 `tests/test_bridge_scale.py`. Their gate tests retain the

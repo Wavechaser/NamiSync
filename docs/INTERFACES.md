@@ -309,6 +309,11 @@ production identity is always `Local\NamiSync.Desktop` with activation title
 nor page state can select a different namespace. Tests inject private identities
 only through Python construction.
 
+The same construction boundary may replace the packaged index with one
+existing absolute physical local file for native probes and the non-shipped
+component gallery. Production launch always resolves package data and offers no
+index override through argv, environment, page state, or bridge traffic.
+
 Phase 0 now supplies the dependency-free runtime version source, injectable
 `%LOCALAPPDATA%\NamiSync` path set, and rotating file logging shared by the
 `namisync` and `pywebview` loggers before pywebview import. Startup diagnostics
@@ -412,6 +417,10 @@ even an attached page has no application command. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, shuts logging, releases
 the mutex, and preserves the initiating startup diagnosis.
+Clean-wheel headed gates exercise this composition through the real pinned
+WebView2/pythonnet stack, including packaged-page popup composition, canceled
+navigation, guard-attachment failure, runtime refusal, activation, and the
+visible coordinated-database refusal.
 
 Normal window close is a separate host-owned state machine. A private admission
 condition around `BridgeDispatcher.dispatch` rejects new calls and waits for

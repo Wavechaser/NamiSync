@@ -4,7 +4,8 @@ Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
 seams. The classified launchers, initial wheel-packaged bootstrap assets, and
 secured product-host composition now exist; its empty bridge surface exposes no
-workflow command until Slice 2, and native headed closure remains pending.
+workflow command until Slice 2. Its clean-wheel, real-WebView2 host, isolation,
+runtime-refusal, popup/navigation, and single-instance gates are closed.
 `M1_SHELL.md` owns the remaining implementation order and beta-package closure.
 
 ## Purpose
@@ -78,6 +79,11 @@ binds that exact origin once. Renderer/origin failure aborts before native
 window creation; guard/load failure destroys the created window exactly once.
 Both paths close the service, logging, and mutex without replacing the original
 failure diagnosis.
+
+Native test and gallery compositions may supply an existing absolute physical
+local index file directly to `run_desktop`. The production launcher never
+exposes that construction-only seam through arguments, environment, page data,
+or bridge traffic, and the test page is never package data.
 
 Frontend assets are setuptools package data and use plain same-origin ES
 modules. There is no npm, framework, bundler, transpiler, source map, inline

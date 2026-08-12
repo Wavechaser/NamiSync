@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 from threading import Event, Lock, current_thread
 from time import monotonic
@@ -307,13 +308,117 @@ def test_host_prepares_before_create_and_starts_only_edge(
     assert started[2] == str(paths.webview2)
 
 
-def test_desktop_host_preserves_the_service_boundary() -> None:
+def test_host_accepts_only_a_construction_injected_local_index(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+    )
+    index = tmp_path / "headed-probe.html"
+    index.write_text("<!doctype html>", encoding="utf-8")
+    monkeypatch.setattr(
+        host,
+        "_packaged_index_path",
+        lambda: pytest.fail("injected host resolved the packaged index"),
+    )
+
+    result = run_desktop(
+        paths,
+        _identity(),
+        startup_error=reports.append,
+        index_path=index,
+    )
+
+    assert result == 0
+    assert reports == []
+    created = next(
+        item
+        for item in order
+        if isinstance(item, tuple) and item[0] == "create_window"
+    )
+    assert created[2] == str(index.resolve())
+
+
+def test_host_rejects_an_invalid_construction_index_before_window_creation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+    )
+
+    result = run_desktop(
+        paths,
+        _identity(),
+        startup_error=reports.append,
+        index_path="relative-headed-probe.html",
+    )
+
+    assert result == 1
+    assert len(reports) == 1
+    assert "absolute local path" in reports[0]
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    assert "create_window" not in labels
+    assert "start" not in labels
+
+
+def test_br_g_19_desktop_host_preserves_the_interface_boundary() -> None:
     source = Path(host.__file__).read_text(encoding="utf-8")
 
     assert "namisync.core" not in source
     assert "namisync.modules" not in source
     assert "namisync.db" not in source
     assert "NamiSyncService(" in source
+
+    package_root = Path(host.__file__).parents[2]
+    interfaces_root = package_root / "interfaces"
+    pathing_tree = ast.parse(
+        (package_root / "core" / "pathing.py").read_text(encoding="utf-8")
+    )
+    path_helpers = {
+        node.name
+        for node in pathing_tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    }
+    forbidden_calls: list[tuple[str, int, str]] = []
+    for interface_source in interfaces_root.rglob("*.py"):
+        tree = ast.parse(
+            interface_source.read_text(encoding="utf-8"),
+            filename=str(interface_source),
+        )
+        imported_aliases = {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+            and node.module == "namisync.core.pathing"
+            for alias in node.names
+            if alias.name in path_helpers
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            called = node.func
+            name = (
+                called.id
+                if isinstance(called, ast.Name)
+                else called.attr
+                if isinstance(called, ast.Attribute)
+                else None
+            )
+            if name in path_helpers or name in imported_aliases:
+                forbidden_calls.append(
+                    (
+                        str(interface_source.relative_to(package_root)),
+                        node.lineno,
+                        name,
+                    )
+                )
+
+    assert forbidden_calls == []
 
 
 def test_losing_instance_exits_before_logging_or_webview_import(

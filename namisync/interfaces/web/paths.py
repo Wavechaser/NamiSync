@@ -44,7 +44,7 @@ class AppPaths:
 
     @classmethod
     def from_root(cls, root: str | Path) -> AppPaths:
-        resolved = _resolve_local_root(root)
+        resolved = _resolve_local_path(root)
         logs = resolved / "logs"
         return cls(
             root=resolved,
@@ -90,7 +90,16 @@ class AppPaths:
                 )
 
 
-def _resolve_local_root(value: str | Path) -> Path:
+def resolve_local_index_path(value: str | Path) -> Path:
+    """Resolve one construction-injected headed-test page on a local drive."""
+
+    resolved = _resolve_local_path(value)
+    if not resolved.is_file():
+        raise AppPathError("desktop index path must resolve to a local file")
+    return resolved
+
+
+def _resolve_local_path(value: str | Path) -> Path:
     path = Path(value)
     _require_absolute_local(path)
     try:

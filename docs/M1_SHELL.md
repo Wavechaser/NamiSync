@@ -1,19 +1,19 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, revised 2026-08-08): implementation plan for the remaining
-M1 desktop shell. The 2026-08-06 revision folded in the bounded-history and
-terminal-cleanup contracts now recorded in `HISTORY.md` and `DISPATCHER.md` and
-added sections 5-8; the 2026-08-07 revision settles single-instance identity,
+Status (2026-08-04, implementation updated 2026-08-12): plan and progress for
+the remaining M1 desktop shell. The 2026-08-06 revision folded in the
+bounded-history and terminal-cleanup contracts now recorded in `HISTORY.md`
+and `DISPATCHER.md` and added sections 5-8; the 2026-08-07 revision settles
+single-instance identity,
 the database file-pair matrix, in-loop startup teardown, the normative CSP
 gate, the GUI argument grammar, and constructor-only command composition; the
 2026-08-08 revision adds the Fluent visual design language (§1.9), motion
 (§1.10), and the two GUI Breaks that bound the visual work.
-Stages 1-5.5, Phase 0, the WebView2 reality spike, Slice 1 steps 1-4 and 7, and
-step 8's shared service/CLI database-pair boundary are complete. Slice 1 steps
-5-6 are implemented through the secured empty-surface product host, bounded
-startup finalizer, and nonblocking user-close/retry state machine. Native
-installed/headed evidence remains before Slice 1 gate closure. NamiSync remains
-version `0.1.0` until M1 is
+Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slice 1 are complete.
+The installed-wheel and real WebView2 gates now cover the secured empty-surface
+product host, bounded startup finalizer, nonblocking user-close/retry state
+machine, fixed single-instance boundary, and coordinated database refusal.
+Slice 2 command transport is next. NamiSync remains version `0.1.0` until M1 is
 complete. Finishing M1 makes the product beta-ready; any later version change
 is a separate release decision.
 
@@ -937,15 +937,17 @@ clauses (no raw color in a surface renderer, the virtualized tree on an opaque
 card, and no animation on row recycling) finalize as `tree.js` and the
 plan/inventory renderers land in Slices 4-6.
 
-The concrete homes: `tests/interfaces/test_launcher.py` (SH-G-1),
-`tests/interfaces/web/test_paths.py` (SH-G-2),
+The concrete homes: `tests/interfaces/web/test_slice1_headed.py` (headed
+SH-G-1/2/5/6/10 and BR-G-31 activation),
+`tests/interfaces/web/test_paths.py` plus
+`tests/interfaces/web/test_headed_native.py` (ordinary and static SH-G-2),
 `tests/interfaces/web/test_logging_config.py` (SH-G-3),
-`tests/test_version.py` (SH-G-4), `tests/interfaces/web/test_startup_refusal.py`
-(SH-G-5), `tests/interfaces/web/test_wheel_assets.py` (SH-G-6),
+`tests/test_version.py` (SH-G-4),
+`tests/interfaces/web/test_wheel_assets.py` (ordinary SH-G-6),
 `tests/interfaces/web/test_frontend_static.py` (SH-G-7),
 `tests/interfaces/web/test_drain.py` (SH-G-8),
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
-`tests/interfaces/web/test_single_instance.py` (SH-G-10),
+`tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
 `tests/interfaces/web/test_design_tokens.py` (SH-G-11),
 `tests/interfaces/web/test_materials.py` (SH-G-12), and
 `tests/interfaces/web/test_motion.py` (SH-G-13). A gate test may live elsewhere

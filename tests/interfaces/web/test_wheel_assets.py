@@ -22,7 +22,7 @@ INITIAL_ASSETS = {
 }
 
 
-def test_built_wheel_contains_exact_initial_web_assets(
+def test_sh_g_6_built_wheel_contains_exact_initial_web_assets(
     built_wheel: BuiltWheel,
 ) -> None:
     project = tomllib.loads(

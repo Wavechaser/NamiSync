@@ -447,6 +447,7 @@ def run_desktop(
     *,
     startup_error: Callable[[str], None],
     instance_native: _InstanceNative | None = None,
+    index_path: str | Path | None = None,
 ) -> int:
     """Run the secured headed composition and retain every native owner."""
 
@@ -488,7 +489,7 @@ def run_desktop(
         dispatcher = _closed_dispatcher(document)
         window = webview_module.create_window(
             identity.window_title,
-            _packaged_index_path(),
+            _desktop_index_path(index_path),
             js_api=dispatcher,
         )
         if window is None:
@@ -634,6 +635,14 @@ def _noop_close_hook() -> None:
 def _packaged_index_path() -> str:
     package = importlib.resources.files("namisync.interfaces.web")
     return str(package / "assets" / "index.html")
+
+
+def _desktop_index_path(index_path: str | Path | None) -> str:
+    if index_path is None:
+        return _packaged_index_path()
+    from .paths import resolve_local_index_path
+
+    return str(resolve_local_index_path(index_path))
 
 
 def _configure_window_security(
