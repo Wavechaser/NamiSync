@@ -297,6 +297,9 @@ has a floor of 0.13.4. The supported pythonnet runtime is its default Windows
 covers both native-host prerequisites. The product WebView2 data directory is
 the explicit `%LOCALAPPDATA%\NamiSync\webview2` path, not pywebview's temporary
 private-mode default.
+GUI roots are resolved to a physical local drive: UNC and mapped-network roots
+are refused, and a pre-existing child junction may not redirect any database,
+settings, log, UI-state, or WebView2 artifact outside that resolved root.
 The side-effect-free compatibility module mirrors pinned pywebview 6.2.1's
 .NET prerequisite, accepted Edge channels, and HKCU/HKLM architecture routing;
 behavioral parity tests execute the upstream detector functions without
