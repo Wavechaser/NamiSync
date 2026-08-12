@@ -173,6 +173,18 @@ The exact pythonnet 3.1.0 pin is equally part of that boundary because native
 delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
 through it.
 
+Slice 2's fixed interaction target adds only two production actions.
+`pick_folder` is intentionally user-paced: it has no application timeout or
+automatic retry, and cancel is a normal `null` result. A selection becomes a
+server-held `slot-<32-lowercase-hex>` plus display-only text. `start_plan`
+accepts one live source slot, one live target slot, deletion policy
+`null`/`trash`/`additive`, and one gesture-scoped `command_id`; its 30-second
+response deadline does not cancel Python work, and one uncertain-delivery retry
+uses a new transport request id with the same command id and payload. Fixed
+structured errors guide the next user action without exposing exception text or
+paths. No plan-review, execution, inventory, history, settings, lifecycle, or
+drain command appears before its owning slice.
+
 Live state uses one bounded, coalescing `next_events` pull/drain request. The
 host preserves reliable item and terminal ordering, allows replaceable progress
 snapshots to collapse, and makes a gap or disconnected task visible instead of

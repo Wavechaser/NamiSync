@@ -81,9 +81,11 @@ decision that serves none of them is a decision to cut.
 3. **One implementation per concept.** Two trees share one builder, two window
    consumers share one flattener, two payload kinds share one validator, plan
    and inventory share one node-identity scheme.
-4. **Mutations are idempotent and revision-guarded.** Every state-changing
-   bridge call is safe to retry and refuses to act on a view the caller has
-   already outgrown.
+4. **Retry identity and view guards are command-specific.** Every receipted
+   bridge gesture is safe to retry under one `command_id`. A command formed
+   against a revisioned server view also carries that view's revision and
+   refuses stale intent; session creation does not invent a revision, and the
+   native folder picker carries neither identity.
 5. **Bounded repeated work, not just bounded payloads.** A window request bounds
    its detail query, decode, and per-row allocation. The deliberately
    whole-structure inventory projection and retained-history aggregate are
@@ -283,14 +285,15 @@ everything above to account for.
   guard and sequence-gap recovery, the subscription registry, and shutdown
   order.
 
-- **[DR-BR-27](#dr-br-27--mutating-commands-are-revision-guarded-and-idempotent)**
-  — extends DR-BR-03's two safety properties to every other mutating command:
-  a gesture-scoped idempotency key, the typed
+- **[DR-BR-27](#dr-br-27--receipted-commands-are-idempotent-revisioned-view-mutations-are-guarded)**
+  — assigns retry identity and revision guards per command rather than as one
+  blanket mutation schema: a gesture-scoped idempotency key, the typed
   `APPLIED`/`NOOP`/`STALE`/`CONFLICT` disposition reaching the view, and a
   `view_id` + projection-revision guard so an id-based command cannot freeze a
   subject set the user never saw, with the receipt consulted before the guard so
-  the two do not cancel. Its former single-mechanism assumption is resolved by
-  the recorder/service receipt split in DR-BR-27 and §9.1.
+  the two do not cancel. Slice 2's `start_plan` is receipted without a revision;
+  `pick_folder` has neither. The former single-mechanism assumption is resolved
+  by the recorder/service receipt split in DR-BR-27 and §9.1.
 
 **Verification.** Proof obligations that don't live at a single module.
 
@@ -1808,9 +1811,100 @@ because pywebview swallows callback exceptions; dispatch stays closed and the
 host tears down actionably after failure. The exact origin is reconstructed
 from the full `window.real_url` with `urlsplit`, never `rsplit`.
 
-The folder picker is the single flow where a real path legitimately enters.
-The host runs the native dialog, retains the path in a server-side slot, and
-returns `{id, display}`; the client only ever sends the id back.
+**Slice 2's wire contract is exact.** `assets/bridge.js` sends one JSON string
+to `dispatch(command_json)`. Its UTF-8 representation is refused above 65,536
+bytes before JSON decoding. Duplicate keys, non-finite numbers, malformed
+Unicode, and missing or unknown fields at every defined object level are
+invalid. A v1 request has exactly this shape:
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "0123456789abcdef0123456789abcdef",
+  "command": "pick_folder",
+  "payload": {"purpose": "source"}
+}
+```
+
+`schema_version` is the JSON integer `1`, not a Boolean. Transport
+`request_id` and receipted-gesture `command_id` each match
+`^[0-9a-f]{32}$`; a folder slot id matches `^slot-[0-9a-f]{32}$`. They are
+opaque, noninterchangeable kinds. The wrapper mints a fresh request id for
+every transport attempt. Success and failure return, respectively, exactly:
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "0123456789abcdef0123456789abcdef",
+  "ok": true,
+  "result": null
+}
+```
+
+```json
+{
+  "schema_version": 1,
+  "request_id": null,
+  "ok": false,
+  "error": {
+    "code": "invalid_request",
+    "message": "The desktop request is invalid."
+  }
+}
+```
+
+The response echoes `request_id` only after that field independently passes
+its grammar; otherwise it is `null`. The exact code/message vocabulary is the
+table in `M1_SHELL.md` Slice 2: `invalid_request`, `unsupported_version`,
+`unknown_command`, `invalid_payload`, `request_too_large`,
+`slot_unavailable`, `picker_unavailable`, `command_conflict`,
+`planning_refused`, `bridge_unavailable`, and `internal_error`. Retry policy is
+owned by the immutable command row and browser wrapper, not returned as handler
+data. A structured refusal is definitive; only uncertain transport delivery or
+`internal_error` from an admitted receipted command may trigger that row's one
+same-command replay. Messages expose no request body, command payload, real
+path, exception text, traceback, Python type, or implementation detail; a
+handler exception never crosses pywebview as its native traceback-bearing error
+value.
+
+**The Slice 2 production allowlist has exactly two rows.** Payload and result
+schemas in this table are exact; Slice 2 adds no dormant or placeholder command
+name.
+
+| Command | Exact payload | Exact success `result` | Identity / revision | Deadline and retry |
+| --- | --- | --- | --- | --- |
+| `pick_folder` | `{"purpose":"source"}` or `{"purpose":"target"}` | cancel: `null`; selection: `{"id":"slot-<32-lowercase-hex>","display":"<valid Unicode string>"}` | no `command_id`; no revision | interactive native operation; no client deadline and no automatic retry; another gesture is a fresh attempt |
+| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same key set with `"trash"` or `"additive"` | `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because it creates a session rather than acting on a revisioned view | 30,000 ms; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay has a fresh request id and the identical command, payload, and command id; an exposed manual Retry retains that command id |
+
+`null` consumes the service's current semantic deletion setting; `mirror` is
+not accepted here. Automatic replay uses the identical payload. The service
+receipt ultimately keys the resolved source/target pair plus deletion policy:
+the same resolved intent returns its retained receipt and different resolved
+intent under that command id returns `command_conflict`. A JavaScript deadline
+does not cancel an already admitted Python handler.
+
+**The native folder picker is the only path ingress.** Only it may create a
+server-side slot. A slot retains the real path, `source` or `target` purpose,
+inert display text, fixed monotonic expiry 30 minutes after insertion, and LRU
+recency. Lookup is nonconsuming and updates recency without extending expiry.
+Expired entries are swept before insertion or lookup; at most 32 unexpired
+entries exist, and an insertion at capacity evicts exactly the least-recently
+used entry, with slot id breaking a timestamp tie. `start_plan` resolves and
+snapshots both slots under one lock, requires one live purpose-matching source
+and target in that same observation, and only then updates both recencies.
+Fabricated, expired, evicted, and wrong-purpose ids have the same sanitized
+`slot_unavailable` result. The browser receives only `{id, display}`, sends only
+ids back, and can never promote `display` to filesystem authority.
+
+The immutable production command mapping is exactly `pick_folder` plus
+`start_plan`. `test_report` is a test-owned constructor-only harness row: the
+harness builds a new immutable mapping from those production rows plus its own
+validator, handler, payload, and result schema under `tests/`. No product argv,
+environment, page value, or bridge request can enable it, and it has no product
+retry class. Event drain and later plan, inventory, settings, history, and
+lifecycle commands are not reserved or allowlisted until their owning slices
+land each row with its schema, receipt/revision rule, deadline, retry policy,
+and gate.
 
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
 as the GUI-owned counterpart to `db/settings.json` — recents, window geometry,
@@ -1841,17 +1935,15 @@ is the one most likely to regress.
 
 **Resolution: both layers, and the DOM test is required.**
 
-- **A WebView2 integration test** drives real page JavaScript through
-  `window.pywebview.api.dispatch`, the Python handler, pinned pywebview's
-  internal `evaluate_js` return transport, and the production `textContent`
-  sink. It reads the rendered value back and compares the exact escaped display
-  form from the scanner's hostile-name corpus—byte-for-byte text, not markup,
-  attributes, or script.
-  Slice 2 cannot honestly satisfy this by inventing a test-only renderer: the
-  production plan and inventory sinks do not exist yet. Slice 2 proves bridge
-  round-trip and static sink restrictions; the DOM assertion lands against the
-  actual plan renderer in slice 5 and is extended to the inventory renderer in
-  slice 6. It stays in the suite thereafter.
+- **Staged WebView2 integration tests** drive real page JavaScript through
+  `window.pywebview.api.dispatch`, the Python handler, and pinned pywebview's
+  internal `evaluate_js` return transport. Slice 2 renders the scanner's
+  hostile-name corpus through the production inert-text path in the
+  constructor-only harness and reads `.textContent` back byte-for-byte; this
+  proves the real return transport and shared sink without pretending the later
+  product surfaces exist. Slice 5 repeats the corpus against the actual plan
+  DOM and slice 6 repeats it against the actual inventory DOM. BR-G-32 remains
+  open until all three stages prove text, not markup, attributes, or script.
 - **A broadened static scan** over packaged assets, because scanning only for
   `innerHTML`, `eval`, and `Function(` misses most markup sinks. It also
   rejects `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`,
@@ -1861,9 +1953,25 @@ is the one most likely to regress.
   source scan proves only that NamiSync-owned code constructs no JavaScript;
   it cannot prove or inspect the third-party return transport.
 
-Bridge round-trip tests over the same corpus land in slice 2, covering the
-ids-in / escaped-text-out and origin-recheck clauses of XV-19 without claiming
-that transport alone proves a later DOM sink.
+The split evidence has concrete homes:
+
+- `tests/interfaces/web/test_commands.py`, `test_transport.py`, and
+  `test_slots.py` own separately discoverable ordinary `test_br_g_32_*` nodes
+  for the immutable table, public-view codec manifest, exact envelope/refusal
+  boundary, receipt identity, and slot lifecycle. `test_frontend_static.py`
+  owns the prefixed packaged-asset sink scan.
+- `tests/interfaces/web/test_transport_headed.py::test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_sink`
+  owns the real pinned-pywebview hostile-text return path through the
+  constructor-only harness.
+- Separate `test_br_g_32_*` nodes in `test_transport_headed.py` own real
+  native-picker confinement and independent off-origin dispatch refusal.
+- `tests/interfaces/web/test_sync_surface.py::test_br_g_32_plan_dom_hostile_text`
+  and
+  `tests/interfaces/web/test_inventory_surface.py::test_br_g_32_inventory_dom_hostile_text`
+  own the production plan and inventory DOM stages in slices 5 and 6.
+
+Thus Slice 2 closes BR-G-32's transport, picker, origin-refusal, and static-sink
+portion of XV-19 without claiming that transport alone proves a later DOM sink.
 
 ### DR-BR-26 — The node tree is a pure function
 
@@ -1880,22 +1988,28 @@ round-tripped through exact-row and recursive-subtree command resolution plus
 foreign-location refusal. The directory-move case above belongs to slice 5 and
 does not cover it.
 
-### DR-BR-27 — Mutating commands are revision-guarded and idempotent
+### DR-BR-27 — Receipted commands are idempotent; revisioned-view mutations are guarded
 
-Selection got both properties in DR-BR-03. Nothing else did, and the gap is not
-cosmetic: `acknowledge_inventory` and `restore_inventory` already take a
-caller-supplied `command_id` that the recorder uses as its receipt key, and
-DR-BR-05 lifted them as "plain passthroughs" without saying who mints it. A
-bridge that generates a fresh id per attempt defeats the receipt the recorder
-was built around.
+Selection needs both properties in DR-BR-03, but they are not one universal
+mutation schema. The gap is still not cosmetic:
+`acknowledge_inventory` and `restore_inventory` already take a caller-supplied
+`command_id` that the recorder uses as its receipt key, and DR-BR-05 lifted them
+as "plain passthroughs" without saying who mints it. A bridge that generates a
+fresh command id per attempt defeats the receipt the recorder was built around.
 
-**Every mutating bridge command carries two things: the view revision it was
-formed against, and an idempotency key that survives retry.**
+**Each command row declares the two concerns independently.** A receipted user
+gesture carries an idempotency key that survives uncertain delivery. A command
+formed against a revisioned server view also carries that exact revision. Thus
+Slice 2's session-creating `start_plan` requires `command_id` but no revision,
+while `pick_folder` requires neither; later selection and inventory mutations
+carry the revision required by their owning view contract. The bridge never
+invents a blanket revision field for a mutation that was not formed against a
+revisioned view.
 
-- **Idempotency key.** `command_id` is minted **once per user gesture** by the
-  adapter and reused verbatim across every retry of that gesture. It is not
-  regenerated on resend, and it is not minted per dispatch, so a double-click or
-  a resend collapses to one applied change.
+- **Idempotency key.** For every receipted command, `command_id` is minted
+  **once per user gesture** by the adapter and reused verbatim across every
+  retry of that gesture. It is not regenerated on resend, and it is not minted
+  per dispatch, so a double-click or resend collapses to one applied change.
 
   **One mechanism cannot supply this property.** Three separate obstacles exist
   in the current tree:
@@ -1921,8 +2035,9 @@ formed against, and an idempotency key that survives retry.**
 
   **Resolution: split by mechanism.** Acknowledge/restore remain
   recorder-keyed, using a per-(gesture, row) derived key and one
-  caller-supplied timestamp reused byte-identically on retry. Every facade call
-  that mints an identity and submits a session instead uses a service-held
+  caller-supplied timestamp reused byte-identically on retry. Every receipted
+  facade call that mints an identity and submits a session instead uses a
+  service-held
   `command_id → (request_id, session_id)` receipt and returns the existing pair
   on a repeat. That receipt lives exactly as long as the retained session:
   `close_session` removes its reverse mapping and service shutdown clears the
@@ -1971,9 +2086,9 @@ formed against, and an idempotency key that survives retry.**
 the current native committed document, then releases that lock before the
 handler runs. It does not recheck after completion or roll back a mutation
 whose response becomes undeliverable after navigation or bridge reinjection.
-That is uncertain delivery, not uncertain commit: the client retries the same
-gesture with the same `command_id`. Recorder-backed mutations replay as
-`NOOP` after an earlier `APPLIED`; session-creating commands return the
+That is uncertain delivery, not uncertain commit: the client retries a
+receipted gesture with the same `command_id`. Recorder-backed mutations replay
+as `NOOP` after an earlier `APPLIED`; session-creating commands return the
 retained original request/session identity. Receipt lookup still precedes
 mutable-state reread and revision validation.
 
@@ -2606,21 +2721,27 @@ because its local tests are easier.
   without opening a system browser. *Not satisfied by* running from a source
   checkout, guarding only navigation, testing popup handlers separately, or
   importing `web` lazily from `cli`.
-- **BR-G-32 — The transport is one allowlisted, inert-data channel.** Every
-  public view type round-trips through the production JSON codec and the one
-  exposed `dispatch(command_json)`; unknown versions, commands, fields, and
-  malformed opaque ids are refused before invocation. The scanner's complete
-  hostile-name corpus crosses page JavaScript, the real pinned pywebview return
-  transport, and the production `textContent` sink byte-for-byte as display
-  text, and the broadened DR-BR-25 sink scan is empty. Bridge error messages
-  expose no filesystem paths or internals even though pywebview otherwise
-  returns Python tracebacks to the renderer. The native folder picker keeps
-  its real path server-side, returns only `{id, display}`, accepts the slot id
-  through dispatch, and refuses a fabricated id; no response or command contains
-  the path as authority. The inbound cap refuses an oversized command or search
-  string before decode/invocation. *Not satisfied by* a
-  direct Python call that bypasses dispatch, a benign-name subset, a test-only
-  renderer, returning a real picker path, or an `innerHTML`-only source scan.
+- **BR-G-32 — The transport is one allowlisted, inert-data channel.** Slice 2
+  proves every public view type round-trips through the production JSON codec
+  and the one exposed `dispatch(command_json)`; the production allowlist is
+  exactly `pick_folder` and `start_plan`, while `test_report` is possible only
+  through test-owned constructor composition. Unknown versions, commands,
+  fields, malformed opaque ids, and input above 65,536 UTF-8 bytes are refused
+  before handler invocation. Errors expose no filesystem path or internals even
+  though pywebview otherwise returns Python tracebacks. The native picker keeps
+  its path in the bounded server slot table, returns only `{id, display}`,
+  accepts only purpose-matching live ids through dispatch, and refuses a
+  fabricated id without making display text authoritative. The scanner's
+  complete hostile-name corpus crosses page JavaScript, the real pinned
+  pywebview return transport, and the production inert-text path in the headed
+  harness byte-for-byte, while the broadened DR-BR-25 packaged-asset sink scan
+  is empty. Those clauses close Slice 2's transport, picker, origin-refusal, and
+  static-sink portion. Slice 5 must repeat the corpus in the production plan DOM
+  and Slice 6 in the production inventory DOM; BR-G-32 is not wholly closed
+  until the latter lands. *Not satisfied by* a direct Python call that bypasses
+  dispatch, a benign-name subset, a test-only reimplementation of the sink,
+  returning a real picker path, an `innerHTML`-only source scan, or treating the
+  Slice 2 harness as proof of a later production surface.
 - **BR-G-33 — Event delivery remains ordered, bounded, recoverable, and
   stoppable.** Concurrent drains cannot reorder or split one task's sequence;
   progress coalesces without displacing reliable data; a reliable flood reaches
@@ -2797,7 +2918,8 @@ because its local tests are easier.
 
 Stage 6 follows the same collision rule as Stage 5.5. Host/transport tests live
 under `tests/interfaces/web/` in `test_host.py`, `test_native_host_gates.py`,
-`test_slice1_headed.py`, `test_transport.py`, and `test_events.py`; detector
+`test_slice1_headed.py`, `test_commands.py`, `test_transport.py`,
+`test_slots.py`, `test_transport_headed.py`, and `test_events.py`; detector
 parity lives in `tests/test_pywebview_runtime.py`; pure presentation tests live
 in `test_visible_sequence.py`;
 sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
@@ -2856,8 +2978,8 @@ accommodate the bridge is a regression unless the governing DR explicitly
 changes that behavior. Commands are repository-root PowerShell commands and use
 stable files/symbols rather than line numbers. A row may run more tests than its
 named XV because that is safer than maintaining a brittle node-id list. XV-19's
-three named files are created by slices 2, 5, and 6 and become mandatory as each
-lands.
+split transport/static files and two later surface files are created by slices
+2, 5, and 6 and become mandatory as each lands.
 
 | Watch | Required command | Why it is at risk / owner |
 | --- | --- | --- |
@@ -2869,7 +2991,7 @@ lands.
 | `XV-16` shared hash factory and production composition | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_runtime.py tests/test_executor_native.py tests/test_executor_pipeline.py tests/test_executor_settlement.py tests/test_inventory_runtime.py tests/test_db_repositories.py tests/test_package.py tests/modules/test_verifier_engine.py` | Payload/runtime edits must not fork verifier construction, diverge copy from verify encoding, or import a second hash implementation / B, C |
 | `XV-17` history-v4 window contract | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | Reset-only v4, append-only reliable events, atomic window/terminal visibility, incomplete restart views, and 1..256-row summary/detail bounds remain exact / B, C, Stage 6 slice 7 |
 | `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
-| `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_transport.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → production `textContent` round trip and NamiSync-owned sink scan become executable across slices 2, 5, and 6; all three files are required because transport alone cannot prove production DOM sinks / slices 2, 5, 6 |
+| `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_commands.py tests/interfaces/web/test_transport.py tests/interfaces/web/test_slots.py tests/interfaces/web/test_transport_headed.py tests/interfaces/web/test_frontend_static.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → production `textContent` round trip and NamiSync-owned sink scan become executable across slices 2, 5, and 6; the split transport/static files plus both later surface files are required because one layer alone cannot prove the full chain / slices 2, 5, 6 |
 | `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
 | M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | The initial Stage 5.5 lanes left this file byte-for-byte unchanged; the integrated adversarial closure adds only the permanent irreversible-update admission regression described by BR-G-17. Every prior explicit sync, history, inventory, and integrity command remains behaviorally unchanged. Slice 1 may later replace only the no-subcommand/entry-point expectations required by the launcher decision / B, C, D, slice 1 |
 | Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |
@@ -2910,11 +3032,11 @@ a parallel pair.
 | --- | --- | --- | --- | --- |
 | 0 | Host | pywebview reality spike | nothing | BR-G-30 |
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
-| 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 |
+| 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
 | 4 | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver over Lane A's ordered array | Lane A | BR-G-2's Stage 6 clause, BR-G-34 |
-| 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-35–37 and the plan portion of BR-G-42 |
-| 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-22, BR-G-23, BR-G-38, BR-G-39 and the inventory portion of BR-G-42 |
+| 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
+| 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
 | 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |
 | 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | 7 | BR-G-43, BR-G-44 |
 

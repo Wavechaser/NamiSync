@@ -308,10 +308,15 @@ response validation, and bridge-reincarnation recovery. A static test enforces
 the single reference site.
 
 `request_id` identifies one transport attempt. `command_id` identifies one
-mutating user gesture and survives uncertain delivery and retry. Read-only
-requests may retry with a new request id; mutations retry with a new request id
-and the same command id and revision. Drains recover from the last sequence the
-client accepted rather than using a mutation receipt. Repeated
+receipted user gesture and survives uncertain delivery and retry. A retry always
+uses a new request id. A receipted command reuses its command id and exact
+command payload; it carries a revision only when that command was formed against
+a revisioned server view. Therefore Slice 2's `start_plan` requires a command id
+but no revision, while `pick_folder` requires neither. Later selection and
+inventory mutations carry the revision required by their owning view contract;
+the bridge does not invent a blanket revision field for every mutation. Drains
+recover from the last sequence the client accepted rather than using a mutation
+receipt. Repeated
 `pywebviewready` events install no duplicate listeners and rearm at most one
 drain per task.
 
@@ -578,6 +583,131 @@ installation, not yet the final PyInstaller artifact.
 
 ### Slice 2 - Command transport, slots, and headed harness
 
+The following is the normative Slice 2 transport target. It is a contract for
+the next implementation slice, not a claim that Slice 2 is complete.
+
+**Wire envelopes and limits.** The JavaScript wrapper sends one JSON string to
+`dispatch(command_json)`. Its UTF-8 encoding must be at most 65,536 bytes before
+JSON decoding. Duplicate object keys, non-finite numbers, malformed Unicode,
+and missing or unknown fields at any defined object level are invalid. The v1
+request has exactly these fields:
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "0123456789abcdef0123456789abcdef",
+  "command": "pick_folder",
+  "payload": {"purpose": "source"}
+}
+```
+
+`schema_version` is the JSON integer `1` (a Boolean is not an integer here).
+Both transport `request_id` and mutation `command_id` match
+`^[0-9a-f]{32}$`; a slot id matches `^slot-[0-9a-f]{32}$`. The wrapper mints a
+fresh request id for every transport attempt. IDs are opaque and one ID kind is
+never accepted in place of another.
+
+A successful dispatch returns exactly:
+
+```json
+{
+  "schema_version": 1,
+  "request_id": "0123456789abcdef0123456789abcdef",
+  "ok": true,
+  "result": null
+}
+```
+
+The response request id equals the admitted request. A failed dispatch returns
+exactly:
+
+```json
+{
+  "schema_version": 1,
+  "request_id": null,
+  "ok": false,
+  "error": {
+    "code": "invalid_request",
+    "message": "The desktop request is invalid."
+  }
+}
+```
+
+`request_id` is echoed only after it independently passes its grammar;
+otherwise it is `null`. The server error vocabulary is exact:
+
+| `code` | Fixed `message` |
+| --- | --- |
+| `invalid_request` | `The desktop request is invalid.` |
+| `unsupported_version` | `Restart NamiSync to load a compatible desktop page.` |
+| `unknown_command` | `This desktop action is not available.` |
+| `invalid_payload` | `The desktop action contains invalid data.` |
+| `request_too_large` | `The desktop request is too large.` |
+| `slot_unavailable` | `That folder selection is no longer available. Choose both folders again.` |
+| `picker_unavailable` | `The folder picker could not open. Try again.` |
+| `command_conflict` | `This action no longer matches its first attempt. Start the action again.` |
+| `planning_refused` | `NamiSync could not start a plan for those folders. Review both folders and try again.` |
+| `bridge_unavailable` | `NamiSync is closing or this desktop page is no longer trusted.` |
+| `internal_error` | `NamiSync could not complete the desktop action.` |
+
+Retry behavior belongs to the immutable command row and JavaScript wrapper,
+not to data returned by a possibly failed handler. A structured server refusal
+is definitive. Only uncertain transport delivery or `internal_error` from an
+admitted receipted command may trigger that row's one same-command replay.
+Messages contain no request body, command payload, real path, exception text,
+traceback, Python type, or implementation detail. No command exception crosses
+pywebview as its traceback-bearing native error value.
+
+**The production allowlist is exactly two rows.** `payload` and `result` below
+are exact schemas, not examples; no additional production command name or
+placeholder handler lands in Slice 2.
+
+| Command | Exact payload | Exact success `result` | Identity / revision | Timeout and retry |
+| --- | --- | --- | --- | --- |
+| `pick_folder` | `{"purpose":"source"}` or `{"purpose":"target"}` | user cancel: `null`; selection: `{"id":"slot-<32-lowercase-hex>","display":"<valid Unicode string>"}` | no `command_id`; no revision | interactive native operation; no client deadline and no automatic retry; a later user gesture is a new attempt with a fresh request id |
+| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same exact key set with `"trash"` or `"additive"` | `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because this creates a session rather than mutating a revisioned view | 30,000 ms response deadline; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay uses a fresh request id and the same command name, payload, and command id; a still-uncertain result exposes Retry, which retains that same command id |
+
+`display` is presentation-only inert text; Python never accepts it back as
+authority. `null` means use the service's current semantic deletion setting;
+`mirror` is not accepted by this Slice 2 command. Automatic replay uses the
+exact original payload. Service receipt identity is ultimately the resolved
+source/target pair plus deletion policy: reusing a command id for different
+resolved intent returns `command_conflict`, while the same resolved intent
+returns the existing `start_plan` receipt. A timer expiring in JavaScript does
+not cancel an admitted Python handler.
+
+**Folder slots are bounded server authority.** Only the native picker may
+insert a slot. Each entry retains the real path, its `source` or `target`
+purpose, inert display text, and a monotonic expiry 30 minutes after insertion.
+Lookup does not consume a slot and does not extend its expiry, so the same slot
+pair supports a same-command retry while live. Before insert or lookup, expired
+entries are swept. At most 32 unexpired entries exist. If insertion still finds
+32, it evicts exactly the least-recently-used entry (slot id breaks a timestamp
+tie); a successful lookup updates recency but never extends the fixed expiry.
+`start_plan` resolves and snapshots the source and target entries under one lock
+before invoking its handler: both must exist in the same observation, be
+unexpired, and match their respective purposes, and only then are both marked
+recently used. Fabricated, expired, evicted, or wrong-purpose ids all return the
+same sanitized `slot_unavailable` error. No bridge request contains a path, and
+no response makes `display` authoritative.
+
+**Harness composition and deferrals.** `test_report` is not a production row.
+The headed harness constructs a new immutable mapping from the production two
+rows plus one test-owned `test_report` spec; its validator, handler, payload,
+and result schema live under `tests/`, and product argv, environment, page data,
+or bridge traffic cannot enable it. The harness uses the same v1 envelope and
+production `bridge.js`, but its whole-scenario parent deadline owns test
+timeout; there is no product `test_report` retry class.
+
+Slice 3 owns the event-drain command; Slice 5 owns plan-review, selection,
+execution, and control commands; Slice 6 owns inventory commands; and Slice 7
+owns settings, history, and lifecycle commands. Those names and payload schemas
+are not reserved or allowlisted in Slice 2. A later command formed against a
+revisioned view must carry that view's exact revision, while a later read or
+mutation not formed against such a view does not invent one. The owning slice
+must add its row, schema, receipt/revision rule, timeout, retry policy, and gate
+together.
+
 1. `commands.py` defines one explicit row per allowed command: exact payload
    validator, handler, read-only/mutating class, command-id requirement,
    revision requirement, and retry/timeout class.
@@ -610,7 +740,34 @@ installation, not yet the final PyInstaller artifact.
    and returns it through `test_report`. Python asserts byte-for-byte equality.
 
 Slice 2 closes the transport portion of BR-G-32. The production plan and
-inventory DOM portions close only with slices 5 and 6.
+inventory DOM portions close only with slices 5 and 6. Split-level evidence is
+named and owned as follows:
+
+- `tests/interfaces/web/test_commands.py` owns discoverable ordinary
+  `test_br_g_32_*` nodes for the exact immutable command table, full
+  public-view codec manifest, and single browser-wrapper reference.
+- `tests/interfaces/web/test_transport.py` owns ordinary `test_br_g_32_*` nodes
+  for exact envelopes, strict pre-handler refusal, the 64 KiB boundary,
+  sanitized failures, and start-plan receipt identity.
+- `tests/interfaces/web/test_slots.py` owns ordinary `test_br_g_32_*` nodes for
+  opaque purpose binding, fixed expiry, capacity/LRU, and atomic nonconsuming
+  pair resolution. `tests/interfaces/web/test_frontend_static.py` owns the
+  broadened packaged-asset sink scan under the same gate prefix.
+- `tests/interfaces/web/test_transport_headed.py::test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_sink`
+  owns the pinned-pywebview return path and production-`textContent` hostile
+  corpus round trip through the constructor-only harness.
+- `tests/interfaces/web/test_transport_headed.py` also owns separate
+  `test_br_g_32_*` nodes for the real native picker path-confinement and
+  independently committed off-origin dispatch-refusal clauses.
+- `tests/interfaces/web/test_transport_headed.py::test_sh_g_3_headed_renderer_and_hostile_dispatch_are_logged_safely`
+  compares the logged renderer to native `BrowserVersionString` and owns
+  SH-G-3's real dispatched-body/path-sentinel privacy clause in a child host,
+  while `tests/interfaces/web/test_logging_config.py` owns discoverable
+  ordinary `test_sh_g_3_*` nodes for configuration/ownership, child-process
+  startup records and console silence, rotation/Unicode, and exception hooks.
+- Slice 5's production plan surface and Slice 6's production inventory surface
+  add their own BR-G-32 named nodes; the Slice 2 nodes do not claim those DOM
+  clauses early.
 
 ### Slice 3 - Event drain
 
@@ -941,7 +1098,12 @@ The concrete homes: `tests/interfaces/web/test_slice1_headed.py` (headed
 SH-G-1/2/5/6/10 and BR-G-31 activation),
 `tests/interfaces/web/test_paths.py` plus
 `tests/interfaces/web/test_headed_native.py` (ordinary and static SH-G-2),
-`tests/interfaces/web/test_logging_config.py` (SH-G-3),
+`tests/interfaces/web/test_logging_config.py` (ordinary/child-process SH-G-3
+logging clauses) plus `tests/interfaces/web/test_transport_headed.py` (SH-G-3's
+real renderer/dispatched-body clauses),
+`tests/interfaces/web/test_commands.py`, `test_transport.py`, `test_slots.py`,
+`test_frontend_static.py`, and `test_transport_headed.py` (split ordinary and
+headed BR-G-32 transport evidence),
 `tests/test_version.py` (SH-G-4),
 `tests/interfaces/web/test_wheel_assets.py` (ordinary SH-G-6),
 `tests/interfaces/web/test_frontend_static.py` (SH-G-7),
@@ -986,6 +1148,7 @@ against the changed configuration before the change lands.
 | `private_mode=True` with explicit `storage_path` | Section 1.3 | Headed retest of the storage branch on any pywebview upgrade |
 | `namisync.log` header, level/propagation ownership, rotation, Unicode fallback, and privacy boundary | Section 1.4 | Rerun SH-G-3 and its child-process tests |
 | Product/distribution version remains independent of schema, protocol, policy, contract, dependency, and runtime versions | Section 1.5 and each owning module | Bump and test only the affected owner; never create a central version registry |
+| Bridge v1 envelopes, ID grammar, 65,536-byte cap, two Slice 2 command rows, fixed errors, and slot limits | Slice 2 normative transport target | Change `M1_BRIDGE.md`'s mirrored boundary and the BR-G-32 split evidence in the same atom; rerun XV-19 |
 | `BridgeDispatcher` exposes only `dispatch` | Section 1.8 | Underscore the new member and keep the static test passing |
 | Two-declaration `ROW_H` equality | Section 1.7 | Keep the parse test and headed measurement passing |
 | Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
@@ -1071,8 +1234,9 @@ Already required, restated here as one list: logging configuration
 (`docs/DESKTOP_UI.md`); the synchronous `before_load` installer; serialized
 teardown attempts, where only a completed attempt permits the one programmatic
 close (Slice 1 step 6); repeated `pywebviewready` handling with at most one
-drain per task (section 1.8); and mutation retry under one `command_id`
-(section 1.8).
+drain per task (section 1.8); and receipted-command retry under one
+`command_id`, with a revision only for commands formed against a revisioned
+view (section 1.8).
 
 Added by this section:
 

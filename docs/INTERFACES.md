@@ -390,6 +390,19 @@ that the transport is system-wide script-free. The actual Stage 6 host must
 preserve the NamiSync-owned shape and add the bounded/coalesced event drain
 plus escaped DOM rendering.
 
+The doc-first Slice 2 target keeps the production table to exactly
+`pick_folder` and `start_plan`. The former owns one native user interaction and
+returns `null` or an opaque purpose-bound slot id plus inert display text; the
+latter accepts only one source slot, one target slot, an explicit
+`null`/`trash`/`additive` deletion choice, and a gesture `command_id`, then
+delegates to `NamiSyncService.start_plan`. The browser never supplies a path as
+authority. `commands.py` owns immutable command rows and exact payload
+validation, `bridge.py` owns the v1 envelope/primitive codec/refusal boundary,
+and `slots.py` owns the locked 32-entry, 30-minute process-local path table.
+The exact envelopes, ids, messages, deadlines, and retry rule are normative in
+`M1_SHELL.md`; this paragraph does not mark the still-empty Slice 1 table as
+implemented.
+
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
 canceled or failed navigation, and rebuilds its in-flight return-callback
 table. The renderer can trigger this repeatedly. Frontend initialization must

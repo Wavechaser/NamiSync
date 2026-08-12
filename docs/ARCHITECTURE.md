@@ -2084,6 +2084,21 @@ Installed native probes can inject an absolute physical local index file at
 Python construction only; product launch retains the package-resource index and
 has no external override surface.
 
+**Stage 6 Slice 2 ownership target.** `interfaces/web/commands.py` is the sole
+owner of immutable production command rows and their exact payload policies;
+its initial table is exactly `pick_folder` and `start_plan`.
+`interfaces/web/bridge.py` remains domain-blind and owns strict v1 parsing,
+origin/admission checks, the recursive primitive-view codec, and sanitized
+response envelopes. `interfaces/web/slots.py` alone retains picker paths in a
+locked, bounded, expiring process-local table and atomically resolves the
+purpose-bound pair. `host.py` constructs these owners and passes one snapshotted
+mapping; it does not duplicate their rules. `assets/bridge.js` alone touches
+`window.pywebview` and owns transport ids, the 30-second uncertain-delivery
+retry for receipted `start_plan`, and response validation. Test-only
+`test_report` composition remains under `tests/`; no runtime registration or
+external composition surface exists. This is the documented next state, not a
+claim that Slice 1's empty table already implements it.
+
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.
 
