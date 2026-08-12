@@ -186,9 +186,16 @@ def test_modules_use_only_local_explicit_js_imports(
     }
 
     assert imports == {
-        "app.js": ["./bridge.js", "./render.js"],
+        "app.js": [
+            "./bridge.js",
+            "./panels.js",
+            "./rail.js",
+            "./render.js",
+        ],
         "bridge.js": [],
         "icons.js": [],
+        "panels.js": ["./render.js"],
+        "rail.js": ["./render.js"],
         "render.js": [],
         "tree.js": ["./render.js"],
     }
@@ -514,3 +521,55 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
 
     assert 'status.textContent === "Starting..."' in app
     assert app.count('renderText(status, "Ready")') == 1
+
+
+def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    index = assets["index.html"]
+    app = assets["app.js"]
+    rail = assets["rail.js"]
+    panels = assets["panels.js"]
+    shell = "\n".join((app, rail, panels))
+
+    assert '<main id="app">' in index
+    assert index.count('id="host-status"') == 1
+    assert '<p id="host-status" role="status" aria-live="polite">' in index
+    assert '<main id="app" aria-live=' not in index
+    assert 'ariaLabel = "Task navigation";' in rail
+    assert 'renderText(heading, "Tasks");' in rail
+    assert 'renderText(empty, "No tasks are available.");' in rail
+    assert 'ariaLabel = "Work area";' in panels
+    assert 'renderText(heading, "Work area");' in panels
+    assert 'renderText(empty, "No task selected.");' in panels
+    assert "Task details will appear here when a task is available." in panels
+    assert rail.count("tabIndex = 0;") == 1
+    assert panels.count("tabIndex = 0;") == 1
+    assert "app.append(createTaskRail(), createWorkPanel());" in app
+    assert 'status.textContent === "Starting..."' in app
+
+    assert "window.pywebview" not in shell
+    assert '"./bridge.js"' not in rail + panels
+    assert "dispatch(" not in rail + panels
+    assert "innerHTML" not in shell
+    assert re.search(r"\.textContent\s*=(?!=)", shell) is None
+    assert not re.search(r"task-[0-9a-f]{32}", shell)
+    assert not re.search(r"[0-9a-f]{32}", shell)
+
+
+def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
+    built_wheel: BuiltWheel,
+) -> None:
+    app_css = _wheel_assets(built_wheel)["app.css"]
+
+    assert '"rail work"' in app_css
+    assert "minmax(12rem, 18rem) minmax(0, 1fr)" in app_css
+    assert "@media (max-width: 48rem)" in app_css
+    assert '"rail"' in app_css and '"work"' in app_css
+    assert "grid-template-columns: minmax(0, 1fr);" in app_css
+    assert app_css.count("min-inline-size: 0;") >= 2
+    assert "min-block-size: 100vh;" in app_css
+    assert "height: 100vh" not in app_css
+    assert "overflow: hidden" not in app_css.split(".nami-tree", 1)[0]
+    assert "--palette-" not in app_css

@@ -5,13 +5,72 @@ body {
 }
 
 body {
-  display: grid;
-  place-items: center;
+  min-block-size: 100vh;
 }
 
 #app {
+  align-content: start;
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-areas:
+    "header header"
+    "rail work";
+  grid-template-columns: minmax(12rem, 18rem) minmax(0, 1fr);
+  min-block-size: 100vh;
   padding: var(--space-6);
-  text-align: center;
+}
+
+.nami-shell__header {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  grid-area: header;
+}
+
+.nami-shell__header h1,
+.nami-task-rail h2,
+.nami-work-panel h2,
+.nami-shell__empty,
+.nami-shell__guidance,
+#host-status {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+#host-status,
+.nami-shell__guidance {
+  color: var(--color-neutral-foreground-secondary);
+}
+
+.nami-task-rail,
+.nami-work-panel {
+  min-inline-size: 0;
+  overflow: auto;
+}
+
+.nami-task-rail {
+  grid-area: rail;
+}
+
+.nami-work-panel {
+  grid-area: work;
+}
+
+.nami-shell__empty,
+.nami-shell__guidance {
+  margin-block-start: var(--space-4);
+}
+
+@media (max-width: 48rem) {
+  #app {
+    grid-template-areas:
+      "header"
+      "rail"
+      "work";
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .nami-tree {

@@ -27,6 +27,8 @@ INITIAL_ASSETS = {
     "icons/info_20_regular.svg",
     "icons/warning_20_regular.svg",
     "index.html",
+    "panels.js",
+    "rail.js",
     "render.js",
     "tokens.css",
     "tree.js",
