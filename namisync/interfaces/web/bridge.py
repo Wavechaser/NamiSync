@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Callable, Mapping, MutableMapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from threading import Condition, Lock
 from typing import Protocol
@@ -518,6 +520,122 @@ class BridgeDispatcher:
         with self._admission:
             while self._admitted:
                 self._admission.wait()
+
+
+def to_primitive_view(value: object) -> object:
+    """Recursively encode only approved public views as JSON-native data."""
+
+    from .commands import PUBLIC_VIEW_DATACLASSES, PUBLIC_VIEW_ENUMS
+
+    return _to_primitive_view(
+        value,
+        set(),
+        PUBLIC_VIEW_DATACLASSES,
+        PUBLIC_VIEW_ENUMS,
+    )
+
+
+def _to_primitive_view(
+    value: object,
+    active: set[int],
+    approved_dataclasses: frozenset[type[object]],
+    approved_enums: frozenset[type[object]],
+) -> object:
+    if value is None or type(value) in {bool, int, str}:
+        if type(value) is str:
+            try:
+                value.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise BridgeProtocolError(
+                    "structured bridge data contains invalid Unicode"
+                ) from error
+        return value
+    if type(value) is float:
+        if math.isfinite(value):
+            return value
+        raise BridgeProtocolError(
+            "structured bridge data contains a non-finite number"
+        )
+    if type(value) is datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise BridgeProtocolError(
+                "structured bridge data contains a naive datetime"
+            )
+        return value.isoformat()
+    if isinstance(value, Enum):
+        if type(value) not in approved_enums:
+            raise BridgeProtocolError(
+                "structured bridge data contains an unapproved enum"
+            )
+        if value.value is value:
+            raise BridgeProtocolError("structured bridge data is recursive")
+        return _to_primitive_view(
+            value.value,
+            active,
+            approved_dataclasses,
+            approved_enums,
+        )
+
+    identity = id(value)
+    if identity in active:
+        raise BridgeProtocolError("structured bridge data is recursive")
+    if is_dataclass(value) and not isinstance(value, type):
+        if type(value) not in approved_dataclasses:
+            raise BridgeProtocolError(
+                "structured bridge data contains an unapproved dataclass"
+            )
+        active.add(identity)
+        try:
+            return {
+                field.name: _to_primitive_view(
+                    getattr(value, field.name),
+                    active,
+                    approved_dataclasses,
+                    approved_enums,
+                )
+                for field in fields(value)
+            }
+        finally:
+            active.remove(identity)
+    if isinstance(value, Mapping):
+        active.add(identity)
+        try:
+            encoded: dict[str, object] = {}
+            for key, item in value.items():
+                if type(key) is not str:
+                    raise BridgeProtocolError(
+                        "structured bridge data contains a non-string object key"
+                    )
+                try:
+                    key.encode("utf-8")
+                except UnicodeEncodeError as error:
+                    raise BridgeProtocolError(
+                        "structured bridge data contains invalid Unicode"
+                    ) from error
+                encoded[key] = _to_primitive_view(
+                    item,
+                    active,
+                    approved_dataclasses,
+                    approved_enums,
+                )
+            return encoded
+        finally:
+            active.remove(identity)
+    if isinstance(value, (list, tuple)):
+        active.add(identity)
+        try:
+            return [
+                _to_primitive_view(
+                    item,
+                    active,
+                    approved_dataclasses,
+                    approved_enums,
+                )
+                for item in value
+            ]
+        finally:
+            active.remove(identity)
+    raise BridgeProtocolError("structured bridge data is not JSON-compatible")
 
 
 def _validate_command(value: object) -> dict[str, object]:

@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 import zipfile
 from html.parser import HTMLParser
+from pathlib import Path
+
+import pytest
 
 from conftest import BuiltWheel
 
@@ -16,6 +19,28 @@ CSP = (
     "img-src 'self' data:; connect-src 'none'; frame-src 'none'; "
     "object-src 'none'; base-uri 'none'; form-action 'none'"
 )
+PROJECT_ROOT = Path(__file__).parents[3]
+_FORBIDDEN_ACTIVE_SINKS = (
+    r"\b(?:innerHTML|outerHTML)\s*=",
+    r"\.insertAdjacentHTML\s*\(",
+    r"\bdocument\.write(?:ln)?\s*\(",
+    r"\bsrcdoc\s*=",
+    r"\bDOMParser\s*\(",
+    r"\bcreateContextualFragment\s*\(",
+    r"\.setAttribute\s*\(",
+    r"\.(?:href|src|style|cssText|on\w+)\s*=",
+    r"\beval\s*\(",
+    r"\bnew\s+Function\s*\(",
+    r"\bset(?:Timeout|Interval)\s*\(\s*[\"']",
+)
+
+
+def _active_sink_hits(source: str) -> tuple[str, ...]:
+    return tuple(
+        pattern
+        for pattern in _FORBIDDEN_ACTIVE_SINKS
+        if re.search(pattern, source, re.IGNORECASE)
+    )
 
 
 class _DocumentAudit(HTMLParser):
@@ -99,7 +124,7 @@ def test_shipped_page_has_exact_first_csp_and_no_inline_execution(
     assert parser.script_sources == ["/app.js"]
 
 
-def test_only_bridge_wrapper_references_pywebview(
+def test_br_g_32_only_bridge_wrapper_references_pywebview(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
@@ -108,6 +133,7 @@ def test_only_bridge_wrapper_references_pywebview(
     }
 
     assert references == {"bridge.js"}
+    assert assets["bridge.js"].count("window.pywebview") == 1
 
 
 def test_modules_use_only_local_explicit_js_imports(
@@ -122,6 +148,73 @@ def test_modules_use_only_local_explicit_js_imports(
     assert imports == ["./bridge.js"]
     assert all(value.startswith("./") and value.endswith(".js") for value in imports)
     assert all("innerHTML" not in text for text in assets.values())
+
+
+def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
+    built_wheel: BuiltWheel,
+) -> None:
+    source = "\n".join(_wheel_assets(built_wheel).values())
+
+    assert _active_sink_hits(source) == ()
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "node.innerHTML = hostile;",
+        "node.outerHTML=hostile;",
+        'node.insertAdjacentHTML("beforeend", hostile);',
+        "document.write(hostile);",
+        "frame.srcdoc = hostile;",
+        "new DOMParser().parseFromString(hostile, mime);",
+        "range.createContextualFragment(hostile);",
+        'node.setAttribute(name, hostile);',
+        "link.href = hostile;",
+        "image.src = hostile;",
+        "node.style = hostile;",
+        "node.cssText = hostile;",
+        "node.onclick = hostile;",
+        "eval(hostile);",
+        "new Function(hostile);",
+        'setTimeout("hostile()", 1);',
+        'setInterval("hostile()", 1);',
+    ],
+)
+def test_br_g_32_sink_scan_catches_counterexample_mutations(
+    mutation: str,
+) -> None:
+    assert _active_sink_hits(mutation)
+
+
+def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+
+    assert "const START_PLAN_TIMEOUT_MS = 30000;" in source
+    assert "command_id: mintId()" in source
+    assert source.count('"pick_folder"') == 1
+    assert source.count('"start_plan"') == 1
+    assert source.count("return await startPlanAttempt(payload);") == 2
+    assert "new StartPlanUncertainError(submit)" in source
+    assert "generation !== bridgeGeneration" in source
+    assert 'typeof sourceId !== "string"' in source
+    assert 'typeof targetId !== "string"' in source
+    assert 'typeof value.id === "string"' in source
+    assert 'typeof value.request_id === "string"' in source
+    assert 'typeof value.session_id === "string"' in source
+    assert "Object.getPrototypeOf(value) !== Object.prototype" in source
+    assert source.index("const generation = bridgeGeneration;") < source.index(
+        "const api = bridgeApi();",
+        source.index("async function dispatchAttempt"),
+    )
+    assert "return dispatchAttempt(" in source
+    assert "response.request_id !== requestId" in source
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(
