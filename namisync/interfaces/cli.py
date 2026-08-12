@@ -193,6 +193,9 @@ def _run_sync(
         )
         return EXIT_USAGE
     try:
+        refusal = _database_refusal(service, stderr)
+        if refusal is not None:
+            return refusal
         plan_session = None
         try:
             plan_session = service.start_plan(
@@ -335,6 +338,9 @@ def _run_location_workflow(
         return EXIT_USAGE
     session = None
     try:
+        refusal = _database_refusal(service, stderr)
+        if refusal is not None:
+            return refusal
         try:
             common = {
                 "root_path": root_path,
@@ -546,6 +552,15 @@ def _wait_for_result(
                     )
     finally:
         service.unsubscribe(session_id)
+
+
+def _database_refusal(service: NamiSyncService, stderr: TextIO) -> int | None:
+    contract = service.validate_database_contracts()
+    if contract.state != "refused":
+        return None
+    print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
+    print(_safe(contract.reset_direction), file=stderr)
+    return EXIT_REFUSED
 
 
 def _location_selection(

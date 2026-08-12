@@ -10,6 +10,7 @@ from namisync.workflows.inventory import (
     VolumeResolutionRequired,
     VolumeResolutionState,
 )
+from namisync.workflows.database_pair import DatabasePairContract
 from namisync.workflows.models import (
     ExecutionDetails,
     ExecutionRequest,
@@ -68,6 +69,7 @@ def integrity_request(
 
 __all__ = [
     "BASELINE_KIND",
+    "DatabasePairContract",
     "EXECUTION_KIND",
     "ExecutionDetails",
     "ExecutionRequest",

@@ -61,6 +61,16 @@ delete **both** local database files, then rerun the command. Startup does not
 delete, migrate, or backfill either database automatically. This is
 development-state recovery, not a migration or preservation promise.
 
+Before the first sync or location command admission, the CLI calls the shared
+read-only database-pair preflight. A refused pair returns exit `3`, prints the
+coordinated reset direction, and leaves every existing main and sidecar byte
+unchanged. A fresh sync pair remains absent through planning and declined
+review, then is initialized together only after explicit execution commitment.
+Inventory and integrity initialize a fresh pair during workflow preparation,
+before their audit observer can open history. The standalone `history` command
+is read-only and deliberately exempt, so an existing history database remains
+inspectable when its ledger peer is missing.
+
 History listing reads summary rows without decoding event detail. `history RUN`
 prints terminal axes when finalized or an explicit incomplete state/phase and
 committed watermark when no terminal row exists, then requests

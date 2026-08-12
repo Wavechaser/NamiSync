@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -29,6 +30,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.db.history import HistoryContext, HistoryStore
+from namisync.db.schema import initialize_history, initialize_ledger
 from namisync.interfaces.cli import (
     EXIT_CANCELED,
     EXIT_DEGRADED,
@@ -958,6 +960,74 @@ def test_declined_plan_mutates_neither_files_nor_databases(tmp_path: Path) -> No
     assert stderr.getvalue() == ""
 
 
+def test_mutating_cli_refuses_mismatched_database_pair_read_only(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    initialize_ledger(ledger)
+    initialize_history(history)
+    connection = sqlite3.connect(history)
+    try:
+        with connection:
+            connection.execute(
+                "UPDATE schema_metadata SET value = ? WHERE key = 'contract_id'",
+                ("wrong-history-role",),
+            )
+    finally:
+        connection.close()
+    before = (ledger.read_bytes(), history.read_bytes())
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(
+        [
+            "inventory",
+            str(root),
+            "--database",
+            str(ledger),
+            "--history-database",
+            str(history),
+        ],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_REFUSED
+    assert (ledger.read_bytes(), history.read_bytes()) == before
+    assert "Database pair refused: history-contract" in stderr.getvalue()
+    assert "reset both database files together" in stderr.getvalue()
+
+
+def test_read_only_history_command_is_exempt_from_missing_ledger_peer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "history.db"
+    initialize_history(history)
+    monkeypatch.setattr(
+        cli_module,
+        "default_database_paths",
+        lambda: (ledger, history),
+    )
+    output = io.StringIO()
+    errors = io.StringIO()
+
+    result = main(
+        ["history", "--history-database", str(history)],
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == EXIT_SUCCESS
+    assert "No retained history runs." in output.getvalue()
+    assert errors.getvalue() == ""
+    assert not ledger.exists()
+
+
 def test_cli_uses_semantic_settings_beside_explicit_ledger(
     tmp_path: Path,
 ) -> None:
@@ -1392,8 +1462,10 @@ def test_execution_fresh_preflight_refuses_drift_without_mutation(tmp_path: Path
 
     assert result == EXIT_REFUSED
     assert (target / "payload.txt").read_text(encoding="utf-8") == "external writer"
-    assert not ledger.exists()
+    assert ledger.exists()
     assert history.exists()
+    with NamiSyncService(ledger, history) as service:
+        assert service.validate_database_contracts().state == "ready"
     assert "destination_appeared" in stderr.getvalue()
 
 

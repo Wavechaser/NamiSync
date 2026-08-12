@@ -107,6 +107,14 @@ from .inventory import (
     run_integrity,
     run_inventory,
 )
+from .database_pair import (
+    DatabasePairContract,
+    DatabasePairRefusedError,
+    DatabasePairState,
+    ensure_database_pair,
+    initialize_database_pair,
+    validate_database_pair,
+)
 from .models import (
     ExecuteContinuation,
     ExecutionDetails,
@@ -265,6 +273,7 @@ class LocalWorkflowRuntime:
         )
         self._lock = Lock()
         self._close_lock = Lock()
+        self._database_pair_lock = Lock()
         self._plans: dict[str, PlanArtifact] = {}
         self._execution_details: dict[str, ExecutionDetails] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
@@ -327,6 +336,24 @@ class LocalWorkflowRuntime:
             ),
         )
 
+    def validate_database_contracts(self) -> DatabasePairContract:
+        """Return the read-only ledger/history pair classification."""
+
+        self._require_open()
+        with self._database_pair_lock:
+            return validate_database_pair(self.ledger_path, self.history_path)
+
+    def initialize_database_contracts(self) -> DatabasePairContract:
+        """Coordinately initialize a fresh pair without resetting existing data."""
+
+        self._require_open()
+        with self._database_pair_lock:
+            return initialize_database_pair(self.ledger_path, self.history_path)
+
+    def _ensure_database_contracts(self) -> DatabasePairContract:
+        with self._database_pair_lock:
+            return ensure_database_pair(self.ledger_path, self.history_path)
+
     def create_plan_request(
         self,
         request_id: str,
@@ -374,6 +401,9 @@ class LocalWorkflowRuntime:
         self._validate_database_roots(
             (request.source_path, request.target_path)
         )
+        contract = self.validate_database_contracts()
+        if contract.state is DatabasePairState.REFUSED:
+            raise DatabasePairRefusedError(contract)
         resources = self._resources_for_paths(
             request.source_path, request.target_path
         )
@@ -395,6 +425,7 @@ class LocalWorkflowRuntime:
                 for volume in plan_value.required_volumes
             )
         )
+        self._ensure_database_contracts()
         return WorkflowPreparation(encode_execution_request(request), resources)
 
     def open_execution(self, payload: bytes) -> _ExecutionInvocation:
@@ -456,6 +487,7 @@ class LocalWorkflowRuntime:
             resolver=self._mounted_volume_resolver,
         )
         self._validate_prepared_location(prepared.binding)
+        self._ensure_database_contracts()
         return WorkflowPreparation(
             encode_inventory_request(prepared),
             (("volume", _volume_resource_key(prepared.binding.volume_id)),),
@@ -696,6 +728,7 @@ class LocalWorkflowRuntime:
         changed_at: datetime | None = None,
     ) -> RecordDisposition:
         self._require_open()
+        self._ensure_database_contracts()
         return self._change_inventory_visibility(
             command_id,
             location_id,
@@ -713,6 +746,7 @@ class LocalWorkflowRuntime:
         changed_at: datetime | None = None,
     ) -> RecordDisposition:
         self._require_open()
+        self._ensure_database_contracts()
         return self._change_inventory_visibility(
             command_id,
             location_id,
@@ -852,6 +886,7 @@ class LocalWorkflowRuntime:
             resolver=self._mounted_volume_resolver,
         )
         self._validate_prepared_location(prepared.binding)
+        self._ensure_database_contracts()
         return WorkflowPreparation(
             encode_integrity_request(prepared),
             (("volume", _volume_resource_key(prepared.binding.volume_id)),),

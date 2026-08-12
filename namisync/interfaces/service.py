@@ -22,6 +22,7 @@ from namisync.dispatcher import (
 )
 from namisync.workflows import (
     BASELINE_KIND,
+    DatabasePairContract,
     EXECUTION_KIND,
     HistoryEventPageView,
     HistoryItemPageView,
@@ -116,6 +117,13 @@ class LocationResolutionView:
     selected_mount: str | None
     candidates: tuple[str, ...]
     detail: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DatabaseContractView:
+    state: str
+    reason: str | None
+    reset_direction: str | None
 
 
 class LocationResolutionError(ValueError):
@@ -479,6 +487,22 @@ class NamiSyncService:
         self._shutdown: ShutdownView | None = None
         self._runtime_closed = False
         self._observer_closed = False
+
+    def validate_database_contracts(self) -> DatabaseContractView:
+        """Classify the database pair through the read-only workflow preflight."""
+
+        self._require_open()
+        return _database_contract_view(
+            self._runtime.validate_database_contracts()
+        )
+
+    def initialize_database_contracts(self) -> DatabaseContractView:
+        """Publish a fresh pair as one coordinated application operation."""
+
+        self._require_open()
+        return _database_contract_view(
+            self._runtime.initialize_database_contracts()
+        )
 
     def start_plan(
         self,
@@ -1686,6 +1710,16 @@ def _control_view(result) -> ControlView:
     )
 
 
+def _database_contract_view(
+    contract: DatabasePairContract,
+) -> DatabaseContractView:
+    return DatabaseContractView(
+        state=contract.state.value,
+        reason=contract.reason,
+        reset_direction=contract.reset_direction,
+    )
+
+
 def classify_result(result: OperationResultView) -> ResultCategory:
     """Expose the workflow-owned headline with every independent result axis."""
 
@@ -1722,6 +1756,7 @@ def _location_resolution_view(resolution) -> LocationResolutionView:
 
 __all__ = [
     "ControlView",
+    "DatabaseContractView",
     "ExecutionAdmissionView",
     "ExecutionSession",
     "InventoryDispositionView",

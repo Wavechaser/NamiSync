@@ -52,6 +52,7 @@ from namisync.core.session import (
 )
 from namisync.db.recorder import LedgerRecorder
 from namisync.db.repositories import LedgerRepository
+from namisync.db.schema import initialize_history
 from namisync.dispatcher import (
     Dispatcher,
     InProcessResourceLockProvider,
@@ -324,6 +325,7 @@ def _runtime(
 ) -> tuple[LocalWorkflowRuntime, int]:
     ledger = tmp_path / "ledger.db"
     location_id = _seed_location(ledger, scanner.mount)
+    initialize_history(tmp_path / "history.db")
     runtime = LocalWorkflowRuntime(
         ledger,
         tmp_path / "history.db",

@@ -61,6 +61,13 @@ Two consequences worth stating outright:
 - **Adapters are siblings.** `interfaces/launcher.py` may dispatch to `cli` or
   `web`; neither adapter imports the other, and both reach domain behavior only
   through `interfaces/service.py`.
+- **Database-pair policy belongs to composition.** `workflows/database_pair.py`
+  classifies and initializes the ledger/history pair because workflows may
+  import the database layer; `interfaces/service.py` exposes only its primitive
+  view. Adapters neither import SQLite ownership nor recreate pair policy.
+  Mutating workflow preparation ensures both stores before dispatcher audit
+  observation, while pure plan review and standalone history reads do not
+  create a missing peer.
 
 ### Dependency direction (bones)
 

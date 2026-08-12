@@ -5,8 +5,9 @@ sync/history adapter, explicit inventory/baseline/verify/rebaseline commands,
 semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
-storage and tested WebView2 security spike remain the desktop foundation; the
-desktop host remains Stage 6, and the API remains latent.
+storage, tested WebView2 security seam, classified launchers, and coordinated
+database-pair facade remain the desktop foundation; the product window is not
+yet composed, and the API remains latent.
 
 ## Purpose
 
@@ -97,6 +98,8 @@ The current public service surface includes:
 
 ```python
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
+validate_database_contracts() -> DatabaseContractView
+initialize_database_contracts() -> DatabaseContractView
 start_plan(source, target, *, deletion_policy=None, command_id=None) -> PlanSession
 preview_selection(request_id) -> SelectionPreviewView
 mutate_selection(request_id, expected_revision, *,
@@ -133,6 +136,17 @@ get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
 get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
 ```
+
+`DatabaseContractView` contains only primitive `state`, `reason`, and
+`reset_direction` fields. Its validation method is strictly read-only and
+classifies the ledger/history mains plus WAL/SHM/journal sidecars as fresh,
+ready, or refused. Initialization is a separate call and never resets an
+existing file. Sync and location CLI compositions validate before their first
+admission; fresh sync review remains database-free until execution commitment.
+Execution, inventory, integrity, and direct inventory-visibility mutations
+revalidate and ensure the pair before any history observer can open. The
+standalone read-only history composition intentionally does not require or
+create its missing ledger peer.
 
 History summary/page limits are `1..256`. Omitting `through_order` or
 `through_seq` starts a fresh traversal and captures the current durable

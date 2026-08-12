@@ -40,12 +40,21 @@ This is not a claim that SQLite database files themselves may use overlong
 paths. `timestamps.py` is the single fixed-width aware-UTC
 representation used by both schemas.
 
-The M1 desktop shell (service facade) composes these per-file checks into one
+The M1 desktop shell service composes these per-file checks into one
 read-only `validate_database_contracts()` preflight returning a
 `fresh`/`ready`/`refused` pair state — including the exactly-one-present and
-orphaned-sidecar refusals — applied across the GUI and CLI paths so history
-cannot be initialized without the ledger. `M1_SHELL.md` Slice 1 step 8 owns that
-contract; it is planned, not yet implemented.
+orphaned-sidecar refusals — enforced by the CLI mutation paths and ready for
+the Slice 1 product host to consume before window creation, so history cannot
+be initialized without the ledger. Validation uses a SQLite immutable
+reader so opening a live WAL database cannot create or rewrite shared-memory
+state. Fresh creation is a separate, serialized workflow operation: it
+publishes ledger then history after exclusively creating and recording the
+identity of every main and sidecar cleanup target. A caught failure retracts
+only an attempt-created artifact whose identity still matches; an unproven or
+replaced sidecar is retained. It never invokes the destructive development
+reset. A crash-shaped one-main pair, an orphan sidecar, an empty/unversioned
+file, or a role/version-marker mismatch is refused with the coordinated
+manual-reset direction and no mutation.
 
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
 values. Canonical path and canonical positive-decimal row-ID selections are
@@ -377,6 +386,11 @@ rather than current implementation claims.
   with an actionable instruction to recreate both local databases.
 - The explicit coordinated development reset recreates ledger v3/history v5;
   normal startup never deletes either database.
+- Pair preflight returns fresh only when both mains and every SQLite sidecar are
+  absent; ready requires both role-specific contracts. Every other combination
+  is refused without changing an existing byte. Mutating service admissions
+  initialize a fresh pair before audit observation; standalone history reads
+  remain deliberately exempt.
 - Concurrent semantic-settings patches preserve unrelated fields because the
   read-modify-replace cycle is serialized across processes.
 - Runtime/service settings reads expose the complete semantic snapshot, an
