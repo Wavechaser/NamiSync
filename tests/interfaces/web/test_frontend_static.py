@@ -81,6 +81,7 @@ class _DocumentAudit(HTMLParser):
         self.head_elements: list[tuple[str, dict[str, str | None]]] = []
         self.inline_event_attributes: list[str] = []
         self.script_sources: list[str | None] = []
+        self.stylesheet_sources: list[str | None] = []
         self.in_script = False
         self.inline_script_text: list[str] = []
 
@@ -100,6 +101,8 @@ class _DocumentAudit(HTMLParser):
         if tag == "script":
             self.in_script = True
             self.script_sources.append(attributes.get("src"))
+        elif tag == "link" and attributes.get("rel") == "stylesheet":
+            self.stylesheet_sources.append(attributes.get("href"))
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "head":
@@ -152,6 +155,11 @@ def test_shipped_page_has_exact_first_csp_and_no_inline_execution(
     assert csp_elements == [first_attrs]
     assert parser.inline_event_attributes == []
     assert parser.inline_script_text == []
+    assert parser.stylesheet_sources == [
+        "/tokens.css",
+        "/components.css",
+        "/app.css",
+    ]
     assert parser.script_sources == ["/app.js"]
 
 

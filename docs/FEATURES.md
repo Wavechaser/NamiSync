@@ -356,6 +356,8 @@ Stage 5 location activities through the shared service.
 - **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
   red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
   `tokens.css` only; yellow and purple intentionally have no `light` input.
+  Further hardcoded or derived color values remain possible after an explicit
+  product-author design decision and coordinated contract/token/evidence update.
   Gallery-tested status and operation aliases, not palette names, feed controls
   and later surfaces. Light/dark pairings are contrast-tested, forced colors use
   Windows system colors, and every meaning retains text and non-color cues.

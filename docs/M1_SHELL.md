@@ -363,13 +363,14 @@ not preselected here.
   Mica and honors the system high-contrast palette; a system without the material
   (pre-22H2) or a transparency failure degrades to an opaque Fluent neutral base,
   never a broken see-through window.
-- **Tokens and theme.** Color ramps (neutral and accent), the type ramp, and
-  spacing, 4px-based radius, and elevation scales live in `tokens.css` as
-  theme-agnostic CSS variables. M1 follows the system light/dark theme and honors
-  high contrast; the accent color is read from Windows and pushed to the token
-  variables, and both theme and accent changes are observed and re-pushed. The
-  Microsoft Fluent 2 Figma kit and Microsoft's published Fluent tokens are the
-  authoritative source these values are transcribed from; no Fluent code is
+- **Tokens and theme.** Neutral and accent roles resolve through Windows/CSS
+  system colors until another authored color is explicitly approved; the type,
+  spacing, 4px-based radius, elevation, and motion scales live in `tokens.css`
+  as theme-agnostic CSS variables. M1 follows the system light/dark theme and
+  honors high contrast; the accent color is read from Windows and pushed to the
+  token variables, and both theme and accent changes are observed and re-pushed.
+  The Microsoft Fluent 2 Figma kit and Microsoft's published Fluent tokens are
+  the reference for non-color scales and component behavior; no Fluent code is
   imported (section 1.6 forbids the toolchain that would need).
   NamiSync's authored status/operation palette is a separate, exact input owned
   only by that file:
@@ -391,10 +392,13 @@ not preselected here.
   ```
 
   These are exactly 13 palette primitives; yellow and purple intentionally have
-  no `light` primitive. No implementation may invent either missing swatch or a
-  substitute without first discussing that change with the product author;
-  deriving or disguising one through `color-mix()`, alpha/transparency, another
-  color function, or an alternate alias is equally prohibited.
+  no authored `light` primitive at GUI Break 1. Adding another hardcoded or
+  derived color value, including a future yellow/purple `light`,
+  is a deliberate design change that must first be discussed with the product
+  author and then land through this token contract and its evidence. The
+  current implementation must not silently manufacture or disguise one through
+  `color-mix()`, alpha/transparency, another color function, or an alternate
+  alias.
   Semantic status and operation aliases in `tokens.css`, never palette names,
   are the contract consumed by controls and surfaces. The `main`/`dark`/`light`
   labels identify authored swatches, not theme assignments: GUI Break 1 chooses
@@ -1353,8 +1357,9 @@ carry the `headed` marker; all are collected by the release command.
   `components.css` nor any Slice 4-7 stylesheet/renderer may contain raw colors
   or consume a palette primitive directly. *Not satisfied by* a single-theme
   token set, treating a `light` primitive as an automatic light-theme foreground,
-  color-only status meaning, invented or derived/disguised yellow/purple light
-  swatches (including mixing, alpha, color functions, or alternate aliases), or
+  color-only status meaning, adding or deriving/disguising a yellow/purple light
+  swatch without the required product-author decision and same-change contract,
+  token, and evidence update, or
   a scan that allows inline color in `components.css` or a surface module.
   The headed gallery resolves production `index.html`, `tokens.css`, and
   `components.css` from a clean installed wheel and records their exact bytes;
@@ -1477,7 +1482,7 @@ against the changed configuration before the change lands.
 | Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
 | Fluent 2 design language, token source, and the standard M1 window frame | Section 1.9 | Re-transcribe tokens (rerun SH-G-11); a frame change re-runs BR-G-31's native-surface proof |
-| Exact 13-swatch authored palette, semantic status/operation aliases, and system-color forced-colors override | Section 1.9 and GUI Break 1 | Preserve the authored values and missing yellow/purple `light` inputs; rerun SH-G-11 gallery, contrast, token-ownership, and no-raw-surface-color evidence |
+| Exact GUI-Break-1 13-swatch authored palette, semantic status/operation aliases, and system-color forced-colors override | Section 1.9 and GUI Break 1 | Preserve the current authored values; discuss any added hardcoded or derived color value with the product author first, update this contract and tokens together, and rerun SH-G-11 gallery, contrast, token-ownership, and no-raw-surface-color evidence |
 | Whole-window Mica base, opaque content cards (material visible only in chrome/seams), and the high-contrast/no-material fallback | Section 1.9 | Rerun SH-G-12 headed on any pywebview/WebView2/Windows-build change |
 | Motion tokens and guardrails (reduced-motion; no virtualized-row animation) | Section 1.10 | Rerun SH-G-13 |
 

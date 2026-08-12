@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "package": "@fluentui/svg-icons",
+  "version": "1.1.334",
+  "git_commit": "d7e5f224125e5638df10610d7c2755d709113e55",
+  "package_url": "https://www.npmjs.com/package/@fluentui/svg-icons/v/1.1.334",
+  "package_tarball_url": "https://registry.npmjs.org/@fluentui/svg-icons/-/svg-icons-1.1.334.tgz",
+  "package_integrity": "sha512-VeKTChgi+iyMj4ecbuKRTGlzzTf6x5v5mD25l8+4DVf7f85dydrmEsWmVITRaoKWxGPMDZsiXqWUSCcXPukvEw==",
+  "license": "MIT",
+  "license_source_url": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/d7e5f224125e5638df10610d7c2755d709113e55/LICENSE",
+  "license_sha256": "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f",
+  "normalization": "The published ASCII SVG bytes are retained with one trailing LF in the wheel.",
+  "files": {
+    "checkmark_circle_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/checkmark_circle_20_regular.svg",
+      "upstream_sha256": "d63cfc815002a8f665bb3ab56aa92f59b578ea64e842fa36b0398296f2d4feea",
+      "packaged_sha256": "2bf440b522c265d247e6e3fd31c654fa623aa4f7d1b37d8bae92c791facaff41"
+    },
+    "dismiss_circle_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/dismiss_circle_20_regular.svg",
+      "upstream_sha256": "83398a47666a71bf096691167dd627c21d950a4efb4760d1c3a111aab3d44ca6",
+      "packaged_sha256": "2f041a80da6cfc58c02f265c7002487adbcd77ee12923995b345583ca7313940"
+    },
+    "warning_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/warning_20_regular.svg",
+      "upstream_sha256": "3c00472172d82455b32c8b177fe8e1cf8ba794ac7e7a1b95e42116725354e574",
+      "packaged_sha256": "3950095baf9383498b42861288def21eecf01c9cf99dcd95d401acdc55348c1b"
+    },
+    "info_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/info_20_regular.svg",
+      "upstream_sha256": "7d7665044432502f39e25427858d7d2ff60a3d993ccb526750c1e9c09d848e01",
+      "packaged_sha256": "dbbb44b43fcfe7e2c38cf2e4c2354fc29ce0555eb383e88faf25ce7a2a924184"
+    }
+  }
+}

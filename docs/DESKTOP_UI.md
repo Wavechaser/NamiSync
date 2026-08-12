@@ -106,10 +106,16 @@ GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
 adds the design-token foundation. `tokens.css` is the only source file allowed
 to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`, and
 available `light` palette values specified by `M1_SHELL.md`; yellow and purple
-deliberately have no `light` input. It also owns meaning-named semantic aliases
-for statuses and operation categories. `components.css` consumes only those
-aliases for badges, banners, status pills, progress indicators, and related
-controls; Slice 4-7 renderers consume component/semantic contracts and contain
+deliberately have no authored `light` input in the current foundation. A future
+hardcoded or derived color value is possible only after an explicit product-
+author design decision and a same-change contract/token/evidence update; it is
+not silently synthesized by a renderer. `tokens.css` also owns meaning-named
+semantic aliases for statuses and operation categories; neutral and accent
+roles use Windows/CSS system colors until another authored color is approved.
+`components.css`
+consumes only those aliases for badges, banners, status pills, progress
+indicators, and related controls; Slice 4-7 renderers consume
+component/semantic contracts and contain
 neither raw color literals nor direct palette references. The component gallery
 settles light/dark mappings with visual and numeric contrast evidence rather
 than inferring theme roles from swatch names. Forced colors use Windows system

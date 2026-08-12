@@ -2049,7 +2049,10 @@ successfully; activation failure is visible.
 Presentation color has one dependency direction. GUI Break 1 places the exact
 13 authored palette primitives and all status/operation semantic aliases in
 `interfaces/web/assets/tokens.css`; yellow and purple have no authored `light`
-primitive. `components.css` may consume semantic aliases but never raw colors or
+primitive in the GUI Break 1 foundation. This is not a permanent ban on future
+color growth: another hardcoded or derived color requires prior product-author
+discussion plus a same-change contract, token, and evidence update.
+`components.css` may consume semantic aliases but never raw colors or
 palette primitives, and Slice 4-7 surface renderers may consume only semantic
 and component contracts. Gallery contrast/visual evidence selects theme pairs;
 primitive names are not theme policy. Windows forced colors replace the authored

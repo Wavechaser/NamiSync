@@ -33,7 +33,7 @@ dev = [
 include = ["namisync*"]
 
 [tool.setuptools.package-data]
-"namisync.interfaces.web" = ["assets/*"]
+"namisync.interfaces.web" = ["assets/*", "assets/icons/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "namisync.version.VERSION"}

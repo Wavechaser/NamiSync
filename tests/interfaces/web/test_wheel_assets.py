@@ -18,8 +18,17 @@ INITIAL_ASSETS = {
     "app.css",
     "app.js",
     "bridge.js",
+    "components.css",
+    "icons.js",
+    "icons/LICENSE.txt",
+    "icons/SOURCE.json",
+    "icons/checkmark_circle_20_regular.svg",
+    "icons/dismiss_circle_20_regular.svg",
+    "icons/info_20_regular.svg",
+    "icons/warning_20_regular.svg",
     "index.html",
     "render.js",
+    "tokens.css",
 }
 
 
@@ -30,7 +39,7 @@ def test_sh_g_6_built_wheel_contains_exact_initial_web_assets(
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
     assert project["tool"]["setuptools"]["package-data"] == {
-        "namisync.interfaces.web": ["assets/*"]
+        "namisync.interfaces.web": ["assets/*", "assets/icons/*"]
     }
 
     with zipfile.ZipFile(built_wheel.path) as wheel:
