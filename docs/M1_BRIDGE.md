@@ -1238,6 +1238,15 @@ serialization firmly bounded by one shared number.
 Fixed row height is a design constraint, not an aesthetic preference:
 variable heights require measurement passes that make window math fragile.
 
+Slice 4 freezes the pure request boundary in `M1_SHELL.md`: an exact structural
+node record, collapsed known-container ids, a literal display-search string,
+and an optional sparse mapping of caller-decided direct-match counts. That
+mapping deliberately carries no filter vocabulary into the generic layer.
+Offset is an exact nonnegative integer, limit is an exact 1..256 integer, and
+the pure derived sequence is replaced rather than cached as a parameter-keyed
+family. Domain command rows and projection revisions remain with their first
+Slice 5/6 consumers.
+
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
 Windowing solves response size. It does not, by itself, solve
@@ -1492,10 +1501,14 @@ DR-BR-15 rather than needing a parallel code path — and as a backend parameter
 it stays available to a headless consumer, which a frontend implementation
 would not be.
 
-Three constraints: substring matching only (a user-supplied regex is a
+Four constraints: substring matching only (a user-supplied regex is a
 denial-of-service surface for no benefit), matching against the **casefolded
 display form** rather than the canonical key (the user types what is on
-screen), and the existing inbound size cap.
+screen), no trimming or Unicode normalization, and an exact 256-UTF-8-byte
+query ceiling. The boundary accepts 256 bytes and refuses 257 before walking
+the node array. The existing 65,536-byte inbound envelope cap still applies,
+but allowing nearly that much text to be compared against 100,000-120,000
+nodes would not satisfy the changed-parameter latency envelope.
 
 ### DR-BR-19 — Autoscroll anchors on the nearest visible ancestor-or-self
 
@@ -1511,7 +1524,8 @@ the DOM; the client could neither scroll to it nor compute the distance shown
 by the follow pill.
 
 **Resolution:** progress carries the ancestor node-id chain derived from
-`item_id` (DR-BR-14), and an anchor lookup resolves that chain against the same
+`item_id` (DR-BR-14), ordered deepest node first through the root, and an
+anchor lookup resolves that chain against the same
 canonical projection and active collapse/filter/search parameters as
 DR-BR-15. It returns the deepest visible ancestor-or-self, its visible-sequence
 index, and the projection revision where applicable. The client can then
@@ -2892,19 +2906,27 @@ because its local tests are easier.
   same pure flattener produces plan and inventory windows from the ordered array
   under expanded/collapsed, filter, and casefolded-display-substring search
   combinations. Changing parameters replaces one active sequence rather than
-  retaining a parameter-keyed family. A folder appears only for a visible
-  descendant or its own match; move-ghost-only ancestors disappear with a
-  filtered ghost; folder rollups remain unfiltered while chip counts describe
-  the filtered view. Search treats regex metacharacters literally, matches the
-  casefolded display form only, and rejects an over-cap query. The default is
-  expanded, fixed row height is enforced, 256 rows are accepted, and 257 are
-  refused rather than truncated. A static assertion proves the implementation calls no
-  path helper and reconstructs no parent or descendant relationship from display
-  text. *Not satisfied by* filtering an already-windowed page, searching the
-  canonical key, or separate plan and inventory flatteners fed the same
-  fixtures.
+  retaining a parameter-keyed family. A container appears only for a directly
+  matching node or matching descendant, and collapse hides descendants only
+  after matching. Search treats regex metacharacters literally, matches the
+  casefolded display form only, accepts 256 UTF-8 bytes, and refuses 257 before
+  traversal. Sparse caller-owned match counts are validated but their domain
+  vocabulary is not interpreted here. The default is expanded, fixed row
+  height is enforced, 256 rows are accepted, and 257 are refused rather than
+  truncated. Anchor lookup uses the same derived sequence and exact
+  deepest-to-root id chain. Plan and inventory cases must start from real
+  `build_node_tree` output; hand-built generic arrays alone do not close the
+  gate. A static assertion proves the implementation calls no path helper and
+  reconstructs no parent or descendant relationship from display text. *Not
+  satisfied by* filtering an already-windowed page, searching the canonical
+  key, accepting an arbitrary callable as filter policy, or separate plan and
+  inventory flatteners fed the same fixtures.
 - **BR-G-35 — Plan presentation preserves operation truth while compressing
-  moves.** The plan tree memo is byte-stable per request and is dropped with the
+  moves.** This is also the first consumer that proves a filtered move ghost
+  removes its synthetic-only ancestor chain, an ordinary real operation keeps
+  its folder visible on its own merits, folder rollups remain the original
+  unfiltered values, and each filter chip count describes filtered domain items
+  rather than structural ancestors. The plan tree memo is byte-stable per request and is dropped with the
   plan; selection overlays do not rebuild its structure. Move annotation uses
   the union of target and prior-target ancestors, keeps the ordinary folder
   selection scope and original operation kinds, emits a noninteractive old-path

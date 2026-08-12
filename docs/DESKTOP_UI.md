@@ -324,6 +324,23 @@ Hostile-name fixtures are required end-to-end.
 
 ## Interaction contract
 
+Slice 4 establishes only the presentation core and honest shell frame. The
+production allowlist remains the three Slice 3 commands; no placeholder plan,
+inventory, history, or control command is added. The page exposes labelled
+task navigation and a work region with truthful empty states under the standard
+native title frame. `rail.js` and `panels.js` own that accessible frame; they
+do not create fake task or session data.
+
+The shared `tree.js` consumes only windows already decided by Python's pure
+`visible_sequence.py`. It renders at most 256 returned rows plus fixed virtual
+spacers, uses exact 28-CSS-pixel rows and the inert text helper, exposes full
+display text to accessibility even when the visual label elides, and ignores a
+stale response generation. It never filters a viewport, reconstructs ancestry,
+searches a path, or talks to the bridge. Slices 5 and 6 remain the first owners
+of real plan/inventory rows and their command wiring. The exact Python
+structural/search/filter/window/anchor contract and installed shell/tree
+evidence live in `M1_SHELL.md` Slice 4 and SH-G-7.
+
 The task rail is a presentation grouping over live service sessions and
 retained history, not a new durable task model. It shows activity kind, source
 and target when applicable, current phase, progress, and a truthful terminal

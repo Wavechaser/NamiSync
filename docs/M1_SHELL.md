@@ -1122,6 +1122,79 @@ implementation over workflow-owned ordered node arrays. Enforce the 256-row
 maximum and fixed row geometry. This closes BR-G-34 and the Stage 6 clause of
 BR-G-2.
 
+**The Slice 4 presentation contract is exact and intentionally contains no
+domain policy.** `visible_sequence.py` defines these frozen adapter values:
+
+- `VisibleSequenceNode(node_id, display, position, depth, parent_index,
+  subtree_end, is_container)`;
+- `VisibleSequenceParameters(collapsed_node_ids, search_query,
+  match_counts_by_node_id=None)`;
+- a derived `VisibleSequence` containing the original node objects, their
+  visible positions, one immutable node-id-to-visible-index lookup, and
+  `filtered_item_count` (`None` when no filter was supplied);
+- `VisibleWindow(offset, total, nodes)`; and
+- `VisibleAnchor(node_id, index)`.
+
+`derive_visible_sequence`, `window_visible_sequence`, and
+`resolve_visible_anchor` are pure functions. They retain no active sequence,
+parameter-keyed cache family, path, or view lifecycle; a caller replaces its
+one active value when parameters change. The node array is accepted only when
+positions are exact contiguous integer indexes (booleans are not integers for
+this contract), node ids are unique nonempty valid Unicode strings, display
+strings are valid Unicode, `is_container` is an exact boolean, index zero is
+the sole depth-zero root, every later
+`parent_index` names an earlier node at exactly `depth - 1`, and every
+half-open `subtree_end` is within its parent's extent. These checks validate
+the structure `workflows/node_tree.py` already emitted; they never import a
+path helper, inspect a canonical key, split display text, or reconstruct
+ancestry from strings.
+
+`collapsed_node_ids` is an immutable set of known container ids; an unknown or
+non-container id is refused. The default empty set is fully expanded. Search
+is an exact string containing at most **256 UTF-8 bytes**: 256 is accepted and
+257 is refused before traversal. Invalid Unicode is refused. No trimming,
+normalization, regex, glob, or canonical-key match occurs; the only operation
+is a literal substring check over `search_query.casefold()` and each supplied
+`display.casefold()`.
+
+`match_counts_by_node_id` is the only generic filter input. `None` means no
+filter. Otherwise it is snapshotted as a sparse mapping from known node ids to
+exact nonnegative integers (a missing id is zero; booleans, negative values,
+and unknown ids are refused). The owning plan or inventory projection decides
+which domain items match and supplies those counts; Slice 4 defines no domain
+filter vocabulary. A node directly matches only when its supplied count is
+positive (or filtering is inactive) and its display matches the search. A
+container remains when it directly matches or any descendant directly matches;
+collapse hides descendants only after that decision. `filtered_item_count`
+sums supplied counts of direct nodes that also match the search; structural
+ancestors never inflate it. Returning original nodes leaves rollups and other
+payload unmodified and caller-owned.
+
+Window `offset` is an exact nonnegative integer and `limit` is an exact integer
+from 1 through 256; booleans are refused. Limit 256 is accepted, 257 is refused
+rather than truncated, and an offset at or beyond `total` returns an honest
+empty window. An empty anchor chain returns `None`; a nonempty candidate chain
+is an exact, structurally valid deepest-to-root chain of known ids. Resolution
+uses the same derived sequence
+and returns the first visible candidate or `None`; it never searches the DOM
+or display text. Projection revisions and progress-chain wiring belong to their
+Slice 5/6 command rows, not this pure core.
+
+Slice 4 adds no bridge command: production remains exactly `pick_folder`,
+`start_plan`, and `next_events`. `tree.js` consumes only the exact generic
+window `{offset,total,rows}`; each row has exactly `node_id`, `display`,
+`depth`, `is_container`, and server-decided `expanded` fields. It owns
+`ROW_H = 28`, fixed spacers, accessible tree/treeitem semantics, and
+full-display labels. `beginWindowRequest()` advances one monotonic generation;
+`commitWindow(generation, window)` mutates the DOM only when that generation is
+still current. At most 256 data rows plus the fixed
+spacers exist in the DOM. It performs no hierarchy, filter, search, path,
+`current_path`, or bridge work and writes returned text only through the
+production inert-text helper. Row creation/removal has no animation. `rail.js`
+and `panels.js` build the accessible task-navigation and work-panel frame with
+honest empty states; they fabricate no task, plan, inventory, or session. The
+standard native title frame remains.
+
 ### Slice 5 - Sync surface
 
 Land plan presentation, move annotations/ghosts, selection overlays, review
@@ -1325,9 +1398,17 @@ carry the `headed` marker; all are collected by the release command.
   `M1_BRIDGE.md`'s normative policy string byte-for-byte (the expected literal
   lives in the test); no inline script or event attribute exists; and the
   CSS/JS row-height declarations are integer-equal, with the headed hostile-row
-  measurement matching `ROW_H`. *Not satisfied by* scanning a hand-maintained
-  file list that is not derived from the packaged asset set, or by asserting the
-  meta element's presence without its exact content value.
+  measurement matching `ROW_H`. The clean-installed-wheel Slice 4 scenario also
+  proves the real empty shell exposes labelled task navigation and a work
+  region without fake data, preserves keyboard focus and usable reflow at 200%
+  zoom, and retains visible system-color focus cues under forced colors. The
+  same scenario imports the installed `tree.js`, renders complete hostile and
+  long display strings through its production text path, measures every row at
+  28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,
+  and proves a stale generation cannot replace a newer window. *Not satisfied
+  by* scanning a hand-maintained file list, asserting only the meta element's
+  presence, testing the component gallery instead of the production shell, or
+  measuring a copied/test-only tree implementation.
 - **SH-G-8 — The drain attaches before work starts.** A test proves the task
   observation is subscribed before execution admission starts the workflow,
   and no `Gap` occurs inside the BR-G-42 normal envelope; a fault-injected
@@ -1445,6 +1526,9 @@ headed BR-G-32 transport evidence),
 `tests/test_version.py` (SH-G-4),
 `tests/interfaces/web/test_wheel_assets.py` (ordinary SH-G-6),
 `tests/interfaces/web/test_frontend_static.py` (SH-G-7),
+`tests/interfaces/web/test_visible_sequence.py` (BR-G-34 and BR-G-2's Stage 6
+structure clause),
+`tests/interfaces/web/test_shell_headed.py` (installed-wheel headed SH-G-7),
 `tests/interfaces/web/test_drain.py` (SH-G-8),
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
