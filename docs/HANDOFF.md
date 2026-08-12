@@ -1,125 +1,111 @@
 # NamiSync Session Handoff
 
-Date: 2026-08-11
+Date: 2026-08-12
 Branch: `milestone1`
 
 ## Session Outcome
 
-The checkpoint 1-15 maintenance refactor remains complete at `2b38407`, and
-the immediate post-refactor review is also complete. Four reported findings
-were reproduced and fixed: generic collaborator exceptions can no longer leave
-active executor effects or pending MKDIRs without terminal truth; executor root
-guards bind the operational root to the reviewed authority; the retained
-settlement oracle now covers the previously selective observer states; and
-verifier native subclasses/decorators use an explicit authority-bound protocol
-instead of exact concrete-type dispatch.
+Stage 6 is implemented through Slice 3 and GUI Break 1. The installed WebView2
+host, strict three-command transport, opaque server-side path slots,
+transactional task observation, bounded event drain, and browser recovery
+manager are complete. GUI Break 1 now supplies the shared token, component,
+motion, fixed local Fluent icon, and native Windows appearance foundation that
+the production surfaces will consume.
 
-No public executor or verifier facade signature, persisted payload, evidence or
-database schema, operation ordering, successful-path filesystem sequence, or
-process-fatal `BaseException` contract changed. The ordinary-`Exception`
-behavior is intentionally stronger: before the collaborator exception is
-re-raised, active effects settle from the original operation error, pending
-directories finalize, and already-statused journal entries retire without
-replaying filesystem or recorder effects.
+This is not a claim that the desktop product views exist. Slice 4 is next.
+SH-G-11, SH-G-12, and SH-G-13 retain their production-tree/renderer clauses
+through Slices 4-6; GUI Break 1 closes their foundation evidence only. SH-G-14's
+fixed icon-infrastructure boundary is complete, while actual surface glyph
+choices remain ordinary later-slice work.
+
+The authored palette remains exactly the 13 requested GUI Break 1 inputs, using
+`main`, `dark`, and available `light` names. Yellow and purple have no authored
+`light` input. This is not a permanent ban on color growth: a future hardcoded
+or derived value requires prior product-author discussion and a same-change
+contract, token, and evidence update.
 
 ## Commit Record
 
-- `2b38407` closed maintenance-refactor checkpoints 1-15. Its detailed
-  checkpoint ancestry remains in Git history and the focused architecture
-  documents.
-- `8a3d64e` replaced verifier exact-type routing with the core
-  `AuthorityBoundVerificationReader` protocol, kept selected-root/opened-volume
-  policy in engine, made the tools timing tap capability-transparent, and
-  shared the pure verifier/sidecar expected-stat predicate.
-- `824055f` added the executor generic-exception settlement/finalization
-  backstop and made source/target root guards fail closed on a supplied root
-  that differs from reviewed authority.
-- `5abf08a` expanded the independent settlement oracle from 58 to 70 exact rows
-  and added direct observer/reducer coverage. It did not edit the baseline or
-  reviewed semantic pin.
-- `0c4d9a9` atomically replaced the independently reviewed baseline and its
-  semantic pin after all 58 prior rows were proven type-strict identical and
-  exactly 12 authorized rows were added.
-- `767c5e8` reconciled README and this handoff after the review; `dd5677b`
-  clarified the original-58/post-refactor-12 baseline lineage across the
-  active architecture, executor, and tools documents. The documentation-only
-  commit archiving and indexing the completed maintenance plan contains this
-  updated handoff, so this file does not name that commit.
+- `98d25d3` closed the installed, secured Slice 1 host gates.
+- `15d8117` through `da5232f` defined and implemented Slice 2's strict bridge,
+  slots, native picker, plan admission, and real headed transport evidence.
+- `973ac01` through `79ed251` defined, implemented, reviewed, and documented
+  Slice 3's transactional observation, bounded task drain, recovery manager,
+  and SH-G-8/BR-G-33 evidence.
+- `e4c9e9f` defined the closed Fluent icon foundation contract.
+- `bf22e67` added the design tokens, semantic components, motion rules, fixed
+  four-glyph registry, pinned local SVGs, provenance, and ordinary evidence.
+- `ce601fc` added Windows theme/accent observation and progressive native Mica
+  with system-color opaque fallback.
+- `b1f36eb` moved inert DOM appearance publication off the native UI thread to
+  avoid pywebview's synchronous return deadlock while retaining UI-thread-only
+  native mutation.
+- `29e04a2` closed GUI Break 1 with the installed-wheel component gallery,
+  real-stack material/fallback gates, forced-colors interaction hardening,
+  pre-material fallback correction, refreshed active documentation, and the
+  independent final review.
 
-## Corrected Baseline Provenance
+## GUI Break 1 Evidence Boundary
 
-- Corrected monolithic executor source: `d99743a`.
-- Original retained oracle: `07f08fe`; hardening through `51eacf7`; timestamp
-  normalization at `2b8b996`.
-- Previous reviewed baseline: `50d676b` (30 scenarios / 58 rows).
-- Current reviewed baseline commit: `0c4d9a9`.
-- Baseline file: `tools/executor_settlement_baseline.json`.
-- Oracle schema: `format_version: 1`; exact top-level fields remain
-  `format_version`, `repeat`, `manifest`, and `scenarios`.
-- Current coverage: 30 scenario IDs and 70 globally unique exact policy rows,
-  captured in three complete byte-identical runs.
-- Current baseline Git blob: `97ebd0a37264dd52989f23ccd36358fbe67886e0`.
-- Current canonical-JSON semantic pin:
-  `df69bf65979c3838e3df9bcc262cd9961945e6a8603c348c22f8136f4d6547b2`.
-
-The exact resume gate is:
-
-```powershell
-python -m tools.executor_settlement_audit check --repeat 3
-```
-
-Its successful final line is:
-
-```text
-settlement check passed: 30 scenarios x 3 runs
-```
-
-Checkpoint 8 did not edit the baseline; neither did checkpoints 9-15. That
-immutability rule remains: a structural executor split, journal/reducer change,
-verifier split, or stabilization refactor must not regenerate the snapshot to
-make itself pass. The replacement at `0c4d9a9` is deliberately separate because
-it follows isolated behavior fixes, persistent regressions, independent exact
-expectations, a three-run oracle, and row-by-row adversarial review. A future
-replacement requires the same sequence and a separately reviewed baseline/pin
-commit.
+- The clean-wheel gallery loads the installed production `index.html`,
+  `tokens.css`, `components.css`, `icons.js`, and fixed local icon files. It
+  proves exact installed bytes, light/dark/forced-colors/reduced-motion modes,
+  semantic aliases, non-color cues, control states, contrast, currentColor
+  icons, and test-gallery exclusion from package data.
+- The real material gate preserves the production host, security, dispatcher,
+  and appearance lifecycle. On the capable Windows 11 stack it records actual
+  DWM backdrop/dark-mode readback, transparent WebView/controller and document
+  seams, an opaque content card, and unchanged frame/dispatch health. Separate
+  injected controller and MAINWINDOW failures prove complete opaque rollback.
+- The CDP screenshot is renderer-layer alpha evidence, not a compositor capture
+  of Mica. The material claim rests on the native DWM/controller/form readbacks
+  plus transparent page seams; documentation must keep that distinction.
+- Pre-22621 builds skip the attr-38 headed scenarios before launch. Ordinary
+  evidence proves those builds never require unsupported backdrop reset and
+  still land the Windows `COLOR_WINDOW` form/controller fallback.
+- No gate calls `SetForegroundWindow`, sends keys, or otherwise forces
+  foreground. The headed runs may naturally show normal application windows;
+  each child is isolated under a kill-on-close Job Object and hard deadline.
 
 ## Final Verification
 
-- Complete suite: `1568 passed, 2 skipped`.
-- Executor runtime + settlement suites: `210 passed` before the oracle
-  expansion; final settlement suite: `124 passed`.
-- Verifier/core/tool/workflow focused gate: `149 passed`.
-- Oracle/tool focused gate after expansion: `202 passed` across settlement and
-  audit tests; audit-only baseline safety gate: `78 passed`.
-- Retained oracle: `30 scenarios x 3 runs`, first as independent exact-policy
-  capture, then as an unpinned candidate check, and finally through the official
-  committed baseline/pin gate.
-- Import linter: `11 kept, 0 broken` across 56 files and 219 dependencies.
-- `python -m compileall -q namisync tests tools` and `git diff --check` passed.
-- Independent reviews found no remaining executor, verifier, oracle, or
-  baseline blocker. The candidate review proved all 58 old rows unchanged,
-  exactly 12 additions, stable scenario metadata, and no raw path, identity,
-  timestamp, object-repr, or non-finite leakage.
+- Full ordinary suite: `1976 passed, 2 skipped, 21 deselected`.
+- Ordinary web adapter suite: `364 passed, 21 deselected`.
+- GUI-foundation documentation/contract suite: `72 passed, 6 deselected`.
+- Refreshed clean-wheel component gallery: `3 passed, 6 deselected`.
+- Refreshed real-stack native materials: `3 passed, 7 deselected`.
+- Focused material/host/logging verification after prebuild hardening:
+  `102 passed, 3 deselected`.
+- `git diff --check` passed.
+- Independent adversarial review returned ACCEPT with no remaining P1/P2
+  blocker across product code, both headed harnesses, package evidence, and
+  active documentation.
+- The final import-linter retry could not start because Windows intermittently
+  returned Access Denied for the virtual-environment launcher. The latest
+  successful run before the test/document-only gate work was `11 kept,
+  0 broken`; the final full Python suite passed and the checkpoint introduced no
+  package import edge beyond the already-linted appearance module.
 
 ## Immediate Next-Session Context
 
-1. Start with the exact three-run oracle command above. Keep the oracle and
-   reviewed baseline as retained infrastructure through the immediate
-   post-refactor stabilization period and later executor/verifier work.
-2. The four findings from this review are closed. Whole-publication UNVERIFIED,
-   changed-after-publish, and some unreadable mutation paths already had unit
-   coverage; the new rows deliberately fill the restored, missing, unreadable,
-   and collaborator-exit gaps rather than duplicating every existing case.
-3. Process-fatal `BaseException` remains cleanup-only and nonterminal. Generic
-   `Exception` is the terminal-effect backstop boundary. Do not broaden one into
-   the other without a separate policy decision and oracle row.
-4. Unbound verifier readers remain an explicit fake/custom seam. Any reader or
-   decorator that implements `AuthorityBoundVerificationReader` must be given
-   `VerifierContext.root_authority`; its bound open derives the root only from
-   that authority.
-5. No maintenance checkpoint or structural split remains open. Resume product
-   work from the active Stage 6 documents unless new evidence identifies a
-   concrete stabilized-boundary failure.
-   `obsolete/M1_MAINTENANCE_REFACTOR.md` is the retained completed delivery
-   record, linked from `M1_PLAN.md`; its historical checkpoint wording does
-   not reopen maintenance work.
+1. Start Slice 4 from `M1_SHELL.md`: implement the pure presentation core and
+   shell frame against the existing tokens/components/icon boundary. Do not
+   reopen transport commands, native asset authority, or the GUI Break palette.
+2. Surface renderers must consume semantic/component contracts, never palette
+   names or raw colors. Any proposed new hardcoded or derived color must be
+   discussed with the product author before code and must update contract,
+   tokens, gallery, contrast, and no-raw-color evidence together.
+3. Keep icons in the frozen source-owned registry with local inert assets and
+   `currentColor`. Add actual glyph mappings only when a Slice 4-7 surface owns
+   them; do not add runtime registration, remote assets, dynamic SVG, or
+   data-derived paths.
+4. Preserve the host order: security registration, appearance registration,
+   load; and on close, appearance stop before observation/service/window
+   teardown. Native DWM/WebView mutation remains on the WinForms UI thread;
+   inert DOM appearance publication remains revisioned and off that thread.
+5. Reuse the installed-wheel headed helpers, unique test identities,
+   absolute-physical-local roots, Job Objects, and one whole-scenario deadline.
+   Warn before every headed run; never add foreground-forcing APIs.
+6. Keep the retained executor settlement oracle unchanged. Stage 6
+   presentation work does not authorize baseline regeneration or executor,
+   verifier, database, or workflow-policy changes.
