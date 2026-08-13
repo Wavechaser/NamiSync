@@ -545,8 +545,8 @@ defect, and move implementation-level test choreography out of the log.
   a second protocol authority after `M1_BRIDGE.md` had already settled the
   seam. Fixed by making `M1_BRIDGE.md` the sole bridge/BR-G authority, reducing
   `M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
-  and status. Numeric-hole and `start_plan` regressions have landed; installed
-  real-WebView2 witness migration and SH-G-8 remain explicitly open.
+  and status. Numeric-hole, `start_plan`, and installed real-WebView2 browser
+  witnesses have landed; SH-G-8 remains explicitly open.
 - SEVERE - FIXED (2026-08-13). Appearance authority was retired during task
   quiescence before `service.close()` proved terminal completion. An incomplete
   or exceptional close correctly leaves the window open for retry but silently

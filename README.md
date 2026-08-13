@@ -38,10 +38,11 @@ native picker confinement, hostile-text transport, log privacy, the component
 gallery, real native material apply/fallback paths, and Slice 4 platform
 keyboard/accessibility, 200%-zoom reflow, forced-colors focus, hostile/long tree
 text, 28-pixel row bounds, scale, and stale-generation behavior. The plan, inventory,
-history, lifecycle, packaging, and beta closures remain open. Migration of the
-named browser-behavior witnesses to an installed real WebView2 remains open, as
-does SH-G-8's complete BR-G-42 normal four-task envelope; existing
-attach/overflow and clean-wheel coverage does not close either item.
+history, lifecycle, packaging, and beta closures remain open. The named
+browser-behavior witnesses now run through the installed production bridge and
+renderer in real WebView2; Node probes remain supplemental. SH-G-8's complete
+BR-G-42 normal four-task envelope remains open because the transport witness
+does not supply its duration, rate, latency, and whole-Job memory evidence.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as

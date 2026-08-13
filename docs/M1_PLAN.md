@@ -14,7 +14,8 @@ foundation, and Slice 4 presentation core and honest shell frame are also
 implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
 `M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
 definitions, and beta-packaging work. The real-WebView2 browser-witness
-migration and SH-G-8's complete normal-envelope evidence remain open.
+migration is complete; SH-G-8's complete normal-envelope evidence remains
+open.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained
@@ -1096,8 +1097,8 @@ nodes directly and follows `M1_BRIDGE.md`'s bounded renderer/query/anchor
 contract while supplying an operable platform accessibility tree. The rail and
 resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
 UI, release, and beta claims stay open. The installed real-WebView2
-browser-behavior witness migration and SH-G-8's complete BR-G-42 normal
-four-task envelope also remain open.
+browser-behavior witness migration is complete; SH-G-8's complete BR-G-42
+normal four-task envelope remains open.
 
 ---
 

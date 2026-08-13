@@ -7,10 +7,11 @@ product-host composition, and the production transport defined by
 `M1_BRIDGE.md` now exist. Ordinary and installed-wheel evidence covers host
 isolation, runtime refusal, popup/navigation guards, single-instance behavior,
 native picker path confinement, committed-origin refusal, hostile text, and
-logging privacy; migration of the browser-behavior witnesses to an installed
-real WebView2 remains open. Slice 3 evidence covers transactional observation,
-bounded drain behavior, recovery, and repeated bridge readiness, while SH-G-8
-remains open for the complete BR-G-42 normal envelope. GUI Break 1
+logging privacy. The named browser-behavior witnesses now run through the
+installed production bridge and renderer in real WebView2. Slice 3 evidence
+covers transactional observation, bounded drain behavior, recovery, and
+repeated bridge readiness, while SH-G-8 remains open for the complete BR-G-42
+normal envelope. GUI Break 1
 and Slice 4 have completed their audited token/material/motion and
 visible-sequence/tree/shell realignment with ordinary, scale, and real
 clean-wheel headed evidence. User-facing plan, inventory, history,
@@ -290,8 +291,7 @@ its serializer/escaper and the real-browser hostile-name round trip remain part
 of the security boundary. The exact pythonnet 3.1.0 pin is equally part of that
 boundary because native delegate subscription, WinForms thread affinity, and
 `CoreWebView2` access pass through it. Browserless/Node probes are supplemental;
-the named browser-behavior gates remain open until their installed real-WebView2
-witnesses land.
+the installed real-WebView2 witnesses now own the named browser-behavior gates.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not

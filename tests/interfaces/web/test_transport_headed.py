@@ -119,6 +119,8 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert "evaluate_js" not in child
     assert "evaluate_js" not in scripts
     assert "dispatchInteractive" in scripts
+    assert "startTaskDrain" in scripts
+    assert 'import("./bridge.js")' in scripts
     assert "pickFolder(" in scripts
     assert "startPlan(" in scripts
     assert '"next_events"' in scripts
@@ -604,16 +606,19 @@ def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
     evidence = headed_transport_evidence.transport
     calls = evidence.result["service_start_plan_calls"]
 
-    assert len(calls) == 2
+    assert len(calls) == 5
     assert [
         (call["source"], call["target"], call["deletion_policy"])
         for call in calls
     ] == [
         (str(evidence.source), str(evidence.target), None),
+        (str(evidence.source), str(evidence.target), "trash"),
+        (str(evidence.source), str(evidence.target), "trash"),
+        (str(evidence.source), str(evidence.target), "trash"),
         (str(evidence.source), str(evidence.target), "additive"),
     ]
     assert all(len(call["command_id"]) == 32 for call in calls)
-    assert calls[0]["command_id"] != calls[1]["command_id"]
+    assert len({call["command_id"] for call in calls}) == len(calls)
     assert evidence.result["report"]["source_id"].startswith("slot-")
     assert evidence.result["report"]["target_id"].startswith("slot-")
     assert all(item["selected"] is True for item in evidence.picker_automation)
@@ -674,9 +679,108 @@ def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
         "message": "task is closing",
     }
     assert result["drain_exited"] is True
-    assert result["controlled_service_cleanup"] == [
-        ["unsubscribe", "b" * 32]
+    assert ["unsubscribe", "b" * 32] in result["controlled_service_cleanup"]
+
+
+@pytest.mark.headed
+def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
+    headed_transport_evidence: _HeadedTransportEvidence,
+) -> None:
+    evidence = headed_transport_evidence.transport
+    result = evidence.result
+    browser = result["report"]["browser_gate"]
+    server = result["browser_gate_server"]
+
+    assert browser["interactive_refusal"] == {
+        "name": "BridgeCommandError",
+        "code": "internal_error",
+    }
+    assert browser["accepted_types"] == [
+        "StateChanged",
+        "Progress",
+        "Gap",
+        "Gap",
+        "PhaseChanged",
+        "record",
     ]
+    assert browser["accepted_sequences"] == [1, 3, 4, 4, 5]
+    assert browser["busy_refusals"] == []
+    assert browser["malformed_refusal"] == {
+        "name": "BridgeTransportError"
+    }
+    assert browser["callback_release_order"] == ["record", "release"]
+    assert browser["automatic_close_calls"] == 0
+    assert browser["replacement_registration"] is True
+    assert browser["cleanup"] == {
+        "active_timers": 0,
+        "ready_listeners": 1,
+    }
+
+    nested = browser["nested_record"]
+    assert nested["session_id"] == "d" * 32
+    assert nested["state"] == "completed"
+    assert nested["result"]["items"][0]["path"] == evidence.corpus
+    assert nested["result"]["items"][0]["detail"] == {
+        "hostile": evidence.corpus,
+        "nested": {"values": ["海", "é", "U0001f30a"]},
+    }
+    assert nested["result"]["items"][1]["detail"] == evidence.corpus
+    assert [phase["phase"] for phase in nested["result"]["phases"]] == [
+        "execute",
+        "verify",
+    ]
+    assert browser["nested_dom"] == {
+        "observed": evidence.corpus,
+        "element_children": 0,
+        "image_count": 0,
+        "hostile_marker_defined": False,
+    }
+
+    assert server["drain_cursors"][:4] == [
+        {"role": "main", "replay_from": None},
+        {"role": "main", "replay_from": 1},
+        {"role": "main", "replay_from": None},
+        {"role": "main", "replay_from": 4},
+    ]
+    assert server["interactive_failures"] == 1
+    assert server["malformed_attempts"] == 7
+    assert len(server["registry_release_calls"]) == 2
+    assert len(server["registry_close_calls"]) == 2
+
+    response_kinds = [
+        (item["role"], item["kind"])
+        for item in result["next_event_responses"]
+    ]
+    assert ("busy", "drain_busy") in response_kinds
+    assert ("busy", "bridge_busy") in response_kinds
+    assert ("busy", "success") in response_kinds
+    malformed = [
+        kind for role, kind in response_kinds if role == "malformed"
+    ]
+    assert malformed == ["authority_mismatch", *("malformed",) * 6]
+
+    requests = [
+        json.loads(body)
+        for body in result["raw_dispatch_bodies"]
+        if isinstance(body, str)
+    ]
+    start_requests = [
+        request for request in requests if request.get("command") == "start_plan"
+    ]
+    by_command: dict[str, list[dict[str, object]]] = {}
+    for request in start_requests:
+        by_command.setdefault(request["payload"]["command_id"], []).append(request)
+    replays = [attempts for attempts in by_command.values() if len(attempts) == 2]
+    assert len(replays) == 1
+    first, second = replays[0]
+    assert first["request_id"] != second["request_id"]
+    assert first["payload"] == second["payload"]
+    assert set(first["payload"]) == {
+        "command_id",
+        "source_id",
+        "target_id",
+        "deletion_policy",
+    }
 
 
 @pytest.mark.headed
@@ -790,6 +894,11 @@ def _run_transport_scenario(
             )
         )
         wait_for_path(output, deadline=deadline)
+        interim = json.loads(read_text(output, deadline=deadline))
+        if "browser_failure" in interim:
+            raise AssertionError(
+                f"transport browser gate failed: {interim['browser_failure']!r}"
+            )
         wait_for_accessible_text(
             window,
             "Transport gate complete",
@@ -799,12 +908,15 @@ def _run_transport_scenario(
         interim = json.loads(read_text(output, deadline=deadline))
         assert interim["report"]["observed"] == corpus
         calls = interim["service_start_plan_calls"]
-        assert len(calls) == 2
+        assert len(calls) == 5
         assert [
             (call["source"], call["target"], call["deletion_policy"])
             for call in calls
         ] == [
             (str(source), str(target), None),
+            (str(source), str(target), "trash"),
+            (str(source), str(target), "trash"),
+            (str(source), str(target), "trash"),
             (str(source), str(target), "additive"),
         ]
         assert interim["drain_probe_report"] == {

@@ -8,8 +8,8 @@ classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and hardened production
 transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
-authority. The installed real-WebView2 browser-witness migration and SH-G-8's
-complete normal-envelope evidence remain open.
+authority. The installed real-WebView2 browser witnesses have landed; SH-G-8's
+complete normal-envelope evidence remains open.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
 visible-sequence, operable-tree, and shell realignment; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
@@ -432,10 +432,10 @@ queues, and only `assets/bridge.js` references `window.pywebview`.
 The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
 alone are not recovery signals. Browserless/Node probes remain supplemental;
-the named browser-behavior witnesses stay open until migrated to an installed
-real WebView2. SH-G-8 likewise remains open until the complete BR-G-42 normal
-four-task envelope runs, despite landed attach-before-schedule and
-beyond-envelope overflow/reconciliation coverage.
+the named browser-behavior witnesses now run through the installed production
+bridge and renderer in real WebView2. SH-G-8 remains open until the complete
+BR-G-42 normal four-task envelope runs, despite landed attach-before-schedule
+and beyond-envelope overflow/reconciliation coverage.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

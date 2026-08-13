@@ -5,8 +5,9 @@ acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
 transport chain through Slice 3 and the post-Slice-3 hardening are complete.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
-Slices 5-8 and GUI Break 2 remain. The real-WebView2 browser-gate migration and
-SH-G-8's complete BR-G-42 normal-envelope evidence also remain open. The
+Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
+migration is complete; SH-G-8's complete BR-G-42 normal-envelope evidence
+remains open. The
 explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed.
 Stage 5.5 landed its tree substrate,
@@ -2127,6 +2128,11 @@ round-trips the hostile corpus through the real pinned return transport and
 production sink. Renderer/log evidence is read from native
 `BrowserVersionString`; logs contain neither request bodies,
 real paths, hostile sentinels, tracebacks, exception text, nor `NICKNAME`.
+The installed-wheel browser scenario also drives the production `bridge.js`
+drain manager through stale readiness and generation settlements, identical
+`start_plan` replay, numeric holes without recovery, explicit-`Gap` recovery,
+busy and malformed refusal budgets, nested hostile-Unicode public views,
+terminal release without automatic task close, and task/listener/timer cleanup.
 
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
 as the GUI-owned counterpart to `db/settings.json` — recents, window geometry,

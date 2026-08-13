@@ -2181,9 +2181,9 @@ response envelopes. `interfaces/web/slots.py` alone retains picker paths;
 `M1_BRIDGE.md`. At Slice 2 closure the wheel's frontend set was
 `index.html`, `app.css`, `app.js`, `bridge.js`, and `render.js`; the last is the
 strict production `textContent` sink. Browserless probes and the headed page
-stay under `tests/assets/`. SH-G-3 is closed; the installed real-WebView2
-browser-behavior witness migration remains open, as do the plan/inventory DOM
-clauses assigned to later slices.
+stay under `tests/assets/`. SH-G-3 and the installed real-WebView2
+browser-behavior witness migration are closed; the plan/inventory DOM clauses
+assigned to later slices remain open.
 
 **Stage 6 Slice 3 status (completed 2026-08-12).** Adapter-owned tasks attach
 their observation transactionally before dispatcher publication, and the
@@ -2234,7 +2234,8 @@ regression and real clean-wheel keyboard, platform-accessibility, geometry,
 hostile-text, forced-colors, zoom, and stale-generation evidence pass, closing
 BR-G-34, BR-G-2's Stage 6 clause, and SH-G-7. Slice 5 remains the first owner
 of the real plan surface, and broader Stage 6/beta closure remains open. The
-installed real-WebView2 browser-witness migration also remains open.
+installed real-WebView2 browser witnesses now also cover the named transport
+and drain-manager behaviors.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.

@@ -12,9 +12,10 @@ two GUI Breaks that bound the visual work; their visual authority now lives in
 `DESKTOP_UI.md`.
 Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-3 are
 implemented. Their secured host, transport, picker, origin, privacy, event
-drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`; the remaining
-real-WebView2 browser-behavior migration and SH-G-8 normal-envelope evidence
-are explicitly open below. GUI Break 1's token, component, icon, motion, and native-material
+drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`; the installed
+real-WebView2 browser-behavior migration is complete, while SH-G-8's
+normal-envelope evidence remains explicitly open below. GUI Break 1's token,
+component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame have completed their
 audited realignment and restored headed gates. Slice 5 is the next delivery
 slice. NamiSync remains version `0.1.0` until
@@ -545,7 +546,7 @@ installation, not yet the final PyInstaller artifact.
 
 ### Slice 2 - Command transport, slots, and headed harness
 
-Status: implementation complete; browser-gate evidence migration remains open.
+Status: implementation and installed real-WebView2 browser evidence complete.
 
 The normative transport contract is exclusively in `M1_BRIDGE.md`: its
 inherited bridge posture, DR-BR-25/27 decisions, Slice 2 delivery contract, and
@@ -568,9 +569,8 @@ Delivery work:
 
 This slice maps SH-G-3 to the transport/privacy portion of BR-G-32. The Python
 boundary, picker confinement, origin refusal, and hostile-text path are
-implemented. The remaining browser-behavior authority is open until the named
-gate runs those wrapper cases through the real installed WebView2 composition;
-a Node probe alone is supplemental evidence.
+implemented. The named gate now runs those wrapper cases through the real
+installed WebView2 composition; Node probes remain supplemental evidence.
 
 ### Slice 3 - Event drain
 
@@ -959,7 +959,7 @@ This table maps shell delivery order to the sole BR-G definitions in
 | --- | --- | --- |
 | Phase 0 | prerequisites for BR-G-19/31/32 | complete |
 | Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
-| Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | implementation complete; installed real-WebView2 browser-witness migration remains open |
+| Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | complete, including installed real-WebView2 browser witnesses |
 | Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation complete; SH-G-8 remains open pending the complete BR-G-42 normal-envelope run |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
