@@ -603,8 +603,11 @@ exact deterministic normal shape: four tasks, 60 logical seconds, 6,000
 64-entry queue ceiling. The separate 260-reliable overflow case remains
 explicitly beyond that envelope and proves visible `Gap`, retained-tail
 recovery, and terminal reconciliation. The standalone installed-wheel WebView2
-benchmark harness also exists, but no passing real-60-second reference-machine
-latency/memory artifact has been recorded, so the gate remains open.
+benchmark harness also exists. Its valid 2026-08-13 reference run passed exact
+event truth, latency, no-`Gap`, and shutdown checks, but measured a 67,375,104-byte
+whole-Job private-memory delta against the 16,777,216-byte ceiling. The
+conservative failure is intentionally non-diagnostic, so the gate remains open
+without changing its capacities or budgets.
 
 ### GUI Break 1 - Presentation foundation (completed 2026-08-13)
 
@@ -986,8 +989,9 @@ The explicit-`Gap`-only recovery decision and the command-specific
 regressions have landed. A numeric sequence hole alone does not reopen recovery.
 SH-G-8 remains open because the deterministic normal fixture, separate
 beyond-envelope overflow regression, and committed benchmark harness do not
-substitute for a passing recorded reference-machine
-duration/rate/latency/memory artifact.
+substitute for a passing recorded reference-machine artifact. The valid
+2026-08-13 run passed duration/rate/event/latency/shutdown predicates but
+exceeded the fixed whole-Job memory ceiling.
 
 ## 7. Contract pointers and change control
 

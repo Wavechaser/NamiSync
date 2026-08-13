@@ -443,9 +443,10 @@ monotonic after coalescing, all four terminal records arrive, and queues stay at
 or below 64. The separate 260-reliable overflow regression remains explicitly
 beyond-envelope and preserves visible `Gap`/tail/terminal reconciliation. The
 standalone installed-wheel WebView2 harness and whole-Job measurement contract
-are implemented; after commit, run `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
-No passing reference-machine artifact has been recorded, so logical-time and
-harness-contract tests do not close SH-G-8.
+are implemented. A valid 2026-08-13 reference run passed exact event,
+latency, no-`Gap`, and clean-shutdown checks, but measured a 67,375,104-byte
+whole-Job private-memory delta against the 16,777,216-byte ceiling. SH-G-8
+therefore remains open; reproduce with `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

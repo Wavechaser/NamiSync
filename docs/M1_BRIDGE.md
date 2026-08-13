@@ -2494,16 +2494,29 @@ require a later schema-version decision rather than an M1 fallback
    repository NVMe, AC-power state, and declared Python/SQLite plus pinned
    pywebview/pythonnet profile; it records the resolved Bottle, evergreen
    WebView2, and loaded CLR identities without pretending they are all
-   package-pinned. After this harness is
-   committed, run it from the repository root with:
+   package-pinned. Reproduce it from the repository root with:
 
    ```powershell
    .\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"
    ```
 
-   Ordinary harness-contract tests and the logical-time fixture do not satisfy
-   the wall-clock/memory gate. No passing reference-machine JSON artifact is
-   linked yet, so SH-G-8 remains open.
+   The 2026-08-13 reference run of archived commit
+   `288969426d6e005bac7a7e540e0cfdbacf28f9eb` completed the exact 60-second
+   fixture with 6,000 `Progress` and 620 reliable/terminal deliveries (600
+   `ItemOutcome`, 12 `StateChanged`, four `Terminal`, and four terminal
+   records), four valid sessions, every item id exactly once and ordered,
+   monotonic progress, no `Gap`, and clean shutdown. Measured producer rates
+   were 100.043 `Progress`/s and 10.004 reliable items/s. Progress latency was
+   4 ms p95 / 17 ms maximum; reliable/terminal
+   latency was 5 ms p95 / 28 ms maximum. All archive, machine, runtime, event,
+   latency, cadence, and terminal predicates passed. The complete headed Job
+   sampled 287,506,432 idle-baseline bytes and a 354,881,536-byte peak, a
+   67,375,104-byte delta against the 16,777,216-byte ceiling, over 3,006
+   fixture samples with a 21.042 ms maximum interval. That conservative
+   overage is intentionally non-diagnostic, but it means the reference run did
+   not pass and SH-G-8 remains open; capacities and budgets are unchanged. The
+   archived source scope was clean; its recorded worktree status contained only
+   the two approved temporary root references, removed during final cleanup.
 
    Critical feedback and command admission are strict because they determine
    whether the interface feels alive. Page, projection, progress, and history
@@ -3225,11 +3238,14 @@ because its local tests are easier.
   allowing normal-load gaps, or using many empty
   history runs instead of a large retained run.
 
-  **Current status:** the exact logical-time fixture and the standalone
+  **Current status:** the exact logical-time fixture and standalone
   installed-wheel benchmark harness have landed, while the separate
-  beyond-envelope overflow regression remains passing. No passing reference
-  artifact has been recorded; therefore BR-G-42's event budget and SH-G-8 stay
-  open.
+  beyond-envelope overflow regression remains passing. The 2026-08-13 run of
+  archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
+  event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
+  predicates, but its conservative whole-Job private-memory delta was
+  67,375,104 bytes against the 16,777,216-byte ceiling. BR-G-42's event budget
+  and SH-G-8 therefore stay open without relaxing the fixed bound.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**
   `DESKTOP_UI.md`, the focused component documents, README overview/index/
   limitations/changelog, and `ui_mockup/` status agree with the implemented

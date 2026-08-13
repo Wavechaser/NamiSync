@@ -15,7 +15,8 @@ implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
 `M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
 definitions, and beta-packaging work. The real-WebView2 browser-witness
 migration is complete; SH-G-8's complete normal-envelope evidence remains
-open.
+open after a valid reference run passed event and latency checks but exceeded
+the fixed whole-Job private-memory ceiling.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained
@@ -1098,7 +1099,8 @@ contract while supplying an operable platform accessibility tree. The rail and
 resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
 UI, release, and beta claims stay open. The installed real-WebView2
 browser-behavior witness migration is complete; SH-G-8's complete BR-G-42
-normal four-task envelope remains open.
+normal four-task envelope remains open because the valid reference run exceeded
+only its fixed whole-Job private-memory ceiling.
 
 ---
 

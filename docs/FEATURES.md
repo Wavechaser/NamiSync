@@ -16,8 +16,8 @@ inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
 delivery order, host/package placement, SH-G definitions, and beta-package
 closure. The installed real-WebView2 browser-witness migration and SH-G-8's
 complete normal-envelope evidence have separate status: the browser witnesses
-have landed, while SH-G-8 remains open. Numeric-hole recovery and `start_plan`
-revision decisions are ratified with landed named regressions.
+have landed, while SH-G-8 remains open. Numeric-hole non-recovery and the
+`start_plan` revision decision are ratified with landed named regressions.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward

@@ -42,8 +42,10 @@ history, lifecycle, packaging, and beta closures remain open. The named
 browser-behavior witnesses now run through the installed production bridge and
 renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
 four-task logical-time fixture and standalone installed-wheel benchmark harness
-have landed, but no passing real-60-second reference artifact records its
-latency and whole-Job memory evidence, so the gate remains open.
+have landed. A valid real-60-second reference run passed event truth, ordering,
+latency, and shutdown, but its 67,375,104-byte whole-Job private-memory delta
+exceeded the 16,777,216-byte ceiling, so the intentionally non-diagnostic gate
+remains open.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -145,6 +147,23 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 - Early Shell Realignment Hardening
+
+- Realigned the Slice 1-3 desktop shell with its original authority and
+  lifecycle without adding later product workflow UI.
+  - **Protocol and ownership:** restored `M1_BRIDGE.md` as the sole transport
+    authority, separated terminal-session release from explicit task disposal,
+    preserved plan review after terminal delivery, and retained bounded retry,
+    admission, receipts, and native owners through safe teardown.
+  - **Trust and evidence:** added typed pre-teardown startup diagnostics,
+    ratified explicit-`Gap`-only recovery and command-specific `start_plan`
+    identity, exhaustively crossed every approved public view through dispatch,
+    and moved authoritative browser behavior into installed real WebView2.
+  - **Scale hardening:** demoted optional Node probes to supplemental evidence,
+    fixed real `sync-plan` terminal validation, and built the 60-second SH-G-8
+    reference harness; its event and latency checks pass, while the measured
+    whole-Job memory overage deliberately leaves the gate open.
 
 ### M1 Stage 6 - GUI And Presentation Realignment Hardening
 
