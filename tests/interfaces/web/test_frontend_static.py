@@ -27,6 +27,7 @@ from namisync.core.session import (
     SessionState,
     TERMINAL_STATES,
 )
+from namisync.interfaces.web.commands import production_command_specs
 from namisync.workflows.views import ResultCategory
 
 from test_wheel_assets import ASSET_ROOT, INITIAL_ASSETS
@@ -384,10 +385,10 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
         / "bridge.js"
     ).read_text(encoding="utf-8")
 
-    assert "const START_PLAN_TIMEOUT_MS = 30000;" in source
+    assert "COMMAND_POLICY_CONTRACT.start_plan.timeout" in source
     assert "command_id: mintId()" in source
-    assert source.count('"pick_folder"') == 1
-    assert source.count('"start_plan"') == 1
+    assert source.count('"pick_folder"') == 2
+    assert source.count('"start_plan"') == 2
     assert source.count("return await startPlanAttempt(payload);") == 2
     assert "new StartPlanUncertainError(submit)" in source
     assert "generation !== bridgeGeneration" in source
@@ -403,6 +404,54 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     )
     assert "return dispatchAttempt(" in source
     assert "response.request_id !== requestId" in source
+
+
+def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    match = re.search(
+        r"const COMMAND_POLICY_JSON = `([\s\S]*?)`;",
+        source,
+    )
+    assert match is not None
+    browser_policy = json.loads(match.group(1))
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=object(),  # type: ignore[arg-type]
+        registry=object(),  # type: ignore[arg-type]
+    )
+    native_policy = {
+        name: {
+            "timeout": spec.timeout.value,
+            "retry": spec.retry.value,
+        }
+        for name, spec in commands.items()
+    }
+
+    assert browser_policy == native_policy
+
+
+def test_task_recovery_and_release_budgets_are_explicit() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+
+    assert "COMMAND_POLICY_CONTRACT.close_task.timeout" in source
+    assert "const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([" in source
+    assert "const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);" in source
+    assert '"close_task"' in source
+    assert "beginTaskRelease(task);" in source
 
 
 def test_br_g_32_pick_folder_uses_neutral_interactive_transport() -> None:

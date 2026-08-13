@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Condition, Lock, get_ident
@@ -16,6 +16,8 @@ from namisync.workflows.views import SessionEventView, SessionRecordView
 
 
 _CAPACITY = 64
+_TASK_CAPACITY = 48
+_CLOSE_RECEIPT_CAPACITY = 48
 _DRAIN_WAIT_SECONDS = 25.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
@@ -72,6 +74,17 @@ class TaskStartView:
         if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
             raise ValueError("task id is invalid")
         _require_opaque_id(self.request_id, "task request id")
+        _require_opaque_id(self.session_id, "task session id")
+
+
+@dataclass(frozen=True, slots=True)
+class TaskCloseView:
+    task_id: str
+    session_id: str
+
+    def __post_init__(self) -> None:
+        if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
+            raise ValueError("task id is invalid")
         _require_opaque_id(self.session_id, "task session id")
 
 
@@ -163,7 +176,11 @@ class _TaskState:
     observation_unsubscribed: bool = False
     cleanup_pending: bool = False
     compensation: _Compensation | None = None
+    compensation_in_progress: bool = False
     cleanup: _TaskCleanup | None = None
+    cleanup_in_progress: bool = False
+    closed: bool = False
+    terminal_delivered: bool = False
     recovery_caller: int | None = None
 
     def sink(self, generation: int) -> Callable[[SessionUpdate], None]:
@@ -230,6 +247,7 @@ class _TaskState:
 class _StartEntry:
     command_id: str
     intent: tuple[str, str, str | None]
+    wire_intent: tuple[str, str, str | None] | None
     task: _TaskState
     participants: int = 0
     complete: bool = False
@@ -247,6 +265,7 @@ class TaskRegistry:
         token: Callable[[], str] | None = None,
         clock: Callable[[], float] = monotonic,
         drain_wait: float = _DRAIN_WAIT_SECONDS,
+        task_capacity: int = _TASK_CAPACITY,
     ) -> None:
         if not callable(token) and token is not None:
             raise TypeError("task token factory must be callable")
@@ -254,13 +273,21 @@ class TaskRegistry:
             raise TypeError("task clock must be callable")
         if drain_wait <= 0:
             raise ValueError("task drain wait must be positive")
+        if isinstance(task_capacity, bool) or not isinstance(task_capacity, int):
+            raise TypeError("task capacity must be an integer")
+        if task_capacity <= 0 or task_capacity > _TASK_CAPACITY:
+            raise ValueError(f"task capacity must be between 1 and {_TASK_CAPACITY}")
         self._service = service
         self._token = token if token is not None else _new_token
         self._clock = clock
         self._drain_wait = drain_wait
+        self._task_capacity = task_capacity
         self._condition = Condition(Lock())
         self._tasks: dict[str, _TaskState] = {}
         self._commands: dict[str, _StartEntry] = {}
+        self._close_receipts: OrderedDict[
+            tuple[str, str], TaskCloseView
+        ] = OrderedDict()
         self._closing = False
 
     def start_plan(
@@ -270,6 +297,7 @@ class TaskRegistry:
         *,
         deletion_policy: str | None,
         command_id: str,
+        wire_intent: tuple[str, str, str | None] | None = None,
     ) -> TaskStartView:
         """Single-flight one resolved plan gesture and attach before scheduling."""
 
@@ -281,9 +309,11 @@ class TaskRegistry:
                 raise TaskUnavailableError("task registry is closing")
             entry = self._commands.get(command_id)
             if entry is None:
+                if len(self._tasks) >= self._task_capacity:
+                    raise TaskUnavailableError("task capacity is exhausted")
                 task_id = self._mint_task_id()
                 task = _TaskState(task_id, command_id, intent)
-                entry = _StartEntry(command_id, intent, task)
+                entry = _StartEntry(command_id, intent, wire_intent, task)
                 self._commands[command_id] = entry
                 self._tasks[task_id] = task
                 owner = True
@@ -294,27 +324,59 @@ class TaskRegistry:
         try:
             if owner:
                 self._start_owner(entry, source, target, deletion_policy)
-            with self._condition:
-                while not entry.complete:
-                    self._condition.wait()
-                if entry.result is not None:
-                    return entry.result
-                assert entry.failure is not None
-                raise entry.failure
+            return self._await_start_entry(entry)
         finally:
-            with self._condition:
-                entry.participants -= 1
-                if (
-                    entry.complete
-                    and entry.result is None
-                    and entry.participants == 0
-                    and not entry.task.cleanup_pending
-                ):
-                    if self._commands.get(command_id) is entry:
-                        self._commands.pop(command_id, None)
-                    if self._tasks.get(entry.task.task_id) is entry.task:
-                        self._tasks.pop(entry.task.task_id, None)
-                self._condition.notify_all()
+            self._leave_start_entry(entry)
+
+    def replay_start(
+        self,
+        command_id: str,
+        wire_intent: tuple[str, str, str | None],
+    ) -> TaskStartView | None:
+        """Return an exact retained wire replay before volatile slots resolve."""
+
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            entry = self._commands.get(command_id)
+            if entry is None:
+                return None
+            if entry.wire_intent != wire_intent:
+                if entry.intent[2] != wire_intent[2]:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                return None
+            entry.participants += 1
+        try:
+            if entry.complete and entry.result is None and entry.task.cleanup_pending:
+                self._retry_compensation(entry.task)
+            return self._await_start_entry(entry)
+        finally:
+            self._leave_start_entry(entry)
+
+    def _await_start_entry(self, entry: _StartEntry) -> TaskStartView:
+        with self._condition:
+            while not entry.complete:
+                self._condition.wait()
+            if entry.result is not None:
+                return entry.result
+            assert entry.failure is not None
+            raise entry.failure
+
+    def _leave_start_entry(self, entry: _StartEntry) -> None:
+        with self._condition:
+            entry.participants -= 1
+            if (
+                entry.complete
+                and entry.result is None
+                and entry.participants == 0
+                and not entry.task.cleanup_pending
+            ):
+                if self._commands.get(entry.command_id) is entry:
+                    self._commands.pop(entry.command_id, None)
+                if self._tasks.get(entry.task.task_id) is entry.task:
+                    self._tasks.pop(entry.task.task_id, None)
+            self._condition.notify_all()
 
     def _start_owner(
         self,
@@ -354,7 +416,13 @@ class TaskRegistry:
             failure = error
             if plan is not None:
                 task.compensation = _Compensation(plan)
-                self._attempt_compensation(task)
+                try:
+                    self._attempt_compensation(task)
+                except BaseException as cleanup_error:
+                    cleanup_error.add_note(
+                        "task admission compensation was interrupted"
+                    )
+                    failure = cleanup_error
             result = None
 
         with self._condition:
@@ -420,6 +488,8 @@ class TaskRegistry:
                         drained.append(task.terminal_record)
                         task.terminal_pending = False
                     updates = tuple(drained)
+                    if any(type(update) is SessionRecordView for update in updates):
+                        task.terminal_delivered = True
                     task.condition.notify_all()
         finally:
             with task.condition:
@@ -545,10 +615,19 @@ class TaskRegistry:
                 if task.session_id == session_id:
                     task.observation_unsubscribed = True
 
-    def close_task(self, task_id: str) -> None:
+    def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
         """Release one task's observer, terminal session, plan, and receipt."""
 
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        receipt_key = (task_id, session_id)
         with self._condition:
+            receipt = self._close_receipts.get(receipt_key)
+            if receipt is not None:
+                self._close_receipts.move_to_end(receipt_key)
+                return receipt
             task = self._tasks.get(task_id)
         if task is None:
             raise TaskUnavailableError("task is unavailable")
@@ -557,8 +636,17 @@ class TaskRegistry:
             if task.cleanup_pending:
                 raise TaskUnavailableError("task cleanup remains pending")
             self._discard_failed_task(task)
-            return
+            raise TaskUnavailableError("task is unavailable")
         with task.condition:
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+            if not task.terminal_delivered:
+                raise TaskUnavailableError("task terminal record was not drained")
+            while task.cleanup_in_progress:
+                task.condition.wait()
+            if task.closed:
+                return TaskCloseView(task_id, session_id)
+            task.cleanup_in_progress = True
             task.closing = True
             task.generation += 1
             if task.active_drain is not None:
@@ -569,21 +657,40 @@ class TaskRegistry:
             session_id = task.session_id
             request_id = task.request_id
         if session_id is None or request_id is None:
+            with task.condition:
+                task.cleanup_in_progress = False
+                task.condition.notify_all()
             raise TaskUnavailableError("task has not completed admission")
         with task.condition:
             cleanup = task.cleanup
             if cleanup is None:
                 cleanup = _TaskCleanup(session_id, request_id)
                 task.cleanup = cleanup
-        self._attempt_task_cleanup(cleanup)
-        if not cleanup.complete:
-            raise TaskUnavailableError("task cleanup remains pending")
+        try:
+            self._attempt_task_cleanup(cleanup)
+            if not cleanup.complete:
+                raise TaskUnavailableError("task cleanup remains pending")
+        except BaseException:
+            with task.condition:
+                task.cleanup_in_progress = False
+                task.condition.notify_all()
+            raise
+        result = TaskCloseView(task_id, session_id)
         with self._condition:
             if self._tasks.get(task_id) is task:
                 self._tasks.pop(task_id, None)
             if self._commands.get(task.command_id, None) is not None:
                 self._commands.pop(task.command_id, None)
+            self._close_receipts[receipt_key] = result
+            self._close_receipts.move_to_end(receipt_key)
+            while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
+                self._close_receipts.popitem(last=False)
             self._condition.notify_all()
+        with task.condition:
+            task.closed = True
+            task.cleanup_in_progress = False
+            task.condition.notify_all()
+        return result
 
     def _require_task(self, task_id: str, session_id: str) -> _TaskState:
         if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
@@ -625,10 +732,27 @@ class TaskRegistry:
             if not compensation.drop_done:
                 self._service.drop_plan(compensation.plan.request_id)
                 compensation.drop_done = True
-        except BaseException:
+        except Exception:
             task.cleanup_pending = True
             return
+        except BaseException:
+            task.cleanup_pending = True
+            raise
         task.cleanup_pending = not compensation.complete
+
+    def _retry_compensation(self, task: _TaskState) -> None:
+        with task.condition:
+            while task.compensation_in_progress:
+                task.condition.wait()
+            if not task.cleanup_pending:
+                return
+            task.compensation_in_progress = True
+        try:
+            self._attempt_compensation(task)
+        finally:
+            with task.condition:
+                task.compensation_in_progress = False
+                task.condition.notify_all()
 
     def _attempt_task_cleanup(self, cleanup: _TaskCleanup) -> None:
         if not cleanup.unsubscribe_done:
@@ -672,6 +796,7 @@ __all__ = [
     "DrainBusyError",
     "ObservationConflictError",
     "TaskDrainView",
+    "TaskCloseView",
     "TaskEventUpdateView",
     "TaskIntentConflictError",
     "TaskRecordUpdateView",

@@ -15,6 +15,11 @@ from namisync.db.schema import (
     initialize_history,
     initialize_ledger,
 )
+from namisync.workflows._database_pair_native import (
+    ArtifactNative,
+    OwnedArtifactLease,
+    WindowsArtifactNative,
+)
 
 
 DATABASE_RESET_DIRECTION = (
@@ -22,6 +27,7 @@ DATABASE_RESET_DIRECTION = (
     "database files together, and restart NamiSync."
 )
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+_ARTIFACT_NATIVE: ArtifactNative = WindowsArtifactNative()
 
 
 class DatabasePairState(StrEnum):
@@ -98,28 +104,72 @@ def initialize_database_pair(
     if state.state is not DatabasePairState.FRESH:
         return state
 
-    owned: dict[Path, tuple[int, int]] = {}
+    owned: dict[Path, OwnedArtifactLease] = {}
     try:
         _reserve_database(ledger, owned)
         initialize_ledger(ledger)
-        _require_owned(ledger, owned[ledger])
+        _require_owned(owned[ledger])
         _discard_reserved_sidecars(ledger, owned)
 
         _reserve_database(history, owned)
         initialize_history(history)
-        _require_owned(history, owned[history])
+        _require_owned(owned[history])
         _discard_reserved_sidecars(history, owned)
 
         ready = validate_database_pair(ledger, history)
         if ready.state is not DatabasePairState.READY:
             raise RuntimeError("published database pair failed its contract check")
-        return ready
-    except Exception as error:
-        cleanup_errors = _retract_owned(owned)
+    except BaseException as error:
+        try:
+            cleanup_errors = _retract_owned(owned)
+        except BaseException as cleanup_error:
+            cleanup_errors = (cleanup_error,)
+        cleanup_interrupt = next(
+            (
+                cleanup_error
+                for cleanup_error in cleanup_errors
+                if not isinstance(cleanup_error, Exception)
+            ),
+            None,
+        )
+        if cleanup_interrupt is not None and isinstance(error, Exception):
+            cleanup_interrupt.add_note(
+                "NamiSync database initialization cleanup was incomplete. "
+                f"{DATABASE_RESET_DIRECTION}"
+            )
+            raise cleanup_interrupt
+        if not isinstance(error, Exception):
+            if cleanup_errors:
+                error.add_note(
+                    "NamiSync database initialization cleanup was incomplete. "
+                    f"{DATABASE_RESET_DIRECTION}"
+                )
+            raise
         suffix = "" if not cleanup_errors else "; cleanup was incomplete"
         raise DatabasePairInitializationError(
             f"coordinated database initialization failed{suffix}"
         ) from error
+    release_errors = _release_owned(owned)
+    release_interrupt = next(
+        (
+            release_error
+            for release_error in release_errors
+            if not isinstance(release_error, Exception)
+        ),
+        None,
+    )
+    if release_interrupt is not None:
+        release_interrupt.add_note(
+            "NamiSync database initialization succeeded, but ownership-handle "
+            "release was incomplete. Restart NamiSync before retrying."
+        )
+        raise release_interrupt
+    if release_errors:
+        raise DatabasePairInitializationError(
+            "coordinated database initialization succeeded, but ownership-handle "
+            "release was incomplete"
+        )
+    return ready
 
 
 def ensure_database_pair(
@@ -136,16 +186,13 @@ def ensure_database_pair(
     return contract
 
 
-def _reserve(path: Path, owned: dict[Path, tuple[int, int]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb"):
-        pass
-    owned[path] = _identity(path)
+def _reserve(path: Path, owned: dict[Path, OwnedArtifactLease]) -> None:
+    owned[path] = OwnedArtifactLease.reserve(path, _ARTIFACT_NATIVE)
 
 
 def _reserve_database(
     main: Path,
-    owned: dict[Path, tuple[int, int]],
+    owned: dict[Path, OwnedArtifactLease],
 ) -> None:
     # Every path that cleanup may remove is exclusively reserved and identified
     # before SQLite runs. Absence-before/presence-after alone cannot establish
@@ -154,46 +201,62 @@ def _reserve_database(
         _reserve(artifact, owned)
 
 
-def _require_owned(path: Path, expected: tuple[int, int]) -> None:
-    if not _matches_identity(path, expected):
+def _require_owned(lease: OwnedArtifactLease) -> None:
+    if not lease.matches_path():
         raise OSError("database publication replaced its reserved file")
 
 
 def _discard_reserved_sidecars(
     main: Path,
-    owned: dict[Path, tuple[int, int]],
+    owned: dict[Path, OwnedArtifactLease],
 ) -> None:
     for artifact in _sidecars(main):
+        lease = owned[artifact]
         if not _entry_exists(artifact):
+            failures = lease.release()
+            if failures:
+                raise failures[0]
+            del owned[artifact]
             continue
-        expected = owned[artifact]
-        if not _matches_identity(artifact, expected):
+        _, failures = lease.retract()
+        if failures:
+            raise failures[0]
+        if _entry_exists(artifact):
             raise OSError("database publication replaced a reserved sidecar")
-        artifact.unlink()
+        del owned[artifact]
 
 
-def _retract_owned(owned: dict[Path, tuple[int, int]]) -> tuple[OSError, ...]:
-    failures: list[OSError] = []
-    for artifact, expected in reversed(tuple(owned.items())):
-        if not _matches_identity(artifact, expected):
-            continue
+def _retract_owned(
+    owned: dict[Path, OwnedArtifactLease],
+) -> tuple[BaseException, ...]:
+    failures: list[BaseException] = []
+    # Deletion authority is the lease's newly bound handle.  A pathname
+    # identity precheck here would merely recreate the check/use race.
+    for lease in reversed(tuple(owned.values())):
         try:
-            artifact.unlink(missing_ok=True)
-        except OSError as error:
+            deleted, lease_failures = lease.retract()
+            failures.extend(lease_failures)
+            if not deleted and not lease_failures:
+                failures.append(
+                    OSError(
+                        "owned database artifact was displaced before cleanup"
+                    )
+                )
+        except BaseException as error:
             failures.append(error)
     return tuple(failures)
 
 
-def _identity(path: Path) -> tuple[int, int]:
-    stat = path.lstat()
-    return stat.st_dev, stat.st_ino
-
-
-def _matches_identity(path: Path, expected: tuple[int, int]) -> bool:
-    try:
-        return _identity(path) == expected
-    except OSError:
-        return False
+def _release_owned(
+    owned: dict[Path, OwnedArtifactLease],
+) -> tuple[BaseException, ...]:
+    failures: list[BaseException] = []
+    for lease in reversed(tuple(owned.values())):
+        try:
+            failures.extend(lease.release())
+        except BaseException as error:
+            failures.append(error)
+    return tuple(failures)
 
 
 def _sidecars(path: Path) -> tuple[Path, ...]:

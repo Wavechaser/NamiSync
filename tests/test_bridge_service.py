@@ -993,6 +993,78 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     assert service._receipt_ids_by_session == {}
 
 
+def test_br_g_16_shutdown_waits_for_an_inflight_receipt_replay() -> None:
+    get_entered = Event()
+    get_release = Event()
+
+    class RetainingDispatcher(_Dispatcher):
+        def __init__(self) -> None:
+            super().__init__()
+            self.sessions: set[str] = set()
+            self.block_get = False
+
+        def submit(self, kind: str, request: object) -> str:
+            session_id = super().submit(kind, request)
+            self.sessions.add(session_id)
+            return session_id
+
+        def get(self, session_id: str):
+            if session_id not in self.sessions:
+                raise SessionNotFound(session_id)
+            if self.block_get:
+                get_entered.set()
+                assert get_release.wait(2)
+            return SimpleNamespace(session_id=session_id)
+
+        def shutdown(self, timeout: float):
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    runtime = SimpleNamespace(close=lambda: None)
+    dispatcher = RetainingDispatcher()
+    service = _service(runtime, dispatcher)
+    service._observer = SimpleNamespace(close=lambda: None)
+    first = service.start_inventory(
+        root_path="F:\\library",
+        command_id="retained-refresh",
+    )
+    dispatcher.block_get = True
+    get_entered.clear()
+
+    replayed: list[object] = []
+    retry = Thread(
+        target=lambda: replayed.append(
+            service.start_inventory(
+                root_path="F:\\library",
+                command_id="retained-refresh",
+            )
+        )
+    )
+    retry.start()
+    assert get_entered.wait(1)
+
+    closed: list[object] = []
+    closer = Thread(target=lambda: closed.append(service.close()))
+    closer.start()
+    closer.join(0.05)
+
+    assert closer.is_alive()
+    assert service._closed is False
+    get_release.set()
+    retry.join(2)
+    closer.join(2)
+
+    assert not retry.is_alive()
+    assert not closer.is_alive()
+    assert replayed == [first]
+    assert len(closed) == 1
+    assert closed[0].complete is True
+    assert service._session_receipts == {}
+
+
 def test_br_g_16_close_and_retry_do_not_replay_a_closed_session() -> None:
     close_entered = Event()
     close_release = Event()

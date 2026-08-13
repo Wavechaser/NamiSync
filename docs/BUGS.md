@@ -535,6 +535,54 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Desktop bridge and native-owner lifecycle
+
+- SEVERE - FIXED (2026-08-13). Pywebview object-graph exposure. Passing the
+  dispatcher as `js_api` let pywebview recursively discover receiver members,
+  so underscore-prefixed bridge state was not a security boundary and crafted
+  raw WebMessages could name private call paths. Fixed by creating the window
+  with no `js_api` object and exposing one function-only `dispatch` entry.
+  Ordinary and real-WebView2 probes send private dotted names and confirm that
+  no private receiver or document mutation is reachable.
+- SEVERE - FIXED (2026-08-13). Unbounded bridge and shutdown ownership. The
+  pinned host creates a thread per admitted call, admission had no cap, and
+  teardown could wait forever or release logging, path, and instance owners
+  after quiescence failed. Fixed with a 64-handler admission ceiling, bounded
+  monotonic handler wait, one fail-closed quiescence sequence, retryable close,
+  and owner release only after complete service shutdown. Drains and producers
+  are woken before the wait; saturation returns the fixed `bridge_busy` error.
+- MODERATE - FIXED (2026-08-13). Adapter task retention and recovery spin.
+  Terminal tasks and start receipts had no production release command, an
+  uncertain start could lose replay when its folder slots expired, and repeated
+  drain failure could immediately rearm forever. Fixed with a 48-task ceiling,
+  terminal-record-gated `close_task`, bounded close receipts and cleanup
+  compensation, pre-slot wire-intent replay, and finite delayed recovery that
+  refuses after its budget. The real headed gate also proves a 25-second drain
+  remains concurrent with another RPC and settles during window shutdown.
+- MODERATE - FIXED (2026-08-13). Desktop pathname and activation substitution.
+  Startup validated resolved app paths and found an activation window by title,
+  then used both after a replacement opportunity. Fixed by holding non-reparse,
+  delete-denying handles on the app root, logs, WebView2 directory, and both
+  ready database mains for process lifetime, and by requiring the found HWND's
+  process image to match the current executable or venv base interpreter before
+  activation. A malicious same-principal process can still squat the mutex or
+  spoof an accepted base interpreter; the primitive is not a same-principal
+  security boundary.
+- MODERATE - FIXED (2026-08-13). Shutdown receipt invalidation race. Service
+  close could mark the facade closed and clear session receipts while a retry
+  was already reading or replaying one, returning authority after shutdown had
+  begun. Cause: the close transition did not share the receipt lifecycle gate
+  used by receipt lookup and publication. Fixed by performing the close mark
+  and receipt-map clearing under that gate; an in-flight replay must now finish
+  before shutdown invalidates receipt state.
+- MINOR - FIXED (2026-08-13). Browser/native command-policy drift. Timeout and
+  retry metadata in Python could differ from the behavior hand-coded in
+  `bridge.js`, while malformed command names could inject control text into
+  diagnostic records. Fixed with an exact dual-declaration policy mirror test,
+  bounded lowercase-snake command validation, log-safe command projection,
+  explicit same-payload bounded release retry, and continued refusal of hidden
+  `mirror` at the desktop payload boundary.
+
 ### M1 Hardening
 
 - SEVERE - FIXED (2026-08-12). Appearance-publication UI-thread deadlock. The
@@ -638,6 +686,18 @@ defect, and move implementation-level test choreography out of the log.
   retry until completion.
 
 ## DATABASE AND INVENTORY
+
+### Database artifact ownership and rollback
+
+- SEVERE - FIXED (2026-08-13). Database-pair rollback pathname race. Failed
+  fresh-pair initialization compared a reserved artifact's identity and then
+  unlinked its pathname, so a replacement between those operations could be
+  deleted; `KeyboardInterrupt` and `SystemExit` also bypassed rollback. Fixed
+  with Windows reservation leases and `ReOpenFile` from the retained
+  reservation for exact-object disposition, cleanup for every
+  `BaseException`, retryable handle release, and explicit incomplete-cleanup
+  notes. Foreign replacements are retained and normal startup still never
+  invokes the destructive development reset.
 
 ### M1 Hardening
 

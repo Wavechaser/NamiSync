@@ -37,12 +37,15 @@ from namisync.interfaces.web.commands import (
     production_command_specs,
 )
 from namisync.interfaces.web.drain import (
+    TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskIntentConflictError,
     TaskRecordUpdateView,
+    TaskRegistry,
     TaskStartView,
 )
+from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.workflows.views import SessionEventView
 
 
@@ -72,6 +75,15 @@ class _Slots:
 class _Service:
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
+        self.replays: list[tuple[object, ...]] = []
+
+    def replay_start(
+        self,
+        command_id: str,
+        wire_intent: tuple[str, str, str | None],
+    ) -> TaskStartView | None:
+        self.replays.append((command_id, wire_intent))
+        return None
 
     def start_plan(
         self,
@@ -80,8 +92,11 @@ class _Service:
         *,
         deletion_policy: str | None = None,
         command_id: str | None = None,
+        wire_intent: tuple[str, str, str | None] | None = None,
     ) -> TaskStartView:
-        self.calls.append((source, target, deletion_policy, command_id))
+        self.calls.append(
+            (source, target, deletion_policy, command_id, wire_intent)
+        )
         return TaskStartView(
             task_id=TASK_ID,
             request_id="4" * 32,
@@ -101,6 +116,10 @@ class _Service:
         )
         return TaskDrainView(task_id, session_id, drain_id, ())
 
+    def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
+        self.calls.append(("close", task_id, session_id))
+        return TaskCloseView(task_id, session_id)
+
 
 def _commands(*, picker=lambda: None):
     slots = _Slots()
@@ -115,7 +134,12 @@ def _commands(*, picker=lambda: None):
 def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete() -> None:
     commands, _, _ = _commands()
 
-    assert tuple(commands) == ("pick_folder", "start_plan", "next_events")
+    assert tuple(commands) == (
+        "pick_folder",
+        "start_plan",
+        "next_events",
+        "close_task",
+    )
     assert "test_report" not in commands
     assert (
         commands["pick_folder"].access,
@@ -155,6 +179,19 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         FieldRequirement.FORBIDDEN,
         CommandTimeout.DRAIN_30_SECONDS,
         CommandRetry.NONE,
+    )
+    assert (
+        commands["close_task"].access,
+        commands["close_task"].command_id,
+        commands["close_task"].revision,
+        commands["close_task"].timeout,
+        commands["close_task"].retry,
+    ) == (
+        CommandAccess.MUTATING,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.MUTATION_30_SECONDS,
+        CommandRetry.SAME_PAYLOAD_BOUNDED,
     )
 
     with pytest.raises(TypeError):
@@ -290,10 +327,83 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
         session_id="5" * 32,
     )
     assert slots.resolved == [(SOURCE_ID, TARGET_ID)]
+    assert service.replays == [
+        (COMMAND_ID, (SOURCE_ID, TARGET_ID, None))
+    ]
     assert service.calls == [
-        (r"C:\private\source", r"D:\private\target", None, COMMAND_ID)
+        (
+            r"C:\private\source",
+            r"D:\private\target",
+            None,
+            COMMAND_ID,
+            (SOURCE_ID, TARGET_ID, None),
+        )
     ]
     assert "private" not in repr(payload)
+
+
+@pytest.mark.parametrize("retirement", ["expiry", "eviction"])
+def test_uncertain_start_replays_before_volatile_slots_are_resolved(
+    retirement: str,
+) -> None:
+    class Clock:
+        now = 0.0
+
+        def __call__(self) -> float:
+            return self.now
+
+    class Service:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def start_plan(self, source, target, **kwargs):
+            self.calls.append((source, target, kwargs["command_id"]))
+            return PlanSession("8" * 32, "9" * 32)
+
+        def unsubscribe(self, session_id):
+            del session_id
+
+        def close_session(self, session_id):
+            del session_id
+
+        def drop_plan(self, request_id):
+            del request_id
+
+    clock = Clock()
+    slot_tokens = iter(f"{value:032x}" for value in range(1, 100))
+    slots = FolderSlotTable(clock=clock, token=lambda: next(slot_tokens))
+    source_id, _ = slots.store(r"C:\source", purpose="source")
+    target_id, _ = slots.store(r"D:\target", purpose="target")
+    service = Service()
+    registry = TaskRegistry(service, token=lambda: "a" * 32)
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=slots,
+        registry=registry,
+    )
+    payload = {
+        "command_id": COMMAND_ID,
+        "source_id": source_id,
+        "target_id": target_id,
+        "deletion_policy": None,
+    }
+
+    lost_response = commands["start_plan"].invoke(payload)
+    if retirement == "expiry":
+        clock.now = 1_801.0
+    else:
+        for value in range(32):
+            purpose = "source" if value % 2 == 0 else "target"
+            slots.store(f"C:\\replacement-{value}", purpose=purpose)
+    with pytest.raises(SlotUnavailableError):
+        slots.resolve_pair(source_id, target_id)
+
+    replay = commands["start_plan"].invoke(payload)
+
+    assert replay == lost_response
+    assert service.calls == [(r"C:\source", r"D:\target", COMMAND_ID)]
+    with pytest.raises(CommandConflictError):
+        commands["start_plan"].invoke({**payload, "deletion_policy": "trash"})
 
 
 def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() -> None:
@@ -313,6 +423,46 @@ def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() 
         ("drain", TASK_ID, SESSION_ID, DRAIN_ID, 17)
     ]
     assert slots.resolved == []
+
+
+def test_task_close_delegates_exact_authority_and_echoes_identity() -> None:
+    commands, slots, registry = _commands()
+
+    result = commands["close_task"].invoke(
+        {"task_id": TASK_ID, "session_id": SESSION_ID}
+    )
+
+    assert result == TaskCloseView(TASK_ID, SESSION_ID)
+    assert registry.calls == [("close", TASK_ID, SESSION_ID)]
+    assert slots.resolved == []
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        object(),
+        TaskCloseView("task-" + "9" * 32, SESSION_ID),
+        TaskCloseView(TASK_ID, "9" * 32),
+    ],
+)
+def test_task_close_refuses_invalid_or_mismatched_registry_result(
+    result: object,
+) -> None:
+    class InvalidRegistry(_Service):
+        def close_task(self, *args: object) -> object:
+            del args
+            return result
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=InvalidRegistry(),
+    )
+
+    with pytest.raises(RuntimeError, match="invalid close data"):
+        commands["close_task"].invoke(
+            {"task_id": TASK_ID, "session_id": SESSION_ID}
+        )
 
 
 @pytest.mark.parametrize(
@@ -504,6 +654,19 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
                 "deletion_policy": None,
             },
         ),
+        ("close_task", {}),
+        (
+            "close_task",
+            {"task_id": TASK_ID, "session_id": SESSION_ID, "extra": True},
+        ),
+        (
+            "close_task",
+            {"task_id": SESSION_ID, "session_id": SESSION_ID},
+        ),
+        (
+            "close_task",
+            {"task_id": TASK_ID, "session_id": TASK_ID},
+        ),
         (
             "start_plan",
             {
@@ -619,6 +782,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
 
     assert ADAPTER_PUBLIC_VIEW_DATACLASSES == {
         TaskStartView,
+        TaskCloseView,
         TaskDrainView,
         TaskEventUpdateView,
         TaskRecordUpdateView,

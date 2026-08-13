@@ -106,6 +106,7 @@ from types import SimpleNamespace
 
 from namisync.interfaces import launcher
 from namisync.interfaces.web import host
+from namisync.interfaces.web.paths import AppPaths
 
 
 class Hook:
@@ -132,6 +133,10 @@ class Window:
                 else None
             )
         )
+        self.exposed = ()
+
+    def expose(self, *functions):
+        self.exposed = functions
 
     def destroy(self):
         pass
@@ -150,7 +155,7 @@ class Webview:
         background_color,
         transparent,
     ):
-        assert js_api is not None
+        assert js_api is None
         assert background_color == "#F3F3F3"
         assert transparent is False
         return self.window
@@ -198,6 +203,10 @@ def start_webview(webview_module, *, on_initialized, storage_path):
 
 
 host._load_webview = load_webview
+AppPaths.acquire_lease = lambda self: SimpleNamespace(
+    bind_databases=lambda: None,
+    close=lambda: None,
+)
 host._prepare_webview_host = lambda _module: None
 host._create_service = lambda _paths: Service()
 host._configure_window_security = configure_security

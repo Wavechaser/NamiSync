@@ -43,6 +43,10 @@ class _Window:
         self.events = SimpleNamespace(closing=_Hook(), loaded=_Hook())
         self.destroy_count = 0
         self.destroyed = Event()
+        self.exposed_functions: tuple[object, ...] = ()
+
+    def expose(self, *functions: object) -> None:
+        self.exposed_functions = functions
 
     def destroy(self) -> None:
         self.destroy_count += 1
@@ -163,6 +167,15 @@ def _patch_primary(
     reports: list[str] = []
     webview = _Webview(order)
     document = _Document()
+    path_lease = SimpleNamespace(
+        bind_databases=lambda: order.append("path_lease.bind_databases"),
+        close=lambda: order.append("path_lease.close"),
+    )
+    monkeypatch.setattr(
+        AppPaths,
+        "acquire_lease",
+        lambda self: order.append("path_lease.acquire") or path_lease,
+    )
     service = _Service(
         order,
         state=database_state,
@@ -211,8 +224,9 @@ def _patch_primary(
     )
     commands = SimpleNamespace()
     dispatcher = SimpleNamespace(
-        _reject_new=lambda: order.append("reject_dispatch"),
-        _wait_for_handlers=lambda: order.append("wait_handlers"),
+        begin_close=lambda: order.append("reject_dispatch"),
+        wait_for_handlers=lambda: order.append("wait_handlers"),
+        dispatch=lambda _body: None,
     )
 
     class Picker:
@@ -361,6 +375,7 @@ def test_host_prepares_before_create_and_starts_only_edge(
     labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
     assert labels == [
         "acquire",
+        "path_lease.acquire",
         "configure_logging",
         "import_webview",
         "log_dependencies",
@@ -368,6 +383,8 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "create_service",
         "validate_databases",
         "initialize_databases",
+        "path_lease.bind_databases",
+        "validate_databases",
         "task_registry",
         "pending_document",
         "folder_slots",
@@ -390,6 +407,7 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "registry.unsubscribe_all",
         "service.close",
         "shutdown_logging",
+        "path_lease.close",
         "lease.close",
     ]
     created = next(item for item in order if isinstance(item, tuple) and item[0] == "create_window")
@@ -407,9 +425,12 @@ def test_host_prepares_before_create_and_starts_only_edge(
         item for item in order if item[0] == "task_registry"
     )[2]
     assert bridge_entry[2] is commands_entry[2]
-    assert created[3] is bridge_entry[3]
+    assert created[3] is None
     assert created[4] == "#F3F3F3"
     assert created[5] is False
+    assert len(webview.window.exposed_functions) == 1
+    exposed_dispatch = webview.window.exposed_functions[0]
+    assert exposed_dispatch.__name__ == "dispatch"
     started = next(item for item in order if isinstance(item, tuple) and item[0] == "start")
     assert started[1] is webview
     assert started[2] == str(paths.webview2)
@@ -550,7 +571,7 @@ def test_br_g_32_native_folder_picker_releases_single_flight_on_every_exit(
     assert calls == 2
 
 
-def test_br_g_32_host_helpers_build_exact_production_js_api() -> None:
+def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
     document = SimpleNamespace(require_trusted=lambda: None)
     slots = host._folder_slots()
     commands = host._production_commands(
@@ -560,15 +581,32 @@ def test_br_g_32_host_helpers_build_exact_production_js_api() -> None:
     )
     dispatcher = host._bridge_dispatcher(document, commands)
 
-    assert tuple(commands) == ("pick_folder", "start_plan", "next_events")
+    assert tuple(commands) == (
+        "pick_folder",
+        "start_plan",
+        "next_events",
+        "close_task",
+    )
     assert tuple(dispatcher._commands) == (
         "pick_folder",
         "start_plan",
         "next_events",
+        "close_task",
     )
-    assert {name for name in dir(dispatcher) if not name.startswith("_")} == {
-        "dispatch"
-    }
+    window = SimpleNamespace(
+        _js_api=None,
+        _functions={},
+        expose=lambda *functions: window._functions.update(
+            {function.__name__: function for function in functions}
+        ),
+    )
+
+    host._expose_bridge_api(window, dispatcher)
+
+    assert window._js_api is None
+    assert tuple(window._functions) == ("dispatch",)
+    assert window._functions["dispatch"]("{}") == dispatcher.dispatch("{}")
+    assert set(window._functions) == {"dispatch"}
 
 
 def test_host_accepts_only_a_construction_injected_local_index(
@@ -735,9 +773,10 @@ def test_database_refusal_finalizes_before_visible_error(
     assert result == 1
     labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
     assert "create_window" not in labels
-    assert labels[-4:] == [
+    assert labels[-5:] == [
         "service.close",
         "shutdown_logging",
+        "path_lease.close",
         "lease.close",
         "report",
     ]
@@ -748,8 +787,8 @@ def test_database_refusal_finalizes_before_visible_error(
 def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
     order: list[str] = []
     dispatcher = SimpleNamespace(
-        _reject_new=lambda: order.append("reject"),
-        _wait_for_handlers=lambda: order.append("wait"),
+        begin_close=lambda: order.append("reject"),
+        wait_for_handlers=lambda: order.append("wait"),
     )
     registry = SimpleNamespace(
         begin_close=lambda: order.append("wake"),
@@ -771,7 +810,7 @@ def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
     assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
 
 
-def test_startup_finalizer_preserves_first_quiesce_error_and_still_closes_service(
+def test_startup_finalizer_preserves_quiesce_error_without_unsafe_service_close(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     order: list[str] = []
@@ -782,8 +821,8 @@ def test_startup_finalizer_preserves_first_quiesce_error_and_still_closes_servic
         raise first
 
     dispatcher = SimpleNamespace(
-        _reject_new=lambda: order.append("reject"),
-        _wait_for_handlers=lambda: order.append("wait"),
+        begin_close=lambda: order.append("reject"),
+        wait_for_handlers=lambda: order.append("wait"),
     )
     registry = SimpleNamespace(
         begin_close=fail_wake,
@@ -800,22 +839,29 @@ def test_startup_finalizer_preserves_first_quiesce_error_and_still_closes_servic
         lambda event, _error, **_options: logged.append(event),
     )
 
+    path_lease = SimpleNamespace(close=lambda: order.append("path.close"))
+    native = _LeaseNative(order)
+    instance_lease = DesktopInstanceLease("owned", native)
+    monkeypatch.setattr(
+        host,
+        "_shutdown_logging",
+        lambda: order.append("logging.close"),
+    )
+
     failure = host._finalize_primary(
         service,
         dispatcher=dispatcher,
         registry=registry,
         service_shutdown_complete=False,
-        logging_configured=False,
-        log_path=None,
-        lease=None,
+        logging_configured=True,
+        log_path=Path("NamiSync.log"),
+        lease=instance_lease,
+        path_lease=path_lease,
     )
 
     assert failure is first
-    assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
-    assert logged == [
-        "startup.registry_wake_failed",
-        "startup.service_cleanup_failed",
-    ]
+    assert order == ["reject", "wake"]
+    assert logged == ["startup.registry_wake_failed"]
 
 
 def test_initialized_refusal_aborts_without_destroy(
@@ -922,8 +968,8 @@ def test_security_failure_never_attempts_appearance_configuration(
 def test_close_hooks_stop_appearance_before_observation_unsubscribe() -> None:
     order: list[str] = []
     dispatcher = SimpleNamespace(
-        _reject_new=lambda: order.append("reject"),
-        _wait_for_handlers=lambda: order.append("wait"),
+        begin_close=lambda: order.append("reject"),
+        wait_for_handlers=lambda: order.append("wait"),
     )
     registry = SimpleNamespace(
         begin_close=lambda: order.append("wake"),
@@ -1295,6 +1341,63 @@ def test_close_exception_uses_the_same_retry_path_without_force_destroy() -> Non
     assert window.destroyed.wait(1.0)
     assert service.close_count == 2
     assert window.destroy_count == 1
+
+
+def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
+    order: list[str] = []
+    prompts: list[int] = []
+    waits = 0
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+
+    def wait_for_handlers() -> None:
+        nonlocal waits
+        waits += 1
+        order.append(f"wait.{waits}")
+        if waits == 1:
+            raise TimeoutError("synthetic admitted handler timeout")
+
+    def retry_prompt() -> bool:
+        prompts.append(len(prompts) + 1)
+        return len(prompts) == 2
+
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        host._DesktopCloseHooks(
+            reject_dispatch=lambda: order.append("reject"),
+            wake_waiters=lambda: order.append("wake"),
+            wait_for_handlers=wait_for_handlers,
+            unsubscribe_observations=lambda: order.append("unsubscribe"),
+        ),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=retry_prompt,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    _wait_until(lambda: prompts == [1] and not controller._prompt_active)
+    assert service.close_count == 0
+    assert "unsubscribe" not in order
+    assert window.destroy_count == 0
+
+    assert controller._on_closing() is False
+    assert window.destroyed.wait(1.0)
+    assert prompts == [1, 2]
+    assert service.close_count == 1
+    assert order == [
+        "reject",
+        "wake",
+        "wait.1",
+        "reject",
+        "wake",
+        "wait.2",
+        "unsubscribe",
+        "service.close",
+        "destroy",
+    ]
 
 
 def test_bridge_rejection_precedes_a_blocked_close_status_render() -> None:

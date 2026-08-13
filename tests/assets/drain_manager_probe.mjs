@@ -56,12 +56,20 @@ async function turns(count = 12) {
 
 
 const timers = new Map();
+const scheduledDelays = [];
 let nextTimer = 1;
 globalThis.setTimeout = (callback, milliseconds) => {
-  assert.equal(milliseconds, 30000);
   const token = nextTimer;
   nextTimer += 1;
   timers.set(token, callback);
+  if (milliseconds !== 30000) {
+    scheduledDelays.push(milliseconds);
+    queueMicrotask(() => {
+      if (timers.delete(token)) {
+        callback();
+      }
+    });
+  }
   return token;
 };
 globalThis.clearTimeout = (token) => timers.delete(token);
@@ -80,11 +88,55 @@ Object.defineProperty(globalThis, "crypto", {
 const testWindow = new TestWindow();
 globalThis.window = testWindow;
 const requests = [];
+const closeRequests = [];
+let closeFailuresRemaining = 0;
+const closeRefusalCodes = [];
+let inspectCloseDispatch = null;
 testWindow.pywebview = {
   api: {
     dispatch(requestJson) {
       const pending = deferred();
-      requests.push({ request: JSON.parse(requestJson), ...pending });
+      const request = JSON.parse(requestJson);
+      const invocation = { request, ...pending };
+      if (request.command === "close_task") {
+        assert.deepEqual(Object.keys(request.payload).sort(), [
+          "session_id",
+          "task_id",
+        ]);
+        closeRequests.push(invocation);
+        queueMicrotask(() => {
+          inspectCloseDispatch?.(request);
+          if (closeFailuresRemaining > 0) {
+            closeFailuresRemaining -= 1;
+            pending.reject(new Error("simulated lost close response"));
+            return;
+          }
+          const refusalCode = closeRefusalCodes.shift();
+          if (refusalCode !== undefined) {
+            pending.resolve({
+              schema_version: 1,
+              request_id: request.request_id,
+              ok: false,
+              error: {
+                code: refusalCode,
+                message: "NamiSync is busy. Try this action again.",
+              },
+            });
+            return;
+          }
+          pending.resolve({
+            schema_version: 1,
+            request_id: request.request_id,
+            ok: true,
+            result: {
+              task_id: request.payload.task_id,
+              session_id: request.payload.session_id,
+            },
+          });
+        });
+      } else {
+        requests.push(invocation);
+      }
       return pending.promise;
     },
   },
@@ -542,6 +594,124 @@ const stopSevenReplacement = bridge.startTaskDrain(
 await nextRequest(requests.length);
 stopSevenReplacement();
 
+// A terminal record is presented before native release begins. A lost close
+// response retries the same task/session authority and a confirmed echo frees
+// the browser entry without reporting a false task refusal.
+const acceptedRelease = [];
+const releaseRefusals = [];
+const closeCountBeforeRelease = closeRequests.length;
+const releaseDelayIndex = scheduledDelays.length;
+closeFailuresRemaining = 1;
+inspectCloseDispatch = (request) => {
+  assert.equal(acceptedRelease.at(-1)?.update_type, "record");
+  assert.equal(request.payload.task_id, task("1"));
+  assert.equal(request.payload.session_id, session("a"));
+};
+const releaseDrainIndex = requests.length;
+const stopRelease = bridge.startTaskDrain(
+  task("1"),
+  session("a"),
+  (update) => acceptedRelease.push(update),
+  (error) => releaseRefusals.push(error),
+);
+const release0 = await nextRequest(releaseDrainIndex);
+success(release0, [terminalRecord(session("a"))]);
+await turns(30);
+inspectCloseDispatch = null;
+assert.equal(closeRequests.length, closeCountBeforeRelease + 2);
+assert.deepEqual(
+  closeRequests.slice(closeCountBeforeRelease).map((item) => item.request.payload),
+  [
+    { task_id: task("1"), session_id: session("a") },
+    { task_id: task("1"), session_id: session("a") },
+  ],
+);
+assert.deepEqual(scheduledDelays.slice(releaseDelayIndex), [100]);
+assert.equal(releaseRefusals.length, 0);
+const stopReleaseReplacement = bridge.startTaskDrain(
+  task("1"),
+  session("a"),
+  assert.fail,
+  assert.fail,
+);
+await nextRequest(requests.length);
+stopReleaseReplacement();
+
+// Native admission saturation is uncertain for both drain consumption and
+// terminal cleanup. Both paths back off and preserve their exact authority.
+const saturationRefusals = [];
+const saturationDelayIndex = scheduledDelays.length;
+const saturationRequestIndex = requests.length;
+const closeCountBeforeSaturation = closeRequests.length;
+closeRefusalCodes.push("bridge_busy");
+const stopSaturation = bridge.startTaskDrain(
+  task("9"),
+  session("9"),
+  () => {},
+  (error) => saturationRefusals.push(error),
+);
+const saturation0 = await nextRequest(saturationRequestIndex);
+refusal(
+  saturation0,
+  "bridge_busy",
+  "NamiSync is busy. Try this action again.",
+);
+const saturation1 = await nextRequest(saturationRequestIndex + 1);
+assert.equal(saturation1.request.payload.replay_from, 1);
+success(saturation1, [terminalRecord(session("9"))]);
+await turns(30);
+assert.deepEqual(scheduledDelays.slice(saturationDelayIndex), [50, 100]);
+assert.equal(closeRequests.length, closeCountBeforeSaturation + 2);
+assert.equal(saturationRefusals.length, 0);
+const stopSaturationReplacement = bridge.startTaskDrain(
+  task("9"),
+  session("9"),
+  assert.fail,
+  assert.fail,
+);
+await nextRequest(requests.length);
+stopSaturationReplacement();
+stopSaturation();
+
+// Persistent malformed transport responses consume a finite exponential
+// recovery budget. Every retry keeps the exact recovery cursor, then one fixed
+// refusal releases the browser entry instead of spinning in microtasks.
+const persistentRefusals = [];
+const persistentDelayIndex = scheduledDelays.length;
+const persistentRequestIndex = requests.length;
+const stopPersistent = bridge.startTaskDrain(
+  task("2"),
+  session("b"),
+  assert.fail,
+  (error) => persistentRefusals.push(error),
+);
+for (let attempt = 0; attempt < 7; attempt += 1) {
+  const pending = await nextRequest(persistentRequestIndex + attempt);
+  if (attempt > 0) {
+    assert.equal(pending.request.payload.replay_from, 1);
+  }
+  pending.resolve(null);
+  await turns(12);
+}
+assert.deepEqual(scheduledDelays.slice(persistentDelayIndex), [
+  50,
+  100,
+  250,
+  500,
+  1000,
+  2000,
+]);
+assert.equal(persistentRefusals.length, 1);
+assert.equal(persistentRefusals[0].name, "BridgeTransportError");
+const stopPersistentReplacement = bridge.startTaskDrain(
+  task("2"),
+  session("b"),
+  assert.fail,
+  assert.fail,
+);
+await nextRequest(requests.length);
+stopPersistentReplacement();
+
 stopOne();
 stopOne();
 stopTwo();
@@ -552,6 +722,8 @@ stopSix();
 stopSeven();
 stopReliable();
 stopCursor();
+stopRelease();
+stopPersistent();
 await turns();
 assert.equal(testWindow.listenerCount("pywebviewready"), 1);
 assert.equal(timers.size, 0);

@@ -19,8 +19,8 @@ history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
 classified launcher, coordinated database gate, packaged bootstrap page, fixed
 single-instance identity, secured local WebView2 product host, and nonblocking
 orderly-close/retry controller. The transport chain through Slice 3 is
-complete: production exposes exactly `pick_folder`, `start_plan`, and
-`next_events`, with real paths retained behind opaque server slots, task
+complete: production exposes exactly `pick_folder`, `start_plan`,
+`next_events`, and lifecycle-only `close_task`, with real paths retained behind opaque server slots, task
 observation attached before work can start, a bounded event drain, and a strict
 inert-text return sink. GUI Break 1's design foundation is also complete:
 `tokens.css` owns the exact authored palette and semantic mappings,
@@ -33,8 +33,8 @@ owns strict structure, literal display search, caller-decided filtering,
 collapse, bounded windows, and visible anchoring; the installed renderer owns
 only accessible fixed-height rows, two virtual spacers, inert labels, and stale
 generation refusal. The shipped frame now shows truthful focusable empty task
-navigation and work regions without fabricating a task or widening the exact
-three-command bridge. Clean-wheel Windows gates exercise the real WebView2
+navigation and work regions without fabricating a task or widening the
+workflow-command surface. Clean-wheel Windows gates exercise the real WebView2
 host, packaged page and design assets,
 navigation/popup and per-dispatch origin guards, runtime refusal,
 single-instance activation, isolated data root, visible database refusal,
@@ -143,6 +143,23 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 - Post-Delivery Hardening
+
+- Hardened the early desktop shell without expanding its product workflow UI.
+  - **Host and transport:** changed pywebview to one function-only dispatch
+    entry, bounded handler/task admission and shutdown, added terminal-gated
+    `close_task`, receipt-safe pre-slot replay, finite recovery, sanitized
+    command logging, and retained the hidden-`mirror` refusal.
+  - **Native ownership:** pinned app directories and ready database mains with
+    process-lifetime handles, authenticated activation by executable/base-image,
+    and made fresh-pair rollback exact-object and interrupt-safe;
+    same-principal mutex or base-interpreter spoofing remains outside the
+    single-instance security boundary.
+  - **Evidence:** regressions cover saturation, cleanup compensation and retry,
+    service receipt shutdown races, replacement attacks, private raw bridge
+    receiver names, and a real headed 25-second drain concurrent with another
+    RPC and settling on close.
 
 ### M1 Stage 6 — Presentation Checkpoint
 

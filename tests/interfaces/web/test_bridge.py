@@ -1036,7 +1036,7 @@ def test_dispatch_rechecks_origin_and_returns_hostile_text_as_data() -> None:
     assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
 
 
-def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> None:
+def test_bridge_public_surface_is_dispatch_and_typed_lifecycle_only() -> None:
     bridge = _dispatcher(
         _trusted_document(),
         {"ping": lambda payload: payload},
@@ -1046,7 +1046,7 @@ def test_dispatch_is_the_only_public_bridge_method_and_allowlist_is_exact() -> N
         for name, member in inspect.getmembers(bridge, predicate=callable)
         if not name.startswith("_")
     }
-    assert public_methods == {"dispatch"}
+    assert public_methods == {"begin_close", "dispatch", "wait_for_handlers"}
 
     command = json.dumps(
         {
@@ -1072,8 +1072,8 @@ def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> No
     )
 
     assert bridge.dispatch(command)["error"]["code"] == "unknown_command"
-    for invalid_name in ("", "_private", 7):
-        with pytest.raises(ValueError, match="public command names"):
+    for invalid_name in ("", "_private", "not-valid", "x" * 65, 7):
+        with pytest.raises(ValueError, match="lowercase snake names"):
             BridgeDispatcher(
                 document=document,
                 commands={invalid_name: _test_spec(lambda payload: payload)},
@@ -1083,6 +1083,70 @@ def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> No
             document=document,
             commands={"ping": lambda payload: payload},
         )
+
+
+def test_pinned_pywebview_raw_receiver_cannot_traverse_bridge_state() -> None:
+    from webview.util import js_bridge_call
+
+    from namisync.interfaces.web import host
+
+    document = _trusted_document()
+    bridge = _dispatcher(document, {"ping": lambda payload: payload})
+    callbacks: list[str] = []
+    returned = Event()
+
+    class RawWindow:
+        def __init__(self) -> None:
+            self._js_api = None
+            self._functions: dict[str, object] = {}
+
+        def expose(self, *functions: object) -> None:
+            self._functions.update(
+                {
+                    function.__name__: function
+                    for function in functions
+                }
+            )
+
+        def evaluate_js(self, source: str) -> None:
+            callbacks.append(source)
+            returned.set()
+
+    window = RawWindow()
+    host._expose_bridge_api(window, bridge)
+
+    js_bridge_call(
+        window,
+        "_document._record",
+        ["https://attacker.invalid/"],
+        "raw-document",
+    )
+    js_bridge_call(window, "_commands.clear", [], "raw-commands")
+    js_bridge_call(
+        window,
+        "dispatch.__self__._document._record",
+        ["https://attacker.invalid/"],
+        "raw-bound-method",
+    )
+
+    document.require_trusted()
+    assert tuple(bridge._commands) == ("ping",)
+    assert callbacks == []
+
+    command = json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": _REQUEST_ID,
+            "command": "ping",
+            "payload": {"value": 1},
+        }
+    )
+    js_bridge_call(window, "dispatch", [command], "intended-dispatch")
+
+    assert returned.wait(1.0)
+    assert len(callbacks) == 1
+    assert '"ok": true' in callbacks[0]
+    assert '"result": {"value": 1}' in callbacks[0]
 
 
 def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
@@ -1108,8 +1172,8 @@ def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
     dispatch_thread.start()
     assert entered.wait(1.0)
 
-    bridge._reject_new()
-    waiter = Thread(target=lambda: (bridge._wait_for_handlers(), finished.set()))
+    bridge.begin_close()
+    waiter = Thread(target=lambda: (bridge.wait_for_handlers(), finished.set()))
     waiter.start()
 
     assert not finished.wait(0.05)

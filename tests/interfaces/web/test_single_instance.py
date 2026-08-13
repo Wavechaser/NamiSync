@@ -24,14 +24,17 @@ class FakeNative:
         already_exists: bool,
         window: object | None = object(),
         foregrounded: bool = True,
+        authentic_window: bool = True,
     ) -> None:
         self.already_exists = already_exists
         self.window = window
         self.foregrounded = foregrounded
+        self.authentic_window = authentic_window
         self.created: list[str] = []
         self.closed: list[object] = []
         self.found: list[str] = []
         self.restored: list[object] = []
+        self.authenticated: list[object] = []
 
     def create_mutex(self, name: str) -> tuple[object, bool]:
         self.created.append(name)
@@ -43,6 +46,10 @@ class FakeNative:
     def find_window(self, title: str) -> object | None:
         self.found.append(title)
         return self.window
+
+    def window_belongs_to_current_executable(self, window: object) -> bool:
+        self.authenticated.append(window)
+        return self.authentic_window
 
     def restore_window(self, window: object) -> None:
         self.restored.append(window)
@@ -149,6 +156,30 @@ def test_primary_holds_one_mutex_until_idempotent_release() -> None:
     assert native.closed == ["mutex-handle"]
 
 
+def test_primary_retries_mutex_release_after_native_close_failure() -> None:
+    class RetryNative(FakeNative):
+        def __init__(self) -> None:
+            super().__init__(already_exists=False)
+            self.attempts = 0
+
+        def close_handle(self, handle: object) -> None:
+            self.attempts += 1
+            if self.attempts == 1:
+                raise OSError("injected close failure")
+            super().close_handle(handle)
+
+    native = RetryNative()
+    admission = acquire_desktop_instance(_test_identity(), native=native)
+    assert admission.lease is not None
+
+    with pytest.raises(OSError, match="injected close failure"):
+        admission.lease.close()
+    admission.lease.close()
+
+    assert native.attempts == 2
+    assert native.closed == ["mutex-handle"]
+
+
 def test_losing_instance_activates_using_the_same_injected_identity() -> None:
     native = FakeNative(already_exists=True)
     identity = _test_identity()
@@ -174,6 +205,20 @@ def test_activation_failure_is_typed_and_still_a_losing_admission() -> None:
     assert admission.activation_error == (
         "The existing NamiSync window could not be found."
     )
+
+
+def test_losing_instance_refuses_a_title_only_spoof_window() -> None:
+    native = FakeNative(already_exists=True, authentic_window=False)
+
+    admission = acquire_desktop_instance(_test_identity(), native=native)
+
+    assert not admission.is_primary
+    assert not admission.activated
+    assert admission.activation_error == (
+        "The existing NamiSync window could not be authenticated."
+    )
+    assert native.authenticated == [native.window]
+    assert native.restored == []
 
 
 def test_distinct_injected_identities_hold_independent_real_mutexes() -> None:

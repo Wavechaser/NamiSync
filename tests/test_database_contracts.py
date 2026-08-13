@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-import sqlite3
 from contextlib import closing
+import os
 from pathlib import Path
+import sqlite3
+import traceback
 
 import pytest
 
@@ -15,6 +17,10 @@ from namisync.db.schema import (
     initialize_ledger,
 )
 from namisync.interfaces.service import NamiSyncService
+from namisync.workflows._database_pair_native import (
+    OwnedArtifactLease,
+    WindowsArtifactNative,
+)
 from namisync.workflows.database_pair import DatabasePairInitializationError
 
 
@@ -335,7 +341,7 @@ def test_initialization_cleanup_preserves_unproven_raced_sidecar(
     service.close()
 
 
-def test_initialization_cleanup_preserves_replaced_reserved_sidecar(
+def test_initialization_cleanup_deletes_displaced_owned_sidecar_only(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -353,8 +359,8 @@ def test_initialization_cleanup_preserves_replaced_reserved_sidecar(
     retract = database_pair._retract_owned
 
     def replace_before_retract(
-        owned: dict[Path, tuple[int, int]],
-    ) -> tuple[OSError, ...]:
+        owned: dict[Path, OwnedArtifactLease],
+    ) -> tuple[BaseException, ...]:
         assert sidecar in owned
         sidecar.rename(displaced)
         sidecar.write_bytes(b"foreign-replacement")
@@ -373,7 +379,194 @@ def test_initialization_cleanup_preserves_replaced_reserved_sidecar(
     assert not ledger.exists()
     assert not history.exists()
     assert sidecar.read_bytes() == b"foreign-replacement"
-    assert displaced.read_bytes() == b"attempt-owned-sidecar"
+    assert not displaced.exists()
+    service.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="requires Win32 delete-by-handle")
+def test_owned_artifact_delete_cannot_be_redirected_after_bound_identity_check(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "reserved.db-wal"
+    displaced = tmp_path / "reserved-displaced.db-wal"
+    native = WindowsArtifactNative()
+    lease = OwnedArtifactLease.reserve(path, native)
+    path.write_bytes(b"attempt-owned")
+    path.rename(displaced)
+    path.write_bytes(b"foreign-replacement")
+
+    deleted, failures = lease.retract()
+
+    assert deleted is True
+    assert failures == ()
+    assert path.read_bytes() == b"foreign-replacement"
+    assert not displaced.exists()
+
+
+@pytest.mark.parametrize(
+    ("phase", "interruption"),
+    (
+        ("ledger", KeyboardInterrupt("stop ledger publication")),
+        ("history", SystemExit(19)),
+    ),
+)
+def test_database_initialization_interrupt_retracts_every_owned_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
+    interruption: BaseException,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    selected = ledger if phase == "ledger" else history
+
+    def interrupt_publication(path: str | Path, **_kwargs: object) -> Path:
+        assert Path(path) == selected
+        Path(f"{path}-wal").write_bytes(b"attempt-owned-sidecar")
+        raise interruption
+
+    monkeypatch.setattr(
+        database_pair,
+        "initialize_ledger" if phase == "ledger" else "initialize_history",
+        interrupt_publication,
+    )
+
+    with pytest.raises(type(interruption)) as raised:
+        service.initialize_database_contracts()
+
+    assert raised.value is interruption
+    assert traceback.extract_tb(raised.value.__traceback__)[-1].name == (
+        "interrupt_publication"
+    )
+    assert _snapshot(ledger, history) == {}
+    service.close()
+
+
+def test_database_initialization_interrupt_reports_incomplete_cleanup_without_wrap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    interruption = KeyboardInterrupt("stop publication")
+    retract = database_pair._retract_owned
+
+    def interrupt_publication(_path: str | Path, **_kwargs: object) -> Path:
+        raise interruption
+
+    def report_cleanup_failure(
+        owned: dict[Path, OwnedArtifactLease],
+    ) -> tuple[BaseException, ...]:
+        assert retract(owned) == ()
+        return (OSError("injected cleanup report"),)
+
+    monkeypatch.setattr(database_pair, "initialize_ledger", interrupt_publication)
+    monkeypatch.setattr(database_pair, "_retract_owned", report_cleanup_failure)
+
+    with pytest.raises(KeyboardInterrupt) as raised:
+        service.initialize_database_contracts()
+
+    assert raised.value is interruption
+    assert raised.value.__notes__ == [
+        "NamiSync database initialization cleanup was incomplete. "
+        f"{database_pair.DATABASE_RESET_DIRECTION}"
+    ]
+    assert _snapshot(ledger, history) == {}
+    service.close()
+
+
+def test_cleanup_interrupt_is_not_wrapped_after_ordinary_publication_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    interruption = KeyboardInterrupt("stop cleanup")
+
+    def fail_publication(_path: str | Path, **_kwargs: object) -> Path:
+        raise OSError("injected publication failure")
+
+    def interrupt_cleanup(
+        _owned: dict[Path, OwnedArtifactLease],
+    ) -> tuple[BaseException, ...]:
+        return (interruption,)
+
+    monkeypatch.setattr(database_pair, "initialize_ledger", fail_publication)
+    monkeypatch.setattr(database_pair, "_retract_owned", interrupt_cleanup)
+
+    with pytest.raises(KeyboardInterrupt) as raised:
+        service.initialize_database_contracts()
+
+    assert raised.value is interruption
+    assert raised.value.__notes__ == [
+        "NamiSync database initialization cleanup was incomplete. "
+        f"{database_pair.DATABASE_RESET_DIRECTION}"
+    ]
+    service.close()
+
+
+def test_retract_owned_continues_after_a_cleanup_interrupt(tmp_path: Path) -> None:
+    class Native:
+        def __init__(self) -> None:
+            self.deleted: list[int] = []
+            self.closed: list[int] = []
+
+        def reserve(self, path: Path) -> tuple[int, tuple[int, int]]:
+            handle = len(self.deleted) + len(self.closed) + 1
+            return handle, (1, handle)
+
+        def path_identity(self, path: Path) -> tuple[int, int]:
+            raise AssertionError(path)
+
+        def delete(self, handle: int) -> None:
+            self.deleted.append(handle)
+            if handle == 2:
+                raise KeyboardInterrupt("stop exact-object cleanup")
+
+        def close(self, handle: int) -> None:
+            self.closed.append(handle)
+
+    native = Native()
+    owned = {
+        tmp_path / f"artifact-{handle}": OwnedArtifactLease(
+            tmp_path / f"artifact-{handle}",
+            (1, handle),
+            handle,
+            native,
+        )
+        for handle in (1, 2, 3)
+    }
+
+    failures = database_pair._retract_owned(owned)
+
+    assert len(failures) == 1
+    assert isinstance(failures[0], KeyboardInterrupt)
+    assert native.deleted == [3, 2, 1]
+    assert native.closed == [3, 2, 1]
+
+
+def test_successful_publication_does_not_wrap_a_release_interrupt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    interruption = SystemExit(23)
+    release = database_pair._release_owned
+
+    def report_release_interrupt(
+        owned: dict[Path, OwnedArtifactLease],
+    ) -> tuple[BaseException, ...]:
+        assert release(owned) == ()
+        return (interruption,)
+
+    monkeypatch.setattr(database_pair, "_release_owned", report_release_interrupt)
+
+    with pytest.raises(SystemExit) as raised:
+        service.initialize_database_contracts()
+
+    assert raised.value is interruption
+    assert raised.value.__notes__ == [
+        "NamiSync database initialization succeeded, but ownership-handle "
+        "release was incomplete. Restart NamiSync before retrying."
+    ]
+    assert database_pair.validate_database_pair(ledger, history).state == "ready"
     service.close()
 
 

@@ -10,7 +10,7 @@ import sys
 import threading
 from collections.abc import Mapping
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -52,15 +52,21 @@ class _Recorder:
     def write(self) -> None:
         with self._lock:
             encoded = json.dumps(self._data, indent=2, sort_keys=True)
-        temporary = self._output.with_suffix(self._output.suffix + ".tmp")
-        temporary.write_text(encoded, encoding="utf-8")
-        temporary.replace(self._output)
+            temporary = self._output.with_suffix(self._output.suffix + ".tmp")
+            temporary.write_text(encoded, encoding="utf-8")
+            temporary.replace(self._output)
 
 
 @dataclass(frozen=True, slots=True)
 class _Report:
     phase: str
     value: Mapping[str, object]
+
+
+@dataclass(slots=True)
+class _DrainProbe:
+    entered: threading.Event = field(default_factory=threading.Event)
+    exited: threading.Event = field(default_factory=threading.Event)
 
 
 class _QuietRequestHandler(SimpleHTTPRequestHandler):
@@ -105,6 +111,7 @@ def _test_spec(
     recorder: _Recorder,
     *,
     off_origin_url: str | None,
+    drain_probe: _DrainProbe | None,
 ):
     from namisync.interfaces.web.commands import (
         CommandAccess,
@@ -185,6 +192,13 @@ def _test_spec(
             return _Report(phase, MappingProxyType(dict(payload)))
         if phase == "off_origin_attempt" and set(payload) == {"phase"}:
             return _Report(phase, MappingProxyType(dict(payload)))
+        if (
+            phase == "drain_probe"
+            and set(payload) == {"phase", "drain_settled"}
+            and type(payload["drain_settled"]) is bool
+            and drain_probe is not None
+        ):
+            return _Report(phase, MappingProxyType(dict(payload)))
         raise CommandPayloadError("test report payload is invalid")
 
     def report(value: object) -> object:
@@ -203,6 +217,16 @@ def _test_spec(
             if off_origin_url is None:
                 raise RuntimeError("off-origin server is unavailable")
             return {"url": off_origin_url}
+        if value.phase == "drain_probe":
+            assert drain_probe is not None
+            evidence = {
+                "drain_entered": drain_probe.entered.is_set(),
+                "drain_exited": drain_probe.exited.is_set(),
+                "drain_settled": value.value["drain_settled"],
+            }
+            recorder.set("drain_probe_report", evidence)
+            recorder.write()
+            return evidence
         recorder.append("off_origin_handler_calls", dict(value.value))
         recorder.write()
         return {"accepted": True}
@@ -241,13 +265,18 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     recorder.set("runtime", _runtime_identity())
     recorder.set("off_origin_handler_calls", [])
     original_dispatcher = host._bridge_dispatcher
+    original_expose_bridge = host._expose_bridge_api
+    original_task_registry = host._task_registry
     original_dispatch = bridge.BridgeDispatcher.dispatch
     original_start_plan = NamiSyncService.start_plan
+    original_unsubscribe = NamiSyncService.unsubscribe
     original_log_renderer = host._log_startup_renderer
     original_pending_document = host._pending_document
     original_attach = bridge._NativeNavigationGuard.attach
     original_source_changed = bridge._NativeNavigationGuard._on_source_changed
+    original_record_document = bridge.NativeDocumentState._record
     document_holder: dict[str, object] = {}
+    drain_probe = _DrainProbe() if arguments.mode == "transport" else None
     second_origin: ThreadingHTTPServer | None = None
     off_origin_url: str | None = None
     if arguments.mode == "off-origin":
@@ -263,6 +292,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     scenario,
                     recorder,
                     off_origin_url=off_origin_url,
+                    drain_probe=drain_probe,
                 ),
             }
         )
@@ -284,6 +314,58 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 recorder.write()
         return response
 
+    def expose_bridge(window: object, dispatcher: object) -> None:
+        original_expose_bridge(window, dispatcher)
+        recorder.set("pywebview_js_api_is_none", window._js_api is None)
+        recorder.set("pywebview_function_names", sorted(window._functions))
+
+    def record_document(document: object, current_url: str) -> None:
+        recorder.append("document_records", current_url)
+        original_record_document(document, current_url)
+
+    def task_registry(service: object) -> object:
+        registry = original_task_registry(service)
+        if drain_probe is None:
+            return registry
+        original_drain = registry.drain
+
+        def observed_drain(
+            task_id: str,
+            session_id: str,
+            drain_id: str,
+            *,
+            replay_from: int | None,
+        ) -> object:
+            drain_probe.entered.set()
+            recorder.set("drain_entered", True)
+            recorder.write()
+            try:
+                result = original_drain(
+                    task_id,
+                    session_id,
+                    drain_id,
+                    replay_from=replay_from,
+                )
+            except BaseException as error:
+                recorder.set(
+                    "drain_exit",
+                    {"type": type(error).__name__, "message": str(error)},
+                )
+                raise
+            else:
+                recorder.set(
+                    "drain_exit",
+                    {"type": "return", "update_count": len(result.updates)},
+                )
+                return result
+            finally:
+                drain_probe.exited.set()
+                recorder.set("drain_exited", True)
+                recorder.write()
+
+        registry.drain = observed_drain  # type: ignore[method-assign]
+        return registry
+
     def start_plan(
         service: object,
         source: str,
@@ -302,6 +384,11 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 "command_id": command_id,
             },
         )
+        if deletion_policy == "additive":
+            from namisync.interfaces.service import PlanSession
+
+            recorder.set("controlled_plan_session", "b" * 32)
+            return PlanSession("a" * 32, "b" * 32)
         return original_start_plan(
             service,
             source,
@@ -310,6 +397,15 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             command_id=command_id,
             observation_sink=observation_sink,
         )
+
+    def unsubscribe(service: object, session_id: str) -> None:
+        if session_id == "b" * 32:
+            recorder.append(
+                "controlled_service_cleanup",
+                ["unsubscribe", session_id],
+            )
+            return
+        original_unsubscribe(service, session_id)
 
     def log_renderer(browser_version: str) -> None:
         recorder.set("native_browser_version", browser_version)
@@ -333,15 +429,25 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     with ExitStack() as stack:
         stack.enter_context(patch.object(host, "_bridge_dispatcher", dispatcher))
         stack.enter_context(
+            patch.object(host, "_expose_bridge_api", expose_bridge)
+        )
+        stack.enter_context(
             patch.object(bridge.BridgeDispatcher, "dispatch", observed_dispatch)
         )
+        stack.enter_context(
+            patch.object(bridge.NativeDocumentState, "_record", record_document)
+        )
+        stack.enter_context(patch.object(host, "_task_registry", task_registry))
         stack.enter_context(patch.object(host, "_pending_document", pending_document))
         stack.enter_context(patch.object(host, "_log_startup_renderer", log_renderer))
         if arguments.mode == "transport":
             stack.enter_context(
                 patch.object(NamiSyncService, "start_plan", start_plan)
             )
-        else:
+            stack.enter_context(
+                patch.object(NamiSyncService, "unsubscribe", unsubscribe)
+            )
+        elif arguments.mode == "off-origin":
             stack.enter_context(
                 patch.object(bridge._NativeNavigationGuard, "attach", attach)
             )

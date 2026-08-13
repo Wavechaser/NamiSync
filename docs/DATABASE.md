@@ -48,11 +48,15 @@ the Slice 1 product host to consume before window creation, so history cannot
 be initialized without the ledger. Validation uses a SQLite immutable
 reader so opening a live WAL database cannot create or rewrite shared-memory
 state. Fresh creation is a separate, serialized workflow operation: it
-publishes ledger then history after exclusively creating and recording the
-identity of every main and sidecar cleanup target. A caught failure retracts
-only an attempt-created artifact whose identity still matches; an unproven or
-replaced sidecar is retained. It never invokes the destructive development
-reset. A crash-shaped one-main pair, an orphan sidecar, an empty/unversioned
+publishes ledger then history after reserving every main and sidecar cleanup
+target through a Windows ownership lease. Failure cleanup derives a new delete
+handle from the retained reservation with `ReOpenFile` and requests
+exact-object disposition; a displaced foreign pathname is retained rather than
+removed through a check/use race. Rollback covers ordinary exceptions,
+`KeyboardInterrupt`, and `SystemExit`; handles release stepwise and an
+incomplete cleanup carries the coordinated reset direction. It never invokes
+the destructive development reset. A crash-shaped one-main pair, an orphan
+sidecar, an empty/unversioned
 file, or a role/version-marker mismatch is refused with the coordinated
 manual-reset direction and no mutation.
 

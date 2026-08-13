@@ -12,7 +12,7 @@ gate, the GUI argument grammar, and constructor-only command composition; the
 Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-3 are complete.
 The installed-wheel and real WebView2 gates now cover the secured product host,
 bounded startup finalizer, nonblocking user-close/retry state machine, fixed
-single-instance boundary, coordinated database refusal, exact three-command
+single-instance boundary, coordinated database refusal, exact four-command
 transport, real native picker confinement, committed-origin refusal, and
 hostile-text/privacy return path. The Slice 3 event drain, transactional
 pre-schedule observation, bounded task registry, and reincarnation recovery are
@@ -34,6 +34,49 @@ launcher is generated.
 The shell does not move domain authority into JavaScript. The desktop remains
 an adapter over `NamiSyncService`; the import law, reviewed-plan safety model,
 process-local M1 lifetime, and all BR-G gates continue to apply.
+
+### 2026-08-13 audit hardening
+
+The native host now constructs the window with `js_api=None` and exposes only
+one function-table entry named `dispatch`; pywebview never receives the
+dispatcher object graph. Bridge command names are bounded lowercase snake case,
+unsafe names are omitted from logs, and at most 64 Python handlers can be
+admitted. Close rejects new work, wakes task waiters, waits a bounded interval
+for admitted handlers, detaches observations, and only then closes the service.
+An incomplete step is retryable and retains the logging, app-path, and
+single-instance owners rather than presenting unsafe completion.
+
+The current immutable transport table is `pick_folder`, `start_plan`,
+`next_events`, and `close_task`. Adapter state is capped at 48 tasks. A
+successful `start_plan` replay is checked against its original wire intent
+before the volatile folder slots are resolved, so slot expiry or eviction
+cannot invalidate an already-earned receipt. `close_task` is accepted only
+after the terminal record was delivered, releases the observation, session,
+plan, task, and start receipt, and retains a bounded same-payload close receipt
+for uncertain response replay. Startup/admission compensation and close
+cleanup are stepwise and retryable. The browser uses the Python command table's
+exact timeout/retry mirror, finite delayed drain recovery, and a bounded
+same-payload release retry; exhaustion produces a visible refusal instead of a
+zero-delay loop.
+
+`AppPaths.acquire_lease()` holds non-reparse, delete-denying handles on the app
+root, logs directory, WebView2 directory, and both ready database mains for the
+headed process lifetime. The database files are bound and the pair contract is
+revalidated before commands are exposed. Second-instance activation also
+checks that the title-matched HWND belongs to `sys.executable` or the venv's
+base interpreter. The fixed named mutex remains deliberately predictable. A
+malicious process already running as the same principal can still squat the
+mutex or spoof an accepted base interpreter; it is a UX ownership primitive,
+not a same-principal security boundary.
+
+Fresh database-pair creation now owns each main and SQLite sidecar through a
+Windows reservation lease. Failure cleanup derives a delete handle from the
+retained reservation with `ReOpenFile` and requests exact-object disposition,
+so a displaced foreign pathname is retained. Rollback runs for ordinary
+failures, `KeyboardInterrupt`, and `SystemExit`, and incomplete cleanup carries
+the coordinated reset direction.
+The desktop continues to accept only `null`, `trash`, or `additive`; hidden
+`mirror` cannot enter through bridge payloads.
 
 ## 1. Settled Shell Decisions
 
@@ -345,9 +388,9 @@ receipt. Repeated
 `pywebviewready` events install no duplicate listeners and rearm at most one
 drain per task.
 
-The Python `BridgeDispatcher` instance exposes only `dispatch`; every other
-instance member remains underscore-prefixed because pywebview recursively
-walks and reads public attributes during injection.
+Pywebview receives no `BridgeDispatcher` object. The host passes `js_api=None`
+and adds one function-table entry named `dispatch`; raw receiver-name messages
+therefore cannot traverse the dispatcher's private object graph.
 
 ### 1.9 Visual design language
 
@@ -731,6 +774,7 @@ otherwise it is `null`. The server error vocabulary is exact:
 | `task_unavailable` | `That desktop task is no longer available.` |
 | `drain_busy` | `That desktop task already has an event request in progress.` |
 | `observation_conflict` | `That desktop task is already observing different work.` |
+| `bridge_busy` | `NamiSync is busy. Try this action again.` |
 | `bridge_unavailable` | `NamiSync is closing or this desktop page is no longer trusted.` |
 | `internal_error` | `NamiSync could not complete the desktop action.` |
 
@@ -776,7 +820,7 @@ same sanitized `slot_unavailable` error. No bridge request contains a path, and
 no response makes `display` authoritative.
 
 **Harness composition and deferrals.** `test_report` is not a production row.
-The headed harness constructs a new immutable mapping from the production three
+The headed harness constructs a new immutable mapping from the production four
 rows plus one test-owned `test_report` spec; its validator, handler, payload,
 and result schema live under `tests/`, and product argv, environment, page data,
 or bridge traffic cannot enable it. The harness uses the same v1 envelope and
@@ -795,10 +839,11 @@ Python's immutable constructor-supplied mapping remains the sole allowlist and
 the `test_report` literal, payload schema, result schema, and handler remain
 under `tests/` and absent from package data.
 
-Slice 3 owns the event-drain command; Slice 5 owns plan-review, selection,
-execution, and control commands; Slice 6 owns inventory commands; and Slice 7
-owns settings, history, and lifecycle commands. Those names and payload schemas
-are not reserved or allowlisted in Slice 2. A later command formed against a
+Slice 3 owns the event-drain command; audit hardening adds only the adapter
+lifecycle command `close_task`; Slice 5 owns plan-review, selection, execution,
+and control commands; Slice 6 owns inventory commands; and Slice 7 owns
+settings and history commands. Other names and payload schemas are not
+reserved or allowlisted. A later command formed against a
 revisioned view must carry that view's exact revision, while a later read or
 mutation not formed against such a view does not invent one. The owning slice
 must add its row, schema, receipt/revision rule, timeout, retry policy, and gate
@@ -896,12 +941,14 @@ resolved `start_plan` intent returns the same task, request, and session ids.
 Task identity does not enter the service, dispatcher, workflow request,
 database, or compatibility protocol below the web adapter.
 
-The Slice 3 production command table is therefore exactly the two Slice 2 rows
-plus this row; there is no dormant control or presentation command:
+At Slice 3 delivery the production command table was exactly the two Slice 2
+rows plus this row. Audit hardening subsequently adds only `close_task`; there
+is still no dormant control or presentation command:
 
 | Command | Exact payload | Exact success `result` | Identity / revision | Deadline and retry |
 | --- | --- | --- | --- | --- |
 | `next_events` | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","replay_from":null}` or the same exact key set with `replay_from` as the positive integer sequence of the first desired event | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","updates":[<zero to 64 exact tagged updates>]}` | no `command_id`; no revision; every long-poll attempt has a fresh drain id and the server echoes it only in that attempt's success | the server waits at most 25,000 ms; the browser deadline is 30,000 ms; success, including an empty timeout result, arms a fresh drain; transport/protocol uncertainty recovers from the first sequence after the last accepted non-`Gap` event, while an explicit `Gap` recovers from its exact positive `first_missed_seq`; no response is retried or cached |
+| `close_task` | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | the exact echoed task and session ids | no `command_id`; no revision; accepted only after the terminal record was delivered | 30,000 ms per attempt; uncertain delivery retries the identical payload on a finite delayed schedule, backed by a bounded server close receipt |
 
 The `updates` array is ordered and contains only these exact tagged-union
 members. `event` is the existing primitive `SessionEventView` JSON shape;
@@ -1182,8 +1229,9 @@ and returns the first visible candidate or `None`; it never searches the DOM
 or display text. Projection revisions and progress-chain wiring belong to their
 Slice 5/6 command rows, not this pure core.
 
-Slice 4 adds no bridge command: production remains exactly `pick_folder`,
-`start_plan`, and `next_events`. `tree.js` consumes only the exact generic
+Slice 4 adds no presentation command. Audit hardening makes production exactly
+`pick_folder`, `start_plan`, `next_events`, and lifecycle-only `close_task`.
+`tree.js` consumes only the exact generic
 window `{offset,total,rows}`; each row has exactly `node_id`, `display`,
 `depth`, `is_container`, and server-decided `expanded` fields. It owns
 `ROW_H = 28`, fixed spacers, accessible tree/treeitem semantics, and
@@ -1596,11 +1644,12 @@ against the changed configuration before the change lands.
 | `namisync.log` header, level/propagation ownership, rotation, Unicode fallback, and privacy boundary | Section 1.4 | Rerun SH-G-3 and its child-process tests |
 | Product/distribution version remains independent of schema, protocol, policy, contract, dependency, and runtime versions | Section 1.5 and each owning module | Bump and test only the affected owner; never create a central version registry |
 | Bridge v1 envelopes, ID grammar, 65,536-byte cap, two Slice 2 command rows, fixed errors, and slot limits | Slice 2 normative transport target | Change `M1_BRIDGE.md`'s mirrored boundary and the BR-G-32 split evidence in the same atom; rerun XV-19 |
-| `BridgeDispatcher` exposes only `dispatch` | Section 1.8 | Underscore the new member and keep the static test passing |
+| Pywebview receives only the function-table `dispatch` entry | Section 1.8 | Never pass the dispatcher as `js_api`; keep ordinary raw-message and headed function-table evidence passing |
 | Two-declaration `ROW_H` equality | Section 1.7 | Keep the parse test and headed measurement passing |
 | Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
 | Reliable readback semantics: sparse inclusive `through_seq`, empty terminal page | `namisync/interfaces/service.py`, `docs/HISTORY.md` | Rerun SH-G-9 and the service page tests |
 | Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
+| 64 admitted bridge handlers; 48 live tasks; 48 retained close receipts; finite drain/release recovery schedules | Sections 1.8 and Slice 3 | Change the Python/JavaScript policy mirror and saturation/recovery/cleanup tests together; rerun BR-G-33 and the headed concurrent-drain gate |
 | Pinned Fluent SVG provenance, fixed icon registry, local CSS-mask authority, and icon size ownership | Section 1.9 and GUI Break 1 | Add or change glyphs only with the asset/source/license hash, registry/CSS/package manifest, SH-G-14, and headed gallery evidence in one reviewed change |
 | Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
 | Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |

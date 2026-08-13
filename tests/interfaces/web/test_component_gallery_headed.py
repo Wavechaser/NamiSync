@@ -618,6 +618,7 @@ def _run_gallery_mode(
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )
     assert result["production_command_names"] == [
+        "close_task",
         "next_events",
         "pick_folder",
         "start_plan",

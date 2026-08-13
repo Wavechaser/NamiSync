@@ -9,6 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from threading import Event, Lock, Thread
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -29,6 +30,7 @@ from namisync.interfaces.web.commands import (
 )
 from namisync.interfaces.web.commands import production_command_specs
 from namisync.interfaces.web.drain import (
+    TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskRecordUpdateView,
@@ -70,6 +72,7 @@ ERRORS = {
     "observation_conflict": (
         "That desktop task is already observing different work."
     ),
+    "bridge_busy": "NamiSync is busy. Try this action again.",
     "bridge_unavailable": (
         "NamiSync is closing or this desktop page is no longer trusted."
     ),
@@ -557,6 +560,39 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
     }
 
 
+def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
+    task_id = "task-" + "2" * 32
+    session_id = "3" * 32
+
+    class Registry:
+        def close_task(self, received_task: str, received_session: str) -> TaskCloseView:
+            assert (received_task, received_session) == (task_id, session_id)
+            return TaskCloseView(received_task, received_session)
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=production_command_specs(
+            picker=lambda: None,
+            slots=SimpleNamespace(),
+            registry=Registry(),
+        ),
+    )
+
+    response = dispatcher.dispatch(
+        _request(
+            command="close_task",
+            payload={"task_id": task_id, "session_id": session_id},
+        )
+    )
+
+    assert response == {
+        "schema_version": 1,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": {"task_id": task_id, "session_id": session_id},
+    }
+
+
 def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None:
     class Registry:
         def drain(self, *args: object, **kwargs: object) -> object:
@@ -630,6 +666,12 @@ def test_br_g_32_utf8_limit_is_inclusive_and_oversize_is_predecode(
     )
     assert decoded == 0
     assert len(handled) == 1
+
+    assert dispatcher.dispatch("x" * 65_537 + "\ud800") == _failure(
+        None,
+        "request_too_large",
+        "The desktop request is too large.",
+    )
 
 
 def test_br_g_32_handler_and_codec_failures_are_sanitized_and_logs_are_private(
@@ -813,7 +855,12 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
     service._closed = False
 
     class Registry:
+        def replay_start(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            return None
+
         def start_plan(self, *args: object, **kwargs: object) -> TaskStartView:
+            kwargs.pop("wire_intent")
             plan = service.start_plan(*args, **kwargs)
             return TaskStartView(
                 "task-" + "6" * 32,
@@ -929,7 +976,7 @@ def test_br_g_32_origin_and_close_refusals_do_not_inspect_untrusted_body() -> No
         document=_Document(),
         commands={"probe": _spec(lambda payload: payload)},
     )
-    closing._reject_new()
+    closing.begin_close()
     assert closing.dispatch(closing_body) == _failure(
         None,
         "bridge_unavailable",
@@ -959,7 +1006,7 @@ def test_br_g_32_admitted_call_finishes_while_close_refuses_new_body() -> None:
     worker.start()
     assert entered.wait(1.0)
 
-    dispatcher._reject_new()
+    dispatcher.begin_close()
     rejected_body = _UntouchableBody()
     assert dispatcher.dispatch(rejected_body) == _failure(
         None,
@@ -980,4 +1027,110 @@ def test_br_g_32_admitted_call_finishes_while_close_refuses_new_body() -> None:
             "result": {},
         }
     ]
-    dispatcher._wait_for_handlers()
+    dispatcher.wait_for_handlers()
+
+
+def test_bridge_admission_ceiling_fails_fast_and_releases_capacity() -> None:
+    assert bridge_module._MAX_ADMITTED_HANDLERS == 64
+    entered = 0
+    entered_lock = Lock()
+    saturated = Event()
+    release = Event()
+    responses: list[object] = []
+
+    def blocking_handler(payload: object) -> object:
+        nonlocal entered
+        with entered_lock:
+            entered += 1
+            if entered == bridge_module._MAX_ADMITTED_HANDLERS:
+                saturated.set()
+        assert release.wait(3.0)
+        return payload
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(blocking_handler)},
+    )
+    workers = [
+        Thread(target=lambda: responses.append(dispatcher.dispatch(_request())))
+        for _ in range(bridge_module._MAX_ADMITTED_HANDLERS)
+    ]
+    for worker in workers:
+        worker.start()
+    assert saturated.wait(2.0)
+
+    untrusted_body = _UntouchableBody()
+    started = monotonic()
+    assert dispatcher.dispatch(untrusted_body) == _failure(
+        None,
+        "bridge_busy",
+        ERRORS["bridge_busy"],
+    )
+    assert monotonic() - started < 0.1
+    assert untrusted_body.touched == []
+
+    release.set()
+    for worker in workers:
+        worker.join(2.0)
+        assert not worker.is_alive()
+    assert len(responses) == bridge_module._MAX_ADMITTED_HANDLERS
+    assert all(response["ok"] is True for response in responses)
+    assert dispatcher.dispatch(_request())["ok"] is True
+
+
+def test_bridge_handler_wait_times_out_then_a_later_retry_quiesces() -> None:
+    entered = Event()
+    release = Event()
+
+    def never_finishes_without_release(payload: object) -> object:
+        entered.set()
+        assert release.wait(3.0)
+        return payload
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(never_finishes_without_release)},
+    )
+    worker = Thread(target=lambda: dispatcher.dispatch(_request()))
+    worker.start()
+    assert entered.wait(1.0)
+    dispatcher.begin_close()
+
+    started = monotonic()
+    with pytest.raises(TimeoutError, match="did not quiesce"):
+        dispatcher.wait_for_handlers(0.02)
+    assert monotonic() - started < 0.2
+    assert worker.is_alive()
+
+    release.set()
+    dispatcher.wait_for_handlers(1.0)
+    worker.join(1.0)
+    assert not worker.is_alive()
+    assert dispatcher.dispatch(_UntouchableBody()) == _failure(
+        None,
+        "bridge_unavailable",
+        ERRORS["bridge_unavailable"],
+    )
+
+
+def test_raw_command_control_characters_are_rejected_without_log_injection(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    marker = "FORGED-BRIDGE-RECORD"
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda payload: payload)},
+    )
+    caplog.set_level(logging.INFO, logger="namisync")
+
+    response = dispatcher.dispatch(
+        _request(command=f"probe\r\nERROR logger=namisync: {marker}")
+    )
+
+    assert response == _failure(
+        REQUEST_ID,
+        "invalid_request",
+        ERRORS["invalid_request"],
+    )
+    assert marker not in caplog.text
+    assert "command=- code=invalid_request" in caplog.text

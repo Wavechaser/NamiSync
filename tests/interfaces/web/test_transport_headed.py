@@ -111,6 +111,7 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
         for path in sorted(_TEST_ASSETS.glob("*.js"))
     )
 
+    compile(child, str(_CHILD), "exec")
     assert _TEST_ASSETS.is_relative_to(Path(__file__).parents[2] / "assets")
     assert '"test_report"' in child
     assert 'const REPORT_COMMAND = "test_report";' in scripts
@@ -120,6 +121,7 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert "dispatchInteractive" in scripts
     assert "pickFolder(" in scripts
     assert "startPlan(" in scripts
+    assert '"next_events"' in scripts
     assert "renderText(" in scripts
     assert 'id="host-status"' in (_TEST_ASSETS / "index.html").read_text(
         encoding="utf-8"
@@ -560,11 +562,13 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert dom["script_count_after"] == dom["script_count_before"]
     assert dom["hostile_marker_defined"] is False
     assert result["production_command_names"] == [
+        "close_task",
         "next_events",
         "pick_folder",
         "start_plan",
     ]
     assert result["combined_command_names"] == [
+        "close_task",
         "next_events",
         "pick_folder",
         "start_plan",
@@ -574,6 +578,9 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert result["dispatcher_type"] == (
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )
+    assert result["pywebview_js_api_is_none"] is True
+    assert result["pywebview_function_names"] == ["dispatch"]
+    assert "https://attacker.invalid/" not in result.get("document_records", [])
     runtime = result["runtime"]
     assert Path(runtime["namisync_file"]).resolve().is_relative_to(
         headed_transport_evidence.installed_root
@@ -595,15 +602,16 @@ def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
     evidence = headed_transport_evidence.transport
     calls = evidence.result["service_start_plan_calls"]
 
-    assert calls == [
-        {
-            "source": str(evidence.source),
-            "target": str(evidence.target),
-            "deletion_policy": None,
-            "command_id": calls[0]["command_id"],
-        }
+    assert len(calls) == 2
+    assert [
+        (call["source"], call["target"], call["deletion_policy"])
+        for call in calls
+    ] == [
+        (str(evidence.source), str(evidence.target), None),
+        (str(evidence.source), str(evidence.target), "additive"),
     ]
-    assert len(calls[0]["command_id"]) == 32
+    assert all(len(call["command_id"]) == 32 for call in calls)
+    assert calls[0]["command_id"] != calls[1]["command_id"]
     assert evidence.result["report"]["source_id"].startswith("slot-")
     assert evidence.result["report"]["target_id"].startswith("slot-")
     assert all(item["selected"] is True for item in evidence.picker_automation)
@@ -625,6 +633,7 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     assert result["final_document_url"].endswith("/off_origin.html")
     assert result["final_document_url"] in result["committed_sources"]
     assert result["production_command_names"] == [
+        "close_task",
         "next_events",
         "pick_folder",
         "start_plan",
@@ -644,6 +653,27 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
         "pywebview": "6.2.1",
         "pythonnet": "3.1.0",
     }
+
+
+@pytest.mark.headed
+def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
+    headed_transport_evidence: _HeadedTransportEvidence,
+) -> None:
+    result = headed_transport_evidence.transport.result
+
+    assert result["drain_probe_report"] == {
+        "drain_entered": True,
+        "drain_exited": False,
+        "drain_settled": False,
+    }
+    assert result["drain_exit"] == {
+        "type": "TaskUnavailableError",
+        "message": "task is closing",
+    }
+    assert result["drain_exited"] is True
+    assert result["controlled_service_cleanup"] == [
+        ["unsubscribe", "b" * 32]
+    ]
 
 
 @pytest.mark.headed
@@ -765,16 +795,20 @@ def _run_transport_scenario(
         )
         interim = json.loads(read_text(output, deadline=deadline))
         assert interim["report"]["observed"] == corpus
-        assert interim["service_start_plan_calls"] == [
-            {
-                "source": str(source),
-                "target": str(target),
-                "deletion_policy": None,
-                "command_id": interim["service_start_plan_calls"][0][
-                    "command_id"
-                ],
-            }
+        calls = interim["service_start_plan_calls"]
+        assert len(calls) == 2
+        assert [
+            (call["source"], call["target"], call["deletion_policy"])
+            for call in calls
+        ] == [
+            (str(source), str(target), None),
+            (str(source), str(target), "additive"),
         ]
+        assert interim["drain_probe_report"] == {
+            "drain_entered": True,
+            "drain_exited": False,
+            "drain_settled": False,
+        }
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)
         assert completed.returncode == 0, completed.stdout + completed.stderr

@@ -25,6 +25,7 @@ from namisync.interfaces.web.drain import (
     DrainBusyError,
     ObservationConflictError,
     TaskIntentConflictError,
+    TaskCloseView,
     TaskRegistry,
     TaskUnavailableError,
 )
@@ -186,6 +187,21 @@ def _drain_until_record(
         if any(update.update_type == "record" for update in batch.updates):
             return updates
     raise AssertionError("terminal task record was not drained")
+
+
+def _mark_terminal_drained(registry: TaskRegistry, start) -> None:
+    task = registry._tasks[start.task_id]
+    with task.condition:
+        task.terminal_record = _record()
+        task.terminal_pending = True
+        task.condition.notify_all()
+    drained = registry.drain(
+        start.task_id,
+        start.session_id,
+        DRAIN,
+        replay_from=None,
+    )
+    assert any(update.update_type == "record" for update in drained.updates)
 
 
 def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
@@ -837,8 +853,10 @@ def test_br_g_33_close_task_cleanup_order_and_retry_authority() -> None:
     registry, service = _registry()
     start = _start(registry)
 
-    registry.close_task(start.task_id)
+    _mark_terminal_drained(registry, start)
+    closed = registry.close_task(start.task_id, start.session_id)
 
+    assert closed == TaskCloseView(start.task_id, start.session_id)
     assert service.cleanup == [
         ("unsubscribe", SESSION),
         ("close_session", SESSION),
@@ -846,6 +864,17 @@ def test_br_g_33_close_task_cleanup_order_and_retry_authority() -> None:
     ]
     with pytest.raises(TaskUnavailableError):
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+
+def test_close_task_refuses_before_terminal_record_is_drained() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    with pytest.raises(TaskUnavailableError, match="terminal record"):
+        registry.close_task(start.task_id, start.session_id)
+
+    assert service.cleanup == []
+    assert start.task_id in registry._tasks
 
 
 def test_br_g_33_failed_binding_retains_and_retries_compensation_in_order() -> None:
@@ -879,9 +908,84 @@ def test_br_g_33_failed_binding_retains_and_retries_compensation_in_order() -> N
         ("close_session", "8" * 32),
     ]
 
-    registry.begin_close()
-    registry.unsubscribe_all()
+    with pytest.raises(ObservationConflictError):
+        registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
 
+    assert service.cleanup == [
+        ("unsubscribe", "8" * 32),
+        ("close_session", "8" * 32),
+        ("close_session", "8" * 32),
+        ("drop_plan", REQUEST),
+    ]
+    assert registry._tasks == {}
+    assert registry._commands == {}
+
+
+def test_compensation_interrupt_propagates_without_stranding_the_registry() -> None:
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            kwargs["observation_sink"](_event(1))
+            return PlanSession(REQUEST, "8" * 32)
+
+        def close_session(self, session_id):
+            raise KeyboardInterrupt(f"stop cleanup for {session_id}")
+
+    registry, _ = _registry(Service())
+
+    with pytest.raises(KeyboardInterrupt, match="stop cleanup"):
+        _start(registry)
+
+    assert len(registry._tasks) == 1
+    task = next(iter(registry._tasks.values()))
+    assert task.cleanup_pending
+
+
+def test_concurrent_replays_single_flight_failed_admission_compensation() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_attempts = 0
+            self.retry_entered = Event()
+            self.release_retry = Event()
+
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            kwargs["observation_sink"](_event(1))
+            return PlanSession(REQUEST, "8" * 32)
+
+        def close_session(self, session_id):
+            self.close_attempts += 1
+            self.cleanup.append(("close_session", session_id))
+            if self.close_attempts == 1:
+                raise OSError("injected cleanup failure")
+            self.retry_entered.set()
+            assert self.release_retry.wait(2)
+
+    service = Service()
+    registry, _ = _registry(service)
+    with pytest.raises(ObservationConflictError):
+        _start(registry)
+
+    errors: list[BaseException] = []
+
+    def replay() -> None:
+        try:
+            registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
+        except BaseException as error:
+            errors.append(error)
+
+    first = Thread(target=replay)
+    second = Thread(target=replay)
+    first.start()
+    assert service.retry_entered.wait(1)
+    second.start()
+    service.release_retry.set()
+    first.join(1)
+    second.join(1)
+
+    assert len(errors) == 2
+    assert all(isinstance(error, ObservationConflictError) for error in errors)
     assert service.cleanup == [
         ("unsubscribe", "8" * 32),
         ("close_session", "8" * 32),
@@ -908,11 +1012,12 @@ def test_br_g_33_close_task_retries_only_unfinished_cleanup_steps() -> None:
     registry, _ = _registry(service)
     start = _start(registry)
 
+    _mark_terminal_drained(registry, start)
     with pytest.raises(OSError, match="drop failure"):
-        registry.close_task(start.task_id)
+        registry.close_task(start.task_id, start.session_id)
     assert start.task_id in registry._tasks
 
-    registry.close_task(start.task_id)
+    registry.close_task(start.task_id, start.session_id)
 
     assert service.cleanup == [
         ("unsubscribe", SESSION),
@@ -921,3 +1026,204 @@ def test_br_g_33_close_task_retries_only_unfinished_cleanup_steps() -> None:
         ("drop_plan", REQUEST),
     ]
     assert start.task_id not in registry._tasks
+
+
+def test_close_task_lost_response_retry_is_exact_and_idempotent() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    _mark_terminal_drained(registry, start)
+    first = registry.close_task(start.task_id, start.session_id)
+    replay = registry.close_task(start.task_id, start.session_id)
+
+    assert first == replay == TaskCloseView(start.task_id, start.session_id)
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
+    with pytest.raises(TaskUnavailableError):
+        registry.close_task(start.task_id, "9" * 32)
+
+
+def test_concurrent_task_close_runs_cleanup_once_and_echoes_both_callers() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.cleanup_entered = Event()
+            self.release_cleanup = Event()
+
+        def unsubscribe(self, session_id):
+            self.cleanup_entered.set()
+            assert self.release_cleanup.wait(2)
+            super().unsubscribe(session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    results = []
+    errors = []
+
+    def close() -> None:
+        try:
+            results.append(registry.close_task(start.task_id, start.session_id))
+        except BaseException as error:
+            errors.append(error)
+
+    _mark_terminal_drained(registry, start)
+    first = Thread(target=close)
+    second = Thread(target=close)
+    first.start()
+    assert service.cleanup_entered.wait(1)
+    second.start()
+    service.release_cleanup.set()
+    first.join(1)
+    second.join(1)
+
+    assert errors == []
+    assert results == [
+        TaskCloseView(start.task_id, start.session_id),
+        TaskCloseView(start.task_id, start.session_id),
+    ]
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
+
+
+def test_task_capacity_is_hard_and_existing_command_replay_still_converges() -> None:
+    assert drain_module._TASK_CAPACITY == 48
+    assert drain_module._CLOSE_RECEIPT_CAPACITY == 48
+
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            command_id = kwargs["command_id"]
+            return PlanSession(command_id, command_id)
+
+    tokens = iter(f"{value:032x}" for value in range(1, 10))
+    registry = TaskRegistry(
+        Service(),
+        token=lambda: next(tokens),
+        task_capacity=2,
+    )
+    first_command = "1" * 32
+    second_command = "2" * 32
+    third_command = "3" * 32
+    first = registry.start_plan(
+        "source-1",
+        "target-1",
+        deletion_policy=None,
+        command_id=first_command,
+    )
+    registry.start_plan(
+        "source-2",
+        "target-2",
+        deletion_policy=None,
+        command_id=second_command,
+    )
+
+    assert registry.start_plan(
+        "source-1",
+        "target-1",
+        deletion_policy=None,
+        command_id=first_command,
+    ) == first
+    with pytest.raises(TaskUnavailableError, match="capacity"):
+        registry.start_plan(
+            "source-3",
+            "target-3",
+            deletion_policy=None,
+            command_id=third_command,
+        )
+
+    _mark_terminal_drained(registry, first)
+    registry.close_task(first.task_id, first.session_id)
+    admitted = registry.start_plan(
+        "source-3",
+        "target-3",
+        deletion_policy=None,
+        command_id=third_command,
+    )
+    assert admitted.session_id == third_command
+
+
+def test_concurrent_capacity_reserves_once_and_same_command_joins() -> None:
+    service = _Service()
+    service.release_start.clear()
+    tokens = iter(f"{value:032x}" for value in range(1, 5))
+    registry = TaskRegistry(
+        service,
+        token=lambda: next(tokens),
+        task_capacity=1,
+    )
+    results = []
+    errors = []
+
+    def start(command_id: str) -> None:
+        try:
+            results.append(
+                registry.start_plan(
+                    "source",
+                    "target",
+                    deletion_policy=None,
+                    command_id=command_id,
+                )
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    owner = Thread(target=start, args=("4" * 32,))
+    owner.start()
+    assert service.start_entered.wait(1)
+    joiner = Thread(target=start, args=("4" * 32,))
+    joiner.start()
+    refused = Thread(target=start, args=("5" * 32,))
+    refused.start()
+    refused.join(1)
+    service.release_start.set()
+    owner.join(1)
+    joiner.join(1)
+
+    assert len(results) == 2
+    assert results[0] == results[1]
+    assert len(service.start_calls) == 1
+    assert len(errors) == 1
+    assert isinstance(errors[0], TaskUnavailableError)
+
+
+def test_repeated_task_close_bounds_active_state_and_close_receipts() -> None:
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            command_id = kwargs["command_id"]
+            return PlanSession(command_id, command_id)
+
+    tokens = iter(f"{value:032x}" for value in range(1, 100))
+    registry = TaskRegistry(
+        Service(),
+        token=lambda: next(tokens),
+        task_capacity=1,
+    )
+    closed = []
+    for value in range(drain_module._CLOSE_RECEIPT_CAPACITY + 1):
+        command_id = f"{value + 1:032x}"
+        started = registry.start_plan(
+            f"source-{value}",
+            f"target-{value}",
+            deletion_policy=None,
+            command_id=command_id,
+        )
+        _mark_terminal_drained(registry, started)
+        closed.append(registry.close_task(started.task_id, started.session_id))
+
+    assert registry._tasks == {}
+    assert registry._commands == {}
+    assert len(registry._close_receipts) == drain_module._CLOSE_RECEIPT_CAPACITY
+    with pytest.raises(TaskUnavailableError):
+        registry.close_task(closed[0].task_id, closed[0].session_id)
+    assert registry.close_task(
+        closed[-1].task_id,
+        closed[-1].session_id,
+    ) == closed[-1]

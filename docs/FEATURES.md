@@ -328,7 +328,7 @@ Stage 5 location activities through the shared service.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 - **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure.
-- **Desktop Command Transport Implemented**. The immutable production allowlist is exactly `pick_folder`, `start_plan`, and `next_events`. Strict v1 envelopes, bounded opaque purpose-bound folder slots, receipted one-replay plan start, sanitized failures, and a production `textContent` sink have ordinary and real-WebView2 coverage. Slice 3 adds adapter-owned tasks, transactional pre-schedule observation, a 64-update progress-coalescing/reliable-backpressure queue, one bounded drain per task, and explicit-Gap/transport recovery without acknowledgments. User-facing plan/inventory controls remain later slices.
+- **Desktop Command Transport Implemented**. The immutable production allowlist is exactly `pick_folder`, `start_plan`, `next_events`, and lifecycle-only `close_task`. Strict v1 envelopes, bounded opaque purpose-bound folder slots, pre-slot receipt replay, sanitized failures, and one function-only pywebview dispatch entry have ordinary and real-WebView2 coverage. Adapter state caps 64 admitted handlers and 48 tasks, terminal delivery gates bounded task release, and finite delayed drain/release recovery refuses on exhaustion. User-facing plan/inventory controls remain later slices.
 
 ## DESKTOP UI
 
@@ -341,7 +341,8 @@ Stage 5 location activities through the shared service.
   28-pixel row, inert full labels, and stale-generation refusal. The production
   shell exposes keyboard-focusable labelled task navigation and work regions
   with honest empty guidance; it fabricates no task, session, or product row
-  and adds no command beyond `pick_folder`, `start_plan`, and `next_events`.
+  and adds no workflow command beyond `pick_folder`, `start_plan`, and
+  `next_events`; `close_task` is lifecycle-only.
 - **Task Rail**. The window provides a scrollable newest-first rail of adapter-owned task cards with status, paths, completion date, close controls, and mini progress bars. A task may hold a reviewed plan without a live session; closing a busy task confirms, cancels, waits for a terminal record, then unsubscribes and closes the session. Stage 6 must also release every process-local plan, execution, inventory, selection, and presentation artifact owned by that task; repeated create/close cycles must keep all registries bounded.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
 - **Folder Selection**. Source and destination support editable recent-folder dropdowns and folder browser buttons.

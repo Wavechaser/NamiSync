@@ -4,9 +4,36 @@ const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
-const START_PLAN_TIMEOUT_MS = 30000;
-const DRAIN_TIMEOUT_MS = 30000;
+const COMMAND_POLICY_JSON = `{
+  "pick_folder": {"timeout": "interactive", "retry": "none"},
+  "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once"},
+  "next_events": {"timeout": "drain-30-seconds", "retry": "none"},
+  "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded"}
+}`;
+export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
+  JSON.parse(COMMAND_POLICY_JSON),
+);
+const TIMEOUT_MS_BY_POLICY = Object.freeze({
+  "interactive": null,
+  "mutation-30-seconds": 30000,
+  "drain-30-seconds": 30000,
+});
+const START_PLAN_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
+const DRAIN_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.timeout];
+const TASK_CLOSE_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.close_task.timeout];
 const DRAIN_MAX_UPDATES = 64;
+const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([
+  50,
+  100,
+  250,
+  500,
+  1000,
+  2000,
+]);
+const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
 const SESSION_STATES = Object.freeze([
   "pending",
   "running",
@@ -27,6 +54,14 @@ const TERMINAL_STATES = Object.freeze([
 ]);
 const RECORDING_STATES = Object.freeze(["ok", "degraded"]);
 const DISPOSITIONS = Object.freeze(["ran", "unrun"]);
+
+function freezeCommandPolicies(policies) {
+  for (const policy of Object.values(policies)) {
+    Object.freeze(policy);
+  }
+  return Object.freeze(policies);
+}
+
 const PHASE_STATES = Object.freeze([
   "completed",
   "failed",
@@ -112,6 +147,7 @@ const ERROR_MESSAGES = Object.freeze({
   drain_busy: "That desktop task already has an event request in progress.",
   observation_conflict:
     "That desktop task is already observing different work.",
+  bridge_busy: "NamiSync is busy. Try this action again.",
   bridge_unavailable:
     "NamiSync is closing or this desktop page is no longer trusted.",
   internal_error: "NamiSync could not complete the desktop action.",
@@ -130,6 +166,7 @@ window.addEventListener("pywebviewready", () => {
   for (const task of taskDrains.values()) {
     if (!task.stopped && !task.terminal) {
       task.busyRearmUsed = false;
+      task.transportFailures = 0;
       rearmTask(task, task.lastAcceptedSequence + 1);
     }
   }
@@ -273,22 +310,28 @@ export function startTaskDrain(
     epoch: 0,
     active: null,
     armScheduled: false,
+    armTimer: null,
+    scheduledEpoch: null,
     desiredReplayFrom: null,
     lastAcceptedSequence: 0,
     busyRearmUsed: false,
+    transportFailures: 0,
     terminal: false,
+    releaseControl: null,
+    releaseTimer: null,
+    releaseEpoch: 0,
+    releaseFailures: 0,
     stopped: false,
   };
   taskDrains.set(taskId, task);
   rearmTask(task, null);
 
   return () => {
+    if (!task.stopped && task.terminal) {
+      return;
+    }
     if (!task.stopped) {
-      task.stopped = true;
-      task.epoch += 1;
-      task.active?.control.cancel();
-      task.active = null;
-      task.armScheduled = false;
+      stopTask(task);
     }
     if (taskDrains.get(taskId) === task) {
       taskDrains.delete(taskId);
@@ -463,7 +506,7 @@ function validateStartPlanResult(value) {
   );
 }
 
-function rearmTask(task, replayFrom) {
+function rearmTask(task, replayFrom, delayMs = 0) {
   if (task.stopped || task.terminal) {
     return;
   }
@@ -471,21 +514,40 @@ function rearmTask(task, replayFrom) {
   task.desiredReplayFrom = replayFrom;
   task.active?.control.cancel();
   task.active = null;
-  if (task.armScheduled) {
-    return;
-  }
+  cancelTaskArm(task);
+  const epoch = task.epoch;
   task.armScheduled = true;
-  queueMicrotask(() => {
+  task.scheduledEpoch = epoch;
+  const arm = () => {
+    if (task.scheduledEpoch !== epoch) {
+      return;
+    }
     task.armScheduled = false;
+    task.armTimer = null;
+    task.scheduledEpoch = null;
     if (task.stopped || task.terminal || taskDrains.get(task.taskId) !== task) {
       return;
     }
     try {
-      runTaskDrain(task, task.epoch, task.desiredReplayFrom);
+      runTaskDrain(task, epoch, task.desiredReplayFrom);
     } catch (_error) {
       stopTaskWithRefusal(task, new BridgeTransportError());
     }
-  });
+  };
+  if (delayMs > 0) {
+    task.armTimer = setTimeout(arm, delayMs);
+  } else {
+    queueMicrotask(arm);
+  }
+}
+
+function cancelTaskArm(task) {
+  if (task.armTimer !== null) {
+    clearTimeout(task.armTimer);
+  }
+  task.armTimer = null;
+  task.armScheduled = false;
+  task.scheduledEpoch = null;
 }
 
 function runTaskDrain(task, epoch, replayFrom) {
@@ -525,6 +587,7 @@ function settleTaskDrain(task, active, result) {
   }
   task.active = null;
   task.busyRearmUsed = false;
+  task.transportFailures = 0;
   for (let index = 0; index < result.updates.length; index += 1) {
     if (task.stopped || task.terminal || task.epoch !== active.epoch) {
       return;
@@ -535,6 +598,7 @@ function settleTaskDrain(task, active, result) {
       if (!deliverTaskUpdate(task, update)) {
         return;
       }
+      beginTaskRelease(task);
       return;
     }
     const event = update.event;
@@ -588,27 +652,139 @@ function refuseTaskDrain(task, active, error) {
       rearmTask(task, active.replayFrom);
       return;
     }
-    stopTaskWithRefusal(task, error);
-    return;
+    if (!isUncertainTaskCommandFailure(error)) {
+      stopTaskWithRefusal(task, error);
+      return;
+    }
   }
   task.busyRearmUsed = false;
-  rearmTask(task, task.lastAcceptedSequence + 1);
+  const failureIndex = task.transportFailures;
+  if (failureIndex >= DRAIN_RECOVERY_DELAYS_MS.length) {
+    stopTaskWithRefusal(task, new BridgeTransportError());
+    return;
+  }
+  task.transportFailures += 1;
+  rearmTask(
+    task,
+    task.lastAcceptedSequence + 1,
+    DRAIN_RECOVERY_DELAYS_MS[failureIndex],
+  );
 }
 
 function stopTaskWithRefusal(task, error) {
-  task.stopped = true;
-  task.epoch += 1;
-  task.active?.control.cancel();
-  task.active = null;
-  task.armScheduled = false;
-  if (taskDrains.get(task.taskId) === task) {
-    taskDrains.delete(task.taskId);
-  }
+  stopTask(task);
   try {
     task.acceptRefusal(error);
   } catch (_callbackError) {
     // The task is already stopped; a presentation failure cannot restart it.
   }
+}
+
+function stopTask(task) {
+  task.stopped = true;
+  task.epoch += 1;
+  task.active?.control.cancel();
+  task.active = null;
+  cancelTaskArm(task);
+  task.releaseEpoch += 1;
+  task.releaseControl?.cancel();
+  task.releaseControl = null;
+  if (task.releaseTimer !== null) {
+    clearTimeout(task.releaseTimer);
+  }
+  task.releaseTimer = null;
+  if (taskDrains.get(task.taskId) === task) {
+    taskDrains.delete(task.taskId);
+  }
+}
+
+function beginTaskRelease(task) {
+  task.releaseFailures = 0;
+  runTaskRelease(task);
+}
+
+function runTaskRelease(task) {
+  if (task.stopped || !task.terminal || taskDrains.get(task.taskId) !== task) {
+    return;
+  }
+  const epoch = task.releaseEpoch + 1;
+  task.releaseEpoch = epoch;
+  let control;
+  try {
+    control = createDispatchAttempt(
+      "close_task",
+      Object.freeze({ task_id: task.taskId, session_id: task.sessionId }),
+      (value) => validateTaskCloseResult(value, task),
+      TASK_CLOSE_TIMEOUT_MS,
+    );
+  } catch (_error) {
+    refuseTaskRelease(task, epoch, new BridgeTransportError());
+    return;
+  }
+  task.releaseControl = control;
+  void control.promise.then(
+    () => settleTaskRelease(task, epoch),
+    (error) => refuseTaskRelease(task, epoch, error),
+  );
+}
+
+function isCurrentTaskRelease(task, epoch) {
+  return (
+    !task.stopped &&
+    task.terminal &&
+    taskDrains.get(task.taskId) === task &&
+    task.releaseEpoch === epoch
+  );
+}
+
+function settleTaskRelease(task, epoch) {
+  if (!isCurrentTaskRelease(task, epoch)) {
+    return;
+  }
+  task.releaseControl = null;
+  stopTask(task);
+}
+
+function refuseTaskRelease(task, epoch, error) {
+  if (!isCurrentTaskRelease(task, epoch)) {
+    return;
+  }
+  task.releaseControl = null;
+  const uncertain =
+    error instanceof BridgeTransportError ||
+    isUncertainTaskCommandFailure(error);
+  if (!uncertain) {
+    stopTaskWithRefusal(task, error);
+    return;
+  }
+  const failureIndex = task.releaseFailures;
+  if (failureIndex >= TASK_CLOSE_RECOVERY_DELAYS_MS.length) {
+    stopTaskWithRefusal(task, new BridgeTransportError());
+    return;
+  }
+  task.releaseFailures += 1;
+  const expectedEpoch = task.releaseEpoch;
+  task.releaseTimer = setTimeout(() => {
+    task.releaseTimer = null;
+    if (isCurrentTaskRelease(task, expectedEpoch)) {
+      runTaskRelease(task);
+    }
+  }, TASK_CLOSE_RECOVERY_DELAYS_MS[failureIndex]);
+}
+
+function isUncertainTaskCommandFailure(error) {
+  return (
+    error instanceof BridgeCommandError &&
+    (error.code === "bridge_busy" || error.code === "internal_error")
+  );
+}
+
+function validateTaskCloseResult(value, task) {
+  return (
+    isExactObject(value, ["task_id", "session_id"]) &&
+    value.task_id === task.taskId &&
+    value.session_id === task.sessionId
+  );
 }
 
 function validateTaskDrainResult(value, task, drainId) {

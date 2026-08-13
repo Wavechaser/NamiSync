@@ -68,6 +68,14 @@ Two consequences worth stating outright:
   Mutating workflow preparation ensures both stores before dispatcher audit
   observation, while pure plan review and standalone history reads do not
   create a missing peer.
+  Fresh-pair ownership is delegated to its Windows native leaf: reservations
+  retain artifact identity, and rollback derives a delete-capable handle from
+  that reservation for exact-object disposition so pathname replacement cannot
+  redirect cleanup.
+- **Desktop pathname leases belong to the adapter.** `interfaces/web/paths.py`
+  pins the app directories and ready database mains against reparse/rename
+  substitution for the headed process lifetime. This protects composition
+  artifacts without moving filesystem sync policy into the interface layer.
 
 ### Dependency direction (bones)
 
@@ -1872,7 +1880,7 @@ Reusable pure node-tree/index construction, recursive subtree
 scan/reconciliation, typed inventory warning projection, user-selection
 provenance and re-derivation, and the facade commands/review state needed by the
 desktop. **Flesh — implemented through M1 Stage 6 Slice 4.** The secured web
-desktop host, bounded three-command transport, shared design foundation, pure
+desktop host, bounded four-command transport, shared design foundation, pure
 visible-sequence presentation core, bounded tree renderer, and honest empty
 shell frame. **Flesh — planned remainder of M1 Stage 6.** Plan, inventory,
 history, settings, and lifecycle presentation projections and controls.

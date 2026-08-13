@@ -428,6 +428,10 @@ class _BoundaryMappedNative:
         self.found.append(title)
         return object()
 
+    def window_belongs_to_current_executable(self, window: object) -> bool:
+        del window
+        return True
+
     def restore_window(self, window: object) -> None:
         self.restored += 1
 
@@ -458,6 +462,9 @@ class _ForcedForegroundFailureNative:
     def find_window(self, title: str) -> object | None:
         self.find_titles.append(title)
         return self._native.find_window(title)
+
+    def window_belongs_to_current_executable(self, window: object) -> bool:
+        return self._native.window_belongs_to_current_executable(window)
 
     def restore_window(self, window: object) -> None:
         self.restore_calls += 1

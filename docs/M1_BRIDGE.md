@@ -36,7 +36,7 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host, three-command transport, GUI foundation, and Slice 4 presentation
+secured host, four-command transport, GUI foundation, and Slice 4 presentation
 foundation are promoted into the active focused documents and README. The
 complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
 the remaining product-surface, second GUI-break, and packaging work, while
@@ -1714,11 +1714,28 @@ IPC channel. If activation fails, the second instance prints a clear message
 and exits successfully. Exiting silently, or reporting an error for what is
 ordinary user behavior, are both rejected.
 
+Activation is not title-only: the process image owning the discovered HWND must
+match `sys.executable` or the venv base interpreter before NamiSync restores or
+foregrounds it. The fixed `Local\NamiSync.Desktop` mutex remains predictable.
+A malicious same-principal process can squat that name or spoof an accepted
+base interpreter, so this prevents accidental duplicate ownership but is not a
+same-principal security boundary.
+
 ---
 
 ## 6. Concurrency
 
 ### DR-BR-24 — Bridge handlers are concurrent and must be synchronized
+
+The pinned host creates one thread per exposed-function call, so the bridge
+admits at most 64 handlers and returns the fixed `bridge_busy` refusal at
+saturation. The same admission condition closes the race between handler entry
+and teardown; no bridge-global lock spans a command handler.
+
+The product window is constructed with `js_api=None` and receives one
+function-table entry named `dispatch`. Pywebview never walks the dispatcher
+instance, so private dotted receiver names cannot become an alternate command
+surface.
 
 DR-M1-15 established that pywebview's exposed functions run on separate
 threads—one newly spawned, unbounded thread per exposed-function call in the
@@ -1777,7 +1794,9 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   when the service closes, admitting work nobody observes and then cancelling it
   half-applied. The dispatcher already has the pattern to copy — it waits on an
   in-flight admission count before closing — and the bridge needs the same
-  counter over its handlers.
+  counter over its handlers. The wait uses one finite monotonic deadline;
+  failure leaves service, logging, app-path leases, and the instance mutex
+  owned for retry. Only complete service shutdown permits native owner release.
 - **Native document authority** — `CoreWebView2` remains owned by the WinForms
   UI thread. One idempotent synchronous `before_load` callback attaches the
   native handlers and writes a small committed-source snapshot; setup and
@@ -1897,7 +1916,8 @@ table in `M1_SHELL.md` Slice 2: `invalid_request`, `unsupported_version`,
 `unknown_command`, `invalid_payload`, `request_too_large`,
 `slot_unavailable`, `picker_unavailable`, `command_conflict`,
 `planning_refused`, `task_unavailable`, `drain_busy`,
-`observation_conflict`, `bridge_unavailable`, and `internal_error`. Retry policy is
+`observation_conflict`, `bridge_busy`, `bridge_unavailable`, and
+`internal_error`. Retry policy is
 owned by the immutable command row and browser wrapper, not returned as handler
 data. A structured refusal is definitive; only uncertain transport delivery or
 `internal_error` from an admitted receipted command may trigger that row's one
@@ -1935,12 +1955,16 @@ Fabricated, expired, evicted, and wrong-purpose ids have the same sanitized
 `slot_unavailable` result. The browser receives only `{id, display}`, sends only
 ids back, and can never promote `display` to filesystem authority.
 
+An exact `start_plan` replay is checked against its retained wire intent before
+these volatile slots are resolved, so an earned receipt survives slot expiry or
+eviction. A different policy under the same command id remains a conflict.
+
 The immutable production command mapping is exactly `pick_folder`,
-`start_plan`, and `next_events`. `test_report` is a test-owned constructor-only
+`start_plan`, `next_events`, and `close_task`. `test_report` is a test-owned constructor-only
 harness row: the harness builds a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
 environment, page value, or bridge request can enable it, and it has no product
-retry class. Later plan, inventory, settings, history, and lifecycle commands
+retry class. Later plan, inventory, settings, and history commands
 are not reserved or allowlisted until their owning slices
 land each row with its schema, receipt/revision rule, deadline, retry policy,
 and gate.
@@ -1995,6 +2019,14 @@ under the same 25-second bound for its claim to release, then returns
 Unknown/closed or mismatched task/session authority is
 `task_unavailable`; a competing observation attach/recovery generation is
 `observation_conflict`. The fixed messages live in `M1_SHELL.md`.
+
+The adapter retains at most 48 tasks. Once a terminal record is delivered,
+`close_task` stepwise unsubscribes, closes the session, drops the plan, and
+removes the task and start receipt. A 48-entry close-receipt LRU makes an
+uncertain success retryable with the identical payload; admission compensation
+uses the same retryable step model. Browser drain recovery and task-release
+retry both use finite delayed schedules and become visibly refused when their
+budget is exhausted rather than rearming without bound.
 
 Task start is single-flight per `(command_id, resolved source, resolved target,
 deletion policy)`. One provisional adapter task exists while the facade call is
@@ -2868,8 +2900,8 @@ because its local tests are easier.
 - **BR-G-32 — The transport is one allowlisted, inert-data channel.** Slice 2
   proves every public view type round-trips through the production JSON codec
   and the one exposed `dispatch(command_json)`; the two Slice 2 rows are exactly
-  `pick_folder` and `start_plan`, and the current allowlist adds only Slice 3's
-  `next_events`, while `test_report` is possible only through test-owned
+  `pick_folder` and `start_plan`, and the current allowlist adds Slice 3's
+  `next_events` plus lifecycle-only `close_task`, while `test_report` is possible only through test-owned
   constructor composition. Unknown versions, commands,
   fields, malformed opaque ids, and input above 65,536 UTF-8 bytes are refused
   before handler invocation. Errors expose no filesystem path or internals even

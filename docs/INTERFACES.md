@@ -6,8 +6,8 @@ semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
-database-pair facade, secured product-host composition, and the exact Slice 3
-`pick_folder`/`start_plan`/`next_events` transport are implemented.
+database-pair facade, secured product-host composition, and the hardened
+`pick_folder`/`start_plan`/`next_events`/`close_task` transport are implemented.
 GUI Break 1's foundation and Slice 4's pure visible sequence, bounded tree
 renderer, and honest accessible shell frame are implemented; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
@@ -221,17 +221,15 @@ commitment response. Closing a retained session releases its receipt, and
 receipt lookup, publication, and removal share one lifecycle gate with
 dispatcher retention so neither a retry nor a late admission can return a
 receipt for an already-closed session. Shutdown prevents a late admission
-return from repopulating cleared receipt state.
+return from repopulating cleared receipt state; its closed transition and
+receipt-map clearing take that same gate, so an in-flight replay finishes
+before invalidation.
 
-The current `close_session()` boundary owns dispatcher retention, observation,
-and command receipts only. Process-local workflow artifacts such as reviewed
-plans, execution detail, and inventory detail have separate opaque ids and are
-not implicitly released by that call. Before Stage 6 task close ships, the
-facade must add one task-owned artifact-release seam that drops the exact linked
-runtime entries immediately for a plan-only or already-terminal task, and only
-after terminal settlement for busy work. Repeated create/close tests must prove
-every service/runtime registry remains bounded without touching retained
-database history.
+The web task boundary owns its linked observation, session, plan, and start
+receipt. After the terminal record is delivered, `close_task` releases those
+artifacts stepwise and removes the adapter task; delivery uncertainty reuses
+one bounded retained close receipt. Live tasks are capped at 48. Retained
+database history is independent and is never removed by task close.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -339,6 +337,13 @@ private-mode default.
 GUI roots are resolved to a physical local drive: UNC and mapped-network roots
 are refused, and a pre-existing child junction may not redirect any database,
 settings, log, UI-state, or WebView2 artifact outside that resolved root.
+The headed host then holds non-reparse, delete-denying handles on the app root,
+logs and WebView2 directories, plus both ready database mains, for process
+lifetime and revalidates the pair after binding. Second-instance activation
+requires the title-matched HWND's process image to match `sys.executable` or the
+venv base interpreter. The predictable named mutex remains a UX primitive and
+cannot prevent a malicious same-principal process from squatting its name or
+spoofing an accepted base interpreter.
 The side-effect-free compatibility module mirrors pinned pywebview 6.2.1's
 .NET prerequisite, accepted Edge channels, and HKCU/HKLM architecture routing;
 behavioral parity tests execute the upstream detector functions without
@@ -386,8 +391,9 @@ snapshot, and `dispatch` rechecks that snapshot without crossing into the UI
 thread. A canceled target never replaces it; a genuinely committed off-origin
 native source does and makes dispatch fail closed.
 
-The only public bridge method is versioned, size-bounded, allowlisted
-`dispatch`. It rechecks the native committed origin on every call, accepts one
+Pywebview receives no bridge object graph: the host passes `js_api=None` and
+exposes one versioned, size-bounded, allowlisted function named `dispatch`.
+It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
 NamiSync application code never constructs JavaScript or calls `evaluate_js`,
@@ -406,7 +412,7 @@ classes select package-local CSS-mask SVGs and inherit `currentColor`; no view,
 payload, command, or returned string can supply markup, a class, URL, path, or
 registration. Unknown names and sizes are refused before DOM mutation.
 
-The current production table contains exactly three rows. Slice 2 owns
+The current production table contains exactly four rows. Slice 2 owns
 `pick_folder` and `start_plan`; the former owns one native user interaction and
 returns `null` or an opaque purpose-bound slot id plus inert display text; the
 latter accepts only one source slot, one target slot, an explicit
@@ -422,7 +428,7 @@ no runtime command registration: the headed gate adds `test_report` only by
 constructing a private immutable mapping under `tests/`, and that row and page
 are absent from the wheel.
 
-Slice 3 owns the third row, `next_events`, and implements adapter-owned
+Slice 3 owns `next_events`, and implements adapter-owned
 `task-<32-lowercase-hex>` identity; task ids never enter the task-agnostic service
 or dispatcher. `start_plan` adds that task id to its web result and replays it
 with the same command receipt. `next_events` returns at most 64 exact
@@ -436,6 +442,14 @@ visible, stops later ordinary-batch updates, and resubscribes from its
 prefix unavailable and permits the retained tail without looping; numeric holes are legal progress
 coalescing. Terminal plan sessions cease being live/active-rail work but remain
 task-owned recovery authority until task close.
+
+Audit hardening adds only `close_task`. The registry requires terminal-record
+delivery before release and retains at most 48 same-payload close receipts.
+Exact `start_plan` wire intent is checked before volatile slot resolution, so a
+lost response remains replayable after slot expiry. The browser policy is an
+exact tested mirror of Python metadata; drain recovery and release retry have
+finite delayed budgets. Bridge handler admission is capped at 64, with a fixed
+`bridge_busy` refusal.
 
 Slice 4 adds presentation only and does not change that table. Frozen adapter
 values and pure functions in `visible_sequence.py` validate one workflow-owned
@@ -473,19 +487,21 @@ order. It acquires the fixed instance identity before logging or webview import,
 prepares the renderer before service/window construction, validates and if
 needed initializes the database pair before command admission, creates one
 pending `NativeDocumentState`, and binds its loopback origin once during the
-renderer-checked initialized callback. The host snapshots the exact three-row
+renderer-checked initialized callback. The host snapshots the exact four-row
 production mapping before exposing the page. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
-destroy. One finalizer closes any constructed service, shuts logging, releases
-the mutex, and preserves the initiating startup diagnosis.
+destroy. One finalizer closes any constructed service, then releases logging,
+app-path leases, and the mutex only after complete quiescence, preserving the
+initiating startup diagnosis.
 Clean-wheel headed gates exercise this composition through the real pinned
 WebView2/pythonnet stack, including packaged-page popup composition, canceled
 navigation, guard-attachment failure, runtime refusal, activation, and the
 visible coordinated-database refusal.
 
-Normal window close is a separate host-owned state machine. A private admission
-condition around `BridgeDispatcher.dispatch` rejects new calls and waits for
-every admitted call without adding another JavaScript-facing method. The
+Normal window close is a separate host-owned state machine. An admission
+condition around `BridgeDispatcher.dispatch` rejects new calls and waits a
+bounded interval for admitted calls without adding another JavaScript-facing
+method. The
 synchronous WinForms callback only claims one worker and vetoes; that worker
   performs reject, close/wake, wait, unsubscribe, and service close in order. Only a
 complete shutdown permits programmatic destroy. Incomplete and exceptional

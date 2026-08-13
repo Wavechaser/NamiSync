@@ -10,12 +10,14 @@ from types import MappingProxyType
 from typing import Protocol
 
 from namisync.interfaces.web.drain import (
+    TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskIntentConflictError,
     TaskRecordUpdateView,
     TaskStartView,
 )
+from namisync.interfaces.web.slots import SlotUnavailableError
 from namisync.interfaces.service import (
     CommandIdConflictError,
     ControlView,
@@ -109,6 +111,7 @@ NESTED_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
 ADAPTER_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
     {
         TaskDrainView,
+        TaskCloseView,
         TaskEventUpdateView,
         TaskRecordUpdateView,
         TaskStartView,
@@ -157,6 +160,7 @@ class CommandTimeout(StrEnum):
 class CommandRetry(StrEnum):
     NONE = "none"
     SAME_COMMAND_ONCE = "same-command-once"
+    SAME_PAYLOAD_BOUNDED = "same-payload-bounded"
 
 
 class FolderSlotAuthority(Protocol):
@@ -168,6 +172,12 @@ class FolderSlotAuthority(Protocol):
 
 
 class TaskAuthority(Protocol):
+    def replay_start(
+        self,
+        command_id: str,
+        wire_intent: tuple[str, str, str | None],
+    ) -> TaskStartView | None: ...
+
     def start_plan(
         self,
         source: str,
@@ -175,6 +185,7 @@ class TaskAuthority(Protocol):
         *,
         deletion_policy: str | None = None,
         command_id: str,
+        wire_intent: tuple[str, str, str | None] | None = None,
     ) -> TaskStartView: ...
 
     def drain(
@@ -185,6 +196,8 @@ class TaskAuthority(Protocol):
         *,
         replay_from: int | None,
     ) -> TaskDrainView: ...
+
+    def close_task(self, task_id: str, session_id: str) -> TaskCloseView: ...
 
 
 PayloadValidator = Callable[[object], object]
@@ -229,13 +242,19 @@ class _NextEventsPayload:
     replay_from: int | None
 
 
+@dataclass(frozen=True, slots=True)
+class _CloseTaskPayload:
+    task_id: str
+    session_id: str
+
+
 def production_command_specs(
     *,
     picker: FolderPicker,
     slots: FolderSlotAuthority,
     registry: TaskAuthority,
 ) -> Mapping[str, CommandSpec]:
-    """Bind the exact three production rows to process-local dependencies."""
+    """Bind the exact production rows to process-local dependencies."""
 
     if not callable(picker):
         raise TypeError("picker must be callable")
@@ -280,14 +299,31 @@ def production_command_specs(
     def start_plan(payload: object) -> object:
         if not isinstance(payload, _StartPlanPayload):
             raise TypeError("start_plan received an unvalidated payload")
-        source, target = slots.resolve_pair(payload.source_id, payload.target_id)
+        wire_intent = (
+            payload.source_id,
+            payload.target_id,
+            payload.deletion_policy,
+        )
         try:
-            result = registry.start_plan(
-                source,
-                target,
-                deletion_policy=payload.deletion_policy,
-                command_id=payload.command_id,
-            )
+            result = registry.replay_start(payload.command_id, wire_intent)
+            if result is None:
+                try:
+                    source, target = slots.resolve_pair(
+                        payload.source_id,
+                        payload.target_id,
+                    )
+                except SlotUnavailableError:
+                    result = registry.replay_start(payload.command_id, wire_intent)
+                    if result is None:
+                        raise
+                else:
+                    result = registry.start_plan(
+                        source,
+                        target,
+                        deletion_policy=payload.deletion_policy,
+                        command_id=payload.command_id,
+                        wire_intent=wire_intent,
+                    )
         except (CommandIdConflictError, TaskIntentConflictError) as error:
             raise CommandConflictError(
                 "start_plan command id conflicts with retained intent"
@@ -296,15 +332,7 @@ def production_command_specs(
             raise PlanningRefusedError(
                 "start_plan roots were refused"
             ) from error
-        if (
-            type(result) is not TaskStartView
-            or type(result.task_id) is not str
-            or _TASK_ID.fullmatch(result.task_id) is None
-            or type(result.request_id) is not str
-            or _OPAQUE_ID.fullmatch(result.request_id) is None
-            or type(result.session_id) is not str
-            or _OPAQUE_ID.fullmatch(result.session_id) is None
-        ):
+        if not _is_valid_task_start(result):
             raise RuntimeError("planning service returned invalid data")
         return result
 
@@ -324,6 +352,18 @@ def production_command_specs(
             or result.drain_id != payload.drain_id
         ):
             raise RuntimeError("task registry returned invalid drain data")
+        return result
+
+    def close_task(payload: object) -> object:
+        if not isinstance(payload, _CloseTaskPayload):
+            raise TypeError("close_task received an unvalidated payload")
+        result = registry.close_task(payload.task_id, payload.session_id)
+        if (
+            type(result) is not TaskCloseView
+            or result.task_id != payload.task_id
+            or result.session_id != payload.session_id
+        ):
+            raise RuntimeError("task registry returned invalid close data")
         return result
 
     return MappingProxyType(
@@ -354,6 +394,15 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.DRAIN_30_SECONDS,
                 retry=CommandRetry.NONE,
+            ),
+            "close_task": CommandSpec(
+                validate_payload=_validate_close_task,
+                handler=close_task,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.MUTATION_30_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
             ),
         }
     )
@@ -422,3 +471,27 @@ def _validate_next_events(value: object) -> _NextEventsPayload:
     ):
         raise CommandPayloadError("next_events payload is invalid")
     return _NextEventsPayload(task_id, session_id, drain_id, replay_from)
+
+
+def _validate_close_task(value: object) -> _CloseTaskPayload:
+    if not isinstance(value, dict) or set(value) != {"task_id", "session_id"}:
+        raise CommandPayloadError("close_task payload is invalid")
+    task_id = value["task_id"]
+    session_id = value["session_id"]
+    if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+        raise CommandPayloadError("close_task payload is invalid")
+    if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
+        raise CommandPayloadError("close_task payload is invalid")
+    return _CloseTaskPayload(task_id, session_id)
+
+
+def _is_valid_task_start(value: object) -> bool:
+    return (
+        type(value) is TaskStartView
+        and type(value.task_id) is str
+        and _TASK_ID.fullmatch(value.task_id) is not None
+        and type(value.request_id) is str
+        and _OPAQUE_ID.fullmatch(value.request_id) is not None
+        and type(value.session_id) is str
+        and _OPAQUE_ID.fullmatch(value.session_id) is not None
+    )

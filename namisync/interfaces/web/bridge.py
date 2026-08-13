@@ -12,6 +12,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from threading import Condition, Lock
+from time import monotonic
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import SplitResult, urlsplit
 
@@ -27,7 +28,10 @@ if TYPE_CHECKING:
 
 BRIDGE_SCHEMA_VERSION = 1
 _MAX_COMMAND_BYTES = 64 * 1024
+_MAX_ADMITTED_HANDLERS = 64
+_HANDLER_WAIT_TIMEOUT_SECONDS = 35.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
+_COMMAND_NAME = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 _ERROR_MESSAGES = {
     "invalid_request": "The desktop request is invalid.",
     "unsupported_version": (
@@ -54,6 +58,7 @@ _ERROR_MESSAGES = {
     "observation_conflict": (
         "That desktop task is already observing different work."
     ),
+    "bridge_busy": "NamiSync is busy. Try this action again.",
     "bridge_unavailable": (
         "NamiSync is closing or this desktop page is no longer trusted."
     ),
@@ -472,7 +477,7 @@ def start_edge_chromium(
 
 
 class BridgeDispatcher:
-    """The one JS-exposed object: versioned allowlisted structured RPC."""
+    """Own versioned allowlisted RPC state behind one exposed function."""
 
     def __init__(
         self,
@@ -484,10 +489,14 @@ class BridgeDispatcher:
 
         snapshot = dict(commands)
         if any(
-            not isinstance(name, str) or not name or name.startswith("_")
+            type(name) is not str
+            or len(name) > 64
+            or _COMMAND_NAME.fullmatch(name) is None
             for name in snapshot
         ):
-            raise ValueError("bridge commands require explicit public command names")
+            raise ValueError(
+                "bridge commands require bounded lowercase snake names"
+            )
         if any(type(spec) is not CommandSpec for spec in snapshot.values()):
             raise TypeError("every bridge command must be an exact CommandSpec")
         self._document = document
@@ -499,8 +508,9 @@ class BridgeDispatcher:
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Return one exact response envelope; never export a Python failure."""
 
-        if not self._admit():
-            return self._failure(None, None, "bridge_unavailable")
+        refusal = self._admit()
+        if refusal is not None:
+            return self._failure(None, None, refusal)
         try:
             try:
                 self._document.require_trusted()
@@ -509,6 +519,8 @@ class BridgeDispatcher:
 
             if type(command_json) is not str:
                 return self._failure(None, None, "invalid_request")
+            if len(command_json) > _MAX_COMMAND_BYTES:
+                return self._failure(None, None, "request_too_large")
             try:
                 command_size = len(command_json.encode("utf-8"))
             except UnicodeEncodeError:
@@ -543,7 +555,11 @@ class BridgeDispatcher:
                 _require_json_value(name)
             except BridgeProtocolError:
                 return self._failure(request_id, None, "invalid_request")
-            if type(name) is not str or not name:
+            if (
+                type(name) is not str
+                or len(name) > 64
+                or _COMMAND_NAME.fullmatch(name) is None
+            ):
                 return self._failure(request_id, None, "invalid_request")
             spec = self._commands.get(name)
             if spec is None:
@@ -615,7 +631,7 @@ class BridgeDispatcher:
             logging.getLogger("namisync").info(
                 "bridge.refused request_id=%s command=%s code=%s",
                 request_id if request_id is not None else "-",
-                command if command is not None else "-",
+                _safe_log_command(command),
                 code,
             )
         except BaseException:
@@ -630,12 +646,14 @@ class BridgeDispatcher:
             },
         }
 
-    def _admit(self) -> bool:
+    def _admit(self) -> str | None:
         with self._admission:
             if not self._accepting:
-                return False
+                return "bridge_unavailable"
+            if self._admitted >= _MAX_ADMITTED_HANDLERS:
+                return "bridge_busy"
             self._admitted += 1
-            return True
+            return None
 
     def _release(self) -> None:
         with self._admission:
@@ -643,14 +661,31 @@ class BridgeDispatcher:
             if self._admitted == 0:
                 self._admission.notify_all()
 
-    def _reject_new(self) -> None:
+    def begin_close(self) -> None:
+        """Reject every later dispatch while admitted handlers settle."""
+
         with self._admission:
             self._accepting = False
 
-    def _wait_for_handlers(self) -> None:
+    def wait_for_handlers(
+        self,
+        timeout: float = _HANDLER_WAIT_TIMEOUT_SECONDS,
+    ) -> None:
+        """Wait a bounded interval for true handler quiescence."""
+
+        if type(timeout) not in {int, float} or not math.isfinite(timeout):
+            raise ValueError("bridge handler wait timeout must be finite")
+        if timeout <= 0:
+            raise ValueError("bridge handler wait timeout must be positive")
+        deadline = monotonic() + timeout
         with self._admission:
             while self._admitted:
-                self._admission.wait()
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        "bridge handlers did not quiesce before the deadline"
+                    )
+                self._admission.wait(remaining)
 
 
 def to_primitive_view(value: object) -> object:
@@ -776,6 +811,16 @@ def _recover_request_id(value: object) -> str | None:
     if type(request_id) is not str or _OPAQUE_ID.fullmatch(request_id) is None:
         return None
     return request_id
+
+
+def _safe_log_command(value: object) -> str:
+    if (
+        type(value) is str
+        and len(value) <= 64
+        and _COMMAND_NAME.fullmatch(value) is not None
+    ):
+        return value
+    return "-"
 
 
 def _reject_json_constant(value: str) -> None:

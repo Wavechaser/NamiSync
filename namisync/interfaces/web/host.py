@@ -6,6 +6,8 @@ import ctypes
 import importlib
 import importlib.resources
 import logging
+import os
+import sys
 from ctypes import wintypes
 from dataclasses import dataclass
 from enum import Enum
@@ -14,11 +16,13 @@ from threading import Event, Lock, Thread
 from typing import Callable, Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .paths import AppPaths
+    from .paths import AppPathLease, AppPaths
 
 
 _ERROR_ALREADY_EXISTS = 183
 _SW_RESTORE = 9
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_MAX_LONG_PATH_CHARS = 32_768
 _EXIT_SUCCESS = 0
 _EXIT_STARTUP = 1
 _ID_RETRY = 4
@@ -91,6 +95,8 @@ class _InstanceNative(Protocol):
 
     def find_window(self, title: str) -> object | None: ...
 
+    def window_belongs_to_current_executable(self, window: object) -> bool: ...
+
     def restore_window(self, window: object) -> None: ...
 
     def foreground_window(self, window: object) -> bool: ...
@@ -110,8 +116,26 @@ class WindowsInstanceNative:
         self._kernel32.CreateMutexW.restype = wintypes.HANDLE
         self._kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
         self._kernel32.CloseHandle.restype = wintypes.BOOL
+        self._kernel32.OpenProcess.argtypes = (
+            wintypes.DWORD,
+            wintypes.BOOL,
+            wintypes.DWORD,
+        )
+        self._kernel32.OpenProcess.restype = wintypes.HANDLE
+        self._kernel32.QueryFullProcessImageNameW.argtypes = (
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        self._kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
         self._user32.FindWindowW.argtypes = (wintypes.LPCWSTR, wintypes.LPCWSTR)
         self._user32.FindWindowW.restype = wintypes.HWND
+        self._user32.GetWindowThreadProcessId.argtypes = (
+            wintypes.HWND,
+            ctypes.POINTER(wintypes.DWORD),
+        )
+        self._user32.GetWindowThreadProcessId.restype = wintypes.DWORD
         self._user32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
         self._user32.ShowWindow.restype = wintypes.BOOL
         self._user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
@@ -133,6 +157,43 @@ class WindowsInstanceNative:
         window = self._user32.FindWindowW(None, title)
         return window or None
 
+    def window_belongs_to_current_executable(self, window: object) -> bool:
+        process_id = wintypes.DWORD()
+        if not self._user32.GetWindowThreadProcessId(
+            window,
+            ctypes.byref(process_id),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        process = self._kernel32.OpenProcess(
+            _PROCESS_QUERY_LIMITED_INFORMATION,
+            False,
+            process_id.value,
+        )
+        if not process:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            image = ctypes.create_unicode_buffer(_MAX_LONG_PATH_CHARS)
+            size = wintypes.DWORD(len(image))
+            if not self._kernel32.QueryFullProcessImageNameW(
+                process,
+                0,
+                image,
+                ctypes.byref(size),
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            self.close_handle(process)
+        observed = os.path.normcase(os.path.abspath(image.value))
+        expected = {
+            os.path.normcase(os.path.abspath(executable))
+            for executable in (
+                sys.executable,
+                getattr(sys, "_base_executable", sys.executable),
+            )
+            if isinstance(executable, str) and executable
+        }
+        return observed in expected
+
     def restore_window(self, window: object) -> None:
         self._user32.ShowWindow(window, _SW_RESTORE)
 
@@ -153,8 +214,8 @@ class DesktopInstanceLease:
             handle = self._handle
             if handle is None:
                 return
+            self._native.close_handle(handle)
             self._handle = None
-        self._native.close_handle(handle)
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +255,14 @@ def acquire_desktop_instance(
                 lease=None,
                 activated=False,
                 activation_error="The existing NamiSync window could not be found.",
+            )
+        if not adapter.window_belongs_to_current_executable(window):
+            return DesktopInstanceAdmission(
+                lease=None,
+                activated=False,
+                activation_error=(
+                    "The existing NamiSync window could not be authenticated."
+                ),
             )
         adapter.restore_window(window)
         if not adapter.foreground_window(window):
@@ -263,6 +332,35 @@ class _DesktopCloseHooks:
     wake_waiters: Callable[[], None]
     wait_for_handlers: Callable[[], None]
     unsubscribe_observations: Callable[[], None]
+
+
+class _DesktopQuiescenceError(RuntimeError):
+    """Name the failed close boundary without exposing its private cause."""
+
+    def __init__(self, step: str) -> None:
+        super().__init__(f"desktop quiescence failed during {step}")
+        self.step = step
+
+
+def _quiesce_desktop(
+    hooks: _DesktopCloseHooks,
+    *,
+    after_waiters_wake: Callable[[], None] | None = None,
+) -> None:
+    """Run the one fail-closed bridge/task quiescence sequence."""
+
+    for step, callback in (
+        ("dispatch_rejection", hooks.reject_dispatch),
+        ("registry_wake", hooks.wake_waiters),
+        ("handler_wait", hooks.wait_for_handlers),
+        ("observation_cleanup", hooks.unsubscribe_observations),
+    ):
+        try:
+            callback()
+        except Exception as error:
+            raise _DesktopQuiescenceError(step) from error
+        if step == "registry_wake" and after_waiters_wake is not None:
+            after_waiters_wake()
 
 
 class _DesktopCloseController:
@@ -374,11 +472,12 @@ class _DesktopCloseController:
     def _run_attempt(self) -> None:
         retryable = False
         try:
-            self._hooks.reject_dispatch()
-            self._hooks.wake_waiters()
-            self._start_status(_ClosePhase.CLOSING)
-            self._hooks.wait_for_handlers()
-            self._hooks.unsubscribe_observations()
+            _quiesce_desktop(
+                self._hooks,
+                after_waiters_wake=lambda: self._start_status(
+                    _ClosePhase.CLOSING
+                ),
+            )
             shutdown = self._service.close()
         except Exception as error:
             _log_cleanup_failure("shutdown.attempt_failed", error)
@@ -512,6 +611,7 @@ def run_desktop(
     """Run the secured headed composition and retain every native owner."""
 
     lease: DesktopInstanceLease | None = None
+    path_lease: AppPathLease | None = None
     service = None
     registry = None
     dispatcher = None
@@ -529,6 +629,7 @@ def run_desktop(
         if lease is None:
             raise RuntimeError("primary desktop admission did not retain its mutex")
 
+        path_lease = paths.acquire_lease()
         _configure_logging(paths)
         logging_configured = True
         webview_module = _load_webview()
@@ -539,6 +640,9 @@ def run_desktop(
         contract = service.validate_database_contracts()
         if contract.state == "fresh":
             contract = service.initialize_database_contracts()
+        if contract.state == "ready":
+            path_lease.bind_databases()
+            contract = service.validate_database_contracts()
         if contract.state != "ready":
             direction = contract.reset_direction or (
                 "Close NamiSync and correct the local database pair, then retry."
@@ -561,12 +665,13 @@ def run_desktop(
         window = webview_module.create_window(
             identity.window_title,
             _desktop_index_path(index_path),
-            js_api=dispatcher,
+            js_api=None,
             background_color=_opaque_window_background(),
             transparent=False,
         )
         if window is None:
             raise DesktopStartupError("NamiSync could not create its desktop window")
+        _expose_bridge_api(window, dispatcher)
         picker.bind(window)
 
         state = _StartupState()
@@ -662,6 +767,7 @@ def run_desktop(
             logging_configured=logging_configured,
             log_path=paths.log_file if logging_configured else None,
             lease=lease,
+            path_lease=path_lease,
         )
         if failure is None:
             failure = cleanup_failure
@@ -749,6 +855,15 @@ def _bridge_dispatcher(document: object, commands: object):
     return BridgeDispatcher(document=document, commands=commands)
 
 
+def _expose_bridge_api(window: object, dispatcher: object) -> None:
+    """Expose only the exact RPC function through pywebview's function table."""
+
+    def dispatch(command_json: str) -> object:
+        return dispatcher.dispatch(command_json)
+
+    window.expose(dispatch)
+
+
 def _desktop_close_hooks(
     dispatcher: object,
     registry: object,
@@ -761,9 +876,9 @@ def _desktop_close_hooks(
         registry.unsubscribe_all()
 
     return _DesktopCloseHooks(
-        reject_dispatch=dispatcher._reject_new,
+        reject_dispatch=dispatcher.begin_close,
         wake_waiters=registry.begin_close,
-        wait_for_handlers=dispatcher._wait_for_handlers,
+        wait_for_handlers=dispatcher.wait_for_handlers,
         unsubscribe_observations=unsubscribe_observations,
     )
 
@@ -875,60 +990,66 @@ def _finalize_primary(
     logging_configured: bool,
     log_path: Path | None,
     lease: DesktopInstanceLease | None,
+    path_lease: object | None = None,
 ) -> Exception | None:
     failure: Exception | None = None
+    safe_to_release_owners = service is None or service_shutdown_complete
     if service is not None and not service_shutdown_complete:
-        teardown_steps: tuple[tuple[str, Callable[[], None]], ...] = tuple(
-            (event, callback)
-            for event, callback in (
-                (
-                    "startup.dispatch_rejection_failed",
-                    dispatcher._reject_new if dispatcher is not None else None,
-                ),
-                (
-                    "startup.registry_wake_failed",
-                    registry.begin_close if registry is not None else None,
-                ),
-                (
-                    "startup.handler_wait_failed",
-                    (
-                        dispatcher._wait_for_handlers
-                        if dispatcher is not None
-                        else None
+        quiesced = True
+        if dispatcher is not None and registry is not None:
+            try:
+                _quiesce_desktop(_desktop_close_hooks(dispatcher, registry))
+            except _DesktopQuiescenceError as error:
+                events = {
+                    "dispatch_rejection": "startup.dispatch_rejection_failed",
+                    "registry_wake": "startup.registry_wake_failed",
+                    "handler_wait": "startup.handler_wait_failed",
+                    "observation_cleanup": (
+                        "startup.observation_cleanup_failed"
                     ),
-                ),
+                }
+                cause = error.__cause__
+                if not isinstance(cause, Exception):
+                    cause = error
+                _log_cleanup_failure(events[error.step], cause)
+                if failure is None:
+                    failure = cause
+                quiesced = False
+        elif registry is not None:
+            for event, callback in (
+                ("startup.registry_wake_failed", registry.begin_close),
                 (
                     "startup.observation_cleanup_failed",
-                    registry.unsubscribe_all if registry is not None else None,
+                    registry.unsubscribe_all,
                 ),
-            )
-            if callback is not None
-        )
-        for event, callback in teardown_steps:
+            ):
+                try:
+                    callback()
+                except Exception as error:
+                    _log_cleanup_failure(event, error)
+                    if failure is None:
+                        failure = error
+        if quiesced:
             try:
-                callback()
+                shutdown = service.close()
+                if not shutdown.complete:
+                    logging.getLogger("namisync").error(
+                        "startup.cleanup_incomplete unfinished_count=%d "
+                        "custody_released=%s",
+                        len(shutdown.unfinished),
+                        shutdown.custody_released,
+                    )
+                    if failure is None:
+                        failure = DesktopStartupError(
+                            "NamiSync desktop cleanup did not complete"
+                        )
+                else:
+                    safe_to_release_owners = True
             except Exception as error:
-                _log_cleanup_failure(event, error)
+                _log_cleanup_failure("startup.service_cleanup_failed", error)
                 if failure is None:
                     failure = error
-        try:
-            shutdown = service.close()
-            if not shutdown.complete:
-                logging.getLogger("namisync").error(
-                    "startup.cleanup_incomplete unfinished_count=%d "
-                    "custody_released=%s",
-                    len(shutdown.unfinished),
-                    shutdown.custody_released,
-                )
-                if failure is None:
-                    failure = DesktopStartupError(
-                        "NamiSync desktop cleanup did not complete"
-                    )
-        except Exception as error:
-            _log_cleanup_failure("startup.service_cleanup_failed", error)
-            if failure is None:
-                failure = error
-    if logging_configured:
+    if logging_configured and safe_to_release_owners:
         try:
             _shutdown_logging()
         except Exception as error:
@@ -939,7 +1060,18 @@ def _finalize_primary(
             )
             if failure is None:
                 failure = error
-    if lease is not None:
+    if path_lease is not None and safe_to_release_owners:
+        try:
+            path_lease.close()
+        except Exception as error:
+            _log_cleanup_failure(
+                "startup.path_lease_cleanup_failed",
+                error,
+                log_path=log_path,
+            )
+            if failure is None:
+                failure = error
+    if lease is not None and safe_to_release_owners:
         try:
             lease.close()
         except Exception as error:

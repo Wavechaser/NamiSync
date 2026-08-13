@@ -156,6 +156,71 @@ def test_directory_creation_is_idempotent(tmp_path: Path) -> None:
     assert paths.webview2.is_dir()
 
 
+def test_path_lease_binds_directories_and_databases_and_retries_close(
+    tmp_path: Path,
+) -> None:
+    class FakeNative:
+        def __init__(self) -> None:
+            self.opened: list[tuple[Path, bool]] = []
+            self.closed: list[object] = []
+            self.fail_once: set[object] = set()
+
+        def open(self, path: Path, *, directory: bool) -> object:
+            self.opened.append((path, directory))
+            return f"handle:{path}"
+
+        def close(self, handle: object) -> None:
+            if handle in self.fail_once:
+                self.fail_once.remove(handle)
+                raise OSError("injected close failure")
+            self.closed.append(handle)
+
+    paths = AppPaths.from_root(tmp_path / "isolated")
+    native = FakeNative()
+    lease = paths.acquire_lease(native=native)
+    paths.ledger.touch()
+    paths.history.touch()
+
+    lease.bind_databases()
+    lease.bind_databases()
+
+    assert native.opened == [
+        (paths.root, True),
+        (paths.logs, True),
+        (paths.webview2, True),
+        (paths.ledger, False),
+        (paths.history, False),
+    ]
+    failed_handle = f"handle:{paths.logs}"
+    native.fail_once.add(failed_handle)
+    with pytest.raises(OSError, match="injected close failure"):
+        lease.close()
+    assert failed_handle not in native.closed
+
+    lease.close()
+    assert native.closed.count(failed_handle) == 1
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows delete-sharing semantics")
+def test_real_path_lease_blocks_replacement_until_release(tmp_path: Path) -> None:
+    paths = AppPaths.from_root(tmp_path / "isolated")
+    paths.ensure_directories()
+    paths.ledger.touch()
+    paths.history.touch()
+    lease = paths.acquire_lease()
+    lease.bind_databases()
+    try:
+        with pytest.raises(OSError):
+            paths.logs.rename(paths.root / "moved-logs")
+        with pytest.raises(OSError):
+            paths.ledger.replace(paths.root / "moved-ledger.db")
+    finally:
+        lease.close()
+
+    paths.logs.rename(paths.root / "moved-logs")
+    paths.ledger.replace(paths.root / "moved-ledger.db")
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows junction containment")
 def test_existing_child_junction_cannot_redirect_an_artifact_outside_root(
     tmp_path: Path,

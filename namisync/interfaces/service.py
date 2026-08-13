@@ -1276,21 +1276,22 @@ class NamiSyncService:
             return self._close_once(timeout)
 
     def _close_once(self, timeout: float) -> ShutdownView:
-        with self._lock:
-            if self._closed:
-                if (
-                    self._shutdown is not None
-                    and self._shutdown.complete
-                    and getattr(self, "_runtime_closed", False)
-                    and getattr(self, "_observer_closed", False)
-                ):
-                    return self._shutdown
-            else:
-                self._closed = True
-                self._plan_selections.clear()
-                self._session_receipts.clear()
-                self._receipt_ids_by_session.clear()
-                self._visibility_receipts.clear()
+        with self._session_receipt_lifecycle_guard():
+            with self._lock:
+                if self._closed:
+                    if (
+                        self._shutdown is not None
+                        and self._shutdown.complete
+                        and getattr(self, "_runtime_closed", False)
+                        and getattr(self, "_observer_closed", False)
+                    ):
+                        return self._shutdown
+                else:
+                    self._closed = True
+                    self._plan_selections.clear()
+                    self._session_receipts.clear()
+                    self._receipt_ids_by_session.clear()
+                    self._visibility_receipts.clear()
         observer_failure: BaseException | None = None
         if not getattr(self, "_observer_closed", False):
             try:
