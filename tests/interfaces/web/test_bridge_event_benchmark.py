@@ -52,6 +52,8 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "retainedBytes" not in browser
     assert "PrivateUsage" in parent
     assert 'kind: "ready"' in browser
+    assert 'enqueueReport("presented", null)' in browser
+    assert "wait_for_accessible_text" not in parent
 
 
 def test_bridge_event_benchmark_full_ordinary_sample_batch_fits_ingress() -> None:
@@ -347,6 +349,8 @@ def _passing_evidence(benchmark):
             }
         )
     evidence = {
+        "browser_presented": True,
+        "complete": True,
         "samples": samples,
         "browser": {
             "gap_events": [],
@@ -493,6 +497,9 @@ def test_bridge_event_benchmark_rejects_incomplete_or_untrusted_evidence(
     startup_failure = copy.deepcopy(evidence)
     startup_failure["startup_errors"] = ["failed"]
     corruptions.append((startup_failure, job_memory))
+    unpresented = copy.deepcopy(evidence)
+    unpresented["browser_presented"] = False
+    corruptions.append((unpresented, job_memory))
     incomplete_memory = dict(job_memory, all_samples_complete=False)
     corruptions.append((evidence, incomplete_memory))
     blind_memory = dict(job_memory, max_sample_interval_seconds=0.5)

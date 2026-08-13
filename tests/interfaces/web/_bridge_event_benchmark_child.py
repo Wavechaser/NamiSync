@@ -44,10 +44,6 @@ class _Recorder:
         with self._lock:
             self._data["samples"].extend(samples)
 
-    def append(self, name: str, value: Any) -> None:
-        with self._lock:
-            self._data.setdefault(name, []).append(value)
-
     def startup_error(self, message: str) -> None:
         with self._lock:
             self._data["startup_errors"].append(message)
@@ -401,6 +397,8 @@ def _benchmark_specs(
             return _Payload(kind, value)
         if kind == "ready" and value is None:
             return _Payload(kind, value)
+        if kind == "presented" and value is None:
+            return _Payload(kind, value)
         if kind == "complete" and type(value) is dict:
             return _Payload(kind, MappingProxyType(dict(value)))
         raise CommandPayloadError("benchmark report payload is invalid")
@@ -419,6 +417,10 @@ def _benchmark_specs(
                 if monotonic() >= deadline:
                     raise TimeoutError("benchmark start handshake timed out")
                 sleep(0.02)
+            return {"accepted": True}
+        if payload.kind == "presented":
+            recorder.set("browser_presented", True)
+            recorder.write()
             return {"accepted": True}
         sampler_error = None
         try:
@@ -520,8 +522,6 @@ def main() -> int:
     original_task_registry = host._task_registry
     original_commands = host._production_commands
     original_log_renderer = host._log_startup_renderer
-    original_on_closing = host._DesktopCloseController._on_closing
-    original_run_attempt = host._DesktopCloseController._run_attempt
 
     def create_service(paths: AppPaths) -> NamiSyncService:
         with patch.object(service_module, "_dispatcher", lambda _runtime: dispatcher):
@@ -532,20 +532,6 @@ def main() -> int:
         sampler.bind_registry(registry)
         sampler.start()
         return registry
-
-    def on_closing(controller: object) -> bool | None:
-        recorder.append("shutdown_trace", "window_closing")
-        recorder.write()
-        return original_on_closing(controller)
-
-    def run_attempt(controller: object) -> None:
-        recorder.append("shutdown_trace", "attempt_enter")
-        recorder.write()
-        try:
-            original_run_attempt(controller)
-        finally:
-            recorder.append("shutdown_trace", "attempt_exit")
-            recorder.write()
 
     def commands(*, picker: object, slots: object, registry: object) -> object:
         production = dict(
@@ -582,20 +568,6 @@ def main() -> int:
             stack.enter_context(patch.object(host, "_production_commands", commands))
             stack.enter_context(
                 patch.object(host, "_log_startup_renderer", log_renderer)
-            )
-            stack.enter_context(
-                patch.object(
-                    host._DesktopCloseController,
-                    "_on_closing",
-                    on_closing,
-                )
-            )
-            stack.enter_context(
-                patch.object(
-                    host._DesktopCloseController,
-                    "_run_attempt",
-                    run_attempt,
-                )
             )
             exit_code = host.run_desktop(
                 AppPaths.from_root(arguments.data_dir),

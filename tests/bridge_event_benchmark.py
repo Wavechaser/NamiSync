@@ -36,12 +36,13 @@ if str(WEB_TEST_ROOT) not in sys.path:
     sys.path.insert(0, str(WEB_TEST_ROOT))
 
 from _headed_native import (  # noqa: E402
+    HeadedProcess,
+    ScenarioDeadline,
     clean_child_environment,
     close_window,
     scenario_deadline,
     start_headed_process,
     terminate_process_tree,
-    wait_for_accessible_text,
     wait_for_process,
     wait_for_window,
 )
@@ -394,6 +395,24 @@ class _JobPrivateMemorySampler:
             fixture_ended_at_seconds=self._fixture_ended_at_seconds,
             root_process_id=self._process.pid,
         )
+
+
+def _wait_for_browser_presentation(
+    path: Path,
+    process: HeadedProcess,
+    deadline: ScenarioDeadline,
+) -> dict[str, object]:
+    while True:
+        deadline.remaining()
+        evidence = _read_evidence(path)
+        browser = evidence.get("browser")
+        if type(browser) is dict and "failure" in browser:
+            raise RuntimeError("benchmark browser failed before presentation")
+        if evidence.get("browser_presented") is True:
+            return evidence
+        if process.poll() is not None:
+            raise RuntimeError("benchmark child exited before browser presentation")
+        time.sleep(0.02)
 
 
 def _job_memory_result(
@@ -1205,6 +1224,8 @@ def _summarize(
         and "failure" not in browser
         and gaps == []
         and browser.get("progress_monotonic") is True
+        and evidence.get("browser_presented") is True
+        and evidence.get("complete") is True
         and len(progress) >= 120
         and reliable_summary["p95_ms"] <= _RELIABLE_P95_MAX_MS
         and reliable_summary["maximum_ms"] <= _RELIABLE_MAX_MS
@@ -1353,11 +1374,10 @@ def main() -> int:
                 )
                 browser = evidence.get("browser")
                 if type(browser) is dict and "failure" not in browser:
-                    wait_for_accessible_text(
-                        window,
-                        "Benchmark complete",
-                        python=python,
-                        deadline=deadline,
+                    evidence = _wait_for_browser_presentation(
+                        evidence_path,
+                        process,
+                        deadline,
                     )
                 close_window(window)
                 completed = wait_for_process(process, deadline=deadline)

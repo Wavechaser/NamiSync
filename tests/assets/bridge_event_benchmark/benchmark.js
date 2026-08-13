@@ -181,6 +181,7 @@ async function finish() {
     terminal_record_count: terminalRecords,
   });
   renderText(status, "Benchmark complete. The parent harness will close this window.");
+  await enqueueReport("presented", null);
 }
 
 
