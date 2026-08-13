@@ -17,6 +17,7 @@ ASSET_ROOT = "namisync/interfaces/web/assets/"
 INITIAL_ASSETS = {
     "app.css",
     "app.js",
+    "appearance.js",
     "bridge.js",
     "components.css",
     "icons.js",

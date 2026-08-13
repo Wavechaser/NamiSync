@@ -16,7 +16,14 @@ from typing import Any
 from unittest.mock import patch
 
 
-_SCENARIOS = ("capable", "controller-failure", "main-window-failure")
+_SCENARIOS = (
+    "capable",
+    "controller-failure",
+    "main-window-failure",
+    "light-no-material",
+    "dark-no-material",
+    "high-contrast",
+)
 _FAILURE_STAGES = frozenset(
     {
         "appearance_observer",
@@ -98,6 +105,18 @@ _PAGE_PROBE = r"""
     dispatch_refusal: dispatchResponse.error.code,
     material: root.getAttribute("data-window-material"),
     theme: root.getAttribute("data-theme"),
+    high_contrast: root.getAttribute("data-high-contrast"),
+    inline_accent: root.style.getPropertyValue("--color-accent").trim(),
+    inline_accent_hover: root.style
+      .getPropertyValue("--color-accent-hover").trim(),
+    inline_accent_pressed: root.style
+      .getPropertyValue("--color-accent-pressed").trim(),
+    inline_accent_foreground: root.style
+      .getPropertyValue("--color-accent-foreground").trim(),
+    inline_accent_hover_foreground: root.style
+      .getPropertyValue("--color-accent-hover-foreground").trim(),
+    inline_accent_pressed_foreground: root.style
+      .getPropertyValue("--color-accent-pressed-foreground").trim(),
     root_background: rootStyle.backgroundColor,
     body_background: bodyStyle.backgroundColor,
     window_base: rootStyle.getPropertyValue("--color-window-base").trim(),
@@ -241,6 +260,11 @@ def _appearance_snapshot(value: object) -> dict[str, object]:
         "dark": bool(value.dark),
         "high_contrast": bool(value.high_contrast),
         "accent": str(value.accent),
+        "accent_hover": str(value.accent_hover),
+        "accent_pressed": str(value.accent_pressed),
+        "accent_foreground": str(value.accent_foreground),
+        "accent_hover_foreground": str(value.accent_hover_foreground),
+        "accent_pressed_foreground": str(value.accent_pressed_foreground),
         "build": int(value.build),
         "supports_mica": bool(value.supports_mica),
     }
@@ -509,12 +533,41 @@ def _install_native_boundary_observers(
         observations["actual_system"] = actual
         if scenario == "capable":
             selected = actual
+        elif scenario == "light-no-material":
+            selected = appearance.SystemAppearance(
+                dark=False,
+                high_contrast=False,
+                accent=actual.accent,
+                build=appearance._MICA_MINIMUM_BUILD - 1,
+                accent_hover=actual.accent_hover,
+                accent_pressed=actual.accent_pressed,
+            )
+        elif scenario == "dark-no-material":
+            selected = appearance.SystemAppearance(
+                dark=True,
+                high_contrast=False,
+                accent=actual.accent,
+                build=appearance._MICA_MINIMUM_BUILD - 1,
+                accent_hover=actual.accent_hover,
+                accent_pressed=actual.accent_pressed,
+            )
+        elif scenario == "high-contrast":
+            selected = appearance.SystemAppearance(
+                dark=actual.dark,
+                high_contrast=True,
+                accent=actual.accent,
+                build=max(actual.build, appearance._MICA_MINIMUM_BUILD),
+                accent_hover=actual.accent_hover,
+                accent_pressed=actual.accent_pressed,
+            )
         else:
             selected = appearance.SystemAppearance(
                 dark=actual.dark,
                 high_contrast=False,
                 accent=actual.accent,
                 build=max(actual.build, appearance._MICA_MINIMUM_BUILD),
+                accent_hover=actual.accent_hover,
+                accent_pressed=actual.accent_pressed,
             )
         recorder.set("selected_system", _appearance_snapshot(selected))
         recorder.set("opaque_system_color", native.opaque_background(selected))
@@ -526,10 +579,10 @@ def _install_native_boundary_observers(
         system: object,
         *,
         transparent: bool,
-    ) -> bool:
+    ) -> object:
         injected = scenario == "controller-failure" and transparent
         if injected:
-            result = False
+            result = appearance._BackgroundLanding(False, False)
         else:
             result = original_controller(
                 native,
@@ -537,16 +590,24 @@ def _install_native_boundary_observers(
                 system,
                 transparent=transparent,
             )
+        landed = appearance._require_background_landing(result)
+        succeeded = (
+            landed.controller
+            if transparent
+            else landed.form and landed.controller
+        )
         recorder.append(
             "native_operations",
             {
                 "operation": "controller_background",
                 "transparent": transparent,
                 "injected_failure": injected,
-                "result": bool(result),
+                "result": succeeded,
+                "form_landed": landed.form,
+                "controller_landed": landed.controller,
             },
         )
-        return bool(result)
+        return result
 
     def glass(
         native: object,

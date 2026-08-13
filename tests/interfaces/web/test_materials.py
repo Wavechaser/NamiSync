@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import ctypes
 import inspect
+import json
 import sys
-from threading import Event, Lock, Thread, current_thread
+from threading import Event
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -31,9 +31,9 @@ class _Hook:
         self.handlers.remove(handler)
         return self
 
-    def emit(self) -> None:
+    def emit(self, *args: object) -> None:
         for handler in tuple(self.handlers):
-            handler()
+            handler(*args)
 
 
 class _RefusingHook(_Hook):
@@ -42,73 +42,16 @@ class _RefusingHook(_Hook):
         raise RuntimeError("injected event refusal")
 
 
-class _Attributes:
+class _Core:
     def __init__(self) -> None:
-        self.updates: list[dict[str, Any]] = []
+        self.messages: list[dict[str, object]] = []
         self.updated = Event()
 
-    def update(self, values: dict[str, Any]) -> None:
-        self.updates.append(dict(values))
+    def PostWebMessageAsJson(self, value: str) -> None:
+        payload = json.loads(value)
+        assert type(payload) is dict
+        self.messages.append(payload)
         self.updated.set()
-
-
-class _BlockingAttributes(_Attributes):
-    def __init__(self) -> None:
-        super().__init__()
-        self.first_entered = Event()
-        self.release_first = Event()
-        self.second_updated = Event()
-        self._state_lock = Lock()
-        self._active = 0
-        self.max_active = 0
-
-    def update(self, values: dict[str, Any]) -> None:
-        with self._state_lock:
-            self._active += 1
-            self.max_active = max(self.max_active, self._active)
-            ordinal = len(self.updates)
-        try:
-            if ordinal == 0:
-                self.first_entered.set()
-                if not self.release_first.wait(1.0):
-                    raise RuntimeError("test publication release timed out")
-            super().update(values)
-            if len(self.updates) >= 2:
-                self.second_updated.set()
-        finally:
-            with self._state_lock:
-                self._active -= 1
-
-
-class _ExitWakeLock:
-    def __init__(self, wake) -> None:
-        self._lock = Lock()
-        self._wake = wake
-        self._publisher_exits = 0
-        self._fired = False
-
-    def __enter__(self):
-        self._lock.acquire()
-        return self
-
-    def __exit__(self, _type, _value, _traceback) -> None:
-        self._lock.release()
-        if current_thread().name != "namisync-appearance-publish":
-            return
-        self._publisher_exits += 1
-        if self._publisher_exits == 3 and not self._fired:
-            self._fired = True
-            self._wake()
-
-
-class _Dom:
-    def __init__(self) -> None:
-        self.attributes = _Attributes()
-        self.selectors: list[str] = []
-
-    def get_element(self, selector: str):
-        self.selectors.append(selector)
-        return SimpleNamespace(attributes=self.attributes)
 
 
 class _FakeNative:
@@ -119,6 +62,7 @@ class _FakeNative:
         self.apply_result = "mica"
         self.apply_error: Exception | None = None
         self.read_error: Exception | None = None
+        self.subscribe_error: Exception | None = None
         self.force_opaque_result = True
 
     def read(self) -> SystemAppearance:
@@ -151,6 +95,8 @@ class _FakeNative:
 
     def subscribe(self, callback):
         self.calls.append("subscribe")
+        if self.subscribe_error is not None:
+            raise self.subscribe_error
         self.preference_handlers.append(callback)
 
         def unsubscribe() -> None:
@@ -175,10 +121,16 @@ def _system(
 
 
 def _window() -> SimpleNamespace:
+    core = _Core()
     return SimpleNamespace(
-        native=SimpleNamespace(InvokeRequired=False),
+        native=SimpleNamespace(
+            InvokeRequired=False,
+            browser=SimpleNamespace(
+                webview=SimpleNamespace(CoreWebView2=core),
+            ),
+        ),
         events=SimpleNamespace(before_load=_Hook(), loaded=_Hook()),
-        dom=_Dom(),
+        appearance_messages=core,
     )
 
 
@@ -197,9 +149,13 @@ def _patch_native_calls(
         _system: SystemAppearance,
         *,
         transparent: bool,
-    ) -> bool:
+    ) -> appearance._BackgroundLanding:
         calls.append(("controller", transparent))
-        return transparent_succeeds if transparent else True
+        return (
+            appearance._BackgroundLanding(False, transparent_succeeds)
+            if transparent
+            else appearance._BackgroundLanding(True, True)
+        )
 
     def dwm(_window: object, attribute: int, value: int) -> bool:
         calls.append(("dwm", attribute, value))
@@ -408,7 +364,6 @@ def test_sh_g_12_pre_material_opaque_skips_unsupported_backdrop_reset(
         return True
 
     monkeypatch.setitem(sys.modules, "System.Drawing", SimpleNamespace(Color=Color))
-    monkeypatch.setattr(appearance, "_system_color", lambda _index: "#010203")
     monkeypatch.setattr(native, "_set_dwm_attribute", dwm)
     monkeypatch.setattr(native, "_set_client_glass", glass)
 
@@ -422,8 +377,8 @@ def test_sh_g_12_pre_material_opaque_skips_unsupported_backdrop_reset(
             1,
         ),
     ]
-    assert native_window.BackColor == (255, 1, 2, 3)
-    assert control.DefaultBackgroundColor == (255, 1, 2, 3)
+    assert native_window.BackColor == (255, 31, 31, 31)
+    assert control.DefaultBackgroundColor == (255, 31, 31, 31)
 
     calls.clear()
     native_window.BackColor = None
@@ -437,8 +392,8 @@ def test_sh_g_12_pre_material_opaque_skips_unsupported_backdrop_reset(
             1,
         ),
     ]
-    assert native_window.BackColor == (255, 1, 2, 3)
-    assert control.DefaultBackgroundColor == (255, 1, 2, 3)
+    assert native_window.BackColor == (255, 31, 31, 31)
+    assert control.DefaultBackgroundColor == (255, 31, 31, 31)
 
 
 def test_sh_g_12_transparency_failure_never_attempts_mica(
@@ -616,6 +571,52 @@ def test_incomplete_opaque_fallback_is_fixed_warning_and_not_confirmed(
     assert "appearance.opaque_fallback_incomplete" in caplog.messages
 
 
+def test_form_only_opaque_landing_requires_a_confirmed_glass_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = appearance._WindowsAppearanceNative()
+    monkeypatch.setattr(native, "_set_dwm_attribute", lambda *_args: True)
+    monkeypatch.setattr(native, "_set_client_glass", lambda *_args, **_kw: False)
+    monkeypatch.setattr(
+        native,
+        "_set_controller_background",
+        lambda *_args, **_kw: appearance._BackgroundLanding(True, False),
+    )
+
+    assert native.force_opaque(object(), _system()) is False
+
+
+def test_controller_opaque_landing_does_not_depend_on_glass_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = appearance._WindowsAppearanceNative()
+    monkeypatch.setattr(native, "_set_dwm_attribute", lambda *_args: True)
+    monkeypatch.setattr(native, "_set_client_glass", lambda *_args, **_kw: False)
+    monkeypatch.setattr(
+        native,
+        "_set_controller_background",
+        lambda *_args, **_kw: appearance._BackgroundLanding(False, True),
+    )
+
+    assert native.force_opaque(object(), _system()) is True
+
+
+def test_opaque_fallback_refuses_untyped_background_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = appearance._WindowsAppearanceNative()
+    monkeypatch.setattr(native, "_set_dwm_attribute", lambda *_args: True)
+    monkeypatch.setattr(native, "_set_client_glass", lambda *_args, **_kw: True)
+    monkeypatch.setattr(
+        native,
+        "_set_controller_background",
+        lambda *_args, **_kw: True,
+    )
+
+    with pytest.raises(TypeError, match="_BackgroundLanding"):
+        native.force_opaque(object(), _system())
+
+
 def test_opaque_fallback_attempts_every_rollback_after_operation_exception(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -637,9 +638,9 @@ def test_opaque_fallback_attempts_every_rollback_after_operation_exception(
         _system: SystemAppearance,
         *,
         transparent: bool,
-    ) -> bool:
+    ) -> appearance._BackgroundLanding:
         calls.append(("controller", transparent))
-        return True
+        return appearance._BackgroundLanding(True, True)
 
     monkeypatch.setattr(native, "_set_dwm_attribute", dwm)
     monkeypatch.setattr(native, "_set_client_glass", glass)
@@ -732,54 +733,60 @@ def test_partial_event_attachment_rolls_back_before_load_handler() -> None:
     assert window.events.before_load.handlers == []
 
 
+def test_initial_observation_failure_marks_startup_refused() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    native.subscribe_error = RuntimeError("injected observation refusal")
+    controller = configure_window_appearance(window, native=native)
+
+    window.events.before_load.emit()
+
+    assert controller.startup_failure is not None
+    assert str(controller.startup_failure) == (
+        "Windows appearance observation could not start"
+    )
+    assert native.preference_handlers == []
+    controller.close()
+
+
 def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -> None:
     window = _window()
     native = _FakeNative(_system(dark=True, accent="#A1B2C3"))
     controller = configure_window_appearance(window, native=native)
 
     window.events.before_load.emit()
-    assert window.dom.attributes.updates == []
+    assert window.appearance_messages.messages == []
     window.events.loaded.emit()
 
-    assert window.dom.attributes.updated.wait(1.0)
-    assert window.dom.selectors == [":root"]
-    assert window.dom.attributes.updates == [
+    assert window.appearance_messages.messages == [
         {
-            "data-theme": "dark",
-            "data-window-material": "mica",
-            "style": "--color-accent: #A1B2C3",
+            "kind": "namisync.appearance.v1",
+            "revision": 1,
+            "theme": "dark",
+            "highContrast": False,
+            "material": "mica",
+            "accent": "#A1B2C3",
+            "accentHover": "#0091F8",
+            "accentPressed": "#0067C0",
+            "accentForeground": "#000000",
+            "accentHoverForeground": "#000000",
+            "accentPressedForeground": "#FFFFFF",
         }
     ]
     controller.close()
 
 
-def test_document_publication_stays_off_the_native_ui_dispatcher() -> None:
+def test_document_publication_uses_the_native_ui_dispatcher_without_dom_eval() -> None:
     window = _window()
     native = _FakeNative(_system(dark=True, accent="#A1B2C3"))
-    publisher_threads: list[str] = []
-    original_update = window.dom.attributes.update
-
-    def update(values: dict[str, Any]) -> None:
-        publisher_threads.append(current_thread().name)
-        original_update(values)
-
-    def refuse_ui_reentry(_native_window: object, _callback: object) -> None:
-        raise AssertionError("DOM publication re-entered the native UI dispatcher")
-
-    window.dom.attributes.update = update
-    native.invoke = refuse_ui_reentry
     controller = configure_window_appearance(window, native=native)
 
     window.events.before_load.emit()
     window.events.loaded.emit()
 
-    assert window.dom.attributes.updated.wait(1.0)
-    assert publisher_threads == ["namisync-appearance-publish"]
-    assert window.dom.attributes.updates[-1] == {
-        "data-theme": "dark",
-        "data-window-material": "mica",
-        "style": "--color-accent: #A1B2C3",
-    }
+    assert ("invoke", window.native) in native.calls
+    assert window.appearance_messages.messages[-1]["accent"] == "#A1B2C3"
+    assert not hasattr(controller, "_publish_thread")
     controller.close()
 
 
@@ -812,109 +819,57 @@ def test_preference_change_republishes_after_loaded() -> None:
     controller = configure_window_appearance(window, native=native)
     window.events.before_load.emit()
     window.events.loaded.emit()
-    window.dom.attributes.updated.clear()
     native.system = _system(dark=True, accent="#ABCDEF")
 
     native.emit_preference_change()
 
-    assert window.dom.attributes.updated.wait(1.0)
-    assert window.dom.attributes.updates[-1] == {
-        "data-theme": "dark",
-        "data-window-material": "mica",
-        "style": "--color-accent: #ABCDEF",
-    }
+    assert [value["revision"] for value in window.appearance_messages.messages] == [
+        1,
+        2,
+    ]
+    assert window.appearance_messages.messages[-1]["theme"] == "dark"
+    assert window.appearance_messages.messages[-1]["accent"] == "#ABCDEF"
     controller.close()
 
 
-def test_publisher_serializes_and_finishes_with_latest_revision() -> None:
+def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     window = _window()
-    attributes = _BlockingAttributes()
-    window.dom.attributes = attributes
     native = _FakeNative(_system(accent="#111111"))
+    queued: list[object] = []
+
+    def queue_invoke(native_window: object, callback: object) -> None:
+        native.calls.append(("invoke", native_window))
+        queued.append(callback)
+
+    native.invoke = queue_invoke
     controller = configure_window_appearance(window, native=native)
     window.events.before_load.emit()
-
     window.events.loaded.emit()
-    assert attributes.first_entered.wait(1.0)
     native.system = _system(dark=True, accent="#222222")
     native.emit_preference_change()
-    attributes.release_first.set()
+    assert len(queued) == 2
+    queued[1]()
+    assert len(queued) == 3
+    queued[0]()
+    queued[2]()
 
-    assert attributes.second_updated.wait(1.0)
-    assert attributes.max_active == 1
-    assert attributes.updates == [
-        {
-            "data-theme": "light",
-            "data-window-material": "mica",
-            "style": "--color-accent: #111111",
-        },
-        {
-            "data-theme": "dark",
-            "data-window-material": "mica",
-            "style": "--color-accent: #222222",
-        },
-    ]
+    assert [value["revision"] for value in window.appearance_messages.messages] == [2]
+    assert window.appearance_messages.messages[0]["accent"] == "#222222"
     controller.close()
 
 
-def test_publisher_does_not_lose_revision_at_worker_exit_boundary() -> None:
+def test_close_invalidates_queued_publication_without_waiting() -> None:
     window = _window()
-    native = _FakeNative(_system(accent="#111111"))
-    controller = configure_window_appearance(window, native=native)
-    latest_updated = Event()
-    original_update = window.dom.attributes.update
-
-    def update(values: dict[str, Any]) -> None:
-        original_update(values)
-        if values["style"] == "--color-accent: #222222":
-            latest_updated.set()
-
-    window.dom.attributes.update = update
-
-    def wake_at_exit_boundary() -> None:
-        native.system = _system(dark=True, accent="#222222")
-        native.emit_preference_change()
-
-    controller._lock = _ExitWakeLock(wake_at_exit_boundary)
-    window.events.before_load.emit()
-    window.events.loaded.emit()
-
-    assert latest_updated.wait(1.0)
-    assert window.dom.attributes.updates[-1] == {
-        "data-theme": "dark",
-        "data-window-material": "mica",
-        "style": "--color-accent: #222222",
-    }
-    controller.close()
-
-
-def test_close_waits_for_active_publisher_to_settle() -> None:
-    window = _window()
-    attributes = _BlockingAttributes()
-    window.dom.attributes = attributes
     native = _FakeNative(_system())
+    queued: list[object] = []
+    native.invoke = lambda _window, callback: queued.append(callback)
     controller = configure_window_appearance(window, native=native)
     window.events.before_load.emit()
     window.events.loaded.emit()
-    assert attributes.first_entered.wait(1.0)
-
-    close_done = Event()
-
-    def close() -> None:
-        controller.close()
-        close_done.set()
-
-    closer = Thread(target=close)
-    closer.start()
-    assert not close_done.wait(0.05)
-    attributes.release_first.set()
-
-    assert close_done.wait(1.0)
-    closer.join(1.0)
-    assert not closer.is_alive()
-    assert controller._publish_thread is None
-    assert not controller._publish_running
-    assert appearance._PUBLISH_CLOSE_TIMEOUT_SECONDS == 1.0
+    assert len(queued) == 1
+    controller.close()
+    queued[0]()
+    assert window.appearance_messages.messages == []
 
 
 def test_close_prevents_queued_read_failure_fallback_native_call() -> None:
@@ -948,21 +903,19 @@ def test_preference_read_failure_restores_opaque_presentation() -> None:
     controller = configure_window_appearance(window, native=native)
     window.events.before_load.emit()
     window.events.loaded.emit()
-    window.dom.attributes.updated.clear()
     native.read_error = RuntimeError("injected preference read failure")
 
     native.emit_preference_change()
 
-    assert window.dom.attributes.updated.wait(1.0)
     assert any(
         isinstance(call, tuple) and call[0] == "force_opaque"
         for call in native.calls
     )
-    assert window.dom.attributes.updates[-1]["data-window-material"] == "opaque"
+    assert window.appearance_messages.messages[-1]["material"] == "opaque"
     controller.close()
 
 
-def test_unconfirmed_fallback_removes_material_claim() -> None:
+def test_unconfirmed_initial_fallback_refuses_a_readable_material_claim() -> None:
     window = _window()
     native = _FakeNative(_system())
     native.apply_error = RuntimeError("injected DWM failure")
@@ -972,12 +925,8 @@ def test_unconfirmed_fallback_removes_material_claim() -> None:
     window.events.before_load.emit()
     window.events.loaded.emit()
 
-    assert window.dom.attributes.updated.wait(1.0)
-    assert window.dom.attributes.updates[-1] == {
-        "data-theme": "light",
-        "data-window-material": None,
-        "style": "--color-accent: #123ABC",
-    }
+    assert window.appearance_messages.messages == []
+    assert controller.startup_failure is not None
     controller.close()
 
 
@@ -990,12 +939,11 @@ def test_material_failure_is_nonfatal_and_forces_opaque() -> None:
     window.events.before_load.emit()
     window.events.loaded.emit()
 
-    assert window.dom.attributes.updated.wait(1.0)
     assert any(
         isinstance(call, tuple) and call[0] == "force_opaque"
         for call in native.calls
     )
-    assert window.dom.attributes.updates[-1]["data-window-material"] == "opaque"
+    assert window.appearance_messages.messages[-1]["material"] == "opaque"
     controller.close()
 
 
@@ -1008,12 +956,11 @@ def test_invalid_material_result_is_nonfatal_and_forces_opaque() -> None:
     window.events.before_load.emit()
     window.events.loaded.emit()
 
-    assert window.dom.attributes.updated.wait(1.0)
     assert any(
         isinstance(call, tuple) and call[0] == "force_opaque"
         for call in native.calls
     )
-    assert window.dom.attributes.updates[-1]["data-window-material"] == "opaque"
+    assert window.appearance_messages.messages[-1]["material"] == "opaque"
     controller.close()
 
 
@@ -1041,7 +988,7 @@ def test_opaque_window_background_is_validated_and_fault_isolated(
     assert opaque_window_background(native=native) == "#010203"
 
 
-def test_opaque_background_uses_windows_system_color_in_every_mode(
+def test_opaque_background_uses_fluent_canvas_except_in_high_contrast(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     native = appearance._WindowsAppearanceNative()
@@ -1053,10 +1000,10 @@ def test_opaque_background_uses_windows_system_color_in_every_mode(
 
     monkeypatch.setattr(appearance, "_system_color", system_color)
 
-    assert native.opaque_background(_system()) == "#010203"
-    assert native.opaque_background(_system(dark=True)) == "#010203"
+    assert native.opaque_background(_system()) == appearance._FLUENT_LIGHT_CANVAS
+    assert native.opaque_background(_system(dark=True)) == appearance._FLUENT_DARK_CANVAS
     assert native.opaque_background(_system(high_contrast=True)) == "#010203"
-    assert indices == [appearance._COLOR_WINDOW] * 3
+    assert indices == [appearance._COLOR_WINDOW]
 
 
 def test_native_snapshot_reads_each_windows_appearance_owner(
@@ -1064,14 +1011,184 @@ def test_native_snapshot_reads_each_windows_appearance_owner(
 ) -> None:
     monkeypatch.setattr(appearance, "_read_dark_theme", lambda: True)
     monkeypatch.setattr(appearance, "_read_high_contrast", lambda: False)
-    monkeypatch.setattr(appearance, "_read_accent", lambda: "#445566")
+    monkeypatch.setattr(
+        appearance,
+        "_read_accent_palette",
+        lambda _settings: ("#445566", "#667788", "#223344"),
+    )
     monkeypatch.setattr(appearance, "_windows_build", lambda: 26100)
+    native = appearance._WindowsAppearanceNative()
+    monkeypatch.setattr(native, "_get_ui_settings", lambda: object())
 
-    assert appearance._WindowsAppearanceNative().read() == SystemAppearance(
+    assert native.read() == SystemAppearance(
         dark=True,
         high_contrast=False,
         accent="#445566",
         build=26100,
+        accent_hover="#667788",
+        accent_pressed="#223344",
+    )
+
+
+def test_windows_accent_palette_uses_all_three_ui_settings_variants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Enum:
+        @staticmethod
+        def Parse(_type: object, name: str) -> str:
+            return name
+
+    colors = {
+        "Accent": SimpleNamespace(R=1, G=2, B=3),
+        "AccentLight1": SimpleNamespace(R=4, G=5, B=6),
+        "AccentDark1": SimpleNamespace(R=7, G=8, B=9),
+    }
+    getter = SimpleNamespace(
+        Invoke=lambda _settings, arguments: colors[arguments[0]],
+    )
+    settings_type = SimpleNamespace(GetMethod=lambda _name: getter)
+    settings = SimpleNamespace(GetType=lambda: settings_type)
+    fake_type = SimpleNamespace(GetType=lambda _name: object())
+    monkeypatch.setitem(
+        sys.modules,
+        "System",
+        SimpleNamespace(Enum=Enum, Type=fake_type),
+    )
+
+    assert appearance._read_accent_palette(settings) == (
+        "#010203",
+        "#040506",
+        "#070809",
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows UISettings is native")
+def test_pinned_runtime_reads_the_live_ui_settings_palette() -> None:
+    settings = appearance._create_ui_settings()
+    from System import Enum, Type
+
+    color_type = Type.GetType(
+        "Windows.UI.ViewManagement.UIColorType, Windows.UI.ViewManagement, "
+        "ContentType=WindowsRuntime"
+    )
+    getter = settings.GetType().GetMethod("GetColorValue")
+    assert color_type is not None
+    assert getter is not None
+
+    def direct(name: str) -> str:
+        value = getter.Invoke(settings, (Enum.Parse(color_type, name),))
+        return f"#{int(value.R):02X}{int(value.G):02X}{int(value.B):02X}"
+
+    assert settings.GetType().FullName == "Windows.UI.ViewManagement.UISettings"
+    assert appearance._read_accent_palette(settings) == tuple(
+        direct(name) for name in ("Accent", "AccentLight1", "AccentDark1")
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows UISettings is native")
+def test_pinned_runtime_native_observer_attaches_and_detaches_exactly() -> None:
+    native = appearance._WindowsAppearanceNative()
+    settings = native._get_ui_settings()
+    assert settings is not None
+    assert settings.GetType().FullName == "Windows.UI.ViewManagement.UISettings"
+
+    unsubscribe = native.subscribe(lambda: None)
+    unsubscribe()
+
+
+def test_native_subscription_observes_theme_and_accent_and_unsubscribes_both(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preferences = _Hook()
+    colors = _Hook()
+    system_events = SimpleNamespace(UserPreferenceChanged=preferences)
+    monkeypatch.setitem(
+        sys.modules,
+        "Microsoft.Win32",
+        SimpleNamespace(SystemEvents=system_events),
+    )
+    native = appearance._WindowsAppearanceNative()
+    settings = SimpleNamespace()
+    monkeypatch.setattr(
+        native,
+        "_get_ui_settings",
+        lambda: settings,
+    )
+    def subscribe_colors(actual_settings: object, callback):
+        assert actual_settings is settings
+        colors.handlers.append(callback)
+
+        def unsubscribe() -> None:
+            colors.handlers.remove(callback)
+
+        return unsubscribe
+
+    monkeypatch.setattr(appearance, "_subscribe_color_values", subscribe_colors)
+    calls: list[str] = []
+
+    unsubscribe = native.subscribe(lambda: calls.append("changed"))
+    preferences.emit(None, None)
+    colors.emit(None, None)
+
+    assert calls == ["changed", "changed"]
+    unsubscribe()
+    preferences.emit(None, None)
+    colors.emit(None, None)
+    assert calls == ["changed", "changed"]
+
+
+def test_failed_accent_subscription_rolls_back_theme_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preferences = _Hook()
+    system_events = SimpleNamespace(UserPreferenceChanged=preferences)
+    monkeypatch.setitem(
+        sys.modules,
+        "Microsoft.Win32",
+        SimpleNamespace(SystemEvents=system_events),
+    )
+    native = appearance._WindowsAppearanceNative()
+    monkeypatch.setattr(native, "_get_ui_settings", lambda: object())
+    monkeypatch.setattr(
+        appearance,
+        "_subscribe_color_values",
+        lambda _settings, _callback: (_ for _ in ()).throw(
+            RuntimeError("injected accent subscription failure")
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="accent subscription failure"):
+        native.subscribe(lambda: None)
+
+    assert preferences.handlers == []
+
+
+def test_coincident_ui_settings_palette_values_are_preserved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Enum:
+        @staticmethod
+        def Parse(_type: object, name: str) -> str:
+            return name
+
+    color = SimpleNamespace(R=1, G=2, B=3)
+    getter = SimpleNamespace(Invoke=lambda _settings, _arguments: color)
+    settings = SimpleNamespace(
+        GetType=lambda: SimpleNamespace(GetMethod=lambda _name: getter)
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "System",
+        SimpleNamespace(
+            Enum=Enum,
+            Type=SimpleNamespace(GetType=lambda _name: object()),
+        ),
+    )
+
+    assert appearance._read_accent_palette(settings) == (
+        "#010203",
+        "#010203",
+        "#010203",
     )
 
 
@@ -1108,30 +1225,29 @@ def test_native_controller_background_uses_initialized_webview2_control(
         native_window,
         _system(),
         transparent=True,
-    )
+    ) == appearance._BackgroundLanding(False, True)
     assert control.DefaultBackgroundColor is transparent
     assert native._set_controller_background(
         native_window,
         _system(dark=True),
         transparent=False,
-    )
+    ) == appearance._BackgroundLanding(True, True)
     assert control.DefaultBackgroundColor == (255, 1, 2, 3)
     assert native_window.BackColor == (255, 1, 2, 3)
 
 
 @pytest.mark.parametrize(
-    ("form_succeeds", "controller_succeeds", "expected"),
+    ("form_succeeds", "controller_succeeds"),
     (
-        (True, False, True),
-        (False, True, True),
-        (False, False, False),
+        (True, False),
+        (False, True),
+        (False, False),
     ),
 )
-def test_native_opaque_background_confirms_either_occluding_path(
+def test_native_opaque_background_reports_each_occluding_path(
     monkeypatch: pytest.MonkeyPatch,
     form_succeeds: bool,
     controller_succeeds: bool,
-    expected: bool,
 ) -> None:
     class Color:
         @staticmethod
@@ -1174,7 +1290,7 @@ def test_native_opaque_background_confirms_either_occluding_path(
         NativeWindow(),
         _system(),
         transparent=False,
-    ) is expected
+    ) == appearance._BackgroundLanding(form_succeeds, controller_succeeds)
 
 
 def test_native_client_glass_uses_documented_reversible_full_frame(
@@ -1273,10 +1389,12 @@ def test_system_snapshot_rejects_non_inert_accent_values() -> None:
 def test_documented_accent_read_and_no_application_javascript_channel() -> None:
     source = inspect.getsource(appearance)
 
-    assert "DwmGetColorizationColor" in source
+    assert "UISettings" in source
+    assert 'read("AccentLight1")' in source
+    assert 'read("AccentDark1")' in source
     assert "DwmSetWindowAttribute" in source
     assert "SetSysColors" not in source
     assert "winreg.SetValue" not in source
     assert "evaluate_js" not in source
     assert "run_js" not in source
-    assert appearance._argb_color(0xCC12ABEF) == "#12ABEF"
+    assert "PostWebMessageAsJson" in source

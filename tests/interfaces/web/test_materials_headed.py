@@ -35,7 +35,14 @@ from _headed_native import (
 
 
 _CHILD = Path(__file__).with_name("_materials_gate_child.py")
-_SCENARIOS = ("capable", "controller-failure", "main-window-failure")
+_SCENARIOS = (
+    "capable",
+    "controller-failure",
+    "main-window-failure",
+    "light-no-material",
+    "dark-no-material",
+    "high-contrast",
+)
 _DWMSBT_NONE = 1
 _DWMSBT_MAINWINDOW = 2
 _DWMWA_SYSTEMBACKDROP_TYPE = 38
@@ -160,6 +167,9 @@ def test_materials_gate_faults_are_exact_and_delegate_other_native_calls() -> No
     assert "original_dwm(native, native_window, attribute, value)" in source
     assert "original_configure(window, *args, **kwargs)" in source
     assert 'scenario == "capable"' in source
+    assert 'scenario == "light-no-material"' in source
+    assert 'scenario == "dark-no-material"' in source
+    assert 'scenario == "high-contrast"' in source
     assert "selected = actual" in source
 
 
@@ -300,6 +310,8 @@ def test_sh_g_12_controller_failure_lands_opaque_before_glass(
         "transparent": True,
         "injected_failure": True,
         "result": False,
+        "form_landed": False,
+        "controller_landed": False,
     }
     assert not any(
         row["operation"] == "client_glass" and row["enabled"] is True
@@ -377,6 +389,75 @@ def test_sh_g_12_mainwindow_failure_unwinds_glass_and_lands_opaque(
         ],
         allow_one_injected=True,
     )
+    _assert_opaque_landed(result)
+    _assert_common_health(result)
+    _assert_renderer_surfaces(result)
+
+
+@pytest.mark.headed
+@pytest.mark.parametrize(
+    ("scenario", "dark", "canvas"),
+    [
+        ("light-no-material", False, "#F5F5F5"),
+        ("dark-no-material", True, "#1F1F1F"),
+    ],
+)
+def test_sh_g_12_pre_material_fallback_uses_the_selected_fluent_canvas(
+    materials_gate_evidence: _MaterialsGate,
+    scenario: str,
+    dark: bool,
+    canvas: str,
+) -> None:
+    result = materials_gate_evidence.result(scenario)
+    _assert_installed_sources(materials_gate_evidence.installed, result)
+
+    assert result["selected_system"]["dark"] is dark
+    assert result["selected_system"]["high_contrast"] is False
+    assert result["selected_system"]["supports_mica"] is False
+    assert result["opaque_system_color"] == canvas
+    assert not any(
+        row["operation"] == "dwm_attribute"
+        and row["attribute"] == _DWMWA_SYSTEMBACKDROP_TYPE
+        for row in result["native_operations"]
+    )
+    _assert_native_operation_sequence(
+        result,
+        [
+            ("client_glass", False),
+            ("dwm_attribute", 20, int(dark)),
+            ("controller_background", False),
+        ],
+    )
+    _assert_appearance_publication(result)
+    _assert_opaque_landed(result, backdrop_reset=False)
+    _assert_common_health(result)
+    _assert_renderer_surfaces(result)
+
+
+@pytest.mark.headed
+def test_sh_g_12_high_contrast_disables_mica_and_uses_system_opaque_color(
+    materials_gate_evidence: _MaterialsGate,
+) -> None:
+    result = materials_gate_evidence.result("high-contrast")
+    _assert_installed_sources(materials_gate_evidence.installed, result)
+
+    assert result["selected_system"]["high_contrast"] is True
+    assert result["selected_system"]["supports_mica"] is True
+    assert not any(
+        row["operation"] == "dwm_attribute"
+        and row["value"] == _DWMSBT_MAINWINDOW
+        for row in result["native_operations"]
+    )
+    _assert_native_operation_sequence(
+        result,
+        [
+            ("dwm_attribute", 38, _DWMSBT_NONE),
+            ("client_glass", False),
+            ("dwm_attribute", 20, 0),
+            ("controller_background", False),
+        ],
+    )
+    _assert_appearance_publication(result)
     _assert_opaque_landed(result)
     _assert_common_health(result)
     _assert_renderer_surfaces(result)
@@ -529,6 +610,7 @@ def _assert_common_health(result: dict[str, object]) -> None:
     assert result["page"]["status"] == (
         f"Materials {result['scenario']} complete"
     )
+    _assert_appearance_publication(result)
     assert result["native_final"]["ui_thread"] is True
     assert all(result["native_final"]["window_style"][name] for name in _REQUIRED_FRAME)
 
@@ -575,6 +657,11 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
             "dark",
             "high_contrast",
             "accent",
+            "accent_hover",
+            "accent_pressed",
+            "accent_foreground",
+            "accent_hover_foreground",
+            "accent_pressed_foreground",
             "build",
             "supports_mica",
         }
@@ -587,6 +674,13 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
         "dispatch_refusal",
         "material",
         "theme",
+        "high_contrast",
+        "inline_accent",
+        "inline_accent_hover",
+        "inline_accent_pressed",
+        "inline_accent_foreground",
+        "inline_accent_hover_foreground",
+        "inline_accent_pressed_foreground",
         "root_background",
         "body_background",
         "window_base",
@@ -625,7 +719,11 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
     for operation in result["native_operations"]:
         shared = {"operation", "injected_failure", "result"}
         if operation["operation"] == "controller_background":
-            assert set(operation) == shared | {"transparent"}
+            assert set(operation) == shared | {
+                "transparent",
+                "form_landed",
+                "controller_landed",
+            }
         elif operation["operation"] == "client_glass":
             assert set(operation) == shared | {"enabled"}
         else:
@@ -654,18 +752,44 @@ def _assert_native_snapshot_schema(value: dict[str, object]) -> None:
     }
 
 
-def _assert_opaque_landed(result: dict[str, object]) -> None:
+def _assert_opaque_landed(
+    result: dict[str, object],
+    *,
+    backdrop_reset: bool = True,
+) -> None:
     assert result["page"]["material"] == "opaque"
-    assert result["native_final"]["dwm_backdrop"] == {
-        "hresult": 0,
-        "value": _DWMSBT_NONE,
-    }
+    if backdrop_reset:
+        assert result["native_final"]["dwm_backdrop"] == {
+            "hresult": 0,
+            "value": _DWMSBT_NONE,
+        }
     expected = _hex_color(result["opaque_system_color"])
     assert result["native_final"]["controller_background"] == expected
     assert result["native_final"]["form_background"] == expected
     assert result["native_final"]["controller_background"]["a"] == 255
     assert not _transparent_css(result["page"]["body_background"])
     assert result["page"]["window_base"] != "transparent"
+
+
+def _assert_appearance_publication(result: dict[str, object]) -> None:
+    selected = result["selected_system"]
+    page = result["page"]
+    assert page["theme"] == ("dark" if selected["dark"] else "light")
+    assert page["high_contrast"] == str(
+        selected["high_contrast"]
+    ).lower()
+    assert page["inline_accent"] == selected["accent"]
+    assert page["inline_accent_hover"] == selected["accent_hover"]
+    assert page["inline_accent_pressed"] == selected["accent_pressed"]
+    assert page["inline_accent_foreground"] == selected["accent_foreground"]
+    assert (
+        page["inline_accent_hover_foreground"]
+        == selected["accent_hover_foreground"]
+    )
+    assert (
+        page["inline_accent_pressed_foreground"]
+        == selected["accent_pressed_foreground"]
+    )
 
 
 def _assert_renderer_surfaces(result: dict[str, object]) -> None:

@@ -373,12 +373,14 @@ class _DesktopCloseController:
         hooks: _DesktopCloseHooks,
         *,
         window_title: str,
+        close_appearance: Callable[[], None] | None = None,
         render_status: Callable[[object, _ClosePhase], None] | None = None,
         retry_prompt: Callable[[], bool] | None = None,
     ) -> None:
         self._window = window
         self._service = service
         self._hooks = hooks
+        self._close_appearance = close_appearance or (lambda: None)
         self._window_title = window_title
         self._render_status = (
             _render_close_status if render_status is None else render_status
@@ -507,6 +509,10 @@ class _DesktopCloseController:
         if not should_destroy:
             return False
         try:
+            self._close_appearance()
+        except Exception as error:
+            _log_presentation_failure("appearance.cleanup_failed", error)
+        try:
             self._window.destroy()
         except Exception as error:
             _log_cleanup_failure("shutdown.window_destroy_failed", error)
@@ -619,6 +625,18 @@ def run_desktop(
     appearance_controller = None
     logging_configured = False
     failure: Exception | None = None
+
+    def close_appearance() -> None:
+        nonlocal appearance_controller
+        controller = appearance_controller
+        if controller is None:
+            return
+        appearance_controller = None
+        try:
+            controller.close()
+        except Exception as error:
+            _log_presentation_failure("appearance.cleanup_failed", error)
+
     try:
         admission = acquire_desktop_instance(identity, native=instance_native)
         if not admission.is_primary:
@@ -676,26 +694,12 @@ def run_desktop(
 
         state = _StartupState()
 
-        def close_appearance() -> None:
-            nonlocal appearance_controller
-            controller = appearance_controller
-            if controller is None:
-                return
-            appearance_controller = None
-            try:
-                controller.close()
-            except Exception as error:
-                _log_presentation_failure("appearance.cleanup_failed", error)
-
         close_controller = _DesktopCloseController(
             window,
             service,
-            _desktop_close_hooks(
-                dispatcher,
-                registry,
-                close_appearance=close_appearance,
-            ),
+            _desktop_close_hooks(dispatcher, registry),
             window_title=identity.window_title,
+            close_appearance=close_appearance,
         )
 
         def initialize_security() -> None:
@@ -719,13 +723,26 @@ def run_desktop(
                     "appearance.configuration_failed",
                     error,
                 )
+                state.refuse(error)
+                raise
 
         def loaded_watchdog() -> None:
             attachment_error = document.attachment_error
-            if document.is_attached and attachment_error is None:
+            appearance_failure = (
+                getattr(appearance_controller, "startup_failure", None)
+                if appearance_controller is not None
+                else None
+            )
+            if (
+                document.is_attached
+                and attachment_error is None
+                and appearance_failure is None
+            ):
                 close_controller._mark_loaded()
                 return
-            if attachment_error is None:
+            if appearance_failure is not None:
+                error = appearance_failure
+            elif attachment_error is None:
                 error = DesktopStartupError(
                     "WebView2 security guards did not attach before page load"
                 )
@@ -753,8 +770,6 @@ def run_desktop(
     finally:
         if close_controller is not None:
             close_controller._wait_for_attempt()
-        if appearance_controller is not None:
-            close_appearance()
         cleanup_failure = _finalize_primary(
             service,
             dispatcher=dispatcher,
@@ -768,6 +783,7 @@ def run_desktop(
             log_path=paths.log_file if logging_configured else None,
             lease=lease,
             path_lease=path_lease,
+            close_presentation=close_appearance,
         )
         if failure is None:
             failure = cleanup_failure
@@ -867,19 +883,12 @@ def _expose_bridge_api(window: object, dispatcher: object) -> None:
 def _desktop_close_hooks(
     dispatcher: object,
     registry: object,
-    *,
-    close_appearance: Callable[[], None] | None = None,
 ) -> _DesktopCloseHooks:
-    def unsubscribe_observations() -> None:
-        if close_appearance is not None:
-            close_appearance()
-        registry.unsubscribe_all()
-
     return _DesktopCloseHooks(
         reject_dispatch=dispatcher.begin_close,
         wake_waiters=registry.begin_close,
         wait_for_handlers=dispatcher.wait_for_handlers,
-        unsubscribe_observations=unsubscribe_observations,
+        unsubscribe_observations=registry.unsubscribe_all,
     )
 
 
@@ -991,6 +1000,7 @@ def _finalize_primary(
     log_path: Path | None,
     lease: DesktopInstanceLease | None,
     path_lease: object | None = None,
+    close_presentation: Callable[[], None] | None = None,
 ) -> Exception | None:
     failure: Exception | None = None
     safe_to_release_owners = service is None or service_shutdown_complete
@@ -1049,6 +1059,13 @@ def _finalize_primary(
                 _log_cleanup_failure("startup.service_cleanup_failed", error)
                 if failure is None:
                     failure = error
+    if safe_to_release_owners and close_presentation is not None:
+        try:
+            close_presentation()
+        except Exception as error:
+            _log_cleanup_failure("startup.presentation_cleanup_failed", error)
+            if failure is None:
+                failure = error
     if logging_configured and safe_to_release_owners:
         try:
             _shutdown_logging()

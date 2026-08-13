@@ -400,12 +400,12 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "configure_security",
         "renderer",
         "configure_appearance",
-        "appearance.close",
         "reject_dispatch",
         "registry.begin_close",
         "wait_handlers",
         "registry.unsubscribe_all",
         "service.close",
+        "appearance.close",
         "shutdown_logging",
         "path_lease.close",
         "lease.close",
@@ -884,7 +884,7 @@ def test_initialized_refusal_aborts_without_destroy(
     assert reports == ["origin was unavailable"]
 
 
-def test_appearance_configuration_failure_is_nonfatal_after_security(
+def test_appearance_configuration_failure_refuses_startup_after_security(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
@@ -903,8 +903,8 @@ def test_appearance_configuration_failure_is_nonfatal_after_security(
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
 
-    assert result == 0
-    assert reports == []
+    assert result == 1
+    assert reports == ["injected material failure"]
     assert document.is_attached
     assert "service.close" in order
     assert "appearance.configuration_failed" in caplog.text
@@ -935,8 +935,45 @@ def test_appearance_cleanup_failure_is_nonfatal(
 
     assert result == 0
     assert reports == []
-    assert order.index("appearance.close") < order.index("service.close")
+    assert order.index("service.close") < order.index("appearance.close")
     assert "appearance.cleanup_failed" in caplog.text
+
+
+def test_unconfirmed_window_material_refuses_startup_before_open_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        webview.window.events.loaded.emit()
+
+    paths, order, webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=start,
+    )
+
+    class Appearance:
+        startup_failure = RuntimeError(
+            "NamiSync could not establish a readable window material"
+        )
+
+        def close(self) -> None:
+            order.append("appearance.close")
+
+    monkeypatch.setattr(
+        host,
+        "_configure_window_appearance",
+        lambda _window: Appearance(),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["NamiSync could not establish a readable window material"]
+    assert webview.window.destroy_count == 1
+    assert order.count("appearance.close") == 1
 
 
 def test_security_failure_never_attempts_appearance_configuration(
@@ -965,7 +1002,7 @@ def test_security_failure_never_attempts_appearance_configuration(
     assert configured == []
 
 
-def test_close_hooks_stop_appearance_before_observation_unsubscribe() -> None:
+def test_close_hooks_quiesce_tasks_without_retiring_appearance() -> None:
     order: list[str] = []
     dispatcher = SimpleNamespace(
         begin_close=lambda: order.append("reject"),
@@ -976,11 +1013,7 @@ def test_close_hooks_stop_appearance_before_observation_unsubscribe() -> None:
         unsubscribe_all=lambda: order.append("unsubscribe"),
     )
 
-    hooks = host._desktop_close_hooks(
-        dispatcher,
-        registry,
-        close_appearance=lambda: order.append("appearance.close"),
-    )
+    hooks = host._desktop_close_hooks(dispatcher, registry)
     hooks.reject_dispatch()
     hooks.wake_waiters()
     hooks.wait_for_handlers()
@@ -990,7 +1023,6 @@ def test_close_hooks_stop_appearance_before_observation_unsubscribe() -> None:
         "reject",
         "wake",
         "wait",
-        "appearance.close",
         "unsubscribe",
     ]
 
@@ -1227,6 +1259,7 @@ def test_close_callback_is_nonblocking_and_quiesces_in_exact_order() -> None:
         service,
         _close_hooks(order),
         window_title="NamiSync Test Close",
+        close_appearance=lambda: order.append("appearance.close"),
         render_status=lambda _window, _phase: None,
         retry_prompt=lambda: pytest.fail("healthy close prompted for retry"),
     )
@@ -1249,6 +1282,7 @@ def test_close_callback_is_nonblocking_and_quiesces_in_exact_order() -> None:
         "wait",
         "unsubscribe",
         "service.close",
+        "appearance.close",
         "destroy",
     ]
     assert service.close_threads[0] is not current_thread()
@@ -1277,6 +1311,7 @@ def test_incomplete_close_requires_explicit_retry_and_second_x_does_not_retry() 
         service,
         _close_hooks(order),
         window_title="NamiSync Test Close",
+        close_appearance=lambda: order.append("appearance.close"),
         render_status=lambda _window, phase: order.append(
             f"status.{phase.value}"
         ),
@@ -1304,6 +1339,8 @@ def test_incomplete_close_requires_explicit_retry_and_second_x_does_not_retry() 
     first_close = order.index("service.close")
     second_close = order.index("service.close", first_close + 1)
     assert first_close < order.index("status.retryable") < second_close
+    assert order.count("appearance.close") == 1
+    assert second_close < order.index("appearance.close") < order.index("destroy")
 
 
 def test_close_exception_uses_the_same_retry_path_without_force_destroy() -> None:
@@ -1325,6 +1362,7 @@ def test_close_exception_uses_the_same_retry_path_without_force_destroy() -> Non
         service,
         _close_hooks(order),
         window_title="NamiSync Test Close",
+        close_appearance=lambda: order.append("appearance.close"),
         render_status=lambda _window, _phase: None,
         retry_prompt=retry_prompt,
     )
@@ -1341,6 +1379,8 @@ def test_close_exception_uses_the_same_retry_path_without_force_destroy() -> Non
     assert window.destroyed.wait(1.0)
     assert service.close_count == 2
     assert window.destroy_count == 1
+    assert order.count("appearance.close") == 1
+    assert order.index("appearance.close") < order.index("destroy")
 
 
 def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
@@ -1371,6 +1411,7 @@ def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
             unsubscribe_observations=lambda: order.append("unsubscribe"),
         ),
         window_title="NamiSync Test Close",
+        close_appearance=lambda: order.append("appearance.close"),
         render_status=lambda _window, _phase: None,
         retry_prompt=retry_prompt,
     )
@@ -1396,8 +1437,58 @@ def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
         "wait.2",
         "unsubscribe",
         "service.close",
+        "appearance.close",
         "destroy",
     ]
+
+
+def test_observation_unsubscribe_failure_retains_appearance_until_retry() -> None:
+    order: list[str] = []
+    prompts: list[int] = []
+    unsubscribes = 0
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+
+    def unsubscribe() -> None:
+        nonlocal unsubscribes
+        unsubscribes += 1
+        order.append(f"unsubscribe.{unsubscribes}")
+        if unsubscribes == 1:
+            raise RuntimeError("synthetic observation unsubscribe failure")
+
+    def retry_prompt() -> bool:
+        prompts.append(len(prompts) + 1)
+        return len(prompts) == 2
+
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        host._DesktopCloseHooks(
+            reject_dispatch=lambda: order.append("reject"),
+            wake_waiters=lambda: order.append("wake"),
+            wait_for_handlers=lambda: order.append("wait"),
+            unsubscribe_observations=unsubscribe,
+        ),
+        window_title="NamiSync Test Close",
+        close_appearance=lambda: order.append("appearance.close"),
+        render_status=lambda _window, _phase: None,
+        retry_prompt=retry_prompt,
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    _wait_until(lambda: prompts == [1] and not controller._prompt_active)
+    assert service.close_count == 0
+    assert "appearance.close" not in order
+    assert window.destroy_count == 0
+
+    assert controller._on_closing() is False
+    assert window.destroyed.wait(1.0)
+    assert service.close_count == 1
+    assert order.count("appearance.close") == 1
+    assert order.index("service.close") < order.index("appearance.close")
+    assert order.index("appearance.close") < order.index("destroy")
 
 
 def test_bridge_rejection_precedes_a_blocked_close_status_render() -> None:
