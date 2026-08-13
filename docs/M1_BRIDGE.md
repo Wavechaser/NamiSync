@@ -4,7 +4,7 @@ Status (2026-07-30, implementation updated 2026-08-13): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
 transport chain through Slice 3 and the post-Slice-3 hardening are complete.
-GUI Break 1 and Slice 4 are reopened for the audited realignment recorded here;
+GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain.
 Stage 5.5 landed its tree substrate,
 recursive scan scope, selection semantics, and facade integration without
@@ -37,8 +37,8 @@ ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
 secured host and four-command transport are promoted into the active focused
-documents and README. GUI Break 1 and Slice 4 completion claims remain open
-until their restored ordinary and clean-wheel headed gates pass. The
+documents and README. GUI Break 1 and Slice 4 completion claims are restored
+after their ordinary, scale, security, and clean-wheel headed gates passed. The
 complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
 the remaining product-surface, second GUI-break, and packaging work, while
 slice 8 still performs the
@@ -1262,9 +1262,9 @@ the pure derived sequence is replaced rather than cached as a parameter-keyed
 family. Domain command rows and projection revisions remain with their first
 Slice 5/6 consumers.
 
-**Realignment required after audit (2026-08-13).**
+**Realignment completed after audit (2026-08-13).**
 `interfaces/web/visible_sequence.py` remains the single tree-agnostic pure
-implementation, but its completion gate is reopened. The corrected seam uses
+implementation. The corrected seam uses
 the workflow-owned array directly, retains source/visible indexes once, and
 derives compact active-tree accessibility metadata before windowing. It keeps strict pre-order structure
 validation, collapse after match retention, literal case-folded display search,
@@ -1273,8 +1273,9 @@ deepest-visible ancestor anchoring proportional to chain depth. It retains no pr
 filter vocabulary, or active-view cache. The installed frontend consumes only
 the generic `{offset,total,rows}` window through a fixed-height renderer with
 two spacers, stale-generation refusal, and a single-tab-stop operable tree.
-Plan and inventory command rows and projection ownership remain unimplemented
-until Slices 5 and 6.
+The focused scale/security regressions and real clean-wheel shell evidence pass,
+closing BR-G-34 and SH-G-7. Plan and inventory command rows and projection
+ownership remain unimplemented until Slices 5 and 6.
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
@@ -2989,8 +2990,9 @@ because its local tests are easier.
   relationship from display text. *Not
   satisfied by* filtering an already-windowed page, searching the canonical
   key, accepting an arbitrary callable as filter policy, or separate plan and
-  inventory flatteners fed the same fixtures. The prior 2026-08-13 closure is
-  invalid until the realignment tests and BR-G-42 scale evidence pass.
+  inventory flatteners fed the same fixtures. The realignment regressions and
+  Slice 4's 120,000-node scale evidence now pass; broader BR-G-42 product-view
+  measurements remain with Slices 5-7.
 - **BR-G-35 — Plan presentation preserves operation truth while compressing
   moves.** This is also the first consumer that proves a filtered move ghost
   removes its synthetic-only ancestor chain, an ordinary real operation keeps
@@ -3255,8 +3257,8 @@ a parallel pair.
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
-| GUI 1 (realignment open) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, and SH-G-13 foundations reopened; SH-G-14 remains closed; exact contract in `M1_SHELL.md` |
-| 4 (realignment open) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 |
+| GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; exact contract in `M1_SHELL.md` |
+| 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 closed |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
 | 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |

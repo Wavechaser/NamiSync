@@ -22,16 +22,14 @@ orderly-close/retry controller. The transport chain through Slice 3 is
 complete: production exposes exactly `pick_folder`, `start_plan`,
 `next_events`, and lifecycle-only `close_task`, with real paths retained behind opaque server slots, task
 observation attached before work can start, a bounded event drain, and a strict
-inert-text return sink. GUI Break 1's fixed local Fluent icon registry remains
-complete, while audit has reopened
-the token/material/motion and Slice 4 presentation claims for realignment.
-The corrected contract restores pinned Fluent neutral and Windows accent roles,
-truthful appearance fallback/lifetime, direct workflow-owned visible arrays, a
-65,536-byte literal-search field ceiling, indexed anchors, an operable virtual
-tree, and Mica-visible rail/task-card surfaces. User-facing workflow
-controls/product views are not yet available in the window. Clean-wheel Windows
-gates will re-close these foundations only after they exercise the real WebView2
-host, packaged page and design assets,
+inert-text return sink. GUI Break 1 and Slice 4 have completed their audited
+realignment: pinned Fluent neutral and live Windows accent roles, structured
+appearance fallback and retry lifetime, direct workflow-owned visible arrays,
+a 65,536-byte literal-search field ceiling behind the separately bounded bridge
+envelope, indexed anchors, an operable platform-accessible virtual tree, and
+Mica-visible rail/task-card rest surfaces. User-facing workflow controls and
+product views are not yet available in the window. Clean-wheel Windows gates
+now exercise the real WebView2 host, packaged page and design assets,
 navigation/popup and per-dispatch origin guards, runtime refusal,
 single-instance activation, isolated data root, visible database refusal,
 native picker confinement, hostile-text transport, log privacy, the component
@@ -139,6 +137,20 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 - GUI And Presentation Realignment Hardening
+
+- Closed the audited GUI Break 1 and Slice 4 regressions without adding product
+  workflow controls.
+  - **Appearance and design:** pinned the Fluent token transcription, published
+    live UISettings accents through a fixed receiver, made fallback evidence
+    structured, added a truthful opaque-page `degraded` state for an unconfirmed
+    live reapply, retained appearance through retryable close, and restored
+    transparent task rests, selected surfaces, and compatible dialog motion.
+  - **Tree core and evidence:** consumes workflow nodes directly, owns an exact
+    bounded renderer view and O(chain-depth) anchors, restores the 65,536-byte
+    literal field ceiling, and proves keyboard/platform accessibility, 120k-node
+    scale, hostile text, zoom, forced colors, geometry, and stale refusal.
 
 ### M1 Stage 6 - Post-Delivery Hardening
 

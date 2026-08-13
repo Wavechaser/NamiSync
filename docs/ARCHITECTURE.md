@@ -2025,6 +2025,16 @@ to the trusted WebView2 document. A packaged receiver validates its exact
 schema and updates only fixed root dataset/custom-property names. The page has
 no matching native-post API, and appearance messages carry no command, URL,
 path, HTML, or general-purpose property authority.
+The snapshot follows Windows light/dark/high-contrast state and live
+`UISettings` `Accent`, `AccentLight1`, and `AccentDark1` values, with fixed
+contrast-foreground roles. Publication is asynchronous `PostWebMessageAsJson`
+on the UI thread; no publisher worker, dynamic script, or whole-style sink is
+part of the boundary. Native fallback is a structured combination of backdrop,
+glass, form, and WebView-controller landing evidence and never claims opacity
+from a partial boolean. If a later system-change reapply cannot confirm either
+native path, the next exact envelope reports `degraded`; only `mica` makes the
+page base transparent, so this truthful state immediately restores the
+theme-correct opaque CSS base instead of leaving the prior snapshot visible.
 The implemented host composition acquires its fixed instance mutex before any
 local artifact or diagnostic ownership, then prepares pywebview, constructs the
 shared service, validates/initializes the coordinated database pair, and only
@@ -2071,8 +2081,11 @@ Presentation color has one dependency direction. GUI Break 1 places the exact
 primitive in the GUI Break 1 foundation. This is not a permanent ban on future
 color growth: another hardcoded or derived color requires prior product-author
 discussion plus a same-change contract, token, and evidence update.
-The same file transcribes a pinned minimum Microsoft Fluent light/dark neutral
-subset and receives distinct Windows `Accent`, `AccentLight1`, and
+The same file transcribes a minimum Microsoft Fluent light/dark neutral and
+scale subset from pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
+`32b42a5bf79c1836047dfc7fae07b1320731bce4`, with exact source hashes and
+values retained in tests. Accessible stroke roles own visible control/focus
+boundaries. It receives distinct Windows `Accent`, `AccentLight1`, and
 `AccentDark1` roles from the native appearance snapshot. Those externally
 owned inputs are provenance- and value-tested separately from the authored
 palette. `components.css` may consume semantic aliases but never raw colors or
@@ -2199,24 +2212,24 @@ service observation teardown, waking both long polls and blocked producers.
 This closes SH-G-8 and BR-G-33 while leaving production plan and inventory DOM
 closure to Slices 5 and 6.
 
-**Stage 6 GUI Break 1 status (realignment open 2026-08-13).**
+**Stage 6 GUI Break 1 status (completed and realigned 2026-08-13).**
 `interfaces/web/appearance.py` owns Windows preference probes and observation,
 native DWM/WebView material application with a theme-correct opaque fallback,
 and fixed host-to-page appearance publication. `host.py` registers appearance
 after the security boundary, retains it through retryable service shutdown, and
 closes it immediately before terminal window destruction.
-`tokens.css`, `components.css`, `icons.js`, and the fixed package-local icon
+`appearance.js`, `tokens.css`, `components.css`, `icons.js`, and the fixed package-local icon
 assets implement the color, component, motion, and icon authority described
-above. At GUI Break 1 closure the wheel added exactly those three top-level
+above. At GUI Break 1 closure the wheel added exactly those four top-level
 files, four pinned SVGs, and their `SOURCE.json` and `LICENSE.txt` records to
 Slice 2's five assets; the gallery scenario remains test-only.
-SH-G-14's fixed icon infrastructure remains closed. Audit invalidated the token,
-motion, material-publication, fallback, and headed-evidence closure; SH-G-11,
-SH-G-12, and SH-G-13 foundation claims remain open until the realigned clean
-wheel evidence passes. Their later plan/inventory clauses remain with Slices 5
-and 6.
+SH-G-11 through SH-G-14 foundations are closed. The realigned clean-wheel
+gallery and material scenarios prove the pinned source, accessible strokes,
+distinct task-card states, compatible dialog exit, live UISettings publication,
+structured capable/fallback landing, and appearance lifetime. Their later
+plan/inventory clauses remain with Slices 5 and 6.
 
-**Stage 6 Slice 4 status (realignment open 2026-08-13).**
+**Stage 6 Slice 4 status (completed and realigned 2026-08-13).**
 `interfaces/web/visible_sequence.py` is the sole tree-agnostic presentation
 owner for strict workflow-array validation, collapse/search/caller-decided
 filter retention, exact 1..256 windows, and deepest-visible ancestor anchoring.
@@ -2229,11 +2242,15 @@ generations before reading their payload. `rail.js` and `panels.js` add only
 labelled task-navigation and work regions with truthful empty text;
 they create no task, session, plan, inventory, or history state. The bridge
 allowlist remains exactly `pick_folder`, `start_plan`, `next_events`, and
-lifecycle-only `close_task`. The prior roles-only keyboard claim, 256-byte
-search limit, repeated anchor allocation, and opaque rail invalidate closure.
-BR-G-34 and SH-G-7 close again only after the restored scale, accessibility,
-geometry, hostile-text, and clean-wheel evidence passes. Slice 5 remains the first owner of the real
-plan surface, and broader Stage 6/beta closure remains open.
+lifecycle-only `close_task`. Python is the sole structural-validation/window
+authority and emits the exact `{offset,total,rows}` wire view; JavaScript
+performs no duplicate hierarchy or field validation. The audit's roles-only
+keyboard claim, 256-byte search limit, repeated anchor allocation, duplicate
+full-tree DTO, and opaque rail have been removed. The 120,000-node scale
+regression and real clean-wheel keyboard, platform-accessibility, geometry,
+hostile-text, forced-colors, zoom, and stale-generation evidence pass, closing
+BR-G-34, BR-G-2's Stage 6 clause, and SH-G-7. Slice 5 remains the first owner
+of the real plan surface, and broader Stage 6/beta closure remains open.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.

@@ -9,10 +9,10 @@ transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
 runtime refusal, popup/navigation guards, single-instance behavior, native
 picker path confinement, committed-origin refusal, hostile text, and logging
 privacy; Slice 3 evidence additionally covers transactional observation,
-bounded drain behavior, recovery, and repeated bridge readiness. The icon
-foundation remains complete; audit reopened GUI Break 1's token, motion, and
-native-material evidence and Slice 4's visible-sequence/tree/shell evidence for
-realignment. User-facing plan, inventory, history,
+bounded drain behavior, recovery, and repeated bridge readiness. GUI Break 1
+and Slice 4 have completed their audited token/material/motion and
+visible-sequence/tree/shell realignment with ordinary, scale, and real
+clean-wheel headed evidence. User-facing plan, inventory, history,
 and control surfaces remain; `M1_SHELL.md` owns their implementation order and
 beta-package closure.
 
@@ -101,7 +101,7 @@ Frontend assets are setuptools package data and use plain same-origin ES
 modules. At Slice 2 closure the wheel contained exactly `index.html`, `app.css`,
 `app.js`, `bridge.js`, and `render.js`; `render.js` owns the strict
 `textContent` sink. GUI Break 1 adds exactly `tokens.css`, `components.css`,
-`icons.js`, four pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
+`icons.js`, `appearance.js`, four pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
 records under `assets/icons/`. The component-gallery scenario remains test-only
 and absent from the wheel.
 There is no npm, framework, bundler, transpiler, source map, inline script, or
@@ -111,8 +111,7 @@ third-party notices, and exact-source release material close in the final beta
 packaging slice.
 
 GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
-establishes the design-token foundation. Its token/material completion is
-currently reopened for audited realignment. `tokens.css` is the only source file
+establishes the completed design-token foundation. `tokens.css` is the only source file
 allowed to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`,
 and available `light` palette values specified by `M1_SHELL.md`; yellow and
 purple deliberately have no authored `light` input in the current foundation.
@@ -123,7 +122,10 @@ semantic aliases for statuses and operation categories; neutral roles use a
 pinned Microsoft Fluent light/dark subset and interactive accent roles use the
 observed Windows `Accent`, `AccentLight1`, and `AccentDark1` palette. These
 externally owned design inputs are tested separately from the 13
-NamiSync-authored primitives.
+NamiSync-authored primitives. The neutral and scale values are transcribed from
+pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
+`32b42a5bf79c1836047dfc7fae07b1320731bce4`; exact source hashes are retained
+in test fixtures and accessible stroke roles own visible control boundaries.
 `components.css`
 consumes only those aliases for badges, banners, status pills, progress
 indicators, and related controls; Slice 4-7 renderers consume
@@ -149,6 +151,19 @@ There is no remote load, icon font, runtime registration, inline/generated SVG,
 or data-derived class/asset path. Icons remain decorative beside visible text;
 icon-only controls require their own accessible name. Later slices extend the
 fixed set only when their real controls make a glyph necessary.
+
+Native appearance observes Windows light/dark/high-contrast state and live
+`UISettings` `Accent`, `AccentLight1`, and `AccentDark1` values. A fixed
+revisioned envelope reaches packaged `appearance.js` through UI-thread
+`PostWebMessageAsJson`; only its exact schema and fixed CSSOM sinks are valid.
+Opaque fallback requires sufficient structured backdrop/glass/form/controller
+landing evidence. A live reapply that confirms neither native path publishes
+`degraded`, which returns the page itself to its theme-correct opaque base;
+startup still refuses an initially unconfirmed material. Appearance remains
+subscribed through incomplete or exceptional close attempts and closes once
+only after complete service close, before destruction. Shared dialogs likewise
+retain their ordinary lifecycle:
+`data-closing` runs the compatible exit state before the owner calls `close()`.
 
 M1 does not bundle or automatically invoke the Evergreen WebView2 Bootstrapper.
 The supported target remains Windows 11; missing WebView2 is refused read-only
@@ -357,12 +372,14 @@ evidence live in `M1_SHELL.md` Slice 4 and SH-G-7.
 The Slice 4 frame has two labelled structural regions beneath the header: task
 navigation stating that no tasks are available and a work region stating that
 no task is selected. Landmarks are not gratuitous tab stops; the first real
-tree is the operable widget. The reopened clean-installed-wheel SH-G-7 run uses
+tree is the operable widget. The completed clean-installed-wheel SH-G-7 run uses
 native keyboard events, platform accessibility inspection, native 200% WebView
 zoom, and forced-colors emulation against production assets. It verifies focus order and visibility,
 usable stacked reflow without horizontal overflow, system-color focus,
 hostile and long labels through `render.js`, exact 28-pixel rows, no more than
-256 rows plus two spacers, and stale-generation refusal. It adds no bridge
+256 rows plus two spacers, and stale-generation refusal. Python is the sole
+validation/window authority and emits the exact renderer view; JavaScript does
+not duplicate structural validation. It adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.

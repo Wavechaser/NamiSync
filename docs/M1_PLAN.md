@@ -1082,19 +1082,20 @@ regression watchlist, reference-machine latency/memory budgets, and 100k-file /
 120k-node / one-million-history-item scale envelope live in `M1_BRIDGE.md` and
 are normative for this stage.
 
-**Implementation checkpoint (reopened 2026-08-13).** Stage 6's secured host,
+**Implementation checkpoint (realigned 2026-08-13).** Stage 6's secured host,
 Slice 3 transport, and post-Slice-3 hardening remain complete, including the
 exact four-command table (`pick_folder`, `start_plan`, `next_events`, and
-lifecycle-only `close_task`). Audit reopened GUI Break 1's token/material/motion
-foundation and Slice 4's pure visible-sequence, operable-tree, and shell claims.
-The realignment restores Fluent neutral and Windows accent roles, truthful
-appearance lifetime/fallback, a direct structural view over workflow-owned
-arrays, a 65,536-byte literal display-search field ceiling, indexed anchors,
-server-derived virtual-tree accessibility metadata, and Mica-visible rail/task
-surfaces. GUI Break 1, BR-G-34, and SH-G-7 close again only after ordinary,
-scale, security, and clean-wheel headed evidence passes. Slice 5 remains the
-first real plan surface; the remaining product UI, release, and beta claims
-stay open.
+lifecycle-only `close_task`). GUI Break 1 and Slice 4 are closed again after
+ordinary, scale, security, and clean-wheel headed evidence. The result uses a
+pinned Fluent token transcription, live UISettings accent publication,
+structured readable fallback evidence, and window-owned appearance lifetime
+through retryable shutdown. The pure presentation core consumes workflow-owned
+nodes directly, owns the exact renderer wire view and 1..256 window, accepts a
+65,536-byte literal-search field behind the bridge's separately bounded whole
+envelope, resolves anchors in O(chain depth), and supplies an operable platform
+accessibility tree. The rail and resting task cards expose Mica; selected cards
+are opaque. Slice 5 remains the first real plan surface; the remaining product
+UI, release, and beta claims stay open.
 
 ---
 

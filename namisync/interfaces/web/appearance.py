@@ -106,7 +106,7 @@ class SystemAppearance:
 @dataclass(frozen=True)
 class _Presentation:
     system: SystemAppearance
-    material: Literal["mica", "opaque"] | None
+    material: Literal["mica", "opaque", "degraded"] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,14 +686,17 @@ class WindowAppearanceController:
         with self._lock:
             if self._closed:
                 return
-            self._presentation = _Presentation(system, material)
+            presented_material = (
+                "degraded" if self._loaded and material is None else material
+            )
+            self._presentation = _Presentation(system, presented_material)
             self._presentation_revision += 1
             if not self._loaded:
                 self._startup_failure = (
                     RuntimeError(
                         "NamiSync could not establish a readable window material"
                     )
-                    if material is None
+                    if presented_material is None
                     else None
                 )
             should_publish = publish and self._loaded

@@ -8,9 +8,9 @@ post-execution compound verification. The CLI and Stage 5.5
 facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` remains
 the decision and acceptance record for the implemented Stage 5.5 prerequisite
 and active Stage 6 headed desktop shell. Stage 6's host and transport through
-Slice 3 plus later transport hardening are implemented. GUI Break 1's icon
-foundation remains complete; audit reopened its token/material/motion claims
-and Slice 4's shared presentation/tree/shell claims for realignment. Product plan,
+Slice 3 plus later transport hardening are implemented. GUI Break 1 and Slice
+4 have completed their audited token/material/motion and shared
+presentation/tree/shell realignment. Product plan,
 inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
 delivery order and beta-package closure.
 

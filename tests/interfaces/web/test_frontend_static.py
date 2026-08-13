@@ -254,6 +254,12 @@ def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
         "--color-accent-pressed-foreground",
     ]
 
+    tokens = assets["tokens.css"]
+    assert tokens.count(':root[data-window-material="mica"]') == 1
+    assert ':root[data-window-material="degraded"]' not in tokens
+    mica = tokens.split(':root[data-window-material="mica"]', 1)[1]
+    assert "--color-window-base: transparent;" in mica.split("}", 1)[0]
+
 
 def test_static_sink_guard_rejects_dynamic_and_authority_attributes() -> None:
     assert _attribute_sink_hits('node.setAttribute(name, value);') == (
@@ -285,11 +291,11 @@ def test_appearance_receiver_accepts_only_latest_exact_inert_envelope() -> None:
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout)
     assert result == {
-        "revision": 2,
+        "revision": 6,
         "dataset": {
-            "theme": "dark",
+            "theme": "light",
             "highContrast": "false",
-            "windowMaterial": "mica",
+            "windowMaterial": "degraded",
         },
         "properties": {
             "--color-accent": "#123456",

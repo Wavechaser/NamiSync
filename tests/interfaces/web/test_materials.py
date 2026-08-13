@@ -930,6 +930,34 @@ def test_unconfirmed_initial_fallback_refuses_a_readable_material_claim() -> Non
     controller.close()
 
 
+def test_unconfirmed_live_fallback_publishes_degraded_opaque_page_state() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    native.system = _system(dark=True, accent="#ABCDEF")
+    native.apply_error = RuntimeError("injected live DWM failure")
+    native.force_opaque_result = False
+
+    native.emit_preference_change()
+
+    assert window.appearance_messages.messages[-1] == {
+        "kind": "namisync.appearance.v1",
+        "revision": 2,
+        "theme": "dark",
+        "highContrast": False,
+        "material": "degraded",
+        "accent": "#ABCDEF",
+        "accentHover": "#0091F8",
+        "accentPressed": "#0067C0",
+        "accentForeground": "#000000",
+        "accentHoverForeground": "#000000",
+        "accentPressedForeground": "#FFFFFF",
+    }
+    controller.close()
+
+
 def test_material_failure_is_nonfatal_and_forces_opaque() -> None:
     window = _window()
     native = _FakeNative(_system())

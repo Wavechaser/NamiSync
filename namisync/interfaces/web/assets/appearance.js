@@ -34,7 +34,11 @@ function isAppearanceMessage(value, previousRevision) {
     && value.revision > previousRevision
     && (value.theme === "light" || value.theme === "dark")
     && typeof value.highContrast === "boolean"
-    && (value.material === "mica" || value.material === "opaque")
+    && (
+      value.material === "mica"
+      || value.material === "opaque"
+      || value.material === "degraded"
+    )
     && COLOR.test(value.accent)
     && COLOR.test(value.accentHover)
     && COLOR.test(value.accentPressed)

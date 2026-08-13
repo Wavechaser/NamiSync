@@ -17,9 +17,9 @@ transport, real native picker confinement, committed-origin refusal, and
 hostile-text/privacy return path. The Slice 3 event drain, transactional
 pre-schedule observation, bounded task registry, and reincarnation recovery are
 implemented. GUI Break 1's token, component, icon, motion, and native-material
-foundation and Slice 4's presentation core/shell frame are reopened for the
-audited realignment; the fixed icon infrastructure remains complete. Slice 5
-follows their restored gates. NamiSync remains version `0.1.0` until
+foundation and Slice 4's presentation core/shell frame have completed their
+audited realignment and restored headed gates. Slice 5 is the next delivery
+slice. NamiSync remains version `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
 
@@ -312,6 +312,7 @@ namisync/interfaces/web/
             info_20_regular.svg
             warning_20_regular.svg
         app.js
+        appearance.js
         bridge.js
         render.js
         tree.js
@@ -341,9 +342,9 @@ At Slice 2 closure the exact shipped asset set is `index.html`, `app.css`,
 not ship until their owning slices. `render.js` owns the strict production
 `textContent` sink. The browserless probes and headed `transport_gate/` page
 remain under `tests/assets/` and are excluded from package data.
-GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, and the exact four
-SVGs plus source/license records under `assets/icons/`; its component-gallery
-scenario remains test-only and absent from the wheel.
+GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, `appearance.js`,
+and the exact four SVGs plus source/license records under `assets/icons/`; its
+component-gallery scenario remains test-only and absent from the wheel.
 
 The production host resolves its index from package resources. A
 Python-construction-only override accepts an absolute local index path for
@@ -1105,7 +1106,7 @@ envelope surface `Gap`, replay only the tail still retained, and reconcile
 terminal truth. Missing reliable events remain visibly missing; recovery never
 pretends full continuity or justifies invented replay headroom.
 
-### GUI Break 1 - Establish the look (realignment open)
+### GUI Break 1 - Establish the look (completed 2026-08-13)
 
 A GUI Break is a deliberate stop to build and calibrate the visual system, not a
 fraction of an assembly line. Break 1 builds the foundation every later surface
@@ -1120,8 +1121,11 @@ Deliverables:
 1. The native material mechanism (Lane H): the DWM Mica backdrop, immersive dark
    title bar, and transparent WebView2 background at Slice 1's UI-thread hook,
    with the high-contrast and no-material fallbacks from section 1.9 and its own
-   real-stack reality test. The security guards and construction order are
-   unchanged by material application.
+   real-stack reality test. Native `UISettings` supplies live `Accent`,
+   `AccentLight1`, and `AccentDark1` updates through a fixed revisioned
+   `PostWebMessageAsJson` envelope and the packaged `appearance.js` receiver.
+   The security guards and construction order are unchanged by material
+   application.
 2. `tokens.css`: the Fluent color/type/spacing/radius/elevation and motion
    tokens, theme-agnostic, with system light/dark/high-contrast following and the
    accent read-and-observe plumbing. It also owns the exact 13 authored palette
@@ -1162,14 +1166,15 @@ retain only the cross-slice production-surface clauses. Exit criterion:
 tokens correct in light, dark, and high contrast;
 the gallery covers every control state and the fixed icon foundation; Mica and
 its fallback are proven on the pinned stack; the design language is frozen.
-The icon-infrastructure boundary remains closed. The token, material, motion,
-and shell-surface claims were reopened after audit found that their tests had
-encoded reduced requirements, blocked accent publication, and incomplete
-fallback/lifecycle evidence. SH-G-11/12/13 foundation closes again only after
-the restored ordinary and clean-wheel headed gates pass; their later
-production plan/inventory clauses remain with Slices 5 and 6.
+The icon-infrastructure boundary remains closed. The audit found reduced token,
+material, motion, and shell-surface requirements, blocked accent publication,
+and incomplete fallback/lifecycle evidence. The realignment replaced those
+claims with pinned Fluent provenance, live UISettings publication, structured
+fallback landing evidence, appearance ownership through retryable shutdown,
+and computed headed evidence. SH-G-11/12/13 foundations are closed again; their
+later production plan/inventory clauses remain with Slices 5 and 6.
 
-### Slice 4 - Presentation core and shell frame (realignment open)
+### Slice 4 - Presentation core and shell frame (completed 2026-08-13)
 
 Implement `visible_sequence.py` plus the minimal rail/panel/tree frontend.
 Plan and inventory share the same pure flatten/window/search/filter/anchor
@@ -1274,9 +1279,9 @@ stale error results cannot replace newer intent. The current valid window stays
 rendered while pending; teardown cancels the timer. Slice 4 records and tests
 the generation primitive but adds no dormant search command or timer.
 
-The previously recorded completion is reopened. Slice 4 and SH-G-7 close again
-only after the realigned pure-core, keyboard/accessibility, geometry, hostile
-text, scale, packaging, and clean-wheel headed evidence all pass. The product
+The realigned pure-core, scale, keyboard/platform-accessibility, geometry,
+hostile-text, packaging, and clean-wheel headed evidence has passed. Slice 4,
+BR-G-34, BR-G-2's Stage 6 clause, and SH-G-7 are closed again. The product
 surfaces and their remaining cross-slice gates stay with Slices 5-7.
 
 ### Slice 5 - Sync surface
@@ -1485,7 +1490,8 @@ carry the `headed` marker; all are collected by the release command.
   measurement matching `ROW_H`. The clean-installed-wheel Slice 4 scenario also
   proves the real empty shell exposes labelled task navigation and a work
   region without fake data, preserves keyboard focus and usable reflow at 200%
-  zoom, and retains visible system-color focus cues under forced colors. The
+  zoom, retains visible system-color focus cues under forced colors, and reads
+  the operable hierarchy from Chromium's platform accessibility tree. The
   same scenario imports the installed `tree.js`, renders complete hostile and
   long display strings through its production text path, measures every row at
   28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,
@@ -1542,7 +1548,12 @@ carry the `headed` marker; all are collected by the release command.
   swatch without the required product-author decision and same-change contract,
   token, and evidence update, or
   a scan that allows inline color in `components.css` or a surface module.
-  The headed gallery resolves production `index.html`, `tokens.css`, and
+  The neutral/type/spacing/radius/motion/elevation subset is transcribed from
+  pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
+  `32b42a5bf79c1836047dfc7fae07b1320731bce4`; exact source-file hashes and
+  values are retained as test fixtures. Accessible Fluent stroke roles, not
+  decorative subtle strokes, own control and focus boundaries. The headed
+  gallery resolves production `index.html`, `tokens.css`, and
   `components.css` from a clean installed wheel and records their exact bytes;
   a source-tree stylesheet or copied/reimplemented component sheet is not
   release evidence. The gallery page itself remains tests-only and absent from
@@ -1554,14 +1565,23 @@ carry the `headed` marker; all are collected by the release command.
   renders on an opaque card rather than compositing the material behind scrolling
   rows; under high contrast Mica is disabled and the high-contrast palette is
   honored; on a pre-material system or an injected transparency failure the
-  window falls back to an opaque Fluent neutral base.
+  window falls back to a theme-correct opaque Fluent neutral base. A fallback
+  is claimed only from structured backdrop/glass/form/controller landing
+  evidence sufficient to prove that the client is readable. If a later live
+  reapply confirms neither native path, the receiver publishes `degraded` and
+  returns the page base itself to the theme-correct opaque neutral rather than
+  preserving a stale Mica claim. Live UISettings changes publish the exact
+  accent rest/hover/pressed and contrasting foreground roles through the fixed
+  revisioned appearance receiver.
   Material application changes neither the security guards nor the construction
   order. *Not satisfied by* a documentation lookup, a mock window, or a test that
   never exercises the fallback.
 - **SH-G-13 — Motion honors the guardrails.** With `prefers-reduced-motion` set,
   non-essential transitions reduce or stop; a static/DOM check proves no
   animation or transition is bound to virtualized-row creation or removal in the
-  plan or inventory tree. *Not satisfied by* asserting the media query exists
+  plan or inventory tree. A dialog remains open while its compatible
+  `data-closing` exit transition runs, then closes through the ordinary dialog
+  lifecycle. *Not satisfied by* asserting the media query exists
   without a reduced-motion render, or by checking only a non-virtualized list.
 
 - **SH-G-14 — Icons are local, closed, and token-colored.** The installed wheel
@@ -1589,10 +1609,10 @@ carry the `headed` marker; all are collected by the release command.
 
 SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
 themes with contrast, Mica apply/degrade, and reduced-motion with the motion
-tokens — is proven on GUI Break 1's gallery, while their production-surface
-clauses (no raw color in a surface renderer, the virtualized tree on an opaque
-card, and no animation on row recycling) finalize as `tree.js` and the
-plan/inventory renderers land in Slices 4-6.
+tokens — is proven on GUI Break 1's gallery. Slice 4 closes the shared-shell
+clauses (no raw color in its renderer, the virtualized tree on an opaque card,
+and no animation on row recycling); the production plan/inventory clauses
+finalize with their renderers in Slices 5 and 6.
 SH-G-14's closed registry and package foundation lands entirely in GUI Break 1;
 later glyph choices are ordinary Slice 4-7 surface work and must not reopen its
 runtime or asset-authority boundaries.

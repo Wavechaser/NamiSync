@@ -45,6 +45,7 @@ receive({ data: { ...base, revision: 1, accent: "#999999" } });
 receive({ data: { ...base, revision: 3, accent: "red;url(x)" } });
 receive({ data: { ...base, revision: 4, unexpected: true } });
 receive({ data: Object.assign(Object.create(null), { ...base, revision: 5 }) });
+receive({ data: { ...base, revision: 6, material: "degraded", theme: "light" } });
 
 const result = {
   revision: receiver.revision(),

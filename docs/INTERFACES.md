@@ -8,9 +8,8 @@ classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and the hardened
 `pick_folder`/`start_plan`/`next_events`/`close_task` transport are implemented.
-GUI Break 1's icon infrastructure remains implemented. Audit reopened its
-token/material/motion foundation and Slice 4's visible-sequence, operable-tree,
-and shell evidence for realignment; the user-facing
+GUI Break 1 and Slice 4 have completed their audited token/material/motion,
+visible-sequence, operable-tree, and shell realignment; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
 latent.
 
@@ -470,9 +469,9 @@ remain boundary-owned. The installed `tree.js` consumes only
 fixed spacers through the inert text sink, and rejects stale generations. Its
 single-tab-stop focus model consumes server-derived parent/child/sibling
 metadata. Structural task/work landmarks are labelled but not focus targets;
-the transparent rail and inactive task-card surface expose Mica. BR-G-34 and
-SH-G-7 remain reopened until direct workflow-node, scale, keyboard/platform
-accessibility, geometry, and clean-wheel evidence passes. Slices 5 and 6 remain the first owners of domain
+the transparent rail and inactive task-card surface expose Mica. Direct
+workflow-node, scale, keyboard/platform-accessibility, geometry, and clean-wheel
+evidence has passed, closing BR-G-34 and SH-G-7. Slices 5 and 6 remain the first owners of domain
 projection commands and real rows.
 
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
