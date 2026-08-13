@@ -400,7 +400,7 @@ def _node_executable() -> Path | None:
     return candidates[0] if candidates else None
 
 
-def test_br_g_32_timed_out_pre_ready_attempt_cannot_dispatch_later() -> None:
+def test_br_g_32_start_plan_browser_identity_and_timeout_contract() -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the no-dependency bridge probe")
@@ -416,6 +416,54 @@ def test_br_g_32_timed_out_pre_ready_attempt_cannot_dispatch_later() -> None:
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "source_id": "slot-" + "1" * 32,
+            "target_id": "slot-" + "2" * 32,
+            "deletion_policy": None,
+        },
+        {
+            "command_id": "3" * 32,
+            "source_id": "slot-" + "1" * 32,
+            "target_id": "slot-" + "2" * 32,
+            "deletion_policy": None,
+            "revision": 0,
+        },
+    ],
+)
+def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
+    payload: dict[str, object],
+) -> None:
+    class Slots:
+        def resolve_pair(self, *args: object) -> tuple[str, str]:
+            del args
+            raise AssertionError("invalid start_plan reached slot authority")
+
+    class Registry:
+        def replay_start(self, *args: object) -> TaskStartView | None:
+            del args
+            raise AssertionError("invalid start_plan reached task authority")
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=production_command_specs(
+            picker=lambda: None,
+            slots=Slots(),
+            registry=Registry(),
+        ),
+    )
+
+    assert dispatcher.dispatch(
+        _request(command="start_plan", payload=payload)
+    ) == _failure(
+        REQUEST_ID,
+        "invalid_payload",
+        ERRORS["invalid_payload"],
+    )
 
 
 def test_br_g_33_browser_drain_generation_recovers_without_duplication() -> None:

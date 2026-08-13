@@ -365,8 +365,38 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
     assert "private" not in repr(payload)
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "source_id": SOURCE_ID,
+            "target_id": TARGET_ID,
+            "deletion_policy": None,
+        },
+        {
+            "command_id": COMMAND_ID,
+            "source_id": SOURCE_ID,
+            "target_id": TARGET_ID,
+            "deletion_policy": None,
+            "revision": 0,
+        },
+    ],
+)
+def test_br_g_32_start_plan_requires_command_id_and_forbids_revision(
+    payload: dict[str, object],
+) -> None:
+    commands, slots, registry = _commands()
+
+    with pytest.raises(CommandPayloadError):
+        commands["start_plan"].invoke(payload)
+
+    assert slots.resolved == []
+    assert registry.replays == []
+    assert registry.calls == []
+
+
 @pytest.mark.parametrize("retirement", ["expiry", "eviction"])
-def test_uncertain_start_replays_before_volatile_slots_are_resolved(
+def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
     retirement: str,
 ) -> None:
     class Clock:

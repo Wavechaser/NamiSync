@@ -427,7 +427,7 @@ queued preview, committing a selection other than the one on screen.
 - Selection state is owned by the **service**, keyed by plan request id, not
   by the web adapter. Ownership below the bridge is what lets execution
   validate atomically.
-- Every mutation supplies the **expected revision**. On match, the server
+- Every selection mutation supplies the **expected revision**. On match, the server
   applies it and returns the new revision plus the current selection digest.
   On mismatch it applies nothing and returns an explicit **conflict** with the
   current revision, and the client re-reads. Responses are never silently
@@ -1975,7 +1975,10 @@ ids back, and can never promote `display` to filesystem authority.
 
 An exact `start_plan` replay is checked against its retained wire intent before
 these volatile slots are resolved, so an earned receipt survives slot expiry or
-eviction. A different policy under the same command id remains a conflict.
+eviction. Its identity is the gesture `command_id`, the exact original
+source-slot/target-slot/deletion-policy wire intent, and the resolved
+source/target/deletion intent. A different wire or resolved intent under the
+same command id remains a conflict.
 
 The immutable production command mapping is exactly `pick_folder`,
 `start_plan`, `next_events`, `release_terminal_session`, and `close_task`.
