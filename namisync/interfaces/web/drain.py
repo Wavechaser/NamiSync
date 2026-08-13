@@ -89,6 +89,17 @@ class TaskCloseView:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskSessionReleaseView:
+    task_id: str
+    session_id: str
+
+    def __post_init__(self) -> None:
+        if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
+            raise ValueError("task id is invalid")
+        _require_opaque_id(self.session_id, "task session id")
+
+
+@dataclass(frozen=True, slots=True)
 class TaskEventUpdateView:
     update_type: str
     event: SessionEventView
@@ -154,8 +165,12 @@ class _TaskCleanup:
     drop_done: bool = False
 
     @property
+    def session_complete(self) -> bool:
+        return self.unsubscribe_done and self.close_done
+
+    @property
     def complete(self) -> bool:
-        return self.unsubscribe_done and self.close_done and self.drop_done
+        return self.session_complete and self.drop_done
 
 
 @dataclass(slots=True)
@@ -181,6 +196,7 @@ class _TaskState:
     cleanup_in_progress: bool = False
     closed: bool = False
     terminal_delivered: bool = False
+    session_release_started: bool = False
     recovery_caller: int | None = None
 
     def sink(self, generation: int) -> Callable[[SessionUpdate], None]:
@@ -569,6 +585,8 @@ class TaskRegistry:
             try:
                 if failure is None:
                     self._service.unsubscribe(session_id)
+                    with task.condition:
+                        task.observation_unsubscribed = True
             finally:
                 with task.condition:
                     if task.generation == generation or task.closing:
@@ -607,21 +625,90 @@ class TaskRegistry:
                 continue
             with task.condition:
                 session_id = task.session_id
-                already = task.observation_unsubscribed
+                cleanup = task.cleanup
+                already = task.observation_unsubscribed or (
+                    cleanup is not None and cleanup.unsubscribe_done
+                )
             if session_id is None or already:
                 continue
             self._service.unsubscribe(session_id)
             with task.condition:
                 if task.session_id == session_id:
                     task.observation_unsubscribed = True
+                    if task.cleanup is not None:
+                        task.cleanup.unsubscribe_done = True
+
+    def release_terminal_session(
+        self,
+        task_id: str,
+        session_id: str,
+    ) -> TaskSessionReleaseView:
+        """Release terminal stream authority while retaining the task and plan."""
+
+        self._require_task_identity(task_id, session_id)
+        receipt_key = (task_id, session_id)
+        with self._condition:
+            close_receipt = self._close_receipts.get(receipt_key)
+            if close_receipt is not None:
+                self._close_receipts.move_to_end(receipt_key)
+                return TaskSessionReleaseView(task_id, session_id)
+            task = self._tasks.get(task_id)
+        if task is None or task.compensation is not None:
+            raise TaskUnavailableError("task is unavailable")
+
+        with task.condition:
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+            if not task.terminal_delivered:
+                raise TaskUnavailableError("task terminal record was not drained")
+            while task.cleanup_in_progress:
+                task.condition.wait()
+            cleanup = task.cleanup
+            if task.closed or (
+                cleanup is not None and cleanup.session_complete
+            ):
+                return TaskSessionReleaseView(task_id, session_id)
+            task.cleanup_in_progress = True
+            task.session_release_started = True
+            task.generation += 1
+            if task.active_drain is not None:
+                task.active_drain.superseded = True
+            task.condition.notify_all()
+            while task.transition:
+                task.condition.wait()
+            request_id = task.request_id
+            if request_id is None:
+                task.cleanup_in_progress = False
+                task.condition.notify_all()
+                raise TaskUnavailableError("task has not completed admission")
+            cleanup = task.cleanup
+            if cleanup is None:
+                cleanup = _TaskCleanup(
+                    session_id,
+                    request_id,
+                    unsubscribe_done=task.observation_unsubscribed,
+                )
+                task.cleanup = cleanup
+
+        try:
+            self._attempt_session_release(task, cleanup)
+            if not cleanup.session_complete:
+                raise TaskUnavailableError("task session release remains pending")
+        except BaseException:
+            with task.condition:
+                task.cleanup_in_progress = False
+                task.condition.notify_all()
+            raise
+
+        with task.condition:
+            task.cleanup_in_progress = False
+            task.condition.notify_all()
+        return TaskSessionReleaseView(task_id, session_id)
 
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
-        """Release one task's observer, terminal session, plan, and receipt."""
+        """Explicitly release one terminal task and its retained plan."""
 
-        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
-            raise TaskUnavailableError("task is unavailable")
-        if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
-            raise TaskUnavailableError("task is unavailable")
+        self._require_task_identity(task_id, session_id)
         receipt_key = (task_id, session_id)
         with self._condition:
             receipt = self._close_receipts.get(receipt_key)
@@ -664,10 +751,14 @@ class TaskRegistry:
         with task.condition:
             cleanup = task.cleanup
             if cleanup is None:
-                cleanup = _TaskCleanup(session_id, request_id)
+                cleanup = _TaskCleanup(
+                    session_id,
+                    request_id,
+                    unsubscribe_done=task.observation_unsubscribed,
+                )
                 task.cleanup = cleanup
         try:
-            self._attempt_task_cleanup(cleanup)
+            self._attempt_task_cleanup(task, cleanup)
             if not cleanup.complete:
                 raise TaskUnavailableError("task cleanup remains pending")
         except BaseException:
@@ -693,10 +784,7 @@ class TaskRegistry:
         return result
 
     def _require_task(self, task_id: str, session_id: str) -> _TaskState:
-        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
-            raise TaskUnavailableError("task is unavailable")
-        if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
-            raise TaskUnavailableError("task is unavailable")
+        self._require_task_identity(task_id, session_id)
         with self._condition:
             task = self._tasks.get(task_id)
         if task is None:
@@ -707,7 +795,18 @@ class TaskRegistry:
 
     @staticmethod
     def _require_live_locked(task: _TaskState, session_id: str) -> None:
-        if task.closing or task.session_id != session_id:
+        if (
+            task.closing
+            or task.session_release_started
+            or task.session_id != session_id
+        ):
+            raise TaskUnavailableError("task is unavailable")
+
+    @staticmethod
+    def _require_task_identity(task_id: str, session_id: str) -> None:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
             raise TaskUnavailableError("task is unavailable")
 
     def _mint_task_id(self) -> str:
@@ -754,13 +853,26 @@ class TaskRegistry:
                 task.compensation_in_progress = False
                 task.condition.notify_all()
 
-    def _attempt_task_cleanup(self, cleanup: _TaskCleanup) -> None:
+    def _attempt_session_release(
+        self,
+        task: _TaskState,
+        cleanup: _TaskCleanup,
+    ) -> None:
         if not cleanup.unsubscribe_done:
             self._service.unsubscribe(cleanup.session_id)
             cleanup.unsubscribe_done = True
+            with task.condition:
+                task.observation_unsubscribed = True
         if not cleanup.close_done:
             self._service.close_session(cleanup.session_id)
             cleanup.close_done = True
+
+    def _attempt_task_cleanup(
+        self,
+        task: _TaskState,
+        cleanup: _TaskCleanup,
+    ) -> None:
+        self._attempt_session_release(task, cleanup)
         if not cleanup.drop_done:
             self._service.drop_plan(cleanup.request_id)
             cleanup.drop_done = True
@@ -801,6 +913,7 @@ __all__ = [
     "TaskIntentConflictError",
     "TaskRecordUpdateView",
     "TaskRegistry",
+    "TaskSessionReleaseView",
     "TaskStartView",
     "TaskUnavailableError",
 ]

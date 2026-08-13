@@ -549,8 +549,11 @@ def test_task_recovery_and_release_budgets_are_explicit() -> None:
     ).read_text(encoding="utf-8")
 
     assert "COMMAND_POLICY_CONTRACT.close_task.timeout" in source
+    assert "COMMAND_POLICY_CONTRACT.release_terminal_session.timeout" in source
     assert "const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([" in source
+    assert "const SESSION_RELEASE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);" in source
     assert "const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);" in source
+    assert '"release_terminal_session"' in source
     assert '"close_task"' in source
     assert "beginTaskRelease(task);" in source
 

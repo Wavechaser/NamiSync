@@ -4,7 +4,7 @@ Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
 seams. The classified launchers, wheel-packaged bootstrap assets, secured
 product-host composition, and exact `pick_folder`/`start_plan`/`next_events`/
-`close_task`
+`release_terminal_session`/`close_task`
 transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
 runtime refusal, popup/navigation guards, single-instance behavior, native
 picker path confinement, committed-origin refusal, hostile text, and logging
@@ -257,9 +257,9 @@ delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
 through it.
 
 Slice 2 introduced exactly two production actions, `pick_folder` and
-`start_plan`; Slice 3 added `next_events`; audit hardening added the
-lifecycle-only `close_task`. The current immutable production table therefore
-has exactly four rows.
+`start_plan`; Slice 3 added `next_events`; audit hardening added
+`release_terminal_session` and explicit `close_task`. The current immutable
+production table therefore has exactly five rows.
 `pick_folder` is intentionally user-paced: it has no application timeout or
 automatic retry, and cancel is a normal `null` result. A selection becomes a
 server-held `slot-<32-lowercase-hex>` plus display-only text. `start_plan`
@@ -287,8 +287,10 @@ including a canceled or failed navigation, and discard in-flight return
 callbacks. `pywebviewready` is therefore a repeatable event: initialization is
 idempotent, does not duplicate listeners, and every firing ensures exactly one
 drain is re-armed per nonterminal task. A matching leading recovery `Gap`
-remains visible while its retained tail is applied; accepting a terminal record
-stops re-arming without releasing the task-owned recovery artifacts early.
+remains visible while its retained tail is applied. A terminal record stops
+re-arming only after the consumer presents it successfully; session release
+then removes observation/replay authority while retaining the plan and browser
+task until explicit close.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
@@ -398,12 +400,14 @@ session state and remains distinct from **Paused** until custody actually
 releases. Repeat pause/resume is disabled during that drain, cancellation stays
 available, and the next state may be paused or terminal if the active operation
 settles the run first.
-Closing a plan-only or already-terminal task needs no confirmation: it invokes
-the Stage 6 facade's task-owned artifact release, then drops the adapter's
-presentation projections; retained history remains. Closing queued or busy work
-confirms, asks for the service-supported control, waits for the terminal record,
-then performs the same release. It never treats a transient progress flag as
-completion.
+Successful terminal presentation automatically releases only the observation
+and dispatcher session. The plan, task identity, and presentation state remain
+available for review. Closing a plan-only or already-terminal task needs no
+confirmation: explicit close invokes the Stage 6 facade's task-owned artifact
+release, then drops the adapter's presentation projections; retained history
+remains. Closing queued or busy work confirms, asks for the service-supported
+control, waits for the terminal record, then performs the same explicit close.
+It never treats a transient progress flag as completion.
 
 Sync remains a two-session interaction: plan first, review its immutable
 fingerprint-bound intent, choose a dependency-closed selection, then start
@@ -476,7 +480,8 @@ Contrast and no-color-only signaling remain requirements in every theme.
   pywebview import. An injected headed-test root receives every local artifact
   and leaves the real per-user directory untouched.
 - A bounded coalescing event drain preserves reliable item/terminal ordering,
-  makes gaps visible, and closes all observations cleanly on task close and
+  makes gaps visible, releases terminal sessions without disposing of their
+  reviewed tasks, and closes all remaining observations on explicit close or
   app shutdown.
 - Repeated task create/plan-only-close, terminal-close, and busy-cancel-close
   cycles release all process-local task artifacts and keep service, runtime,

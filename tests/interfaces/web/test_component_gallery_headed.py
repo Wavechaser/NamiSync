@@ -749,6 +749,7 @@ def _run_gallery_mode(
         "close_task",
         "next_events",
         "pick_folder",
+        "release_terminal_session",
         "start_plan",
     ]
     assert result["combined_mapping_type"] == "mappingproxy"

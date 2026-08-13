@@ -585,12 +585,14 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "pick_folder",
         "start_plan",
         "next_events",
+        "release_terminal_session",
         "close_task",
     )
     assert tuple(dispatcher._commands) == (
         "pick_folder",
         "start_plan",
         "next_events",
+        "release_terminal_session",
         "close_task",
     )
     window = SimpleNamespace(

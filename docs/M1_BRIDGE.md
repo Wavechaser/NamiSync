@@ -36,7 +36,7 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host and four-command transport are promoted into the active focused
+secured host and five-command transport are promoted into the active focused
 documents and README. GUI Break 1 and Slice 4 completion claims are restored
 after their ordinary, scale, security, and clean-wheel headed gates passed. The
 complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
@@ -1656,16 +1656,15 @@ disabled during the drain, cancellation remains available, and either `paused`
 or a legal terminal state may follow. This is presentation of an existing
 bridge value, not a payload/schema addition.
 
-**Slice 3 supersedes the earlier immediate-close rule for plan sessions.** Once
-its terminal record is delivered, a plan session is no longer live work and is
-not rendered as an active rail entry, but its task retains the dispatcher
-record, replay, observation recovery source, and service command receipt until
-task close. A lost reliable or terminal bridge response must be recoverable
-from those authorities; closing the session immediately would destroy them and
-would force a forbidden drain-response cache, acknowledgment, or second
-receipt. The plan *artifact* still lives independently in the runtime keyed by
-request id. Task close unsubscribes, calls `close_session`, then drops that
-artifact; ordinary terminal delivery does none of those early.
+**Terminal delivery releases session authority, not the reviewed task.** Until
+the terminal record has been presented successfully, the task retains the
+dispatcher record, replay, observation recovery source, and service command
+receipt so a lost bridge response remains recoverable without another response
+cache or acknowledgment. The browser then calls
+`release_terminal_session`, which unsubscribes and closes that dispatcher
+session while retaining the task id, request id, start receipt, presentation
+state, capacity slot, and plan artifact. Only an explicit `close_task` drops the
+plan and removes the adapter task.
 
 For a compound execute-then-verify run, the two phases are one session
 producing one result with ordered `PhaseResultView`s. The rail summarizes the
@@ -1697,10 +1696,10 @@ precondition documented rather than growing a control policy.
    which is the same rule in both places.
 1. Request the service-supported control (cancel).
 2. The card enters a visible **closing** state and remains on the rail.
-3. **On the terminal record — not the terminal event** — unsubscribe, close
-   the session, and invoke the task-owned facade artifact release. Plan-only
-   and already-terminal tasks invoke that release immediately; the adapter
-   separately drops its presentation projections.
+3. **On the terminal record — not the terminal event** — acknowledge browser
+   presentation by releasing the observation and session. Keep the task and its
+   reviewed artifact until explicit task close, which invokes the task-owned
+   facade artifact release and drops the adapter's presentation projections.
 
 Step 3's distinction is a real race, not pedantry. `SessionObserver` delivers
 the `Terminal` event to the sink and only *afterward* calls
@@ -1979,7 +1978,8 @@ these volatile slots are resolved, so an earned receipt survives slot expiry or
 eviction. A different policy under the same command id remains a conflict.
 
 The immutable production command mapping is exactly `pick_folder`,
-`start_plan`, `next_events`, and `close_task`. `test_report` is a test-owned constructor-only
+`start_plan`, `next_events`, `release_terminal_session`, and `close_task`.
+`test_report` is a test-owned constructor-only
 harness row: the harness builds a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
 environment, page value, or bridge request can enable it, and it has no product
@@ -1987,6 +1987,12 @@ retry class. Later plan, inventory, settings, and history commands
 are not reserved or allowlisted until their owning slices
 land each row with its schema, receipt/revision rule, deadline, retry policy,
 and gate.
+
+`release_terminal_session` accepts exactly `{task_id, session_id}` and returns
+those exact echoed ids. It is a mutating lifecycle acknowledgment with no
+`command_id` or revision, a 30-second deadline, and finite delayed retries that
+retain the identical payload. `close_task` remains the separate explicit
+disposal operation.
 
 `bridge.js` exports the neutral browser transport primitive
 `dispatchInteractive(command, payload, validator)`. It accepts only a 1--64
@@ -2039,13 +2045,15 @@ Unknown/closed or mismatched task/session authority is
 `task_unavailable`; a competing observation attach/recovery generation is
 `observation_conflict`. The fixed messages live in `M1_SHELL.md`.
 
-The adapter retains at most 48 tasks. Once a terminal record is delivered,
-`close_task` stepwise unsubscribes, closes the session, drops the plan, and
-removes the task and start receipt. A 48-entry close-receipt LRU makes an
-uncertain success retryable with the identical payload; admission compensation
-uses the same retryable step model. Browser drain recovery and task-release
-retry both use finite delayed schedules and become visibly refused when their
-budget is exhausted rather than rearming without bound.
+The adapter retains at most 48 tasks. After a terminal record has been returned
+by a drain, `release_terminal_session` stepwise unsubscribes and closes the
+session, then refuses further drain/recovery while retaining the plan, task,
+start receipt, and capacity slot. `close_task` completes either unfinished step,
+drops the plan, and alone removes the task and start receipt. A 48-entry
+close-receipt LRU also proves success to a delayed release retry. Browser drain,
+session-release, and explicit-close recovery use finite delayed schedules and
+become visibly retryable when their budget is exhausted; no uncertainty path
+implicitly disposes of the task.
 
 Task start is single-flight per `(command_id, resolved source, resolved target,
 deletion policy)`. One provisional adapter task exists while the facade call is
@@ -2920,7 +2928,8 @@ because its local tests are easier.
   proves every public view type round-trips through the production JSON codec
   and the one exposed `dispatch(command_json)`; the two Slice 2 rows are exactly
   `pick_folder` and `start_plan`, and the current allowlist adds Slice 3's
-  `next_events` plus lifecycle-only `close_task`, while `test_report` is possible only through test-owned
+  `next_events` plus lifecycle-only `release_terminal_session` and
+  `close_task`, while `test_report` is possible only through test-owned
   constructor composition. Unknown versions, commands,
   fields, malformed opaque ids, and input above 65,536 UTF-8 bytes are refused
   before handler invocation. Errors expose no filesystem path or internals even
@@ -3073,9 +3082,11 @@ because its local tests are easier.
   by matching only the final headline of an uncomplicated run.
 - **BR-G-41 — Task and process lifecycle lose neither work nor authority.** A
   reviewed task exists without live work; a terminal plan session is absent
-  from the active rail but its record/replay/receipt and plan artifact survive
-  until task close so drain recovery retains authority; compound phases remain
-  one session with independent counters. Closing a live task asks once, enters
+  from the active rail. Its record/replay authority survives until successful
+  terminal presentation, then session release removes that live authority while
+  the plan artifact, task/start identity, and presentation state survive until
+  explicit task close; compound phases remain one session with independent
+  counters. Closing a live task asks once, enters
   visible closing, cancels, waits for a terminal **record**, then unsubscribes,
   closes, and releases the exact task-owned plan, selection, execution/inventory
   detail, view/projection, session, and receipt artifacts; refusal leaves it

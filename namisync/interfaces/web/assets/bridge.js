@@ -8,6 +8,7 @@ const COMMAND_POLICY_JSON = `{
   "pick_folder": {"timeout": "interactive", "retry": "none"},
   "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none"},
+  "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded"},
   "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded"}
 }`;
 export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
@@ -22,6 +23,8 @@ const START_PLAN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
 const DRAIN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.timeout];
+const SESSION_RELEASE_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.release_terminal_session.timeout];
 const TASK_CLOSE_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.close_task.timeout];
 const DRAIN_MAX_UPDATES = 64;
@@ -33,6 +36,7 @@ const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([
   1000,
   2000,
 ]);
+const SESSION_RELEASE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
 const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
 const SESSION_STATES = Object.freeze([
   "pending",
@@ -164,7 +168,7 @@ window.addEventListener("pywebviewready", () => {
   resolveReadiness = undefined;
   resolve?.();
   for (const task of taskDrains.values()) {
-    if (!task.stopped && !task.terminal) {
+    if (!task.stopped && !task.terminal && task.pendingTerminalUpdate === null) {
       task.busyRearmUsed = false;
       task.transportFailures = 0;
       rearmTask(task, task.lastAcceptedSequence + 1);
@@ -191,6 +195,30 @@ export class StartPlanUncertainError extends BridgeTransportError {
   constructor(retry) {
     super("The plan-start response could not be confirmed.");
     this.name = "StartPlanUncertainError";
+    this.retry = retry;
+  }
+}
+
+export class TerminalPresentationError extends BridgeTransportError {
+  constructor(retry) {
+    super("The completed task could not be displayed. Retry displaying it.");
+    this.name = "TerminalPresentationError";
+    this.retry = retry;
+  }
+}
+
+export class TerminalSessionReleaseError extends BridgeTransportError {
+  constructor(retry) {
+    super("The completed task session could not be released. Retry the release.");
+    this.name = "TerminalSessionReleaseError";
+    this.retry = retry;
+  }
+}
+
+export class TaskCloseUncertainError extends BridgeTransportError {
+  constructor(retry) {
+    super("The task-close response could not be confirmed.");
+    this.name = "TaskCloseUncertainError";
     this.retry = retry;
   }
 }
@@ -317,6 +345,9 @@ export function startTaskDrain(
     busyRearmUsed: false,
     transportFailures: 0,
     terminal: false,
+    pendingTerminalUpdate: null,
+    terminalPresentationInProgress: false,
+    sessionReleased: false,
     releaseControl: null,
     releaseTimer: null,
     releaseEpoch: 0,
@@ -327,7 +358,10 @@ export function startTaskDrain(
   rearmTask(task, null);
 
   return () => {
-    if (!task.stopped && task.terminal) {
+    if (
+      !task.stopped &&
+      (task.terminal || task.pendingTerminalUpdate !== null)
+    ) {
       return;
     }
     if (!task.stopped) {
@@ -337,6 +371,53 @@ export function startTaskDrain(
       taskDrains.delete(taskId);
     }
   };
+}
+
+export async function closeTask(taskId, sessionId) {
+  const task = taskDrains.get(taskId);
+  if (
+    typeof taskId !== "string" ||
+    typeof sessionId !== "string" ||
+    !TASK_PATTERN.test(taskId) ||
+    !ID_PATTERN.test(sessionId) ||
+    task?.sessionId !== sessionId ||
+    task.stopped
+  ) {
+    throw new TypeError("closeTask requires a retained task and session");
+  }
+
+  const submit = async () => {
+    for (
+      let attempt = 0;
+      attempt <= TASK_CLOSE_RECOVERY_DELAYS_MS.length;
+      attempt += 1
+    ) {
+      try {
+        const result = await dispatchAttempt(
+          "close_task",
+          Object.freeze({ task_id: taskId, session_id: sessionId }),
+          (value) => validateTaskIdentityResult(value, task),
+          TASK_CLOSE_TIMEOUT_MS,
+        );
+        stopTask(task);
+        return result;
+      } catch (error) {
+        if (
+          !(error instanceof BridgeTransportError) &&
+          !isUncertainTaskCommandFailure(error)
+        ) {
+          throw error;
+        }
+        if (attempt >= TASK_CLOSE_RECOVERY_DELAYS_MS.length) {
+          throw new TaskCloseUncertainError(submit);
+        }
+        await delay(TASK_CLOSE_RECOVERY_DELAYS_MS[attempt]);
+      }
+    }
+    throw new TaskCloseUncertainError(submit);
+  };
+
+  return submit();
 }
 
 function startPlanAttempt(payload) {
@@ -507,7 +588,7 @@ function validateStartPlanResult(value) {
 }
 
 function rearmTask(task, replayFrom, delayMs = 0) {
-  if (task.stopped || task.terminal) {
+  if (task.stopped || task.terminal || task.pendingTerminalUpdate !== null) {
     return;
   }
   task.epoch += 1;
@@ -525,7 +606,12 @@ function rearmTask(task, replayFrom, delayMs = 0) {
     task.armScheduled = false;
     task.armTimer = null;
     task.scheduledEpoch = null;
-    if (task.stopped || task.terminal || taskDrains.get(task.taskId) !== task) {
+    if (
+      task.stopped ||
+      task.terminal ||
+      task.pendingTerminalUpdate !== null ||
+      taskDrains.get(task.taskId) !== task
+    ) {
       return;
     }
     try {
@@ -594,11 +680,7 @@ function settleTaskDrain(task, active, result) {
     }
     const update = result.updates[index];
     if (update.update_type === "record") {
-      task.terminal = true;
-      if (!deliverTaskUpdate(task, update)) {
-        return;
-      }
-      beginTaskRelease(task);
+      presentTerminalUpdate(task, update);
       return;
     }
     const event = update.event;
@@ -626,6 +708,45 @@ function settleTaskDrain(task, active, result) {
     }
   }
   rearmTask(task, null);
+}
+
+function presentTerminalUpdate(task, update) {
+  if (task.stopped || task.terminal || taskDrains.get(task.taskId) !== task) {
+    return;
+  }
+  if (task.pendingTerminalUpdate === null) {
+    task.pendingTerminalUpdate = freezeJsonValue(cloneJsonValue(update));
+  }
+  if (task.terminalPresentationInProgress) {
+    return;
+  }
+  task.terminalPresentationInProgress = true;
+  try {
+    task.acceptUpdate(cloneJsonValue(task.pendingTerminalUpdate));
+  } catch (_error) {
+    task.terminalPresentationInProgress = false;
+    reportTaskRefusal(
+      task,
+      new TerminalPresentationError(() => retryTerminalPresentation(task)),
+    );
+    return;
+  }
+  task.terminalPresentationInProgress = false;
+  task.pendingTerminalUpdate = null;
+  task.terminal = true;
+  beginTaskRelease(task);
+}
+
+function retryTerminalPresentation(task) {
+  if (
+    task.stopped ||
+    task.terminal ||
+    task.pendingTerminalUpdate === null ||
+    taskDrains.get(task.taskId) !== task
+  ) {
+    return;
+  }
+  presentTerminalUpdate(task, task.pendingTerminalUpdate);
 }
 
 function deliverTaskUpdate(task, update) {
@@ -673,11 +794,39 @@ function refuseTaskDrain(task, active, error) {
 
 function stopTaskWithRefusal(task, error) {
   stopTask(task);
+  reportTaskRefusal(task, error);
+}
+
+function reportTaskRefusal(task, error) {
   try {
     task.acceptRefusal(error);
   } catch (_callbackError) {
-    // The task is already stopped; a presentation failure cannot restart it.
+    // Presentation failure cannot mutate retained native authority.
   }
+}
+
+function cloneJsonValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneJsonValue(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const clone = {};
+    for (const [key, item] of Object.entries(value)) {
+      clone[key] = cloneJsonValue(item);
+    }
+    return clone;
+  }
+  return value;
+}
+
+function freezeJsonValue(value) {
+  if (value !== null && typeof value === "object") {
+    for (const item of Object.values(value)) {
+      freezeJsonValue(item);
+    }
+    Object.freeze(value);
+  }
+  return value;
 }
 
 function stopTask(task) {
@@ -699,12 +848,20 @@ function stopTask(task) {
 }
 
 function beginTaskRelease(task) {
+  if (task.releaseControl !== null || task.releaseTimer !== null) {
+    return;
+  }
   task.releaseFailures = 0;
   runTaskRelease(task);
 }
 
 function runTaskRelease(task) {
-  if (task.stopped || !task.terminal || taskDrains.get(task.taskId) !== task) {
+  if (
+    task.stopped ||
+    !task.terminal ||
+    task.sessionReleased ||
+    taskDrains.get(task.taskId) !== task
+  ) {
     return;
   }
   const epoch = task.releaseEpoch + 1;
@@ -712,10 +869,10 @@ function runTaskRelease(task) {
   let control;
   try {
     control = createDispatchAttempt(
-      "close_task",
+      "release_terminal_session",
       Object.freeze({ task_id: task.taskId, session_id: task.sessionId }),
-      (value) => validateTaskCloseResult(value, task),
-      TASK_CLOSE_TIMEOUT_MS,
+      (value) => validateTaskIdentityResult(value, task),
+      SESSION_RELEASE_TIMEOUT_MS,
     );
   } catch (_error) {
     refuseTaskRelease(task, epoch, new BridgeTransportError());
@@ -732,6 +889,7 @@ function isCurrentTaskRelease(task, epoch) {
   return (
     !task.stopped &&
     task.terminal &&
+    !task.sessionReleased &&
     taskDrains.get(task.taskId) === task &&
     task.releaseEpoch === epoch
   );
@@ -742,7 +900,7 @@ function settleTaskRelease(task, epoch) {
     return;
   }
   task.releaseControl = null;
-  stopTask(task);
+  task.sessionReleased = true;
 }
 
 function refuseTaskRelease(task, epoch, error) {
@@ -754,12 +912,18 @@ function refuseTaskRelease(task, epoch, error) {
     error instanceof BridgeTransportError ||
     isUncertainTaskCommandFailure(error);
   if (!uncertain) {
-    stopTaskWithRefusal(task, error);
+    reportTaskRefusal(
+      task,
+      new TerminalSessionReleaseError(() => beginTaskRelease(task)),
+    );
     return;
   }
   const failureIndex = task.releaseFailures;
-  if (failureIndex >= TASK_CLOSE_RECOVERY_DELAYS_MS.length) {
-    stopTaskWithRefusal(task, new BridgeTransportError());
+  if (failureIndex >= SESSION_RELEASE_RECOVERY_DELAYS_MS.length) {
+    reportTaskRefusal(
+      task,
+      new TerminalSessionReleaseError(() => beginTaskRelease(task)),
+    );
     return;
   }
   task.releaseFailures += 1;
@@ -769,7 +933,7 @@ function refuseTaskRelease(task, epoch, error) {
     if (isCurrentTaskRelease(task, expectedEpoch)) {
       runTaskRelease(task);
     }
-  }, TASK_CLOSE_RECOVERY_DELAYS_MS[failureIndex]);
+  }, SESSION_RELEASE_RECOVERY_DELAYS_MS[failureIndex]);
 }
 
 function isUncertainTaskCommandFailure(error) {
@@ -779,12 +943,18 @@ function isUncertainTaskCommandFailure(error) {
   );
 }
 
-function validateTaskCloseResult(value, task) {
+function validateTaskIdentityResult(value, task) {
   return (
     isExactObject(value, ["task_id", "session_id"]) &&
     value.task_id === task.taskId &&
     value.session_id === task.sessionId
   );
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 function validateTaskDrainResult(value, task, drainId) {

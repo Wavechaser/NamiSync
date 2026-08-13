@@ -88,30 +88,45 @@ Object.defineProperty(globalThis, "crypto", {
 const testWindow = new TestWindow();
 globalThis.window = testWindow;
 const requests = [];
+const releaseRequests = [];
 const closeRequests = [];
+let releaseFailuresRemaining = 0;
 let closeFailuresRemaining = 0;
-const closeRefusalCodes = [];
-let inspectCloseDispatch = null;
+const releaseRefusalCodes = [];
+let inspectReleaseDispatch = null;
 testWindow.pywebview = {
   api: {
     dispatch(requestJson) {
       const pending = deferred();
       const request = JSON.parse(requestJson);
       const invocation = { request, ...pending };
-      if (request.command === "close_task") {
+      if (
+        request.command === "release_terminal_session" ||
+        request.command === "close_task"
+      ) {
         assert.deepEqual(Object.keys(request.payload).sort(), [
           "session_id",
           "task_id",
         ]);
-        closeRequests.push(invocation);
+        const isRelease = request.command === "release_terminal_session";
+        (isRelease ? releaseRequests : closeRequests).push(invocation);
         queueMicrotask(() => {
-          inspectCloseDispatch?.(request);
-          if (closeFailuresRemaining > 0) {
-            closeFailuresRemaining -= 1;
-            pending.reject(new Error("simulated lost close response"));
+          if (isRelease) {
+            inspectReleaseDispatch?.(request);
+          }
+          if (
+            (isRelease && releaseFailuresRemaining > 0) ||
+            (!isRelease && closeFailuresRemaining > 0)
+          ) {
+            if (isRelease) {
+              releaseFailuresRemaining -= 1;
+            } else {
+              closeFailuresRemaining -= 1;
+            }
+            pending.reject(new Error("simulated lost lifecycle response"));
             return;
           }
-          const refusalCode = closeRefusalCodes.shift();
+          const refusalCode = isRelease ? releaseRefusalCodes.shift() : undefined;
           if (refusalCode !== undefined) {
             pending.resolve({
               schema_version: 1,
@@ -297,6 +312,7 @@ assert.deepEqual(
 );
 assert.equal(refusedOne.length, 0);
 const countAfterTerminal = requests.length;
+await turns();
 testWindow.emit("pywebviewready");
 await turns();
 assert.equal(requests.length, countAfterTerminal);
@@ -594,15 +610,60 @@ const stopSevenReplacement = bridge.startTaskDrain(
 await nextRequest(requests.length);
 stopSevenReplacement();
 
-// A terminal record is presented before native release begins. A lost close
-// response retries the same task/session authority and a confirmed echo frees
-// the browser entry without reporting a false task refusal.
+// A terminal callback failure retains the validated record and task authority,
+// mutates no native lifetime, and its retry presents the same record before one
+// terminal-session release. Automatic terminal cleanup never closes the task.
+const terminalCallbackAttempts = [];
+const terminalCallbackRefusals = [];
+const terminalCallbackReleaseStart = releaseRequests.length;
+const terminalCallbackCloseStart = closeRequests.length;
+const terminalCallbackDrainStart = requests.length;
+const stopTerminalCallback = bridge.startTaskDrain(
+  task("3"),
+  session("c"),
+  (update) => {
+    terminalCallbackAttempts.push(update);
+    if (terminalCallbackAttempts.length === 1) {
+      update.record.state = "failed";
+      throw new Error("private terminal renderer detail");
+    }
+  },
+  (error) => terminalCallbackRefusals.push(error),
+);
+const terminalCallback0 = await nextRequest(terminalCallbackDrainStart);
+success(terminalCallback0, [terminalRecord(session("c"))]);
+await turns();
+assert.equal(terminalCallbackAttempts.length, 1);
+assert.equal(terminalCallbackRefusals.length, 1);
+assert.equal(terminalCallbackRefusals[0].name, "TerminalPresentationError");
+assert.equal(typeof terminalCallbackRefusals[0].retry, "function");
+assert.ok(!terminalCallbackRefusals[0].message.includes("private"));
+assert.equal(releaseRequests.length, terminalCallbackReleaseStart);
+assert.equal(closeRequests.length, terminalCallbackCloseStart);
+terminalCallbackRefusals[0].retry();
+await turns(20);
+assert.equal(terminalCallbackAttempts.length, 2);
+assert.notEqual(terminalCallbackAttempts[0], terminalCallbackAttempts[1]);
+assert.equal(terminalCallbackAttempts[0].record.state, "failed");
+assert.equal(terminalCallbackAttempts[1].record.state, "completed");
+assert.equal(releaseRequests.length, terminalCallbackReleaseStart + 1);
+assert.equal(closeRequests.length, terminalCallbackCloseStart);
+stopTerminalCallback();
+assert.throws(
+  () => bridge.startTaskDrain(task("3"), session("c"), assert.fail, assert.fail),
+  TypeError,
+);
+
+// A terminal record is presented before session release begins. A lost release
+// response retries the same task/session authority; confirmed release retains
+// the browser entry, and only explicit close removes it.
 const acceptedRelease = [];
 const releaseRefusals = [];
+const releaseCountBefore = releaseRequests.length;
 const closeCountBeforeRelease = closeRequests.length;
 const releaseDelayIndex = scheduledDelays.length;
-closeFailuresRemaining = 1;
-inspectCloseDispatch = (request) => {
+releaseFailuresRemaining = 1;
+inspectReleaseDispatch = (request) => {
   assert.equal(acceptedRelease.at(-1)?.update_type, "record");
   assert.equal(request.payload.task_id, task("1"));
   assert.equal(request.payload.session_id, session("a"));
@@ -617,10 +678,10 @@ const stopRelease = bridge.startTaskDrain(
 const release0 = await nextRequest(releaseDrainIndex);
 success(release0, [terminalRecord(session("a"))]);
 await turns(30);
-inspectCloseDispatch = null;
-assert.equal(closeRequests.length, closeCountBeforeRelease + 2);
+inspectReleaseDispatch = null;
+assert.equal(releaseRequests.length, releaseCountBefore + 2);
 assert.deepEqual(
-  closeRequests.slice(closeCountBeforeRelease).map((item) => item.request.payload),
+  releaseRequests.slice(releaseCountBefore).map((item) => item.request.payload),
   [
     { task_id: task("1"), session_id: session("a") },
     { task_id: task("1"), session_id: session("a") },
@@ -628,6 +689,23 @@ assert.deepEqual(
 );
 assert.deepEqual(scheduledDelays.slice(releaseDelayIndex), [100]);
 assert.equal(releaseRefusals.length, 0);
+assert.equal(closeRequests.length, closeCountBeforeRelease);
+const closeDelayIndex = scheduledDelays.length;
+closeFailuresRemaining = 1;
+const closedReleaseTask = await bridge.closeTask(task("1"), session("a"));
+assert.deepEqual(closedReleaseTask, {
+  task_id: task("1"),
+  session_id: session("a"),
+});
+assert.equal(closeRequests.length, closeCountBeforeRelease + 2);
+assert.deepEqual(scheduledDelays.slice(closeDelayIndex), [100]);
+assert.deepEqual(
+  closeRequests.slice(closeCountBeforeRelease).map((item) => item.request.payload),
+  [
+    { task_id: task("1"), session_id: session("a") },
+    { task_id: task("1"), session_id: session("a") },
+  ],
+);
 const stopReleaseReplacement = bridge.startTaskDrain(
   task("1"),
   session("a"),
@@ -642,11 +720,11 @@ stopReleaseReplacement();
 const saturationRefusals = [];
 const saturationDelayIndex = scheduledDelays.length;
 const saturationRequestIndex = requests.length;
-const closeCountBeforeSaturation = closeRequests.length;
-closeRefusalCodes.push("bridge_busy");
+const releaseCountBeforeSaturation = releaseRequests.length;
+releaseRefusalCodes.push("bridge_busy");
 const stopSaturation = bridge.startTaskDrain(
-  task("9"),
-  session("9"),
+  task("6"),
+  session("6"),
   () => {},
   (error) => saturationRefusals.push(error),
 );
@@ -658,20 +736,66 @@ refusal(
 );
 const saturation1 = await nextRequest(saturationRequestIndex + 1);
 assert.equal(saturation1.request.payload.replay_from, 1);
-success(saturation1, [terminalRecord(session("9"))]);
+success(saturation1, [terminalRecord(session("6"))]);
 await turns(30);
 assert.deepEqual(scheduledDelays.slice(saturationDelayIndex), [50, 100]);
-assert.equal(closeRequests.length, closeCountBeforeSaturation + 2);
+assert.equal(releaseRequests.length, releaseCountBeforeSaturation + 2);
 assert.equal(saturationRefusals.length, 0);
-const stopSaturationReplacement = bridge.startTaskDrain(
-  task("9"),
-  session("9"),
+stopSaturation();
+
+// Exhausted release uncertainty retains the task and exposes an exact retry.
+const exhaustedReleaseRefusals = [];
+const exhaustedReleaseStart = releaseRequests.length;
+releaseFailuresRemaining = 4;
+const exhaustedReleaseDrainStart = requests.length;
+const stopExhaustedRelease = bridge.startTaskDrain(
+  task("4"),
+  session("d"),
+  () => {},
+  (error) => exhaustedReleaseRefusals.push(error),
+);
+const exhaustedRelease0 = await nextRequest(exhaustedReleaseDrainStart);
+success(exhaustedRelease0, [terminalRecord(session("d"))]);
+await turns(40);
+assert.equal(releaseRequests.length, exhaustedReleaseStart + 4);
+assert.equal(exhaustedReleaseRefusals.length, 1);
+assert.equal(
+  exhaustedReleaseRefusals[0].name,
+  "TerminalSessionReleaseError",
+);
+assert.equal(typeof exhaustedReleaseRefusals[0].retry, "function");
+releaseFailuresRemaining = 0;
+exhaustedReleaseRefusals[0].retry();
+await turns(20);
+assert.equal(releaseRequests.length, exhaustedReleaseStart + 5);
+stopExhaustedRelease();
+const exhaustedCloseStart = closeRequests.length;
+closeFailuresRemaining = 4;
+let uncertainClose;
+try {
+  await bridge.closeTask(task("4"), session("d"));
+  assert.fail("exhausted close uncertainty must be visible");
+} catch (error) {
+  uncertainClose = error;
+}
+assert.equal(uncertainClose.name, "TaskCloseUncertainError");
+assert.equal(typeof uncertainClose.retry, "function");
+assert.equal(closeRequests.length, exhaustedCloseStart + 4);
+assert.throws(
+  () => bridge.startTaskDrain(task("4"), session("d"), assert.fail, assert.fail),
+  TypeError,
+);
+closeFailuresRemaining = 0;
+await uncertainClose.retry();
+assert.equal(closeRequests.length, exhaustedCloseStart + 5);
+const stopClosedReplacement = bridge.startTaskDrain(
+  task("4"),
+  session("d"),
   assert.fail,
   assert.fail,
 );
 await nextRequest(requests.length);
-stopSaturationReplacement();
-stopSaturation();
+stopClosedReplacement();
 
 // Persistent malformed transport responses consume a finite exponential
 // recovery budget. Every retry keeps the exact recovery cursor, then one fixed
@@ -723,6 +847,8 @@ stopSeven();
 stopReliable();
 stopCursor();
 stopRelease();
+stopTerminalCallback();
+stopExhaustedRelease();
 stopPersistent();
 await turns();
 assert.equal(testWindow.listenerCount("pywebviewready"), 1);

@@ -592,10 +592,17 @@ defect, and move implementation-level test choreography out of the log.
   Terminal tasks and start receipts had no production release command, an
   uncertain start could lose replay when its folder slots expired, and repeated
   drain failure could immediately rearm forever. Fixed with a 48-task ceiling,
-  terminal-record-gated `close_task`, bounded close receipts and cleanup
+  terminal-record-gated lifecycle commands, bounded close receipts and cleanup
   compensation, pre-slot wire-intent replay, and finite delayed recovery that
   refuses after its budget. The real headed gate also proves a 25-second drain
   remains concurrent with another RPC and settles during window shutdown.
+- SEVERE - FIXED (2026-08-13). Terminal delivery destroyed reviewed plans.
+  The browser automatically called `close_task` after a terminal record, while
+  terminal callback failure discarded browser authority before cleanup could be
+  retried. Fixed by presenting terminal truth first, retaining it on callback
+  failure, and automatically releasing only observation/session authority.
+  Explicit `close_task` alone drops the plan and task; release and close share
+  stepwise, race-safe cleanup and bounded same-payload recovery.
 - MODERATE - FIXED (2026-08-13). Desktop pathname and activation substitution.
   Startup validated resolved app paths and found an activation window by title,
   then used both after a replacement opportunity. Fixed by holding non-reparse,

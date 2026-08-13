@@ -565,12 +565,14 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "close_task",
         "next_events",
         "pick_folder",
+        "release_terminal_session",
         "start_plan",
     ]
     assert result["combined_command_names"] == [
         "close_task",
         "next_events",
         "pick_folder",
+        "release_terminal_session",
         "start_plan",
         "test_report",
     ]
@@ -636,6 +638,7 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
         "close_task",
         "next_events",
         "pick_folder",
+        "release_terminal_session",
         "start_plan",
     ]
     assert result["dispatcher_type"] == (

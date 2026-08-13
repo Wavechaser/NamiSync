@@ -7,7 +7,8 @@ retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and the hardened
-`pick_folder`/`start_plan`/`next_events`/`close_task` transport are implemented.
+`pick_folder`/`start_plan`/`next_events`/`release_terminal_session`/`close_task`
+transport are implemented.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
 visible-sequence, operable-tree, and shell realignment; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
@@ -226,10 +227,13 @@ receipt-map clearing take that same gate, so an in-flight replay finishes
 before invalidation.
 
 The web task boundary owns its linked observation, session, plan, and start
-receipt. After the terminal record is delivered, `close_task` releases those
-artifacts stepwise and removes the adapter task; delivery uncertainty reuses
-one bounded retained close receipt. Live tasks are capped at 48. Retained
-database history is independent and is never removed by task close.
+receipt. After successful terminal presentation, `release_terminal_session`
+stepwise unsubscribes and closes the dispatcher session but retains the task,
+plan, start receipt, presentation state, and occupied capacity slot. Only an
+explicit `close_task` drops the plan and removes the adapter task; one bounded
+close receipt also converges delayed release retries. Live tasks are capped at
+48. Retained database history is independent and is never removed by task
+close.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -419,7 +423,7 @@ classes select package-local CSS-mask SVGs and inherit `currentColor`; no view,
 payload, command, or returned string can supply markup, a class, URL, path, or
 registration. Unknown names and sizes are refused before DOM mutation.
 
-The current production table contains exactly four rows. Slice 2 owns
+The current production table contains exactly five rows. Slice 2 owns
 `pick_folder` and `start_plan`; the former owns one native user interaction and
 returns `null` or an opaque purpose-bound slot id plus inert display text; the
 latter accepts only one source slot, one target slot, an explicit
@@ -447,11 +451,15 @@ uncertainty resubscribes after the last accepted event; explicit `Gap` remains
 visible, stops later ordinary-batch updates, and resubscribes from its
 `first_missed_seq`. A matching leading gap in that recovery result proves the
 prefix unavailable and permits the retained tail without looping; numeric holes are legal progress
-coalescing. Terminal plan sessions cease being live/active-rail work but remain
-task-owned recovery authority until task close.
+coalescing. Terminal plan sessions cease being live/active-rail work. Their
+recovery authority remains through successful browser presentation, then
+session release removes that authority while retaining the reviewed task and
+plan until explicit task close.
 
-Audit hardening adds only `close_task`. The registry requires terminal-record
-delivery before release and retains at most 48 same-payload close receipts.
+Audit hardening adds `release_terminal_session` and `close_task`. The former
+requires terminal-record delivery, accepts and echoes exact task/session ids,
+and uses no command id or revision; the latter alone disposes of the task. The
+registry retains at most 48 same-payload close receipts.
 Exact `start_plan` wire intent is checked before volatile slot resolution, so a
 lost response remains replayable after slot expiry. The browser policy is an
 exact tested mirror of Python metadata; drain recovery and release retry have
@@ -496,7 +504,7 @@ order. It acquires the fixed instance identity before logging or webview import,
 prepares the renderer before service/window construction, validates and if
 needed initializes the database pair before command admission, creates one
 pending `NativeDocumentState`, and binds its loopback origin once during the
-renderer-checked initialized callback. The host snapshots the exact four-row
+renderer-checked initialized callback. The host snapshots the exact five-row
 production mapping before exposing the page. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, then releases logging,

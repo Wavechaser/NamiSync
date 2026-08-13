@@ -43,6 +43,7 @@ from namisync.interfaces.web.drain import (
     TaskIntentConflictError,
     TaskRecordUpdateView,
     TaskRegistry,
+    TaskSessionReleaseView,
     TaskStartView,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
@@ -120,6 +121,14 @@ class _Service:
         self.calls.append(("close", task_id, session_id))
         return TaskCloseView(task_id, session_id)
 
+    def release_terminal_session(
+        self,
+        task_id: str,
+        session_id: str,
+    ) -> TaskSessionReleaseView:
+        self.calls.append(("release", task_id, session_id))
+        return TaskSessionReleaseView(task_id, session_id)
+
 
 def _commands(*, picker=lambda: None):
     slots = _Slots()
@@ -138,6 +147,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "pick_folder",
         "start_plan",
         "next_events",
+        "release_terminal_session",
         "close_task",
     )
     assert "test_report" not in commands
@@ -179,6 +189,19 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         FieldRequirement.FORBIDDEN,
         CommandTimeout.DRAIN_30_SECONDS,
         CommandRetry.NONE,
+    )
+    assert (
+        commands["release_terminal_session"].access,
+        commands["release_terminal_session"].command_id,
+        commands["release_terminal_session"].revision,
+        commands["release_terminal_session"].timeout,
+        commands["release_terminal_session"].retry,
+    ) == (
+        CommandAccess.MUTATING,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.MUTATION_30_SECONDS,
+        CommandRetry.SAME_PAYLOAD_BOUNDED,
     )
     assert (
         commands["close_task"].access,
@@ -437,6 +460,46 @@ def test_task_close_delegates_exact_authority_and_echoes_identity() -> None:
     assert slots.resolved == []
 
 
+def test_terminal_session_release_delegates_and_echoes_exact_identity() -> None:
+    commands, slots, registry = _commands()
+
+    result = commands["release_terminal_session"].invoke(
+        {"task_id": TASK_ID, "session_id": SESSION_ID}
+    )
+
+    assert result == TaskSessionReleaseView(TASK_ID, SESSION_ID)
+    assert registry.calls == [("release", TASK_ID, SESSION_ID)]
+    assert slots.resolved == []
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        object(),
+        TaskSessionReleaseView("task-" + "9" * 32, SESSION_ID),
+        TaskSessionReleaseView(TASK_ID, "9" * 32),
+    ],
+)
+def test_terminal_session_release_refuses_mismatched_registry_result(
+    result: object,
+) -> None:
+    class InvalidRegistry(_Service):
+        def release_terminal_session(self, *args: object) -> object:
+            del args
+            return result
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=InvalidRegistry(),
+    )
+
+    with pytest.raises(RuntimeError, match="invalid release data"):
+        commands["release_terminal_session"].invoke(
+            {"task_id": TASK_ID, "session_id": SESSION_ID}
+        )
+
+
 @pytest.mark.parametrize(
     "result",
     [
@@ -655,6 +718,19 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
             },
         ),
         ("close_task", {}),
+        ("release_terminal_session", {}),
+        (
+            "release_terminal_session",
+            {"task_id": TASK_ID, "session_id": SESSION_ID, "extra": True},
+        ),
+        (
+            "release_terminal_session",
+            {"task_id": SESSION_ID, "session_id": SESSION_ID},
+        ),
+        (
+            "release_terminal_session",
+            {"task_id": TASK_ID, "session_id": TASK_ID},
+        ),
         (
             "close_task",
             {"task_id": TASK_ID, "session_id": SESSION_ID, "extra": True},
@@ -783,6 +859,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
     assert ADAPTER_PUBLIC_VIEW_DATACLASSES == {
         TaskStartView,
         TaskCloseView,
+        TaskSessionReleaseView,
         TaskDrainView,
         TaskEventUpdateView,
         TaskRecordUpdateView,

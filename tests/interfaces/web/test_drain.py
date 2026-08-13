@@ -27,6 +27,7 @@ from namisync.interfaces.web.drain import (
     TaskIntentConflictError,
     TaskCloseView,
     TaskRegistry,
+    TaskSessionReleaseView,
     TaskUnavailableError,
 )
 from namisync.workflows import PLAN_KIND
@@ -864,6 +865,269 @@ def test_br_g_33_close_task_cleanup_order_and_retry_authority() -> None:
     ]
     with pytest.raises(TaskUnavailableError):
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+
+def test_terminal_session_release_refuses_before_record_delivery() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    with pytest.raises(TaskUnavailableError, match="terminal record"):
+        registry.release_terminal_session(start.task_id, start.session_id)
+
+    assert service.cleanup == []
+    assert start.task_id in registry._tasks
+
+
+def test_terminal_session_release_retains_plan_receipt_and_task_capacity() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.plans = {REQUEST: object()}
+
+        def get_plan_review(self, request_id):
+            return self.plans[request_id]
+
+        def drop_plan(self, request_id):
+            self.cleanup.append(("drop_plan", request_id))
+            self.plans.pop(request_id, None)
+
+    service = Service()
+    registry = TaskRegistry(
+        service,
+        token=lambda: "a" * 32,
+        task_capacity=1,
+    )
+    command_id = "4" * 32
+    start = _start(registry, command_id)
+    _mark_terminal_drained(registry, start)
+
+    released = registry.release_terminal_session(
+        start.task_id,
+        start.session_id,
+    )
+
+    assert released == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+    ]
+    assert service.get_plan_review(REQUEST) is service.plans[REQUEST]
+    assert start.task_id in registry._tasks
+    assert command_id in registry._commands
+    assert registry.replay_start(command_id, None) == start  # type: ignore[arg-type]
+    with pytest.raises(TaskUnavailableError, match="capacity"):
+        registry.start_plan(
+            "other-source",
+            "other-target",
+            deletion_policy=None,
+            command_id="5" * 32,
+        )
+    with pytest.raises(TaskUnavailableError):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+
+def test_terminal_session_release_lost_response_replay_is_idempotent() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    first = registry.release_terminal_session(start.task_id, start.session_id)
+    replay = registry.release_terminal_session(start.task_id, start.session_id)
+
+    assert first == replay == TaskSessionReleaseView(
+        start.task_id,
+        start.session_id,
+    )
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+    ]
+
+
+def test_delayed_terminal_release_converges_from_close_receipt() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    registry.close_task(start.task_id, start.session_id)
+
+    released = registry.release_terminal_session(start.task_id, start.session_id)
+
+    assert released == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert start.task_id not in registry._tasks
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
+
+
+def test_explicit_close_after_terminal_release_only_drops_plan() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    registry.release_terminal_session(start.task_id, start.session_id)
+
+    closed = registry.close_task(start.task_id, start.session_id)
+
+    assert closed == TaskCloseView(start.task_id, start.session_id)
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
+    assert start.task_id not in registry._tasks
+
+
+def test_release_retries_only_unfinished_session_step() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_attempts = 0
+
+        def close_session(self, session_id):
+            self.close_attempts += 1
+            self.cleanup.append(("close_session", session_id))
+            if self.close_attempts == 1:
+                raise OSError("injected session release failure")
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    with pytest.raises(OSError, match="session release failure"):
+        registry.release_terminal_session(start.task_id, start.session_id)
+    registry.release_terminal_session(start.task_id, start.session_id)
+
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("close_session", SESSION),
+    ]
+    assert start.task_id in registry._tasks
+
+
+def test_close_drop_failure_still_proves_terminal_session_release() -> None:
+    class Service(_Service):
+        def drop_plan(self, request_id):
+            self.cleanup.append(("drop_plan", request_id))
+            raise OSError("injected drop failure")
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    with pytest.raises(OSError, match="drop failure"):
+        registry.close_task(start.task_id, start.session_id)
+
+    assert registry.release_terminal_session(
+        start.task_id,
+        start.session_id,
+    ) == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
+
+
+def test_release_and_close_race_runs_each_cleanup_step_once() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.unsubscribe_entered = Event()
+            self.release_unsubscribe = Event()
+
+        def unsubscribe(self, session_id):
+            self.unsubscribe_entered.set()
+            assert self.release_unsubscribe.wait(2)
+            super().unsubscribe(session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    released = []
+    closed = []
+    errors = []
+
+    def release() -> None:
+        try:
+            released.append(
+                registry.release_terminal_session(start.task_id, start.session_id)
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    def close() -> None:
+        try:
+            closed.append(registry.close_task(start.task_id, start.session_id))
+        except BaseException as error:
+            errors.append(error)
+
+    releasing = Thread(target=release)
+    closing = Thread(target=close)
+    releasing.start()
+    assert service.unsubscribe_entered.wait(1)
+    closing.start()
+    service.release_unsubscribe.set()
+    releasing.join(1)
+    closing.join(1)
+
+    assert errors == []
+    assert released == [TaskSessionReleaseView(start.task_id, start.session_id)]
+    assert closed == [TaskCloseView(start.task_id, start.session_id)]
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
+
+
+def test_close_and_delayed_release_race_converges_through_close_receipt() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.drop_entered = Event()
+            self.release_drop = Event()
+
+        def drop_plan(self, request_id):
+            self.drop_entered.set()
+            assert self.release_drop.wait(2)
+            super().drop_plan(request_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    closed = []
+    released = []
+
+    closing = Thread(
+        target=lambda: closed.append(
+            registry.close_task(start.task_id, start.session_id)
+        )
+    )
+    releasing = Thread(
+        target=lambda: released.append(
+            registry.release_terminal_session(start.task_id, start.session_id)
+        )
+    )
+    closing.start()
+    assert service.drop_entered.wait(1)
+    releasing.start()
+    service.release_drop.set()
+    closing.join(1)
+    releasing.join(1)
+
+    assert closed == [TaskCloseView(start.task_id, start.session_id)]
+    assert released == [TaskSessionReleaseView(start.task_id, start.session_id)]
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+        ("drop_plan", REQUEST),
+    ]
 
 
 def test_close_task_refuses_before_terminal_record_is_drained() -> None:

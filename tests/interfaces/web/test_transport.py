@@ -34,6 +34,7 @@ from namisync.interfaces.web.drain import (
     TaskDrainView,
     TaskEventUpdateView,
     TaskRecordUpdateView,
+    TaskSessionReleaseView,
     TaskStartView,
 )
 from namisync.interfaces.web.drain import (
@@ -581,6 +582,43 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
     response = dispatcher.dispatch(
         _request(
             command="close_task",
+            payload={"task_id": task_id, "session_id": session_id},
+        )
+    )
+
+    assert response == {
+        "schema_version": 1,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": {"task_id": task_id, "session_id": session_id},
+    }
+
+
+def test_terminal_session_release_crosses_dispatch_as_exact_echo() -> None:
+    task_id = "task-" + "2" * 32
+    session_id = "3" * 32
+
+    class Registry:
+        def release_terminal_session(
+            self,
+            received_task: str,
+            received_session: str,
+        ) -> TaskSessionReleaseView:
+            assert (received_task, received_session) == (task_id, session_id)
+            return TaskSessionReleaseView(received_task, received_session)
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=production_command_specs(
+            picker=lambda: None,
+            slots=SimpleNamespace(),
+            registry=Registry(),
+        ),
+    )
+
+    response = dispatcher.dispatch(
+        _request(
+            command="release_terminal_session",
             payload={"task_id": task_id, "session_id": session_id},
         )
     )

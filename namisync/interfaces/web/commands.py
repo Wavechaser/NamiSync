@@ -15,6 +15,7 @@ from namisync.interfaces.web.drain import (
     TaskEventUpdateView,
     TaskIntentConflictError,
     TaskRecordUpdateView,
+    TaskSessionReleaseView,
     TaskStartView,
 )
 from namisync.interfaces.web.slots import SlotUnavailableError
@@ -114,6 +115,7 @@ ADAPTER_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
         TaskCloseView,
         TaskEventUpdateView,
         TaskRecordUpdateView,
+        TaskSessionReleaseView,
         TaskStartView,
     }
 )
@@ -197,6 +199,12 @@ class TaskAuthority(Protocol):
         replay_from: int | None,
     ) -> TaskDrainView: ...
 
+    def release_terminal_session(
+        self,
+        task_id: str,
+        session_id: str,
+    ) -> TaskSessionReleaseView: ...
+
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView: ...
 
 
@@ -244,6 +252,12 @@ class _NextEventsPayload:
 
 @dataclass(frozen=True, slots=True)
 class _CloseTaskPayload:
+    task_id: str
+    session_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ReleaseTerminalSessionPayload:
     task_id: str
     session_id: str
 
@@ -366,6 +380,23 @@ def production_command_specs(
             raise RuntimeError("task registry returned invalid close data")
         return result
 
+    def release_terminal_session(payload: object) -> object:
+        if not isinstance(payload, _ReleaseTerminalSessionPayload):
+            raise TypeError(
+                "release_terminal_session received an unvalidated payload"
+            )
+        result = registry.release_terminal_session(
+            payload.task_id,
+            payload.session_id,
+        )
+        if (
+            type(result) is not TaskSessionReleaseView
+            or result.task_id != payload.task_id
+            or result.session_id != payload.session_id
+        ):
+            raise RuntimeError("task registry returned invalid release data")
+        return result
+
     return MappingProxyType(
         {
             "pick_folder": CommandSpec(
@@ -394,6 +425,15 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.DRAIN_30_SECONDS,
                 retry=CommandRetry.NONE,
+            ),
+            "release_terminal_session": CommandSpec(
+                validate_payload=_validate_release_terminal_session,
+                handler=release_terminal_session,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.MUTATION_30_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
             ),
             "close_task": CommandSpec(
                 validate_payload=_validate_close_task,
@@ -483,6 +523,20 @@ def _validate_close_task(value: object) -> _CloseTaskPayload:
     if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
         raise CommandPayloadError("close_task payload is invalid")
     return _CloseTaskPayload(task_id, session_id)
+
+
+def _validate_release_terminal_session(
+    value: object,
+) -> _ReleaseTerminalSessionPayload:
+    if not isinstance(value, dict) or set(value) != {"task_id", "session_id"}:
+        raise CommandPayloadError("release_terminal_session payload is invalid")
+    task_id = value["task_id"]
+    session_id = value["session_id"]
+    if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+        raise CommandPayloadError("release_terminal_session payload is invalid")
+    if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
+        raise CommandPayloadError("release_terminal_session payload is invalid")
+    return _ReleaseTerminalSessionPayload(task_id, session_id)
 
 
 def _is_valid_task_start(value: object) -> bool:
