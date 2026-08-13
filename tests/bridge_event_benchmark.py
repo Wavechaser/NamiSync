@@ -1264,6 +1264,7 @@ def _summarize(
         "raw_samples": samples,
         "startup_errors": evidence.get("startup_errors"),
         "browser_failure": browser.get("failure"),
+        "browser_report": browser,
     }
 
 

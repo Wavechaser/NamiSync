@@ -47,6 +47,8 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "evaluate_js" not in browser
     assert "SAMPLE_REPORT_BATCH_SIZE = 250" in browser
     assert 'sampleClass === "terminal_event"' in browser
+    assert "failure_source:" in browser
+    assert "report_completed:" in browser
     assert "retainedBytes" not in browser
     assert "PrivateUsage" in parent
     assert 'kind: "ready"' in browser

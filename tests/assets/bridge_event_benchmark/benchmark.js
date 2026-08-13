@@ -17,6 +17,9 @@ let failureReported = false;
 let terminalRecords = 0;
 let progressMonotonic = true;
 let benchmarkStartedAt = null;
+let reportQueued = 0;
+let reportCompleted = 0;
+let activeReport = null;
 
 
 function isTaskStart(value) {
@@ -31,13 +34,29 @@ function isTaskStart(value) {
 
 
 function enqueueReport(kind, value) {
-  reporting = reporting.then(() =>
-    dispatchInteractive(
-      "benchmark_report",
-      { kind, value },
-      (result) => result !== null && typeof result === "object",
-    ),
-  );
+  reportQueued += 1;
+  const reportIndex = reportQueued;
+  reporting = reporting.then(async () => {
+    activeReport = {
+      index: reportIndex,
+      kind,
+      sample_count: Array.isArray(value) ? value.length : null,
+    };
+    try {
+      const result = await dispatchInteractive(
+        "benchmark_report",
+        { kind, value },
+        (candidate) => candidate !== null && typeof candidate === "object",
+      );
+      reportCompleted = reportIndex;
+      return result;
+    } catch (error) {
+      error.benchmarkStage = `report:${kind}`;
+      throw error;
+    } finally {
+      activeReport = null;
+    }
+  });
   return reporting;
 }
 
@@ -170,7 +189,7 @@ function acceptUpdate(task, update) {
     recordSample("terminal_record", update);
     terminalRecords += 1;
     if (terminalRecords === 4) {
-      void finish().catch(fail);
+      void finish().catch((error) => fail(error, "finish"));
     }
     return;
   }
@@ -206,7 +225,7 @@ function acceptUpdate(task, update) {
 }
 
 
-function fail(error) {
+function fail(error, source = "task") {
   if (failureReported) {
     return;
   }
@@ -221,6 +240,13 @@ function fail(error) {
         kind: "complete",
         value: {
           failure: name,
+          failure_source: typeof error?.benchmarkStage === "string"
+            ? error.benchmarkStage
+            : source,
+          active_report: activeReport,
+          report_queued: reportQueued,
+          report_completed: reportCompleted,
+          buffered_sample_count: samples.length,
           gap_events: gaps,
           progress_monotonic: progressMonotonic,
           session_ids: [...tasks.values()]
@@ -258,10 +284,10 @@ async function start() {
       identity.task_id,
       identity.session_id,
       (update) => acceptUpdate(task, update),
-      fail,
+      (error) => fail(error, `task:${identity.task_id}`),
     );
   }
 }
 
 
-void start().catch(fail);
+void start().catch((error) => fail(error, "start"));
