@@ -307,6 +307,7 @@ class _JobPrivateMemorySampler:
         self._process = process
         self._started_at = time.perf_counter()
         self._samples: list[dict[str, object]] = []
+        self._fixture_ended_at_seconds: float | None = None
 
     def sample(self, phase: str) -> None:
         sampled_at = time.perf_counter()
@@ -376,6 +377,9 @@ class _JobPrivateMemorySampler:
             self.sample("fixture")
             evidence = _read_evidence(path)
             if evidence.get("browser_report_received") is True:
+                self._fixture_ended_at_seconds = (
+                    time.perf_counter() - self._started_at
+                )
                 return evidence
             if self._process.poll() is not None:
                 raise RuntimeError("benchmark child exited before browser report")
@@ -387,7 +391,7 @@ class _JobPrivateMemorySampler:
     def result(self) -> dict[str, object]:
         return _job_memory_result(
             self._samples,
-            fixture_ended_at_seconds=time.perf_counter() - self._started_at,
+            fixture_ended_at_seconds=self._fixture_ended_at_seconds,
             root_process_id=self._process.pid,
         )
 
