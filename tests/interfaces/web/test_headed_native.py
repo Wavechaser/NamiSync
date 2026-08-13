@@ -181,6 +181,7 @@ def test_process_tree_window_lookup_ignores_unrelated_matching_caption(
 ) -> None:
     monkeypatch.setattr(native, "_enumerate_windows", lambda: (70, 71))
     monkeypatch.setattr(native, "_window_text", lambda handle: "Same Caption")
+    monkeypatch.setattr(native, "_is_window_visible", lambda handle: True)
     monkeypatch.setattr(
         native,
         "_window_process_id",
@@ -191,6 +192,25 @@ def test_process_tree_window_lookup_ignores_unrelated_matching_caption(
         "Same Caption",
         frozenset(),
         process_ids=frozenset({700, 701}),
+    ) == 71
+
+
+def test_process_tree_window_lookup_ignores_hidden_matching_caption(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(native, "_enumerate_windows", lambda: (70, 71))
+    monkeypatch.setattr(native, "_window_text", lambda handle: "Same Caption")
+    monkeypatch.setattr(
+        native,
+        "_is_window_visible",
+        lambda handle: handle == 71,
+    )
+    monkeypatch.setattr(native, "_window_process_id", lambda handle: 700)
+
+    assert native._find_window(
+        "Same Caption",
+        frozenset(),
+        process_ids=frozenset({700}),
     ) == 71
 
 

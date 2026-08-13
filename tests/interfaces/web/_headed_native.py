@@ -693,6 +693,7 @@ def _find_window(
         if (
             handle not in exclude
             and _window_text(handle) == title
+            and _is_window_visible(handle)
             and (process_ids is None or _window_process_id(handle) in process_ids)
         ):
             return handle
