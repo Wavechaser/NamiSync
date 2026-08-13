@@ -9,6 +9,7 @@ import os
 import sys
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).parents[2]
@@ -21,6 +22,18 @@ def _benchmark_module():
     specification = importlib.util.spec_from_file_location(
         "bridge_event_benchmark_contract",
         PARENT,
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def _child_module():
+    specification = importlib.util.spec_from_file_location(
+        "bridge_event_benchmark_child_contract",
+        CHILD,
     )
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
@@ -54,6 +67,73 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert 'kind: "ready"' in browser
     assert 'void enqueueReport("presented", null).catch' in browser
     assert "wait_for_accessible_text" not in parent
+    complete = browser.index('await enqueueReport("complete"')
+    rendered = browser.index('renderText(status, "Benchmark complete', complete)
+    presented = browser.index('void enqueueReport("presented"', rendered)
+    assert complete < rendered < presented
+
+
+def test_bridge_event_benchmark_uses_immutable_handshake_markers(
+    tmp_path: Path,
+) -> None:
+    child = _child_module()
+    output = tmp_path / "evidence.json"
+    recorder = child._Recorder(output)
+    sampler = SimpleNamespace(
+        error=None,
+        max_sample_interval_seconds=0.02,
+        peak_bytes=4_096,
+        sample_count=3_000,
+        stop=lambda: None,
+    )
+    begin = tmp_path / "benchmark.begin"
+    ready = tmp_path / "benchmark.ready"
+    report = tmp_path / "benchmark.report"
+    failure = tmp_path / "benchmark.failure"
+    presented = tmp_path / "benchmark.presented"
+    begin.write_bytes(b"")
+    spec = child._benchmark_specs(
+        object(),
+        (),
+        recorder,
+        sampler,
+        begin,
+        ready,
+        report,
+        failure,
+        presented,
+    )["benchmark_report"]
+
+    assert spec.invoke({"kind": "ready", "value": None}) == {"accepted": True}
+    assert spec.invoke({"kind": "complete", "value": {}}) == {"accepted": True}
+    assert spec.invoke({"kind": "presented", "value": None}) == {
+        "accepted": True
+    }
+
+    assert ready.is_file()
+    assert report.is_file()
+    assert presented.is_file()
+    assert not failure.exists()
+    assert not output.exists()
+
+    failed_report = tmp_path / "failed.report"
+    failed_marker = tmp_path / "failed.failure"
+    failed_spec = child._benchmark_specs(
+        object(),
+        (),
+        child._Recorder(tmp_path / "failed-evidence.json"),
+        sampler,
+        begin,
+        tmp_path / "failed.ready",
+        failed_report,
+        failed_marker,
+        tmp_path / "failed.presented",
+    )["benchmark_report"]
+    assert failed_spec.invoke(
+        {"kind": "complete", "value": {"failure": "BridgeTransportError"}}
+    ) == {"accepted": True}
+    assert failed_marker.is_file()
+    assert not failed_report.exists()
 
 
 def test_bridge_event_benchmark_full_ordinary_sample_batch_fits_ingress() -> None:

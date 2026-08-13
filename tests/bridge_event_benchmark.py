@@ -344,12 +344,11 @@ class _JobPrivateMemorySampler:
             }
         )
 
-    def wait_until_ready(self, path: Path, deadline) -> dict[str, object]:
+    def wait_until_ready(self, marker: Path, deadline: ScenarioDeadline) -> None:
         while True:
             deadline.remaining()
-            evidence = _read_evidence(path)
-            if evidence.get("browser_ready") is True:
-                return evidence
+            if marker.is_file():
+                return
             if self._process.poll() is not None:
                 raise RuntimeError("benchmark child exited before browser readiness")
             time.sleep(0.02)
@@ -367,21 +366,21 @@ class _JobPrivateMemorySampler:
 
     def run_until_browser_report(
         self,
-        path: Path,
+        report_marker: Path,
+        failure_marker: Path,
         begin_marker: Path,
-        deadline,
-    ) -> dict[str, object]:
+        deadline: ScenarioDeadline,
+    ) -> bool:
         begin_marker.write_text("begin\n", encoding="ascii")
         next_sample = time.perf_counter()
         while True:
             deadline.remaining()
             self.sample("fixture")
-            evidence = _read_evidence(path)
-            if evidence.get("browser_report_received") is True:
+            if failure_marker.is_file() or report_marker.is_file():
                 self._fixture_ended_at_seconds = (
                     time.perf_counter() - self._started_at
                 )
-                return evidence
+                return not failure_marker.is_file()
             if self._process.poll() is not None:
                 raise RuntimeError("benchmark child exited before browser report")
             next_sample += _MEMORY_SAMPLE_SECONDS
@@ -398,18 +397,17 @@ class _JobPrivateMemorySampler:
 
 
 def _wait_for_browser_presentation(
-    path: Path,
+    marker: Path,
+    failure_marker: Path,
     process: HeadedProcess,
     deadline: ScenarioDeadline,
-) -> dict[str, object]:
+) -> bool:
     while True:
         deadline.remaining()
-        evidence = _read_evidence(path)
-        browser = evidence.get("browser")
-        if type(browser) is dict and "failure" in browser:
-            raise RuntimeError("benchmark browser failed before presentation")
-        if evidence.get("browser_presented") is True:
-            return evidence
+        if failure_marker.is_file():
+            return False
+        if marker.is_file():
+            return True
         if process.poll() is not None:
             raise RuntimeError("benchmark child exited before browser presentation")
         time.sleep(0.02)
@@ -1340,6 +1338,10 @@ def main() -> int:
             data_dir = root / "data"
             evidence_path = root / "child-evidence.json"
             begin_marker = data_dir / "benchmark.begin"
+            ready_marker = data_dir / "benchmark.ready"
+            report_marker = data_dir / "benchmark.report"
+            failure_marker = data_dir / "benchmark.failure"
+            presented_marker = data_dir / "benchmark.presented"
             title = f"NamiSync bridge benchmark {uuid4().hex}"
             mutex = rf"Local\NamiSync.BridgeBenchmark.{uuid4().hex}"
             deadline = scenario_deadline(110)
@@ -1365,17 +1367,18 @@ def main() -> int:
             sampler = _JobPrivateMemorySampler(process)
             try:
                 window = wait_for_window(process, title, deadline=deadline)
-                evidence = sampler.wait_until_ready(evidence_path, deadline)
+                sampler.wait_until_ready(ready_marker, deadline)
                 sampler.take_idle_baseline(deadline)
-                evidence = sampler.run_until_browser_report(
-                    evidence_path,
+                browser_succeeded = sampler.run_until_browser_report(
+                    report_marker,
+                    failure_marker,
                     begin_marker,
                     deadline,
                 )
-                browser = evidence.get("browser")
-                if type(browser) is dict and "failure" not in browser:
-                    evidence = _wait_for_browser_presentation(
-                        evidence_path,
+                if browser_succeeded:
+                    _wait_for_browser_presentation(
+                        presented_marker,
+                        failure_marker,
                         process,
                         deadline,
                     )

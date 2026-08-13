@@ -317,6 +317,10 @@ def _benchmark_specs(
     recorder: _Recorder,
     sampler: _QueueMemorySampler,
     begin_marker: Path,
+    ready_marker: Path,
+    report_marker: Path,
+    failure_marker: Path,
+    presented_marker: Path,
 ):
     from namisync.interfaces.web.commands import (
         CommandAccess,
@@ -411,7 +415,7 @@ def _benchmark_specs(
             return {"accepted": len(payload.value)}
         if payload.kind == "ready":
             recorder.set("browser_ready", True)
-            recorder.write()
+            ready_marker.write_bytes(b"")
             deadline = monotonic() + 10
             while not begin_marker.exists():
                 if monotonic() >= deadline:
@@ -420,7 +424,7 @@ def _benchmark_specs(
             return {"accepted": True}
         if payload.kind == "presented":
             recorder.set("browser_presented", True)
-            recorder.write()
+            presented_marker.write_bytes(b"")
             return {"accepted": True}
         sampler_error = None
         try:
@@ -440,7 +444,12 @@ def _benchmark_specs(
             },
         )
         recorder.set("browser_report_received", True)
-        recorder.write()
+        marker = (
+            failure_marker
+            if "failure" in payload.value
+            else report_marker
+        )
+        marker.write_bytes(b"")
         return {"accepted": True}
 
     common = {
@@ -501,6 +510,10 @@ def main() -> int:
     fixture_clock = _FixtureClock()
     start_barrier = threading.Barrier(4, action=fixture_clock.begin)
     begin_marker = arguments.data_dir / "benchmark.begin"
+    ready_marker = arguments.data_dir / "benchmark.ready"
+    report_marker = arguments.data_dir / "benchmark.report"
+    failure_marker = arguments.data_dir / "benchmark.failure"
+    presented_marker = arguments.data_dir / "benchmark.presented"
 
     def prepare(request) -> PreparedSession:
         payload = str(request.source_path).encode("utf-8")
@@ -545,6 +558,10 @@ def main() -> int:
                 recorder,
                 sampler,
                 begin_marker,
+                ready_marker,
+                report_marker,
+                failure_marker,
+                presented_marker,
             ),
         }
         recorder.set("production_command_names", sorted(production))
