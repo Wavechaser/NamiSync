@@ -1084,7 +1084,7 @@ function validateSessionRecord(record, sessionId) {
       "result",
     ]) &&
     record.session_id === sessionId &&
-    record.kind === "plan" &&
+    record.kind === "sync-plan" &&
     isOneOf(record.state, TERMINAL_STATES) &&
     record.supports_pause === false &&
     isUtcTimestamp(record.created_at) &&

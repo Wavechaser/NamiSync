@@ -230,7 +230,9 @@ before invalidation.
 The web task boundary owns its linked observation, session, plan, and start
 receipt. `M1_BRIDGE.md` exclusively defines terminal-session release, explicit
 task close, receipt convergence, and the live-task capacity exposed through the
-bridge. Retained database history remains independent of adapter task cleanup.
+bridge. Plan task records retain the workflow's exact `sync-plan` kind across
+the service and browser boundary; the adapter does not rename it. Retained
+database history remains independent of adapter task cleanup.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is

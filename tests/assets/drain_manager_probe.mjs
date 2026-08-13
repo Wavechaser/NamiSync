@@ -206,7 +206,7 @@ const terminalRecord = (sessionId, result = operationResult) => ({
   update_type: "record",
   record: {
     session_id: sessionId,
-    kind: "plan",
+    kind: "sync-plan",
     state: "completed",
     supports_pause: false,
     created_at: at,

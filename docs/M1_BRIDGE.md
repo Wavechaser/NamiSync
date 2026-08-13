@@ -2043,7 +2043,10 @@ exactly the echoed task/session/drain ids plus `updates`, an array of zero to 64
 members. Each member is exactly
 `{"update_type":"event","event":<SessionEventView>}` or
 `{"update_type":"record","record":<SessionRecordView>}`. The server wait is
-25 seconds and the browser deadline is 30 seconds. Empty timeout success arms
+25 seconds and the browser deadline is 30 seconds. A terminal record returned
+by `start_plan` carries the workflow's exact `kind` value, `"sync-plan"`; the
+browser validates that production identity rather than an adapter-only alias.
+Empty timeout success arms
 the next ordinary drain. Transport/protocol uncertainty uses a fresh drain id
 and `replay_from=last accepted non-Gap sequence + 1`; an ordinary explicit
 `Gap` remains visible, stops later updates, and uses its exact positive
@@ -2134,7 +2137,8 @@ The installed-wheel browser scenario also drives the production `bridge.js`
 drain manager through stale readiness and generation settlements, identical
 `start_plan` replay, numeric holes without recovery, explicit-`Gap` recovery,
 busy and malformed refusal budgets, nested hostile-Unicode public views,
-terminal release without automatic task close, and task/listener/timer cleanup.
+the real `sync-plan` terminal-record identity, terminal release without
+automatic task close, and task/listener/timer cleanup.
 
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
 as the GUI-owned counterpart to `db/settings.json` — recents, window geometry,

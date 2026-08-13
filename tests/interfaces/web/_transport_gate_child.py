@@ -212,11 +212,12 @@ def _deliver_initial_events(sink: object, session_id: str) -> None:
 
 
 def _nonterminal_record(session_id: str):
+    from namisync.workflows import PLAN_KIND
     from namisync.workflows.views import SessionRecordView
 
     return SessionRecordView(
         session_id,
-        "plan",
+        PLAN_KIND,
         "running",
         False,
         "2026-08-13T00:00:00+00:00",
@@ -227,6 +228,7 @@ def _nonterminal_record(session_id: str):
 
 
 def _terminal_record(session_id: str, hostile: str):
+    from namisync.workflows import PLAN_KIND
     from namisync.workflows.views import (
         IntegrityOutcomeView,
         OperationItemView,
@@ -283,7 +285,7 @@ def _terminal_record(session_id: str, hostile: str):
     )
     return SessionRecordView(
         session_id,
-        "plan",
+        PLAN_KIND,
         "completed",
         False,
         "2026-08-13T00:00:00+00:00",

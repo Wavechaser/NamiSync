@@ -718,6 +718,7 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
 
     nested = browser["nested_record"]
     assert nested["session_id"] == "d" * 32
+    assert nested["kind"] == "sync-plan"
     assert nested["state"] == "completed"
     assert nested["result"]["items"][0]["path"] == evidence.corpus
     assert nested["result"]["items"][0]["detail"] == {

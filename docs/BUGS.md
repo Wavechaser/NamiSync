@@ -613,6 +613,13 @@ defect, and move implementation-level test choreography out of the log.
   failure, and automatically releasing only observation/session authority.
   Explicit `close_task` alone drops the plan and task; release and close share
   stepwise, race-safe cleanup and bounded same-payload recovery.
+- SEVERE - FIXED (2026-08-13). Real plan terminal records were rejected by the
+  browser. The workflow emits its registered `sync-plan` kind, but the client
+  validator and its synthetic headed witness expected the invented alias
+  `plan`; every real terminal drain therefore entered transport recovery and
+  never presented completion. Fixed by validating the exact workflow kind and
+  deriving the installed-wheel fixture from `PLAN_KIND`; the real WebView2 gate
+  now crosses that production identity before terminal release.
 - MINOR - FIXED (2026-08-13). Decisive startup diagnostics were missing after
   logging configuration. The outer host catch entered teardown without first
   recording the initiating exception, so a completed finalizer could close the
