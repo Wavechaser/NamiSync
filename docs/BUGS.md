@@ -603,6 +603,13 @@ defect, and move implementation-level test choreography out of the log.
   failure, and automatically releasing only observation/session authority.
   Explicit `close_task` alone drops the plan and task; release and close share
   stepwise, race-safe cleanup and bounded same-payload recovery.
+- MINOR - FIXED (2026-08-13). Decisive startup diagnostics were missing after
+  logging configuration. The outer host catch entered teardown without first
+  recording the initiating exception, so a completed finalizer could close the
+  only configured handler while retaining merely secondary cleanup evidence.
+  Fixed with one typed `startup.failed` traceback before fail-closed teardown;
+  diagnostic failure cannot replace the native report or exit status, and
+  pre-logging failures continue to use only the native startup reporter.
 - MODERATE - FIXED (2026-08-13). Desktop pathname and activation substitution.
   Startup validated resolved app paths and found an activation window by title,
   then used both after a replacement opportunity. Fixed by holding non-reparse,

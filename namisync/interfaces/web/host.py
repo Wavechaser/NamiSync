@@ -767,6 +767,11 @@ def run_desktop(
             raise state.failure
     except Exception as error:
         failure = error
+        if logging_configured:
+            try:
+                _log_startup_failure(error)
+            except BaseException:
+                pass
     finally:
         if close_controller is not None:
             close_controller._wait_for_attempt()
@@ -814,6 +819,12 @@ def _log_startup_renderer(browser_version: str) -> None:
     from .logging_config import log_startup_renderer
 
     log_startup_renderer(browser_version)
+
+
+def _log_startup_failure(error: Exception) -> None:
+    from .logging_config import log_startup_failure
+
+    log_startup_failure(error)
 
 
 def _prepare_webview_host(webview_module: object) -> None:

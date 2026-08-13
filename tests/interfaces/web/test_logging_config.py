@@ -289,6 +289,24 @@ def test_emitted_records_have_exact_header_and_version_only_startup(
     assert lines[1].endswith("logger=pywebview: renderer-message")
 
 
+def test_post_configuration_startup_failure_records_type_and_traceback_once(
+    tmp_path: Path,
+) -> None:
+    paths = AppPaths.from_root(tmp_path / "app")
+    logging_config.configure_logging(paths)
+
+    try:
+        raise RuntimeError("synthetic startup failure")
+    except RuntimeError as error:
+        logging_config.log_startup_failure(error)
+    _flush()
+
+    text = paths.log_file.read_text(encoding="utf-8")
+    assert text.count("startup.failed exception_type=RuntimeError") == 1
+    assert "Traceback (most recent call last):" in text
+    assert "RuntimeError: synthetic startup failure" in text
+
+
 def test_dependency_record_reads_distribution_metadata_without_importing_hosts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

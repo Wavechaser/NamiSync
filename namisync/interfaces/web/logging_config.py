@@ -124,6 +124,16 @@ def log_startup_renderer(browser_version: str) -> None:
     )
 
 
+def log_startup_failure(error: Exception) -> None:
+    """Record one decisive post-configuration startup failure."""
+
+    logging.getLogger("namisync").error(
+        "startup.failed exception_type=%s",
+        type(error).__name__,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+
+
 def shutdown_logging() -> None:
     """Emit the normal-exit record and close logging after the GUI loop."""
 

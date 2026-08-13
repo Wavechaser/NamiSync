@@ -509,7 +509,9 @@ production mapping before exposing the page. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, then releases logging,
 app-path leases, and the mutex only after complete quiescence, preserving the
-initiating startup diagnosis.
+initiating startup diagnosis. Every failure caught after logging configuration
+records one typed `startup.failed` traceback before that finalizer; diagnostic
+failure cannot replace the native report or process exit status.
 Clean-wheel headed gates exercise this composition through the real pinned
 WebView2/pythonnet stack, including packaged-page popup composition, canceled
 navigation, guard-attachment failure, runtime refusal, activation, and the

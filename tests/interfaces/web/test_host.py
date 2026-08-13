@@ -866,6 +866,87 @@ def test_startup_finalizer_preserves_quiesce_error_without_unsafe_service_close(
     assert logged == ["startup.registry_wake_failed"]
 
 
+@pytest.mark.parametrize(
+    "first_kind",
+    ["incomplete", "exception"],
+)
+def test_startup_finalizer_retains_every_owner_until_complete_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    first_kind: str,
+) -> None:
+    order: list[object] = []
+    logged: list[str] = []
+    dispatcher = SimpleNamespace(
+        begin_close=lambda: order.append("reject"),
+        wait_for_handlers=lambda: order.append("wait"),
+    )
+    registry = SimpleNamespace(
+        begin_close=lambda: order.append("wake"),
+        unsubscribe_all=lambda: order.append("unsubscribe"),
+    )
+    first_outcome = (
+        _shutdown_view(complete=False)
+        if first_kind == "incomplete"
+        else RuntimeError("injected close failure")
+    )
+    service = _ControllerService(
+        order,
+        [first_outcome, _shutdown_view(complete=True)],
+    )
+    path_lease = SimpleNamespace(close=lambda: order.append("path.close"))
+    instance_lease = DesktopInstanceLease("owned", _LeaseNative(order))
+    monkeypatch.setattr(
+        host,
+        "_shutdown_logging",
+        lambda: order.append("logging.close"),
+    )
+    monkeypatch.setattr(
+        host,
+        "_log_cleanup_failure",
+        lambda event, _error, **_options: logged.append(event),
+    )
+    options = {
+        "dispatcher": dispatcher,
+        "registry": registry,
+        "service_shutdown_complete": False,
+        "logging_configured": True,
+        "log_path": Path("NamiSync.log"),
+        "lease": instance_lease,
+        "path_lease": path_lease,
+        "close_presentation": lambda: order.append("presentation.close"),
+    }
+
+    first_failure = host._finalize_primary(service, **options)
+
+    assert first_failure is not None
+    assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
+
+    retry_failure = host._finalize_primary(service, **options)
+
+    assert retry_failure is None
+    assert order == [
+        "reject",
+        "wake",
+        "wait",
+        "unsubscribe",
+        "service.close",
+        "reject",
+        "wake",
+        "wait",
+        "unsubscribe",
+        "service.close",
+        "presentation.close",
+        "logging.close",
+        "path.close",
+        ("lease.close", "owned"),
+    ]
+    assert logged == (
+        ["startup.service_cleanup_failed"]
+        if first_kind == "exception"
+        else []
+    )
+
+
 def test_initialized_refusal_aborts_without_destroy(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1086,6 +1167,118 @@ def test_original_startup_failure_survives_cleanup_failure(
 
     assert result == 1
     assert reports == ["original startup failure"]
+
+
+def test_post_logging_startup_failure_is_recorded_once_before_finalization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_after_initialization(
+        webview,
+        *,
+        on_initialized,
+        storage_path,
+    ) -> None:
+        del webview, storage_path
+        on_initialized()
+        raise RuntimeError("original startup failure")
+
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=fail_after_initialization,
+    )
+    monkeypatch.setattr(
+        host,
+        "_log_startup_failure",
+        lambda error: order.append(("startup.failed", type(error).__name__)),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["original startup failure"]
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    assert labels.count("startup.failed") == 1
+    assert labels.index("startup.failed") < labels.index("service.close")
+    assert labels.index("startup.failed") < labels.index("appearance.close")
+    assert labels.index("startup.failed") < labels.index("shutdown_logging")
+    assert labels.index("startup.failed") < labels.index("path_lease.close")
+    assert labels.index("startup.failed") < labels.index("lease.close")
+
+
+def test_pre_logging_failure_does_not_attempt_startup_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        host,
+        "_configure_logging",
+        lambda _paths: (_ for _ in ()).throw(RuntimeError("logging unavailable")),
+    )
+    monkeypatch.setattr(
+        host,
+        "_log_startup_failure",
+        lambda _error: pytest.fail("pre-logging failure was logged"),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["logging unavailable"]
+    assert "path_lease.close" in order
+    assert any(
+        isinstance(entry, tuple) and entry[0] == "lease.close"
+        for entry in order
+    )
+
+
+@pytest.mark.parametrize(
+    "diagnostic_failure",
+    [RuntimeError("diagnostic failure"), KeyboardInterrupt()],
+)
+def test_startup_diagnostic_failure_cannot_replace_original_or_skip_teardown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    diagnostic_failure: BaseException,
+) -> None:
+    def fail_after_initialization(
+        webview,
+        *,
+        on_initialized,
+        storage_path,
+    ) -> None:
+        del webview, storage_path
+        on_initialized()
+        raise RuntimeError("original startup failure")
+
+    paths, order, _webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=fail_after_initialization,
+    )
+    monkeypatch.setattr(
+        host,
+        "_log_startup_failure",
+        lambda _error: (_ for _ in ()).throw(diagnostic_failure),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["original startup failure"]
+    assert "service.close" in order
+    assert "appearance.close" in order
+    assert "shutdown_logging" in order
+    assert "path_lease.close" in order
+    assert any(
+        isinstance(entry, tuple) and entry[0] == "lease.close"
+        for entry in order
+    )
 
 
 @pytest.mark.parametrize("cleanup", ("logging", "mutex"))
