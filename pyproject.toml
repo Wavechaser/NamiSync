@@ -44,6 +44,7 @@ testpaths = ["tests"]
 filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 markers = [
     "headed: requires an interactive Windows desktop and the real WebView2 host",
+    "supplemental_node: optional deterministic JavaScript probe using Node.js from PATH",
 ]
 
 [tool.importlinter]

@@ -48,10 +48,11 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def test_sh_g_14_registry_is_fixed_and_rejects_unregistered_authority() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_icon_registry_rejects_unknown_authority() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency icon probe")
+        pytest.skip("Node.js is unavailable for the supplemental icon probe")
 
     completed = subprocess.run(
         [

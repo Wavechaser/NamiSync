@@ -273,10 +273,11 @@ def test_static_sink_guard_rejects_dynamic_and_authority_attributes() -> None:
     ) == ()
 
 
-def test_appearance_receiver_accepts_only_latest_exact_inert_envelope() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency appearance probe")
+        pytest.skip("Node.js is unavailable for the supplemental appearance probe")
     completed = subprocess.run(
         [
             str(node),
@@ -398,10 +399,11 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
     assert "Reflect.ownKeys(" not in tree
 
 
-def test_sh_g_7_browserless_tree_probe_uses_production_modules() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_tree_probe_uses_production_modules() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency tree probe")
+        pytest.skip("Node.js is unavailable for the supplemental tree probe")
     probe = PROJECT_ROOT / "tests" / "assets" / "tree_probe.mjs"
     asset_root = (
         PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
@@ -423,10 +425,11 @@ def test_sh_g_7_browserless_tree_probe_uses_production_modules() -> None:
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
-def test_br_g_32_inert_text_helper_rejects_before_setter_or_coercion() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_inert_text_rejects_before_coercion() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency render probe")
+        pytest.skip("Node.js is unavailable for the supplemental render probe")
     probe = PROJECT_ROOT / "tests" / "assets" / "render_text_probe.mjs"
     renderer = (
         PROJECT_ROOT

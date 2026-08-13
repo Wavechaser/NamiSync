@@ -1,10 +1,9 @@
-"""Ordinary BR-G-32 evidence for the strict bridge transport boundary."""
+"""Bridge transport evidence plus optional supplemental Node.js probes."""
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -364,51 +363,14 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
 
 def _node_executable() -> Path | None:
     installed = shutil.which("node")
-    if installed is not None:
-        return Path(installed)
-    for raw_entry in os.environ.get("PATH", "").split(os.pathsep):
-        if not raw_entry:
-            continue
-        entry = Path(raw_entry)
-        if entry.name.casefold() == "override" and len(entry.parents) >= 2:
-            candidate = entry.parents[1] / "node" / "bin" / "node.exe"
-            if candidate.is_file():
-                return candidate
-        if entry.name.casefold() == "resources":
-            candidate = entry / "cua_node" / "bin" / "node.exe"
-            if candidate.is_file():
-                return candidate
-    program_files = Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
-    known_bundled = (
-        program_files / "Adobe" / "Adobe Creative Cloud Experience" / "libs" / "node.exe",
-        program_files
-        / "Common Files"
-        / "Adobe"
-        / "Creative Cloud Libraries"
-        / "libs"
-        / "node.exe",
-    )
-    for candidate in known_bundled:
-        if candidate.is_file():
-            return candidate
-    windows_apps = program_files / "WindowsApps"
-    try:
-        candidates = sorted(
-            windows_apps.glob(
-                "OpenAI.Codex_*_x64__*"
-                "/app/resources/cua_node/bin/node.exe"
-            ),
-            reverse=True,
-        )
-    except OSError:
-        return None
-    return candidates[0] if candidates else None
+    return Path(installed) if installed is not None else None
 
 
-def test_br_g_32_start_plan_browser_identity_and_timeout_contract() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_start_plan_identity_and_timeout_contract() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency bridge probe")
+        pytest.skip("Node.js is unavailable for the supplemental bridge probe")
     probe = Path(__file__).parents[2] / "assets" / "bridge_timeout_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
@@ -471,10 +433,11 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
     )
 
 
-def test_br_g_33_browser_drain_generation_recovers_without_duplication() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_drain_generation_recovers_without_duplication() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency drain probe")
+        pytest.skip("Node.js is unavailable for the supplemental drain probe")
     probe = Path(__file__).parents[2] / "assets" / "drain_manager_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
@@ -489,10 +452,11 @@ def test_br_g_33_browser_drain_generation_recovers_without_duplication() -> None
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
-def test_br_g_32_interactive_wrapper_is_neutral_bounded_and_single_attempt() -> None:
+@pytest.mark.supplemental_node
+def test_supplemental_node_interactive_wrapper_is_bounded_single_attempt() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the no-dependency bridge probe")
+        pytest.skip("Node.js is unavailable for the supplemental bridge probe")
     probe = Path(__file__).parents[2] / "assets" / "bridge_interactive_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
