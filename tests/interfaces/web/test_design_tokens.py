@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -15,6 +17,7 @@ ASSET_ROOT = (
 )
 TOKENS = ASSET_ROOT / "tokens.css"
 COMPONENTS = ASSET_ROOT / "components.css"
+FLUENT_FIXTURE = Path(__file__).parents[2] / "assets" / "fluent_tokens"
 
 AUTHORED_PALETTE = {
     "--palette-red-main": "#EE6666",
@@ -30,6 +33,193 @@ AUTHORED_PALETTE = {
     "--palette-yellow-dark": "#553300",
     "--palette-purple-main": "#BB88EE",
     "--palette-purple-dark": "#331155",
+}
+FLUENT_SOURCE = {
+    "package": "@fluentui/tokens@1.0.0-alpha.24",
+    "commit": "32b42a5bf79c1836047dfc7fae07b1320731bce4",
+    "files": {
+        "package.json": "6f2af81d6cadd474dc8e4a30cd512ccf5f0aa3e6221985ea6b28ce0e866c9991",
+        "lightColor.ts": "0882854a85d8433e530bb5e40adff342e321361c64cd295255127c06fea55a48",
+        "darkColor.ts": "ed15b83e605999aa196ba04ac9d03557cf943a3ba7ce3a3979650992505c2bea",
+        "borderRadius.ts": "156bf14d20515100a28356daa7c07c9766a1108a0e4efef86ae171ee8c505f34",
+        "curves.ts": "e1681eb819b86380e9ef6d52b9821b5fce2382d8d0070a33eef6429c4e0e2a6c",
+        "durations.ts": "34ef2eb5444fa422632f5ec1c2033f947d953f96c569e23e0ad8f78a6921f6bf",
+        "fonts.ts": "ba5c662e2ec0e216f98ca28433ab439ecb4036d30d2311aa3f7d9c362ddcb2e9",
+        "spacings.ts": "63a64eba054236a88c80293f3128f89e988f22da90e7b4637a53ad92a89f9c2d",
+        "shadows.ts": "0f76754193af8f255401fe69f0288dd96767f4e35e7663bd0f84bf8af879d61a",
+    },
+}
+FLUENT_LIGHT_VALUES = {
+    "colorNeutralBackground1": "#ffffff",
+    "colorNeutralBackground1Hover": "#f5f5f5",
+    "colorNeutralBackground1Pressed": "#e0e0e0",
+    "colorNeutralBackground1Selected": "#ebebeb",
+    "colorNeutralBackground2": "#fafafa",
+    "colorSubtleBackground": "transparent",
+    "colorSubtleBackgroundLightAlphaHover": "rgba(255,255,255,0.7)",
+    "colorSubtleBackgroundLightAlphaPressed": "rgba(255,255,255,0.5)",
+    "colorNeutralForeground1": "#242424",
+    "colorNeutralForeground2": "#424242",
+    "colorNeutralForegroundDisabled": "#bdbdbd",
+    "colorNeutralStrokeAccessible": "#616161",
+    "colorNeutralStrokeAccessibleHover": "#575757",
+    "colorNeutralStrokeAccessiblePressed": "#4d4d4d",
+    "colorNeutralStroke2": "#e0e0e0",
+    "colorNeutralBackgroundDisabled": "#f0f0f0",
+    "colorBackgroundOverlay": "rgba(0,0,0,0.4)",
+    "colorNeutralShadowAmbient": "rgba(0,0,0,0.12)",
+    "colorNeutralShadowKey": "rgba(0,0,0,0.14)",
+    "colorStrokeFocus2": "#000000",
+}
+FLUENT_DARK_VALUES = {
+    "colorNeutralBackground1": "#292929",
+    "colorNeutralBackground1Hover": "#3d3d3d",
+    "colorNeutralBackground1Pressed": "#1f1f1f",
+    "colorNeutralBackground1Selected": "#383838",
+    "colorNeutralBackground2": "#1f1f1f",
+    "colorSubtleBackground": "transparent",
+    "colorSubtleBackgroundLightAlphaHover": "rgba(36,36,36,0.8)",
+    "colorSubtleBackgroundLightAlphaPressed": "rgba(36,36,36,0.5)",
+    "colorNeutralForeground1": "#ffffff",
+    "colorNeutralForeground2": "#d6d6d6",
+    "colorNeutralForegroundDisabled": "#5c5c5c",
+    "colorNeutralStrokeAccessible": "#adadad",
+    "colorNeutralStrokeAccessibleHover": "#bdbdbd",
+    "colorNeutralStrokeAccessiblePressed": "#b3b3b3",
+    "colorNeutralStrokeSubtle": "#0a0a0a",
+    "colorNeutralBackgroundDisabled": "#141414",
+    "colorBackgroundOverlay": "rgba(0,0,0,0.5)",
+    "colorNeutralShadowAmbient": "rgba(0,0,0,0.24)",
+    "colorNeutralShadowKey": "rgba(0,0,0,0.28)",
+    "colorStrokeFocus2": "#ffffff",
+}
+FLUENT_LIGHT_ALIASES = {
+    "--color-neutral-canvas": "colorNeutralBackground1Hover",
+    "--color-neutral-surface": "colorNeutralBackground1",
+    "--color-neutral-surface-subtle": "colorNeutralBackground2",
+    "--color-neutral-surface-hover": "colorNeutralBackground1Hover",
+    "--color-neutral-surface-pressed": "colorNeutralBackground1Pressed",
+    "--color-neutral-surface-selected": "colorNeutralBackground1Selected",
+    "--color-neutral-subtle-background": "colorSubtleBackground",
+    "--color-neutral-subtle-hover": "colorSubtleBackgroundLightAlphaHover",
+    "--color-neutral-subtle-pressed": "colorSubtleBackgroundLightAlphaPressed",
+    "--color-neutral-foreground": "colorNeutralForeground1",
+    "--color-neutral-foreground-secondary": "colorNeutralForeground2",
+    "--color-neutral-foreground-disabled": "colorNeutralForegroundDisabled",
+    "--color-neutral-border": "colorNeutralStrokeAccessible",
+    "--color-neutral-border-hover": "colorNeutralStrokeAccessibleHover",
+    "--color-neutral-border-pressed": "colorNeutralStrokeAccessiblePressed",
+    "--color-neutral-border-subtle": "colorNeutralStroke2",
+    "--color-neutral-disabled-background": "colorNeutralBackgroundDisabled",
+    "--color-backdrop": "colorBackgroundOverlay",
+    "--color-shadow-ambient": "colorNeutralShadowAmbient",
+    "--color-shadow-key": "colorNeutralShadowKey",
+    "--color-focus-ring": "colorStrokeFocus2",
+}
+FLUENT_DARK_ALIASES = {
+    **FLUENT_LIGHT_ALIASES,
+    "--color-neutral-canvas": "colorNeutralBackground2",
+    "--color-neutral-border-subtle": "colorNeutralStrokeSubtle",
+}
+FLUENT_SCALE_VALUES = {
+    "fontSizeBase200": "12px",
+    "fontSizeBase300": "14px",
+    "fontSizeBase400": "16px",
+    "fontSizeBase500": "20px",
+    "fontSizeHero700": "28px",
+    "lineHeightBase200": "16px",
+    "lineHeightBase300": "20px",
+    "lineHeightBase400": "22px",
+    "lineHeightBase500": "28px",
+    "lineHeightHero700": "36px",
+    "fontWeightRegular": "400",
+    "fontWeightMedium": "500",
+    "fontWeightSemibold": "600",
+    "spacingHorizontalNone": "0",
+    "spacingHorizontalXXS": "2px",
+    "spacingHorizontalXS": "4px",
+    "spacingHorizontalS": "8px",
+    "spacingHorizontalM": "12px",
+    "spacingHorizontalL": "16px",
+    "spacingHorizontalXXL": "24px",
+    "spacingHorizontalXXXL": "32px",
+    "borderRadiusNone": "0",
+    "borderRadiusMedium": "4px",
+    "borderRadiusXLarge": "8px",
+    "borderRadius2XLarge": "12px",
+    "borderRadiusCircular": "10000px",
+    "durationFaster": "100ms",
+    "durationNormal": "200ms",
+    "durationSlow": "300ms",
+    "curveEasyEase": "cubic-bezier(0.33,0,0.67,1)",
+    "curveAccelerateMax": "cubic-bezier(0.9,0.1,1,0.2)",
+    "curveDecelerateMax": "cubic-bezier(0.1,0.9,0.2,1)",
+}
+FLUENT_SCALE_ALIASES = {
+    "--font-size-caption": "fontSizeBase200",
+    "--font-size-body": "fontSizeBase300",
+    "--font-size-body-large": "fontSizeBase400",
+    "--font-size-title": "fontSizeBase500",
+    "--font-size-heading": "fontSizeHero700",
+    "--line-height-caption": "lineHeightBase200",
+    "--line-height-body": "lineHeightBase300",
+    "--line-height-body-large": "lineHeightBase400",
+    "--line-height-title": "lineHeightBase500",
+    "--line-height-heading": "lineHeightHero700",
+    "--font-weight-regular": "fontWeightRegular",
+    "--font-weight-medium": "fontWeightMedium",
+    "--font-weight-semibold": "fontWeightSemibold",
+    "--space-0": "spacingHorizontalNone",
+    "--space-1": "spacingHorizontalXXS",
+    "--space-2": "spacingHorizontalXS",
+    "--space-3": "spacingHorizontalS",
+    "--space-4": "spacingHorizontalM",
+    "--space-5": "spacingHorizontalL",
+    "--space-6": "spacingHorizontalXXL",
+    "--space-7": "spacingHorizontalXXXL",
+    "--radius-none": "borderRadiusNone",
+    "--radius-small": "borderRadiusMedium",
+    "--radius-medium": "borderRadiusXLarge",
+    "--radius-large": "borderRadius2XLarge",
+    "--radius-circular": "borderRadiusCircular",
+    "--motion-duration-fast": "durationFaster",
+    "--motion-duration-normal": "durationNormal",
+    "--motion-duration-slow": "durationSlow",
+    "--motion-easing-standard": "curveEasyEase",
+    "--motion-easing-accelerate": "curveAccelerateMax",
+    "--motion-easing-decelerate": "curveDecelerateMax",
+}
+FLUENT_SHADOW_VALUES = {
+    "shadow2": (
+        "0 0 2px var(--color-shadow-ambient), "
+        "0 1px 2px var(--color-shadow-key)"
+    ),
+    "shadow4": (
+        "0 0 2px var(--color-shadow-ambient), "
+        "0 2px 4px var(--color-shadow-key)"
+    ),
+    "shadow8": (
+        "0 0 2px var(--color-shadow-ambient), "
+        "0 4px 8px var(--color-shadow-key)"
+    ),
+    "shadow16": (
+        "0 0 2px var(--color-shadow-ambient), "
+        "0 8px 16px var(--color-shadow-key)"
+    ),
+}
+FLUENT_SHADOW_ALIASES = {
+    "--elevation-2": "shadow2",
+    "--elevation-4": "shadow4",
+    "--elevation-8": "shadow8",
+    "--elevation-16": "shadow16",
+}
+WINDOWS_ACCENT_FALLBACK = {
+    "--color-accent": "#0078D4",
+    "--color-accent-hover": "#0091F8",
+    "--color-accent-pressed": "#0067C0",
+    "--color-accent-foreground": "#FFFFFF",
+    "--color-accent-hover-foreground": "#000000",
+    "--color-accent-pressed-foreground": "#FFFFFF",
 }
 STATUSES = (
     "complete",
@@ -160,11 +350,116 @@ def test_sh_g_11_tokens_preserve_exact_authored_palette_without_missing_lights()
     }
 
     assert palette == AUTHORED_PALETTE
-    assert HEX_LITERAL.findall(source) == list(AUTHORED_PALETTE.values())
     assert "--palette-yellow-light" not in source
     assert "--palette-purple-light" not in source
     assert "color-mix(" not in source
-    assert not re.search(r"\b(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch)\(", source)
+    assert not re.search(r"\b(?:hsl|hsla|hwb|lab|lch|oklab|oklch)\(", source)
+
+    actual_literals = {
+        value.replace(" ", "").casefold()
+        for value in (
+            *HEX_LITERAL.findall(source),
+            *re.findall(r"rgba\([^)]*\)", source, re.IGNORECASE),
+        )
+    }
+    expected_literals = {
+        value.replace(" ", "").casefold()
+        for value in (
+            *AUTHORED_PALETTE.values(),
+            *FLUENT_LIGHT_VALUES.values(),
+            *FLUENT_DARK_VALUES.values(),
+            *WINDOWS_ACCENT_FALLBACK.values(),
+        )
+        if value != "transparent"
+    }
+    assert actual_literals == expected_literals
+
+
+def test_sh_g_11_fluent_table_matches_pinned_source_transcription() -> None:
+    source = TOKENS.read_text(encoding="utf-8")
+    light = _variables(_block(source, ":root "))
+    dark = light | _variables(_block(source, ':root[data-theme="dark"]'))
+    automatic_dark = light | _variables(
+        _block(source, ':root:not([data-theme="light"])')
+    )
+
+    expected_light = {
+        local: FLUENT_LIGHT_VALUES[upstream]
+        for local, upstream in FLUENT_LIGHT_ALIASES.items()
+    }
+    expected_dark = {
+        local: FLUENT_DARK_VALUES[upstream]
+        for local, upstream in FLUENT_DARK_ALIASES.items()
+    }
+    expected_scales = {
+        local: FLUENT_SCALE_VALUES[upstream]
+        for local, upstream in FLUENT_SCALE_ALIASES.items()
+    }
+    expected_shadows = {
+        local: FLUENT_SHADOW_VALUES[upstream]
+        for local, upstream in FLUENT_SHADOW_ALIASES.items()
+    }
+
+    assert expected_light.items() <= light.items()
+    assert expected_dark.items() <= dark.items()
+    assert expected_dark.items() <= automatic_dark.items()
+    assert expected_scales.items() <= light.items()
+    assert expected_shadows.items() <= light.items()
+    assert WINDOWS_ACCENT_FALLBACK.items() <= light.items()
+    assert str(FLUENT_SOURCE["package"]).removeprefix(
+        "@fluentui/tokens@"
+    ) in source
+    for name, sha256 in FLUENT_SOURCE["files"].items():
+        assert f"{name} SHA-256: {sha256}" in source
+    assert (
+        "https://github.com/microsoft/fluentui/tree/"
+        f"{FLUENT_SOURCE['commit']}/packages/tokens"
+    ) in source
+
+    assert {
+        path.name for path in FLUENT_FIXTURE.iterdir() if path.is_file()
+    } == {*FLUENT_SOURCE["files"], "LICENSE"}
+    for name, sha256 in FLUENT_SOURCE["files"].items():
+        assert hashlib.sha256((FLUENT_FIXTURE / name).read_bytes()).hexdigest() == sha256
+    package = json.loads(
+        (FLUENT_FIXTURE / "package.json").read_text(encoding="utf-8")
+    )
+    assert f"{package['name']}@{package['version']}" == FLUENT_SOURCE["package"]
+    license_text = (FLUENT_FIXTURE / "LICENSE").read_text(encoding="utf-8")
+    assert "MIT License" in license_text
+    assert "Copyright (c) Microsoft Corporation" in license_text
+
+    for theme in (light, dark):
+        assert len(
+            {
+                _resolve("--color-neutral-surface", theme),
+                _resolve("--color-neutral-surface-hover", theme),
+                _resolve("--color-neutral-surface-pressed", theme),
+                _resolve("--color-neutral-surface-selected", theme),
+            }
+        ) == 4
+        assert len(
+            {
+                _resolve("--color-neutral-subtle-background", theme),
+                _resolve("--color-neutral-subtle-hover", theme),
+                _resolve("--color-neutral-subtle-pressed", theme),
+            }
+        ) == 3
+
+    assert len(
+        {
+            _resolve(name, light)
+            for name in WINDOWS_ACCENT_FALLBACK
+            if "foreground" not in name
+        }
+    ) == 3
+    for state in ("", "-hover", "-pressed"):
+        assert _contrast(
+            _resolve(f"--color-accent{state}", light),
+            _resolve(f"--color-accent{state}-foreground", light),
+        ) >= 4.5
+
+
 def test_sh_g_11_all_status_and_operation_aliases_are_complete() -> None:
     values = _variables(TOKENS.read_text(encoding="utf-8"))
 
@@ -199,25 +494,11 @@ def test_sh_g_11_semantic_text_and_indicator_pairs_meet_contrast_floors() -> Non
             foreground = _resolve(f"--{prefix}-foreground", theme)
             background = _resolve(f"--{prefix}-background", theme)
             indicator = _resolve(f"--{prefix}-indicator", theme)
-            if prefix in {"status-neutral", "status-noop", "operation-noop"}:
-                assert {foreground, background, indicator} <= {
-                    "ButtonFace",
-                    "ButtonText",
-                    "CanvasText",
-                }
-                continue
             assert _contrast(foreground, background) >= 4.5, prefix
             assert _contrast(indicator, background) >= 3.0, prefix
 
-        assert _resolve("--color-neutral-surface", theme) == "Canvas"
-        assert _resolve("--color-neutral-canvas", theme) == "Canvas"
-        assert _resolve("--color-neutral-foreground", theme) == "CanvasText"
-        assert _resolve("--color-neutral-foreground-secondary", theme) == "ButtonText"
-        assert _resolve("--color-neutral-border", theme) == "ButtonBorder"
         focus = _resolve("--color-focus-ring", theme)
-        assert focus in AUTHORED_PALETTE.values()
-        assert _resolve("--color-accent", theme) == "AccentColor"
-        assert _resolve("--color-accent-foreground", theme) == "AccentColorText"
+        assert _contrast(focus, _resolve("--color-neutral-canvas", theme)) >= 3.0
 
 
 def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
@@ -305,6 +586,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         "nami-list-row",
         "nami-tree-row",
         "nami-card",
+        "nami-task-card",
         "nami-dialog",
         "nami-menu",
         "nami-segmented",
@@ -353,6 +635,8 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         '.nami-list-row:not([aria-disabled="true"]):active',
         '.nami-tree-row:not([aria-disabled="true"]):hover',
         '.nami-tree-row:not([aria-disabled="true"]):active',
+        '.nami-task-card:not([aria-disabled="true"]):hover',
+        '.nami-task-card:not([aria-disabled="true"]):active',
         '.nami-card:not([aria-disabled="true"]):active',
         '.nami-dialog:not([aria-disabled="true"]):active',
         ".nami-menu__item:not(:disabled):hover",
@@ -392,6 +676,32 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
                 for role in ROLES
             }
     assert ".nami-state-cue" in source
+    task_card = _block(source, ".nami-task-card ")
+    assert "background: var(--color-neutral-subtle-background);" in task_card
+    assert "border: 1px solid var(--color-neutral-subtle-background);" in task_card
+    selected_task = _block(
+        source,
+        '.nami-task-card[aria-selected="true"],',
+    )
+    assert "background: var(--color-neutral-surface);" in selected_task
+    assert '.nami-task-card[aria-current="true"]' in source
+    assert ".nami-task-card:not([aria-disabled=\"true\"]):hover" in source
+    assert ".nami-task-card:not([aria-disabled=\"true\"]):active" in source
+    assert (
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]):hover'
+    ) in source
+    assert (
+        '.nami-task-card[aria-current="true"]:'
+        'not([aria-disabled="true"]):active'
+    ) in source
+    selected_focus = _block(
+        source,
+        '.nami-task-card[aria-selected="true"]:focus-visible,',
+    )
+    assert "box-shadow: var(--elevation-2);" in selected_focus
+    assert "outline: 2px solid var(--color-focus-ring);" in selected_focus
+    assert "outline-offset: 2px;" in selected_focus
     cue_owners: set[tuple[str, str]] = set()
     for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", source):
         if re.search(r"(?:^|;)\s*content\s*:", rule.group(2)) is None:
@@ -415,6 +725,13 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     forced = _block(source, "@media (forced-colors: active)")
     assert "outline: 2px solid var(--color-focus-ring);" in forced
     assert "outline-offset: 2px;" in forced
+    active_tree = _block(forced, '.nami-tree-row[data-active="true"] ')
+    assert "color: var(--color-accent-foreground);" in active_tree
+    active_disclosure = _block(
+        forced,
+        '.nami-tree-row[data-active="true"] .nami-tree-row__disclosure ',
+    )
+    assert "border-color: var(--color-accent-foreground);" in active_disclosure
     assert re.search(
         r"\.nami-icon\s*\{\s*forced-color-adjust:\s*none;\s*\}",
         forced,

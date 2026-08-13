@@ -16,76 +16,107 @@
   --palette-purple-main: #BB88EE;
   --palette-purple-dark: #331155;
 
+  /* Font families are Windows-shell choices; the numeric ramp is Fluent. */
   --font-family-body: "Segoe UI Variable", "Segoe UI", sans-serif;
   --font-family-monospace: "Cascadia Mono", Consolas, monospace;
-  --font-size-caption: 0.75rem;
-  --font-size-body: 0.875rem;
-  --font-size-body-large: 1rem;
-  --font-size-title: 1.25rem;
-  --font-size-heading: 1.75rem;
-  --line-height-caption: 1rem;
-  --line-height-body: 1.25rem;
-  --line-height-body-large: 1.5rem;
-  --line-height-title: 1.75rem;
-  --line-height-heading: 2.25rem;
+  --font-size-caption: 12px;
+  --font-size-body: 14px;
+  --font-size-body-large: 16px;
+  --font-size-title: 20px;
+  --font-size-heading: 28px;
+  --line-height-caption: 16px;
+  --line-height-body: 20px;
+  --line-height-body-large: 22px;
+  --line-height-title: 28px;
+  --line-height-heading: 36px;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
   --space-0: 0;
-  --space-1: 0.125rem;
-  --space-2: 0.25rem;
-  --space-3: 0.5rem;
-  --space-4: 0.75rem;
-  --space-5: 1rem;
-  --space-6: 1.5rem;
-  --space-7: 2rem;
-  --space-8: 3rem;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --space-7: 32px;
 
+  /* The local 4px radius labels select Fluent Medium, XLarge, and 2XLarge. */
   --radius-none: 0;
-  --radius-small: 0.25rem;
-  --radius-medium: 0.5rem;
-  --radius-large: 0.75rem;
-  --radius-circular: 9999px;
+  --radius-small: 4px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+  --radius-circular: 10000px;
 
   --icon-size-sm: 16px;
   --icon-size-md: 20px;
   --icon-size-lg: 24px;
   --row-h: 28px;
 
+  /* Instant reduction and the progress cycle are NamiSync behavior tokens. */
   --motion-duration-instant: 0ms;
   --motion-duration-fast: 100ms;
   --motion-duration-normal: 200ms;
   --motion-duration-slow: 300ms;
   --motion-duration-progress-cycle: 1500ms;
-  --motion-easing-standard: cubic-bezier(0.33, 0, 0.67, 1);
-  --motion-easing-accelerate: cubic-bezier(0.9, 0.1, 1, 0.2);
-  --motion-easing-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --motion-easing-standard: cubic-bezier(0.33,0,0.67,1);
+  --motion-easing-accelerate: cubic-bezier(0.9,0.1,1,0.2);
+  --motion-easing-decelerate: cubic-bezier(0.1,0.9,0.2,1);
 
-  /* Windows owns the neutral and accent inputs until authored ramps are approved. */
-  --color-neutral-canvas: Canvas;
-  --color-neutral-surface: Canvas;
-  --color-neutral-surface-subtle: ButtonFace;
-  --color-neutral-surface-hover: ButtonFace;
-  --color-neutral-surface-pressed: ButtonFace;
-  --color-neutral-foreground: CanvasText;
-  --color-neutral-foreground-secondary: ButtonText;
-  --color-neutral-foreground-disabled: GrayText;
-  --color-neutral-border: ButtonBorder;
-  --color-neutral-border-subtle: ButtonBorder;
-  --color-neutral-disabled-background: ButtonFace;
-  --color-shadow: GrayText;
+  /*
+   * Fluent-derived aliases use Microsoft @fluentui/tokens 1.0.0-alpha.24
+   * at immutable commit 32b42a5bf79c1836047dfc7fae07b1320731bce4.
+   * package.json SHA-256: 6f2af81d6cadd474dc8e4a30cd512ccf5f0aa3e6221985ea6b28ce0e866c9991
+   * lightColor.ts SHA-256: 0882854a85d8433e530bb5e40adff342e321361c64cd295255127c06fea55a48
+   * darkColor.ts SHA-256: ed15b83e605999aa196ba04ac9d03557cf943a3ba7ce3a3979650992505c2bea
+   * borderRadius.ts SHA-256: 156bf14d20515100a28356daa7c07c9766a1108a0e4efef86ae171ee8c505f34
+   * curves.ts SHA-256: e1681eb819b86380e9ef6d52b9821b5fce2382d8d0070a33eef6429c4e0e2a6c
+   * durations.ts SHA-256: 34ef2eb5444fa422632f5ec1c2033f947d953f96c569e23e0ad8f78a6921f6bf
+   * fonts.ts SHA-256: ba5c662e2ec0e216f98ca28433ab439ecb4036d30d2311aa3f7d9c362ddcb2e9
+   * spacings.ts SHA-256: 63a64eba054236a88c80293f3128f89e988f22da90e7b4637a53ad92a89f9c2d
+   * shadows.ts SHA-256: 0f76754193af8f255401fe69f0288dd96767f4e35e7663bd0f84bf8af879d61a
+   * https://github.com/microsoft/fluentui/tree/32b42a5bf79c1836047dfc7fae07b1320731bce4/packages/tokens
+   * The offline provenance test records each local-to-upstream token mapping.
+   * Canvas intentionally selects Background1Hover (light) / Background2
+   * (dark) to match the native opaque fallback. Task-card overlays intentionally
+   * select the LightAlpha subtle aliases so Mica remains visible. Windows accent
+   * fallbacks and NamiSync's 13-swatch palette are separate, product-owned inputs.
+   * The package and source are MIT licensed.
+   */
+  --color-neutral-canvas: #f5f5f5;
+  --color-neutral-surface: #ffffff;
+  --color-neutral-surface-subtle: #fafafa;
+  --color-neutral-surface-hover: #f5f5f5;
+  --color-neutral-surface-pressed: #e0e0e0;
+  --color-neutral-surface-selected: #ebebeb;
+  --color-neutral-subtle-background: transparent;
+  --color-neutral-subtle-hover: rgba(255,255,255,0.7);
+  --color-neutral-subtle-pressed: rgba(255,255,255,0.5);
+  --color-neutral-foreground: #242424;
+  --color-neutral-foreground-secondary: #424242;
+  --color-neutral-foreground-disabled: #bdbdbd;
+  --color-neutral-border: #616161;
+  --color-neutral-border-hover: #575757;
+  --color-neutral-border-pressed: #4d4d4d;
+  --color-neutral-border-subtle: #e0e0e0;
+  --color-neutral-disabled-background: #f0f0f0;
+  --color-backdrop: rgba(0,0,0,0.4);
+  --color-shadow-ambient: rgba(0,0,0,0.12);
+  --color-shadow-key: rgba(0,0,0,0.14);
   --color-window-base: var(--color-neutral-canvas);
-  --color-accent: AccentColor;
-  --color-accent-foreground: AccentColorText;
-  --color-accent-hover: Highlight;
-  --color-accent-pressed: AccentColor;
-  --color-focus-ring: var(--palette-blue-dark);
+  --color-accent: #0078D4;
+  --color-accent-hover: #0091F8;
+  --color-accent-pressed: #0067C0;
+  --color-accent-foreground: #FFFFFF;
+  --color-accent-hover-foreground: #000000;
+  --color-accent-pressed-foreground: #FFFFFF;
+  --color-focus-ring: #000000;
 
-  --elevation-2: 0 1px 2px var(--color-shadow);
-  --elevation-4: 0 2px 4px var(--color-shadow);
-  --elevation-8: 0 4px 8px var(--color-shadow);
-  --elevation-16: 0 8px 16px var(--color-shadow);
+  --elevation-2: 0 0 2px var(--color-shadow-ambient), 0 1px 2px var(--color-shadow-key);
+  --elevation-4: 0 0 2px var(--color-shadow-ambient), 0 2px 4px var(--color-shadow-key);
+  --elevation-8: 0 0 2px var(--color-shadow-ambient), 0 4px 8px var(--color-shadow-key);
+  --elevation-16: 0 0 2px var(--color-shadow-ambient), 0 8px 16px var(--color-shadow-key);
 
   /* Light-theme semantic pairings, chosen by contrast rather than swatch name. */
   --semantic-positive-foreground: var(--palette-green-dark);
@@ -194,7 +225,27 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-focus-ring: var(--palette-blue-light);
+  --color-neutral-canvas: #1f1f1f;
+  --color-neutral-surface: #292929;
+  --color-neutral-surface-subtle: #1f1f1f;
+  --color-neutral-surface-hover: #3d3d3d;
+  --color-neutral-surface-pressed: #1f1f1f;
+  --color-neutral-surface-selected: #383838;
+  --color-neutral-subtle-background: transparent;
+  --color-neutral-subtle-hover: rgba(36,36,36,0.8);
+  --color-neutral-subtle-pressed: rgba(36,36,36,0.5);
+  --color-neutral-foreground: #ffffff;
+  --color-neutral-foreground-secondary: #d6d6d6;
+  --color-neutral-foreground-disabled: #5c5c5c;
+  --color-neutral-border: #adadad;
+  --color-neutral-border-hover: #bdbdbd;
+  --color-neutral-border-pressed: #b3b3b3;
+  --color-neutral-border-subtle: #0a0a0a;
+  --color-neutral-disabled-background: #141414;
+  --color-backdrop: rgba(0,0,0,0.5);
+  --color-shadow-ambient: rgba(0,0,0,0.24);
+  --color-shadow-key: rgba(0,0,0,0.28);
+  --color-focus-ring: #ffffff;
   --semantic-positive-foreground: var(--palette-green-light);
   --semantic-positive-background: var(--palette-green-dark);
   --semantic-positive-indicator: var(--palette-green-light);
@@ -224,7 +275,27 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --color-focus-ring: var(--palette-blue-light);
+    --color-neutral-canvas: #1f1f1f;
+    --color-neutral-surface: #292929;
+    --color-neutral-surface-subtle: #1f1f1f;
+    --color-neutral-surface-hover: #3d3d3d;
+    --color-neutral-surface-pressed: #1f1f1f;
+    --color-neutral-surface-selected: #383838;
+    --color-neutral-subtle-background: transparent;
+    --color-neutral-subtle-hover: rgba(36,36,36,0.8);
+    --color-neutral-subtle-pressed: rgba(36,36,36,0.5);
+    --color-neutral-foreground: #ffffff;
+    --color-neutral-foreground-secondary: #d6d6d6;
+    --color-neutral-foreground-disabled: #5c5c5c;
+    --color-neutral-border: #adadad;
+    --color-neutral-border-hover: #bdbdbd;
+    --color-neutral-border-pressed: #b3b3b3;
+    --color-neutral-border-subtle: #0a0a0a;
+    --color-neutral-disabled-background: #141414;
+    --color-backdrop: rgba(0,0,0,0.5);
+    --color-shadow-ambient: rgba(0,0,0,0.24);
+    --color-shadow-key: rgba(0,0,0,0.28);
+    --color-focus-ring: #ffffff;
     --semantic-positive-foreground: var(--palette-green-light);
     --semantic-positive-background: var(--palette-green-dark);
     --semantic-positive-indicator: var(--palette-green-light);
@@ -262,18 +333,28 @@
     --color-neutral-surface-subtle: Canvas;
     --color-neutral-surface-hover: Highlight;
     --color-neutral-surface-pressed: Highlight;
+    --color-neutral-surface-selected: Highlight;
+    --color-neutral-subtle-background: Canvas;
+    --color-neutral-subtle-hover: Highlight;
+    --color-neutral-subtle-pressed: Highlight;
     --color-neutral-foreground: CanvasText;
     --color-neutral-foreground-secondary: CanvasText;
     --color-neutral-foreground-disabled: GrayText;
     --color-neutral-border: ButtonBorder;
+    --color-neutral-border-hover: Highlight;
+    --color-neutral-border-pressed: Highlight;
     --color-neutral-border-subtle: ButtonBorder;
     --color-neutral-disabled-background: Canvas;
-    --color-shadow: CanvasText;
+    --color-backdrop: Canvas;
+    --color-shadow-ambient: CanvasText;
+    --color-shadow-key: CanvasText;
     --color-window-base: Canvas !important;
     --color-accent: Highlight !important;
     --color-accent-foreground: HighlightText;
     --color-accent-hover: Highlight;
+    --color-accent-hover-foreground: HighlightText;
     --color-accent-pressed: Highlight;
+    --color-accent-pressed-foreground: HighlightText;
     --color-focus-ring: Highlight;
     --semantic-positive-foreground: CanvasText;
     --semantic-positive-background: Canvas;

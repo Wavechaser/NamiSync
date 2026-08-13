@@ -80,6 +80,7 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "original(window)" in source
     assert '"Input.dispatchKeyEvent"' in source
     assert '"Emulation.setEmulatedMedia"' in source
+    assert '"Accessibility.getFullAXTree"' in source
     assert "ZoomFactor = 2.0" in source
     assert 'await import("/tree.js")' in source
     assert "fingerprint === JSON.stringify(treeFingerprint(treeRoot))" in source
@@ -106,6 +107,18 @@ def test_shell_gate_report_refuses_private_error_text(tmp_path: Path) -> None:
     assert result["failure"] == {"stage": "child", "type": "RuntimeError"}
     assert "private" not in json.dumps(result).casefold()
     assert "sentinel" not in json.dumps(result).casefold()
+
+
+def test_accessibility_evidence_preserves_incomplete_normalized_facts() -> None:
+    assert shell_child._accessibility_evidence({"nodes": []}) == {
+        "tree_count": 0,
+        "treeitem_count": 0,
+        "keyboard_tree_named": False,
+        "presentation_tree_named": False,
+        "hostile_label_exact": False,
+        "long_label_exact": False,
+        "active_descendant_exposed": False,
+    }
 
 
 @pytest.mark.headed
@@ -169,10 +182,23 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     assert layout["rail_right"] <= layout["work_left"]
     assert layout["rail_bottom"] > layout["rail_top"]
     assert layout["work_bottom"] > layout["work_top"]
-    assert page["first_focus"] == {"label": "Task navigation", "tag": "NAV"}
-    assert page["second_focus"] == {"label": "Work area", "tag": "SECTION"}
+    assert page["keyboard_tree"] == {
+        "row_count": 3,
+        "tab_index": 0,
+        "active_node": "keyboard-root",
+    }
+    assert page["first_focus"] == {
+        "label": "Keyboard tree evidence",
+        "tag": "DIV",
+        "active_node": "keyboard-root",
+    }
+    assert page["second_focus"] == {
+        "label": "Keyboard tree evidence",
+        "tag": "DIV",
+        "active_node": "keyboard-child",
+    }
     assert page["controller_zoom"] == 2.0
-    assert final["focused_before_tree"] == "Work area"
+    assert final["focused_before_tree"] == "Keyboard tree evidence"
     assert final["zoom"] == {
         "stacked": True,
         "cards_positive": True,
@@ -209,6 +235,15 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         ).hexdigest(),
     }
     assert final["complete_text"] == shell_child._COMPLETE_TEXT
+    assert page["accessibility"] == {
+        "tree_count": 2,
+        "treeitem_count": 259,
+        "keyboard_tree_named": True,
+        "presentation_tree_named": True,
+        "hostile_label_exact": True,
+        "long_label_exact": True,
+        "active_descendant_exposed": True,
+    }
     assert page["native"] == {
         "ui_thread": True,
         "window_style": {
@@ -328,10 +363,12 @@ def _assert_report_schema(result: object) -> None:
     }
     assert set(result["page"]) == {
         "initial",
+        "keyboard_tree",
         "first_focus",
         "second_focus",
         "controller_zoom",
         "final",
+        "accessibility",
         "native",
     }
     initial = result["page"]["initial"]
@@ -363,8 +400,17 @@ def _assert_report_schema(result: object) -> None:
         "work_top",
         "work_bottom",
     }
+    assert set(result["page"]["keyboard_tree"]) == {
+        "row_count",
+        "tab_index",
+        "active_node",
+    }
     for focus_name in ("first_focus", "second_focus"):
-        assert set(result["page"][focus_name]) == {"label", "tag"}
+        assert set(result["page"][focus_name]) == {
+            "label",
+            "tag",
+            "active_node",
+        }
     final = result["page"]["final"]
     assert set(final) == {
         "focused_before_tree",
@@ -408,6 +454,15 @@ def _assert_report_schema(result: object) -> None:
         "long_exact",
         "long_bytes",
         "long_sha256",
+    }
+    assert set(result["page"]["accessibility"]) == {
+        "tree_count",
+        "treeitem_count",
+        "keyboard_tree_named",
+        "presentation_tree_named",
+        "hostile_label_exact",
+        "long_label_exact",
+        "active_descendant_exposed",
     }
     assert set(result["page"]["native"]) == {"ui_thread", "window_style"}
     assert set(result["page"]["native"]["window_style"]) == {

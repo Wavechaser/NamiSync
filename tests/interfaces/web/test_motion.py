@@ -15,11 +15,11 @@ ASSET_ROOT = (
 )
 
 
-def _rule_bodies(source: str, selector_fragment: str) -> tuple[str, ...]:
+def _rule_bodies(source: str, selector: str) -> tuple[str, ...]:
     return tuple(
         body
         for selectors, body in re.findall(r"([^{}]+)\{([^{}]*)\}", source)
-        if selector_fragment in selectors
+        if selector in {item.strip() for item in selectors.split(",")}
     )
 
 
@@ -45,9 +45,40 @@ def test_sh_g_13_motion_tokens_and_reduced_motion_override_are_owned() -> None:
     reduced = components.split("@media (prefers-reduced-motion: reduce)", 1)[1]
     assert "transition-duration: var(--motion-duration-instant);" in reduced
     assert "--motion-duration-progress-cycle: 0.01ms;" in reduced_tokens
-    assert ".nami-dialog[open]" in reduced
+    assert ".nami-dialog," in reduced
+    assert ".nami-tree-row__disclosure," in reduced
     assert ".nami-progress--indeterminate .nami-progress__bar" in reduced
-    assert reduced.count("animation: none;") >= 2
+    assert reduced.count("animation: none;") >= 1
+
+
+def test_sh_g_13_disclosure_and_dialog_use_css_motion_with_real_exit() -> None:
+    components = (ASSET_ROOT / "components.css").read_text(encoding="utf-8")
+
+    disclosure = _rule_bodies(components, ".nami-tree-row__disclosure")
+    assert any(
+        "transition: transform var(--motion-duration-fast)" in body
+        for body in disclosure
+    )
+    assert "@starting-style" not in components
+    assert "allow-discrete" not in components
+    assert "overlay var(" not in components
+    dialog = _rule_bodies(components, ".nami-dialog")
+    assert dialog
+    exit_rule = next(body for body in dialog if "opacity: 0;" in body)
+    assert "opacity var(--motion-duration-normal)" in exit_rule
+    assert "transform var(--motion-duration-normal)" in exit_rule
+    opened = _rule_bodies(components, ".nami-dialog[open]")
+    assert any("opacity: 1;" in body for body in opened)
+    assert any("animation: nami-dialog-enter" in body for body in opened)
+    closing = _rule_bodies(components, '.nami-dialog[data-closing="true"]')
+    assert any("opacity: 0;" in body for body in closing)
+    assert any("pointer-events: none;" in body for body in closing)
+    closing_backdrop = _rule_bodies(
+        components,
+        '.nami-dialog[data-closing="true"]::backdrop',
+    )
+    assert any("opacity: 0;" in body for body in closing_backdrop)
+    assert "@keyframes nami-dialog-enter" in components
 
 
 def test_sh_g_13_no_motion_is_bound_to_virtualized_row_lifecycle() -> None:

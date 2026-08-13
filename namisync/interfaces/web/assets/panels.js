@@ -5,7 +5,6 @@ export function createWorkPanel() {
   panel.classList.add("nami-card", "nami-work-panel");
   panel.role = "region";
   panel.ariaLabel = "Work area";
-  panel.tabIndex = 0;
 
   const heading = document.createElement("h2");
   renderText(heading, "Work area");

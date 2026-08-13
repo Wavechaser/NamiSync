@@ -23,6 +23,7 @@ _COMPLETE_TEXT = "Shell gate complete"
 _ASSETS = (
     "app.css",
     "app.js",
+    "appearance.js",
     "components.css",
     "index.html",
     "panels.js",
@@ -86,11 +87,82 @@ _INITIAL_PROBE = r"""
 })()
 """
 
+_KEYBOARD_TREE_PROBE = r"""
+(async () => {
+  const work = document.querySelector(".nami-work-panel");
+  if (!(work instanceof HTMLElement)) {
+    throw new Error("production work panel is unavailable");
+  }
+  const {createTree} = await import("/tree.js");
+  const root = document.createElement("div");
+  root.ariaLabel = "Keyboard tree evidence";
+  work.append(root);
+  const controller = createTree(root);
+  const generation = controller.beginWindowRequest();
+  controller.commitWindow(generation, {
+    offset: 0,
+    total: 3,
+    rows: [
+      {
+        node_id: "keyboard-root",
+        display: "Keyboard root",
+        depth: 0,
+        is_container: true,
+        visible_index: 0,
+        parent_visible_index: null,
+        first_child_visible_index: 1,
+        position_in_set: 1,
+        set_size: 1,
+        expanded: true,
+      },
+      {
+        node_id: "keyboard-child",
+        display: "Keyboard child",
+        depth: 1,
+        is_container: false,
+        visible_index: 1,
+        parent_visible_index: 0,
+        first_child_visible_index: null,
+        position_in_set: 1,
+        set_size: 2,
+        expanded: null,
+      },
+      {
+        node_id: "keyboard-sibling",
+        display: "Keyboard sibling",
+        depth: 1,
+        is_container: false,
+        visible_index: 2,
+        parent_visible_index: 0,
+        first_child_visible_index: null,
+        position_in_set: 2,
+        set_size: 2,
+        expanded: null,
+      },
+    ],
+  });
+  const activeDescendant = root.getAttribute("aria-activedescendant");
+  return {
+    row_count: root.querySelectorAll(".nami-tree-row").length,
+    tab_index: root.tabIndex,
+    active_node: document.getElementById(activeDescendant)
+      ?.dataset.nodeId ?? null,
+  };
+})()
+"""
+
 _ACTIVE_PROBE = r"""
-(() => ({
-  label: document.activeElement?.getAttribute("aria-label") ?? null,
-  tag: document.activeElement?.tagName ?? null,
-}))()
+(() => {
+  const active = document.activeElement;
+  const descendant = active?.getAttribute("aria-activedescendant");
+  return {
+    label: active?.getAttribute("aria-label") ?? null,
+    tag: active?.tagName ?? null,
+    active_node: descendant === null || descendant === undefined
+      ? null
+      : document.getElementById(descendant)?.dataset.nodeId ?? null,
+  };
+})()
 """
 
 _FINAL_PROBE = r"""
@@ -105,9 +177,14 @@ _FINAL_PROBE = r"""
     throw new Error("production shell disappeared");
   }
   const focusedBeforeTree = document.activeElement?.getAttribute("aria-label");
+  const focused = document.activeElement;
+  if (!(focused instanceof HTMLElement)) {
+    throw new Error("keyboard tree focus disappeared");
+  }
   const railRect = rail.getBoundingClientRect();
   const workRect = work.getBoundingClientRect();
-  const focusStyle = getComputedStyle(work);
+  const focusedRect = focused.getBoundingClientRect();
+  const focusStyle = getComputedStyle(focused);
   const treeModule = await import("/tree.js");
   const renderModule = await import("/render.js");
   const treeRoot = document.createElement("div");
@@ -133,16 +210,26 @@ _FINAL_PROBE = r"""
       {
         node_id: "node-hostile",
         display: hostile,
-        depth: 0,
+        depth: 1,
         is_container: true,
-        expanded: false,
+        visible_index: 5,
+        parent_visible_index: 0,
+        first_child_visible_index: 6,
+        position_in_set: 1,
+        set_size: 1,
+        expanded: true,
       },
       {
         node_id: "node-long",
         display: longValue,
         depth: 1,
         is_container: false,
-        expanded: false,
+        visible_index: 6,
+        parent_visible_index: 5,
+        first_child_visible_index: null,
+        position_in_set: 1,
+        set_size: 1,
+        expanded: null,
       },
     ],
   });
@@ -158,10 +245,15 @@ _FINAL_PROBE = r"""
   const currentTwo = controller.beginWindowRequest();
   const rows = Array.from({length: 256}, (_, index) => ({
     node_id: `node-${index}`,
-    display: index === 255 ? longValue : `Row ${index}`,
+    display: index === 1 ? hostile : index === 255 ? longValue : `Row ${index}`,
     depth: index === 0 ? 0 : 1,
     is_container: index === 0,
-    expanded: index === 0,
+    visible_index: index,
+    parent_visible_index: index === 0 ? null : 0,
+    first_child_visible_index: index === 0 ? 1 : null,
+    position_in_set: index === 0 ? 1 : index,
+    set_size: index === 0 ? 1 : 255,
+    expanded: index === 0 ? true : null,
   }));
   controller.commitWindow(currentTwo, {offset: 0, total: 256, rows});
   const fingerprint = JSON.stringify(treeFingerprint(treeRoot));
@@ -182,7 +274,8 @@ _FINAL_PROBE = r"""
       no_horizontal_overflow:
         document.documentElement.scrollWidth <=
           document.documentElement.clientWidth + 1,
-      focused_visible: workRect.top < innerHeight && workRect.bottom > 0,
+      focused_visible:
+        focusedRect.top < innerHeight && focusedRect.bottom > 0,
     },
     forced: {
       active: matchMedia("(forced-colors: active)").matches,
@@ -346,6 +439,56 @@ def _runtime_value(task: object) -> dict[str, object]:
     return value
 
 
+def _accessibility_evidence(value: object) -> dict[str, object]:
+    if type(value) is not dict or type(value.get("nodes")) is not list:
+        raise TypeError("accessibility tree result is invalid")
+    nodes = value["nodes"]
+
+    def field(node: object, name: str) -> object:
+        if type(node) is not dict:
+            return None
+        candidate = node.get(name)
+        return candidate.get("value") if type(candidate) is dict else None
+
+    trees = [node for node in nodes if field(node, "role") == "tree"]
+    items = [node for node in nodes if field(node, "role") == "treeitem"]
+    tree_names = {field(node, "name") for node in trees}
+    item_names = {field(node, "name") for node in items}
+    keyboard = next(
+        (
+            node
+            for node in trees
+            if field(node, "name") == "Keyboard tree evidence"
+        ),
+        None,
+    )
+    properties = keyboard.get("properties") if type(keyboard) is dict else None
+    active = next(
+        (
+            prop
+            for prop in properties or []
+            if type(prop) is dict and prop.get("name") == "activedescendant"
+        ),
+        None,
+    )
+    active_value = active.get("value") if type(active) is dict else None
+    related = (
+        active_value.get("relatedNodes")
+        if type(active_value) is dict
+        else None
+    )
+    evidence = {
+        "tree_count": len(trees),
+        "treeitem_count": len(items),
+        "keyboard_tree_named": "Keyboard tree evidence" in tree_names,
+        "presentation_tree_named": "Presentation tree evidence" in tree_names,
+        "hostile_label_exact": _HOSTILE in item_names,
+        "long_label_exact": _LONG in item_names,
+        "active_descendant_exposed": type(related) is list and bool(related),
+    }
+    return evidence
+
+
 def _begin_probe(
     window: object,
     recorder: _Recorder,
@@ -407,31 +550,61 @@ def _begin_probe(
             runtime=True,
         )
 
-    def key(event_type: str, callback: Callable[[object], None]) -> None:
+    def key(
+        event_type: str,
+        name: str,
+        code: str,
+        virtual_key: int,
+        callback: Callable[[object], None],
+    ) -> None:
         protocol(
             "Input.dispatchKeyEvent",
             {
                 "type": event_type,
-                "key": "Tab",
-                "code": "Tab",
-                "windowsVirtualKeyCode": 9,
-                "nativeVirtualKeyCode": 9,
+                "key": name,
+                "code": code,
+                "windowsVirtualKeyCode": virtual_key,
+                "nativeVirtualKeyCode": virtual_key,
             },
             callback,
         )
 
+    def press(
+        name: str,
+        code: str,
+        virtual_key: int,
+        callback: Callable[[object], None],
+    ) -> None:
+        key(
+            "rawKeyDown",
+            name,
+            code,
+            virtual_key,
+            lambda _value: key(
+                "keyUp",
+                name,
+                code,
+                virtual_key,
+                callback,
+            ),
+        )
+
     def after_initial(value: object) -> None:
         page["initial"] = value
-        key("rawKeyDown", lambda _value: key("keyUp", after_first_tab))
+        evaluate(_KEYBOARD_TREE_PROBE, after_keyboard_tree)
+
+    def after_keyboard_tree(value: object) -> None:
+        page["keyboard_tree"] = value
+        press("Tab", "Tab", 9, after_first_tab)
 
     def after_first_tab(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_first_focus)
 
     def after_first_focus(value: object) -> None:
         page["first_focus"] = value
-        key("rawKeyDown", lambda _value: key("keyUp", after_second_tab))
+        press("ArrowDown", "ArrowDown", 40, after_second_key)
 
-    def after_second_tab(_value: object) -> None:
+    def after_second_key(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_second_focus)
 
     def after_second_focus(value: object) -> None:
@@ -460,6 +633,18 @@ def _begin_probe(
 
     def after_final(value: object) -> None:
         page["final"] = value
+        protocol(
+            "Accessibility.enable",
+            {},
+            lambda _value: protocol(
+                "Accessibility.getFullAXTree",
+                {},
+                after_accessibility,
+            ),
+        )
+
+    def after_accessibility(value: object) -> None:
+        page["accessibility"] = _accessibility_evidence(value)
         page["native"] = {
             "ui_thread": not bool(native.InvokeRequired),
             "window_style": _window_style(native),

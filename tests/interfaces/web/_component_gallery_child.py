@@ -53,6 +53,9 @@ _CONTROL_KEYS = (
     "list_row",
     "tree_row",
     "card",
+    "task_card",
+    "task_card_selected",
+    "task_card_current",
     "dialog",
     "context_menu",
     "segmented_control",
@@ -143,6 +146,16 @@ _EXPECTED_PSEUDO_TARGETS = [
     for control in _CONTROL_KEYS
     for state, classes in _PSEUDO_CLASSES.items()
 ]
+_CONTROL_REPORT_CHUNK_ROWS = 10
+_CONTROL_REPORT_ROW_COUNT = len(_CONTROL_KEYS) * len(_CONTROL_STATES)
+_CONTROL_REPORT_CHUNK_COUNT = math.ceil(
+    _CONTROL_REPORT_ROW_COUNT / _CONTROL_REPORT_CHUNK_ROWS
+)
+_REPORT_PART_NAMES = (
+    ("statuses", "operations")
+    + ("controls",) * _CONTROL_REPORT_CHUNK_COUNT
+    + ("control_contract", "motion", "icons")
+)
 
 
 class _Recorder:
@@ -226,6 +239,9 @@ def _test_report_spec(
         FieldRequirement,
     )
 
+    parts: list[tuple[str, object]] = []
+    completed = False
+
     def validate(payload: object) -> dict[str, object]:
         if type(payload) is not dict or type(payload.get("phase")) is not str:
             raise CommandPayloadError("component gallery report is invalid")
@@ -251,40 +267,108 @@ def _test_report_spec(
             ):
                 raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
+        if payload["phase"] == "part" and set(payload) == {
+            "phase",
+            "sequence",
+            "name",
+            "value",
+        }:
+            sequence = payload["sequence"]
+            name = payload["name"]
+            value = payload["value"]
+            if (
+                type(sequence) is not int
+                or not 0 <= sequence < len(_REPORT_PART_NAMES)
+                or type(name) is not str
+                or name != _REPORT_PART_NAMES[sequence]
+                or (
+                    name in {"statuses", "operations", "controls"}
+                    and type(value) is not list
+                )
+                or (
+                    name in {"control_contract", "motion", "icons"}
+                    and type(value) is not dict
+                )
+            ):
+                raise CommandPayloadError("component gallery report is invalid")
+            if name == "controls":
+                chunk_index = sequence - 2
+                remaining = (
+                    _CONTROL_REPORT_ROW_COUNT
+                    - chunk_index * _CONTROL_REPORT_CHUNK_ROWS
+                )
+                expected_rows = min(_CONTROL_REPORT_CHUNK_ROWS, remaining)
+                if len(value) != expected_rows:
+                    raise CommandPayloadError(
+                        "component gallery report is invalid"
+                    )
+            return dict(payload)
         if payload["phase"] != "complete" or set(payload) != {
             "phase",
             "mode",
             "media",
-            "statuses",
-            "operations",
-            "controls",
-            "control_contract",
-            "motion",
-            "icons",
+            "part_count",
         }:
             raise CommandPayloadError("component gallery report is invalid")
         if (
             type(payload["mode"]) is not str
             or type(payload["media"]) is not dict
-            or type(payload["statuses"]) is not list
-            or type(payload["operations"]) is not list
-            or type(payload["controls"]) is not list
-            or type(payload["control_contract"]) is not dict
-            or type(payload["motion"]) is not dict
-            or type(payload["icons"]) is not dict
+            or type(payload["part_count"]) is not int
+            or payload["part_count"] != len(_REPORT_PART_NAMES)
         ):
-            raise CommandPayloadError("component gallery report is invalid")
-        if not _valid_complete_report(payload, expected_mode=expected_mode):
             raise CommandPayloadError("component gallery report is invalid")
         return dict(payload)
 
     def report(payload: object) -> object:
+        nonlocal completed
         if type(payload) is not dict:
             raise TypeError("component gallery received unvalidated data")
         if payload["phase"] == "prepare":
             schedule_pseudos(payload["targets"])
             return {"accepted": True}
-        recorder.set("report", payload)
+        if completed:
+            raise CommandPayloadError("component gallery report is invalid")
+        if payload["phase"] == "failure":
+            recorder.set("report_part_count", len(parts))
+            recorder.set("report", payload)
+            recorder.write()
+            return {"accepted": True}
+        if payload["phase"] == "part":
+            if payload["sequence"] != len(parts):
+                raise CommandPayloadError("component gallery report is invalid")
+            parts.append((payload["name"], payload["value"]))
+            return {"accepted": True}
+        if (
+            len(parts) != len(_REPORT_PART_NAMES)
+            or tuple(name for name, _value in parts) != _REPORT_PART_NAMES
+        ):
+            raise CommandPayloadError("component gallery report is invalid")
+        controls = [
+            row
+            for name, value in parts
+            if name == "controls" and type(value) is list
+            for row in value
+        ]
+        values = {
+            name: value
+            for name, value in parts
+            if name != "controls"
+        }
+        complete = {
+            "phase": "complete",
+            "mode": payload["mode"],
+            "media": payload["media"],
+            "statuses": values["statuses"],
+            "operations": values["operations"],
+            "controls": controls,
+            "control_contract": values["control_contract"],
+            "motion": values["motion"],
+            "icons": values["icons"],
+        }
+        if not _valid_complete_report(complete, expected_mode=expected_mode):
+            raise CommandPayloadError("component gallery report is invalid")
+        completed = True
+        recorder.set("report", complete)
         recorder.write()
         return {"accepted": True}
 
@@ -440,9 +524,13 @@ def _valid_control_rows(rows: object) -> bool:
 
 
 def _valid_control_contract(value: object) -> bool:
-    if type(value) is not dict or set(value) != {"tri_state"}:
+    if type(value) is not dict or set(value) != {
+        "tri_state",
+        "dialog_exit",
+    }:
         return False
     tri_state = value["tri_state"]
+    dialog_exit = value["dialog_exit"]
     return (
         type(tri_state) is dict
         and set(tri_state) == {"aria_checked", "indeterminate", "cue_content"}
@@ -450,6 +538,10 @@ def _valid_control_contract(value: object) -> bool:
         and tri_state["indeterminate"] is True
         and type(tri_state["cue_content"]) is str
         and tri_state["cue_content"] not in {"", "none", "normal"}
+        and type(dialog_exit) is dict
+        and set(dialog_exit)
+        == {"opened", "retained_while_closing", "faded", "closed"}
+        and all(value is True for value in dialog_exit.values())
     )
 
 

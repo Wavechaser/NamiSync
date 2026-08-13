@@ -47,7 +47,6 @@ _FORBIDDEN_ACTIVE_SINKS = (
     r"\bsrcdoc\s*=",
     r"\bDOMParser\s*\(",
     r"\bcreateContextualFragment\s*\(",
-    r"\.setAttribute\s*\(",
     r"\.(?:href|src|style|cssText|on\w+)\s*=",
     r"\beval\s*\(",
     r"\bnew\s+Function\s*\(",
@@ -56,11 +55,26 @@ _FORBIDDEN_ACTIVE_SINKS = (
 
 
 def _active_sink_hits(source: str) -> tuple[str, ...]:
-    return tuple(
+    pattern_hits = tuple(
         pattern
         for pattern in _FORBIDDEN_ACTIVE_SINKS
         if re.search(pattern, source, re.IGNORECASE)
     )
+    return pattern_hits + tuple(
+        f"setAttribute:{name}" for name in _attribute_sink_hits(source)
+    )
+
+
+def _attribute_sink_hits(source: str) -> tuple[str, ...]:
+    calls = re.findall(r"\.setAttribute\s*\(", source)
+    fixed_names = re.findall(
+        r"\.setAttribute\s*\(\s*['\"]([^'\"]+)['\"]\s*,",
+        source,
+    )
+    if len(calls) != len(fixed_names):
+        return ("dynamic-attribute-name",)
+    allowed = {"aria-activedescendant"}
+    return tuple(name for name in fixed_names if name not in allowed)
 
 
 def _javascript_frozen_array(source: str, name: str) -> tuple[str, ...]:
@@ -189,10 +203,12 @@ def test_modules_use_only_local_explicit_js_imports(
     assert imports == {
         "app.js": [
             "./bridge.js",
+            "./appearance.js",
             "./panels.js",
             "./rail.js",
             "./render.js",
         ],
+        "appearance.js": [],
         "bridge.js": [],
         "icons.js": [],
         "panels.js": ["./render.js"],
@@ -211,9 +227,80 @@ def test_modules_use_only_local_explicit_js_imports(
 def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
     built_wheel: BuiltWheel,
 ) -> None:
-    source = "\n".join(_wheel_assets(built_wheel).values())
+    assets = _wheel_assets(built_wheel)
+    source = "\n".join(assets.values())
 
     assert _active_sink_hits(source) == ()
+    assert _attribute_sink_hits(source) == ()
+    assert source.count('setAttribute("aria-activedescendant",') == 1
+
+    appearance = assets["appearance.js"]
+    assert "setAttribute" not in appearance
+    assert ".style =" not in appearance
+    assert ".cssText" not in appearance
+    assert ".postMessage" not in appearance
+    assert appearance.count("root.style.setProperty(") == 6
+    assert appearance.count('addEventListener("message", receive)') == 1
+    assert appearance.count('removeEventListener("message", receive)') == 1
+    properties = re.findall(
+        r'root\.style\.setProperty\(\s*"(--[a-z-]+)"', appearance
+    )
+    assert properties == [
+        "--color-accent",
+        "--color-accent-hover",
+        "--color-accent-pressed",
+        "--color-accent-foreground",
+        "--color-accent-hover-foreground",
+        "--color-accent-pressed-foreground",
+    ]
+
+
+def test_static_sink_guard_rejects_dynamic_and_authority_attributes() -> None:
+    assert _attribute_sink_hits('node.setAttribute(name, value);') == (
+        "dynamic-attribute-name",
+    )
+    assert _attribute_sink_hits('node.setAttribute("href", value);') == (
+        "href",
+    )
+    assert _attribute_sink_hits(
+        'node.setAttribute("aria-activedescendant", value);'
+    ) == ()
+
+
+def test_appearance_receiver_accepts_only_latest_exact_inert_envelope() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the no-dependency appearance probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "appearance_probe.mjs"),
+            str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "appearance.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result == {
+        "revision": 2,
+        "dataset": {
+            "theme": "dark",
+            "highContrast": "false",
+            "windowMaterial": "mica",
+        },
+        "properties": {
+            "--color-accent": "#123456",
+            "--color-accent-hover": "#234567",
+            "--color-accent-pressed": "#012345",
+            "--color-accent-foreground": "#FFFFFF",
+            "--color-accent-hover-foreground": "#FFFFFF",
+            "--color-accent-pressed-foreground": "#FFFFFF",
+        },
+        "listenerRemoved": True,
+    }
 
 
 def test_br_g_32_production_inert_text_helper_owns_text_writes(
@@ -289,12 +376,20 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
         "filter",
         "collapse",
         "ancestor",
-        "parent_index",
     ):
         assert forbidden not in tree
     assert "256" not in tree
+    assert 'root.role = "tree";' in tree
+    assert tree.count("root.tabIndex = 0;") == 1
+    assert (
+        'root.setAttribute("aria-activedescendant", activeElement.id);'
+        in tree
+    )
+    assert 'root.removeAttribute("aria-activedescendant");' in tree
+    assert "root.ariaActiveDescendant" not in tree
     assert ".slice(" not in tree
     assert "Object.keys(" not in tree
+    assert "Reflect.ownKeys(" not in tree
 
 
 def test_sh_g_7_browserless_tree_probe_uses_production_modules() -> None:
@@ -593,8 +688,11 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'renderText(heading, "Work area");' in panels
     assert 'renderText(empty, "No task selected.");' in panels
     assert "Task details will appear here when a task is available." in panels
-    assert rail.count("tabIndex = 0;") == 1
-    assert panels.count("tabIndex = 0;") == 1
+    assert "tabIndex" not in rail
+    assert "tabIndex" not in panels
+    assert 'rail.classList.add("nami-task-rail");' in rail
+    assert 'rail.classList.add("nami-card"' not in rail
+    assert 'panel.classList.add("nami-card", "nami-work-panel");' in panels
     assert "app.append(createTaskRail(), createWorkPanel());" in app
     assert 'status.textContent === "Starting..."' in app
 

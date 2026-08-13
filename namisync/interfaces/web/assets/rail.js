@@ -2,9 +2,8 @@ import { renderText } from "./render.js";
 
 export function createTaskRail() {
   const rail = document.createElement("nav");
-  rail.classList.add("nami-card", "nami-task-rail");
+  rail.classList.add("nami-task-rail");
   rail.ariaLabel = "Task navigation";
-  rail.tabIndex = 0;
 
   const heading = document.createElement("h2");
   renderText(heading, "Tasks");

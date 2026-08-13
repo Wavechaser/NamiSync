@@ -89,6 +89,8 @@ body {
 .nami-row:focus-visible,
 .nami-list-row:focus-visible,
 .nami-tree-row:focus-visible,
+.nami-tree:focus-visible,
+.nami-task-card:focus-visible,
 .nami-segmented__item:focus-visible {
   box-shadow: 0 0 0 2px var(--color-focus-ring);
   outline: none;
@@ -118,11 +120,13 @@ body {
 .nami-button--primary:hover {
   background: var(--color-accent-hover);
   border-color: var(--color-accent-hover);
+  color: var(--color-accent-hover-foreground);
 }
 
 .nami-button--primary:active {
   background: var(--color-accent-pressed);
   border-color: var(--color-accent-pressed);
+  color: var(--color-accent-pressed-foreground);
 }
 
 .nami-button--danger {
@@ -151,7 +155,7 @@ body {
 
 .nami-input:active,
 .nami-select:active {
-  border-color: var(--color-accent-pressed);
+  border-color: var(--color-neutral-border-pressed);
 }
 
 .nami-input::placeholder {
@@ -200,7 +204,7 @@ body {
 }
 
 .nami-checkbox:active {
-  border-color: var(--color-accent-pressed);
+  border-color: var(--color-neutral-border-pressed);
 }
 
 .nami-checkbox:checked,
@@ -259,7 +263,7 @@ body {
 }
 
 .nami-toggle__control:active {
-  border-color: var(--color-accent-pressed);
+  border-color: var(--color-neutral-border-pressed);
 }
 
 .nami-toggle__control:checked {
@@ -377,6 +381,36 @@ body {
   font-weight: var(--font-weight-medium);
 }
 
+.nami-tree-row[data-active="true"] {
+  background: var(--color-neutral-surface-selected);
+  font-weight: var(--font-weight-medium);
+}
+
+.nami-tree {
+  background: var(--color-neutral-surface);
+  border: 1px solid var(--color-neutral-border-subtle);
+  border-radius: var(--radius-medium);
+}
+
+.nami-tree-row__disclosure {
+  block-size: var(--space-3);
+  border-block-end: 1px solid var(--color-neutral-foreground-secondary);
+  border-inline-end: 1px solid var(--color-neutral-foreground-secondary);
+  flex: none;
+  inline-size: var(--space-3);
+  transform: rotate(-45deg);
+  transition: transform var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.nami-tree-row[aria-expanded="true"] .nami-tree-row__disclosure {
+  transform: rotate(45deg);
+}
+
+.nami-tree-row__disclosure--leaf {
+  border-color: var(--color-neutral-subtle-background);
+  visibility: hidden;
+}
+
 .nami-row[aria-disabled="true"],
 .nami-list-row[aria-disabled="true"],
 .nami-tree-row[aria-disabled="true"] {
@@ -397,7 +431,7 @@ body {
 }
 
 .nami-card:hover {
-  background: var(--color-neutral-surface-subtle);
+  background: var(--color-neutral-surface-hover);
 }
 
 .nami-card:active {
@@ -409,21 +443,75 @@ body {
   outline: none;
 }
 
-.nami-dialog {
-  background: var(--color-neutral-surface);
-  border-radius: var(--radius-large);
-  box-shadow: var(--elevation-16);
+.nami-task-card {
+  background: var(--color-neutral-subtle-background);
+  border: 1px solid var(--color-neutral-subtle-background);
+  border-radius: var(--radius-medium);
   color: var(--color-neutral-foreground);
-  max-inline-size: 36rem;
-  padding: var(--space-6);
+  cursor: pointer;
+  padding: var(--space-4);
   transition:
     background-color var(--motion-duration-fast) var(--motion-easing-standard),
     border-color var(--motion-duration-fast) var(--motion-easing-standard),
     box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
+.nami-task-card:not([aria-disabled="true"]):hover {
+  background: var(--color-neutral-subtle-hover);
+}
+
+.nami-task-card:not([aria-disabled="true"]):active {
+  background: var(--color-neutral-subtle-pressed);
+}
+
+.nami-task-card[aria-selected="true"],
+.nami-task-card[aria-current="true"] {
+  background: var(--color-neutral-surface);
+  border-color: var(--color-neutral-border-subtle);
+  box-shadow: var(--elevation-2);
+}
+
+.nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
+.nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
+  background: var(--color-neutral-surface-hover);
+}
+
+.nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
+.nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
+  background: var(--color-neutral-surface-pressed);
+}
+
+.nami-task-card[aria-disabled="true"] {
+  color: var(--color-neutral-foreground-disabled);
+  cursor: default;
+}
+
+.nami-task-card[aria-selected="true"]:focus-visible,
+.nami-task-card[aria-current="true"]:focus-visible {
+  box-shadow: var(--elevation-2);
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.nami-dialog {
+  background: var(--color-neutral-surface);
+  border-radius: var(--radius-large);
+  box-shadow: var(--elevation-16);
+  color: var(--color-neutral-foreground);
+  max-inline-size: 36rem;
+  opacity: 0;
+  padding: var(--space-6);
+  transform: translateY(var(--space-3));
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+    opacity var(--motion-duration-normal) var(--motion-easing-accelerate),
+    transform var(--motion-duration-normal) var(--motion-easing-accelerate);
+}
+
 .nami-dialog:hover {
-  background: var(--color-neutral-surface-subtle);
+  background: var(--color-neutral-surface-hover);
 }
 
 .nami-dialog:active {
@@ -436,18 +524,39 @@ body {
 }
 
 .nami-dialog::backdrop {
-  background: var(--color-neutral-canvas);
+  background: var(--color-backdrop);
+  opacity: 0;
+  transition: opacity var(--motion-duration-normal) var(--motion-easing-accelerate);
 }
 
 .nami-dialog[open] {
   animation: nami-dialog-enter var(--motion-duration-normal) var(--motion-easing-decelerate);
+  opacity: 1;
+  transform: translateY(var(--space-0));
+}
+
+.nami-dialog[data-closing="true"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(var(--space-3));
+}
+
+.nami-dialog[open]::backdrop {
+  opacity: 1;
+}
+
+.nami-dialog[data-closing="true"]::backdrop {
+  opacity: 0;
 }
 
 @keyframes nami-dialog-enter {
   from {
+    opacity: 0;
     transform: translateY(var(--space-3));
   }
+
   to {
+    opacity: 1;
     transform: translateY(var(--space-0));
   }
 }
@@ -868,7 +977,9 @@ body {
   .nami-row,
   .nami-list-row,
   .nami-tree-row,
+  .nami-tree,
   .nami-card,
+  .nami-task-card,
   .nami-dialog,
   .nami-menu,
   .nami-segmented,
@@ -897,6 +1008,8 @@ body {
   .nami-list-row:not([aria-disabled="true"]):active,
   .nami-tree-row:not([aria-disabled="true"]):hover,
   .nami-tree-row:not([aria-disabled="true"]):active,
+  .nami-task-card:not([aria-disabled="true"]):hover,
+  .nami-task-card:not([aria-disabled="true"]):active,
   .nami-card:not([aria-disabled="true"]):active,
   .nami-dialog:not([aria-disabled="true"]):active,
   .nami-menu__item:not(:disabled):hover,
@@ -926,6 +1039,14 @@ body {
     outline: 2px solid var(--color-focus-ring);
   }
 
+  .nami-tree-row[data-active="true"] {
+    color: var(--color-accent-foreground);
+  }
+
+  .nami-tree-row[data-active="true"] .nami-tree-row__disclosure {
+    border-color: var(--color-accent-foreground);
+  }
+
   .nami-button:focus-visible,
   .nami-input:focus-visible,
   .nami-select:focus-visible,
@@ -936,7 +1057,9 @@ body {
   .nami-row:focus-visible,
   .nami-list-row:focus-visible,
   .nami-tree-row:focus-visible,
+  .nami-tree:focus-visible,
   .nami-card:focus-visible,
+  .nami-task-card:focus-visible,
   .nami-dialog:focus-visible,
   .nami-menu__item:focus-visible,
   .nami-segmented__item:focus-visible,
@@ -957,7 +1080,9 @@ body {
   .nami-icon-button,
   .nami-segmented__item,
   .nami-card,
+  .nami-task-card,
   .nami-dialog,
+  .nami-tree-row__disclosure,
   .nami-progress,
   .nami-progress__bar {
     transition-duration: var(--motion-duration-instant);

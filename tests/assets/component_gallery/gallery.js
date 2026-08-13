@@ -11,6 +11,7 @@ const FAILURE_TYPES = Object.freeze(new Set([
 ]));
 let galleryStage = "module_import";
 const PSEUDO_STATE_SETTLE_MS = 350;
+const CONTROL_REPORT_CHUNK_ROWS = 10;
 
 function validAccepted(value) {
   return value !== null &&
@@ -84,6 +85,9 @@ async function reportFailure(error) {
     { key: "list_row", className: "nami-list-row", tag: "div" },
     { key: "tree_row", className: "nami-tree-row", tag: "div" },
     { key: "card", className: "nami-card", tag: "section" },
+    { key: "task_card", className: "nami-task-card", tag: "button" },
+    { key: "task_card_selected", className: "nami-task-card", tag: "button" },
+    { key: "task_card_current", className: "nami-task-card", tag: "button" },
     { key: "dialog", className: "nami-dialog", tag: "dialog" },
     { key: "context_menu", className: "nami-menu__item", tag: "button" },
     { key: "segmented_control", className: "nami-segmented__item", tag: "button" },
@@ -275,6 +279,13 @@ async function reportFailure(error) {
       element.setAttribute("role", "treeitem");
       element.setAttribute("aria-selected", "false");
       renderText(element, "Tree row");
+    } else if (definition.key.startsWith("task_card")) {
+      if (definition.key === "task_card_selected") {
+        element.setAttribute("aria-selected", "true");
+      } else if (definition.key === "task_card_current") {
+        element.setAttribute("aria-current", "true");
+      }
+      renderText(element, "Task card");
     } else if (definition.key === "dialog") {
       element.open = true;
       renderText(element, "Confirm operation");
@@ -517,32 +528,87 @@ async function reportFailure(error) {
     system_colors: systemColors,
   };
   const mixedStyle = getComputedStyle(mixedCheckbox, "::after");
+  const dialogExit = await dialogExitEvidence();
   const controlContract = {
     tri_state: {
       aria_checked: mixedCheckbox.getAttribute("aria-checked"),
       indeterminate: mixedCheckbox.indeterminate,
       cue_content: mixedStyle.content,
     },
+    dialog_exit: dialogExit,
   };
 
   galleryStage = "report";
+  const reportParts = [
+    { name: "statuses", value: statuses },
+    { name: "operations", value: operations },
+  ];
+  for (let offset = 0; offset < controls.length; offset += CONTROL_REPORT_CHUNK_ROWS) {
+    reportParts.push({
+      name: "controls",
+      value: controls.slice(offset, offset + CONTROL_REPORT_CHUNK_ROWS),
+    });
+  }
+  reportParts.push(
+    { name: "control_contract", value: controlContract },
+    {
+      name: "motion",
+      value: Object.freeze({
+        nonessential_max_ms: nonessentialMax,
+        indeterminate_iteration_count: indeterminateIterationCount,
+      }),
+    },
+    { name: "icons", value: iconEvidence },
+  );
+  for (const [sequence, part] of reportParts.entries()) {
+    await dispatchInteractive(
+      "test_report",
+      Object.freeze({
+        phase: "part",
+        sequence,
+        name: part.name,
+        value: part.value,
+      }),
+      validAccepted,
+    );
+  }
   await dispatchInteractive(
     "test_report",
     Object.freeze({
       phase: "complete",
       mode,
       media: Object.freeze({ dark, forced, reduced }),
-      statuses,
-      operations,
-      controls,
-      control_contract: controlContract,
-      motion: Object.freeze({
-        nonessential_max_ms: nonessentialMax,
-        indeterminate_iteration_count: indeterminateIterationCount,
-      }),
-      icons: iconEvidence,
+      part_count: reportParts.length,
     }),
     validAccepted,
   );
   renderText(status, `Gallery ${mode} complete`);
+
+  async function dialogExitEvidence() {
+    const dialog = document.createElement("dialog");
+    dialog.className = "nami-dialog";
+    renderText(dialog, "Dialog exit evidence");
+    app.append(dialog);
+    dialog.showModal();
+    await new Promise((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const duration = durationMilliseconds(
+      getComputedStyle(dialog).transitionDuration,
+    );
+    await new Promise((resolve) => setTimeout(resolve, duration + 50));
+    const openOpacity = parseFloat(getComputedStyle(dialog).opacity);
+    dialog.dataset.closing = "true";
+    await new Promise((resolve) => setTimeout(resolve, duration + 50));
+    const closingOpacity = parseFloat(getComputedStyle(dialog).opacity);
+    const retainedWhileClosing = dialog.open;
+    dialog.close();
+    const closed = !dialog.open;
+    dialog.remove();
+    return {
+      opened: openOpacity > 0.99,
+      retained_while_closing: retainedWhileClosing,
+      faded: closingOpacity < 0.01,
+      closed,
+    };
+  }
 })().catch(reportFailure);

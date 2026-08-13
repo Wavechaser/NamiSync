@@ -51,6 +51,7 @@ body {
 }
 
 .nami-task-rail {
+  background: var(--color-neutral-subtle-background);
   grid-area: rail;
 }
 

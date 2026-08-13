@@ -21,6 +21,7 @@ import pytest
 
 import _component_gallery_child as component_gallery_child
 from conftest import HeadedInstalledWheel
+from namisync.interfaces.web.commands import CommandPayloadError
 from namisync.version import VERSION
 from _headed_native import (
     clean_child_environment,
@@ -82,6 +83,9 @@ _CONTROL_KEYS = {
     "list_row",
     "tree_row",
     "card",
+    "task_card",
+    "task_card_selected",
+    "task_card_current",
     "dialog",
     "context_menu",
     "segmented_control",
@@ -204,7 +208,9 @@ def test_component_gallery_media_modes_are_exact_and_scenario_bounded() -> None:
     assert "--scenario" in source
 
 
-def test_component_gallery_report_parser_is_exact_and_nested() -> None:
+def test_component_gallery_report_parser_is_exact_and_nested(
+    tmp_path: Path,
+) -> None:
     def semantic(key: str) -> dict[str, object]:
         return {
             "key": key,
@@ -276,6 +282,12 @@ def test_component_gallery_report_parser_is_exact_and_nested() -> None:
                 "indeterminate": True,
                 "cue_content": '"−"',
             },
+            "dialog_exit": {
+                "opened": True,
+                "retained_while_closing": True,
+                "faded": True,
+                "closed": True,
+            },
         },
         "motion": {
             "nonessential_max_ms": 100,
@@ -312,6 +324,89 @@ def test_component_gallery_report_parser_is_exact_and_nested() -> None:
         },
     }
     assert component_gallery_child._valid_complete_report(report) is True
+
+    chunk_rows = component_gallery_child._CONTROL_REPORT_CHUNK_ROWS
+    part_values = [
+        ("statuses", report["statuses"]),
+        ("operations", report["operations"]),
+        *(
+            ("controls", controls[offset : offset + chunk_rows])
+            for offset in range(0, len(controls), chunk_rows)
+        ),
+        ("control_contract", report["control_contract"]),
+        ("motion", report["motion"]),
+        ("icons", report["icons"]),
+    ]
+    assert tuple(name for name, _value in part_values) == (
+        component_gallery_child._REPORT_PART_NAMES
+    )
+    recorder = component_gallery_child._Recorder(
+        tmp_path / "report.json",
+        "light",
+    )
+    spec = component_gallery_child._test_report_spec(
+        recorder,
+        lambda _targets: None,
+        "light",
+    )
+    for sequence, (name, value) in enumerate(part_values):
+        payload = {
+            "phase": "part",
+            "sequence": sequence,
+            "name": name,
+            "value": value,
+        }
+        envelope = {
+            "schema_version": 1,
+            "request_id": "0" * 32,
+            "command": "test_report",
+            "payload": payload,
+        }
+        assert len(json.dumps(envelope).encode("utf-8")) <= 65_536
+        assert spec.invoke(payload) == {"accepted": True}
+    assert spec.invoke(
+        {
+            "phase": "complete",
+            "mode": "light",
+            "media": {"dark": False, "forced": False, "reduced": False},
+            "part_count": len(part_values),
+        }
+    ) == {"accepted": True}
+    recorded = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert recorded["report"] == report
+
+    incomplete = component_gallery_child._test_report_spec(
+        component_gallery_child._Recorder(tmp_path / "incomplete.json", "light"),
+        lambda _targets: None,
+        "light",
+    )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        incomplete.invoke(
+            {
+                "phase": "complete",
+                "mode": "light",
+                "media": {"dark": False, "forced": False, "reduced": False},
+                "part_count": len(part_values),
+            }
+        )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        incomplete.invoke(
+            {
+                "phase": "part",
+                "sequence": 1,
+                "name": "operations",
+                "value": report["operations"],
+            }
+        )
+    with pytest.raises(CommandPayloadError, match="report is invalid"):
+        incomplete.validate_payload(
+            {
+                "phase": "part",
+                "sequence": 2,
+                "name": "controls",
+                "value": controls[: chunk_rows - 1],
+            }
+        )
 
     assert (
         component_gallery_child._valid_complete_report(
@@ -353,6 +448,9 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/icons.js")' in script
     assert "const PSEUDO_STATE_SETTLE_MS = 350;" in script
     assert "setTimeout(resolve, PSEUDO_STATE_SETTLE_MS)" in script
+    assert 'dialog.dataset.closing = "true";' in script
+    assert "dialog.showModal();" in script
+    assert "dialog.close();" in script
     assert "window.pywebview" not in script
     assert "innerHTML" not in script
 
@@ -441,7 +539,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
     }
     for report in (light, dark, forced):
         _assert_complete_gallery_matrix(report)
-        _assert_icon_registry_evidence(report["icons"])
+        _assert_icon_registry_evidence(
+            report["icons"],
+            forced=report["media"]["forced"],
+        )
         assert all(
             row["aliases_consumed"] is True
             for row in (*report["statuses"], *report["operations"])
@@ -516,6 +617,21 @@ def test_sh_g_13_component_gallery_honors_reduced_motion(
         (row["control"], row["state"]): row
         for row in reduced["controls"]
     }
+    light_controls = {
+        (row["control"], row["state"]): row
+        for row in light["controls"]
+    }
+    assert all(
+        _maximum_duration_ms(
+            light_controls[("dialog", state)]["transition_duration"]
+        ) > 1.0
+        for state in _CONTROL_STATES
+    )
+    assert all(
+        light_controls[("dialog", state)]["animation_name"]
+        == "nami-dialog-enter"
+        for state in _CONTROL_STATES
+    )
     assert all(
         reduced_controls[("progress_indeterminate", state)]["animation_name"]
         == "none"
@@ -527,17 +643,29 @@ def test_sh_g_13_component_gallery_honors_reduced_motion(
     )
 
 
+def _maximum_duration_ms(value: str) -> float:
+    maximum = 0.0
+    for raw in value.split(","):
+        part = raw.strip()
+        amount = float(part.removesuffix("ms").removesuffix("s"))
+        maximum = max(maximum, amount if part.endswith("ms") else amount * 1000)
+    return maximum
+
+
 @pytest.mark.headed
 def test_sh_g_14_component_gallery_uses_closed_local_icon_registry(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
     for result in component_gallery_evidence.results.values():
-        icons = result["report"]["icons"]
-        _assert_icon_registry_evidence(icons)
+        report = result["report"]
+        icons = report["icons"]
+        _assert_icon_registry_evidence(
+            icons,
+            forced=report["media"]["forced"],
+        )
         assert {sample["state"] for sample in icons["state_samples"]} == (
             _CONTROL_STATES
         )
-        assert all(sample["inherits"] is True for sample in icons["state_samples"])
 
 
 def _run_gallery_mode(
@@ -705,6 +833,12 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     assert tri_state["aria_checked"] == "mixed"
     assert tri_state["indeterminate"] is True
     assert tri_state["cue_content"] not in {"", "none", "normal"}
+    assert report["control_contract"]["dialog_exit"] == {
+        "opened": True,
+        "retained_while_closing": True,
+        "faded": True,
+        "closed": True,
+    }
     for control in _CONTROL_KEYS:
         rows = {
             row["state"]: row
@@ -809,7 +943,11 @@ def _opaque_color(value: str) -> bool:
     return match.group(4) is None or math.isclose(float(match.group(4)), 1.0)
 
 
-def _assert_icon_registry_evidence(icons: dict[str, object]) -> None:
+def _assert_icon_registry_evidence(
+    icons: dict[str, object],
+    *,
+    forced: bool,
+) -> None:
     assert icons["registry_frozen"] is True
     expected_names = {
         "checkmark-circle",
@@ -832,7 +970,28 @@ def _assert_icon_registry_evidence(icons: dict[str, object]) -> None:
     assert {sample["state"] for sample in icons["state_samples"]} == (
         _CONTROL_STATES
     )
-    assert all(sample["inherits"] is True for sample in icons["state_samples"])
+    if forced:
+        samples = {
+            sample["state"]: sample for sample in icons["state_samples"]
+        }
+        assert all(
+            samples[state]["inherits"] is True
+            for state in {"rest", "disabled", "focused"}
+        )
+        for state in {"hover", "pressed"}:
+            assert (
+                samples[state]["icon_color"]
+                == icons["system_colors"]["HighlightText"]
+            )
+            assert (
+                samples[state]["control_background"]
+                == icons["system_colors"]["Highlight"]
+            )
+    else:
+        assert all(
+            sample["inherits"] is True
+            for sample in icons["state_samples"]
+        )
     # Inactive controls are exempt from non-text contrast; their currentColor
     # inheritance and fixed local mask remain required above.
     assert all(
