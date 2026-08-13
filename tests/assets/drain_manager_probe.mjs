@@ -287,6 +287,10 @@ success(one0, [
 ]);
 const one1 = await nextRequest(1);
 assert.equal(one1.request.payload.replay_from, null);
+assert.deepEqual(
+  acceptedOne.map((update) => update.event.sequence),
+  [1, 3],
+);
 testWindow.emit("pywebviewready");
 const one2 = await nextRequest(2);
 assert.equal(one2.request.payload.replay_from, 4);
@@ -309,6 +313,12 @@ assert.deepEqual(
     "Terminal",
     "record",
   ],
+);
+assert.deepEqual(
+  acceptedOne
+    .filter((update) => update.update_type === "event")
+    .map((update) => update.event.sequence),
+  [1, 3, 4, 6, 7],
 );
 assert.equal(refusedOne.length, 0);
 const countAfterTerminal = requests.length;
@@ -333,12 +343,24 @@ success(two0, [
 ]);
 const two1 = await nextRequest(countAfterTerminal + 1);
 assert.equal(two1.request.payload.replay_from, 10);
+assert.deepEqual(
+  acceptedTwo.map((update) => update.event.body_type),
+  ["Gap"],
+);
 success(two1, [
   event(session("2"), 10, "Gap", { first_missed_seq: 10 }),
   event(session("2"), 12),
 ]);
 const two2 = await nextRequest(countAfterTerminal + 2);
 assert.equal(two2.request.payload.replay_from, null);
+assert.deepEqual(
+  acceptedTwo.map((update) => update.event.body_type),
+  ["Gap", "Gap", "StateChanged"],
+);
+assert.deepEqual(
+  acceptedTwo.map((update) => update.event.sequence),
+  [10, 10, 12],
+);
 success(two2, [terminalRecord(session("2"))]);
 await turns();
 assert.deepEqual(

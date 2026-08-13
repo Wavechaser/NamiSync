@@ -554,6 +554,7 @@ def test_br_g_33_progress_coalesces_and_reliable_never_drops_or_reorders() -> No
         (1001, "Progress"),
         (1002, "StateChanged"),
     ]
+    assert service.reobserve_calls == []
 
 
 def test_br_g_33_progress_yields_to_a_full_reliable_queue() -> None:
@@ -590,7 +591,7 @@ def test_br_g_33_reliable_capacity_blocks_until_drain_and_close_wakes() -> None:
     producer.join(1)
     second = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
 
-    assert len(first.updates) == 64
+    assert [item.event.sequence for item in first.updates] == list(range(2, 66))
     assert [item.event.sequence for item in second.updates] == [66]
 
     for sequence in range(67, 131):
@@ -705,6 +706,56 @@ def test_br_g_33_terminal_recovery_enqueues_record_and_stops_at_truth() -> None:
     assert len(drained.updates) == 1
     assert drained.updates[0].update_type == "record"
     assert drained.updates[0].record is terminal
+
+
+def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            sink(
+                SessionEventView(
+                    session_id,
+                    2,
+                    "2026-01-01T00:00:00Z",
+                    "Gap",
+                    {"first_missed_seq": 2},
+                )
+            )
+            sink(
+                SessionEventView(
+                    session_id,
+                    4,
+                    "2026-01-01T00:00:00Z",
+                    "StateChanged",
+                    {},
+                )
+            )
+            return self.reobserve_result
+
+    service = Service()
+    terminal = _record()
+    service.reobserve_result = terminal
+    registry, _ = _registry(service)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=2,
+    )
+
+    assert [update.update_type for update in drained.updates] == [
+        "event",
+        "event",
+        "record",
+    ]
+    assert [
+        update.event.body_type for update in drained.updates[:2]
+    ] == ["Gap", "StateChanged"]
+    assert drained.updates[0].event.body == {"first_missed_seq": 2}
+    assert drained.updates[2].record is terminal
 
 
 def test_br_g_33_terminal_recovery_never_exceeds_the_queue_or_batch_cap() -> None:

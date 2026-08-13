@@ -67,7 +67,7 @@ def test_audit_flush_interval_must_be_positive() -> None:
         make_hub(audit_flush_interval=0)
 
 
-def test_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
+def test_br_g_33_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
     hub = make_hub(subscriber_capacity=1)
     stream = hub.subscribe(from_seq=1)
     started = monotonic()
@@ -82,7 +82,7 @@ def test_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
     assert hub.close(0.5)
 
 
-def test_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
+def test_br_g_33_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
     hub = make_hub(subscriber_capacity=1)
     stream = hub.subscribe(from_seq=1)
     hub.emit(PhaseChanged("one"))
@@ -97,7 +97,7 @@ def test_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
     assert hub.close(0.5)
 
 
-def test_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
+def test_br_g_33_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
     hub = make_hub(replay_capacity=2, subscriber_capacity=4)
     hub.emit(StateChanged(SessionState.RUNNING))
     hub.emit(PhaseChanged("one"))
@@ -111,7 +111,7 @@ def test_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
     assert hub.close(0.5)
 
 
-def test_truncated_replay_keeps_its_gap_inside_the_subscriber_bound() -> None:
+def test_br_g_33_truncated_replay_keeps_gap_inside_subscriber_bound() -> None:
     # A replay buffer larger than one subscriber's bound is the normal
     # production shape (128 versus 64), so the truncation gap must be counted
     # against the bound rather than delivered on top of an already full tail.
@@ -126,6 +126,73 @@ def test_truncated_replay_keeps_its_gap_inside_the_subscriber_bound() -> None:
     assert [
         stream.next(0.1).body for _ in range(3)
     ] == [PhaseChanged("phase-5"), PhaseChanged("phase-6"), PhaseChanged("phase-7")]
+    assert not stream.ejected
+    assert hub.close(0.5)
+
+
+@pytest.mark.parametrize(
+    ("boundary", "replay_capacity", "subscriber_capacity", "pattern"),
+    [
+        pytest.param("live", 8, 1, "RR", id="live-capacity-1"),
+        pytest.param("live", 8, 2, "PRR", id="live-progress-prefix"),
+        pytest.param("live", 8, 3, "RPRR", id="live-mixed-capacity-3"),
+        pytest.param("live", 8, 4, "RPRPRR", id="live-replaced-progress"),
+        pytest.param("replay", 2, 4, "RRR", id="retention-truncation"),
+        pytest.param("replay", 8, 4, "RRRRRRRR", id="subscriber-truncation"),
+        pytest.param("replay", 4, 3, "PRPRR", id="replay-mixed-pattern"),
+    ],
+)
+def test_br_g_33_gap_covers_earliest_missing_reliable_sequence(
+    boundary: str,
+    replay_capacity: int,
+    subscriber_capacity: int,
+    pattern: str,
+) -> None:
+    hub = make_hub(
+        replay_capacity=replay_capacity,
+        subscriber_capacity=subscriber_capacity,
+    )
+    stream = hub.subscribe(from_seq=1) if boundary == "live" else None
+    emitted = []
+    for index, kind in enumerate(pattern, start=1):
+        body = (
+            PhaseChanged(f"reliable-{index}")
+            if kind == "R"
+            else Progress(index, len(pattern), index, len(pattern), None)
+        )
+        emitted.append((kind, hub.emit(body)))
+    if stream is None:
+        stream = hub.subscribe(from_seq=1)
+
+    observed = [stream.next(0.1) for _ in range(len(stream._items))]
+    assert observed
+    assert isinstance(observed[0].body, Gap)
+    delivered_sequences = {
+        envelope.seq for envelope in observed if not isinstance(envelope.body, Gap)
+    }
+    missing_reliable = [
+        envelope.seq
+        for kind, envelope in emitted
+        if kind == "R" and envelope.seq not in delivered_sequences
+    ]
+    assert missing_reliable
+    assert observed[0].body.first_missed_seq <= min(missing_reliable)
+    assert stream.ejected is (boundary == "live")
+    assert hub.close(0.5)
+
+
+def test_br_g_33_progress_coalescing_makes_legal_numeric_holes() -> None:
+    hub = make_hub(subscriber_capacity=4)
+    stream = hub.subscribe(from_seq=1)
+    hub.emit(StateChanged(SessionState.RUNNING))
+    hub.emit(Progress(1, 2, 1, 2, None))
+    hub.emit(Progress(2, 2, 2, 2, None))
+    hub.emit(PhaseChanged("after-progress"))
+
+    observed = [stream.next(0.1) for _ in range(3)]
+
+    assert [envelope.seq for envelope in observed] == [1, 3, 4]
+    assert not any(isinstance(envelope.body, Gap) for envelope in observed)
     assert not stream.ejected
     assert hub.close(0.5)
 
