@@ -5,14 +5,18 @@ contract, schema/settings/security prerequisites, pipelined XXH3-128
 executor/verifier switch, role-free inventory, standalone integrity workflows,
 generic history items, production dispatcher registrations, and optional
 post-execution compound verification. The CLI and Stage 5.5
-facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` remains
-the decision and acceptance record for the implemented Stage 5.5 prerequisite
-and active Stage 6 headed desktop shell. Stage 6's host and transport through
+facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` is the
+sole normative bridge protocol and BR-G acceptance authority for the
+implemented Stage 5.5 prerequisite and active Stage 6 headed desktop shell.
+Stage 6's host and transport through
 Slice 3 plus later transport hardening are implemented. GUI Break 1 and Slice
 4 have completed their audited token/material/motion and shared
 presentation/tree/shell realignment. Product plan,
 inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
-delivery order and beta-package closure.
+delivery order, host/package placement, SH-G definitions, and beta-package
+closure. The installed real-WebView2 browser-witness migration and SH-G-8's
+complete normal-envelope evidence remain open; numeric-hole recovery and
+`start_plan` revision decisions are ratified with landed named regressions.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -329,7 +333,7 @@ Stage 5 location activities through the shared service.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 - **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure.
-- **Desktop Command Transport Implemented**. The immutable production allowlist is exactly `pick_folder`, `start_plan`, `next_events`, and lifecycle-only `close_task`. Strict v1 envelopes, bounded opaque purpose-bound folder slots, pre-slot receipt replay, sanitized failures, and one function-only pywebview dispatch entry have ordinary and real-WebView2 coverage. Adapter state caps 64 admitted handlers and 48 tasks, terminal delivery gates bounded task release, and finite delayed drain/release recovery refuses on exhaustion. User-facing plan/inventory controls remain later slices.
+- **Desktop Command Transport Implemented**. One function-only pywebview dispatch entry, bounded opaque folder authority, sanitized failures, receipt-safe replay, and bounded task/drain ownership are implemented. `M1_BRIDGE.md` exclusively defines the production mapping, exact envelopes/errors, retry/revision rules, capacities, recovery, and terminal release versus task close. Browserless/Node evidence is supplemental; the named installed real-WebView2 browser witnesses and SH-G-8 normal envelope remain open. User-facing plan/inventory controls remain later slices.
 
 ## DESKTOP UI
 
@@ -343,8 +347,8 @@ Stage 5 location activities through the shared service.
   exact 28-pixel row, inert full labels, and stale-generation refusal. The production
   shell exposes labelled task navigation and work regions
   with honest empty guidance; it fabricates no task, session, or product row
-  and adds no workflow command beyond `pick_folder`, `start_plan`, and
-  `next_events`; `close_task` is lifecycle-only.
+  and adds no presentation command. The exact bridge surface remains solely in
+  `M1_BRIDGE.md`.
 - **Task Rail**. The transparent rail exposes the window's Mica or opaque
   fallback base. Unselected cards are transparent, hover/press use distinct
   tokenized overlays, and the selected/current card uses the opaque work-card

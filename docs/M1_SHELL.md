@@ -7,16 +7,14 @@ and `DISPATCHER.md` and added sections 5-8; the 2026-08-07 revision settles
 single-instance identity,
 the database file-pair matrix, in-loop startup teardown, the normative CSP
 gate, the GUI argument grammar, and constructor-only command composition; the
-2026-08-08 revision adds the Fluent visual design language (§1.9), motion
-(§1.10), and the two GUI Breaks that bound the visual work.
-Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-3 are complete.
-The installed-wheel and real WebView2 gates now cover the secured product host,
-bounded startup finalizer, nonblocking user-close/retry state machine, fixed
-single-instance boundary, coordinated database refusal, exact four-command
-transport, real native picker confinement, committed-origin refusal, and
-hostile-text/privacy return path. The Slice 3 event drain, transactional
-pre-schedule observation, bounded task registry, and reincarnation recovery are
-implemented. GUI Break 1's token, component, icon, motion, and native-material
+2026-08-08 revision added the Fluent visual design language, motion, and the
+two GUI Breaks that bound the visual work; their visual authority now lives in
+`DESKTOP_UI.md`.
+Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-3 are
+implemented. Their secured host, transport, picker, origin, privacy, event
+drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`; the remaining
+real-WebView2 browser-behavior migration and SH-G-8 normal-envelope evidence
+are explicitly open below. GUI Break 1's token, component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame have completed their
 audited realignment and restored headed gates. Slice 5 is the next delivery
 slice. NamiSync remains version `0.1.0` until
@@ -25,8 +23,9 @@ change is a separate release decision.
 
 ## Standing
 
-`M1_BRIDGE.md` remains the authoritative bridge semantics and BR-G acceptance
-contract. `DESKTOP_UI.md` remains the user-facing desktop contract. This file
+`M1_BRIDGE.md` is the sole normative bridge semantics and BR-G acceptance
+contract: envelopes, commands, errors, retry/revision identity, sequence and
+lifecycle rules live there, not here. `DESKTOP_UI.md` remains the user-facing desktop contract. This file
 owns the implementation sequence, frontend/package layout, and release-work
 placement for the shell. Its later entry-point and packaging decisions replace
 the older statements that bare `nami-sync` opens the desktop or that no GUI
@@ -38,27 +37,11 @@ process-local M1 lifetime, and all BR-G gates continue to apply.
 
 ### 2026-08-13 audit hardening
 
-The native host now constructs the window with `js_api=None` and exposes only
-one function-table entry named `dispatch`; pywebview never receives the
-dispatcher object graph. Bridge command names are bounded lowercase snake case,
-unsafe names are omitted from logs, and at most 64 Python handlers can be
-admitted. Close rejects new work, wakes task waiters, waits a bounded interval
-for admitted handlers, detaches observations, and only then closes the service.
-An incomplete step is retryable and retains the logging, app-path, and
-single-instance owners rather than presenting unsafe completion.
-
-The current immutable transport table is `pick_folder`, `start_plan`,
-`next_events`, and `close_task`. Adapter state is capped at 48 tasks. A
-successful `start_plan` replay is checked against its original wire intent
-before the volatile folder slots are resolved, so slot expiry or eviction
-cannot invalidate an already-earned receipt. `close_task` is accepted only
-after the terminal record was delivered, releases the observation, session,
-plan, task, and start receipt, and retains a bounded same-payload close receipt
-for uncertain response replay. Startup/admission compensation and close
-cleanup are stepwise and retryable. The browser uses the Python command table's
-exact timeout/retry mirror, finite delayed drain recovery, and a bounded
-same-payload release retry; exhaustion produces a visible refusal instead of a
-zero-delay loop.
+The native host uses function-only bridge exposure and fail-closed, retryable
+owner teardown. Task/session authority, command policy, and browser recovery
+were hardened in the same delivery stream. Their exact behavior and evidence
+are normative in `M1_BRIDGE.md`; this plan retains only their host placement and
+slice order.
 
 `AppPaths.acquire_lease()` holds non-reparse, delete-denying handles on the app
 root, logs directory, WebView2 directory, and both ready database mains for the
@@ -76,9 +59,6 @@ retained reservation with `ReOpenFile` and requests exact-object disposition,
 so a displaced foreign pathname is retained. Rollback runs for ordinary
 failures, `KeyboardInterrupt`, and `SystemExit`, and incomplete cleanup carries
 the coordinated reset direction.
-The desktop continues to accept only `null`, `trash`, or `additive`; hidden
-`mirror` cannot enter through bridge payloads.
-
 ## 1. Settled Shell Decisions
 
 ### 1.1 Entry points
@@ -333,7 +313,7 @@ presentation. `tree.js` virtualizes and renders windows already decided by the
 server; it never reconstructs hierarchy or filters an already-windowed page.
 `plan.js` and `inventory.js` keep the two vertical renderers disjoint;
 `panels.js` owns only their shared panel frame. `tokens.css` holds the Fluent
-design tokens (section 1.9), `components.css` the Fluent control set built on
+design tokens defined in `DESKTOP_UI.md`, `components.css` the Fluent control set built on
 them, and `app.css` layout only; surface renderers consume tokens and
 components and define no color of their own.
 
@@ -352,168 +332,26 @@ headed tests so the test page and production assets can be assembled under one
 temporary root. The production launcher never accepts that override from argv,
 the bridge, or page data, and test assets are never package data.
 
-### 1.7 Fixed virtual row geometry
+### 1.7 Boundaries owned elsewhere
 
-All virtualized plan and inventory rows use one CSS-pixel height expressed in
-exactly two authored declarations:
+This plan fixes only implementation and package placement at seams whose
+behavioral contract is owned elsewhere:
 
-```css
-:root { --row-h: 28px; }
-```
+- `M1_BRIDGE.md` is the sole normative authority for bridge envelopes,
+  limits, commands, exact errors, retry/deadline and revision identity,
+  visible-sequence behavior, sequence/`Gap`/terminal semantics,
+  terminal-session release versus explicit task close, and every BR-G gate.
+- `DESKTOP_UI.md` owns the visual and user-facing contract, including the
+  exact authored palette, Fluent roles, native materials, icon foundation, and
+  motion guardrails.
+- `ARCHITECTURE.md` owns layer and lifecycle boundaries; focused module
+  documents own domain behavior.
 
-```javascript
-export const ROW_H = 28;
-```
-
-An ordinary test parses the two declarations and asserts integer equality.
-Row CSS fixes border-box height, min/max height, vertical margins, and
-single-line overflow. A headed check measures representative hostile and long
-rows so matching constants cannot hide accidental variable DOM height.
-
-### 1.8 One browser bridge wrapper
-
-Only `assets/bridge.js` may reference `window.pywebview`. It owns readiness,
-schema version, transport request ids, mutation command ids, timeout classes,
-response validation, and bridge-reincarnation recovery. A static test enforces
-the single reference site.
-
-`request_id` identifies one transport attempt. `command_id` identifies one
-receipted user gesture and survives uncertain delivery and retry. A retry always
-uses a new request id. A receipted command reuses its command id and exact
-command payload; it carries a revision only when that command was formed against
-a revisioned server view. Therefore Slice 2's `start_plan` requires a command id
-but no revision, while `pick_folder` requires neither. Later selection and
-inventory mutations carry the revision required by their owning view contract;
-the bridge does not invent a blanket revision field for every mutation. Drains
-recover from the last sequence the client accepted rather than using a mutation
-receipt. Repeated
-`pywebviewready` events install no duplicate listeners and rearm at most one
-drain per task.
-
-Pywebview receives no `BridgeDispatcher` object. The host passes `js_api=None`
-and adds one function-table entry named `dispatch`; raw receiver-name messages
-therefore cannot traverse the dispatcher's private object graph.
-
-### 1.9 Visual design language
-
-NamiSync presents as a Fluent 2 (Windows 11) desktop app. This section fixes the
-design language; the pixel-level result is tuned in the GUI Breaks (section 2),
-not preselected here.
-
-- **Type and frame.** Body text is Segoe UI Variable; paths and hashes use
-  Cascadia Mono/Consolas. Both are Windows 11 system fonts, so no font ships.
-  M1 keeps the standard OS window frame and gets Fluent chrome from native
-  materials; a frameless custom caption — with its caption-button and
-  window-drag reimplementation — is deferred post-M1 so no new native surface
-  needs re-proving for the beta.
-- **Native materials.** Mica (`DWMSBT_MAINWINDOW`) is the whole-window base,
-  applied by DWM on the top-level HWND at the same UI-thread hook Slice 1 uses
-  for guard attachment, with an immersive dark title bar; the WebView2 controller
-  background and the page base are transparent so the material shows through
-  everywhere it is not covered. Content does not hide Mica edge-to-edge — it sits
-  in opaque Fluent *cards* floating on the Mica base, and Mica stays visible in
-  the seams: the title bar, the task-rail and unselected-tab backgrounds, and the
-  gutters and margins around cards. Cards are opaque for readability and because
-  compositing a material behind a virtualized scrolling list is a rendering and
-  performance trap, so the plan and inventory trees render inside an opaque card
-  while their surrounding gutter stays Mica. No Acrylic in M1; menus and dialogs
-  are opaque, and a later CSS `backdrop-filter` acrylic on those overlays is a
-  localized `components.css` change, not a re-architecture. High contrast disables
-  Mica and honors the system high-contrast palette; a system without the material
-  (pre-22H2) or a transparency failure degrades to an opaque Fluent neutral base,
-  never a broken see-through window.
-- **Tokens and theme.** Fluent neutral and accent ramps, the type ramp, and
-  spacing, 4px-based radius, elevation, and motion scales live in `tokens.css`
-  as theme-agnostic CSS variables. The minimal light/dark neutral subset is
-  transcribed from one pinned Microsoft Fluent token source with its source
-  identity and exact values tested; no Fluent code or build toolchain enters
-  production. M1 follows the system light/dark theme and honors high contrast.
-  Windows `UISettings` supplies `Accent`, `AccentLight1`, and `AccentDark1` for
-  distinct rest, hover, and pressed roles; theme and color changes are observed
-  and re-published. Forced colors remain system-owned.
-  NamiSync's authored status/operation palette is a separate, exact input owned
-  only by that file:
-
-  ```css
-  --palette-red-main: #EE6666;
-  --palette-red-dark: #551111;
-  --palette-red-light: #FFAACC;
-  --palette-green-main: #33DD99;
-  --palette-green-dark: #004422;
-  --palette-green-light: #99EEDD;
-  --palette-blue-main: #33AAEE;
-  --palette-blue-dark: #002255;
-  --palette-blue-light: #99CCFF;
-  --palette-yellow-main: #FFDD44;
-  --palette-yellow-dark: #553300;
-  --palette-purple-main: #BB88EE;
-  --palette-purple-dark: #331155;
-  ```
-
-  These are exactly 13 palette primitives; yellow and purple intentionally have
-  no authored `light` primitive at GUI Break 1. Adding another hardcoded or
-  derived color value, including a future yellow/purple `light`,
-  is a deliberate design change that must first be discussed with the product
-  author and then land through this token contract and its evidence. The
-  current implementation must not silently manufacture or disguise one through
-  `color-mix()`, alpha/transparency, another color function, or an alternate
-  alias.
-  Semantic status and operation aliases in `tokens.css`, never palette names,
-  are the contract consumed by controls and surfaces. The `main`/`dark`/`light`
-  labels identify authored swatches, not theme assignments: GUI Break 1 chooses
-  light- and dark-theme semantic pairs only after visual and numeric contrast
-  checks. Under Windows forced colors, semantic aliases resolve to appropriate
-  system colors rather than forcing this palette.
-- **Components.** Because there is no framework or bundler, the control set is a
-  compact hand-authored Fluent 2 CSS system in `components.css` on those tokens:
-  button, dropdown, tri-state checkbox, determinate and indeterminate progress,
-  text input, toggle, chips, list/tree row, card, dialog, context menu, and the
-  Sync|Integrity segmented control. Each control carries its rest, hover,
-  pressed, disabled, and focused states. Surface renderers consume tokens and
-  components and define no color of their own.
-- **Icons.** Microsoft Fluent System Icons are the default source. GUI Break 1
-  vendors only the four regular 20 px foundation glyphs it needs to prove the
-  system (`checkmark_circle`, `dismiss_circle`, `warning`, and `info`) from one
-  pinned `@fluentui/svg-icons@1.1.334` package, retaining the upstream
-  filenames, per-file SHA-256 hashes, MIT license, exact package/file source
-  URLs, and package version under `assets/icons/`.
-  `icons.js` owns one frozen code-only registry whose public names are visual
-  glyph names, not workflow or status policy. A registry entry selects one
-  fixed CSS class; the class selects one fixed local SVG as a CSS mask.
-  `tokens.css` owns only the shared `--icon-size-sm: 16px`,
-  `--icon-size-md: 20px`, and `--icon-size-lg: 24px` sizes. `components.css`
-  owns mask alignment, sizing classes,
-  `background-color: currentColor`, and interaction/disabled behavior. The
-  helper creates only an inert span with allowlisted classes: it never emits or
-  parses SVG markup, accepts a URL/path, constructs a class or asset name from
-  data, fetches remotely, or exposes runtime registration. An unknown glyph or
-  size is refused instead of falling back. Icons are decorative by default and
-  accompany visible text; an icon-only control must own an accessible name.
-  Later slices add the exact surface glyphs and mappings as ordinary source
-  changes to the registry, CSS, provenance, package manifest, and tests.
-- **Information architecture.** The rail-plus-panel layout, task cards, the
-  Sync|Integrity toggle, and the setup-form-versus-summary flow follow
-  `DESKTOP_UI.md` and the `ui_mockup/` reference. The mockup is a look and IA
-  reference only — it is dark-only, simulates menus and caption buttons, and
-  sources tokens from a removed Qt file — so it is re-authored against the real
-  tokens and bridge/command/view contracts rather than grafted in.
-
-### 1.10 Motion
-
-Fluent motion is a system, not per-element choreography. Duration steps and the
-Fluent easing curves live in `tokens.css` as CSS variables transcribed from the
-Fluent motion spec; state transitions, expand/collapse, progress, and dialog
-entrance/exit are plain CSS on those tokens (WebView2 is full Chromium, so
-nothing is held back). Two guardrails are normative:
-
-- `prefers-reduced-motion` is honored — non-essential motion reduces or stops,
-  matching the system setting.
-- No animation is bound to virtualized-row recycling. Rows are created and
-  destroyed by scrolling, so animating their insertion or removal produces jank
-  and flicker; motion lives at the panel, control, and discrete-state level, not
-  on the plan or inventory row lifecycle.
-
-The exact choreography is felt, not specified, and is tuned in the GUI Breaks.
+Only `assets/bridge.js` may reference `window.pywebview`; the host exposes
+only the function-table `dispatch` entry. Slice 2 places that wrapper and the
+strict dispatcher, Slice 3 places the drain manager, and later slices extend
+the one transport through rows defined in `M1_BRIDGE.md`. This file neither
+duplicates nor refines those protocols.
 
 ## 2. Delivery Sequence
 
@@ -707,669 +545,115 @@ installation, not yet the final PyInstaller artifact.
 
 ### Slice 2 - Command transport, slots, and headed harness
 
-The following is the normative, implemented Slice 2 transport contract. Its
-closure covers transport, picker, committed-origin refusal, static sinks, and
-SH-G-3 logging/privacy; it does not claim the later plan or inventory DOM
-portions of BR-G-32.
+Status: implementation complete; browser-gate evidence migration remains open.
 
-**Wire envelopes and limits.** The JavaScript wrapper sends one JSON string to
-`dispatch(command_json)`. Its UTF-8 encoding must be at most 65,536 bytes before
-JSON decoding. Duplicate object keys, non-finite numbers, malformed Unicode,
-and missing or unknown fields at any defined object level are invalid. The v1
-request has exactly these fields:
+The normative transport contract is exclusively in `M1_BRIDGE.md`: its
+inherited bridge posture, DR-BR-25/27 decisions, Slice 2 delivery contract, and
+BR-G-32 acceptance gate own envelopes, limits, command schemas, error
+vocabulary, retry identity, deadlines, and command-specific revision rules.
+This shell plan owns only when and where that contract lands.
 
-```json
-{
-  "schema_version": 1,
-  "request_id": "0123456789abcdef0123456789abcdef",
-  "command": "pick_folder",
-  "payload": {"purpose": "source"}
-}
-```
+Delivery work:
 
-`schema_version` is the JSON integer `1` (a Boolean is not an integer here).
-Both transport `request_id` and mutation `command_id` match
-`^[0-9a-f]{32}$`; a slot id matches `^slot-[0-9a-f]{32}$`. The wrapper mints a
-fresh request id for every transport attempt. IDs are opaque and one ID kind is
-never accepted in place of another.
+1. Add `commands.py` for immutable constructor-supplied command composition
+   and `slots.py` for server-held native-picker authority.
+2. Complete `bridge.py` as the strict dispatch/codec/refusal boundary and keep
+   `assets/bridge.js` as the sole browser transport owner.
+3. Compose the production rows, native picker, committed-origin check, and
+   sanitized logging through the Slice 1 host without moving domain policy into
+   the adapter.
+4. Add ordinary boundary tests and a constructor-only installed-wheel headed
+   harness under `tests/`; test commands and pages remain absent from package
+   data.
 
-A successful dispatch returns exactly:
-
-```json
-{
-  "schema_version": 1,
-  "request_id": "0123456789abcdef0123456789abcdef",
-  "ok": true,
-  "result": null
-}
-```
-
-The response request id equals the admitted request. A failed dispatch returns
-exactly:
-
-```json
-{
-  "schema_version": 1,
-  "request_id": null,
-  "ok": false,
-  "error": {
-    "code": "invalid_request",
-    "message": "The desktop request is invalid."
-  }
-}
-```
-
-`request_id` is echoed only after it independently passes its grammar;
-otherwise it is `null`. The server error vocabulary is exact:
-
-| `code` | Fixed `message` |
-| --- | --- |
-| `invalid_request` | `The desktop request is invalid.` |
-| `unsupported_version` | `Restart NamiSync to load a compatible desktop page.` |
-| `unknown_command` | `This desktop action is not available.` |
-| `invalid_payload` | `The desktop action contains invalid data.` |
-| `request_too_large` | `The desktop request is too large.` |
-| `slot_unavailable` | `That folder selection is no longer available. Choose both folders again.` |
-| `picker_unavailable` | `The folder picker could not open. Try again.` |
-| `command_conflict` | `This action no longer matches its first attempt. Start the action again.` |
-| `planning_refused` | `NamiSync could not start a plan for those folders. Review both folders and try again.` |
-| `task_unavailable` | `That desktop task is no longer available.` |
-| `drain_busy` | `That desktop task already has an event request in progress.` |
-| `observation_conflict` | `That desktop task is already observing different work.` |
-| `bridge_busy` | `NamiSync is busy. Try this action again.` |
-| `bridge_unavailable` | `NamiSync is closing or this desktop page is no longer trusted.` |
-| `internal_error` | `NamiSync could not complete the desktop action.` |
-
-Retry behavior belongs to the immutable command row and JavaScript wrapper,
-not to data returned by a possibly failed handler. A structured server refusal
-is definitive. Only uncertain transport delivery or `internal_error` from an
-admitted receipted command may trigger that row's one same-command replay.
-Messages contain no request body, command payload, real path, exception text,
-traceback, Python type, or implementation detail. No command exception crosses
-pywebview as its traceback-bearing native error value.
-
-**The production allowlist is exactly two rows.** `payload` and `result` below
-are exact schemas, not examples; no additional production command name or
-placeholder handler lands in Slice 2.
-
-| Command | Exact payload | Exact success `result` | Identity / revision | Timeout and retry |
-| --- | --- | --- | --- | --- |
-| `pick_folder` | `{"purpose":"source"}` or `{"purpose":"target"}` | user cancel: `null`; selection: `{"id":"slot-<32-lowercase-hex>","display":"<valid Unicode string>"}` | no `command_id`; no revision | interactive native operation; no client deadline and no automatic retry; a later user gesture is a new attempt with a fresh request id |
-| `start_plan` | `{"command_id":"<32-lowercase-hex>","source_id":"slot-<32-lowercase-hex>","target_id":"slot-<32-lowercase-hex>","deletion_policy":null}` or the same exact key set with `"trash"` or `"additive"` | Slice 2: `{"request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}`; Slice 3 atomically expands it to `{"task_id":"task-<32-lowercase-hex>","request_id":"<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | required `command_id`; no revision because this creates a session rather than mutating a revisioned view; Slice 3 retains the adapter-owned task id with the same command receipt | 30,000 ms response deadline; after uncertain delivery, bridge reincarnation, or `internal_error`, at most one automatic replay uses a fresh request id and the same command name, payload, and command id; a still-uncertain result exposes Retry, which retains that same command id |
-
-`display` is presentation-only inert text; Python never accepts it back as
-authority. `null` means use the service's current semantic deletion setting;
-`mirror` is not accepted by this Slice 2 command. Automatic replay uses the
-exact original payload. Service receipt identity is ultimately the resolved
-source/target pair plus deletion policy: reusing a command id for different
-resolved intent returns `command_conflict`, while the same resolved intent
-returns the existing `start_plan` receipt. A timer expiring in JavaScript does
-not cancel an admitted Python handler.
-
-**Folder slots are bounded server authority.** Only the native picker may
-insert a slot. Each entry retains the real path, its `source` or `target`
-purpose, inert display text, and a monotonic expiry 30 minutes after insertion.
-Lookup does not consume a slot and does not extend its expiry, so the same slot
-pair supports a same-command retry while live. Before insert or lookup, expired
-entries are swept. At most 32 unexpired entries exist. If insertion still finds
-32, it evicts exactly the least-recently-used entry (slot id breaks a timestamp
-tie); a successful lookup updates recency but never extends the fixed expiry.
-`start_plan` resolves and snapshots the source and target entries under one lock
-before invoking its handler: both must exist in the same observation, be
-unexpired, and match their respective purposes, and only then are both marked
-recently used. Fabricated, expired, evicted, or wrong-purpose ids all return the
-same sanitized `slot_unavailable` error. No bridge request contains a path, and
-no response makes `display` authoritative.
-
-**Harness composition and deferrals.** `test_report` is not a production row.
-The headed harness constructs a new immutable mapping from the production four
-rows plus one test-owned `test_report` spec; its validator, handler, payload,
-and result schema live under `tests/`, and product argv, environment, page data,
-or bridge traffic cannot enable it. The harness uses the same v1 envelope and
-production `bridge.js`, but its whole-scenario parent deadline owns test
-timeout; there is no product `test_report` retry class.
-
-The neutral browser primitive
-`dispatchInteractive(command, payload, validator)` accepts only a 1--64 ASCII
-lowercase-snake command name matching
-`^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$` and a callable result validator, then makes
-one transport attempt with no client deadline and no automatic retry. Payload
-validation remains the selected Python command row's responsibility. Both
-`pickFolder` and the constructor-only headed `test_report` client use this
-primitive. It formats a request; it does not register or allow a command, so
-Python's immutable constructor-supplied mapping remains the sole allowlist and
-the `test_report` literal, payload schema, result schema, and handler remain
-under `tests/` and absent from package data.
-
-Slice 3 owns the event-drain command; audit hardening adds only the adapter
-lifecycle command `close_task`; Slice 5 owns plan-review, selection, execution,
-and control commands; Slice 6 owns inventory commands; and Slice 7 owns
-settings and history commands. Other names and payload schemas are not
-reserved or allowlisted. A later command formed against a
-revisioned view must carry that view's exact revision, while a later read or
-mutation not formed against such a view does not invent one. The owning slice
-must add its row, schema, receipt/revision rule, timeout, retry policy, and gate
-together.
-
-1. `commands.py` defines one explicit row per allowed command: exact payload
-   validator, handler, read-only/mutating class, command-id requirement,
-   revision requirement, and retry/timeout class.
-2. Unknown versions, commands, fields, malformed ids, invalid Unicode, and
-   oversized input are refused before handler invocation. Returned failures are
-   sanitized and never expose Python tracebacks or filesystem authority.
-3. `slots.py` retains real folder-picker paths server-side and returns only an
-   opaque id plus display text. Fabricated and expired ids are refused.
-4. Add the reusable headed harness. Test HTML and JavaScript live outside the
-   package, are combined with production assets in an isolated temporary root,
-   and run through the production host, server, origin guards, bridge wrapper,
-   and render functions. Command composition is constructor-only, matching the
-   spike's dispatcher, which privately snapshots its handler mapping:
-   `commands.py` builds the immutable production command-spec mapping; the
-   production host passes exactly that mapping; the harness builds a new
-   immutable `production + test_report` mapping and passes it to the same
-   dispatcher. There is no registration method and no `extra_commands` input
-   from argv, environment, page data, or bridge traffic, and the `test_report`
-   handler and its implementation stay outside package data. The existing
-   production-table and build-output scan remains as defense in depth, but
-   constructor-only composition makes the isolation structural rather than
-   scan-enforced.
-5. Each headed scenario runs in a child process with a hard parent timeout.
-   JavaScript reports observed values through `dispatch("test_report")`; Python
-   performs the assertion and destroys the window. NamiSync test code uses no
-   `evaluate_js`.
-6. The BR-G-32 hostile-text scenario takes its corpus from Python, crosses
-   pywebview's `js_bridge_call` interpolation and `JSON.parse`, renders through
-   the production `textContent` path, reads `.textContent` back in JavaScript,
-   and returns it through `test_report`. Python asserts byte-for-byte equality.
-
-Slice 2 closes the transport portion of BR-G-32. The production plan and
-inventory DOM portions close only with slices 5 and 6. Split-level evidence is
-named and owned as follows:
-
-- `tests/interfaces/web/test_commands.py` owns discoverable ordinary
-  `test_br_g_32_*` nodes for the exact immutable command table, full
-  public-view codec manifest, and single browser-wrapper reference.
-- `tests/interfaces/web/test_transport.py` owns ordinary `test_br_g_32_*` nodes
-  for exact envelopes, strict pre-handler refusal, the 64 KiB boundary,
-  sanitized failures, and start-plan receipt identity.
-- `tests/interfaces/web/test_slots.py` owns ordinary `test_br_g_32_*` nodes for
-  opaque purpose binding, fixed expiry, capacity/LRU, and atomic nonconsuming
-  pair resolution. `tests/interfaces/web/test_frontend_static.py` owns the
-  broadened packaged-asset sink scan under the same gate prefix.
-- `tests/interfaces/web/test_transport_headed.py::test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_sink`
-  owns the pinned-pywebview return path and production-`textContent` hostile
-  corpus round trip through the constructor-only harness.
-- `tests/interfaces/web/test_transport_headed.py` also owns separate
-  `test_br_g_32_*` nodes for the real native picker path-confinement and
-  independently committed off-origin dispatch-refusal clauses.
-- `tests/interfaces/web/test_transport_headed.py::test_sh_g_3_headed_renderer_and_hostile_dispatch_are_logged_safely`
-  compares the logged renderer to native `BrowserVersionString` and owns
-  SH-G-3's real dispatched-body/path-sentinel privacy clause in a child host,
-  while `tests/interfaces/web/test_logging_config.py` owns discoverable
-  ordinary `test_sh_g_3_*` nodes for configuration/ownership, child-process
-  startup records and console silence, rotation/Unicode, and exception hooks.
-- Slice 5's production plan surface and Slice 6's production inventory surface
-  add their own BR-G-32 named nodes; the Slice 2 nodes do not claim those DOM
-  clauses early.
-
-Slice 2's headed child uses an absolute physical local data/page root, unique
-test-only window and mutex identity, a hard parent deadline, and a kill-on-close
-Job Object. It drives the real native folder dialog without a foreground-forcing
-API, localized-label lookup, or keystroke automation, proves the browser sees
-only `{id, display}` while the service receives the selected paths, commits a
-second loopback origin to prove
-per-dispatch refusal without handler entry, and round-trips the hostile corpus
-through production `renderText`. The harness extends the exact production
-mapping only by constructor composition; `test_report` and every harness asset
-remain absent from the wheel. Emitted records prove the native renderer version
-and omit request bodies, real paths, hostile sentinels, tracebacks, exception
-text, and the human-facing `NICKNAME`, closing SH-G-3.
-
-The close-status hardening discovered while exercising repeated native loads is
-also retained: each loaded document binds its current fixed `#host-status`
-target before an asynchronous close attempt can render. A late worker never
-queries a destroyed/replaced document, and a missing or failed presentation
-target is logged without changing shutdown truth.
+This slice maps SH-G-3 to the transport/privacy portion of BR-G-32. The Python
+boundary, picker confinement, origin refusal, and hostile-text path are
+implemented. The remaining browser-behavior authority is open until the named
+gate runs those wrapper cases through the real installed WebView2 composition;
+a Node probe alone is supplemental evidence.
 
 ### Slice 3 - Event drain
 
-Slice 3 adds exactly one production command, `next_events`, and expands
-`start_plan`'s result with an adapter-owned task id. A task id matches
-`^task-[0-9a-f]{32}$`; a session id, transport request id, command id, and drain
-id each match `^[0-9a-f]{32}$`. These opaque kinds are not interchangeable.
-The web adapter mints the task id once before the first plan admission and
-retains `command_id -> task_id` beside its task state, so replay of the same
-resolved `start_plan` intent returns the same task, request, and session ids.
-Task identity does not enter the service, dispatcher, workflow request,
-database, or compatibility protocol below the web adapter.
+Status: implementation complete; SH-G-8 remains open.
 
-At Slice 3 delivery the production command table was exactly the two Slice 2
-rows plus this row. Audit hardening subsequently adds only `close_task`; there
-is still no dormant control or presentation command:
+The exact event command, queue policy, recovery cursor, explicit-`Gap`
+semantics, terminal reconciliation, retry behavior, and terminal-session
+release versus explicit task close are normative only in `M1_BRIDGE.md`
+(DR-BR-21/22/24 and BR-G-33/41/42). This plan records their delivery placement:
 
-| Command | Exact payload | Exact success `result` | Identity / revision | Deadline and retry |
-| --- | --- | --- | --- | --- |
-| `next_events` | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","replay_from":null}` or the same exact key set with `replay_from` as the positive integer sequence of the first desired event | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>","drain_id":"<32-lowercase-hex>","updates":[<zero to 64 exact tagged updates>]}` | no `command_id`; no revision; every long-poll attempt has a fresh drain id and the server echoes it only in that attempt's success | the server waits at most 25,000 ms; the browser deadline is 30,000 ms; success, including an empty timeout result, arms a fresh drain; transport/protocol uncertainty recovers from the first sequence after the last accepted non-`Gap` event, while an explicit `Gap` recovers from its exact positive `first_missed_seq`; no response is retried or cached |
-| `close_task` | `{"task_id":"task-<32-lowercase-hex>","session_id":"<32-lowercase-hex>"}` | the exact echoed task and session ids | no `command_id`; no revision; accepted only after the terminal record was delivered | 30,000 ms per attempt; uncertain delivery retries the identical payload on a finite delayed schedule, backed by a bounded server close receipt |
+1. Add `drain.py` for adapter-owned task identity, observation generations,
+   bounded event custody, long-poll claims, recovery, and lifecycle cleanup.
+2. Extend the constructor-supplied command mapping and `bridge.js` drain
+   manager in the same atom; no later surface command lands early.
+3. Attach observation transactionally before scheduling through the existing
+   service/dispatcher seam, and preserve shutdown ordering through the Slice 1
+   close controller.
+4. Add ordinary concurrency/overflow/recovery tests and extend the installed
+   headed harness; keep transport probes test-owned.
 
-The `updates` array is ordered and contains only these exact tagged-union
-members. `event` is the existing primitive `SessionEventView` JSON shape;
-`record` is the existing primitive `SessionRecordView` JSON shape. Neither arm
-accepts extra keys.
+The explicit-`Gap`-only recovery decision and the command-specific
+`start_plan` revision decision are ratified in `M1_BRIDGE.md` and now have
+named regressions. Numeric sequence holes alone are not a recovery signal, and
+session creation does not invent a revision.
 
-```json
-{"update_type":"event","event":{"session_id":"0123456789abcdef0123456789abcdef","sequence":1,"at":"<UTC ISO-8601 string>","body_type":"StateChanged","body":{"state":"pending"}}}
-```
+SH-G-8 is **open**. Current evidence proves attach-before-schedule and the
+separate beyond-envelope overflow/`Gap`/terminal-reconciliation case. It does
+not yet execute BR-G-42's complete normal four-task duration/rate envelope or
+its latency and memory budgets, so neither this slice nor a small burst test
+closes that shell gate.
+### GUI Break 1 - Presentation foundation (completed 2026-08-13)
 
-```json
-{"update_type":"record","record":{"session_id":"0123456789abcdef0123456789abcdef","kind":"plan","state":"completed","supports_pause":false,"created_at":"<UTC ISO-8601 string>","started_at":"<UTC ISO-8601 string or null>","ended_at":"<UTC ISO-8601 string or null>","result":"<OperationResultView object or null>"}}
-```
-
-`replay_from=null` is the ordinary drain. After transport/protocol uncertainty,
-the positive value is the last accepted non-`Gap` sequence plus one. After an
-explicit `Gap`, it is that event body's exact positive `first_missed_seq`, even
-when earlier numeric holes were legal coalesced progress. It means the first
-desired dispatcher sequence, not an acknowledgment. The response has no
-cursor, receipt, `has_more`, or echoed replay value. The client advances its
-local accepted sequence only after validating and accepting a non-`Gap` event.
-It does not advance on `Gap` or on a terminal record. On an ordinary or
-uncertainty-recovery response, a `Gap` stays visible, stops application of the
-remaining updates, and arms recovery from its `first_missed_seq`. A recovery
-response may instead start with the same `Gap` whose `first_missed_seq` equals
-that attempt's `replay_from`; this is proof that prefix is no longer retained,
-not another recovery trigger. The client keeps it visible, applies the
-available tail after it, and does not loop. Any later/different `Gap` stops that
-batch and becomes the next recovery point. Sequence numbers may jump
-because `Progress` is replaceable in both dispatcher replay and the adapter
-queue. A numeric hole alone is therefore legal and never triggers recovery.
-Recovery never claims that a missing reliable event was restored: an explicit
-`Gap` stays visible, available replay is applied, and the terminal record is
-the final lifecycle truth.
-
-`drain.py` owns one `TaskState` per adapter task. Its update queue has an exact
-capacity of 64. It stores `SessionEventView | SessionRecordView`, never raw
-dispatcher envelopes or workflow objects. On a new `Progress`, it removes an
-older queued `Progress` and appends the new snapshot; if all 64 entries are
-reliable, it discards the new progress. Before enqueuing a reliable update it
-may remove queued progress, but it never removes or reorders reliable updates;
-if 64 reliable entries remain, the observation sink blocks on capacity until a
-drain or shutdown wakes it. A drain removes at most 64 entries in FIFO order,
-returns immediately when any are available, otherwise waits on the task
-condition for at most 25 seconds, and releases the one-drain claim in `finally`.
-No `TaskState` lock spans a service call or JSON encoding. A second admitted
-drain for the same task marks the incumbent long poll superseded, wakes it,
-waits under the same 25-second server bound until that claim's `finally` has
-released it, and only then returns `drain_busy`. The browser therefore has a
-bounded proof that one re-arm cannot collide with the abandoned claim; it does
-not spin or depend on a promise lost during bridge reinjection. An absent/closed task or mismatched
-task/session pair returns `task_unavailable`; a competing attach/recovery
-generation returns `observation_conflict`. Their messages are the fixed table
-in Slice 2's envelope section.
-
-Plan-start task identity is single-flight per command id and resolved intent.
-After atomically resolving both slots, the first caller installs one provisional
-`STARTING` command/task entry under the registry lock, then releases that lock
-before calling the facade. Same-intent concurrent calls wait for that entry and
-never call the facade; a different resolved source, target, or policy is
-`command_conflict`. Success atomically binds the task to the returned request
-and session ids and wakes every waiter, which returns those same three ids.
-Facade, admission, or attach failure aborts the provisional task, wakes all
-same-intent waiters with the same sanitized refusal, and removes the command and
-task entries after those waiters release them. A later explicit attempt may
-then create a new provisional task; no failed task id is exposed or retained.
-If the facade returned a session but adapter binding itself cannot complete,
-the adapter compensates outside its lock by unsubscribing, closing that session,
-and dropping its plan before removing the provisional entry.
-
-Normal-path continuity is established transactionally instead of guessed from
-replay headroom. `NamiSyncService.start_plan` gains the keyword-only optional
-`observation_sink` input, excluded from command-receipt identity, and
-`SessionObserver` gains a resubscribe operation whose `from_sequence` is the
-positive first desired sequence. The dispatcher remains domain-blind: its
-optional admission attach callback receives only `(session_id, preopened
-EventStream)` and returns an idempotent rollback callback. The dispatcher
-prepares the record, hub, store row, and stream while the session is still
-unpublished and unschedulable. The adapter callback adopts the stream into the
-already-created task observation. Only after adoption succeeds does dispatcher
-emit `PENDING` while the session remains unschedulable, then atomically publish
-the session maps, append the pending entry, and notify the scheduler under the
-admission/publication gates. Every exception from stream creation through
-`PENDING` emission and atomic publication takes the same rollback path. The
-attach callback is atomic from dispatcher ownership: it either returns the
-rollback after a complete adoption, or raises only after self-reverting every
-partial observer entry/thread it created. If adoption returned successfully,
-dispatcher first invokes its rollback, which
-signals stop, closes the adopted stream, and joins/removes that exact
-observation; dispatcher then closes its remaining stream/hub ownership and
-drops the store row. If attach raised before returning, dispatcher owns and
-closes the stream directly. Cleanup never replaces the initiating exception. A
-store-drop or cleanup failure is retained as dispatcher cleanup-pending
-ownership, keeps shutdown incomplete, and can never make the row schedulable.
-This seam contains no task vocabulary and
-does not alter ordinary callers that omit it.
-
-Recovery replaces only the task's observation generation. It clears queued
-updates from the uncertain generation, calls the facade resubscribe outside the
-task lock with `from_sequence=replay_from`, then adopts the replacement only if
-the generation is still current. A concurrent recovery/attach is the named
-`observation_conflict`; a slow facade call holds no task lock. The facade method
-returns `SessionRecordView`: a nonterminal result means the replacement sink is
-installed, while an already-terminal result installs no stream and the registry
-enqueues that returned record itself. Close/recovery is serialized per task; if
-close wins while the facade call is outside the lock, the registry unsubscribes
-the just-installed session outside the lock before completing close. Terminal plan
-sessions remain dispatcher-retained, including their replay and command
-receipt, until task close. They are no longer live work and are not rendered as
-an active rail entry, but early session close is forbidden because it would
-destroy the recovery authority for a lost reliable or terminal bridge response.
-Task close performs unsubscribe, `close_session`, and `drop_plan`; no drain
-response cache, client acknowledgment, or second receipt is introduced.
-
-`bridge.js` owns one generation-counted drain manager per task. Repeated
-`pywebviewready` installs no duplicate listener and invalidates/re-arms at most
-one drain for each retained task. Every attempt mints a drain id; stale promise
-settlement cannot mutate the accepted cursor, render updates, or arm a second
-loop. A valid success applies its tagged updates in order and then arms one
-ordinary drain. Timeout, malformed/mismatched success, or bridge reincarnation
-invalidates that generation and arms one recovery drain from the last accepted
-non-`Gap` sequence plus one. An explicit `Gap` remains visible, ends that batch,
-and arms recovery from its `first_missed_seq`, except for the matching leading
-`Gap` of that recovery attempt, after which the retained tail is applied.
-Acceptance of a terminal record stops that task's drain loop and suppresses all
-further re-arms, even when it follows a matching recovery `Gap`. `drain_busy` is returned only
-after the superseded incumbent has released its server claim, so one bounded
-re-arm is enough; other structured refusals
-are definitive and visible. No path relies on a raw numeric sequence hole.
-
-Host shutdown follows one exact ownership order: reject new bridge admission;
-close the drain registry and wake long-poll waiters and capacity-blocked sinks;
-wait for already-admitted bridge handlers; unsubscribe every service
-observation; then call `NamiSyncService.close()`. Window-owned appearance
-observation is not a task observation: it remains live through an incomplete or
-exceptional service close and is retired exactly once only after a complete
-service result, immediately before window destruction. A task close uses the same
-per-task wake-before-unsubscribe order. All waits are off the presentation
-thread. Registry close marks provisional tasks closing but retains their
-observations until the admitted-handler wait completes, so a close beginning
-after attach cannot remove the observer before dispatcher publication.
-
-Fault-inject lost reliable and terminal responses and repeat
-`pywebviewready` while a drain is outstanding. This closes BR-G-33 and retains
-XV-18 shutdown behavior.
-
-The GUI is a recovery consumer, not a continuity consumer, but the normal path
-must not lean on recovery: the task observation attaches before execution
-admission starts the workflow, so an ordinary run inside the BR-G-42 envelope
-sees no `Gap` with the production 128/64 replay/subscriber capacities.
-`docs/DISPATCHER.md` still owns the continuity policy; bursts beyond that
-envelope surface `Gap`, replay only the tail still retained, and reconcile
-terminal truth. Missing reliable events remain visibly missing; recovery never
-pretends full continuity or justifies invented replay headroom.
-
-### GUI Break 1 - Establish the look (completed 2026-08-13)
-
-A GUI Break is a deliberate stop to build and calibrate the visual system, not a
-fraction of an assembly line. Break 1 builds the foundation every later surface
-consumes and freezes the design language before the renderers exist, so Slices
-4-7 render onto tokens and components rather than inventing their own. Its Lane P
-authoring (tokens, components) may start as early as Slice 1 in parallel; its
-scheduled home is here, immediately before the first frame, where the Slice 2
-harness and Slice 3 drain exist to exercise it through the real host.
-
-Deliverables:
-
-1. The native material mechanism (Lane H): the DWM Mica backdrop, immersive dark
-   title bar, and transparent WebView2 background at Slice 1's UI-thread hook,
-   with the high-contrast and no-material fallbacks from section 1.9 and its own
-   real-stack reality test. Native `UISettings` supplies live `Accent`,
-   `AccentLight1`, and `AccentDark1` updates through a fixed revisioned
-   `PostWebMessageAsJson` envelope and the packaged `appearance.js` receiver.
-   The security guards and construction order are unchanged by material
-   application.
-2. `tokens.css`: the Fluent color/type/spacing/radius/elevation and motion
-   tokens, theme-agnostic, with system light/dark/high-contrast following and the
-   accent read-and-observe plumbing. It also owns the exact 13 authored palette
-   primitives from section 1.9 and semantic aliases for status meanings and
-   operation categories. The authored swatch names do not prescribe theme
-   pairing; the gallery settles those aliases through light/dark visual review
-   and numeric contrast checks. Forced-colors aliases use Windows system colors.
-3. `components.css`: the section 1.9 control set on those tokens, every state
-   present, demonstrated on a non-shipped component-gallery page that runs
-   through the production host and headed harness. The gallery is a dev/test
-   artifact and never package data. Badges, banners, status pills, progress
-   indicators, and related controls consume semantic aliases only. Gallery rows
-   settle complete/success, failure/error, warning/degraded/incomplete, active,
-   paused, canceled, mismatch, blocked/deferred, neutral/no-op, and every M1
-   `OperationKind` value (`copy`, `update`, `move`, `move_update`, `recase`,
-   `mkdir`, `trash`, `delete`, and `noop`), with visible text and
-   icon/shape/state cues so color is never the sole carrier of meaning.
-   The headed gallery runs from a clean installed wheel: production
-   `index.html`, `tokens.css`, and `components.css` resolve through the installed
-   package, and evidence records exact installed CSS bytes; only the gallery
-   page/scenario code stays outside package data.
-4. The minimal icon foundation from section 1.9: a frozen `icons.js` registry,
-   the four pinned local Fluent SVG masks plus their source/license record, and
-   gallery evidence that registry refusal is closed, every shipped asset is
-   local and package-owned, all three size tokens compute exactly, and the same
-   glyph inherits `currentColor` across light, dark, forced-colors, disabled,
-   and interactive component states. Break 1 does not choose the later plan,
-   inventory, history, or settings icon vocabulary.
-
-Calibration is the tinkering part: get Mica, tokens, and components reading
-correctly in all three themes and freeze the language. Time-box it to
-language-and-gallery, not gold-plating — polishing against fixtures that must
-then survive real data is wasted work. GUI Break 1 closes the SH-G-11/12/13
-*foundation* — tokens, materials, and motion proven on the gallery — while each
-gate's production-surface clause finalizes as the trees and renderers land.
-It closes SH-G-14's icon-infrastructure boundary completely here; Slices 4-6
-retain only the cross-slice production-surface clauses. Exit criterion:
-tokens correct in light, dark, and high contrast;
-the gallery covers every control state and the fixed icon foundation; Mica and
-its fallback are proven on the pinned stack; the design language is frozen.
-The icon-infrastructure boundary remains closed. The audit found reduced token,
-material, motion, and shell-surface requirements, blocked accent publication,
-and incomplete fallback/lifecycle evidence. The realignment replaced those
-claims with pinned Fluent provenance, live UISettings publication, structured
-fallback landing evidence, appearance ownership through retryable shutdown,
-and computed headed evidence. SH-G-11/12/13 foundations are closed again; their
-later production plan/inventory clauses remain with Slices 5 and 6.
+GUI Break 1 sits after Slice 3 and before Slice 4. It placed `tokens.css`,
+`components.css`, `icons.js`, `appearance.js`, and the fixed local icon
+assets in the package, with a test-only component gallery outside package
+data. The exact visual contract lives in `DESKTOP_UI.md`; SH-G-11 through
+SH-G-14 below map its installed/headed evidence to the BR-G dependencies in
+`M1_BRIDGE.md`.
 
 ### Slice 4 - Presentation core and shell frame (completed 2026-08-13)
 
-Implement `visible_sequence.py` plus the minimal rail/panel/tree frontend.
-Plan and inventory share the same pure flatten/window/search/filter/anchor
-implementation over workflow-owned ordered node arrays. Enforce the 256-row
-maximum and fixed row geometry. This closes BR-G-34 and the Stage 6 clause of
-BR-G-2.
-
-**The Slice 4 presentation contract is exact and intentionally contains no
-domain policy.** `visible_sequence.py` defines these typed presentation values:
-
-- a read-only structural `VisibleNodeLike` protocol over workflow-owned nodes,
-  so the interface validates and retains the authoritative objects instead of
-  copying a second complete tree;
-- `VisibleSequenceParameters(collapsed_node_ids, search_query,
-  match_counts_by_node_id=None)`;
-- a derived `VisibleSequence` containing the original node objects, their
-  visible positions, immutable node-id-to-source-position and
-  node-id-to-visible-index lookups, compact active-tree accessibility metadata,
-  and
-  `filtered_item_count` (`None` when no filter was supplied);
-- `VisibleWindowRow`, created only for the bounded page and carrying the
-  original node plus its visible index, parent/first-child indexes, sibling
-  position/set size, and expanded state;
-- `VisibleWindow(offset, total, rows)`; and
-- `VisibleAnchor(node_id, index)`.
-
-`derive_visible_sequence`, `window_visible_sequence`, and
-`resolve_visible_anchor` are pure functions. They retain no active sequence,
-parameter-keyed cache family, path, or view lifecycle; a caller replaces its
-one active value when parameters change. The node array is accepted only when
-positions are exact contiguous integer indexes (booleans are not integers for
-this contract), node ids are unique nonempty valid Unicode strings, display
-strings are valid Unicode, `is_container` is an exact boolean, index zero is
-the sole depth-zero root, every later
-`parent_index` names an earlier node at exactly `depth - 1`, and every
-half-open `subtree_end` is within its parent's extent. These checks validate
-the structure `workflows/node_tree.py` already emitted; they never import a
-path helper, inspect a canonical key, split display text, or reconstruct
-ancestry from strings.
-
-`collapsed_node_ids` is an immutable set of known container ids; an unknown or
-non-container id is refused. The default empty set is fully expanded. Search
-is an exact string containing at most **65,536 UTF-8 bytes**: 65,536 is accepted
-and 65,537 is refused before traversal. Invalid Unicode is refused. This field
-ceiling aligns with, but does not replace, the bridge's 65,536-byte limit on the
-complete serialized request; JSON overhead makes an actual bridge query
-smaller. Every future non-bridge external adapter bounds its complete request
-before constructing these presentation values. No trimming,
-normalization, regex, glob, or canonical-key match occurs; the only operation
-is a literal substring check over `search_query.casefold()` and each supplied
-`display.casefold()`.
-
-`match_counts_by_node_id` is the only generic filter input. `None` means no
-filter. Otherwise it is snapshotted as a sparse mapping from known node ids to
-exact nonnegative integers (a missing id is zero; booleans, negative values,
-and unknown ids are refused). The owning plan or inventory projection decides
-which domain items match and supplies those counts; Slice 4 defines no domain
-filter vocabulary. A node directly matches only when its supplied count is
-positive (or filtering is inactive) and its display matches the search. A
-container remains when it directly matches or any descendant directly matches;
-collapse hides descendants only after that decision. `filtered_item_count`
-sums supplied counts of direct nodes that also match the search; structural
-ancestors never inflate it. Returning original nodes leaves rollups and other
-payload unmodified and caller-owned.
-
-Window `offset` is an exact nonnegative integer and `limit` is an exact integer
-from 1 through 256; booleans are refused. Limit 256 is accepted, 257 is refused
-rather than truncated, and an offset at or beyond `total` returns an honest
-empty window. An empty anchor chain returns `None`; a nonempty candidate chain
-is an exact, structurally valid deepest-to-root chain of known ids. Resolution
-uses the same derived sequence and its retained source-position lookup, so its
-work is proportional to the supplied parent-chain depth rather than total tree
-size. It returns the first visible candidate or `None`; it never searches the DOM
-or display text. Projection revisions and progress-chain wiring belong to their
-Slice 5/6 command rows, not this pure core.
-
-Slice 4 adds no presentation command. Audit hardening makes production exactly
-`pick_folder`, `start_plan`, `next_events`, and lifecycle-only `close_task`.
-`tree.js` consumes only the exact generic
-window `{offset,total,rows}` and the server-derived accessibility fields above.
-It owns `ROW_H = 28`, fixed spacers, a single-tab-stop tree using
-`aria-activedescendant`, standard Up/Down/Home/End/Left/Right/Enter behavior,
-and full-display labels. Generic callbacks request an off-window index,
-container toggle, or activation; JavaScript owns no hierarchy, expansion,
-selection, or domain policy. `beginWindowRequest()` advances one monotonic generation;
-`commitWindow(generation, window)` mutates the DOM only when that generation is
-still current. At most 256 data rows plus the fixed
-spacers exist in the DOM. It performs no hierarchy, filter, search, path,
-`current_path`, or bridge work and writes returned text only through the
-production inert-text helper. Row creation/removal has no animation. `rail.js`
-and `panels.js` build labelled task-navigation and work-panel landmarks with
-honest empty states; structural landmarks are not gratuitous tab stops. The
-rail and unselected task cards expose Mica, hover/press use distinct tokenized
-overlays, and the selected/current task uses the opaque work-card surface.
-They fabricate no task, plan, inventory, or session. The standard native title
-frame remains.
-
-The first request-owning plan or inventory surface applies a fixed 150 ms
-trailing search debounce. Every search, collapse, or filter intent advances the
-local window generation immediately, before dispatch, so stale success and
-stale error results cannot replace newer intent. The current valid window stays
-rendered while pending; teardown cancels the timer. Slice 4 records and tests
-the generation primitive but adds no dormant search command or timer.
-
-The realigned pure-core, scale, keyboard/platform-accessibility, geometry,
-hostile-text, packaging, and clean-wheel headed evidence has passed. Slice 4,
-BR-G-34, BR-G-2's Stage 6 clause, and SH-G-7 are closed again. The product
-surfaces and their remaining cross-slice gates stay with Slices 5-7.
+Slice 4 placed `visible_sequence.py`, `tree.js`, `rail.js`, and
+`panels.js`, then connected the honest empty shell frame. It introduced no
+second transport. The pure presentation and BR-G-34 contracts live only in
+`M1_BRIDGE.md`; SH-G-7 records the installed shell/tree witness. GUI Break 1
+must be complete before the production renderer consumes its tokens and
+components.
 
 ### Slice 5 - Sync surface
 
-Land plan presentation, move annotations/ghosts, selection overlays, review
-and destructive-confirmation flow, execution admission, paired progress item
-identity, and indexed follow mode. The production plan renderer joins the
-hostile-text headed round trip. Close BR-G-35 through BR-G-37 and the plan
-portion of BR-G-42.
+Land the plan projection and review surface, selection controls,
+destructive-confirmation flow, execution admission, progress identity, and
+indexed follow mode. Extend the existing transport only through the Slice 5
+command rows and gates defined by `M1_BRIDGE.md`. Close BR-G-35 through
+BR-G-37 and the plan portion of BR-G-42.
 
 ### Slice 6 - Inventory and integrity surface
 
-Land cached inventory projections, `view_id` lifecycle, patch/acknowledgement
-rules, five location-resolution states, recursive folder actions, warning
-display, integrity modes, and per-window detail queries. The production
-inventory renderer joins the hostile-text headed round trip. Close BR-G-22,
-BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42.
+Land cached inventory projections, location-resolution presentation,
+recursive folder actions, scope warnings, integrity controls, and bounded
+detail queries. Extend the existing transport only through the Slice 6 rows
+and gates defined by `M1_BRIDGE.md`. Close BR-G-22, BR-G-23, BR-G-38,
+BR-G-39, and the inventory portion of BR-G-42.
 
 ### Slice 7 - Lifecycle, settings, and history
 
-Land database-paged history, semantic-settings UI, cosmetic `ui-state.json`,
-and one task-owned close/release seam that drops plan, selection,
-execution/inventory detail, view/projection, session, and receipt artifacts
-immediately for plan-only/already-terminal tasks or after terminal settlement
-for busy work. Repeated create/close tests keep every registry bounded while
-history remains. Also land full task detail in Slice 1's existing
-shutdown-retry/incomplete presentation and normal single-instance activation
-behavior. Close BR-G-40, BR-G-41, and the history portion of BR-G-42.
+Land database-paged history, semantic settings, cosmetic `ui-state.json`,
+and the task-owned cleanup UI. The exact lifecycle and history bridge rows
+remain exclusively in `M1_BRIDGE.md`. Close BR-G-40, BR-G-41, and the
+history portion of BR-G-42.
 
-History paging follows the bounded readback contract exactly. A fresh event
-traversal whose live cursor is ahead of durability returns the empty terminal
-page — durable `through_seq`, unchanged `next_after_seq`, `has_more=False` —
-and `history.js` treats that page as the end of that traversal, not a
-retryable error. A later repair issues a fresh read that omits `through_seq`
-and captures the new committed prefix; an explicit reversed fixed interval
-remains invalid.
+### GUI Break 2 - Visual cohesion
 
-### GUI Break 2 - Visual cohesion (after Slice 7, before Slice 8)
-
-With plan, inventory, history, and settings all real and on screen together,
-Break 2 is the holistic taste pass that cannot happen earlier: cross-surface
-spacing rhythm, motion choreography, empty/edge/error states, and the details
-only visible with everything present. It precedes Slice 8 so packaging freezes a
-finished look.
-
-Its internals are deliberately loose because they are felt, not specified, but
-its acceptance is explicit and mostly review-based: the result matches the
-intended look, and — as the automatable share — contrast ratios meet the
-accessibility bar on the token pairs and `prefers-reduced-motion` is honored
-across every surface. SH-G-11 and SH-G-13 already assert those and are re-run
-here over the now-complete surfaces. No new BR-G or SH-G gate is introduced;
-Break 2 tightens what the earlier gates already pin.
+After the real plan, inventory, history, and settings surfaces coexist, perform
+the holistic spacing, motion, empty/error-state, accessibility, and responsive
+review defined by `DESKTOP_UI.md`. It precedes Slice 8.
 
 ### Slice 8 - Beta packaging and release closure
 
-Release engineering follows a running vertical shell so it packages real
-behavior rather than placeholders:
-
-1. Add and commit the PyInstaller specification; unignore that named file.
-   Add PyInstaller and `pyinstaller-hooks-contrib` as development dependencies.
-   Use the pywebview and pythonnet `pyinstaller40` hooks and collect only the
-   NamiSync web asset package. Run the host/hostile-page smoke test from the
-   frozen artifact.
-2. Add a resolved Windows build lock or constraints file. Release artifacts
-   are built from that environment, not from a fresh floating resolution.
-3. Add CI for headless pytest, import boundaries, wheel contents, and frozen
-   construction. Real headed gates require an interactive Windows runner or
-   recorded release-machine execution; a noninteractive hosted runner is not
-   treated as equivalent.
-4. Add `THIRD_PARTY_NOTICES.md`, required dependency license texts, visible
-   binary-distribution license material, and clear directions from each binary
-   release to the exact Corresponding Source tag/commit and build scripts.
-   The release checklist uses GPLv3 section 6d's network-source path beside the
-   binary download rather than making a section 6b three-year written offer.
-5. Rewrite active desktop documentation as-built, update README status/index/
-   limitations/changelog, re-status `ui_mockup/`, and close BR-G-43/BR-G-44.
-
-M1 beta artifacts may be unsigned. Release notes publish SHA-256 hashes,
-identify the exact source commit, explain the expected unknown-publisher
-warning without telling users to disable Windows protections, and disclose
-that enterprise policy or Smart App Control may block unsigned code. Paid
-signing and Microsoft Store distribution remain post-M1 decisions.
-
-The M1 beta does not bundle or automatically run the Evergreen WebView2
-Bootstrapper. Windows 11 remains the supported target; missing WebView2 is
-refused read-only with an official installation direction. Bundling the
-bootstrapper is reconsidered with a real installer or an explicitly tested
-Windows 10 support decision.
+Add the frozen specification, dependency lock and CI, third-party notices,
+source-release material, frozen smoke, and clean-checkout release proof.
+Reconcile active documentation and the `ui_mockup/` reference against the
+as-built product. Close BR-G-43 and BR-G-44.
 
 ## 3. Test Commands
 
@@ -1499,14 +783,16 @@ carry the `headed` marker; all are collected by the release command.
   by* scanning a hand-maintained file list, asserting only the meta element's
   presence, testing the component gallery instead of the production shell, or
   measuring a copied/test-only tree implementation.
-- **SH-G-8 — The drain attaches before work starts.** A test proves the task
+- **SH-G-8 — OPEN: the drain attaches before work starts.** A test proves the task
   observation is subscribed before execution admission starts the workflow,
   and no `Gap` occurs inside the BR-G-42 normal envelope; a fault-injected
   burst beyond that envelope surfaces `Gap`, resumes from the retained replay
   tail when available, and reconciles terminal truth without claiming the
   missing reliable events were recovered. *Not satisfied by* attaching after
   start, relying on replay for the normal path, or hiding loss behind terminal
-  recovery.
+  recovery. Peak queue memory uses `M1_BRIDGE.md` §9.4's conservative whole
+  headed Job Object delta; component or payload-byte measurements are diagnostic
+  only.
 - **SH-G-9 — The history pager terminates on the empty terminal page.** A
   fault-injected traversal whose live cursor is ahead of durability renders
   the committed prefix and stops on the empty terminal page; a later repair
@@ -1529,7 +815,7 @@ carry the `headed` marker; all are collected by the release command.
 - **SH-G-11 — Tokens own color; surfaces borrow it.** `tokens.css` defines the
   color/type/spacing/radius/elevation variables in light, dark, and
   high-contrast. It contains exactly the 13 authored `--palette-*-main|dark|light`
-  primitives from section 1.9, with no invented yellow/purple `light` value, and
+  primitives from `DESKTOP_UI.md`, with no invented yellow/purple `light` value, and
   maps them through status- and operation-named semantic aliases. Headed gallery
   evidence records computed light/dark pairs and visible non-color cues for
   complete/success, failure/error, warning/degraded/incomplete, active, paused,
@@ -1588,7 +874,7 @@ carry the `headed` marker; all are collected by the release command.
   contains the exact four pinned Fluent regular SVGs from
   `@fluentui/svg-icons@1.1.334`, their exact package/file URLs and version,
   per-file SHA-256 hashes, and MIT license, plus a frozen `icons.js` registry with exactly the
-  four section 1.9 glyph names at GUI Break 1. A production helper accepts only
+  four `DESKTOP_UI.md` foundation glyph names at GUI Break 1. A production helper accepts only
   a registered glyph and `sm`/`md`/`lg`, creates no SVG/path markup, and returns
   an inert decorative element with fixed classes; unknown, path-shaped, URL,
   case-variant, and prototype-key inputs are refused without DOM mutation.
@@ -1658,175 +944,48 @@ clause lands:
 | Phase 0 | SH-G-4 |
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
-| Slice 3 | SH-G-8 |
+| Slice 3 | SH-G-8 remains open pending the complete BR-G-42 normal-envelope run |
 | GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
 | Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
 | Slice 7 | SH-G-9 |
 
-## 6. Contract and Policy Watchlist
+## 6. Slice-to-gate map
 
-Each row names a policy that must not drift silently, the authority that owns
-it, and the action any change requires. "Rerun" means the named gates run
-against the changed configuration before the change lands.
+This table maps shell delivery order to the sole BR-G definitions in
+`M1_BRIDGE.md`; it does not redefine them.
 
-| Policy | Authority | On change |
+| Delivery checkpoint | BR-G dependency | Shell status |
 | --- | --- | --- |
-| 256-event/1-MiB/one-second history window policy | `docs/HISTORY.md` | Rerun the documented 50-run/1,000,000-item benchmark and all its gates |
-| 128/64 replay/subscriber capacities; no invented replay headroom | `docs/DISPATCHER.md` | UI/load evidence or a readiness-handshake design, never a constant bump |
-| `pywebview==6.2.1`, `pythonnet==3.1.0`, `clr_loader`, Bottle floor, return transport | Section 1.2 | Rerun the native reality and hostile-text gates (BR-G-30/31/32 family) |
-| Windows `netfx` runtime path and `PYTHONNET_RUNTIME` conflict refusal | `docs/DESKTOP_UI.md` | Re-probe and update the shared prerequisite check |
-| CSP normative directive string (byte-for-byte), exact-origin, and navigation/popup guards | `docs/M1_BRIDGE.md` | Change the normative string and SH-G-7's expected literal together; rerun BR-G-31/BR-G-32 headed scenarios |
-| `private_mode=True` with explicit `storage_path` | Section 1.3 | Headed retest of the storage branch on any pywebview upgrade |
-| `namisync.log` header, level/propagation ownership, rotation, Unicode fallback, and privacy boundary | Section 1.4 | Rerun SH-G-3 and its child-process tests |
-| Product/distribution version remains independent of schema, protocol, policy, contract, dependency, and runtime versions | Section 1.5 and each owning module | Bump and test only the affected owner; never create a central version registry |
-| Bridge v1 envelopes, ID grammar, 65,536-byte cap, two Slice 2 command rows, fixed errors, and slot limits | Slice 2 normative transport target | Change `M1_BRIDGE.md`'s mirrored boundary and the BR-G-32 split evidence in the same atom; rerun XV-19 |
-| Pywebview receives only the function-table `dispatch` entry | Section 1.8 | Never pass the dispatcher as `js_api`; keep ordinary raw-message and headed function-table evidence passing |
-| Two-declaration `ROW_H` equality | Section 1.7 | Keep the parse test and headed measurement passing |
-| Import-linter layers including `launcher` | `pyproject.toml` | `lint-imports` stays in the release command |
-| Reliable readback semantics: sparse inclusive `through_seq`, empty terminal page | `namisync/interfaces/service.py`, `docs/HISTORY.md` | Rerun SH-G-9 and the service page tests |
-| Teardown order: reject, wake, wait, unsubscribe, `close(timeout)`, destroy | Slice 1 step 6 | Rerun BR-G-41 shutdown and XV-18/DR-BR-24 scenarios |
-| 64 admitted bridge handlers; 48 live tasks; 48 retained close receipts; finite drain/release recovery schedules | Sections 1.8 and Slice 3 | Change the Python/JavaScript policy mirror and saturation/recovery/cleanup tests together; rerun BR-G-33 and the headed concurrent-drain gate |
-| Pinned Fluent SVG provenance, fixed icon registry, local CSS-mask authority, and icon size ownership | Section 1.9 and GUI Break 1 | Add or change glyphs only with the asset/source/license hash, registry/CSS/package manifest, SH-G-14, and headed gallery evidence in one reviewed change |
-| Single-instance `DesktopInstanceIdentity` (`Local\` mutex + activation title), fixed and independent of version and data root | Slice 1 step 7 | Keep the production pair fixed; rerun SH-G-10 (production collision, test coexistence, no override) |
-| Database file-pair matrix and coordinated fresh initialization across GUI and CLI | `namisync/interfaces/service.py`, Slice 1 step 8 | Keep the preflight read-only; rerun the pair-state and CLI-composition tests |
-| Fluent 2 design language, token source, and the standard M1 window frame | Section 1.9 | Re-transcribe tokens (rerun SH-G-11); a frame change re-runs BR-G-31's native-surface proof |
-| Exact GUI-Break-1 13-swatch authored palette, semantic status/operation aliases, and system-color forced-colors override | Section 1.9 and GUI Break 1 | Preserve the current authored values; discuss any added hardcoded or derived color value with the product author first, update this contract and tokens together, and rerun SH-G-11 gallery, contrast, token-ownership, and no-raw-surface-color evidence |
-| Whole-window Mica base, opaque content cards (material visible only in chrome/seams), and the high-contrast/no-material fallback | Section 1.9 | Rerun SH-G-12 headed on any pywebview/WebView2/Windows-build change |
-| Motion tokens and guardrails (reduced-motion; no virtualized-row animation) | Section 1.10 | Rerun SH-G-13 |
+| Phase 0 | prerequisites for BR-G-19/31/32 | complete |
+| Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
+| Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | implementation complete; installed real-WebView2 browser-witness migration remains open |
+| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation complete; SH-G-8 remains open pending the complete BR-G-42 normal-envelope run |
+| GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
+| Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
+| Slice 5 | BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
+| Slice 6 | BR-G-22, BR-G-23, BR-G-38, BR-G-39; inventory portion of BR-G-42 | pending |
+| Slice 7 | BR-G-40, BR-G-41; history portion of BR-G-42 | pending |
+| Slice 8 | BR-G-43 and BR-G-44 | pending |
 
-The 256-row visible-window cap and the 256-event history retention cap are
-independent constants that happen to share a value. No shared constant may
-unify them, and changing one is never a reason to change the other.
+The explicit-`Gap`-only recovery decision and the command-specific
+`start_plan` revision decision are ratified in `M1_BRIDGE.md`; their named
+regressions have landed. A numeric sequence hole alone does not reopen recovery.
+SH-G-8 remains open because attach-before-schedule and beyond-envelope
+overflow/reconciliation coverage do not substitute for the complete normal
+four-task BR-G-42 duration/rate/latency/memory witness.
 
-## 7. Parallel Delivery Lanes
+## 7. Contract pointers and change control
 
-Serial delivery in section 2's order remains valid. When capacity allows, the
-sequence decomposes into the following ownership lanes. Parallel work is
-limited to disjoint lane-owned modules; shared bootstrap and harness wiring is
-serialized through the current slice integrator.
+| Concern | Sole authority | Shell responsibility |
+| --- | --- | --- |
+| Bridge protocol, errors, identity, recovery, lifecycle, and BR-G gates | `docs/M1_BRIDGE.md` | preserve one wrapper/dispatcher/drain placement and slice dependencies |
+| User-facing behavior, visual language, material, palette, icons, and motion | `docs/DESKTOP_UI.md` | place/package the declared assets at the assigned slice |
+| Layering and service/host ownership | `docs/ARCHITECTURE.md` | keep the desktop an adapter over `NamiSyncService` |
+| Product scope and deferrals | `docs/FEATURES.md`, `docs/M1_PLAN.md` | schedule only the active Stage 6 work |
+| Packaging and release evidence | this file, BR-G-43/44 in `docs/M1_BRIDGE.md` | build from the installed/frozen artifact and run every named gate |
 
-| Lane | Owns | Contains | Depends on |
-| --- | --- | --- | --- |
-| **H — Host and transport** | `version.py`, Phase 0/host `pyproject.toml` entries, `launcher.py`, `paths.py`, `logging_config.py`, `host.py`, `bridge.py`, `commands.py`, `slots.py`, `drain.py`, `bridge.js`, harness infrastructure | Phase 0, Slices 1-3, in order | nothing |
-| **P — Presentation core and design foundation** | `tokens.css`, `components.css`, `visible_sequence.py`, `tree.js`, `rail.js`, `panels.js`, `app.css` geometry | GUI Break 1 foundation, then Slice 4's pure logic and frame | Stage 5.5 arrays (done); token/component authoring can start at H Slice 1; frame wiring waits for H Slice 1 and headed geometry/gallery waits for H Slice 2 |
-| **S — Sync surface** | `plan.js`, plan renderer, overlays, follow mode | Slice 5 | H and P |
-| **I — Inventory surface** | `inventory.js`, inventory projections, `view_id` lifecycle, inventory renderer | Slice 6 | H and P; parallel with S |
-| **L — Lifecycle and history** | `history.js`, settings UI, `ui-state.json`, close sequencing | Slice 7 | History/settings preparation may follow H and P; final integration and gate closure wait for S and I |
-| **R — Release** | PyInstaller spec, lockfile, CI, notices, as-built docs | Slice 8 | everything above |
-
-Phase 0 is not fully parallel: items 1-3 have no semantic dependency and may
-land in any order, item 4 follows all three, and item 5 is independent. Edits
-to their shared `pyproject.toml` surface still serialize. Each item lands with
-its own tests. Lane P's pure `visible_sequence.py` work can start immediately;
-its frame integration waits for H's initial assets, and its headed checks wait
-for the harness.
-
-Only S ∥ I is a complete vertical parallel pair. Their final layout always uses
-the separate `plan.js` and `inventory.js` modules listed in section 1.6; staffing
-does not change architecture. `app.js`, `panels.js`, and shared harness
-registration are integration files and have one editor after lane-owned modules
-and tests are ready. Lane L may prepare disjoint history/settings work earlier,
-but Slice 7 integration and closure remain after Slices 5 and 6 as required by
-`M1_BRIDGE.md`.
-
-GUI Break 1 splits by lane: its material mechanism is Lane H's, while
-`tokens.css`, `components.css`, and the gallery are Lane P's and may begin at
-Slice 1, though the break's scheduled close sits before Slice 4. GUI Break 2 is
-a whole-surface integration pass with a single editor, after Slices 5-7.
-
-## 8. Atomicity, Idempotency, and Orthogonality Rules
-
-The spec already implies most of these; this section makes them normative so
-they are reviewable and testable.
-
-### 8.1 Atomicity
-
-- Every numbered Phase 0 item and slice step is one revertible change landing
-  with its tests. A step whose tests cannot land with it is mis-sliced.
-- Slice 1 steps 5 and 6 are separate atoms: the startup order and the close
-  state machine land as distinct changes even though both live in `host.py`.
-  The step 1 rename is behavior-free and lands alone.
-- Slice 2's command table, pre-handler refusal layer, `slots.py`, and the
-  headed harness are four atoms.
-- `settings.json` and `ui-state.json` writes go through write-to-temp and
-  atomic replace in the destination directory. BR-G-41's corruption recovery
-  remains the read-side guard; replace is the write-side guard, and the GUI
-  never half-writes either file.
-- Coordinated fresh database initialization (Slice 1 step 8) is atomic in
-  effect: a caught partial failure removes only what that attempt created and
-  never a pre-existing file, and a crash between the ledger and history
-  publications is recovered by the exactly-one-present refusal on the next
-  launch.
-- GUI Break 1's `tokens.css`/`components.css` foundation lands before any surface
-  renderer consumes it; a renderer (Slices 4-7) that introduces its own color or
-  control CSS is mis-sliced.
-
-### 8.2 Idempotency
-
-Already required, restated here as one list: logging configuration
-(section 1.4); host preparation, which the start wrapper repeats
-(`docs/DESKTOP_UI.md`); the synchronous `before_load` installer; serialized
-teardown attempts, where only a completed attempt permits the one programmatic
-close (Slice 1 step 6); repeated `pywebviewready` handling with at most one
-drain per task (section 1.8); and receipted-command retry under one
-`command_id`, with a revision only for commands formed against a revisioned
-view (section 1.8).
-
-Added by this section:
-
-- `AppPaths` directory creation is create-if-absent and safe to repeat.
-- The single-instance mutex is acquired once and held for the host lifetime;
-  re-acquisition by the same process is not attempted.
-- A second user close gesture during an active teardown is vetoed and leaves
-  that attempt in charge; it never joins or blocks on the UI thread. After an
-  incomplete attempt, only the explicit Retry Close action starts another
-  off-thread `NamiSyncService.close(timeout)` call. The service owns retry
-  settlement; the host owns the one-at-a-time UI state.
-- History repair reads are idempotent by construction: a repair is a fresh
-  traversal, never a mutation of pager state.
-- `validate_database_contracts()` is read-only and repeatable: re-running it
-  never changes pair state or touches a file.
-
-### 8.3 Orthogonality
-
-One owner per decision; intentional couplings are named.
-
-- `paths.py` owns root resolution and creation; `logging_config.py` consumes
-  an `AppPaths` value and composes no path of its own.
-- `host.py` owns sequencing; `pywebview_runtime.py` owns pywebview
-  primitives; `bridge.py` owns dispatch security. No file duplicates
-  another's checks.
-- `visible_sequence.py` alone owns windowing and the 256-row cap; `tree.js`
-  renders what it is given and re-validates nothing.
-- `request_id` (one transport attempt) and `command_id` (one user gesture)
-  remain orthogonal identities; neither is derived from the other.
-- Single-instance identity is one immutable `DesktopInstanceIdentity` object,
-  passed to both the holder and the activator rather than re-derived, and keyed
-  to the logon session — never to product version, `AppPaths`, or `--data-dir`.
-  Only the headed harness injects an alternate (test) identity, at construction.
-- Command allowlisting is constructor-only: `commands.py` owns the production
-  mapping, the host passes it, and only the harness composes
-  `production + test_report`. No runtime, argv, environment, or bridge
-  registration path exists.
-- The document CSP has exactly three witnesses — the authored `index.html`,
-  `M1_BRIDGE.md`'s normative string, and SH-G-7's expected literal — and no
-  fourth: there is no production Python CSP constant, because the HTML is
-  authored, not generated.
-- `--data-dir` is application-composition input, never session authority.
-- `version.py` is the single product/distribution version source with three
-  witnesses (SH-G-4). Every schema, protocol, policy, contract, dependency,
-  and runtime version remains with its owning layer and is never derived from
-  the product version.
-- The named constants 28 (`ROW_H`), 256 (visible window), 256 (history
-  events), 5 MiB (log budget), and 128/64 (replay/subscriber capacities) are
-  independent decisions; no shared constant, helper, or "cleanup" may unify
-  any pair.
-- `tokens.css` owns color and scale, `components.css` owns control CSS, and
-  surface modules consume both and define neither; section 1.9 owns the material
-  scope and section 1.10 the motion tokens. The Fluent look has one token
-  source, not per-surface palettes.
-- One intentional coupling: the read-only .NET Framework probe serves as both
-  the pywebview WinForms prerequisite check and the pythonnet runtime check
-  (section 1.2). That is a decision, not an accident, and it stays a single
-  probe.
+A bridge change updates `M1_BRIDGE.md` and its BR-G evidence in the same
+atom. A visual change updates `DESKTOP_UI.md` and its SH-G evidence together.
+This file changes only when delivery order, host/package placement,
+launcher/packaging policy, or a shell gate changes.

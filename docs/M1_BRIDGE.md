@@ -5,7 +5,10 @@ acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
 transport chain through Slice 3 and the post-Slice-3 hardening are complete.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
-Slices 5-8 and GUI Break 2 remain.
+Slices 5-8 and GUI Break 2 remain. The real-WebView2 browser-gate migration and
+SH-G-8's complete BR-G-42 normal-envelope evidence also remain open. The
+explicit-`Gap`-only recovery and command-specific `start_plan` revision
+decisions are ratified and their named regressions have landed.
 Stage 5.5 landed its tree substrate,
 recursive scan scope, selection semantics, and facade integration without
 taking Stage 6 presentation work. It
@@ -25,10 +28,15 @@ this document refines them with implementation detail settled afterward and
 does not overrule them. Where it adds a decision M1_PLAN did not make, it is
 numbered `DR-BR-##` to avoid colliding with either existing series.
 `DESKTOP_UI.md` remains the user-facing delivery contract; this file is the
-mechanism behind it. `M1_SHELL.md` owns the remaining Stage 6 implementation
-sequence and packaging placement. Its later console/GUI entry-point decision
-supersedes this file's older no-subcommand desktop-launch wording; the BR-G
-semantics and gates here otherwise remain authoritative.
+mechanism behind it. Within Stage 6, this is the sole normative authority for
+bridge envelopes and limits, command schemas and exact errors, retry identity
+and deadlines, command-specific revisions, sequence/`Gap`/terminal semantics,
+terminal-session release versus task close, and every BR-G acceptance gate.
+`M1_SHELL.md` owns only the remaining Stage 6 implementation sequence, host and
+package placement, launcher/packaging decisions, SH-G definitions, and their
+mapping to these BR-G dependencies. Its later console/GUI entry-point decision
+supersedes this file's older no-subcommand desktop-launch wording; it may link
+to this contract but does not restate or refine it.
 
 Section 10 is normative for implementation: a lane or slice is complete only
 when its numbered acceptance gates, decision prerequisites, regression rows,
@@ -36,7 +44,7 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host and five-command transport are promoted into the active focused
+secured host and production transport are promoted into the active focused
 documents and README. GUI Break 1 and Slice 4 completion claims are restored
 after their ordinary, scale, security, and clean-wheel headed gates passed. The
 complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
@@ -1253,7 +1261,7 @@ successes and failures are ignored, the current valid window remains visible
 while pending, and teardown cancels the timer. Slice 4 supplies the generation
 primitive but adds no dormant command or timer.
 
-Slice 4 freezes the pure request boundary in `M1_SHELL.md`: a typed structural
+This document freezes the pure request boundary: a typed structural
 view over the workflow-owned node object, collapsed known-container ids, a literal display-search string,
 and an optional sparse mapping of caller-decided direct-match counts. That
 mapping deliberately carries no filter vocabulary into the generic layer.
@@ -1929,13 +1937,27 @@ every transport attempt. Success and failure return, respectively, exactly:
 ```
 
 The response echoes `request_id` only after that field independently passes
-its grammar; otherwise it is `null`. The exact code/message vocabulary is the
-table in `M1_SHELL.md` Slice 2: `invalid_request`, `unsupported_version`,
-`unknown_command`, `invalid_payload`, `request_too_large`,
-`slot_unavailable`, `picker_unavailable`, `command_conflict`,
-`planning_refused`, `task_unavailable`, `drain_busy`,
-`observation_conflict`, `bridge_busy`, `bridge_unavailable`, and
-`internal_error`. Retry policy is
+its grammar; otherwise it is `null`. The code/message vocabulary is exact:
+
+| `code` | Fixed `message` |
+| --- | --- |
+| `invalid_request` | `The desktop request is invalid.` |
+| `unsupported_version` | `Restart NamiSync to load a compatible desktop page.` |
+| `unknown_command` | `This desktop action is not available.` |
+| `invalid_payload` | `The desktop action contains invalid data.` |
+| `request_too_large` | `The desktop request is too large.` |
+| `slot_unavailable` | `That folder selection is no longer available. Choose both folders again.` |
+| `picker_unavailable` | `The folder picker could not open. Try again.` |
+| `command_conflict` | `This action no longer matches its first attempt. Start the action again.` |
+| `planning_refused` | `NamiSync could not start a plan for those folders. Review both folders and try again.` |
+| `task_unavailable` | `That desktop task is no longer available.` |
+| `drain_busy` | `That desktop task already has an event request in progress.` |
+| `observation_conflict` | `That desktop task is already observing different work.` |
+| `bridge_busy` | `NamiSync is busy. Try this action again.` |
+| `bridge_unavailable` | `NamiSync is closing or this desktop page is no longer trusted.` |
+| `internal_error` | `NamiSync could not complete the desktop action.` |
+
+Retry policy is
 owned by the immutable command row and browser wrapper, not returned as handler
 data. A structured refusal is definitive; only uncertain transport delivery or
 `internal_error` from an admitted receipted command may trigger that row's one
@@ -2046,7 +2068,7 @@ under the same 25-second bound for its claim to release, then returns
 `drain_busy`; reinjection therefore has a bounded one-rearm convergence rule.
 Unknown/closed or mismatched task/session authority is
 `task_unavailable`; a competing observation attach/recovery generation is
-`observation_conflict`. The fixed messages live in `M1_SHELL.md`.
+`observation_conflict`. Their fixed messages are defined by the table above.
 
 The adapter retains at most 48 tasks. After a terminal record has been returned
 by a drain, `release_terminal_session` stepwise unsubscribes and closes the
@@ -2411,6 +2433,24 @@ require a later schema-version decision rather than an M1 fallback
    | Incremental plan projection memory | 128 MiB maximum |
    | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
    | Incremental bridge event-queue memory under the event fixture | 16 MiB maximum |
+
+   **SH-G-8 memory-accounting definition (OPEN).** The acceptance measurement
+   is the conservative private-memory delta of the complete headed Job Object.
+   Its idle baseline is taken only after the real packaged browser has loaded
+   and is blocked on a test-only start handshake. The parent samples the Job on
+   a target 20 ms cadence throughout the event fixture and records the actual
+   maximum sample interval and Job membership. Acceptance uses
+   `max(0, sampled private-memory peak - conservative idle baseline)` against
+   the 16 MiB ceiling. This deliberately includes Python, the renderer, CLR/IPC,
+   and unrelated runtime growth: a pass proves the upper bound, while a failure
+   is intentionally non-diagnostic and leaves SH-G-8 open. Identity-deduplicated
+   deep sizing of the live Python `EventHub` replay/subscriber and
+   `TaskRegistry` queue/terminal graphs, and an optional precise renderer-heap
+   series, may be recorded only as diagnostics; each records its actual sample
+   cadence. No payload-byte proxy or subtraction of transient/runtime memory is
+   accepted. This definition does not close SH-G-8: the complete
+   normal-envelope benchmark must still pass and record the baseline, sampled
+   peak, delta, cadence, and membership.
 
    Critical feedback and command admission are strict because they determine
    whether the interface feels alive. Page, projection, progress, and history
@@ -3117,13 +3157,17 @@ because its local tests are easier.
   row and decode counts, `preview_selection` at depth 32, and history
   summary/detail latency over the exact retained-item fixture. It also records
   event-drain latency and peak bridge-queue memory under the stated normal
-  burst/rate and proves no `Gap` occurs below that envelope. The ordinary pytest
+  burst/rate using the SH-G-8 whole-Job definition above and proves no `Gap`
+  occurs below that envelope. The ordinary pytest
   deterministically asserts query count, decoded row count,
   allocation-sensitive object count, queue bound/coalescing, and fixture shape;
   the named benchmark command runs cold and warm cases separately and records
   machine/runtime identity. *Not satisfied by* choosing sizes after seeing
   results, reporting averages without the declared percentile/maximum,
-  measuring only payload bytes, allowing normal-load gaps, or using many empty
+  measuring payload bytes or a selected component instead of the complete
+  headed Job, taking the baseline before the real browser reaches the blocked
+  start handshake, treating a target sampling cadence as a guaranteed interval,
+  omitting Job membership, allowing normal-load gaps, or using many empty
   history runs instead of a large retained run.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**
   `DESKTOP_UI.md`, the focused component documents, README overview/index/
@@ -3271,7 +3315,7 @@ a parallel pair.
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
-| GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; exact contract in `M1_SHELL.md` |
+| GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; visual contract in `DESKTOP_UI.md` |
 | 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 closed |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
@@ -3285,7 +3329,7 @@ verified against a real runtime. Slices 1→2→3 are serial within the
 host/transport departments. GUI Break 1 closes after Slice 3 and before Slice 4;
 its exact 13-swatch palette, semantic mappings, contrast/forced-colors evidence,
 no-raw-surface-color rule, and closed local Fluent icon foundation are
-normative in `M1_SHELL.md`.
+normative in `DESKTOP_UI.md`.
 Slice 4 additionally needs GUI Break 1, while its Lane A logic may be prepared
 earlier. **Slices 5 and 6 are a parallel pair**
 only once the host/transport chain through slice 3, slice 4, and Lane D are all

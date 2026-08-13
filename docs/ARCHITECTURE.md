@@ -1880,7 +1880,7 @@ Reusable pure node-tree/index construction, recursive subtree
 scan/reconciliation, typed inventory warning projection, user-selection
 provenance and re-derivation, and the facade commands/review state needed by the
 desktop. **Flesh — implemented through M1 Stage 6 Slice 4.** The secured web
-desktop host, bounded four-command transport, shared design foundation, pure
+desktop host, production bridge transport, shared design foundation, pure
 visible-sequence presentation core, bounded tree renderer, and honest empty
 shell frame. **Flesh — planned remainder of M1 Stage 6.** Plan, inventory,
 history, settings, and lifecycle presentation projections and controls.
@@ -1983,6 +1983,12 @@ parses paths or rebuilds domain rollups. The inventory request codec advances
 to v2 while integrity stays v1 under an exact-integer, kind-aware validator; sync
 plan/execution advances to v4 for `user_deselected`.
 
+Within Stage 6, `M1_BRIDGE.md` is the sole normative authority for bridge
+envelopes/limits, command schemas/errors, retry/deadline and revision identity,
+sequence/`Gap`/terminal behavior, terminal-session release versus task close,
+visible-sequence wire behavior, and every BR-G acceptance gate. This section
+summarizes component ownership and must not refine that protocol.
+
 The M1 desktop is a pywebview host forced to Edge Chromium/WebView2. It exposes
 one versioned allowlisted `dispatch` endpoint, uses structured pull/RPC and a
 bounded event drain that coalesces only replaceable progress and preserves
@@ -2019,12 +2025,10 @@ tree, inventory tree, and history dialog consume service/workflow views only.
 NamiSync-owned code never constructs JavaScript for application data; pinned
 pywebview's internal exposed-function return escaper remains a version-audited,
 real-browser-tested part of the security boundary.
-Appearance is the sole presentation-only exception to the RPC transport:
-native code posts one fixed, revisioned, inert system-appearance JSON envelope
-to the trusted WebView2 document. A packaged receiver validates its exact
-schema and updates only fixed root dataset/custom-property names. The page has
-no matching native-post API, and appearance messages carry no command, URL,
-path, HTML, or general-purpose property authority.
+Appearance is the sole presentation-only exception to the RPC transport. Its
+native-to-page envelope and receiver contract live in `M1_BRIDGE.md`; this
+layer only records that appearance has no browser-to-native sender and grants
+no command, URL, path, HTML, or general-purpose property authority.
 The snapshot follows Windows light/dark/high-contrast state and live
 `UISettings` `Accent`, `AccentLight1`, and `AccentDark1` values, with fixed
 contrast-foreground roles. Publication is asynchronous `PostWebMessageAsJson`
@@ -2040,8 +2044,8 @@ local artifact or diagnostic ownership, then prepares pywebview, constructs the
 shared service, validates/initializes the coordinated database pair, and only
 then resolves the wheel-packaged page and creates a window. A pending document
 authority keeps dispatch closed until native guard attachment; once trusted,
-the host exposes exactly the snapshotted `pick_folder`, `start_plan`, and
-`next_events` rows plus lifecycle-only `close_task`.
+the host exposes only the immutable production mapping defined in
+`M1_BRIDGE.md`.
 Initialized failure aborts before native creation; UI-thread guard or
 loaded-watchdog failure destroys once. One finalizer owns service, logging, and
 mutex release without allowing cleanup failure to replace startup truth.
@@ -2069,10 +2073,10 @@ retained console. This is one GUI implementation exposed through correctly
 classified Windows launchers, not a second desktop.
 
 The adapter owns task cards and cosmetics, not review or projection authority.
-A task may retain a plan with no live session. Busy close confirms, cancels,
-waits for the terminal record, then unsubscribes/closes/drops; application
-shutdown quiesces handlers and wakes drains/producers before closing observers
-and the service. A second GUI launch activates the existing window and exits
+A task may retain a plan with no live session. `M1_BRIDGE.md` exclusively
+defines terminal-session release and explicit task close; application shutdown
+still quiesces handlers and wakes drains/producers before closing observers and
+the service. A second GUI launch activates the existing window and exits
 successfully; activation failure is visible.
 
 Presentation color has one dependency direction. GUI Break 1 places the exact
@@ -2112,12 +2116,10 @@ owns generic node structure, subtree membership, rollups, and opaque id lookup;
 `interfaces/web` owns tree-agnostic flatten/filter/search/window/anchor
 presentation mechanics. The interface consumes a typed structural view of the
 workflow-owned array directly, retains immutable source/visible indexes, and
-creates accessibility row wrappers only for the bounded window. Search accepts
-at most 65,536 UTF-8 bytes before traversal; the bridge independently bounds
-the complete serialized request to 65,536 bytes, and future external adapters
-bound their complete request at ingress. Requests use a common maximum of 256
-rows and reject 257. Anchor resolution is proportional to the supplied parent
-chain, not the total tree. Plan trees are memoized per request. Inventory uses immutable copy/swap
+creates accessibility row wrappers only for the bounded window. The exact
+query/envelope/window bounds and anchor behavior live in `M1_BRIDGE.md`; other
+external adapters impose an equal-or-stricter complete-request ingress bound.
+Plan trees are memoized per request. Inventory uses immutable copy/swap
 projections in a six-view LRU, built from a slim whole-location structure query
 and detail-fetched only for visible row ids. History summary/detail paging is
 performed by repository queries, not by loading then slicing.
@@ -2129,16 +2131,11 @@ participate in no rollup, and carry their count on the filter chip; only an
 `APPLIED` visibility mutation reflows/refetches the list. M1 never auto-scans.
 
 Bridge handlers are concurrent: service review/projection state and adapter
-task state have explicit locks, no task lock spans a facade call or encoding,
-and only one event drain runs per task. Each adapter-owned task has one
-64-update queue: progress is replaceable; reliable updates are ordered and
-backpressure at full reliable capacity. The drain waits 25 seconds on the
-server under a 30-second browser deadline and returns no acknowledgment or
-server cursor. Transport/protocol uncertainty recovers from the first sequence
-after the last accepted non-`Gap` event. An ordinary explicit `Gap` remains
-visible, stops later updates, and recovers from its exact `first_missed_seq`; a
-matching leading recovery gap permits its retained tail without looping. Numeric sequence
-holes are legal progress coalescing and do not recover. `Progress` supplies paired item identity for row updates.
+task state have explicit locks, and no task lock spans a facade call or
+encoding. `M1_BRIDGE.md` exclusively defines per-task drain concurrency, queue
+and deadline bounds, progress replacement, reliable backpressure, recovery
+cursors, and explicit-`Gap` behavior. Numeric sequence holes alone are not a
+recovery signal. `Progress` supplies paired item identity for row updates.
 Visibility receipts use a reproducible per-(gesture,row) key and one
 caller-supplied timestamp. Session-creating commands instead retain
 `command_id -> (request_id, session_id)` in the service until `close_session`
@@ -2153,7 +2150,8 @@ return idempotent rollback, emits `PENDING` into that stream, then atomically
 publishes maps/pending and notifies the scheduler. Attach failure or shutdown
 before publication rolls back the adoption, stream, hub, and store row and
 starts no work. A terminal plan session is no longer live rail work but its
-record/replay/receipt remains task-owned until task close.
+record/replay/receipt lifetime follows the release-versus-close contract in
+`M1_BRIDGE.md`.
 
 Interfaces own cosmetic `ui-state.json` (recents, geometry, columns, sorting,
 collapsed paths, filter chips) directly. It persists no request, session, task,
@@ -2175,42 +2173,28 @@ has no external override surface.
 
 **Stage 6 Slice 2 status (completed 2026-08-12).**
 `interfaces/web/commands.py` is the sole owner of immutable production command
-rows and their exact payload policies;
-at Slice 2 closure its production table contained exactly `pick_folder` and
-`start_plan`.
-`interfaces/web/bridge.py` remains domain-blind and owns strict v1 parsing,
-origin/admission checks, the recursive primitive-view codec, and sanitized
-response envelopes. `interfaces/web/slots.py` alone retains picker paths in a
-locked, bounded, expiring process-local table and atomically resolves the
-purpose-bound pair. `host.py` constructs these owners and passes one snapshotted
-mapping; it does not duplicate their rules. `assets/bridge.js` alone touches
-`window.pywebview` and owns transport ids, the 30-second uncertain-delivery
-retry for receipted `start_plan`, and response validation. Test-only
-`test_report` composition remains under `tests/`; no runtime registration or
-external composition surface exists. At that checkpoint this did not claim
-later command families. At Slice 2 closure the wheel's exact frontend set was
+rows and payload policy. `interfaces/web/bridge.py` remains domain-blind and
+owns parsing, origin/admission checks, the primitive-view codec, and sanitized
+response envelopes. `interfaces/web/slots.py` alone retains picker paths;
+`host.py` composes one snapshotted mapping; only `assets/bridge.js` touches
+`window.pywebview`. The exact command/envelope/retry contract is exclusively in
+`M1_BRIDGE.md`. At Slice 2 closure the wheel's frontend set was
 `index.html`, `app.css`, `app.js`, `bridge.js`, and `render.js`; the last is the
 strict production `textContent` sink. Browserless probes and the headed page
-stay under `tests/assets/`. Ordinary and real-WebView2 evidence covers the
-64 KiB boundary, sanitized refusal/exception paths, receipted retry, slot
-expiry/LRU, the real native picker, independent committed-origin refusal, and
-hostile-text/log privacy. This closes SH-G-3 and only the transport/picker/
-origin/static-sink portion of BR-G-32; production plan and inventory DOM
-closure remains with Slices 5 and 6.
+stay under `tests/assets/`. SH-G-3 is closed; the installed real-WebView2
+browser-behavior witness migration remains open, as do the plan/inventory DOM
+clauses assigned to later slices.
 
-**Stage 6 Slice 3 status (completed 2026-08-12).** The production command map
-is now exactly `pick_folder`, `start_plan`, and `next_events`. Adapter-owned
-tasks attach their observation transactionally before dispatcher publication,
-retain one bounded 64-update queue, and expose at most one 25-second server
-drain under the browser's 30-second deadline. Progress is replaceable while
-reliable events and terminal records retain ordering and backpressure. The
-generation-counted browser manager validates whole responses, treats explicit
-`Gap` as visible recovery state, resumes transport uncertainty from the first
-unaccepted sequence, and re-arms exactly one drain for each nonterminal task
-after repeated `pywebviewready`. Host shutdown closes the registry before
-service observation teardown, waking both long polls and blocked producers.
-This closes SH-G-8 and BR-G-33 while leaving production plan and inventory DOM
-closure to Slices 5 and 6.
+**Stage 6 Slice 3 status (completed 2026-08-12).** Adapter-owned tasks attach
+their observation transactionally before dispatcher publication, and the
+bounded drain implementation preserves reliable ordering/backpressure while
+coalescing replaceable progress. The exact queue, deadline, recovery,
+sequence, terminal, and release behavior is exclusively in `M1_BRIDGE.md`.
+The explicit-`Gap`-only decision and command-specific `start_plan` revision
+decision are ratified with landed named regressions. BR-G-33 implementation is
+present, but SH-G-8 remains open until the complete BR-G-42 normal four-task
+envelope passes; attach-before-schedule and beyond-envelope overflow evidence
+do not close it.
 
 **Stage 6 GUI Break 1 status (completed and realigned 2026-08-13).**
 `interfaces/web/appearance.py` owns Windows preference probes and observation,
@@ -2232,7 +2216,7 @@ plan/inventory clauses remain with Slices 5 and 6.
 **Stage 6 Slice 4 status (completed and realigned 2026-08-13).**
 `interfaces/web/visible_sequence.py` is the sole tree-agnostic presentation
 owner for strict workflow-array validation, collapse/search/caller-decided
-filter retention, exact 1..256 windows, and deepest-visible ancestor anchoring.
+filter retention, bounded windows, and deepest-visible ancestor anchoring.
 Its typed structural view and pure functions retain no path, domain vocabulary,
 projection lifecycle, active cache, or duplicate full-tree DTO. The installed
 `tree.js` consumes only the already-decided generic window and server-derived
@@ -2240,17 +2224,17 @@ accessibility metadata, renders a fixed 28-pixel operable tree
 with exactly two spacers, writes labels through `render.js`, and refuses stale
 generations before reading their payload. `rail.js` and `panels.js` add only
 labelled task-navigation and work regions with truthful empty text;
-they create no task, session, plan, inventory, or history state. The bridge
-allowlist remains exactly `pick_folder`, `start_plan`, `next_events`, and
-lifecycle-only `close_task`. Python is the sole structural-validation/window
-authority and emits the exact `{offset,total,rows}` wire view; JavaScript
-performs no duplicate hierarchy or field validation. The audit's roles-only
+they create no task, session, plan, inventory, or history state. Slice 4 adds
+no command. Python remains the structural-validation/window owner while
+JavaScript performs no duplicate hierarchy or field validation; the exact
+wire view and bounds live in `M1_BRIDGE.md`. The audit's roles-only
 keyboard claim, 256-byte search limit, repeated anchor allocation, duplicate
 full-tree DTO, and opaque rail have been removed. The 120,000-node scale
 regression and real clean-wheel keyboard, platform-accessibility, geometry,
 hostile-text, forced-colors, zoom, and stale-generation evidence pass, closing
 BR-G-34, BR-G-2's Stage 6 clause, and SH-G-7. Slice 5 remains the first owner
-of the real plan surface, and broader Stage 6/beta closure remains open.
+of the real plan surface, and broader Stage 6/beta closure remains open. The
+installed real-WebView2 browser-witness migration also remains open.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer
 desktop surfaces, and other interfaces behind the same facade.

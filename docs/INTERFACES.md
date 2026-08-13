@@ -6,9 +6,10 @@ semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
-database-pair facade, secured product-host composition, and the hardened
-`pick_folder`/`start_plan`/`next_events`/`release_terminal_session`/`close_task`
-transport are implemented.
+database-pair facade, secured product-host composition, and hardened production
+transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
+authority. The installed real-WebView2 browser-witness migration and SH-G-8's
+complete normal-envelope evidence remain open.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
 visible-sequence, operable-tree, and shell realignment; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
@@ -227,13 +228,9 @@ receipt-map clearing take that same gate, so an in-flight replay finishes
 before invalidation.
 
 The web task boundary owns its linked observation, session, plan, and start
-receipt. After successful terminal presentation, `release_terminal_session`
-stepwise unsubscribes and closes the dispatcher session but retains the task,
-plan, start receipt, presentation state, and occupied capacity slot. Only an
-explicit `close_task` drops the plan and removes the adapter task; one bounded
-close receipt also converges delayed release retries. Live tasks are capped at
-48. Retained database history is independent and is never removed by task
-close.
+receipt. `M1_BRIDGE.md` exclusively defines terminal-session release, explicit
+task close, receipt convergence, and the live-task capacity exposed through the
+bridge. Retained database history remains independent of adapter task cleanup.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -409,9 +406,9 @@ the NamiSync-owned shape and strict shared text sink; Slice 3 implements the
 bounded/coalesced event drain, while Slices 5 and 6 add the production plan and
 inventory DOM renderers.
 
-The sole presentation-only native-to-page path is a fixed revisioned system
-appearance envelope posted through WebView2 after native origin/security
-attachment. Its packaged receiver validates the complete schema and may update
+The sole presentation-only native-to-page path is the system-appearance
+publication defined in `M1_BRIDGE.md`, posted through WebView2 after native
+origin/security attachment. Its packaged receiver validates the complete schema and may update
 only fixed root appearance datasets and CSS custom properties. It exposes no
 browser-to-native sender, command, URL, path, HTML, or dynamic property name and
 therefore does not widen bridge authority.
@@ -423,73 +420,22 @@ classes select package-local CSS-mask SVGs and inherit `currentColor`; no view,
 payload, command, or returned string can supply markup, a class, URL, path, or
 registration. Unknown names and sizes are refused before DOM mutation.
 
-The current production table contains exactly five rows. Slice 2 owns
-`pick_folder` and `start_plan`; the former owns one native user interaction and
-returns `null` or an opaque purpose-bound slot id plus inert display text; the
-latter accepts only one source slot, one target slot, an explicit
-`null`/`trash`/`additive` deletion choice, and a gesture `command_id`, then
-delegates to `NamiSyncService.start_plan`. The browser never supplies a path as
-authority. `commands.py` owns immutable command rows and exact payload
-validation, `bridge.py` owns the v1 envelope/primitive codec/refusal boundary,
-and `slots.py` owns the locked 32-entry, 30-minute process-local path table.
-The exact envelopes, ids, messages, deadlines, and retry rule are normative in
-`M1_SHELL.md`. `assets/bridge.js` is the only `window.pywebview` owner and
-`assets/render.js` is the strict production `textContent` sink. Production has
-no runtime command registration: the headed gate adds `test_report` only by
-constructing a private immutable mapping under `tests/`, and that row and page
-are absent from the wheel.
+`M1_BRIDGE.md` is the sole normative authority for the immutable production
+command mapping, envelope/codec boundary, opaque ids and slots, exact errors,
+deadlines/retry and revision identity, drain queue and recovery, visible
+sequence, terminal reconciliation, terminal-session release versus explicit
+task close, and all BR-G evidence. Implementation placement remains discrete:
+`commands.py` owns rows and validators, `bridge.py` owns dispatch security,
+`slots.py` owns process-local path authority, `drain.py` owns adapter event
+queues, and only `assets/bridge.js` references `window.pywebview`.
 
-Slice 3 owns `next_events`, and implements adapter-owned
-`task-<32-lowercase-hex>` identity; task ids never enter the task-agnostic service
-or dispatcher. `start_plan` adds that task id to its web result and replays it
-with the same command receipt. `next_events` returns at most 64 exact
-event/record tagged updates from one 64-entry task queue. Progress may replace
-progress or yield to reliable data; reliable updates never displace one another
-and backpressure until drain or close. One server drain per task waits at most
-25 seconds under a 30-second browser deadline. Only transport/protocol
-uncertainty resubscribes after the last accepted event; explicit `Gap` remains
-visible, stops later ordinary-batch updates, and resubscribes from its
-`first_missed_seq`. A matching leading gap in that recovery result proves the
-prefix unavailable and permits the retained tail without looping; numeric holes are legal progress
-coalescing. Terminal plan sessions cease being live/active-rail work. Their
-recovery authority remains through successful browser presentation, then
-session release removes that authority while retaining the reviewed task and
-plan until explicit task close.
-
-Audit hardening adds `release_terminal_session` and `close_task`. The former
-requires terminal-record delivery, accepts and echoes exact task/session ids,
-and uses no command id or revision; the latter alone disposes of the task. The
-registry retains at most 48 same-payload close receipts.
-Exact `start_plan` wire intent is checked before volatile slot resolution, so a
-lost response remains replayable after slot expiry. The browser policy is an
-exact tested mirror of Python metadata; drain recovery and release retry have
-finite delayed budgets. Bridge handler admission is capped at 64, with a fixed
-`bridge_busy` refusal.
-
-Slice 4 adds presentation only and does not change that table. A typed
-structural view and pure functions in `visible_sequence.py` validate one workflow-owned
-pre-order array and derive collapse/search/caller-filter retention, exact
-1..256 windows, and indexed deepest-visible ancestor anchors without retaining
-a view, duplicating the full workflow array, or importing domain policy. Search
-accepts at most 65,536 UTF-8 bytes before traversal; external request limits
-remain boundary-owned. The installed `tree.js` consumes only
-`{offset,total,rows}`, renders at most 256 operable 28-pixel rows between two
-fixed spacers through the inert text sink, and rejects stale generations. Its
-single-tab-stop focus model consumes server-derived parent/child/sibling
-metadata. Structural task/work landmarks are labelled but not focus targets;
-the transparent rail and inactive task-card surface expose Mica. Direct
-workflow-node, scale, keyboard/platform-accessibility, geometry, and clean-wheel
-evidence has passed, closing BR-G-34 and SH-G-7. Slices 5 and 6 remain the first owners of domain
-projection commands and real rows.
-
-Pywebview reinjects its bridge after every `NavigationCompleted`, including
-canceled or failed navigation, and rebuilds its in-flight return-callback
-table. The renderer can trigger this repeatedly. Frontend initialization must
-therefore treat `pywebviewready` as repeatable and idempotent, install no
-duplicate listeners, and ensure exactly one `next_events` request is re-armed
-per task after every firing. A lost mutation response retries with its
-original `command_id`; a lost drain resumes from the last accepted sequence
-and reconciles through terminal truth.
+The explicit-`Gap`-only recovery and command-specific `start_plan` revision
+decisions are ratified and their named regressions have landed. Numeric holes
+alone are not recovery signals. Browserless/Node probes remain supplemental;
+the named browser-behavior witnesses stay open until migrated to an installed
+real WebView2. SH-G-8 likewise remains open until the complete BR-G-42 normal
+four-task envelope runs, despite landed attach-before-schedule and
+beyond-envelope overflow/reconciliation coverage.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the
@@ -504,8 +450,8 @@ order. It acquires the fixed instance identity before logging or webview import,
 prepares the renderer before service/window construction, validates and if
 needed initializes the database pair before command admission, creates one
 pending `NativeDocumentState`, and binds its loopback origin once during the
-renderer-checked initialized callback. The host snapshots the exact five-row
-production mapping before exposing the page. Loaded attachment failure
+renderer-checked initialized callback. The host snapshots the immutable
+production mapping defined in `M1_BRIDGE.md` before exposing the page. Loaded attachment failure
 destroys the window once; pre-native initialization failure does not call
 destroy. One finalizer closes any constructed service, then releases logging,
 app-path leases, and the mutex only after complete quiescence, preserving the
@@ -536,10 +482,10 @@ failure is logged without changing the close phase or service result.
 
 ## Common Adapter Contract
 
-- Bound each complete externally supplied request at ingress. The desktop
-  bridge's ceiling is 65,536 UTF-8 bytes including its JSON envelope; a future
-  REST, IPC, or other adapter must impose an equal-or-stricter whole-request
-  limit before constructing internal presentation values.
+- Bound each complete externally supplied request at ingress. `M1_BRIDGE.md`
+  exclusively defines the desktop ceiling; a future REST, IPC, or other adapter
+  must impose an equal-or-stricter whole-request limit before constructing
+  internal presentation values.
 - Validate syntax/presence early and report actionable path/input errors; domain
   validation remains in workflow/preflight.
 - Submit through dispatcher/registry rather than starting ad hoc workers that

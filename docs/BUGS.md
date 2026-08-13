@@ -537,6 +537,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
+  documents delegated exact errors and retry rules to `M1_SHELL.md` while also
+  retaining stale command, sequence, and lifecycle summaries, so reviewers
+  could follow incompatible contracts and SH-G-8 appeared closed without its
+  normal-envelope evidence. Cause: the Stage 6 delivery plan was promoted into
+  a second protocol authority after `M1_BRIDGE.md` had already settled the
+  seam. Fixed by making `M1_BRIDGE.md` the sole bridge/BR-G authority, reducing
+  `M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
+  and status. Numeric-hole and `start_plan` regressions have landed; installed
+  real-WebView2 witness migration and SH-G-8 remain explicitly open.
 - SEVERE - FIXED (2026-08-13). Appearance authority was retired during task
   quiescence before `service.close()` proved terminal completion. An incomplete
   or exceptional close correctly leaves the window open for retry but silently

@@ -19,10 +19,12 @@ history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
 classified launcher, coordinated database gate, packaged bootstrap page, fixed
 single-instance identity, secured local WebView2 product host, and nonblocking
 orderly-close/retry controller. The transport chain through Slice 3 is
-complete: production exposes exactly `pick_folder`, `start_plan`,
-`next_events`, and lifecycle-only `close_task`, with real paths retained behind opaque server slots, task
+complete under the production mapping defined exclusively in
+`docs/M1_BRIDGE.md`, with real paths retained behind opaque server slots, task
 observation attached before work can start, a bounded event drain, and a strict
-inert-text return sink. GUI Break 1 and Slice 4 have completed their audited
+inert-text return sink. Explicit-`Gap`-only recovery and command-specific
+`start_plan` revision are ratified with landed named regressions. GUI Break 1
+and Slice 4 have completed their audited
 realignment: pinned Fluent neutral and live Windows accent roles, structured
 appearance fallback and retry lifetime, direct workflow-owned visible arrays,
 a 65,536-byte literal-search field ceiling behind the separately bounded bridge
@@ -36,7 +38,10 @@ native picker confinement, hostile-text transport, log privacy, the component
 gallery, real native material apply/fallback paths, and Slice 4 platform
 keyboard/accessibility, 200%-zoom reflow, forced-colors focus, hostile/long tree
 text, 28-pixel row bounds, scale, and stale-generation behavior. The plan, inventory,
-history, lifecycle, packaging, and beta closures remain open.
+history, lifecycle, packaging, and beta closures remain open. Migration of the
+named browser-behavior witnesses to an installed real WebView2 remains open, as
+does SH-G-8's complete BR-G-42 normal four-task envelope; existing
+attach/overflow and clean-wheel coverage does not close either item.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -124,7 +129,8 @@ never hides the other result axes in rendered output.
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
 - [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
 - [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.
-- [M1 Shell](docs/M1_SHELL.md) — ordered Stage 6 host, frontend, and beta-package delivery plan.
+- [M1 Bridge](docs/M1_BRIDGE.md) — sole Stage 6 bridge protocol and BR-G acceptance authority.
+- [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
 - [Command line](docs/COMMANDLINE.md) — commands, review, output, and exits.
 - [Executor](docs/EXECUTOR.md) — guarded filesystem mutation, pipeline, and recovery.
 - [Inventory](docs/INVENTORY.md), [Verifier](docs/VERIFIER.md), and
@@ -205,10 +211,10 @@ never hides the other result axes in rendered output.
   - **Host:** retained the secured installed-wheel WebView2 composition and
     hardened repeated-load close status so late workers do not query a destroyed
     document or let presentation failure change shutdown truth.
-  - **Transport:** added exact strict v1 envelopes, the three-row
-    `pick_folder`/`start_plan`/`next_events` allowlist, bounded purpose-bound
-    path slots, receipt-safe plan replay, transactional task observation, and a
-    64-update progress-coalescing/reliable-backpressure drain.
+  - **Transport:** added the strict Slice 2/3 transport now specified solely in
+    `M1_BRIDGE.md`, bounded purpose-bound path slots, receipt-safe plan replay,
+    transactional task observation, and a bounded
+    progress-coalescing/reliable-backpressure drain.
   - **Frontend and evidence:** added the sole strict `render.js` text sink, the
     generation-counted browser drain manager, and constructor-only headed
     harness; gates cover native picker confinement, independent off-origin

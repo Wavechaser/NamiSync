@@ -3,18 +3,24 @@
 Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
 seams. The classified launchers, wheel-packaged bootstrap assets, secured
-product-host composition, and exact `pick_folder`/`start_plan`/`next_events`/
-`release_terminal_session`/`close_task`
-transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
-runtime refusal, popup/navigation guards, single-instance behavior, native
-picker path confinement, committed-origin refusal, hostile text, and logging
-privacy; Slice 3 evidence additionally covers transactional observation,
-bounded drain behavior, recovery, and repeated bridge readiness. GUI Break 1
+product-host composition, and the production transport defined by
+`M1_BRIDGE.md` now exist. Ordinary and installed-wheel evidence covers host
+isolation, runtime refusal, popup/navigation guards, single-instance behavior,
+native picker path confinement, committed-origin refusal, hostile text, and
+logging privacy; migration of the browser-behavior witnesses to an installed
+real WebView2 remains open. Slice 3 evidence covers transactional observation,
+bounded drain behavior, recovery, and repeated bridge readiness, while SH-G-8
+remains open for the complete BR-G-42 normal envelope. GUI Break 1
 and Slice 4 have completed their audited token/material/motion and
 visible-sequence/tree/shell realignment with ordinary, scale, and real
 clean-wheel headed evidence. User-facing plan, inventory, history,
 and control surfaces remain; `M1_SHELL.md` owns their implementation order and
 beta-package closure.
+
+`M1_BRIDGE.md` is the sole normative authority for bridge envelopes, commands,
+errors, retry/revision identity, sequence and terminal lifecycle, and BR-G
+acceptance gates. This document owns the user-facing and visual contract; it
+does not restate the wire protocol.
 
 ## Purpose
 
@@ -84,8 +90,8 @@ the shared database-pair facade. Fresh state initializes ledger then history;
 ready state continues; refused state runs the bounded finalizer and shows the
 coordinated reset action through the stable native startup dialog. It then
 resolves `index.html` from package resources, creates one pending native
-document and a dispatcher snapshotted from exactly `pick_folder`, `start_plan`,
-and `next_events`, and starts only Edge Chromium with
+document and a dispatcher snapshotted from the production command mapping
+defined exclusively by `M1_BRIDGE.md`, and starts only Edge Chromium with
 the packaged page served on a random loopback origin. The initialized callback
 binds that exact origin once. Renderer/origin failure aborts before native
 window creation; guard/load failure destroys the created window exactly once.
@@ -111,10 +117,36 @@ third-party notices, and exact-source release material close in the final beta
 packaging slice.
 
 GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
-establishes the completed design-token foundation. `tokens.css` is the only source file
-allowed to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`,
-and available `light` palette values specified by `M1_SHELL.md`; yellow and
-purple deliberately have no authored `light` input in the current foundation.
+establishes the completed design-token foundation. NamiSync presents as a
+Fluent 2 Windows 11 app using Segoe UI Variable for body text and
+Cascadia Mono/Consolas for paths and hashes. It retains the standard native
+frame. Mica is the whole-window base, with transparent page/controller
+backgrounds and opaque Fluent cards for readable scrolling content; high
+contrast, unavailable material, or a transparency failure falls back to an
+opaque system-appropriate neutral surface. M1 adds neither Acrylic nor a
+custom caption.
+
+`tokens.css` is the only source file allowed to contain these exact 13 authored
+red/green/blue/yellow/purple palette primitives:
+
+```css
+--palette-red-main: #EE6666;
+--palette-red-dark: #551111;
+--palette-red-light: #FFAACC;
+--palette-green-main: #33DD99;
+--palette-green-dark: #004422;
+--palette-green-light: #99EEDD;
+--palette-blue-main: #33AAEE;
+--palette-blue-dark: #002255;
+--palette-blue-light: #99CCFF;
+--palette-yellow-main: #FFDD44;
+--palette-yellow-dark: #553300;
+--palette-purple-main: #BB88EE;
+--palette-purple-dark: #331155;
+```
+
+Yellow and purple deliberately have no authored `light` input in the current
+foundation.
 A future hardcoded or derived color value is possible only after an explicit product-
 author design decision and a same-change contract/token/evidence update; it is
 not silently synthesized by a renderer. `tokens.css` also owns meaning-named
@@ -165,6 +197,13 @@ only after complete service close, before destruction. Shared dialogs likewise
 retain their ordinary lifecycle:
 `data-closing` runs the compatible exit state before the owner calls `close()`.
 
+Motion tokens and Fluent easing curves live in `tokens.css`; controls,
+expand/collapse, progress, and dialog transitions consume those shared values.
+`prefers-reduced-motion` reduces or stops non-essential motion. Virtualized row
+creation and recycling never animate, so scroll performance and row geometry
+remain stable. GUI Breaks tune choreography without creating another motion
+contract.
+
 M1 does not bundle or automatically invoke the Evergreen WebView2 Bootstrapper.
 The supported target remains Windows 11; missing WebView2 is refused read-only
 with an official installation direction. M1 beta binaries may be unsigned and
@@ -189,11 +228,9 @@ commit_semantic_settings(patch) -> SemanticSettingsView
 ```
 
 `SessionObserver.observe(session_id, sink)` supplies primitive current-state
-and event/record views; its Slice 3 resubscribe form takes the positive first
-desired sequence after transport uncertainty, or an explicit `Gap` body's exact
-`first_missed_seq`. Plan start's
-optional sink is attached transactionally before the session can run and is
-excluded from command receipt identity. The desktop owns the bounded
+and event/record views. Plan start's optional sink is attached transactionally
+before the session can run. `M1_BRIDGE.md` exclusively defines the recovery
+cursor and command-receipt identity exposed across the wire. The desktop owns the bounded
 presentation queue fed by that sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe on task close and close every observation before service shutdown.
 
@@ -238,59 +275,23 @@ session store.
 
 ## Bridge and renderer security
 
-The host exposes exactly one JavaScript-facing method:
+The host exposes one function-table `dispatch` entry, and only packaged
+`bridge.js` references `window.pywebview`. `M1_BRIDGE.md` exclusively defines
+the complete envelope bound, immutable command mapping, opaque identities,
+exact errors, deadlines and retry classes, revision rules, drain recovery,
+sequence/`Gap`/terminal semantics, and terminal-session release versus explicit
+task close. This document requires those mechanisms to produce actionable,
+path-sanitized UI feedback; it does not duplicate their wire contract.
 
-```text
-dispatch(command_json)
-```
-
-It remains versioned, JSON-schema-shaped, size-bounded, and command-allowlisted
-through `BridgeDispatcher`. Commands and responses use opaque ids and primitive
-structured data, never raw filesystem paths as authority. The frontend starts
-every request and receives structured return values. NamiSync-owned code never
-constructs JavaScript or calls `evaluate_js`, `run_js`, or `Window.state` as an
-application-data channel. Pinned pywebview 6.2.1 internally constructs
-JavaScript to return exposed-function results, so its serializer/escaper and
-the real-browser hostile-name round trip remain part of the security boundary.
-The exact pythonnet 3.1.0 pin is equally part of that boundary because native
-delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
-through it.
-
-Slice 2 introduced exactly two production actions, `pick_folder` and
-`start_plan`; Slice 3 added `next_events`; audit hardening added
-`release_terminal_session` and explicit `close_task`. The current immutable
-production table therefore has exactly five rows.
-`pick_folder` is intentionally user-paced: it has no application timeout or
-automatic retry, and cancel is a normal `null` result. A selection becomes a
-server-held `slot-<32-lowercase-hex>` plus display-only text. `start_plan`
-accepts one live source slot, one live target slot, deletion policy
-`null`/`trash`/`additive`, and one gesture-scoped `command_id`; its 30-second
-response deadline does not cancel Python work, and one uncertain-delivery retry
-uses a new transport request id with the same command id and payload. Fixed
-structured errors guide the next user action without exposing exception text or
-paths. The browser wrapper and strict `renderText` sink have browserless and
-real-WebView2 hostile-data coverage. A constructor-only headed composition adds
-`test_report` under `tests/`; production has no runtime registration or
-external composition surface. No plan-review, execution, inventory, history,
-settings, or lifecycle command appears before its owning slice.
-
-Live state uses one bounded, coalescing `next_events` pull/drain request. Its
-exact task/session/drain/replay payload, tagged event/record result, 64-update
-queue/batch, and 25-second server/30-second browser bounds live in
-`M1_SHELL.md`. The host preserves reliable item and terminal ordering, allows
-replaceable progress snapshots to collapse, and makes an explicit `Gap` or
-disconnected task visible instead of inventing history. A numeric sequence
-hole is legal progress coalescing, not by itself loss. A JavaScript call must
-never block indefinitely waiting for an event, and the frontend must keep at
-most one outstanding event drain per task. Pywebview may reinject its bridge after any `NavigationCompleted`,
-including a canceled or failed navigation, and discard in-flight return
-callbacks. `pywebviewready` is therefore a repeatable event: initialization is
-idempotent, does not duplicate listeners, and every firing ensures exactly one
-drain is re-armed per nonterminal task. A matching leading recovery `Gap`
-remains visible while its retained tail is applied. A terminal record stops
-re-arming only after the consumer presents it successfully; session release
-then removes observation/replay authority while retaining the plan and browser
-task until explicit close.
+NamiSync-owned code never constructs JavaScript or calls `evaluate_js`,
+`run_js`, or `Window.state` as an application-data channel. Pinned pywebview
+6.2.1 internally constructs JavaScript to return exposed-function results, so
+its serializer/escaper and the real-browser hostile-name round trip remain part
+of the security boundary. The exact pythonnet 3.1.0 pin is equally part of that
+boundary because native delegate subscription, WinForms thread affinity, and
+`CoreWebView2` access pass through it. Browserless/Node probes are supplemental;
+the named browser-behavior gates remain open until their installed real-WebView2
+witnesses land.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
@@ -337,9 +338,9 @@ committed off-origin source replaces it and causes dispatch to fail closed.
 Origin authorization is an entry-time admission check; the bridge neither
 holds the document lock across a handler nor rolls back completed work if
 navigation or reinjection makes its response undeliverable. That state is
-uncertain delivery, not uncertain commit: mutations retry with the same
-`command_id`, and drains recover from the last accepted sequence. The packaged
-static-asset server is not an API or event channel.
+uncertain delivery, not uncertain commit; `M1_BRIDGE.md` owns the corresponding
+retry and recovery rules. The packaged static-asset server is not an API or
+event channel.
 
 The frontend places the restrictive CSP meta element first in `<head>` so no
 earlier resource escapes it; `frame-src 'none'` independently blocks frames
@@ -351,9 +352,9 @@ Hostile-name fixtures are required end-to-end.
 
 ## Interaction contract
 
-Slice 4 establishes only the presentation core and honest shell frame. The
-production allowlist remains the three Slice 3 commands; no placeholder plan,
-inventory, history, or control command is added. The page exposes labelled
+Slice 4 establishes only the presentation core and honest shell frame. It adds
+no presentation command or placeholder plan, inventory, history, or control
+surface. The page exposes labelled
 task navigation and a work region with truthful empty states under the standard
 native title frame. `rail.js` and `panels.js` own that accessible frame; they
 do not create fake task or session data.
@@ -369,7 +370,8 @@ across a window boundary. It never filters a viewport, reconstructs ancestry,
 searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree
-evidence live in `M1_SHELL.md` Slice 4 and SH-G-7.
+contract live in `M1_BRIDGE.md`; the installed shell/tree witness is SH-G-7 in
+`M1_SHELL.md`.
 
 The Slice 4 frame has two labelled structural regions beneath the header: task
 navigation stating that no tasks are available and a work region stating that
@@ -400,14 +402,12 @@ session state and remains distinct from **Paused** until custody actually
 releases. Repeat pause/resume is disabled during that drain, cancellation stays
 available, and the next state may be paused or terminal if the active operation
 settles the run first.
-Successful terminal presentation automatically releases only the observation
-and dispatcher session. The plan, task identity, and presentation state remain
-available for review. Closing a plan-only or already-terminal task needs no
-confirmation: explicit close invokes the Stage 6 facade's task-owned artifact
-release, then drops the adapter's presentation projections; retained history
-remains. Closing queued or busy work confirms, asks for the service-supported
-control, waits for the terminal record, then performs the same explicit close.
-It never treats a transient progress flag as completion.
+Successful terminal presentation releases only observation/session authority;
+the reviewed plan, task identity, and presentation remain. Task close is a
+separate explicit user action, with confirmation/control when work is still
+queued or busy. `M1_BRIDGE.md` exclusively defines the exact release and close
+commands, ordering, retries, and retained artifacts. Retained history remains,
+and the UI never treats a transient progress flag as completion.
 
 Sync remains a two-session interaction: plan first, review its immutable
 fingerprint-bound intent, choose a dependency-closed selection, then start
@@ -459,8 +459,8 @@ Use accessible text and non-color outcome cues, stable layouts, and full-path
 accessibility text for elided paths. Empty, unavailable, ambiguous, blocked,
 and failure states must say what the user can do next. The desktop presents as a
 Fluent 2 (Windows 11) app that follows the system light/dark theme and reads the
-system accent, over a standard window frame on a Mica base; `M1_SHELL.md`
-sections 1.9-1.10 own the design-language, material, and motion specifics.
+system accent, over a standard window frame on a Mica base; the visual authority
+is the design-token/material/motion contract above.
 Contrast and no-color-only signaling remain requirements in every theme.
 
 ## Acceptance criteria

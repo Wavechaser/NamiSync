@@ -11,8 +11,10 @@ and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. Stage 6's secured host and transport through Slice 3, GUI Break 1
 foundation, and Slice 4 presentation core and honest shell frame are also
-implemented. `M1_BRIDGE.md` records the landed bridge contract; `M1_SHELL.md`
-owns the remaining product-surface slices and beta-packaging placement.
+implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
+`M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
+definitions, and beta-packaging work. The real-WebView2 browser-witness
+migration and SH-G-8's complete normal-envelope evidence remain open.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained
@@ -41,12 +43,14 @@ lands**, not deferred indefinitely. Once a decision is promoted, the active
 document wins and this file becomes history — the same lifecycle
 `DESIGN_REVIEW.md` has.
 
-For the seam between Stage 5 and Stage 6, `M1_BRIDGE.md` refines this plan: its
-DR-BR decisions, BR-G acceptance criteria, slicing plan, and regression
-watchlist govern wherever this file's earlier GUI sketch is less specific or
-conflicts. `M1_SHELL.md` further owns the pre-shell Phase 0, entry points,
-frontend/package layout, and final packaging placement. The settled behavior
-and contracts are also summarized in
+For the seam between Stage 5 and Stage 6, `M1_BRIDGE.md` refines this plan and
+is the sole normative authority for envelopes/limits, command schemas/errors,
+retry/deadline and revision identity, sequence/`Gap`/terminal semantics,
+terminal-session release versus task close, and every BR-G acceptance gate.
+`M1_SHELL.md` owns only the pre-shell Phase 0 and Stage 6 delivery order,
+entry points, host/frontend/package placement, packaging, SH-G definitions,
+and their BR-G dependency map; it may link to but cannot refine the bridge
+contract. The settled behavior and contracts are also summarized in
 `FEATURES.md`, `ARCHITECTURE.md`, and `WORKFLOWS.md`.
 
 ---
@@ -1048,12 +1052,9 @@ Stage 6 presentation helper.
   `python -m namisync` remain console/CLI entry points and no-subcommand use
   points to `nami-sync-gui`; that GUI-subsystem entry point opens the sole
   desktop implementation without retaining a console window.
-- Exactly one versioned, schema-validated, allowlisted
-  `dispatch(command_json)` method. All data uses structured pull/RPC; live
-  events use one bounded `next_events` drain that coalesces only replaceable
-  progress, preserves reliable events, permits one concurrent request, and
-  recovers transport uncertainty or an explicit `Gap` through the existing
-  observer path; numeric holes from coalesced progress are not recovery signals.
+- Exactly one function-table `dispatch` entry, with the complete envelope,
+  command, retry/revision, drain, sequence, recovery, and lifecycle contract
+  defined exclusively by `M1_BRIDGE.md`.
 - Force Edge Chromium; fail actionably without WebView2. Install native
   cancellation hooks for untrusted navigation/new windows and reject every
   dispatch outside the exact packaged origin.
@@ -1083,19 +1084,20 @@ regression watchlist, reference-machine latency/memory budgets, and 100k-file /
 are normative for this stage.
 
 **Implementation checkpoint (realigned 2026-08-13).** Stage 6's secured host,
-Slice 3 transport, and post-Slice-3 hardening remain complete, including the
-exact four-command table (`pick_folder`, `start_plan`, `next_events`, and
-lifecycle-only `close_task`). GUI Break 1 and Slice 4 are closed again after
-ordinary, scale, security, and clean-wheel headed evidence. The result uses a
+transport through Slice 3, and post-Slice-3 hardening remain complete under
+the production mapping recorded only in `M1_BRIDGE.md`. The explicit-`Gap`-only
+recovery and command-specific `start_plan` revision decisions are ratified and
+their named regressions have landed. GUI Break 1 and Slice 4 are closed again
+after ordinary, scale, security, and clean-wheel headed evidence. The result uses a
 pinned Fluent token transcription, live UISettings accent publication,
 structured readable fallback evidence, and window-owned appearance lifetime
 through retryable shutdown. The pure presentation core consumes workflow-owned
-nodes directly, owns the exact renderer wire view and 1..256 window, accepts a
-65,536-byte literal-search field behind the bridge's separately bounded whole
-envelope, resolves anchors in O(chain depth), and supplies an operable platform
-accessibility tree. The rail and resting task cards expose Mica; selected cards
-are opaque. Slice 5 remains the first real plan surface; the remaining product
-UI, release, and beta claims stay open.
+nodes directly and follows `M1_BRIDGE.md`'s bounded renderer/query/anchor
+contract while supplying an operable platform accessibility tree. The rail and
+resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
+UI, release, and beta claims stay open. The installed real-WebView2
+browser-behavior witness migration and SH-G-8's complete BR-G-42 normal
+four-task envelope also remain open.
 
 ---
 
