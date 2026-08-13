@@ -2192,9 +2192,16 @@ coalescing replaceable progress. The exact queue, deadline, recovery,
 sequence, terminal, and release behavior is exclusively in `M1_BRIDGE.md`.
 The explicit-`Gap`-only decision and command-specific `start_plan` revision
 decision are ratified with landed named regressions. BR-G-33 implementation is
-present, but SH-G-8 remains open until the complete BR-G-42 normal four-task
-envelope passes; attach-before-schedule and beyond-envelope overflow evidence
-do not close it.
+present. Its deterministic fixture now drives four attached-before-tick-zero
+tasks through 60 logical seconds with exactly 6,000 `Progress` and 600 ordered,
+exactly-once reliable item emissions, monotonic coalesced progress, four exact
+terminal records, no `Gap`, and no queue above 64. The separate 260-reliable
+overflow regression remains explicitly beyond-envelope and proves visible
+`Gap`, retained-tail recovery, and terminal reconciliation. The standalone
+installed-wheel real-WebView2 harness implements the conservative whole-Job
+memory contract and real 60-second latency measurement; after committing it,
+run `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
+No passing reference artifact has been recorded, so SH-G-8 remains open.
 
 **Stage 6 GUI Break 1 status (completed and realigned 2026-08-13).**
 `interfaces/web/appearance.py` owns Windows preference probes and observation,

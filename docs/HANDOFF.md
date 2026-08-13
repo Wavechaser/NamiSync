@@ -2,8 +2,10 @@
 
 Status (2026-08-13): early-shell realignment checkpoints 1-8 have landed.
 `M1_BRIDGE.md` alone owns the protocol and every BR-G gate. Checkpoint 6 closes
-the installed real-WebView2 browser-witness migration; SH-G-8's complete
-normal-envelope evidence remains open, and Slices 5-8 remain product work.
+the installed real-WebView2 browser-witness migration. Checkpoint 9's
+deterministic fixture and standalone installed-wheel benchmark harness are
+implemented, but no passing reference-machine artifact exists; SH-G-8 remains
+open, and Slices 5-8 remain product work.
 
 ## Delivered
 
@@ -28,6 +30,16 @@ normal-envelope evidence remains open, and Slices 5-8 remain product work.
   lane independent of Node availability.
 - Added a literal witness table for every approved public-view dataclass and
   routed every witness plus hostile return types through production dispatch.
+- Rebuilt the SH-G-8 ordinary fixture around four tasks and 60 logical seconds.
+  It emits exactly 6,000 `Progress` and 600 reliable item events, proves every
+  observer attaches before tick zero, retains per-session exactly-once order,
+  monotonic coalesced progress, four exact terminal records, no `Gap`, and a
+  queue high-water no greater than 64. The separate 260-reliable overflow
+  regression remains explicitly beyond-envelope.
+- Added the opt-in archived-wheel WebView2 benchmark and its ordinary contract
+  checks. It runs the same rates for a real 60 seconds and applies
+  `M1_BRIDGE.md`'s conservative whole-headed-Job memory delta. This harness is
+  present, but its passing reference artifact has not been recorded.
 
 ## Verification And Review
 
@@ -39,6 +51,10 @@ normal-envelope evidence remains open, and Slices 5-8 remain product work.
 - The public-view manifest/dispatch suites passed: 175 passed. The
   authoritative non-Node frontend/transport/icon lane passed: 133 passed and 7
   supplemental probes deselected.
+- The deterministic ordinary event fixture and separate beyond-envelope
+  overflow regression are ordinary evidence. Harness-contract tests validate
+  evidence refusal and all fixed ceilings, but deliberately do not substitute
+  for the real 60-second run.
 - Active-document contradiction searches excluded `docs/obsolete/` and the
   temporary root reference and found no actionable stale command-table count,
   reverse delegation, mirrored-boundary language, false SH-G-8 closure,
@@ -49,9 +65,12 @@ normal-envelope evidence remains open, and Slices 5-8 remain product work.
 
 ## Immediate Context
 
-Checkpoint 9 alone may close SH-G-8, and only after the complete BR-G-42 normal four-task
-duration/rate/latency/memory envelope passes. Preserve the explicit separation
-between terminal-session release and explicit task close.
+After committing the harness, run `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`
+on the documented reference machine. Checkpoint 9 itself leaves SH-G-8 open;
+only a separate evidence commit may close it after
+the complete BR-G-42 four-task duration/rate/latency/whole-Job-memory envelope
+passes and the artifact is recorded. Preserve the explicit separation between
+terminal-session release and explicit task close.
 
 The root `M1_SHELL.md` reference and `S0-S3_REALIGNMENT.md` plan are
 temporary untracked files. They are excluded from active contradiction searches

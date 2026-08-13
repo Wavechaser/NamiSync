@@ -597,10 +597,15 @@ named regressions. Numeric sequence holes alone are not a recovery signal, and
 session creation does not invent a revision.
 
 SH-G-8 is **open**. Current evidence proves attach-before-schedule and the
-separate beyond-envelope overflow/`Gap`/terminal-reconciliation case. It does
-not yet execute BR-G-42's complete normal four-task duration/rate envelope or
-its latency and memory budgets, so neither this slice nor a small burst test
-closes that shell gate.
+exact deterministic normal shape: four tasks, 60 logical seconds, 6,000
+`Progress` emissions, 600 reliable item emissions, four exact terminal records, no
+`Gap`, per-session reliable ordering, monotonic coalesced progress, and a
+64-entry queue ceiling. The separate 260-reliable overflow case remains
+explicitly beyond that envelope and proves visible `Gap`, retained-tail
+recovery, and terminal reconciliation. The standalone installed-wheel WebView2
+benchmark harness also exists, but no passing real-60-second reference-machine
+latency/memory artifact has been recorded, so the gate remains open.
+
 ### GUI Break 1 - Presentation foundation (completed 2026-08-13)
 
 GUI Break 1 sits after Slice 3 and before Slice 4. It placed `tokens.css`,
@@ -783,16 +788,20 @@ carry the `headed` marker; all are collected by the release command.
   by* scanning a hand-maintained file list, asserting only the meta element's
   presence, testing the component gallery instead of the production shell, or
   measuring a copied/test-only tree implementation.
-- **SH-G-8 — OPEN: the drain attaches before work starts.** A test proves the task
-  observation is subscribed before execution admission starts the workflow,
-  and no `Gap` occurs inside the BR-G-42 normal envelope; a fault-injected
-  burst beyond that envelope surfaces `Gap`, resumes from the retained replay
-  tail when available, and reconciles terminal truth without claiming the
-  missing reliable events were recovered. *Not satisfied by* attaching after
-  start, relying on replay for the normal path, or hiding loss behind terminal
-  recovery. Peak queue memory uses `M1_BRIDGE.md` §9.4's conservative whole
-  headed Job Object delta; component or payload-byte measurements are diagnostic
-  only.
+- **SH-G-8 — OPEN: the drain attaches before work starts.** The deterministic
+  ordinary fixture proves four observations attach before tick zero, then
+  drives 60 logical seconds with exactly 6,000 `Progress` and 600 reliable item
+  emissions plus four terminal records. All reliable ids arrive exactly once
+  and per-session ordered, delivered progress is strictly monotonic after
+  coalescing, no normal `Gap` occurs, and no queue exceeds 64. A separate
+  260-reliable beyond-envelope burst surfaces `Gap`, resumes from the retained
+  replay tail when available, and reconciles terminal truth without claiming
+  the missing reliable events were recovered. Peak memory uses
+  `M1_BRIDGE.md` §9.4's conservative whole headed Job Object delta; component
+  or payload-byte measurements are diagnostic only. *Not satisfied by*
+  attaching after start, relying on replay for the normal path, hiding loss
+  behind terminal recovery, or treating logical-time/contract tests as the
+  real-60-second latency and memory artifact.
 - **SH-G-9 — The history pager terminates on the empty terminal page.** A
   fault-injected traversal whose live cursor is ahead of durability renders
   the committed prefix and stops on the empty terminal page; a later repair
@@ -919,7 +928,11 @@ headed BR-G-32 transport evidence),
 `tests/interfaces/web/test_visible_sequence.py` (BR-G-34 and BR-G-2's Stage 6
 structure clause),
 `tests/interfaces/web/test_shell_headed.py` (installed-wheel headed SH-G-7),
-`tests/interfaces/web/test_drain.py` (SH-G-8),
+`tests/interfaces/web/test_drain.py` (SH-G-8 deterministic and overflow
+fixtures), `tests/interfaces/web/test_bridge_event_benchmark.py` (ordinary
+benchmark-contract checks), and the opt-in installed-wheel command
+`.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`
+(SH-G-8 reference evidence),
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
 `tests/interfaces/web/test_design_tokens.py` (ordinary SH-G-11),
@@ -944,7 +957,7 @@ clause lands:
 | Phase 0 | SH-G-4 |
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
-| Slice 3 | SH-G-8 remains open pending the complete BR-G-42 normal-envelope run |
+| Slice 3 | SH-G-8 remains open pending a passing recorded BR-G-42 reference-machine event artifact |
 | GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
 | Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
@@ -960,7 +973,7 @@ This table maps shell delivery order to the sole BR-G definitions in
 | Phase 0 | prerequisites for BR-G-19/31/32 | complete |
 | Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
 | Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | complete, including installed real-WebView2 browser witnesses |
-| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation complete; SH-G-8 remains open pending the complete BR-G-42 normal-envelope run |
+| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation complete; SH-G-8 remains open pending a passing recorded reference-machine event artifact |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
 | Slice 5 | BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
@@ -971,9 +984,10 @@ This table maps shell delivery order to the sole BR-G definitions in
 The explicit-`Gap`-only recovery decision and the command-specific
 `start_plan` revision decision are ratified in `M1_BRIDGE.md`; their named
 regressions have landed. A numeric sequence hole alone does not reopen recovery.
-SH-G-8 remains open because attach-before-schedule and beyond-envelope
-overflow/reconciliation coverage do not substitute for the complete normal
-four-task BR-G-42 duration/rate/latency/memory witness.
+SH-G-8 remains open because the deterministic normal fixture, separate
+beyond-envelope overflow regression, and committed benchmark harness do not
+substitute for a passing recorded reference-machine
+duration/rate/latency/memory artifact.
 
 ## 7. Contract pointers and change control
 

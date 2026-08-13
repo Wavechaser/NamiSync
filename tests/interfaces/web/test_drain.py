@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Event, Thread
@@ -18,6 +19,7 @@ from namisync.dispatcher import (
     SessionNotFound,
     WorkflowRegistration,
 )
+from namisync.dispatcher import event_bus as event_bus_module
 from namisync.interfaces import service as service_module
 from namisync.interfaces.service import NamiSyncService, PlanSession
 from namisync.interfaces.web import drain as drain_module
@@ -160,6 +162,60 @@ class _IntegratedInvocation:
         return self.name.encode("utf-8")
 
 
+@dataclass
+class _EnvelopeRun:
+    name: str
+    index: int
+    tick_releases: tuple[Event, ...]
+    tick_emitted: tuple[Event, ...]
+    abort: Event
+    entered: Event
+    progress_emitted: int = 0
+    reliable_emitted: int = 0
+
+
+@dataclass
+class _EnvelopeInvocation:
+    run_state: _EnvelopeRun
+
+    def run(self, context):
+        state = self.run_state
+        state.entered.set()
+        reliable_pattern = (3, 3, 2, 2)
+        for tick in range(60):
+            state.tick_releases[tick].wait()
+            if state.abort.is_set():
+                return OperationResult(SessionState.CANCELED, canceled=True)
+            for offset in range(25):
+                completed = tick * 25 + offset + 1
+                context.emit(
+                    Progress(
+                        items_done=completed,
+                        items_total=1_500,
+                        bytes_done=completed,
+                        bytes_total=1_500,
+                        current_path=f"{state.name}-progress-{completed}",
+                    )
+                )
+                state.progress_emitted += 1
+            reliable_count = reliable_pattern[(state.index + tick) % 4]
+            for item_index in range(reliable_count):
+                context.emit(
+                    ItemOutcome(
+                        item_id=f"{state.name}-item-{tick:02d}-{item_index}",
+                        kind="copy",
+                        path=f"{state.name}-{tick:02d}-{item_index}.txt",
+                        outcome=Outcome.SUCCEEDED,
+                    )
+                )
+                state.reliable_emitted += 1
+            state.tick_emitted[tick].set()
+        return OperationResult(SessionState.COMPLETED)
+
+    def snapshot(self) -> bytes:
+        return self.run_state.name.encode("utf-8")
+
+
 def _wait_terminal(dispatcher: Dispatcher, session_id: str) -> None:
     deadline = monotonic() + 2
     while monotonic() < deadline:
@@ -205,22 +261,17 @@ def _mark_terminal_drained(registry: TaskRegistry, start) -> None:
     assert any(update.update_type == "record" for update in drained.updates)
 
 
-def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
+def test_br_g_33_integrated_admission_and_visible_overflow_gap(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     adopt_entered = Event()
     adopt_release = Event()
     adopted_session_ids = []
-    normal_release = Event()
     overflow_release = Event()
     overflow_finish = Event()
     overflow_done = Event()
     runs = {
-        "normal-0": _IntegratedRun(Event(), normal_release, 25, 3),
-        "normal-1": _IntegratedRun(Event(), normal_release, 25, 3),
-        "normal-2": _IntegratedRun(Event(), normal_release, 25, 2),
-        "normal-3": _IntegratedRun(Event(), normal_release, 25, 2),
         "overflow": _IntegratedRun(
             Event(),
             overflow_release,
@@ -283,8 +334,7 @@ def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
         assert dispatcher._subscriber_capacity == 64
         assert drain_module._CAPACITY == 64
 
-        starts = []
-        source, target = roots("normal-0")
+        source, target = roots("overflow")
         start_results = []
         start_errors = []
 
@@ -307,17 +357,16 @@ def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
         assert start_thread.is_alive()
         with pytest.raises(SessionNotFound):
             dispatcher.get(adopted_session_ids[0])
-        assert not runs["normal-0"].entered.wait(0.05)
+        assert not runs["overflow"].entered.wait(0.05)
         adopt_release.set()
         start_thread.join(2)
         assert not start_thread.is_alive()
         assert not start_errors
-        attached = start_results[0]
-        starts.append(attached)
-        assert runs["normal-0"].entered.wait(1)
+        overflow = start_results[0]
+        assert runs["overflow"].entered.wait(1)
         pending = registry.drain(
-            attached.task_id,
-            attached.session_id,
+            overflow.task_id,
+            overflow.session_id,
             next(drain_ids),
             replay_from=None,
         )
@@ -329,70 +378,7 @@ def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
         assert pending_events[0] == ("StateChanged", {"state": "pending"})
         assert not any(body_type == "Gap" for body_type, _body in pending_events)
 
-        for index in range(1, 4):
-            source, target = roots(f"normal-{index}")
-            starts.append(
-                registry.start_plan(
-                    source,
-                    target,
-                    deletion_policy=None,
-                    command_id=f"{index + 1:032x}",
-                )
-            )
-            assert runs[f"normal-{index}"].entered.wait(1)
-
-        assert all(dispatcher.get(start.session_id).result is None for start in starts)
-
-        normal_release.set()
-        normal_updates = list(pending.updates)
-        for start in starts:
-            _wait_terminal(dispatcher, start.session_id)
-            normal_updates.extend(
-                _drain_until_record(
-                    registry,
-                    start.task_id,
-                    start.session_id,
-                    drain_ids,
-                )
-            )
-
-        normal_events = [
-            update.event
-            for update in normal_updates
-            if update.update_type == "event"
-        ]
-        assert not any(event.body_type == "Gap" for event in normal_events)
-        assert sum(event.body_type == "ItemOutcome" for event in normal_events) == 10
-        progress_events = [
-            event for event in normal_events if event.body_type == "Progress"
-        ]
-        assert len(progress_events) == 4
-        progress_by_session = {
-            event.session_id: event.body for event in progress_events
-        }
-        assert set(progress_by_session) == {
-            start.session_id for start in starts
-        }
-        for index, start in enumerate(starts):
-            assert progress_by_session[start.session_id] == {
-                "items_done": 25,
-                "items_total": 25,
-                "bytes_done": 25,
-                "bytes_total": 25,
-                "current_path": f"normal-{index}-progress-24",
-            }
-        assert all(
-            len(registry._tasks[start.task_id].queue) <= 64 for start in starts
-        )
-
-        source, target = roots("overflow")
-        overflow = registry.start_plan(
-            source,
-            target,
-            deletion_policy=None,
-            command_id=f"{5:032x}",
-        )
-        assert runs["overflow"].entered.wait(1)
+        assert dispatcher.get(overflow.session_id).result is None
         overflow_release.set()
         assert overflow_done.wait(2)
         assert dispatcher.get(overflow.session_id).result is None
@@ -473,9 +459,250 @@ def test_br_g_33_sh_g_8_integrated_admission_envelope_and_visible_gap(
         )
     finally:
         adopt_release.set()
-        normal_release.set()
         overflow_release.set()
         overflow_finish.set()
+        registry.begin_close()
+        registry.unsubscribe_all()
+        service.close(timeout=2)
+
+
+def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tick_releases = tuple(Event() for _ in range(60))
+    abort = Event()
+    runs = {
+        f"envelope-{index}": _EnvelopeRun(
+            f"envelope-{index}",
+            index,
+            tick_releases,
+            tuple(Event() for _ in range(60)),
+            abort,
+            Event(),
+        )
+        for index in range(4)
+    }
+
+    def prepare_plan(request) -> PreparedSession:
+        name = Path(request.source_path).name
+        return PreparedSession(name.encode("utf-8"))
+
+    def open_plan(payload: bytes) -> _EnvelopeInvocation:
+        return _EnvelopeInvocation(runs[payload.decode("utf-8")])
+
+    dispatcher = Dispatcher(
+        {PLAN_KIND: WorkflowRegistration(prepare_plan, open_plan)}
+    )
+    monkeypatch.setattr(service_module, "_dispatcher", lambda _runtime: dispatcher)
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    real_adopt = service._observer.adopt
+    adopted_session_ids = []
+    observed_adapter_queue_lengths = []
+    observed_dispatcher_queue_lengths = []
+
+    class _ObservedAdapterQueue(deque):
+        def __init__(self, values=()):
+            super().__init__(values)
+            observed_adapter_queue_lengths.append(len(self))
+
+        def append(self, value):
+            super().append(value)
+            observed_adapter_queue_lengths.append(len(self))
+
+    class _ObservedDispatcherQueue(deque):
+        def __init__(self, values=()):
+            super().__init__(values)
+            observed_dispatcher_queue_lengths.append(len(self))
+
+        def append(self, value):
+            super().append(value)
+            observed_dispatcher_queue_lengths.append(len(self))
+
+    def observed_adapter_deque(values=()):
+        return _ObservedAdapterQueue(values)
+
+    real_event_stream_init = event_bus_module.EventStream.__init__
+
+    def instrumented_event_stream_init(stream, *args, **kwargs):
+        real_event_stream_init(stream, *args, **kwargs)
+        stream._items = _ObservedDispatcherQueue(stream._items)
+
+    monkeypatch.setattr(drain_module, "deque", observed_adapter_deque)
+    monkeypatch.setattr(
+        event_bus_module.EventStream,
+        "__init__",
+        instrumented_event_stream_init,
+    )
+
+    def instrumented_adopt(
+        session_id,
+        sink,
+        stream,
+        *,
+        from_sequence=1,
+    ):
+        rollback = real_adopt(
+            session_id,
+            sink,
+            stream,
+            from_sequence=from_sequence,
+        )
+        adopted_session_ids.append(session_id)
+        return rollback
+
+    monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
+    task_tokens = iter(f"{index:032x}" for index in range(1, 16))
+    registry = TaskRegistry(service, token=lambda: next(task_tokens), drain_wait=0.1)
+    drain_ids = iter(f"{index:032x}" for index in range(100, 2_000))
+    starts = []
+    delivered_reliable: dict[str, list[str]] = {}
+    delivered_progress: dict[str, list[int]] = {}
+    terminal_records = {}
+
+    try:
+        for index in range(4):
+            name = f"envelope-{index}"
+            source = tmp_path / "sources" / name
+            target = tmp_path / "targets" / name
+            source.mkdir(parents=True)
+            target.mkdir(parents=True)
+            start = registry.start_plan(
+                str(source),
+                str(target),
+                deletion_policy=None,
+                command_id=f"{index + 1:032x}",
+            )
+            starts.append(start)
+            task = registry._tasks[start.task_id]
+            with task.condition:
+                task.queue = _ObservedAdapterQueue(task.queue)
+            delivered_reliable[start.session_id] = []
+            delivered_progress[start.session_id] = []
+            assert runs[name].entered.wait(1)
+
+        assert set(adopted_session_ids) == {
+            start.session_id for start in starts
+        }
+        assert len(adopted_session_ids) == 4
+        assert dispatcher._subscriber_capacity == 64
+        assert drain_module._CAPACITY == 64
+        assert all(
+            dispatcher.get(start.session_id).state is SessionState.RUNNING
+            for start in starts
+        )
+        assert all(
+            run.progress_emitted == 0 and run.reliable_emitted == 0
+            for run in runs.values()
+        )
+        assert not any(release.is_set() for release in tick_releases)
+
+        fixture_deadline = monotonic() + 15
+        reliable_pattern = (3, 3, 2, 2)
+        for tick in range(60):
+            tick_releases[tick].set()
+            for run in runs.values():
+                remaining = fixture_deadline - monotonic()
+                assert remaining > 0 and run.tick_emitted[tick].wait(remaining)
+            for index, start in enumerate(starts):
+                expected_ids = {
+                    f"envelope-{index}-item-{tick:02d}-{item_index}"
+                    for item_index in range(
+                        reliable_pattern[(index + tick) % 4]
+                    )
+                }
+                seen_this_tick: set[str] = set()
+                while seen_this_tick != expected_ids:
+                    assert monotonic() < fixture_deadline
+                    batch = registry.drain(
+                        start.task_id,
+                        start.session_id,
+                        next(drain_ids),
+                        replay_from=None,
+                    )
+                    for update in batch.updates:
+                        if update.update_type == "record":
+                            terminal_records[start.session_id] = update.record
+                            continue
+                        event = update.event
+                        assert event.body_type != "Gap"
+                        if event.body_type == "ItemOutcome":
+                            item_id = event.body["item_id"]
+                            delivered_reliable[start.session_id].append(item_id)
+                            if item_id in expected_ids:
+                                seen_this_tick.add(item_id)
+                        elif event.body_type == "Progress":
+                            delivered_progress[start.session_id].append(
+                                event.body["items_done"]
+                            )
+                assert seen_this_tick == expected_ids
+
+        for start in starts:
+            if start.session_id not in terminal_records:
+                updates = _drain_until_record(
+                    registry,
+                    start.task_id,
+                    start.session_id,
+                    drain_ids,
+                )
+                for update in updates:
+                    if update.update_type == "record":
+                        terminal_records[start.session_id] = update.record
+                    elif update.event.body_type == "Progress":
+                        delivered_progress[start.session_id].append(
+                            update.event.body["items_done"]
+                        )
+                    elif update.event.body_type == "ItemOutcome":
+                        delivered_reliable[start.session_id].append(
+                            update.event.body["item_id"]
+                        )
+                    else:
+                        assert update.event.body_type != "Gap"
+
+        assert sum(run.progress_emitted for run in runs.values()) == 6_000
+        assert sum(run.reliable_emitted for run in runs.values()) == 600
+        assert sum(map(len, delivered_reliable.values())) == 600
+        for index, start in enumerate(starts):
+            expected = [
+                f"envelope-{index}-item-{tick:02d}-{item_index}"
+                for tick in range(60)
+                for item_index in range(reliable_pattern[(index + tick) % 4])
+            ]
+            assert delivered_reliable[start.session_id] == expected
+            progress = delivered_progress[start.session_id]
+            assert progress
+            assert all(
+                earlier < later
+                for earlier, later in zip(progress, progress[1:], strict=False)
+            )
+            assert progress[-1] == 1_500
+            record = terminal_records[start.session_id]
+            assert record.state == "completed"
+            assert record.started_at is not None
+            assert record.ended_at is not None
+            result = record.result
+            assert result is not None
+            assert result.filesystem == "completed"
+            assert result.headline == "success"
+            assert result.integrity == "not-run"
+            assert result.recording == "ok"
+            assert result.audit == "ok"
+            assert result.disposition == "ran"
+            assert result.canceled is False
+            assert result.error is None
+            assert [item.item_id for item in result.items] == expected
+            assert all(item.result == "succeeded" for item in result.items)
+        assert set(terminal_records) == {
+            start.session_id for start in starts
+        }
+        assert observed_adapter_queue_lengths
+        assert 1 <= max(observed_adapter_queue_lengths) <= 64
+        assert observed_dispatcher_queue_lengths
+        assert 1 <= max(observed_dispatcher_queue_lengths) <= 64
+    finally:
+        abort.set()
+        for release in tick_releases:
+            release.set()
         registry.begin_close()
         registry.unsubscribe_all()
         service.close(timeout=2)

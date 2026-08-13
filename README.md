@@ -40,9 +40,10 @@ keyboard/accessibility, 200%-zoom reflow, forced-colors focus, hostile/long tree
 text, 28-pixel row bounds, scale, and stale-generation behavior. The plan, inventory,
 history, lifecycle, packaging, and beta closures remain open. The named
 browser-behavior witnesses now run through the installed production bridge and
-renderer in real WebView2; Node probes remain supplemental. SH-G-8's complete
-BR-G-42 normal four-task envelope remains open because the transport witness
-does not supply its duration, rate, latency, and whole-Job memory evidence.
+renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
+four-task logical-time fixture and standalone installed-wheel benchmark harness
+have landed, but no passing real-60-second reference artifact records its
+latency and whole-Job memory evidence, so the gate remains open.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as

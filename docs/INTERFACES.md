@@ -434,8 +434,16 @@ decisions are ratified and their named regressions have landed. Numeric holes
 alone are not recovery signals. Browserless/Node probes remain supplemental;
 the named browser-behavior witnesses now run through the installed production
 bridge and renderer in real WebView2. SH-G-8 remains open until the complete
-BR-G-42 normal four-task envelope runs, despite landed attach-before-schedule
-and beyond-envelope overflow/reconciliation coverage.
+BR-G-42 reference evidence passes. The ordinary deterministic fixture now
+proves four observations precede tick zero, the exact 60-logical-second
+6,000-`Progress`/600-reliable-item shape is lossless and ordered, progress is
+monotonic after coalescing, all four terminal records arrive, and queues stay at
+or below 64. The separate 260-reliable overflow regression remains explicitly
+beyond-envelope and preserves visible `Gap`/tail/terminal reconciliation. The
+standalone installed-wheel WebView2 harness and whole-Job measurement contract
+are implemented; after commit, run `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
+No passing reference-machine artifact has been recorded, so logical-time and
+harness-contract tests do not close SH-G-8.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

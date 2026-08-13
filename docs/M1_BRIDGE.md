@@ -7,7 +7,9 @@ transport chain through Slice 3 and the post-Slice-3 hardening are complete.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
 migration is complete; SH-G-8's complete BR-G-42 normal-envelope evidence
-remains open. The
+remains open. Its deterministic ordinary fixture and standalone installed-wheel
+benchmark harness are implemented, but no passing reference-machine artifact
+has been recorded. The
 explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed.
 Stage 5.5 landed its tree substrate,
@@ -2442,10 +2444,18 @@ require a later schema-version decision rather than an M1 fallback
 
    **SH-G-8 memory-accounting definition (OPEN).** The acceptance measurement
    is the conservative private-memory delta of the complete headed Job Object.
-   Its idle baseline is taken only after the real packaged browser has loaded
-   and is blocked on a test-only start handshake. The parent samples the Job on
-   a target 20 ms cadence throughout the event fixture and records the actual
-   maximum sample interval and Job membership. Acceptance uses
+   Its idle baseline is taken only after the real installed production host and
+   WebView2 have loaded the test-owned benchmark page plus wheel-installed
+   bridge/render assets and are blocked on a test-only start handshake. The
+   parent samples one full second of idle Job membership, then samples the Job
+   on a target 20 ms cadence throughout the event fixture and records the
+   actual maximum sample interval—including the tail from the final sample to
+   fixture completion—and membership. The conservative idle
+   baseline is the minimum complete private-byte sample in that fixed one-second
+   window; the fixture value is the maximum complete sample. Any missing member,
+   unreadable process sample, membership that omits the headed root process, or
+   blind interval above 100 ms refuses the evidence rather than allowing a
+   friendly baseline or catch-up samples to hide a peak. Acceptance uses
    `max(0, sampled private-memory peak - conservative idle baseline)` against
    the 16 MiB ceiling. This deliberately includes Python, the renderer, CLR/IPC,
    and unrelated runtime growth: a pass proves the upper bound, while a failure
@@ -2457,6 +2467,39 @@ require a later schema-version decision rather than an M1 fallback
    accepted. This definition does not close SH-G-8: the complete
    normal-envelope benchmark must still pass and record the baseline, sampled
    peak, delta, cadence, and membership.
+
+   **SH-G-8 evidence status (OPEN, 2026-08-13).** The deterministic ordinary
+   fixture now drives four simultaneous tasks through 60 logical seconds with
+   exactly 6,000 `Progress` emissions, 600 reliable item emissions, and terminal
+   truth for every task. It proves every observer is attached before tick zero,
+   no normal-envelope `Gap` occurs, all reliable ids arrive exactly once and in
+   per-session order, delivered progress is strictly monotonic after coalescing
+   and reaches 1,500 per task, every terminal record is exact, and neither the
+   dispatcher subscriber queue nor adapter task queue exceeds 64. The existing
+   260-reliable fault-injected overflow case remains a
+   separate, explicitly beyond-envelope witness for visible `Gap`, retained-tail
+   recovery, and terminal reconciliation.
+
+   The standalone `tests/bridge_event_benchmark.py` harness builds and installs
+   the archived-HEAD wheel, loads a test-owned benchmark page with the installed
+   production bridge/render assets in real WebView2, waits on a
+   test-only start handshake, runs the same aggregate rates for a real 60
+   seconds, and records latency, `Gap`, fixture, runtime, dirty-state, and
+   whole-Job memory evidence under the definition above. The artifact also
+   identifies and enforces the declared Windows build, CPU/core shape, RAM,
+   repository NVMe, AC-power state, and declared Python/SQLite plus pinned
+   pywebview/pythonnet profile; it records the resolved Bottle, evergreen
+   WebView2, and loaded CLR identities without pretending they are all
+   package-pinned. After this harness is
+   committed, run it from the repository root with:
+
+   ```powershell
+   .\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"
+   ```
+
+   Ordinary harness-contract tests and the logical-time fixture do not satisfy
+   the wall-clock/memory gate. No passing reference-machine JSON artifact is
+   linked yet, so SH-G-8 remains open.
 
    Critical feedback and command admission are strict because they determine
    whether the interface feels alive. Page, projection, progress, and history
@@ -3171,10 +3214,18 @@ because its local tests are easier.
   machine/runtime identity. *Not satisfied by* choosing sizes after seeing
   results, reporting averages without the declared percentile/maximum,
   measuring payload bytes or a selected component instead of the complete
-  headed Job, taking the baseline before the real browser reaches the blocked
+  headed Job, taking the baseline before the real installed host/WebView2 and
+  wheel-installed bridge/render assets reach the blocked
   start handshake, treating a target sampling cadence as a guaranteed interval,
-  omitting Job membership, allowing normal-load gaps, or using many empty
+  accepting a sampling blind interval above 100 ms, omitting Job membership,
+  allowing normal-load gaps, or using many empty
   history runs instead of a large retained run.
+
+  **Current status:** the exact logical-time fixture and the standalone
+  installed-wheel benchmark harness have landed, while the separate
+  beyond-envelope overflow regression remains passing. No passing reference
+  artifact has been recorded; therefore BR-G-42's event budget and SH-G-8 stay
+  open.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**
   `DESKTOP_UI.md`, the focused component documents, README overview/index/
   limitations/changelog, and `ui_mockup/` status agree with the implemented
