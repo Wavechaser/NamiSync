@@ -42,6 +42,7 @@ from namisync.interfaces.web.drain import (
     TaskUnavailableError,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.workflows import PLAN_KIND
 from namisync.workflows.views import SessionEventView, SessionRecordView
 from tests.interfaces.web._public_view_witnesses import (
     INVALID_RETURN_WITNESSES,
@@ -499,7 +500,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
     )
     record = SessionRecordView(
         session_id,
-        "plan",
+        PLAN_KIND,
         "pending",
         False,
         "2026-08-12T10:59:59Z",
@@ -564,7 +565,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                     "update_type": "record",
                     "record": {
                         "session_id": session_id,
-                        "kind": "plan",
+                        "kind": "sync-plan",
                         "state": "pending",
                         "supports_pause": False,
                         "created_at": "2026-08-12T10:59:59Z",

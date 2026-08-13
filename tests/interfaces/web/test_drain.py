@@ -48,7 +48,7 @@ def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
 def _record(*, terminal: bool = True) -> SessionRecordView:
     return SessionRecordView(
         SESSION,
-        "plan",
+        PLAN_KIND,
         "completed" if terminal else "pending",
         False,
         "2026-01-01T00:00:00Z",

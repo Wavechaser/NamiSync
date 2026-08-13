@@ -38,6 +38,7 @@ from namisync.interfaces.web.drain import (
     TaskSessionReleaseView,
     TaskStartView,
 )
+from namisync.workflows import PLAN_KIND
 from namisync.workflows.models import (
     ExecutionDetails,
     HistoryEventPageView,
@@ -307,7 +308,7 @@ SESSION_EVENT_JSON = {
 }
 NONTERMINAL_RECORD = SessionRecordView(
     SESSION_ID,
-    "plan",
+    PLAN_KIND,
     "running",
     False,
     "2026-08-13T10:00:00Z",
@@ -317,7 +318,7 @@ NONTERMINAL_RECORD = SessionRecordView(
 )
 NONTERMINAL_RECORD_JSON = {
     "session_id": SESSION_ID,
-    "kind": "plan",
+    "kind": "sync-plan",
     "state": "running",
     "supports_pause": False,
     "created_at": "2026-08-13T10:00:00Z",
@@ -327,7 +328,7 @@ NONTERMINAL_RECORD_JSON = {
 }
 TERMINAL_RECORD = SessionRecordView(
     SESSION_ID,
-    "plan",
+    PLAN_KIND,
     "completed",
     False,
     "2026-08-13T10:00:00Z",
@@ -337,7 +338,7 @@ TERMINAL_RECORD = SessionRecordView(
 )
 TERMINAL_RECORD_JSON = {
     "session_id": SESSION_ID,
-    "kind": "plan",
+    "kind": "sync-plan",
     "state": "completed",
     "supports_pause": False,
     "created_at": "2026-08-13T10:00:00Z",
