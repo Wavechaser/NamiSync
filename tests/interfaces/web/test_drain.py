@@ -1085,6 +1085,65 @@ def test_release_and_close_race_runs_each_cleanup_step_once() -> None:
     ]
 
 
+def test_release_settles_a_stale_failed_recovery_without_deadlock() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            self.reobserve_entered.set()
+            assert self.release_reobserve.wait(2)
+            raise OSError("injected stale recovery failure")
+
+    service = Service()
+    service.release_reobserve.clear()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    drain_errors = []
+    release_results = []
+    release_errors = []
+
+    def recover() -> None:
+        try:
+            registry.drain(
+                start.task_id,
+                start.session_id,
+                "6" * 32,
+                replay_from=1,
+            )
+        except BaseException as error:
+            drain_errors.append(error)
+
+    def release() -> None:
+        try:
+            release_results.append(
+                registry.release_terminal_session(start.task_id, start.session_id)
+            )
+        except BaseException as error:
+            release_errors.append(error)
+
+    recovering = Thread(target=recover)
+    releasing = Thread(target=release)
+    recovering.start()
+    assert service.reobserve_entered.wait(1)
+    releasing.start()
+    service.release_reobserve.set()
+    recovering.join(1)
+    releasing.join(1)
+
+    assert not recovering.is_alive()
+    assert not releasing.is_alive()
+    assert len(drain_errors) == 1
+    assert isinstance(drain_errors[0], OSError)
+    assert release_errors == []
+    assert release_results == [
+        TaskSessionReleaseView(start.task_id, start.session_id)
+    ]
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+    ]
+
+
 def test_close_and_delayed_release_race_converges_through_close_receipt() -> None:
     class Service(_Service):
         def __init__(self) -> None:

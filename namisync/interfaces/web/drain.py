@@ -589,7 +589,11 @@ class TaskRegistry:
                         task.observation_unsubscribed = True
             finally:
                 with task.condition:
-                    if task.generation == generation or task.closing:
+                    if (
+                        task.generation == generation
+                        or task.closing
+                        or task.session_release_started
+                    ):
                         task.transition = False
                     task.condition.notify_all()
             if failure is None:
