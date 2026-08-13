@@ -8,8 +8,9 @@ post-execution compound verification. The CLI and Stage 5.5
 facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` remains
 the decision and acceptance record for the implemented Stage 5.5 prerequisite
 and active Stage 6 headed desktop shell. Stage 6's host and transport through
-Slice 3 are implemented, GUI Break 1's foundation is complete, and Slice 4 has
-landed the shared presentation core and honest empty shell frame. Product plan,
+Slice 3 plus later transport hardening are implemented. GUI Break 1's icon
+foundation remains complete; audit reopened its token/material/motion claims
+and Slice 4's shared presentation/tree/shell claims for realignment. Product plan,
 inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
 delivery order and beta-package closure.
 
@@ -332,18 +333,29 @@ Stage 5 location activities through the shared service.
 
 ## DESKTOP UI
 
-- **Desktop Presentation Foundation Implemented**. One pure tree-agnostic
-  `visible_sequence.py` validates workflow pre-order arrays and owns literal
+- **Desktop Presentation Foundation Realignment**. One pure tree-agnostic
+  `visible_sequence.py` consumes workflow-owned pre-order arrays directly and owns literal
   case-folded display search, caller-decided filter counts, collapse, exact
-  1..256 windows, and visible-ancestor anchoring without domain policy or
+  1..256 windows, server-derived accessibility metadata, and indexed
+  visible-ancestor anchoring without domain policy, a duplicate tree, or
   retained projections. The installed `tree.js` renders only those decided
-  windows as an accessible fixed-height tree with two spacers, an exact
-  28-pixel row, inert full labels, and stale-generation refusal. The production
-  shell exposes keyboard-focusable labelled task navigation and work regions
+  windows as an operable single-tab-stop fixed-height tree with two spacers, an
+  exact 28-pixel row, inert full labels, and stale-generation refusal. The production
+  shell exposes labelled task navigation and work regions
   with honest empty guidance; it fabricates no task, session, or product row
   and adds no workflow command beyond `pick_folder`, `start_plan`, and
   `next_events`; `close_task` is lifecycle-only.
-- **Task Rail**. The window provides a scrollable newest-first rail of adapter-owned task cards with status, paths, completion date, close controls, and mini progress bars. A task may hold a reviewed plan without a live session; closing a busy task confirms, cancels, waits for a terminal record, then unsubscribes and closes the session. Stage 6 must also release every process-local plan, execution, inventory, selection, and presentation artifact owned by that task; repeated create/close cycles must keep all registries bounded.
+- **Task Rail**. The transparent rail exposes the window's Mica or opaque
+  fallback base. Unselected cards are transparent, hover/press use distinct
+  tokenized overlays, and the selected/current card uses the opaque work-card
+  surface without conflating selection with running status. The window provides
+  a scrollable newest-first rail of adapter-owned task cards with status, paths,
+  completion date, close controls, and mini progress bars. A task may hold a
+  reviewed plan without a live session; closing a busy task confirms, cancels,
+  waits for a terminal record, then unsubscribes and closes the session. Stage
+  6 must also release every process-local plan, execution, inventory, selection,
+  and presentation artifact owned by that task; repeated create/close cycles
+  must keep all registries bounded.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
 - **Folder Selection**. Source and destination support editable recent-folder dropdowns and folder browser buttons.
 - **Plan Tree**. The Plan view displays literal operations in a directory-nested tree with rolled-up counts, sizes, reasons, hashes, and statuses. Move-shaped decompositions use paired old-path annotations and noninteractive ghosts without becoming rename operations or independent selection units; nested move annotations are suppressed where an outer pairing already explains the structure.
@@ -354,7 +366,14 @@ Stage 5 location activities through the shared service.
 - **Inventory Actions**. Menus and row context actions support exact-row or recursive-folder refresh and integrity work, missing acknowledgement, acknowledgement restore, and path copying. Row/folder actions are plainly distinguished; folder integrity predicts no eligibility count and adds no confirmation because admitted work reports its real count and remains pausable/cancelable. Acknowledgement hides rows from the default view without changing rollups and refetches only after an applied mutation.
 - **Server-Owned Selection**. Plan selection is path-scoped across the whole tree, independent of viewport and filter. The DOM is disposable: the service owns revisioned state, exposes a direct selection preview, and receives pending changes in short batches.
 - **Bounded Tree Views**. Each open plan or inventory view has one canonical server projection, never one tree per filter/search condition. Filtering/searching/windowing happen on the backend over a fixed-height visible sequence with a common 256-row page and a hard 257-row refusal; inventory projections are immutable copy/swap entries in a six-view LRU.
-- **Tree Search**. Plan and Inventory search is a literal case-folded display substring operation on the backend. A folder remains visible for its own or a descendant match, rollups remain unfiltered, chips report filtered counts, and active-item anchoring falls back to the nearest visible ancestor.
+- **Tree Search**. Plan and Inventory search is a literal case-folded display
+  substring operation on the backend. The pure helper accepts at most 65,536
+  UTF-8 bytes before traversal, while each external adapter separately bounds
+  its complete request. The first real request owner applies a 150 ms trailing
+  debounce and invalidates stale success/error generations on every input,
+  collapse, or filter intent. A folder remains visible for its own or a
+  descendant match, rollups remain unfiltered, chips report filtered counts,
+  and active-item anchoring falls back to the nearest visible ancestor.
 - **Live Progress**. Sync, scan, baseline, and verification workers update overall and per-file progress with counters and paired item id/type. The display path is informational and is never used to locate or mutate a row.
 - **Plan Follow Mode**. The Plan view follows the active operation until the user deliberately scrolls away, resolving collapsed or filtered items through the server-visible ancestor chain.
 - **Live Integrity Feedback**. The Inventory view follows the file being hashed and patches settled per-file outcomes without rebuilding or drifting the active projection.
@@ -366,6 +385,11 @@ Stage 5 location activities through the shared service.
   progressive native enhancement; opaque high-contrast/no-material fallbacks
   preserve readability, focus, and status semantics without relying on color
   alone.
+- **Fluent Neutral And Windows Accent Roles**. `tokens.css` owns a pinned
+  transcribed Microsoft Fluent light/dark neutral subset. Native appearance
+  publishes Windows `Accent`, `AccentLight1`, and `AccentDark1` as distinct
+  rest/hover/pressed roles through a fixed revisioned host-to-page envelope;
+  forced colors remain system-owned.
 - **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
   red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
   `tokens.css` only; yellow and purple intentionally have no `light` input.

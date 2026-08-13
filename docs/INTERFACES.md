@@ -8,8 +8,9 @@ classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and the hardened
 `pick_folder`/`start_plan`/`next_events`/`close_task` transport are implemented.
-GUI Break 1's foundation and Slice 4's pure visible sequence, bounded tree
-renderer, and honest accessible shell frame are implemented; the user-facing
+GUI Break 1's icon infrastructure remains implemented. Audit reopened its
+token/material/motion foundation and Slice 4's visible-sequence, operable-tree,
+and shell evidence for realignment; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
 latent.
 
@@ -405,6 +406,13 @@ the NamiSync-owned shape and strict shared text sink; Slice 3 implements the
 bounded/coalesced event drain, while Slices 5 and 6 add the production plan and
 inventory DOM renderers.
 
+The sole presentation-only native-to-page path is a fixed revisioned system
+appearance envelope posted through WebView2 after native origin/security
+attachment. Its packaged receiver validates the complete schema and may update
+only fixed root appearance datasets and CSS custom properties. It exposes no
+browser-to-native sender, command, URL, path, HTML, or dynamic property name and
+therefore does not widen bridge authority.
+
 GUI Break 1's icon helper is presentation-only and never becomes another bridge
 or asset-authority surface. It resolves one exact visual glyph name through a
 frozen source-owned `icons.js` registry to fixed inert CSS classes. Those
@@ -451,18 +459,20 @@ exact tested mirror of Python metadata; drain recovery and release retry have
 finite delayed budgets. Bridge handler admission is capped at 64, with a fixed
 `bridge_busy` refusal.
 
-Slice 4 adds presentation only and does not change that table. Frozen adapter
-values and pure functions in `visible_sequence.py` validate one workflow-owned
+Slice 4 adds presentation only and does not change that table. A typed
+structural view and pure functions in `visible_sequence.py` validate one workflow-owned
 pre-order array and derive collapse/search/caller-filter retention, exact
-1..256 windows, and deepest-visible ancestor anchors without retaining a view
-or importing domain policy. The installed `tree.js` consumes only
-`{offset,total,rows}`, renders at most 256 accessible 28-pixel rows between two
-fixed spacers through the inert text sink, and rejects stale generations. The
-installed page now exposes focusable labelled task navigation and work regions
-with truthful empty text and no fabricated task, session, plan, inventory, or
-history data. SH-G-7 exercises those exact wheel assets with renderer keyboard
-events, native 200% zoom, forced colors, hostile/long labels, row/DOM bounds,
-and stale-window refusal. Slices 5 and 6 remain the first owners of domain
+1..256 windows, and indexed deepest-visible ancestor anchors without retaining
+a view, duplicating the full workflow array, or importing domain policy. Search
+accepts at most 65,536 UTF-8 bytes before traversal; external request limits
+remain boundary-owned. The installed `tree.js` consumes only
+`{offset,total,rows}`, renders at most 256 operable 28-pixel rows between two
+fixed spacers through the inert text sink, and rejects stale generations. Its
+single-tab-stop focus model consumes server-derived parent/child/sibling
+metadata. Structural task/work landmarks are labelled but not focus targets;
+the transparent rail and inactive task-card surface expose Mica. BR-G-34 and
+SH-G-7 remain reopened until direct workflow-node, scale, keyboard/platform
+accessibility, geometry, and clean-wheel evidence passes. Slices 5 and 6 remain the first owners of domain
 projection commands and real rows.
 
 Pywebview reinjects its bridge after every `NavigationCompleted`, including
@@ -503,8 +513,10 @@ condition around `BridgeDispatcher.dispatch` rejects new calls and waits a
 bounded interval for admitted calls without adding another JavaScript-facing
 method. The
 synchronous WinForms callback only claims one worker and vetoes; that worker
-  performs reject, close/wake, wait, unsubscribe, and service close in order. Only a
-complete shutdown permits programmatic destroy. Incomplete and exceptional
+  performs reject, close/wake, wait, task-observation unsubscribe, and service
+close in order. Window-owned appearance remains subscribed during every
+retryable failure. Only a complete shutdown closes appearance exactly once and
+permits programmatic destroy. Incomplete and exceptional
 attempts retain the page status and one owned native Retry/Cancel prompt; Retry
 alone starts another attempt, and the finalizer does not close an
 already-complete service twice.
@@ -515,6 +527,10 @@ failure is logged without changing the close phase or service result.
 
 ## Common Adapter Contract
 
+- Bound each complete externally supplied request at ingress. The desktop
+  bridge's ceiling is 65,536 UTF-8 bytes including its JSON envelope; a future
+  REST, IPC, or other adapter must impose an equal-or-stricter whole-request
+  limit before constructing internal presentation values.
 - Validate syntax/presence early and report actionable path/input errors; domain
   validation remains in workflow/preflight.
 - Submit through dispatcher/registry rather than starting ad hoc workers that

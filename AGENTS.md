@@ -122,6 +122,11 @@ their contract, and update the matching tests and documentation when it does.
 - Use `sqlite3` directly. Do not add an ORM.
 - Keep live SQLite databases local only. Do not place app DBs in cloud-synced
   folders.
+- Bound every externally reachable request before constructing interface or
+  presentation values. The desktop bridge limits the complete serialized
+  command envelope to 65,536 UTF-8 bytes; any future non-bridge external
+  adapter must impose an equal-or-stricter complete-request bound at its own
+  ingress rather than relying on a field-level presentation limit.
 - Use WAL mode for the main database.
 - Commit database state only after successful filesystem operations.
 - Preserve timestamps on copied files so reruns can stay stable.

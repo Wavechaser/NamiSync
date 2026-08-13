@@ -3,9 +3,9 @@
 Status (2026-07-30, implementation updated 2026-08-13): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
-transport chain through Slice 3, GUI Break 1's foundation, and Slice 4
-presentation core and honest shell frame are complete; Slices 5-8 and GUI
-Break 2 remain.
+transport chain through Slice 3 and the post-Slice-3 hardening are complete.
+GUI Break 1 and Slice 4 are reopened for the audited realignment recorded here;
+Slices 5-8 and GUI Break 2 remain.
 Stage 5.5 landed its tree substrate,
 recursive scan scope, selection semantics, and facade integration without
 taking Stage 6 presentation work. It
@@ -36,8 +36,9 @@ and integration/release gates are all satisfied. The delivery table is an
 ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host, four-command transport, GUI foundation, and Slice 4 presentation
-foundation are promoted into the active focused documents and README. The
+secured host and four-command transport are promoted into the active focused
+documents and README. GUI Break 1 and Slice 4 completion claims remain open
+until their restored ordinary and clean-wheel headed gates pass. The
 complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
 the remaining product-surface, second GUI-break, and packaging work, while
 slice 8 still performs the
@@ -1229,8 +1230,11 @@ independent server-side objects, so **the view parameters** leak no lifecycle.
 That is a narrower claim than an earlier draft made: DR-BR-16's cached
 inventory projection is genuine server-side per-view state, and its lifecycle
 is specified there rather than denied here. The default is expanded, so
-collapsing is a deliberate act on a handful of folders, and the existing 64 KB
-inbound cap is the backstop.
+collapsing is a deliberate act on a handful of folders. The pure helper accepts
+at most 65,536 UTF-8 bytes of search text; the bridge separately caps the
+complete serialized request at 65,536 bytes, including JSON overhead. A future
+non-bridge external adapter imposes an equal-or-stricter complete-request bound
+at ingress.
 **Responses have a common server-enforced `limit` ceiling of 256 rows** for
 plan, inventory, and history windows. The current transport cap is inbound
 only, and a truncation must be an explicit refusal rather than a short list
@@ -1241,8 +1245,16 @@ serialization firmly bounded by one shared number.
 Fixed row height is a design constraint, not an aesthetic preference:
 variable heights require measurement passes that make window math fragile.
 
-Slice 4 freezes the pure request boundary in `M1_SHELL.md`: an exact structural
-node record, collapsed known-container ids, a literal display-search string,
+Search responsiveness is interaction-owned, not an excuse for a tiny semantic
+query limit. The first Slice 5/6 request owner uses a fixed 150 ms trailing
+debounce and advances its window generation on every search, collapse, or
+filter intent before dispatch. Only the final search in a burst is sent; stale
+successes and failures are ignored, the current valid window remains visible
+while pending, and teardown cancels the timer. Slice 4 supplies the generation
+primitive but adds no dormant command or timer.
+
+Slice 4 freezes the pure request boundary in `M1_SHELL.md`: a typed structural
+view over the workflow-owned node object, collapsed known-container ids, a literal display-search string,
 and an optional sparse mapping of caller-decided direct-match counts. That
 mapping deliberately carries no filter vocabulary into the generic layer.
 Offset is an exact nonnegative integer, limit is an exact 1..256 integer, and
@@ -1250,15 +1262,19 @@ the pure derived sequence is replaced rather than cached as a parameter-keyed
 family. Domain command rows and projection revisions remain with their first
 Slice 5/6 consumers.
 
-**Implemented in Slice 4 (2026-08-13).** `interfaces/web/visible_sequence.py`
-now owns this one tree-agnostic pure implementation: strict pre-order structure
+**Realignment required after audit (2026-08-13).**
+`interfaces/web/visible_sequence.py` remains the single tree-agnostic pure
+implementation, but its completion gate is reopened. The corrected seam uses
+the workflow-owned array directly, retains source/visible indexes once, and
+derives compact active-tree accessibility metadata before windowing. It keeps strict pre-order structure
 validation, collapse after match retention, literal case-folded display search,
 caller-supplied sparse direct-match counts, exact 1..256 windows, and
-deepest-visible ancestor anchoring. It retains no projection, path, domain
+deepest-visible ancestor anchoring proportional to chain depth. It retains no projection, path, domain
 filter vocabulary, or active-view cache. The installed frontend consumes only
 the generic `{offset,total,rows}` window through a fixed-height renderer with
-two spacers and stale-generation refusal. Plan and inventory command rows and
-projection ownership remain unimplemented until Slices 5 and 6.
+two spacers, stale-generation refusal, and a single-tab-stop operable tree.
+Plan and inventory command rows and projection ownership remain unimplemented
+until Slices 5 and 6.
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
@@ -1517,11 +1533,13 @@ would not be.
 Four constraints: substring matching only (a user-supplied regex is a
 denial-of-service surface for no benefit), matching against the **casefolded
 display form** rather than the canonical key (the user types what is on
-screen), no trimming or Unicode normalization, and an exact 256-UTF-8-byte
-query ceiling. The boundary accepts 256 bytes and refuses 257 before walking
-the node array. The existing 65,536-byte inbound envelope cap still applies,
-but allowing nearly that much text to be compared against 100,000-120,000
-nodes would not satisfy the changed-parameter latency envelope.
+screen), no trimming or Unicode normalization, and an exact 65,536-UTF-8-byte
+query ceiling. The pure presentation seam accepts 65,536 UTF-8 bytes
+and refuses 65,537 before walking the node array. The existing 65,536-byte
+complete inbound-envelope cap remains the external authority, so JSON overhead
+makes an actual bridge query smaller; future non-bridge adapters impose their
+own whole-request bound. Responsiveness comes from the 150 ms trailing debounce
+and last-intent-wins generation rule in DR-BR-15, not a tiny field limit.
 
 ### DR-BR-19 — Autoscroll anchors on the nearest visible ancestor-or-self
 
@@ -2954,18 +2972,25 @@ because its local tests are easier.
   retaining a parameter-keyed family. A container appears only for a directly
   matching node or matching descendant, and collapse hides descendants only
   after matching. Search treats regex metacharacters literally, matches the
-  casefolded display form only, accepts 256 UTF-8 bytes, and refuses 257 before
-  traversal. Sparse caller-owned match counts are validated but their domain
+  casefolded display form only, accepts 65,536 UTF-8 bytes, and refuses 65,537
+  before traversal. The bridge's separate 65,536-byte complete-envelope bound
+  and every future external adapter's ingress bound remain authoritative.
+  Sparse caller-owned match counts are validated but their domain
   vocabulary is not interpreted here. The default is expanded, fixed row
   height is enforced, 256 rows are accepted, and 257 are refused rather than
-  truncated. Anchor lookup uses the same derived sequence and exact
-  deepest-to-root id chain. Plan and inventory cases must start from real
-  `build_node_tree` output; hand-built generic arrays alone do not close the
-  gate. A static assertion proves the implementation calls no path helper and
-  reconstructs no parent or descendant relationship from display text. *Not
+  truncated. The workflow-owned node array is consumed directly without a
+  second complete DTO copy. Anchor lookup uses the same derived sequence and
+  exact deepest-to-root id chain and performs work proportional to chain depth,
+  not tree size. Plan and inventory cases must start from real
+  `build_node_tree` output and retain object identity; hand-built generic arrays
+  alone do not close the gate. The bounded window carries server-derived
+  parent/child/sibling accessibility metadata. A static assertion proves the
+  implementation calls no path helper and reconstructs no parent or descendant
+  relationship from display text. *Not
   satisfied by* filtering an already-windowed page, searching the canonical
   key, accepting an arbitrary callable as filter policy, or separate plan and
-  inventory flatteners fed the same fixtures.
+  inventory flatteners fed the same fixtures. The prior 2026-08-13 closure is
+  invalid until the realignment tests and BR-G-42 scale evidence pass.
 - **BR-G-35 — Plan presentation preserves operation truth while compressing
   moves.** This is also the first consumer that proves a filtered move ghost
   removes its synthetic-only ancestor chain, an ordinary real operation keeps
@@ -3230,8 +3255,8 @@ a parallel pair.
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
-| GUI 1 | Presentation foundation | Native material behavior; exact authored palette and semantic status/operation aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, and SH-G-13 foundations plus SH-G-14; exact contract in `M1_SHELL.md` |
-| 4 (complete) | Presentation core | Tree-agnostic flatten/window/search/filter and the visible-sequence anchor resolver over Lane A's ordered array; bounded installed tree renderer and honest accessible shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 |
+| GUI 1 (realignment open) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, and SH-G-13 foundations reopened; SH-G-14 remains closed; exact contract in `M1_SHELL.md` |
+| 4 (realignment open) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
 | 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |

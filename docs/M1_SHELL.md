@@ -17,8 +17,9 @@ transport, real native picker confinement, committed-origin refusal, and
 hostile-text/privacy return path. The Slice 3 event drain, transactional
 pre-schedule observation, bounded task registry, and reincarnation recovery are
 implemented. GUI Break 1's token, component, icon, motion, and native-material
-foundation and Slice 4's presentation core and honest shell frame are complete;
-Slice 5 is next. NamiSync remains version `0.1.0` until
+foundation and Slice 4's presentation core/shell frame are reopened for the
+audited realignment; the fixed icon infrastructure remains complete. Slice 5
+follows their restored gates. NamiSync remains version `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
 
@@ -420,15 +421,15 @@ not preselected here.
   Mica and honors the system high-contrast palette; a system without the material
   (pre-22H2) or a transparency failure degrades to an opaque Fluent neutral base,
   never a broken see-through window.
-- **Tokens and theme.** Neutral and accent roles resolve through Windows/CSS
-  system colors until another authored color is explicitly approved; the type,
+- **Tokens and theme.** Fluent neutral and accent ramps, the type ramp, and
   spacing, 4px-based radius, elevation, and motion scales live in `tokens.css`
-  as theme-agnostic CSS variables. M1 follows the system light/dark theme and
-  honors high contrast; the accent color is read from Windows and pushed to the
-  token variables, and both theme and accent changes are observed and re-pushed.
-  The Microsoft Fluent 2 Figma kit and Microsoft's published Fluent tokens are
-  the reference for non-color scales and component behavior; no Fluent code is
-  imported (section 1.6 forbids the toolchain that would need).
+  as theme-agnostic CSS variables. The minimal light/dark neutral subset is
+  transcribed from one pinned Microsoft Fluent token source with its source
+  identity and exact values tested; no Fluent code or build toolchain enters
+  production. M1 follows the system light/dark theme and honors high contrast.
+  Windows `UISettings` supplies `Accent`, `AccentLight1`, and `AccentDark1` for
+  distinct rest, hover, and pressed roles; theme and color changes are observed
+  and re-published. Forced colors remain system-owned.
   NamiSync's authored status/operation palette is a separate, exact input owned
   only by that file:
 
@@ -1082,7 +1083,10 @@ are definitive and visible. No path relies on a raw numeric sequence hole.
 Host shutdown follows one exact ownership order: reject new bridge admission;
 close the drain registry and wake long-poll waiters and capacity-blocked sinks;
 wait for already-admitted bridge handlers; unsubscribe every service
-observation; then call `NamiSyncService.close()`. A task close uses the same
+observation; then call `NamiSyncService.close()`. Window-owned appearance
+observation is not a task observation: it remains live through an incomplete or
+exceptional service close and is retired exactly once only after a complete
+service result, immediately before window destruction. A task close uses the same
 per-task wake-before-unsubscribe order. All waits are off the presentation
 thread. Registry close marks provisional tasks closing but retains their
 observations until the admitted-handler wait completes, so a close beginning
@@ -1101,7 +1105,7 @@ envelope surface `Gap`, replay only the tail still retained, and reconcile
 terminal truth. Missing reliable events remain visibly missing; recovery never
 pretends full continuity or justifies invented replay headroom.
 
-### GUI Break 1 - Establish the look (completed 2026-08-12)
+### GUI Break 1 - Establish the look (realignment open)
 
 A GUI Break is a deliberate stop to build and calibrate the visual system, not a
 fraction of an assembly line. Break 1 builds the foundation every later surface
@@ -1158,12 +1162,14 @@ retain only the cross-slice production-surface clauses. Exit criterion:
 tokens correct in light, dark, and high contrast;
 the gallery covers every control state and the fixed icon foundation; Mica and
 its fallback are proven on the pinned stack; the design language is frozen.
-The completed checkpoint closes the SH-G-11/12/13 gallery/material foundation
-and all of SH-G-14. It does not close SH-G-11/12/13's production-surface
-clauses. Slice 4 now supplies the honest shell/tree ownership evidence; the
-remaining plan and inventory surface clauses stay with Slices 5 and 6.
+The icon-infrastructure boundary remains closed. The token, material, motion,
+and shell-surface claims were reopened after audit found that their tests had
+encoded reduced requirements, blocked accent publication, and incomplete
+fallback/lifecycle evidence. SH-G-11/12/13 foundation closes again only after
+the restored ordinary and clean-wheel headed gates pass; their later
+production plan/inventory clauses remain with Slices 5 and 6.
 
-### Slice 4 - Presentation core and shell frame (completed 2026-08-13)
+### Slice 4 - Presentation core and shell frame (realignment open)
 
 Implement `visible_sequence.py` plus the minimal rail/panel/tree frontend.
 Plan and inventory share the same pure flatten/window/search/filter/anchor
@@ -1172,16 +1178,22 @@ maximum and fixed row geometry. This closes BR-G-34 and the Stage 6 clause of
 BR-G-2.
 
 **The Slice 4 presentation contract is exact and intentionally contains no
-domain policy.** `visible_sequence.py` defines these frozen adapter values:
+domain policy.** `visible_sequence.py` defines these typed presentation values:
 
-- `VisibleSequenceNode(node_id, display, position, depth, parent_index,
-  subtree_end, is_container)`;
+- a read-only structural `VisibleNodeLike` protocol over workflow-owned nodes,
+  so the interface validates and retains the authoritative objects instead of
+  copying a second complete tree;
 - `VisibleSequenceParameters(collapsed_node_ids, search_query,
   match_counts_by_node_id=None)`;
 - a derived `VisibleSequence` containing the original node objects, their
-  visible positions, one immutable node-id-to-visible-index lookup, and
+  visible positions, immutable node-id-to-source-position and
+  node-id-to-visible-index lookups, compact active-tree accessibility metadata,
+  and
   `filtered_item_count` (`None` when no filter was supplied);
-- `VisibleWindow(offset, total, nodes)`; and
+- `VisibleWindowRow`, created only for the bounded page and carrying the
+  original node plus its visible index, parent/first-child indexes, sibling
+  position/set size, and expanded state;
+- `VisibleWindow(offset, total, rows)`; and
 - `VisibleAnchor(node_id, index)`.
 
 `derive_visible_sequence`, `window_visible_sequence`, and
@@ -1200,8 +1212,12 @@ ancestry from strings.
 
 `collapsed_node_ids` is an immutable set of known container ids; an unknown or
 non-container id is refused. The default empty set is fully expanded. Search
-is an exact string containing at most **256 UTF-8 bytes**: 256 is accepted and
-257 is refused before traversal. Invalid Unicode is refused. No trimming,
+is an exact string containing at most **65,536 UTF-8 bytes**: 65,536 is accepted
+and 65,537 is refused before traversal. Invalid Unicode is refused. This field
+ceiling aligns with, but does not replace, the bridge's 65,536-byte limit on the
+complete serialized request; JSON overhead makes an actual bridge query
+smaller. Every future non-bridge external adapter bounds its complete request
+before constructing these presentation values. No trimming,
 normalization, regex, glob, or canonical-key match occurs; the only operation
 is a literal substring check over `search_query.casefold()` and each supplied
 `display.casefold()`.
@@ -1224,43 +1240,44 @@ from 1 through 256; booleans are refused. Limit 256 is accepted, 257 is refused
 rather than truncated, and an offset at or beyond `total` returns an honest
 empty window. An empty anchor chain returns `None`; a nonempty candidate chain
 is an exact, structurally valid deepest-to-root chain of known ids. Resolution
-uses the same derived sequence
-and returns the first visible candidate or `None`; it never searches the DOM
+uses the same derived sequence and its retained source-position lookup, so its
+work is proportional to the supplied parent-chain depth rather than total tree
+size. It returns the first visible candidate or `None`; it never searches the DOM
 or display text. Projection revisions and progress-chain wiring belong to their
 Slice 5/6 command rows, not this pure core.
 
 Slice 4 adds no presentation command. Audit hardening makes production exactly
 `pick_folder`, `start_plan`, `next_events`, and lifecycle-only `close_task`.
 `tree.js` consumes only the exact generic
-window `{offset,total,rows}`; each row has exactly `node_id`, `display`,
-`depth`, `is_container`, and server-decided `expanded` fields. It owns
-`ROW_H = 28`, fixed spacers, accessible tree/treeitem semantics, and
-full-display labels. `beginWindowRequest()` advances one monotonic generation;
+window `{offset,total,rows}` and the server-derived accessibility fields above.
+It owns `ROW_H = 28`, fixed spacers, a single-tab-stop tree using
+`aria-activedescendant`, standard Up/Down/Home/End/Left/Right/Enter behavior,
+and full-display labels. Generic callbacks request an off-window index,
+container toggle, or activation; JavaScript owns no hierarchy, expansion,
+selection, or domain policy. `beginWindowRequest()` advances one monotonic generation;
 `commitWindow(generation, window)` mutates the DOM only when that generation is
 still current. At most 256 data rows plus the fixed
 spacers exist in the DOM. It performs no hierarchy, filter, search, path,
 `current_path`, or bridge work and writes returned text only through the
 production inert-text helper. Row creation/removal has no animation. `rail.js`
-and `panels.js` build the accessible task-navigation and work-panel frame with
-honest empty states; they fabricate no task, plan, inventory, or session. The
-standard native title frame remains.
+and `panels.js` build labelled task-navigation and work-panel landmarks with
+honest empty states; structural landmarks are not gratuitous tab stops. The
+rail and unselected task cards expose Mica, hover/press use distinct tokenized
+overlays, and the selected/current task uses the opaque work-card surface.
+They fabricate no task, plan, inventory, or session. The standard native title
+frame remains.
 
-The completed implementation follows that boundary without widening transport.
-`visible_sequence.py` supplies the frozen values and pure derivation, window,
-and anchor functions above, including the 256-row ceiling. The installed
-`tree.js` keeps exactly two virtual spacers, a 28-CSS-pixel fixed row,
-accessible tree/treeitem semantics, and generation-based stale-window refusal.
-`rail.js` and
-`panels.js` expose keyboard-focusable labelled task navigation and work regions
-with truthful empty guidance. The page creates no task, session, plan,
-inventory, history item, or domain control, and the production command table
-remains exactly the three Slice 3 rows. Installed-wheel SH-G-7 evidence proves
-renderer-level Tab traversal, usable stacked reflow at native 200% zoom,
-system-color focus under forced colors, hostile and long text through the real
-text sink, exact row geometry and DOM bounds, and a stale older generation
-leaving the newer 256-row window unchanged. This closes Slice 4 and SH-G-7;
-the product surfaces and their remaining cross-slice gates stay with Slices
-5-7.
+The first request-owning plan or inventory surface applies a fixed 150 ms
+trailing search debounce. Every search, collapse, or filter intent advances the
+local window generation immediately, before dispatch, so stale success and
+stale error results cannot replace newer intent. The current valid window stays
+rendered while pending; teardown cancels the timer. Slice 4 records and tests
+the generation primitive but adds no dormant search command or timer.
+
+The previously recorded completion is reopened. Slice 4 and SH-G-7 close again
+only after the realigned pure-core, keyboard/accessibility, geometry, hostile
+text, scale, packaging, and clean-wheel headed evidence all pass. The product
+surfaces and their remaining cross-slice gates stay with Slices 5-7.
 
 ### Slice 5 - Sync surface
 

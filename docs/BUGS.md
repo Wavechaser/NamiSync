@@ -537,6 +537,41 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- SEVERE - OPEN (2026-08-13). Appearance authority was retired during task
+  quiescence before `service.close()` proved terminal completion. An incomplete
+  or exceptional close correctly leaves the window open for retry but silently
+  loses future theme, accent, and high-contrast observation. Cause: task-owned
+  observations and window-owned appearance shared one cleanup hook. Realignment
+  keeps appearance live until complete service shutdown, then closes it once
+  immediately before destruction.
+- MODERATE - OPEN (2026-08-13). Opaque fallback could be white in dark mode and
+  report success after only the form background landed while full-client glass
+  and a transparent WebView controller remained. Cause: fallback ignored the
+  captured theme and collapsed backdrop, glass, form, and controller evidence
+  into permissive booleans. Realignment uses theme-correct Fluent canvases and
+  claims opaque only from sufficient structured landing evidence.
+- MODERATE - OPEN (2026-08-13). Visible-sequence contract and performance drift.
+  A new 256-byte field cap rejected ordinary literal searches even though the
+  external request envelope already had a 65,536-byte ceiling, while every
+  anchor call rebuilt a complete id map and the exact DTO forced a second full
+  120,000-node tree. Cause: implementation-specific limits and adapters were
+  promoted into requirements without boundary or scale evidence. Realignment
+  restores the 65,536-byte field ceiling, direct workflow-node view, and indexed
+  O(chain-depth) anchoring.
+- MODERATE - OPEN (2026-08-13). Roles-only virtual tree. The renderer advertised
+  `tree`/`treeitem` roles but exposed no Tab stop, active descendant, keyboard
+  navigation, or off-DOM sibling metadata, so keyboard and assistive-technology
+  users could not operate or perceive the virtual hierarchy. Cause: tests
+  asserted role strings and focusable landmarks instead of widget behavior.
+  Realignment adds server-derived structure and one operable recycled focus
+  model.
+- MODERATE - OPEN (2026-08-13). Mica surface hierarchy and state evidence drift.
+  The entire task rail inherited an opaque generic card, neutral hover/pressed
+  and primary rest/pressed states collapsed visually, and dialog exit motion was
+  absent while selector-only tests claimed closure. Cause: reduced requirements
+  were committed with implementation-mirroring tests. Realignment restores the
+  transparent rail/task rest surface, distinct Fluent/Windows states, real exit
+  behavior, and computed/pixel headed evidence.
 - SEVERE - FIXED (2026-08-13). Pywebview object-graph exposure. Passing the
   dispatcher as `js_api` let pywebview recursively discover receiver members,
   so underscore-prefixed bridge state was not a security boundary and crafted
@@ -585,7 +620,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- SEVERE - FIXED (2026-08-12). Appearance-publication UI-thread deadlock. The
+- SEVERE - OPEN (2026-08-13). Appearance-publication UI-thread deadlock remedy
+  is not lifecycle-bounded. The 2026-08-12 fix moved synchronous pywebview DOM
+  calls to a daemon worker, but a wedged renderer can retain that worker/window
+  indefinitely after the one-second close join. Its whole-style-attribute write
+  is also blocked by the shipped CSP and would clobber unrelated properties if
+  allowed. Realignment replaces the worker with UI-thread asynchronous
+  host-to-page WebView2 publication and fixed validated CSSOM sinks.
+- SEVERE - SUPERSEDED (2026-08-12). Appearance-publication UI-thread deadlock. The
   first loaded desktop window could apply its native backdrop and then stop
   responding before publishing theme, accent, and material state to the page.
   Cause: NamiSync marshaled pywebview's synchronous public DOM API onto the

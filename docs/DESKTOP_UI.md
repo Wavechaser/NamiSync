@@ -3,15 +3,16 @@
 Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
 desktop's service, view, settings, session-observation, and bridge-security
 seams. The classified launchers, wheel-packaged bootstrap assets, secured
-product-host composition, and exact `pick_folder`/`start_plan`/`next_events`
+product-host composition, and exact `pick_folder`/`start_plan`/`next_events`/
+`close_task`
 transport now exist. Clean-wheel and real-WebView2 gates cover host isolation,
 runtime refusal, popup/navigation guards, single-instance behavior, native
 picker path confinement, committed-origin refusal, hostile text, and logging
 privacy; Slice 3 evidence additionally covers transactional observation,
-bounded drain behavior, recovery, and repeated bridge readiness. GUI Break 1's
-token, component, icon, motion, and native-material foundation is complete.
-Slice 4's shared visible-sequence logic, bounded tree renderer, and honest
-accessible shell frame are also complete. User-facing plan, inventory, history,
+bounded drain behavior, recovery, and repeated bridge readiness. The icon
+foundation remains complete; audit reopened GUI Break 1's token, motion, and
+native-material evidence and Slice 4's visible-sequence/tree/shell evidence for
+realignment. User-facing plan, inventory, history,
 and control surfaces remain; `M1_SHELL.md` owns their implementation order and
 beta-package closure.
 
@@ -109,16 +110,20 @@ proof precede PyInstaller work. The frozen specification, dependency lock, CI,
 third-party notices, and exact-source release material close in the final beta
 packaging slice.
 
-GUI Break 1, completed after Slice 3 and before production surfaces begin,
-establishes the design-token foundation. `tokens.css` is the only source file
+GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
+establishes the design-token foundation. Its token/material completion is
+currently reopened for audited realignment. `tokens.css` is the only source file
 allowed to contain the 13 authored red/green/blue/yellow/purple `main`, `dark`,
 and available `light` palette values specified by `M1_SHELL.md`; yellow and
 purple deliberately have no authored `light` input in the current foundation.
 A future hardcoded or derived color value is possible only after an explicit product-
 author design decision and a same-change contract/token/evidence update; it is
 not silently synthesized by a renderer. `tokens.css` also owns meaning-named
-semantic aliases for statuses and operation categories; neutral and accent
-roles use Windows/CSS system colors until another authored color is approved.
+semantic aliases for statuses and operation categories; neutral roles use a
+pinned Microsoft Fluent light/dark subset and interactive accent roles use the
+observed Windows `Accent`, `AccentLight1`, and `AccentDark1` palette. These
+externally owned design inputs are tested separately from the 13
+NamiSync-authored primitives.
 `components.css`
 consumes only those aliases for badges, banners, status pills, progress
 indicators, and related controls; Slice 4-7 renderers consume
@@ -190,7 +195,9 @@ visible rather than being swallowed by window destruction. The implemented
 controller rejects new bridge admission, closes the task registry to wake
 drains and capacity-blocked sinks, waits for admitted calls, unsubscribes task
 observations, then calls the service. A complete result permits one recursive-safe
-programmatic destroy. An incomplete result or exception keeps the window open,
+programmatic destroy only after window-owned appearance observation closes
+exactly once. An incomplete result or exception keeps the window open with
+appearance observation still active,
 sets fixed retry guidance in the packaged status element, and presents an owned
 native Retry/Cancel dialog. Only its Retry choice starts another worker; another
 title-bar close can reopen the dialog but neither retries nor force-closes.
@@ -235,8 +242,9 @@ delegate subscription, WinForms thread affinity, and `CoreWebView2` access pass
 through it.
 
 Slice 2 introduced exactly two production actions, `pick_folder` and
-`start_plan`; Slice 3 added `next_events`, making the current immutable
-production table exactly three rows.
+`start_plan`; Slice 3 added `next_events`; audit hardening added the
+lifecycle-only `close_task`. The current immutable production table therefore
+has exactly four rows.
 `pick_folder` is intentionally user-paced: it has no application timeout or
 automatic retry, and cancel is a normal `null` result. A selection becomes a
 server-held `slot-<32-lowercase-hex>` plus display-only text. `start_plan`
@@ -337,21 +345,32 @@ The shared `tree.js` consumes only windows already decided by Python's pure
 `visible_sequence.py`. It renders at most 256 returned rows plus fixed virtual
 spacers, uses exact 28-CSS-pixel rows and the inert text helper, exposes full
 display text to accessibility even when the visual label elides, and ignores a
-stale response generation. It never filters a viewport, reconstructs ancestry,
-searches a path, or talks to the bridge. Slices 5 and 6 remain the first owners
+stale response generation. The root is the single Tab stop, row focus uses
+`aria-activedescendant`, and server-derived level, sibling-set, parent, and
+first-child metadata support Up/Down/Home/End/Left/Right/Enter navigation even
+across a window boundary. It never filters a viewport, reconstructs ancestry,
+searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree
 evidence live in `M1_SHELL.md` Slice 4 and SH-G-7.
 
-The shipped Slice 4 frame has exactly two focusable labelled regions beneath
-the header: task navigation stating that no tasks are available and a work
-region stating that no task is selected. The clean-installed-wheel SH-G-7 run
-uses renderer key events, native 200% WebView zoom, and forced-colors emulation
-against those production assets. It verifies focus order and visibility,
+The Slice 4 frame has two labelled structural regions beneath the header: task
+navigation stating that no tasks are available and a work region stating that
+no task is selected. Landmarks are not gratuitous tab stops; the first real
+tree is the operable widget. The reopened clean-installed-wheel SH-G-7 run uses
+native keyboard events, platform accessibility inspection, native 200% WebView
+zoom, and forced-colors emulation against production assets. It verifies focus order and visibility,
 usable stacked reflow without horizontal overflow, system-color focus,
 hostile and long labels through `render.js`, exact 28-pixel rows, no more than
 256 rows plus two spacers, and stale-generation refusal. It adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
+
+The rail itself is a Mica seam: it has no card background, border, or shadow.
+An unselected task card is transparent, hover and pointer press use distinct
+tokenized overlays, and the selected/current card uses the opaque work-card
+surface. Selection is conveyed with `aria-selected`/`aria-current` and is not
+inferred from a task's running status. Work panels and tree viewports remain
+opaque for readability and scroll performance.
 
 The task rail is a presentation grouping over live service sessions and
 retained history, not a new durable task model. It shows activity kind, source
@@ -407,6 +426,13 @@ pipeline diagnostics are opt-in developer data, not the rolling transfer rate
 or ETA promised to users. Filter/search state never changes the underlying
 plan or inventory selection; changing a location or plan option invalidates
 only the state that semantically depends on it.
+
+The first real plan/inventory search owner uses a fixed 150 ms trailing
+debounce. Every search, filter, or collapse intent invalidates earlier response
+generations immediately; only the final search in a burst is dispatched, stale
+successes and failures are ignored, and the current valid page remains visible
+while pending. The pure Slice 4 helper therefore admits the documented bounded
+literal query rather than substituting an arbitrary responsiveness limit.
 
 Use accessible text and non-color outcome cues, stable layouts, and full-path
 accessibility text for elided paths. Empty, unavailable, ambiguous, blocked,

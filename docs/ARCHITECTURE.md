@@ -2019,22 +2019,30 @@ tree, inventory tree, and history dialog consume service/workflow views only.
 NamiSync-owned code never constructs JavaScript for application data; pinned
 pywebview's internal exposed-function return escaper remains a version-audited,
 real-browser-tested part of the security boundary.
+Appearance is the sole presentation-only exception to the RPC transport:
+native code posts one fixed, revisioned, inert system-appearance JSON envelope
+to the trusted WebView2 document. A packaged receiver validates its exact
+schema and updates only fixed root dataset/custom-property names. The page has
+no matching native-post API, and appearance messages carry no command, URL,
+path, HTML, or general-purpose property authority.
 The implemented host composition acquires its fixed instance mutex before any
 local artifact or diagnostic ownership, then prepares pywebview, constructs the
 shared service, validates/initializes the coordinated database pair, and only
 then resolves the wheel-packaged page and creates a window. A pending document
 authority keeps dispatch closed until native guard attachment; once trusted,
 the host exposes exactly the snapshotted `pick_folder`, `start_plan`, and
-`next_events` rows.
+`next_events` rows plus lifecycle-only `close_task`.
 Initialized failure aborts before native creation; UI-thread guard or
 loaded-watchdog failure destroys once. One finalizer owns service, logging, and
 mutex release without allowing cleanup failure to replace startup truth.
 For a normal user close, a private bridge-admission gate first rejects new
 calls, closes the task registry to wake drains and capacity-blocked sinks,
 waits for already-admitted calls, then runs the service close off the WinForms
-thread. Only a complete shutdown permits one
-recursive-safe programmatic destroy. Incomplete or exceptional attempts retain
-the window and expose a fixed native Retry/Cancel action; another title-bar X
+thread. Task observation cleanup and window-owned appearance cleanup are
+separate owners. Appearance remains subscribed through incomplete or
+exceptional service closure; only a complete shutdown closes it exactly once
+and then permits one recursive-safe programmatic destroy. Incomplete or
+exceptional attempts retain the window and expose a fixed native Retry/Cancel action; another title-bar X
 can reopen that action but cannot itself retry or force destruction.
 The loaded callback binds the current fixed status element before asynchronous
 close presentation. Repeated loads replace that cached target, avoiding a late
@@ -2063,7 +2071,11 @@ Presentation color has one dependency direction. GUI Break 1 places the exact
 primitive in the GUI Break 1 foundation. This is not a permanent ban on future
 color growth: another hardcoded or derived color requires prior product-author
 discussion plus a same-change contract, token, and evidence update.
-`components.css` may consume semantic aliases but never raw colors or
+The same file transcribes a pinned minimum Microsoft Fluent light/dark neutral
+subset and receives distinct Windows `Accent`, `AccentLight1`, and
+`AccentDark1` roles from the native appearance snapshot. Those externally
+owned inputs are provenance- and value-tested separately from the authored
+palette. `components.css` may consume semantic aliases but never raw colors or
 palette primitives, and Slice 4-7 surface renderers may consume only semantic
 and component contracts. Gallery contrast/visual evidence selects theme pairs;
 primitive names are not theme policy. Windows forced colors replace the authored
@@ -2085,8 +2097,14 @@ provenance, package-manifest, and test change, not runtime composition.
 Each open plan or inventory view uses one canonical server projection. Workflow code
 owns generic node structure, subtree membership, rollups, and opaque id lookup;
 `interfaces/web` owns tree-agnostic flatten/filter/search/window/anchor
-presentation mechanics. Requests use a common maximum of 256 rows and reject
-257. Plan trees are memoized per request. Inventory uses immutable copy/swap
+presentation mechanics. The interface consumes a typed structural view of the
+workflow-owned array directly, retains immutable source/visible indexes, and
+creates accessibility row wrappers only for the bounded window. Search accepts
+at most 65,536 UTF-8 bytes before traversal; the bridge independently bounds
+the complete serialized request to 65,536 bytes, and future external adapters
+bound their complete request at ingress. Requests use a common maximum of 256
+rows and reject 257. Anchor resolution is proportional to the supplied parent
+chain, not the total tree. Plan trees are memoized per request. Inventory uses immutable copy/swap
 projections in a six-view LRU, built from a slim whole-location structure query
 and detail-fetched only for visible row ids. History summary/detail paging is
 performed by repository queries, not by loading then slicing.
@@ -2181,41 +2199,40 @@ service observation teardown, waking both long polls and blocked producers.
 This closes SH-G-8 and BR-G-33 while leaving production plan and inventory DOM
 closure to Slices 5 and 6.
 
-**Stage 6 GUI Break 1 status (completed 2026-08-12).**
+**Stage 6 GUI Break 1 status (realignment open 2026-08-13).**
 `interfaces/web/appearance.py` owns Windows preference probes and observation,
-native DWM/WebView material application with an opaque system-color fallback,
-and inert document appearance publication. `host.py` registers appearance after
-the security boundary and closes it before task/service/window teardown.
+native DWM/WebView material application with a theme-correct opaque fallback,
+and fixed host-to-page appearance publication. `host.py` registers appearance
+after the security boundary, retains it through retryable service shutdown, and
+closes it immediately before terminal window destruction.
 `tokens.css`, `components.css`, `icons.js`, and the fixed package-local icon
 assets implement the color, component, motion, and icon authority described
 above. At GUI Break 1 closure the wheel added exactly those three top-level
 files, four pinned SVGs, and their `SOURCE.json` and `LICENSE.txt` records to
-Slice 2's five assets; the gallery scenario remains test-only. The
-clean-installed-wheel
-gallery proves SH-G-11/13/14 foundation
-behavior across light, dark, forced-colors, and reduced-motion modes. Real
-installed-wheel SH-G-12 evidence records actual DWM backdrop/dark-mode
-readbacks, transparent renderer seams over opaque cards, and two injected
-fallback sequences that finish opaque without changing frame or dispatch
-health. SH-G-14's infrastructure boundary is closed. Slice 4 now supplies its
-shell/tree production ownership evidence; SH-G-11/12/13 remain open only for
-the plan and inventory surface clauses that land with Slices 5 and 6.
+Slice 2's five assets; the gallery scenario remains test-only.
+SH-G-14's fixed icon infrastructure remains closed. Audit invalidated the token,
+motion, material-publication, fallback, and headed-evidence closure; SH-G-11,
+SH-G-12, and SH-G-13 foundation claims remain open until the realigned clean
+wheel evidence passes. Their later plan/inventory clauses remain with Slices 5
+and 6.
 
-**Stage 6 Slice 4 status (completed 2026-08-13).**
+**Stage 6 Slice 4 status (realignment open 2026-08-13).**
 `interfaces/web/visible_sequence.py` is the sole tree-agnostic presentation
 owner for strict workflow-array validation, collapse/search/caller-decided
 filter retention, exact 1..256 windows, and deepest-visible ancestor anchoring.
-Its frozen values and pure functions retain no path, domain vocabulary,
-projection lifecycle, or active cache. The installed `tree.js` consumes only
-the already-decided generic window, renders a fixed 28-pixel accessible tree
+Its typed structural view and pure functions retain no path, domain vocabulary,
+projection lifecycle, active cache, or duplicate full-tree DTO. The installed
+`tree.js` consumes only the already-decided generic window and server-derived
+accessibility metadata, renders a fixed 28-pixel operable tree
 with exactly two spacers, writes labels through `render.js`, and refuses stale
 generations before reading their payload. `rail.js` and `panels.js` add only
-focusable labelled task-navigation and work regions with truthful empty text;
+labelled task-navigation and work regions with truthful empty text;
 they create no task, session, plan, inventory, or history state. The bridge
-allowlist remains exactly `pick_folder`, `start_plan`, and `next_events`.
-Clean-wheel SH-G-7 evidence covers keyboard focus, native 200% zoom reflow,
-forced-colors focus, hostile and long text, exact row geometry and DOM bounds,
-and stale-window nonreplacement. Slice 5 remains the first owner of the real
+allowlist remains exactly `pick_folder`, `start_plan`, `next_events`, and
+lifecycle-only `close_task`. The prior roles-only keyboard claim, 256-byte
+search limit, repeated anchor allocation, and opaque rail invalidate closure.
+BR-G-34 and SH-G-7 close again only after the restored scale, accessibility,
+geometry, hostile-text, and clean-wheel evidence passes. Slice 5 remains the first owner of the real
 plan surface, and broader Stage 6/beta closure remains open.
 
 **Flesh — deferred.** Web API, durable cross-process task visibility, richer

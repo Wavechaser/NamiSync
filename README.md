@@ -22,26 +22,22 @@ orderly-close/retry controller. The transport chain through Slice 3 is
 complete: production exposes exactly `pick_folder`, `start_plan`,
 `next_events`, and lifecycle-only `close_task`, with real paths retained behind opaque server slots, task
 observation attached before work can start, a bounded event drain, and a strict
-inert-text return sink. GUI Break 1's design foundation is also complete:
-`tokens.css` owns the exact authored palette and semantic mappings,
-`components.css` supplies the shared control states, a fixed local Fluent icon
-registry owns four pinned foundation glyphs, and native appearance follows
-Windows theme/material capability with an opaque fallback. User-facing workflow
-controls/product views are not yet available in the window. Slice 4's shared
-presentation foundation is complete: one pure visible-sequence implementation
-owns strict structure, literal display search, caller-decided filtering,
-collapse, bounded windows, and visible anchoring; the installed renderer owns
-only accessible fixed-height rows, two virtual spacers, inert labels, and stale
-generation refusal. The shipped frame now shows truthful focusable empty task
-navigation and work regions without fabricating a task or widening the
-workflow-command surface. Clean-wheel Windows gates exercise the real WebView2
+inert-text return sink. GUI Break 1's fixed local Fluent icon registry remains
+complete, while audit has reopened
+the token/material/motion and Slice 4 presentation claims for realignment.
+The corrected contract restores pinned Fluent neutral and Windows accent roles,
+truthful appearance fallback/lifetime, direct workflow-owned visible arrays, a
+65,536-byte literal-search field ceiling, indexed anchors, an operable virtual
+tree, and Mica-visible rail/task-card surfaces. User-facing workflow
+controls/product views are not yet available in the window. Clean-wheel Windows
+gates will re-close these foundations only after they exercise the real WebView2
 host, packaged page and design assets,
 navigation/popup and per-dispatch origin guards, runtime refusal,
 single-instance activation, isolated data root, visible database refusal,
-native picker confinement, hostile-text transport, log privacy, the four-mode
-component gallery, real native material apply/fallback paths, and Slice 4
-keyboard, 200%-zoom reflow, forced-colors focus, hostile/long tree text,
-28-pixel row bounds, and stale-generation behavior. The plan, inventory,
+native picker confinement, hostile-text transport, log privacy, the component
+gallery, real native material apply/fallback paths, and Slice 4 platform
+keyboard/accessibility, 200%-zoom reflow, forced-colors focus, hostile/long tree
+text, 28-pixel row bounds, scale, and stale-generation behavior. The plan, inventory,
 history, lifecycle, packaging, and beta closures remain open.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive

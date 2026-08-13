@@ -1082,17 +1082,19 @@ regression watchlist, reference-machine latency/memory budgets, and 100k-file /
 120k-node / one-million-history-item scale envelope live in `M1_BRIDGE.md` and
 are normative for this stage.
 
-**Implementation checkpoint (2026-08-13).** Stage 6 is complete through Slice
-4. The one pure `visible_sequence.py` implementation owns strict structure,
-literal display search, caller-supplied filter counts, collapse, 1..256-row
-windows, and visible-ancestor anchoring. The installed tree renderer owns only
-fixed 28-pixel rows, two virtual spacers, accessible rendering through the
-inert text sink, and stale-generation refusal. The shipped page adds truthful
-empty task-navigation and work regions but no task, session, plan, inventory,
-history item, or control. Production therefore still exposes exactly
-`pick_folder`, `start_plan`, and `next_events`. Clean-wheel SH-G-7 closes the
-Slice 4 shell/tree gate; Slice 5's real plan surface is next, and the remaining
-product UI, release, and beta claims stay open.
+**Implementation checkpoint (reopened 2026-08-13).** Stage 6's secured host,
+Slice 3 transport, and post-Slice-3 hardening remain complete, including the
+exact four-command table (`pick_folder`, `start_plan`, `next_events`, and
+lifecycle-only `close_task`). Audit reopened GUI Break 1's token/material/motion
+foundation and Slice 4's pure visible-sequence, operable-tree, and shell claims.
+The realignment restores Fluent neutral and Windows accent roles, truthful
+appearance lifetime/fallback, a direct structural view over workflow-owned
+arrays, a 65,536-byte literal display-search field ceiling, indexed anchors,
+server-derived virtual-tree accessibility metadata, and Mica-visible rail/task
+surfaces. GUI Break 1, BR-G-34, and SH-G-7 close again only after ordinary,
+scale, security, and clean-wheel headed evidence passes. Slice 5 remains the
+first real plan surface; the remaining product UI, release, and beta claims
+stay open.
 
 ---
 
