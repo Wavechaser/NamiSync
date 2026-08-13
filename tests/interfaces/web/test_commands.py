@@ -48,6 +48,10 @@ from namisync.interfaces.web.drain import (
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.workflows.views import SessionEventView
+from tests.interfaces.web._public_view_witnesses import (
+    PUBLIC_VIEW_WITNESSES,
+    iter_public_view_witnesses,
+)
 
 
 SOURCE_ID = "slot-11111111111111111111111111111111"
@@ -869,6 +873,23 @@ def test_br_g_32_public_view_codec_manifest_tracks_service_exports() -> None:
 
     assert SERVICE_PUBLIC_VIEW_DATACLASSES == exported_dataclasses
     assert SERVICE_PUBLIC_VIEW_DATACLASSES <= PUBLIC_VIEW_DATACLASSES
+
+
+def test_br_g_32_public_view_witness_table_keys_are_exact_and_manual() -> None:
+    witnesses = iter_public_view_witnesses()
+
+    assert set(PUBLIC_VIEW_WITNESSES) == PUBLIC_VIEW_DATACLASSES
+    assert len({witness.label for witness in witnesses}) == len(witnesses)
+    for approved_type, typed_witnesses in PUBLIC_VIEW_WITNESSES.items():
+        assert typed_witnesses
+        assert all(type(witness.value) is approved_type for witness in typed_witnesses)
+        for witness in typed_witnesses:
+            encoded = json.dumps(
+                witness.expected,
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+            assert json.loads(encoded) == witness.expected
 
 
 def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:

@@ -44,6 +44,11 @@ from namisync.interfaces.web.drain import (
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.workflows.views import SessionEventView, SessionRecordView
+from tests.interfaces.web._public_view_witnesses import (
+    INVALID_RETURN_WITNESSES,
+    PublicViewWitness,
+    iter_public_view_witnesses,
+)
 
 
 REQUEST_ID = "a1" * 16
@@ -796,6 +801,62 @@ def test_br_g_32_handler_and_codec_failures_are_sanitized_and_logs_are_private(
     assert f"request_id={REQUEST_ID}" in caplog.text
     assert "command=probe" in caplog.text
     assert "code=internal_error" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "witness",
+    iter_public_view_witnesses(),
+    ids=lambda witness: witness.label,
+)
+def test_br_g_32_every_approved_public_view_crosses_real_dispatch_exactly(
+    witness: PublicViewWitness,
+) -> None:
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda _payload: witness.value)},
+    )
+    expected = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": witness.expected,
+    }
+
+    response = dispatcher.dispatch(_request())
+
+    assert response == expected
+    assert set(response) == {"schema_version", "request_id", "ok", "result"}
+    assert isinstance(response["result"], dict)
+    assert isinstance(witness.expected, dict)
+    assert set(response["result"]) == set(witness.expected)
+    encoded = json.dumps(response, ensure_ascii=False, allow_nan=False)
+    assert json.loads(encoded) == expected
+
+
+@pytest.mark.parametrize(
+    ("_label", "invalid_return"),
+    INVALID_RETURN_WITNESSES,
+    ids=[label for label, _value in INVALID_RETURN_WITNESSES],
+)
+def test_br_g_32_invalid_public_view_returns_are_sanitized_by_dispatch(
+    _label: str,
+    invalid_return: object,
+) -> None:
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda _payload: invalid_return)},
+    )
+
+    response = dispatcher.dispatch(_request())
+
+    assert response == _failure(
+        REQUEST_ID,
+        "internal_error",
+        ERRORS["internal_error"],
+    )
+    assert json.loads(
+        json.dumps(response, ensure_ascii=False, allow_nan=False)
+    ) == response
 
 
 def test_br_g_32_base_exceptions_cannot_cross_handler_or_codec_boundary() -> None:
