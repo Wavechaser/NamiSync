@@ -181,7 +181,10 @@ async function finish() {
     terminal_record_count: terminalRecords,
   });
   renderText(status, "Benchmark complete. The parent harness will close this window.");
-  await enqueueReport("presented", null);
+  // This final request is a one-way close handshake. Its native admission
+  // proves the preceding DOM mutation; the parent intentionally closes before
+  // Chromium is guaranteed to receive the response.
+  void enqueueReport("presented", null).catch(() => undefined);
 }
 
 

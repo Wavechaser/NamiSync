@@ -52,7 +52,7 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "retainedBytes" not in browser
     assert "PrivateUsage" in parent
     assert 'kind: "ready"' in browser
-    assert 'enqueueReport("presented", null)' in browser
+    assert 'void enqueueReport("presented", null).catch' in browser
     assert "wait_for_accessible_text" not in parent
 
 
