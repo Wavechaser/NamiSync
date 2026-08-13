@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
 import os
 import sys
 import zipfile
@@ -44,11 +45,42 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "evaluate_js" not in parent
     assert "evaluate_js" not in child
     assert "evaluate_js" not in browser
-    assert "samples.length >= 100" in browser
+    assert "SAMPLE_REPORT_BATCH_SIZE = 250" in browser
     assert 'sampleClass === "terminal_event"' in browser
     assert "retainedBytes" not in browser
     assert "PrivateUsage" in parent
     assert 'kind: "ready"' in browser
+
+
+def test_bridge_event_benchmark_full_ordinary_sample_batch_fits_ingress() -> None:
+    samples = [
+        {
+            "class": "progress",
+            "event_id": "Progress",
+            "event_result": None,
+            "latency_ms": 1_999.999,
+            "observed_offset_ms": 59_999.999,
+            "position": 1_500,
+            "record_state": None,
+            "session_id": "f" * 32,
+            "sequence": 2_000,
+        }
+        for _ in range(250)
+    ]
+    request = {
+        "schema_version": 1,
+        "request_id": "f" * 32,
+        "command": "benchmark_report",
+        "payload": {"kind": "samples", "value": samples},
+    }
+
+    encoded = json.dumps(
+        request,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    assert len(encoded) <= 65_536
 
 
 def test_bridge_event_benchmark_reads_current_process_private_memory() -> None:

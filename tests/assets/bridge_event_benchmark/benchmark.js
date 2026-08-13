@@ -11,6 +11,7 @@ const samples = [];
 const gaps = [];
 const terminalEventLatencies = [];
 const terminalRecordLatencies = [];
+const SAMPLE_REPORT_BATCH_SIZE = 250;
 let reporting = Promise.resolve();
 let failureReported = false;
 let terminalRecords = 0;
@@ -139,7 +140,7 @@ function recordSample(sampleClass, update) {
     terminalRecordLatencies.push(sample.latency_ms);
   }
   if (
-    samples.length >= 100 ||
+    samples.length >= SAMPLE_REPORT_BATCH_SIZE ||
     sampleClass === "terminal_event" ||
     sampleClass === "terminal_record"
   ) {
