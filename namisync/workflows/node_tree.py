@@ -61,6 +61,12 @@ class NodeTreeNode:
     subtree_member_count: int
 
     @property
+    def display(self) -> str:
+        """Return the workflow-owned display form of this relative path."""
+
+        return self.rel_path or "All items"
+
+    @property
     def subtree_extent(self) -> tuple[int, int]:
         """Return this node's half-open pre-order interval."""
 

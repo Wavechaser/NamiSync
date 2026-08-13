@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import replace
+import json
+from dataclasses import dataclass, replace
 from pathlib import Path
+from time import perf_counter
 from types import MappingProxyType
 
 import pytest
 
 from namisync.core.pathing import normalize_relative_path
+from namisync.interfaces.web import visible_sequence as visible_module
 from namisync.interfaces.web.visible_sequence import (
     VisibleAnchor,
-    VisibleSequenceNode,
     VisibleSequenceParameters,
     derive_visible_sequence,
     resolve_visible_anchor,
+    to_visible_window_view,
     window_visible_sequence,
 )
 from namisync.workflows.node_tree import (
@@ -29,7 +32,18 @@ from namisync.workflows.node_tree import (
 MODULE = Path(__file__).parents[3] / "namisync/interfaces/web/visible_sequence.py"
 
 
-def _nodes() -> tuple[VisibleSequenceNode, ...]:
+@dataclass(frozen=True, slots=True)
+class _Node:
+    node_id: str
+    display: str
+    position: int
+    depth: int
+    parent_index: int | None
+    subtree_end: int
+    is_container: bool
+
+
+def _nodes() -> tuple[_Node, ...]:
     # root
     #   Alpha
     #     Straße.txt
@@ -37,12 +51,12 @@ def _nodes() -> tuple[VisibleSequenceNode, ...]:
     #   Beta
     #     literal-[.*].txt
     return (
-        VisibleSequenceNode("root", "All items", 0, 0, None, 6, True),
-        VisibleSequenceNode("alpha", "Alpha", 1, 1, 0, 4, True),
-        VisibleSequenceNode("street", "Straße.txt", 2, 2, 1, 3, False),
-        VisibleSequenceNode("composed", "composed-é.txt", 3, 2, 1, 4, False),
-        VisibleSequenceNode("beta", "Beta", 4, 1, 0, 6, True),
-        VisibleSequenceNode("literal", "literal-[.*].txt", 5, 2, 4, 6, False),
+        _Node("root", "All items", 0, 0, None, 6, True),
+        _Node("alpha", "Alpha", 1, 1, 0, 4, True),
+        _Node("street", "Straße.txt", 2, 2, 1, 3, False),
+        _Node("composed", "composed-é.txt", 3, 2, 1, 4, False),
+        _Node("beta", "Beta", 4, 1, 0, 6, True),
+        _Node("literal", "literal-[.*].txt", 5, 2, 4, 6, False),
     )
 
 
@@ -56,21 +70,6 @@ def _parameters(
         collapsed_node_ids=collapsed,
         search_query=search,
         match_counts_by_node_id=counts,
-    )
-
-
-def _adapt(tree: NodeTree) -> tuple[VisibleSequenceNode, ...]:
-    return tuple(
-        VisibleSequenceNode(
-            node_id=node.node_id,
-            display=node.rel_path or "All items",
-            position=node.position,
-            depth=node.depth,
-            parent_index=node.parent_index,
-            subtree_end=node.subtree_end,
-            is_container=node.is_container,
-        )
-        for node in tree.nodes
     )
 
 
@@ -101,18 +100,24 @@ def _ids(sequence) -> tuple[str, ...]:
 
 
 @pytest.mark.parametrize("kind", [NodeTreeKind.PLAN, NodeTreeKind.INVENTORY])
-def test_br_g_34_real_workflow_trees_supply_all_structure_without_path_logic(
+def test_br_g_34_real_workflow_tree_is_used_directly_without_dto_copy(
     kind: NodeTreeKind,
 ) -> None:
     tree = _tree(kind)
-    nodes = _adapt(tree)
 
-    sequence = derive_visible_sequence(nodes, _parameters())
+    sequence = derive_visible_sequence(tree.nodes, _parameters())
+    window = window_visible_sequence(sequence, offset=1, limit=2)
 
-    assert sequence.nodes == nodes
-    assert all(left is right for left, right in zip(sequence.nodes, nodes))
-    assert sequence.visible_positions == tuple(range(len(nodes)))
-    assert _ids(sequence) == tuple(node.node_id for node in nodes)
+    assert sequence.nodes is tree.nodes
+    assert sequence.visible_positions == tuple(range(len(tree.nodes)))
+    assert _ids(sequence) == tuple(node.node_id for node in tree.nodes)
+    assert tree.nodes[0].display == "All items"
+    assert tree.nodes[1].display == tree.nodes[1].rel_path
+    assert tuple(row.node for row in window.rows) == tree.nodes[1:3]
+    assert all(
+        row.node is tree.nodes[row.node.position] for row in window.rows
+    )
+    assert not hasattr(visible_module, "VisibleSequenceNode")
     assert sequence.filtered_item_count is None
 
 
@@ -122,12 +127,12 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
         scope_identity="empty-location",
         members=(),
     )
-    nodes = _adapt(tree)
 
-    sequence = derive_visible_sequence(nodes, _parameters())
+    sequence = derive_visible_sequence(tree.nodes, _parameters())
 
-    assert len(nodes) == 1
+    assert sequence.nodes is tree.nodes
     assert _ids(sequence) == (tree.root_node_id,)
+    assert tree.nodes[0].display == "All items"
 
 
 def test_br_g_2_stage_6_visible_core_imports_no_project_or_path_helper() -> None:
@@ -219,26 +224,31 @@ def test_br_g_34_malformed_preorder_structure_is_refused(mutation, error) -> Non
         {"node_id": ""},
         {"node_id": "bad\ud800"},
         {"display": "bad\ud800"},
+        {"position": True},
         {"depth": True},
         {"parent_index": True},
         {"subtree_end": True},
         {"is_container": 1},
     ],
 )
-def test_br_g_34_node_fields_use_exact_types_and_valid_unicode(arguments) -> None:
-    values = {
-        "node_id": "node",
-        "display": "display",
-        "position": 0,
-        "depth": 0,
-        "parent_index": None,
-        "subtree_end": 1,
-        "is_container": True,
-    }
-    values.update(arguments)
+def test_br_g_34_structural_node_fields_are_validated(arguments) -> None:
+    node = replace(_nodes()[0], **arguments)
 
     with pytest.raises((TypeError, ValueError)):
-        VisibleSequenceNode(**values)
+        derive_visible_sequence((node,), _parameters())
+
+
+def test_br_g_34_structural_node_must_supply_every_required_field() -> None:
+    class _MissingDisplay:
+        node_id = "root"
+        position = 0
+        depth = 0
+        parent_index = None
+        subtree_end = 1
+        is_container = True
+
+    with pytest.raises(TypeError, match="provide display"):
+        derive_visible_sequence((_MissingDisplay(),), _parameters())
 
 
 class _PoisonNodes:
@@ -253,17 +263,37 @@ class _PoisonNodes:
 
 
 def test_br_g_34_search_cap_is_utf8_bytes_and_checked_before_traversal() -> None:
-    accepted = _parameters(search="😀" * 64)
-    assert len(accepted.search_query.encode("utf-8")) == 256
-    derive_visible_sequence(_nodes(), accepted)
+    assert len("x" * 257) == 257
+    derive_visible_sequence(_nodes(), _parameters(search="x" * 257))
 
-    with pytest.raises(ValueError, match="256 UTF-8 bytes"):
-        _parameters(search=("😀" * 63) + "abcde")
+    boundaries = ("x" * 65_536, chr(0x1F600) * 16_384)
+    for boundary in boundaries:
+        accepted = _parameters(search=boundary)
+        assert len(accepted.search_query.encode("utf-8")) == 65_536
+        derive_visible_sequence(_nodes(), accepted)
+
+    refused = boundaries[1] + "a"
+    with pytest.raises(ValueError, match="65,536 UTF-8 bytes"):
+        _parameters(search=refused)
 
     poisoned = _parameters()
-    object.__setattr__(poisoned, "search_query", ("😀" * 63) + "abcde")
-    with pytest.raises(ValueError, match="256 UTF-8 bytes"):
+    object.__setattr__(poisoned, "search_query", refused)
+    with pytest.raises(ValueError, match="65,536 UTF-8 bytes"):
         derive_visible_sequence(_PoisonNodes(), poisoned)  # type: ignore[arg-type]
+
+
+def test_br_g_34_search_type_and_unicode_are_checked_before_traversal() -> None:
+    class _StringSubclass(str):
+        pass
+
+    for refused in (_StringSubclass("query"), "bad\ud800"):
+        parameters = _parameters()
+        object.__setattr__(parameters, "search_query", refused)
+        with pytest.raises((TypeError, ValueError)):
+            derive_visible_sequence(  # type: ignore[arg-type]
+                _PoisonNodes(),
+                parameters,
+            )
 
 
 @pytest.mark.parametrize("query", [".", "[", ".*+?^$(){}|\\"])
@@ -302,6 +332,7 @@ def test_br_g_34_filter_retention_precedes_collapse_and_counting() -> None:
     assert _ids(sequence) == ("root", "alpha", "beta", "literal")
     assert sequence.filtered_item_count == 5
     assert "street" not in sequence.visible_index_by_node_id
+    assert sequence.source_position_by_node_id["street"] == 2
 
 
 def test_br_g_34_sparse_filter_and_search_are_conjunctive() -> None:
@@ -340,7 +371,41 @@ def test_br_g_34_collapsed_ids_must_name_known_containers(collapsed) -> None:
         derive_visible_sequence(_nodes(), _parameters(collapsed=collapsed))
 
 
-def test_br_g_34_inputs_and_results_are_immutable_snapshots() -> None:
+def test_br_g_34_active_tree_metadata_is_global_and_filter_aware() -> None:
+    expanded = derive_visible_sequence(_nodes(), _parameters())
+    collapsed = derive_visible_sequence(
+        _nodes(),
+        _parameters(collapsed={"alpha"}),
+    )
+    filtered = derive_visible_sequence(
+        _nodes(),
+        _parameters(search="strasse"),
+    )
+
+    assert expanded.parent_visible_indexes == (None, 0, 1, 1, 0, 4)
+    assert expanded.first_child_visible_indexes == (1, 2, None, None, 5, None)
+    assert expanded.positions_in_set == (1, 1, 1, 2, 2, 1)
+    assert expanded.set_sizes == (1, 2, 2, 2, 2, 1)
+
+    assert collapsed.parent_visible_indexes == (None, 0, 0, 2)
+    assert collapsed.first_child_visible_indexes == (1, None, 3, None)
+    assert collapsed.positions_in_set == (1, 1, 2, 1)
+    assert collapsed.set_sizes == (1, 2, 2, 1)
+    collapsed_rows = window_visible_sequence(collapsed, offset=0, limit=4).rows
+    assert tuple(row.expanded for row in collapsed_rows) == (
+        True,
+        False,
+        True,
+        None,
+    )
+
+    assert _ids(filtered) == ("root", "alpha", "street")
+    assert filtered.parent_visible_indexes == (None, 0, 1)
+    assert filtered.positions_in_set == (1, 1, 1)
+    assert filtered.set_sizes == (1, 1, 1)
+
+
+def test_br_g_34_inputs_indexes_and_results_are_immutable_snapshots() -> None:
     collapsed = {"alpha"}
     counts = {"street": 2}
     node_list = list(_nodes())
@@ -355,14 +420,17 @@ def test_br_g_34_inputs_and_results_are_immutable_snapshots() -> None:
     assert parameters.collapsed_node_ids == frozenset({"alpha"})
     assert dict(parameters.match_counts_by_node_id or {}) == {"street": 2}
     assert _ids(sequence) == before
+    assert type(sequence.source_position_by_node_id) is MappingProxyType
     assert type(sequence.visible_index_by_node_id) is MappingProxyType
+    with pytest.raises(TypeError):
+        sequence.source_position_by_node_id["new"] = 9  # type: ignore[index]
     with pytest.raises(TypeError):
         sequence.visible_index_by_node_id["new"] = 9  # type: ignore[index]
 
 
-def test_br_g_34_window_is_exact_bounded_and_never_truncates_a_bad_limit() -> None:
+def test_br_g_34_window_is_exact_bounded_and_wraps_only_requested_rows() -> None:
     nodes = tuple(
-        VisibleSequenceNode(
+        _Node(
             node_id=f"node-{position}",
             display=f"Node {position}",
             position=position,
@@ -379,16 +447,84 @@ def test_br_g_34_window_is_exact_bounded_and_never_truncates_a_bad_limit() -> No
     end = window_visible_sequence(sequence, offset=257, limit=1)
     beyond = window_visible_sequence(sequence, offset=999, limit=1)
 
-    assert len(first.nodes) == 256
+    assert len(first.rows) == 256
     assert first.total == 257
-    assert end.nodes == () and end.total == 257 and end.offset == 257
-    assert beyond.nodes == () and beyond.total == 257 and beyond.offset == 999
+    assert all(row.node is nodes[row.visible_index] for row in first.rows)
+    assert first.rows[0].first_child_visible_index == 1
+    assert first.rows[255].position_in_set == 255
+    assert first.rows[255].set_size == 256
+    assert end.rows == () and end.total == 257 and end.offset == 257
+    assert beyond.rows == () and beyond.total == 257 and beyond.offset == 999
     for value in (True, -1):
         with pytest.raises((TypeError, ValueError)):
             window_visible_sequence(sequence, offset=value, limit=1)
     for value in (True, 0, 257):
         with pytest.raises((TypeError, ValueError)):
             window_visible_sequence(sequence, offset=0, limit=value)
+
+
+def test_br_g_34_window_wire_view_is_exact_bounded_and_authority_free() -> None:
+    tree = _tree(NodeTreeKind.PLAN)
+    sequence = derive_visible_sequence(tree.nodes, _parameters())
+    window = window_visible_sequence(sequence, offset=0, limit=3)
+
+    view = to_visible_window_view(window)
+
+    assert set(view) == {"offset", "total", "rows"}
+    assert type(view["offset"]) is int
+    assert type(view["total"]) is int
+    assert type(view["rows"]) is list
+    rows = view["rows"]
+    assert len(rows) == 3
+    expected_row_keys = {
+        "node_id",
+        "display",
+        "depth",
+        "is_container",
+        "visible_index",
+        "parent_visible_index",
+        "first_child_visible_index",
+        "position_in_set",
+        "set_size",
+        "expanded",
+    }
+    assert all(
+        type(row) is dict and set(row) == expected_row_keys for row in rows
+    )
+    assert rows[0]["display"] == "All items"
+    assert rows[0]["expanded"] is True
+    assert rows[2]["expanded"] is None
+    forbidden_fields = {
+        "rel_path",
+        "rel_path_key",
+        "member_ids",
+        "position",
+        "parent_index",
+        "subtree_end",
+        "subtree_extent",
+        "subtree_member_count",
+    }
+    assert all(forbidden_fields.isdisjoint(row) for row in rows)
+    assert json.loads(json.dumps(view, ensure_ascii=False)) == view
+
+    with pytest.raises(TypeError, match="VisibleWindow"):
+        to_visible_window_view(object())  # type: ignore[arg-type]
+
+
+def test_br_g_34_sequence_metadata_is_derived_once(monkeypatch) -> None:
+    original = visible_module._derive_visible_metadata
+    calls = 0
+
+    def observed(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(visible_module, "_derive_visible_metadata", observed)
+
+    derive_visible_sequence(_nodes(), _parameters())
+
+    assert calls == 1
 
 
 def test_br_g_34_anchor_requires_exact_deepest_to_root_chain() -> None:
@@ -422,6 +558,64 @@ def test_br_g_34_anchor_requires_exact_deepest_to_root_chain() -> None:
             resolve_visible_anchor(sequence, chain)
 
 
+def test_br_g_34_anchor_reads_only_the_supplied_chain() -> None:
+    sequence = derive_visible_sequence(_nodes(), _parameters())
+
+    class _ObservedNodes(tuple):
+        reads = 0
+
+        def __iter__(self):
+            raise AssertionError("anchor resolution iterated the node array")
+
+        def __getitem__(self, index):
+            type(self).reads += 1
+            return super().__getitem__(index)
+
+    observed = _ObservedNodes(sequence.nodes)
+    object.__setattr__(sequence, "nodes", observed)
+
+    anchor = resolve_visible_anchor(sequence, ("street", "alpha", "root"))
+
+    assert anchor == VisibleAnchor("street", 2)
+    assert observed.reads == 3
+
+
+def test_br_g_34_120k_projection_remains_linear_and_windows_256_rows(
+    record_property,
+) -> None:
+    node_count = 120_000
+    nodes = (
+        _Node("root", "All Nodes", 0, 0, None, node_count, True),
+        *(
+            _Node(
+                f"node-{position}",
+                f"Node {position}",
+                position,
+                1,
+                0,
+                position + 1,
+                False,
+            )
+            for position in range(1, node_count)
+        ),
+    )
+
+    started = perf_counter()
+    sequence = derive_visible_sequence(nodes, _parameters(search="node"))
+    window = window_visible_sequence(sequence, offset=60_000, limit=256)
+    elapsed = perf_counter() - started
+    record_property("derive_and_window_seconds", f"{elapsed:.6f}")
+
+    assert sequence.nodes is nodes
+    assert len(sequence.visible_positions) == node_count
+    assert len(sequence.source_position_by_node_id) == node_count
+    assert len(window.rows) == 256
+    assert window.rows[0].node is nodes[60_000]
+    assert window.rows[-1].node is nodes[60_255]
+    assert window.rows[0].position_in_set == 60_000
+    assert window.rows[0].set_size == node_count - 1
+
+
 def test_br_g_34_module_retains_no_active_sequence_or_cache_family() -> None:
     parsed = ast.parse(MODULE.read_text(encoding="utf-8"))
     assigned_names = {
@@ -434,4 +628,8 @@ def test_br_g_34_module_retains_no_active_sequence_or_cache_family() -> None:
         if isinstance(target, ast.Name)
     }
 
-    assert assigned_names == {"_MAX_SEARCH_BYTES", "_MAX_WINDOW_ROWS"}
+    assert assigned_names == {
+        "_MAX_SEARCH_BYTES",
+        "_MAX_WINDOW_ROWS",
+        "_VisibleNodeT",
+    }
