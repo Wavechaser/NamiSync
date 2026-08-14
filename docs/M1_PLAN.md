@@ -15,6 +15,10 @@ implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
 `M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
 definitions, and beta-packaging work. The real-WebView2 browser-witness
 migration and fixed, non-sliding 150 ms progress-only linger are complete.
+The existing installed-wheel event harness has also been decontaminated: it
+streams bounded manifested evidence, assembles the report after the measured
+child exits, admits that child directly to the Job before product composition,
+and reports per-PID/runtime resources only as non-acceptance diagnostics.
 Realigned SH-G-8 remains open for calibrated, independently held-out transport
 custody; BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
 completed-task retention open, while shell-owned SH-G-15 leaves version-bound

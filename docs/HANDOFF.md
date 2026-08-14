@@ -1,13 +1,17 @@
 # Session Handoff
 
-Status (2026-08-14): the progress-only drain behavior checkpoint has landed.
-Each task retains one fixed 150 ms deadline from first progress-only
-availability; replacement, supersession, and retry cannot restart it, and the
-original long-poll deadline remains the outer cap. Reliable, `Gap`, terminal,
-recovery, close, and supersession wake immediately. The 174 focused
-drain/command/host checks pass. SH-G-8 remains open for realistic-payload
-transport-custody calibration, a limit fixed in a later commit, and an
-independent holdout. BR-G-45 separately remains open for the
+Status (2026-08-14): the benchmark/accounting checkpoint has landed after the
+progress-only drain behavior checkpoint. Browser samples and producer timings
+now stream in bounded batches to SHA-256-manifested sidecars; the child retains
+no growing sample dictionary or repeated full producer snapshots, and final
+evidence assembly occurs only after child exit. The actual child enters the Job
+before product composition. Per-PID role/private bytes and sampled thread,
+handle, and topology evidence remain diagnostic, with no whole-runtime
+acceptance predicate. Event `passed`/`event_passed` is independent of diagnostic
+completeness and explicitly leaves SH-G-8 incomplete without custody evidence.
+A separate path-local retained-state sizer has also landed. SH-G-8 remains open
+for realistic-payload transport-custody calibration, a limit fixed in a later
+commit, and an independent holdout. BR-G-45 separately remains open for the
 complete 100,000-subject terminal artifact set and aggregate completed-task
 retention policy. Shell-owned SH-G-15 separately remains open for version-bound
 whole-runtime containment. Slices 5-8 remain product work.
@@ -25,6 +29,22 @@ whole-runtime containment. Slices 5-8 remain product work.
   deadline. Reliable, `Gap`, terminal, close, supersession, and recovery values
   wake immediately. This behavior and its stale-prequeue, supersession/retry,
   fixed-anchor, immediate-wake, ordering, and cursor regressions have landed.
+- The installed-wheel harness now labels itself the SH-G-8 event limb / BR-G-42
+  event envelope. Browser and producer evidence is bounded, streamed, and
+  manifest-checked; final attachment happens after the measured child exits.
+  Its actual child is assigned directly to the Job before composition, and its
+  per-PID role/private-byte plus thread/handle/topology series is diagnostic.
+  The former 16 MiB whole-Job line no longer participates in event pass/fail;
+  `sh_g_8_acceptance` remains `incomplete-without-custody` and
+  `whole_runtime_acceptance` remains `not-defined`.
+- The retained-state helper snapshots actual deque shallow storage and immutable
+  item tuples under owner locks, requires two matching capture passes, and
+  refuses unknown graph types instead of silently undercounting them. It reports
+  replay, subscriber, and adapter component graphs plus their
+  identity-deduplicated transport union. Core
+  `Terminal.result`, adapter terminal `body["result"]`, and
+  `SessionRecordView.result` are cut only along those terminal paths, so an
+  identity also reached through a nonterminal path still counts in transport.
 - BR-G-45 owns the entire subject-scaled completion set: core
   `Terminal(OperationResult.items)`, adapter terminal event view,
   `SessionRecordView`/`OperationResultView.items`, serialized/native return,
@@ -121,12 +141,11 @@ acknowledgment races; those paths were fixed or removed before the valid run.
 
 ## Immediate Next Work
 
-1. Replace the old deep-size diagnostic with an explicit SH-G-8 custody
-   instrument. Use production offer/observation paths, distinct realistic
-   path/detail values, exact replay/subscriber/adapter roots, strong identity
-   deduplication, achieved high-water marks, and a quiescent maximum no-`Gap`
-   snapshot. Bound or stream telemetry and perform no growing full serialization
-   during the measured interval.
+1. Build the named realistic SH-G-8 corpus and production-path custody runner on
+   the landed retained-state helper. Use distinct path/detail values, assert
+   ordinary high-water marks and the quiescent maximum no-`Gap` shape, and
+   preserve the existing event/capacity/ordering predicates. The helper alone
+   is not calibration or acceptance evidence.
 2. Record calibration without a pass/fail limit. In a later commit freeze the
    corpus, allocation method, interpreter, ceiling, and headroom; only a later
    independent artifact may close SH-G-8.
@@ -135,9 +154,9 @@ acknowledgment races; those paths were fixed or removed before the valid run.
    survive presentation/release when history is degraded. Then freeze both
    per-completion and aggregate limits before holdout.
 4. Build SH-G-15 as a distinct artifact and `passed` field, not an extension of
-   SH-G-8's result. Move raw telemetry ownership outside the Job; retain
-   per-PID/role/thread/handle/topology series; use equal pre/post windows; add
-   repeated and long warm fixtures plus cold absolute/settled phases. Diagnose
+   SH-G-8's result. Reuse the landed direct-Job and diagnostic per-PID resource
+   plumbing, but add cold/settled acceptance, equal pre/post windows, repeated
+   and long warm fixtures plus cold absolute/settled phases. Diagnose
    by process role and event-free controls, but never subtract a control or
    retune a frozen bound after seeing holdout data.
 
@@ -155,13 +174,18 @@ from one duration.
 - `tests/interfaces/web/test_drain.py`: 48 passed.
 - `tests/interfaces/web/test_commands.py`: 77 passed.
 - `tests/interfaces/web/test_host.py`: 49 passed.
+- `tests/interfaces/web/test_bridge_event_benchmark.py`: 21 passed for the
+  streamed evidence/manifests, direct-Job admission, diagnostic separation, and
+  retained-state accounting contracts.
 - Total focused Python evidence: 174 passed. No new custody, BR-G-45, SH-G-15,
-  or headed benchmark result is claimed by this checkpoint.
+  or headed benchmark result is claimed by the linger checkpoint; checkpoint 3
+  adds the separate 21-test accounting file without a new headed result.
 - Required before commit: active-doc contradiction search and `git diff --check`.
 
 ## Immediate Context
 
-The 150 ms linger is implemented; the corrected custody instrument is not. Do
+The 150 ms linger and checkpoint-3 accounting infrastructure are implemented;
+the named realistic corpus and production-path custody runner are not. Do
 not reuse the old 67,375,104-byte delta as SH-G-8 failure, SH-G-15 calibration
 limit, or BR-G-45 evidence. Preserve explicit
 terminal-session-release versus task-close authority while designing aggregate

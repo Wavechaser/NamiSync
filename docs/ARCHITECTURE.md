@@ -2214,8 +2214,20 @@ the version-bound whole headed runtime: absolute cold peak/settled plateau and
 repeated/long warm marginal/plateau evidence with bounded out-of-Job telemetry,
 per-PID roles/private bytes/threads/handles, topology, and explicit version
 restatement. All three gates remain open. The standalone installed-wheel
-WebView2 harness still supplies useful event and diagnostic data, and its valid
-2026-08-13 run passed event truth, ordering, latency, no-`Gap`, and clean exit.
+WebView2 harness now keeps measurement ownership honest: bounded browser sample
+and producer-timing streams carry SHA-256 manifests, full evidence is assembled
+only after the measured child exits, and the actual child joins the Job before
+product composition. Per-PID roles/private bytes and sampled thread/handle/
+topology evidence are diagnostic only; diagnostic incompleteness cannot turn a
+valid event run into failure or provide whole-runtime acceptance. The separate
+retained-state sizer snapshots real replay/subscriber/adapter deques under their
+owner locks, requires two matching structural captures, refuses unknown graph
+types, reports each graph plus one identity-deduplicated union, and stops at
+terminal-result subtrees only on the paths where they are terminal. These
+mechanisms do not supply SH-G-8's realistic corpus, calibration, frozen limit,
+or holdout. The harness still supplies useful event and diagnostic data. Its
+valid 2026-08-13 run passed event truth, ordering, latency, no-`Gap`, and clean
+exit.
 Its 67,375,104-byte whole-Job delta is not a transport-custody measurement and
 lacks SH-G-15's calibration/freeze/holdout contract, so it closes none of these
 gates. The existing diagnostic command remains `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.

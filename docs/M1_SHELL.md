@@ -14,7 +14,10 @@ Stages 1-5.5, Phase 0, the WebView2 reality spike, and the existing Slice 1-3
 implementation have landed. Their secured host, transport, picker, origin,
 privacy, event-drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`;
 the installed real-WebView2 browser-behavior migration and fixed, non-sliding
-150 ms progress-only linger are complete. Realigned SH-G-8 remains open for
+150 ms progress-only linger are complete. The benchmark/accounting checkpoint
+has also landed: streamed manifested evidence, post-exit final assembly,
+direct-Job child admission, diagnostic-only whole-runtime accounting, and a
+path-local retained-state sizer. Realigned SH-G-8 remains open for
 calibrated and independently held-out transport custody. BR-G-45 separately
 keeps terminal artifact/retention scale open, and shell-owned SH-G-15 keeps version-bound
 whole-runtime containment open. GUI Break 1's token,
@@ -612,8 +615,12 @@ non-extending 150 ms wait only when a drain sees progress alone; reliable,
 `Gap`, terminal, close, supersession, and recovery values wake it immediately.
 That production behavior and its fixed-anchor, non-sliding, immediate-wake,
 supersession/retry, and stale-prequeue regressions have landed; 174 focused
-drain/command/host checks pass. Custody acceptance separately deep
-sizes the identity-deduplicated dispatcher replay, subscriber, and adapter queue
+drain/command/host checks pass. Benchmark accounting now streams manifested
+browser/producer evidence, assembles it after child exit, assigns the actual
+child directly to the Job before product composition, and keeps per-PID
+resource evidence diagnostic. A path-local retained-state sizer reports root
+classes and their identity-deduplicated union. Custody acceptance separately
+deep-sizes the identity-deduplicated dispatcher replay, subscriber, and adapter queue
 graphs with distinct realistic path/detail values, fixes a limit after
 calibration, and applies it to a later independent holdout. Terminal result
 graphs belong to BR-G-45, and complete headed-runtime growth belongs to SH-G-15.
@@ -826,7 +833,10 @@ carry the `headed` marker; all are collected by the release command.
   the maximum reachable no-`Gap` shape. Calibration records raw measurements;
   a later commit freezes the limit before an independent holdout. Terminal
   result graphs belong to BR-G-45 and complete headed-runtime growth to SH-G-15.
-  **The corrected instrument, calibration limit, and holdout have not landed.**
+  A path-local retained-state sizer now reports replay, subscriber, adapter,
+  and identity-deduplicated union graphs without charging terminal-result
+  subtrees to transport. **The named realistic corpus, production-path
+  high-water instrument, calibration limit, and holdout have not landed.**
   *Not satisfied by* attaching after start, relying on replay for the
   normal path, sliding the progress deadline, delaying a reliable value,
   hiding loss behind terminal recovery, reusing short/shared fixture strings,
@@ -998,10 +1008,11 @@ structure clause),
 `tests/interfaces/web/test_shell_headed.py` (installed-wheel headed SH-G-7),
 `tests/interfaces/web/test_drain.py` (SH-G-8 deterministic, linger, and
 overflow fixtures), `tests/interfaces/web/test_bridge_event_benchmark.py`
-(ordinary event/custody artifact-contract checks), and the opt-in
+(ordinary streamed-evidence, event/diagnostic-separation, direct-Job, and
+retained-state accounting checks), and the opt-in
 installed-wheel command
 `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`
-(SH-G-8 event evidence; its custody instrument is pending),
+(SH-G-8 event evidence; its realistic-corpus custody runner is pending),
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
 `tests/interfaces/web/test_design_tokens.py` (ordinary SH-G-11),
@@ -1057,9 +1068,13 @@ This table maps shell delivery order to the sole BR-G definitions in
 The explicit-`Gap`-only recovery decision and the command-specific
 `start_plan` revision decision are ratified in `M1_BRIDGE.md`; their named
 regressions have landed. A numeric sequence hole alone does not reopen recovery.
-The fixed 150 ms linger and focused regressions have also landed. SH-G-8
-remains open because realistic-payload custody calibration, a frozen limit,
-and an independent holdout have not landed. The valid
+The fixed 150 ms linger and focused regressions have also landed.
+Benchmark/accounting support now streams manifested evidence, assembles the
+artifact after the child exits, reports whole-runtime memory without an
+acceptance predicate, and sizes transport roots separately from terminal
+results. SH-G-8 remains open because the named realistic corpus,
+production-path high-water evidence, custody calibration, a frozen limit, and
+an independent holdout have not landed. The valid
 2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but
 its whole-Job delta is neither corrected transport-custody evidence nor a
 version-bound SH-G-15 containment result. BR-G-45 and SH-G-15 remain separately

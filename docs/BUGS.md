@@ -546,14 +546,25 @@ defect, and move implementation-level test choreography out of the log.
   recovery, close, and supersession still wake immediately. The 174 focused
   drain/command/host regressions cover cadence, stale custody, races, ordering,
   and unchanged cursor behavior.
+- MODERATE - FIXED (2026-08-14). Benchmark accounting contamination. The headed
+  harness retained every decoded browser sample, repeatedly serialized growing
+  producer documents inside the measured child, admitted a wrapper rather than
+  the actual host to the Job, and let one 16 MiB whole-Job line decide the event
+  result. Cause: evidence collection, process membership, transport custody,
+  and runtime acceptance had no separate owners. Fixed with bounded streamed
+  SHA-256-manifested browser/producer evidence, post-exit final assembly,
+  pre-composition direct-Job child admission, and per-PID role/private-byte plus
+  thread/handle/topology diagnostics. Event acceptance is now independent of
+  diagnostic completeness; whole-runtime acceptance remains undefined.
 - MODERATE - OPEN (2026-08-14). Invalid transport-custody attribution. The old
   SH-G-8 evidence charged the complete headed Job, while its Python diagnostic
   mixed subject-scaled terminal results and short/shared values into queue
   custody. Cause: transport custody, completed artifacts, and whole-runtime
-  containment shared one memory predicate. Closure requires realistic distinct
-  values, one identity-deduplicated replay/subscriber/adapter graph, calibration,
-  a later frozen limit, and an independent holdout. BR-G-45 terminal artifacts
-  and SH-G-15 whole-runtime containment remain separate open gates.
+  containment shared one memory predicate. The separate sizer now reports each
+  replay/subscriber/adapter graph and their identity-deduplicated union while
+  cutting terminal results only on terminal paths. Closure still requires the
+  named realistic corpus, production-path high water, calibration, a later
+  frozen limit, and independent holdout. BR-G-45 and SH-G-15 remain open.
 - MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
   documents delegated exact errors and retry rules to `M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers

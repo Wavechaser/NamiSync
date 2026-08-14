@@ -6,7 +6,10 @@ Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
 existing transport chain through Slice 3 and the post-Slice-3 hardening have
 landed. The fixed 150 ms progress-only linger has landed with focused
 fixed-anchor, non-sliding replacement, immediate-wake, and lifecycle-race
-evidence. Corrected transport-custody evidence remains implementation work.
+evidence. Benchmark/accounting support now provides bounded manifested streams,
+post-exit assembly, direct-Job admission, event/diagnostic result separation,
+and a path-local retained-state sizer. The realistic-corpus transport-custody
+runner, calibration, frozen limit, and holdout remain implementation work.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
 migration is complete. SH-G-8 remains open pending realistic-payload custody
@@ -2527,10 +2530,16 @@ require a later schema-version decision rather than an M1 fallback
    progress-only availability without restarting it for replacement,
    supersession, or retry. Reliable, `Gap`, terminal, recovery, close, and
    supersession wake immediately; 174 focused drain/command/host checks pass.
-   The current short-path 289,147-byte
-   diagnostic does not close realistic-payload custody because it also included
-   terminal records and ran beside the whole-Job sampler. Corrected calibration
-   and independent holdout evidence remain required.
+   The former short-path 289,147-byte diagnostic does not close
+   realistic-payload custody because it included terminal records and ran
+   beside the whole-Job sampler. A separate retained-state sizer now snapshots
+   the real replay, subscriber, and adapter deques under their owner locks,
+   requires two identical structural captures, refuses unknown graph types,
+   reports those three non-additive graphs plus one identity-deduplicated union,
+   and stops at terminal-result subtrees only along terminal paths. It is
+   accounting support, not acceptance evidence: the named realistic corpus,
+   production-path high-water fixture, calibration, frozen limit, and
+   independent holdout remain required.
 
    The standalone `tests/bridge_event_benchmark.py` harness builds and installs
    the archived-HEAD wheel, loads a test-owned benchmark page with the installed
@@ -2538,6 +2547,19 @@ require a later schema-version decision rather than an M1 fallback
    test-only start handshake, runs the same aggregate rates for a real 60
    seconds, and records latency, `Gap`, fixture, runtime, dirty-state, and
    whole-Job diagnostics that may inform, but cannot close, shell-owned SH-G-15.
+   The browser streams bounded sample batches and the producers stream bounded
+   timing batches to SHA-256-manifested sidecars; the measured child retains no
+   growing sample dictionary and performs no repeated full producer-document
+   serialization during the fixture. Final evidence attachment and artifact
+   assembly happen only after the child exits. The actual Python child is
+   assigned directly to the Job before product composition rather than hiding
+   an unmeasured launcher outside it. Whole-Job diagnostics preserve per-PID
+   role/private bytes, sampled thread/handle counts, and membership/topology
+   transitions. They have no acceptance line here: artifact `passed` and
+   `event_passed` describe only the event envelope,
+   `sh_g_8_acceptance` is `incomplete-without-custody`, diagnostic completeness
+   is reported separately, and `whole_runtime_acceptance` is `not-defined`.
+   The former 16 MiB whole-Job ceiling has no pass/fail effect.
    The artifact also
    identifies and enforces the declared Windows build, CPU/core shape, RAM,
    repository NVMe, AC-power state, and declared Python/SQLite plus pinned
@@ -2563,7 +2585,7 @@ require a later schema-version decision rather than an M1 fallback
    sampled 287,506,432 idle-baseline bytes and a 354,881,536-byte peak, a
    67,375,104-byte delta against the 16,777,216-byte ceiling, over 3,006
    fixture samples with a 21.042 ms maximum interval. That conservative
-   overage is intentionally non-diagnostic. It does not measure transport
+   overage is intentionally non-normative. It does not measure transport
    custody and therefore neither passes nor fails realigned SH-G-8. Queue
    capacities and event latency budgets are unchanged; no replacement custody
    ceiling is set by this checkpoint. The
@@ -3294,9 +3316,13 @@ because its local tests are easier.
   **Current status:** the exact logical-time fixture and standalone
   installed-wheel benchmark harness have landed, while the separate
   beyond-envelope overflow regression remains passing. The fixed 150 ms
-  progress-only linger and focused regressions have landed. Realistic-payload
-  custody calibration, a frozen limit, and an independent holdout have not
-  landed. The 2026-08-13 run of
+  progress-only linger and focused regressions have landed. Benchmark evidence
+  is now bounded/streamed and manifest-checked, final assembly is outside the
+  measured child lifetime, event acceptance is independent of diagnostic
+  whole-runtime completeness, and the old 16 MiB line is retired. The
+  path-local retained-state sizer has also landed. Realistic-payload corpus and
+  production-path high-water evidence, custody calibration, a frozen limit,
+  and an independent holdout have not landed. The 2026-08-13 run of
   archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
   event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
   predicates. Its 67,375,104-byte whole-Job delta is not transport-custody

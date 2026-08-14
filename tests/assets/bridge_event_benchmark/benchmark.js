@@ -11,7 +11,8 @@ const samples = [];
 const gaps = [];
 const terminalEventLatencies = [];
 const terminalRecordLatencies = [];
-const SAMPLE_REPORT_BATCH_SIZE = 250;
+const SAMPLE_REPORT_BATCH_SIZE = 100;
+const MAX_PENDING_SAMPLE_REPORTS = 4;
 let reporting = Promise.resolve();
 let failureReported = false;
 let terminalRecords = 0;
@@ -20,6 +21,7 @@ let benchmarkStartedAt = null;
 let reportQueued = 0;
 let reportCompleted = 0;
 let activeReport = null;
+let pendingSampleReports = 0;
 
 
 function isTaskStart(value) {
@@ -34,6 +36,14 @@ function isTaskStart(value) {
 
 
 function enqueueReport(kind, value) {
+  if (kind === "samples") {
+    if (pendingSampleReports >= MAX_PENDING_SAMPLE_REPORTS) {
+      const error = new Error("benchmark sample reporting is saturated");
+      error.benchmarkStage = "report:samples:capacity";
+      throw error;
+    }
+    pendingSampleReports += 1;
+  }
   reportQueued += 1;
   const reportIndex = reportQueued;
   reporting = reporting.then(async () => {
@@ -55,6 +65,9 @@ function enqueueReport(kind, value) {
       throw error;
     } finally {
       activeReport = null;
+      if (kind === "samples") {
+        pendingSampleReports -= 1;
+      }
     }
   });
   return reporting;

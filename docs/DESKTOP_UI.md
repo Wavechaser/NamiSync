@@ -11,8 +11,12 @@ logging privacy. The named browser-behavior witnesses now run through the
 installed production bridge and renderer in real WebView2. Slice 3 evidence
 covers transactional observation, bounded drain behavior, recovery, and
 repeated bridge readiness. The fixed, non-sliding 150 ms progress-only linger
-and its immediate reliable/lifecycle wake regressions have landed. Realigned
-SH-G-8 remains open for calibrated, independently held-out transport custody;
+and its immediate reliable/lifecycle wake regressions have landed. Benchmark
+accounting now streams bounded browser/producer evidence, performs final
+assembly after the child exits, and labels whole-runtime memory as a
+non-acceptance diagnostic; its event pass explicitly cannot close SH-G-8.
+Realigned SH-G-8 remains open for calibrated, independently held-out transport
+custody;
 BR-G-45 separately leaves full terminal-artifact retention open, and
 shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
 earlier whole-Job delta is diagnostic input only, not a result for any of those

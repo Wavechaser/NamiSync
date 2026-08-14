@@ -9,9 +9,11 @@ storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and hardened production
 transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
 authority. The installed real-WebView2 browser witnesses and fixed, non-sliding
-150 ms progress-only linger have landed. SH-G-8's realigned event/custody
-evidence remains open for realistic-payload calibration, a frozen limit, and
-an independent holdout. BR-G-45 terminal-artifact retention and shell-owned
+150 ms progress-only linger have landed. Benchmark accounting now uses bounded
+manifested streams, post-exit assembly, direct-Job child admission, and an
+event-only pass separate from whole-runtime diagnostics. SH-G-8's realigned
+event/custody evidence remains open for realistic-payload calibration, a frozen
+limit, and an independent holdout. BR-G-45 terminal-artifact retention and shell-owned
 SH-G-15 whole-runtime containment remain independently open.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
 visible-sequence, operable-tree, and shell realignment; the user-facing
@@ -450,7 +452,16 @@ infrastructure. Production progress-only drains now use one fixed,
 non-extending 150 ms first-availability deadline capped by the original long
 poll; reliable, `Gap`, terminal, recovery, close, and supersession wake
 immediately. The 174 focused drain/command/host checks pass. Corrected custody
-evidence must deep-size
+support now includes a path-local retained-state sizer that reports replay,
+subscriber, adapter, and identity-deduplicated union graphs without charging
+terminal result subtrees to transport. The installed-wheel harness streams
+bounded SHA-256-manifested browser samples and producer timings, assembles them
+after child exit, and assigns the actual child directly to the Job before
+product composition. Its per-PID role/private-byte and thread/handle/topology
+series remain diagnostic; `passed` is the event-envelope result,
+`sh_g_8_acceptance` remains `incomplete-without-custody`, and whole-runtime
+acceptance remains explicitly undefined. Corrected custody evidence must still
+deep-size
 the identity-deduplicated dispatcher replay, subscriber, and adapter queues
 with distinct realistic path/detail values, then freeze a limit from
 calibration before a later holdout. Terminal result graphs belong to BR-G-45,

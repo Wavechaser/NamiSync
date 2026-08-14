@@ -44,6 +44,16 @@ renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
 four-task logical-time fixture and standalone installed-wheel benchmark harness
 have landed. The fixed, non-sliding 150 ms progress-only linger has also landed
 with focused immediate-wake, lifecycle-race, ordering, and cursor regressions.
+The installed-wheel benchmark now streams bounded browser and producer evidence
+to SHA-256-manifested sidecars, assembles the final artifact only after the
+measured child exits, and reports whole-runtime memory only as a non-acceptance
+diagnostic. Its `passed` field covers the event envelope alone and explicitly
+leaves SH-G-8 incomplete without separate custody evidence. The actual child is
+assigned directly to the Job before product composition, with per-PID
+role/private-byte plus thread/handle/topology diagnostics. A separate
+retained-state sizer reports replay, subscriber, adapter, and
+identity-deduplicated union graphs while cutting terminal-result subtrees only
+along terminal paths.
 Realigned SH-G-8 remains open for realistic-payload transport-custody
 calibration, a frozen limit, and an independent holdout.
 BR-G-45 separately leaves the complete 100,000-subject terminal artifact set

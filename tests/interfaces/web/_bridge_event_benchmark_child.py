@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import hashlib
 import importlib.metadata
 import json
 import sqlite3
 import sys
 import threading
-from collections import deque
-from collections.abc import Mapping
 from contextlib import ExitStack
+from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic, perf_counter, sleep
 from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
+
+
+_SYNCHRONIZE = 0x00100000
+_WAIT_OBJECT_0 = 0
+_WAIT_TIMEOUT = 258
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,12 +34,20 @@ class _Payload:
 class _Recorder:
     def __init__(self, output: Path) -> None:
         self._output = output
+        self._samples_output = output.with_suffix(output.suffix + ".samples.jsonl")
         self._lock = threading.Lock()
+        self._sample_digest = hashlib.sha256()
+        self._sample_batch_count = 0
+        self._sample_count = 0
+        self._producer_timing_digests: dict[int, Any] = {}
+        self._producer_timing_batch_counts: dict[int, int] = {}
+        self._producer_timing_progress_counts: dict[int, int] = {}
+        self._producer_timing_reliable_counts: dict[int, int] = {}
         self._data: dict[str, Any] = {
             "schema_version": 1,
             "complete": False,
+            "producer_streams": {},
             "startup_errors": [],
-            "samples": [],
         }
 
     def set(self, name: str, value: Any) -> None:
@@ -41,15 +55,94 @@ class _Recorder:
             self._data[name] = value
 
     def append_samples(self, samples: list[dict[str, object]]) -> None:
+        if not samples or len(samples) > 100:
+            raise ValueError("benchmark sample batches must contain 1..100 items")
+        encoded = (
+            json.dumps(samples, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
         with self._lock:
-            self._data["samples"].extend(samples)
+            with self._samples_output.open("ab") as stream:
+                stream.write(encoded)
+            self._sample_digest.update(encoded)
+            self._sample_batch_count += 1
+            self._sample_count += len(samples)
 
     def startup_error(self, message: str) -> None:
         with self._lock:
             self._data["startup_errors"].append(message)
 
+    def append_producer_timings(
+        self,
+        task_index: int,
+        *,
+        progress: list[float],
+        reliable: list[float],
+    ) -> None:
+        if not progress or len(progress) > 125 or len(reliable) > 125:
+            raise ValueError(
+                "producer timing batches must contain 1..125 progress items"
+            )
+        encoded = (
+            json.dumps(
+                {"progress": progress, "reliable": reliable},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode("utf-8")
+        path = self._output.with_suffix(
+            self._output.suffix + f".producer-{task_index}.timings.jsonl"
+        )
+        with self._lock:
+            with path.open("ab") as stream:
+                stream.write(encoded)
+            digest = self._producer_timing_digests.setdefault(
+                task_index,
+                hashlib.sha256(),
+            )
+            digest.update(encoded)
+            self._producer_timing_batch_counts[task_index] = (
+                self._producer_timing_batch_counts.get(task_index, 0) + 1
+            )
+            self._producer_timing_progress_counts[task_index] = (
+                self._producer_timing_progress_counts.get(task_index, 0)
+                + len(progress)
+            )
+            self._producer_timing_reliable_counts[task_index] = (
+                self._producer_timing_reliable_counts.get(task_index, 0)
+                + len(reliable)
+            )
+
+    def write_producer(self, task_index: int, value: dict[str, object]) -> None:
+        encoded = (
+            json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        path = self._output.with_suffix(
+            self._output.suffix + f".producer-{task_index}.json"
+        )
+        with self._lock:
+            digest = self._producer_timing_digests.get(task_index)
+            if digest is None:
+                raise RuntimeError("producer timing stream is missing")
+            path.write_bytes(encoded)
+            self._data["producer_streams"][str(task_index)] = {
+                "byte_count": len(encoded),
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+                "timings": {
+                    "batch_count": self._producer_timing_batch_counts[task_index],
+                    "progress_count": self._producer_timing_progress_counts[task_index],
+                    "reliable_count": self._producer_timing_reliable_counts[task_index],
+                    "sha256": digest.hexdigest(),
+                },
+            }
+
     def write(self) -> None:
         with self._lock:
+            self._data["sample_stream"] = {
+                "batch_count": self._sample_batch_count,
+                "sample_count": self._sample_count,
+                "sha256": self._sample_digest.hexdigest(),
+            }
             encoded = json.dumps(self._data, indent=2, sort_keys=True)
             temporary = self._output.with_suffix(self._output.suffix + ".tmp")
             temporary.write_text(encoded, encoding="utf-8")
@@ -100,8 +193,8 @@ class _BenchmarkInvocation:
         first_emission_at: float | None = None
         last_emission_at: float | None = None
         reliable_by_second = [0] * 60
-        progress_emission_offsets_seconds = []
-        reliable_emission_offsets_seconds = []
+        pending_progress_offsets = []
+        pending_reliable_offsets = []
         for tick in range(1_500):
             due = started + (tick * 0.04)
             remaining = due - perf_counter()
@@ -118,7 +211,7 @@ class _BenchmarkInvocation:
                 )
             )
             emitted_at = perf_counter()
-            progress_emission_offsets_seconds.append(emitted_at - started)
+            pending_progress_offsets.append(emitted_at - started)
             progress_emissions += 1
             if first_emission_at is None:
                 first_emission_at = emitted_at
@@ -150,12 +243,20 @@ class _BenchmarkInvocation:
                 reliable_emissions += 1
                 reliable_by_second[second] += 1
                 last_emission_at = perf_counter()
-                reliable_emission_offsets_seconds.append(
+                pending_reliable_offsets.append(
                     last_emission_at - started
                 )
+            if completed % 125 == 0:
+                self._recorder.append_producer_timings(
+                    self._task_index,
+                    progress=pending_progress_offsets,
+                    reliable=pending_reliable_offsets,
+                )
+                pending_progress_offsets = []
+                pending_reliable_offsets = []
         finished_at = perf_counter()
-        self._recorder.set(
-            f"producer_task_{self._task_index}",
+        self._recorder.write_producer(
+            self._task_index,
             {
                 "elapsed_seconds": finished_at - started,
                 "first_emission_offset_seconds": (
@@ -169,17 +270,10 @@ class _BenchmarkInvocation:
                     else None
                 ),
                 "progress_emissions": progress_emissions,
-                "progress_emission_offsets_seconds": (
-                    progress_emission_offsets_seconds
-                ),
                 "reliable_by_second": reliable_by_second,
-                "reliable_emission_offsets_seconds": (
-                    reliable_emission_offsets_seconds
-                ),
                 "reliable_emissions": reliable_emissions,
             },
         )
-        self._recorder.write()
         return OperationResult(
             SessionState.COMPLETED,
             bytes_done=1_500,
@@ -190,119 +284,10 @@ class _BenchmarkInvocation:
         return str(self._task_index).encode("ascii")
 
 
-class _QueueMemorySampler:
-    def __init__(self, dispatcher: object) -> None:
-        self._dispatcher = dispatcher
-        self._registry = None
-        self._stop = threading.Event()
-        self._thread = threading.Thread(
-            target=self._run,
-            name="namisync-bridge-benchmark-memory",
-            daemon=True,
-        )
-        self.peak_bytes = 0
-        self.sample_count = 0
-        self.max_sample_interval_seconds = 0.0
-        self.error: str | None = None
-        self._started = False
-        self._stopped = False
-        self._state_lock = threading.Lock()
-
-    def bind_registry(self, registry: object) -> None:
-        self._registry = registry
-
-    def start(self) -> None:
-        with self._state_lock:
-            if self._started:
-                return
-            self._started = True
-            self._thread.start()
-
-    def stop(self) -> None:
-        with self._state_lock:
-            if not self._started:
-                return
-            if self._stopped:
-                if self.error is not None:
-                    raise RuntimeError(self.error)
-                return
-        self._stop.set()
-        self._thread.join(2)
-        if self._thread.is_alive():
-            raise RuntimeError("Python queue-memory sampler did not stop")
-        self.sample()
-        with self._state_lock:
-            self._stopped = True
-        if self.error is not None:
-            raise RuntimeError(self.error)
-
-    def sample(self) -> None:
-        sizer = _DeepSizer()
-        registry = self._registry
-        if registry is not None:
-            with registry._condition:
-                tasks = tuple(registry._tasks.values())
-            for task in tasks:
-                with task.condition:
-                    sizer.add(task.queue)
-                    sizer.add(task.terminal_record)
-        with self._dispatcher._condition:
-            hubs = tuple(self._dispatcher._hubs.values())
-        for hub in hubs:
-            with hub._lock:
-                sizer.add(hub._replay)
-                streams = tuple(hub._subscribers)
-            for stream in streams:
-                with stream._condition:
-                    sizer.add(stream._items)
-        self.peak_bytes = max(self.peak_bytes, sizer.total)
-        self.sample_count += 1
-
-    def _run(self) -> None:
-        previous = perf_counter()
-        while not self._stop.wait(0.02):
-            sampled_at = perf_counter()
-            self.max_sample_interval_seconds = max(
-                self.max_sample_interval_seconds,
-                sampled_at - previous,
-            )
-            previous = sampled_at
-            try:
-                self.sample()
-            except BaseException as error:
-                self.error = f"{type(error).__name__}: {error}"
-                self._stop.set()
-                return
-
-
-class _DeepSizer:
-    def __init__(self) -> None:
-        self._seen: set[int] = set()
-        self.total = 0
-
-    def add(self, item: object) -> None:
-        identity = id(item)
-        if identity in self._seen:
-            return
-        self._seen.add(identity)
-        self.total += sys.getsizeof(item)
-        if isinstance(item, Mapping):
-            for key, child in item.items():
-                self.add(key)
-                self.add(child)
-            return
-        if isinstance(item, (tuple, list, set, frozenset, deque)):
-            for child in item:
-                self.add(child)
-            return
-        fields = getattr(item, "__dataclass_fields__", None)
-        if fields is not None:
-            for name in fields:
-                self.add(getattr(item, name))
-
-
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--admission-gate", required=True)
+    parser.add_argument("--admission-timeout-ms", required=True, type=int)
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--index", required=True, type=Path)
     parser.add_argument("--mutex", required=True)
@@ -311,11 +296,36 @@ def _arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _wait_for_named_gate(name: str, *, timeout_ms: int) -> bool:
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenEventW.argtypes = (
+        wintypes.DWORD,
+        wintypes.BOOL,
+        wintypes.LPCWSTR,
+    )
+    kernel32.OpenEventW.restype = wintypes.HANDLE
+    kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    handle = kernel32.OpenEventW(_SYNCHRONIZE, False, name)
+    if not handle:
+        return False
+    try:
+        result = int(kernel32.WaitForSingleObject(handle, timeout_ms))
+        if result == _WAIT_OBJECT_0:
+            return True
+        if result == _WAIT_TIMEOUT:
+            return False
+        raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel32.CloseHandle(handle)
+
+
 def _benchmark_specs(
     registry: object,
     roots: tuple[tuple[str, str], ...],
     recorder: _Recorder,
-    sampler: _QueueMemorySampler,
     begin_marker: Path,
     ready_marker: Path,
     report_marker: Path,
@@ -356,7 +366,11 @@ def _benchmark_specs(
             raise CommandPayloadError("benchmark report payload is invalid")
         kind = payload["kind"]
         value = payload["value"]
-        if kind == "samples" and type(value) is list and len(value) <= 250:
+        if (
+            kind == "samples"
+            and type(value) is list
+            and 1 <= len(value) <= 100
+        ):
             for sample in value:
                 if (
                     type(sample) is not dict
@@ -426,23 +440,7 @@ def _benchmark_specs(
             recorder.set("browser_presented", True)
             presented_marker.write_bytes(b"")
             return {"accepted": True}
-        sampler_error = None
-        try:
-            sampler.stop()
-        except BaseException as error:
-            sampler_error = f"{type(error).__name__}: {error}"
         recorder.set("browser", dict(payload.value))
-        recorder.set(
-            "python_queue_memory",
-            {
-                "error": sampler_error or sampler.error,
-                "max_sample_interval_seconds": (
-                    sampler.max_sample_interval_seconds
-                ),
-                "peak_bytes": sampler.peak_bytes,
-                "sample_count": sampler.sample_count,
-            },
-        )
         recorder.set("browser_report_received", True)
         marker = (
             failure_marker
@@ -476,6 +474,11 @@ def _benchmark_specs(
 
 def main() -> int:
     arguments = _arguments()
+    if not _wait_for_named_gate(
+        arguments.admission_gate,
+        timeout_ms=max(1, arguments.admission_timeout_ms),
+    ):
+        return 65
     recorder = _Recorder(arguments.output)
     recorder.set(
         "runtime",
@@ -530,7 +533,6 @@ def main() -> int:
     dispatcher = Dispatcher(
         {PLAN_KIND: WorkflowRegistration(prepare, open_invocation)}
     )
-    sampler = _QueueMemorySampler(dispatcher)
     original_create_service = host._create_service
     original_task_registry = host._task_registry
     original_commands = host._production_commands
@@ -541,10 +543,7 @@ def main() -> int:
             return original_create_service(paths)
 
     def task_registry(service: object) -> object:
-        registry = original_task_registry(service)
-        sampler.bind_registry(registry)
-        sampler.start()
-        return registry
+        return original_task_registry(service)
 
     def commands(*, picker: object, slots: object, registry: object) -> object:
         production = dict(
@@ -556,7 +555,6 @@ def main() -> int:
                 registry,
                 tuple(roots),
                 recorder,
-                sampler,
                 begin_marker,
                 ready_marker,
                 report_marker,
@@ -593,13 +591,6 @@ def main() -> int:
                 index_path=arguments.index,
             )
     finally:
-        try:
-            sampler.stop()
-        except BaseException as error:
-            recorder.set(
-                "sampler_shutdown_error",
-                f"{type(error).__name__}: {error}",
-            )
         recorder.set("exit_code", exit_code)
         recorder.set("complete", True)
         recorder.write()
