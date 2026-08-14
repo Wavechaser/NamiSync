@@ -79,7 +79,8 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "evaluate_js" not in child
     assert "evaluate_js" not in browser
     assert "SAMPLE_REPORT_BATCH_SIZE = 100" in browser
-    assert "MAX_PENDING_SAMPLE_REPORTS = 4" in browser
+    assert "MAX_PENDING_ORDINARY_SAMPLE_REPORTS = 4" in browser
+    assert "MAX_PENDING_SAMPLE_REPORTS = 16" in browser
     assert 'sampleClass === "terminal_event"' in browser
     assert "failure_source:" in browser
     assert "report_completed:" in browser
@@ -100,6 +101,8 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
         'sampleClass === "terminal_event" || sampleClass === "terminal_record"'
     )
     assert terminal_preflush < browser.index("samples.push(sample)")
+    assert browser.count("flushSamples(true)") == 1
+    assert 'sampleClass === "terminal_event" || sampleClass === "terminal_record",' in browser
 
 
 def test_bridge_event_benchmark_assigns_actual_child_before_admission(

@@ -12,7 +12,8 @@ const gaps = [];
 const terminalEventLatencies = [];
 const terminalRecordLatencies = [];
 const SAMPLE_REPORT_BATCH_SIZE = 100;
-const MAX_PENDING_SAMPLE_REPORTS = 4;
+const MAX_PENDING_ORDINARY_SAMPLE_REPORTS = 4;
+const MAX_PENDING_SAMPLE_REPORTS = 16;
 let reporting = Promise.resolve();
 let failureReported = false;
 let terminalRecords = 0;
@@ -22,6 +23,7 @@ let reportQueued = 0;
 let reportCompleted = 0;
 let activeReport = null;
 let pendingSampleReports = 0;
+let pendingOrdinarySampleReports = 0;
 
 
 function isTaskStart(value) {
@@ -35,14 +37,21 @@ function isTaskStart(value) {
 }
 
 
-function enqueueReport(kind, value) {
+function enqueueReport(kind, value, terminalAdjacent = false) {
   if (kind === "samples") {
-    if (pendingSampleReports >= MAX_PENDING_SAMPLE_REPORTS) {
+    if (
+      pendingSampleReports >= MAX_PENDING_SAMPLE_REPORTS ||
+      (!terminalAdjacent &&
+        pendingOrdinarySampleReports >= MAX_PENDING_ORDINARY_SAMPLE_REPORTS)
+    ) {
       const error = new Error("benchmark sample reporting is saturated");
       error.benchmarkStage = "report:samples:capacity";
       throw error;
     }
     pendingSampleReports += 1;
+    if (!terminalAdjacent) {
+      pendingOrdinarySampleReports += 1;
+    }
   }
   reportQueued += 1;
   const reportIndex = reportQueued;
@@ -67,6 +76,9 @@ function enqueueReport(kind, value) {
       activeReport = null;
       if (kind === "samples") {
         pendingSampleReports -= 1;
+        if (!terminalAdjacent) {
+          pendingOrdinarySampleReports -= 1;
+        }
       }
     }
   });
@@ -74,11 +86,15 @@ function enqueueReport(kind, value) {
 }
 
 
-function flushSamples() {
+function flushSamples(terminalAdjacent = false) {
   if (samples.length === 0) {
     return;
   }
-  enqueueReport("samples", samples.splice(0, samples.length));
+  enqueueReport(
+    "samples",
+    samples.splice(0, samples.length),
+    terminalAdjacent,
+  );
 }
 
 
@@ -162,7 +178,7 @@ function recordSample(sampleClass, update) {
     sequence: event?.sequence ?? null,
   };
   if (sampleClass === "terminal_event" || sampleClass === "terminal_record") {
-    flushSamples();
+    flushSamples(true);
   }
   samples.push(sample);
   if (sampleClass === "terminal_event") {
@@ -176,7 +192,9 @@ function recordSample(sampleClass, update) {
     sampleClass === "terminal_event" ||
     sampleClass === "terminal_record"
   ) {
-    flushSamples();
+    flushSamples(
+      sampleClass === "terminal_event" || sampleClass === "terminal_record",
+    );
   }
 }
 

@@ -556,6 +556,13 @@ defect, and move implementation-level test choreography out of the log.
   pre-composition direct-Job child admission, and per-PID role/private-byte plus
   thread/handle/topology diagnostics. Event acceptance is now independent of
   diagnostic completeness; whole-runtime acceptance remains undefined.
+- MODERATE - FIXED (2026-08-14). Terminal evidence burst refusal. The bounded
+  browser reporter reserved only four pending sample batches, so four tasks
+  reaching terminal together could fill that allowance with ordinary reports
+  and make a valid terminal callback throw before presentation. Fixed by
+  retaining the four-batch ordinary limit while reserving a separately bounded
+  16-batch total for the known terminal-adjacent burst; terminal reports remain
+  isolated below bridge ingress size and cannot be mistaken for product loss.
 - MODERATE - OPEN (2026-08-14). Invalid transport-custody attribution. The old
   SH-G-8 evidence charged the complete headed Job, while its Python diagnostic
   mixed subject-scaled terminal results and short/shared values into queue
