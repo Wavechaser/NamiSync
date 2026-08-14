@@ -22,10 +22,12 @@ and reports per-PID/runtime resources only as non-acceptance diagnostics.
 The frozen/disjoint realistic custody corpora and production-path runner have
 also landed, including exact real-deque 128/64/64 no-`Gap`, terminal path-cut,
 cleanup, and clean source/dependency/runtime/digest-authority witnesses. The
-runner makes no acceptance decision. The committed calibration-a artifact records
+committed calibration-a artifact records
 normative ordinary/exact-maximum transport measurements, and the separate
-contract freezes the 1,966,080-byte ceiling. Realigned SH-G-8 remains open only
-for independent holdout-b;
+contract freezes the 1,966,080-byte ceiling. Three fresh holdout-b runs then
+pass at 1,351,794 ordinary and 1,513,014 exact-maximum bytes. Realigned SH-G-8
+and BR-G-42 event/transport custody are closed; other BR-G-42 rows remain on
+their owning slices.
 BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
 completed-task retention open, while shell-owned SH-G-15 leaves version-bound
 whole-runtime containment open. The earlier whole-Job delta is diagnostic input
@@ -1118,8 +1120,9 @@ production-path runner now prove the exact real-deque 128/64/64 no-`Gap` shape,
 ordered cleanup, terminal cut, and clean source/dependency/runtime authority.
 The committed calibration-a artifact supplies the normative transport
 measurement, and the separate contract freezes the 1,966,080-byte ceiling.
-SH-G-8's realigned BR-G-42 custody clause remains open only until independent
-holdout-b lands.
+Independent holdout-b passes under the frozen authorities, closing SH-G-8 and
+BR-G-42 event/transport custody only. Other BR-G-42 rows remain open on their
+owning slices.
 BR-G-45's terminal-artifact retention policy and
 SH-G-15's version-bound whole-runtime calibration/holdouts remain independently
 open; the 2026-08-13 whole-Job delta closes none of them.

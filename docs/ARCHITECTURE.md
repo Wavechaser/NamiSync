@@ -2245,11 +2245,17 @@ maximum no-`Gap` snapshot. Its predeclared 25-percent
 headroom/65,536-byte-round-up rule is now frozen by
 `tests/interfaces/web/sh_g_8_transport_ceiling.json` as a 1,966,080-byte
 (1.875 MiB) ceiling. The contract pins the validator-owning test file to Git
-blob `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`; holdout work must use a new test
-file. Acceptance requires three fresh valid holdout-b runs under the exact
+blob `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`; the new holdout witness leaves
+that file unchanged. Acceptance requires three fresh valid holdout-b runs under the exact
 frozen authorities with both ordinary and exact-maximum union measurements at
-or below the ceiling. SH-G-8 still requires that independent holdout-b; no
-acceptance result exists. The harness still supplies useful
+or below the ceiling. The accepted
+`tests/interfaces/web/sh_g_8_transport_holdout.json` dataset provides those
+three runs under the frozen authorities: 1,351,794 ordinary and 1,513,014
+exact-maximum bytes, respectively 614,286 and 453,066 bytes below the ceiling.
+Its no-`Gap`, ordering, 128/64/64 custody, cleanup, and terminal predicates also
+pass. This closes SH-G-8 and BR-G-42's event/transport-custody predicate only;
+other BR-G-42 rows remain on their owning slices. BR-G-45 terminal-artifact
+retention and SH-G-15 whole-runtime containment remain open. The harness still supplies useful
 event and diagnostic data. Its valid 2026-08-13 run passed event truth,
 ordering, latency, no-`Gap`, and clean exit.
 Its 67,375,104-byte whole-Job delta is not a transport-custody measurement and

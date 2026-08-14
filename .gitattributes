@@ -1,0 +1,6 @@
+/tests/bridge_transport_custody.py text eol=lf
+/tests/interfaces/web/test_bridge_transport_custody.py text eol=lf
+/tests/interfaces/web/test_bridge_transport_custody_holdout.py text eol=lf
+/tests/interfaces/web/sh_g_8_transport_calibration.json text eol=crlf
+/tests/interfaces/web/sh_g_8_transport_ceiling.json text eol=lf
+/tests/interfaces/web/sh_g_8_transport_holdout.json text eol=crlf

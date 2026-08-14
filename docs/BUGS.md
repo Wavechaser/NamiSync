@@ -563,21 +563,19 @@ defect, and move implementation-level test choreography out of the log.
   retaining the four-batch ordinary limit while reserving a separately bounded
   16-batch total for the known terminal-adjacent burst; terminal reports remain
   isolated below bridge ingress size and cannot be mistaken for product loss.
-- MODERATE - OPEN (2026-08-14). Invalid transport-custody attribution. The old
+- MODERATE - FIXED (2026-08-14). Invalid transport-custody attribution. The old
   SH-G-8 evidence charged the complete headed Job, while its Python diagnostic
   mixed subject-scaled terminal results and short/shared values into queue
   custody. Cause: transport custody, completed artifacts, and whole-runtime
-  containment shared one memory predicate. The separate sizer now reports each
-  replay/subscriber/adapter graph and their identity-deduplicated union while
-  cutting terminal results only on terminal paths. Frozen/disjoint realistic
-  corpora and a production-path three-fresh-process runner now prove the real
-  built-in queue roots, exact 128/64/64 no-`Gap` shape, terminal cut, cleanup,
-  and clean source/dependency/runtime/digest authority. The committed
-  calibration-a artifact records 1,376,690 ordinary and 1,534,946 exact-maximum
-  transport bytes; the separate contract freezes a 1,966,080-byte ceiling by
-  the predeclared integer 5/4 and 65,536-byte round-up. Closure now requires
-  only an independent three-fresh-process holdout-b with both measurements at
-  or below that ceiling. BR-G-45 and SH-G-15 remain open.
+  containment shared one memory predicate. Fixed with path-local,
+  identity-deduplicated queue sizing, disjoint realistic corpora, and real
+  production-deque calibration/holdout runs. The independent three-process
+  holdout passed at 1,351,794 ordinary and 1,513,014 exact-maximum bytes against
+  the frozen 1,966,080-byte ceiling, with exact source/runtime/dependency
+  authority plus no-`Gap`, ordering, 128/64/64, cleanup, and terminal truth.
+  This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45
+  terminal-artifact retention and SH-G-15 whole-runtime containment remain
+  open and untested by this evidence.
 - MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
   documents delegated exact errors and retry rules to `M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers
@@ -587,8 +585,8 @@ defect, and move implementation-level test choreography out of the log.
   seam. Fixed by making `M1_BRIDGE.md` the sole bridge/BR-G authority, reducing
   `M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
   and status. Numeric-hole, `start_plan`, and installed real-WebView2 browser
-  witnesses have landed. Realigned SH-G-8 remains explicitly open under the
-  later transport-custody contract rather than the former whole-Job predicate.
+  witnesses have landed. Realigned SH-G-8 later closed under its separate
+  transport-custody contract rather than the former whole-Job predicate.
 - SEVERE - FIXED (2026-08-13). Appearance authority was retired during task
   quiescence before `service.close()` proved terminal completion. An incomplete
   or exceptional close correctly leaves the window open for retry but silently

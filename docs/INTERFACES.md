@@ -14,8 +14,9 @@ manifested streams, post-exit assembly, direct-Job child admission, and an
 event-only pass separate from whole-runtime diagnostics. The frozen realistic
 custody corpora and production-path runner have also landed. SH-G-8's realigned
 event/custody evidence now includes a committed normative calibration-a
-artifact plus a frozen 1,966,080-byte ceiling, and remains open only for
-independent holdout-b.
+artifact, a frozen 1,966,080-byte ceiling, and an accepted independent
+holdout-b dataset. SH-G-8 and BR-G-42 event/transport custody are closed; other
+BR-G-42 feature rows remain on their owning slices.
 BR-G-45 terminal-artifact
 retention and shell-owned SH-G-15 whole-runtime containment remain independently
 open.
@@ -444,8 +445,8 @@ The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
 alone are not recovery signals. Browserless/Node probes remain supplemental;
 the named browser-behavior witnesses now run through the installed production
-bridge and renderer in real WebView2. SH-G-8 remains open until the complete
-BR-G-42 event-custody evidence passes. The ordinary deterministic fixture now
+bridge and renderer in real WebView2. SH-G-8 and BR-G-42 event/transport
+custody are now closed by the complete evidence below. The ordinary deterministic fixture now
 proves four observations precede tick zero, the exact 60-logical-second
 6,000-`Progress`/600-reliable-item shape is lossless and ordered, progress is
 monotonic after coalescing, all four terminal records arrive, and subscriber and
@@ -463,9 +464,10 @@ terminal result subtrees to transport. The installed-wheel harness streams
 bounded SHA-256-manifested browser samples and producer timings, assembles them
 after child exit, and assigns the actual child directly to the Job before
 product composition. Its per-PID role/private-byte and thread/handle/topology
-series remain diagnostic; `passed` is the event-envelope result,
-`sh_g_8_acceptance` remains `incomplete-without-custody`, and whole-runtime
-acceptance remains explicitly undefined. The frozen
+series remain diagnostic; `passed` is the event-envelope result and its local
+`sh_g_8_acceptance` remains `incomplete-without-custody`, so that artifact is
+not the separate custody closure authority. Whole-runtime acceptance remains
+explicitly undefined. The frozen
 `sh-g-8-transport-v1` calibration-a/holdout-b corpora drive the real built-in
 dispatcher replay, subscriber, and adapter deques through
 `Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. The
@@ -476,14 +478,20 @@ source and instrument authority, an isolated `-I -S` parent, safe-path `-P -S`
 children, fresh out-of-tree bytecode caches, hashed active-venv `xxhash`
 dependencies, stable qualifier hashes, and an external exact-schema receipt. Its predeclared
 headroom rule is now mechanically frozen by a separate ceiling contract; the
-runner makes no acceptance decision.
+runner does not itself decide acceptance, while the independent holdout below
+does.
 The committed `tests/interfaces/web/sh_g_8_transport_calibration.json` artifact
 now records the normative calibration-a union measurements: 1,376,690 bytes /
 4,890 objects ordinary and 1,534,946 bytes / 5,499 objects at the exact maximum
 no-`Gap` snapshot. The committed
 `tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
-1,966,080-byte (1.875 MiB) ceiling. Independent holdout-b remains required.
-Terminal result graphs belong to BR-G-45, not that
+1,966,080-byte (1.875 MiB) ceiling. The accepted
+`tests/interfaces/web/sh_g_8_transport_holdout.json` artifact records 1,351,794
+ordinary and 1,513,014 exact-maximum bytes, respectively 614,286 and 453,066
+bytes below the ceiling. Its three fresh runs match the frozen authorities and
+pass the no-`Gap`, ordering, 128/64/64, cleanup, and terminal predicates. This
+closes SH-G-8 and BR-G-42 event/transport custody only. Terminal result graphs
+belong to BR-G-45, not that
 custody total. A valid 2026-08-13 run passed its exact event, latency,
 no-`Gap`, and clean-shutdown checks and measured a 67,375,104-byte whole-Job
 delta, but that value neither passes nor fails realigned SH-G-8 or SH-G-15.
@@ -493,8 +501,8 @@ The clean-commit custody calibration reproduction command is
 the durable artifact was generated from tested commit
 `56c50b43dc19090ad33af031891503bfec80599b`. It is a normative calibration
 measurement; the separate ceiling contract supplies the byte limit. Acceptance
-still requires three fresh valid holdout-b runs under the exact authorities,
-with both ordinary and exact-maximum union measurements at or below the
+was then established by three fresh valid holdout-b runs under the exact
+authorities, with both ordinary and exact-maximum union measurements below the
 ceiling. No containment command/result is claimed yet.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,

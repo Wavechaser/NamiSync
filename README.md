@@ -48,7 +48,8 @@ The installed-wheel benchmark now streams bounded browser and producer evidence
 to SHA-256-manifested sidecars, assembles the final artifact only after the
 measured child exits, and reports whole-runtime memory only as a non-acceptance
 diagnostic. Its `passed` field covers the event envelope alone and explicitly
-leaves SH-G-8 incomplete without separate custody evidence. The actual child is
+does not stand in for custody evidence. The separate accepted custody evidence
+below closes SH-G-8. The actual child is
 assigned directly to the Job before product composition, with per-PID
 role/private-byte plus thread/handle/topology diagnostics. A separate
 retained-state sizer reports replay, subscriber, adapter, and
@@ -62,7 +63,9 @@ bind three fresh-process artifacts to clean committed source, an isolated
 external digest receipt. Realigned BR-G-42
 event-custody and SH-G-8 now have a committed calibration-a artifact and
 normative transport measurement plus a mechanically frozen 1,966,080-byte
-(1.875 MiB) ceiling. They remain open only for an independent holdout-b run.
+(1.875 MiB) ceiling. The independent holdout-b dataset passed, closing SH-G-8
+and BR-G-42's event/transport-custody predicate. Other BR-G-42 feature rows
+remain on their owning slices.
 BR-G-45 separately leaves the complete 100,000-subject terminal artifact set
 and aggregate completed-task retention policy open. Shell-owned SH-G-15
 separately leaves version-bound absolute cold/settled and repeated/long warm
@@ -75,8 +78,10 @@ predicates. The durable
 no-`Gap` union from clean commit
 `56c50b43dc19090ad33af031891503bfec80599b`. The separate
 `tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
-1,966,080-byte ceiling by integer 5/4 headroom and 65,536-byte round-up. No
-acceptance or holdout result is claimed yet.
+1,966,080-byte ceiling by integer 5/4 headroom and 65,536-byte round-up. The
+accepted `tests/interfaces/web/sh_g_8_transport_holdout.json` artifact records
+1,351,794 ordinary and 1,513,014 exact-maximum no-`Gap` bytes, leaving 614,286
+and 453,066 bytes of margin respectively.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -178,6 +183,20 @@ never hides the other result axes in rendered output.
   harness and deterministic corpus generator.
 
 ## Changelog
+
+### M1 Stage 6 - SH-G-8 Transport Custody Closure
+
+- Closed SH-G-8 and BR-G-42's event/transport-custody predicate against the
+  production queue path; other BR-G-42 feature rows remain on their owning
+  slices.
+  - **Bounded custody:** calibration fixed the realistic corpus, a separate
+    commit froze the 1,966,080-byte limit, and three fresh holdout-b runs passed
+    at 1,351,794 ordinary and 1,513,014 exact-maximum bytes.
+  - **Correctness and authority:** no-`Gap`, ordering, 128/64/64 custody,
+    cleanup, terminal truth, clean-commit hashes, and the frozen real-Git
+    validator passed in the 62-test custody suite.
+  - **Residual scale:** BR-G-45 terminal-result retention and SH-G-15 headed
+    cold/warm containment remain open and untested by this closure.
 
 ### M1 Stage 6 - Early Shell Realignment Hardening
 
