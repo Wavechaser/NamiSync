@@ -163,6 +163,43 @@ their contract, and update the matching tests and documentation when it does.
   brittle assumptions, security risks, hidden edge cases, and unnecessary
   complexity.
 
+## Measurement Authority
+
+- Classify every empirical quantitative claim before building its evidence.
+  **Tier 0** is a reasoned target and never closes a gate. **Tier 1** is a
+  current-source live drift guard against an already accepted invariant and is
+  not acceptance evidence. **Tier 2** is named-reference acceptance for an independently
+  predeclared budget: exact fixture, profile, statistic, run count, committed
+  raw evidence, and a separate validator. **Tier 3** is protected authority.
+- Tier 3 is required when calibration derives a release ceiling, release-gating
+  acceptance authority failed or was invalidated, an empirical number without
+  an analytical bound closes a cross-slice user-operation gate, or an
+  unversioned runtime-dependent result would otherwise become a release limit.
+  Use the lowest sufficient tier for every other number; compatible Tier 2
+  measurements may share one vertical-slice harness. An analytical or source-
+  derived bound may close outside the empirical tiers only when it is derived
+  entirely from enforced production maxima over the complete admitted domain
+  and every assumption is a checked invariant. Any sampled allocator, runtime,
+  or environment term makes the claim empirical.
+- Empirical Tier 3 requires disjoint calibration and holdout data, derivation,
+  rounding, headroom, and fresh-process count committed before holdout;
+  verdict-free raw artifacts; exact source, instrument, fixture, runtime, and
+  dependency authority plus immutable validator/contract blob identity; and
+  fail-closed unknown-input handling.
+  Calibration never validates its own limit, and a frozen limit is never
+  retuned after holdout. Accepted contracts, validators, and artifacts are
+  append/version-only rather than edited in place.
+- A deterministic semantic Tier 3 may instead use an independently authored
+  oracle, a protected committed baseline, and the declared number of identical
+  normalized runs. The executor settlement oracle is this form.
+- Every measured quantity names its roots, scaling axes, aggregation/retention
+  policy, tier, artifacts, and rerun/version trigger in the owning component
+  authority. Before accepting a new or changed retained-memory representation,
+  its corpus must classify every retained dataclass field and reachable mapping
+  family/key as populated at its declared envelope or intentionally absent/non-
+  retained. An unclassified representation change invalidates that acceptance
+  evidence.
+
 ## Commit Readiness
 
 - Before any future commit, review whether the relevant files under `docs/`,

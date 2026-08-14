@@ -114,6 +114,29 @@ and release evidence. The split does not weaken queue capacities, ordering,
 `Gap`, terminal reconciliation, terminal-session release, or explicit task
 close.
 
+## Measurement Authority Ratification
+
+- `AGENTS.md` now distinguishes Tier 0 reasoned targets, Tier 1 current-source
+  drift guards, Tier 2 named-reference acceptance, and Tier 3 protected
+  authority. Use the lowest sufficient tier; a test at one tier never promotes
+  an unrelated timing or memory claim.
+- Empirical Tier 3 freezes disjoint calibration/holdout, derivation, rounding,
+  headroom, run count, and exact authorities before holdout; raw artifacts carry
+  no verdict and accepted authority is append/version-only. The executor
+  settlement oracle is the deterministic-semantic sibling: independent in-code
+  truth, protected committed baseline, and three identical normalized runs.
+- `M1_BRIDGE.md` now labels every performance row. Most Slice 5-7 values remain
+  Tier 0 reasoned targets awaiting a shared vertical-slice Tier 2 artifact. The
+  current drain-latency rows have Tier 1 behavior plus historical
+  characterization but still need current-source Tier 2 measurement after the
+  linger change. Transport custody alone has Tier 3 acceptance plus its Tier 1
+  live guard; BR-G-45 and SH-G-15 still require Tier 3.
+- Shared empirical-authority code is deliberately not extracted from the
+  accepted SH-G-8 paths. When BR-G-45 or SH-G-15 becomes the second consumer,
+  extract only artifact/schema/digest, process-isolation, receipt, and frozen-
+  contract mechanics into `tools`; keep corpora, roots, statistics, scaling
+  axes, aggregation, and component validators local.
+
 ## Prior Reference Run, Reclassified
 
 The valid 2026-08-13 run tested archived commit
@@ -293,6 +316,9 @@ from one duration.
 - Broader verification: the focused closure selection passed 133 tests; the
   non-headed, non-supplemental suite passed 2,273 with 2 skipped and 34
   deselected.
+- Two independent read-only adversarial reviews of the measurement-authority
+  ratification found no remaining escalation, analytical-bypass, ownership,
+  status-scope, or evidence-classification blocker.
 - Active-doc contradiction search found no stale runner/corpus, runtime-command,
   warning-family, measurement, limit, or gate-status claim; `git diff --check`
   is clean.
@@ -309,4 +335,6 @@ the one-child smoke nor the old 67,375,104-byte whole-Job delta supplies an
 SH-G-15 limit or BR-G-45 evidence. Preserve explicit
 terminal-session-release versus task-close authority while designing aggregate
 terminal retention. BR-G-45 and SH-G-15 remain open until their own frozen
-holdout evidence exists.
+holdout evidence exists. Apply the ratified authority tier before measuring any
+remaining BR-G-42 row; reasoned targets do not become release evidence merely
+because a nearby deterministic test passes.

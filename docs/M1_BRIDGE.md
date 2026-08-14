@@ -2479,26 +2479,35 @@ require a later schema-version decision rather than an M1 fallback
    | Projection retention | Six populated 120,000-node inventory projections, then a seventh view to exercise LRU eviction |
    | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
 
-   | Measurement on the reference profile | Ceiling |
-   | --- | --- |
-   | Local pending/disabled feedback after a critical click | 50 ms maximum |
-   | Typed facade receipt for execute, pause/resume/cancel, or one-row acknowledge/restore, excluding admitted work | 100 ms p95; 250 ms maximum |
-   | Admission that freezes/normalizes the full 100,000-subject scope (folder refresh/integrity or multi-row visibility) | 500 ms p95; 1 s maximum |
-   | Reliable/terminal bridge delivery under the event fixture | 100 ms p95; 250 ms maximum; no `Gap` |
-   | Replaceable progress delivery under the event fixture | 1 s p95; 2 s maximum; monotonic and ordered after coalescing |
-   | Cold 120,000-node plan projection build | 2 s maximum |
-   | Cold 120,000-node inventory slim-projection build | 3 s maximum |
-   | Unchanged-parameter 256-row plan/inventory window | 250 ms p95; 500 ms maximum |
-   | Changed collapse/filter/search visible sequence plus 256-row window | 750 ms p95; 1.5 s maximum |
-   | `preview_selection` over the plan fixture at depth 32 | 500 ms p95; 1 s maximum |
-   | Fifty-run / 1,000,000-item history summary | 3 s maximum |
-   | 256-row history detail window | 500 ms p95; 1 s maximum |
-   | Incremental plan projection memory | 128 MiB maximum |
-   | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
-   | Identity-deduplicated bridge transport custody under the event fixture | CLOSED: three fresh holdout-b runs passed the 1,966,080-byte ceiling and frozen authorities |
-   | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | OPEN under BR-G-45; per-completion and aggregate ceilings are separate |
+   | Measurement on the reference profile | Ceiling | Authority status |
+   | --- | --- | --- |
+   | Local pending/disabled feedback after a critical click | 50 ms maximum | Tier 0 reasoned target; Tier 2 reference acceptance required in the owning slice |
+   | Typed facade receipt for execute, pause/resume/cancel, or one-row acknowledge/restore, excluding admitted work | 100 ms p95; 250 ms maximum | Tier 0 reasoned target; Tier 2 reference acceptance required in the owning slice |
+   | Admission that freezes/normalizes the full 100,000-subject scope (folder refresh/integrity or multi-row visibility) | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 reference acceptance required in the owning slice |
+   | Reliable/terminal bridge delivery under the event fixture | 100 ms p95; 250 ms maximum; no `Gap` | Tier 1 ordering/delivery behavior only, not latency-ceiling evidence; current-source Tier 2 timing acceptance pending after the linger change |
+   | Replaceable progress delivery under the event fixture | 1 s p95; 2 s maximum; monotonic and ordered after coalescing | Tier 1 coalescing/cadence behavior only, not latency-ceiling evidence; current-source Tier 2 timing acceptance pending after the linger change |
+   | Cold 120,000-node plan projection build | 2 s maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required |
+   | Cold 120,000-node inventory slim-projection build | 3 s maximum | Tier 0 reasoned target; Tier 2 Slice 6 reference acceptance required |
+   | Unchanged-parameter 256-row plan/inventory window | 250 ms p95; 500 ms maximum | Tier 0 reasoned target; Tier 2 Slice 5/6 reference acceptance required |
+   | Changed collapse/filter/search visible sequence plus 256-row window | 750 ms p95; 1.5 s maximum | Tier 0 reasoned target; Tier 2 Slice 5/6 reference acceptance required |
+   | `preview_selection` over the plan fixture at depth 32 | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required |
+   | Fifty-run / 1,000,000-item history summary | 3 s maximum | Tier 0 reasoned target; Tier 2 Slice 7 reference acceptance required |
+   | 256-row history detail window | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 Slice 7 reference acceptance required |
+   | Incremental plan projection memory | 128 MiB maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required, escalating under repository Tier 3 triggers |
+   | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six | Tier 0 reasoned target; Tier 2 Slice 6 reference acceptance required, escalating under repository Tier 3 triggers |
+   | Identity-deduplicated bridge transport custody under the event fixture | 1,966,080 bytes | Tier 3 accepted by frozen calibration/holdout authority; Tier 1 current-source drift guard active |
+   | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | Ceilings not yet derived | Tier 0 contract shape; Tier 3 required by BR-G-45 |
 
-   **BR-G-42 event/transport-custody definition (required by SH-G-8; REALIGNED, CLOSED).**
+   Tier 0 rows above are design targets, not measured closure evidence. A
+   deterministic count, shape, serializer, or behavioral test does not promote
+   a timing or memory row. Compatible Tier 2 rows may share one reference
+   artifact in their owning vertical slice rather than building one harness per
+   number. The 2026-08-13 event artifact remains useful historical
+   characterization, but the later 150 ms linger changed current-source timing;
+   reliable/terminal and progress latency therefore still need Tier 2 evidence.
+   `AGENTS.md` owns escalation to Tier 3.
+
+   **BR-G-42 event-correctness/transport-custody definition (required by SH-G-8; REALIGNED; SH-G-8 SCOPE CLOSED, CURRENT-SOURCE LATENCY ACCEPTANCE OPEN).**
    Transport custody
    includes only the live dispatcher replay deques, subscriber deques, and
    adapter task queues, measured as one identity-deduplicated deep Python graph.
@@ -2554,7 +2563,7 @@ require a later schema-version decision rather than an M1 fallback
    Payload-byte totals and complete-process memory are invalid substitutes for
    retained transport custody.
 
-   **BR-G-42 event/transport custody / SH-G-8 evidence status (REALIGNED, CLOSED, 2026-08-14).** The deterministic ordinary
+   **BR-G-42 event-correctness/transport custody / SH-G-8 evidence status (REALIGNED; SH-G-8 SCOPE CLOSED, CURRENT-SOURCE LATENCY ACCEPTANCE OPEN; 2026-08-14).** The deterministic ordinary
    fixture now drives four simultaneous tasks through 60 logical seconds with
    exactly 6,000 `Progress` emissions, 600 reliable item emissions, and terminal
    truth for every task. It proves every observer is attached before tick zero,

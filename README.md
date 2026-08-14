@@ -184,10 +184,24 @@ never hides the other result axes in rendered output.
   [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
   [Handoff](docs/HANDOFF.md) — present and future scope, known issues, and session context.
-- [Development tools](docs/TOOLS.md) — the `tools` executor/verifier measurement
-  harness and deterministic corpus generator.
+- [Development tools](docs/TOOLS.md) — measurement tooling, the
+  executor/verifier harness, deterministic corpora, and the settlement oracle.
 
 ## Changelog
+
+### Cross-cutting Measurement Authority Ratification
+
+- Ratified four evidence tiers so reasoned targets, live drift guards,
+  named-reference acceptance, and frozen release authority cannot substitute
+  for one another.
+  - **Escalation:** failed or calibration-derived release limits require
+    disjoint calibration/holdout, a pre-frozen derivation, verdict-free raw
+    artifacts, exact authorities, fresh processes, and fail-closed validation.
+  - **Existing authority:** the executor settlement oracle is the deterministic
+    semantic sibling; SH-G-8 is the empirical model plus a live drift guard.
+  - **Cost control:** compatible Tier 2 metrics share vertical-slice artifacts;
+    shared tooling waits for a second empirical Tier 3 consumer while domain
+    corpora, roots, statistics, and aggregate policy stay local.
 
 ### M1 Stage 6 - SH-G-8 Closure Hardening
 

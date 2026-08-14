@@ -2363,6 +2363,52 @@ desktop surfaces, and other interfaces behind the same facade.
 14. **Explicit compound continuation** — execute/verify phase, published
     evidence, candidates, and completed readback state are serialized facts;
     phase is never inferred from prior events.
+15. **Evidence authority matches the claim** — a reasoned target, live drift
+    guard, named-reference result, and frozen release authority are distinct;
+    none is promoted by wording or by reusing another tier's test.
+
+### 5.1 Measurement acceptance authority
+
+Quantitative acceptance separates observation from judgment. An instrument
+emits exact observations and refuses unknown shapes; it does not know the
+ceiling or write a pass verdict into raw evidence. The owning contract names the
+fixture, reference profile, statistic, scaling axes, root set, aggregate or
+retention policy, authority tier, and rerun/version trigger. A separate
+validator applies the independently declared budget.
+
+Empirical claims use the four tiers in `AGENTS.md`: Tier 0 reasoned target,
+Tier 1 current-source drift guard, Tier 2 named-reference acceptance, and Tier 3
+protected authority. Tier 3 empirical numbers use disjoint calibration and
+holdout data with a frozen pre-holdout derivation; deterministic semantic gates
+use an independent oracle, protected baseline, and repeated identical normalized
+traces instead. The executor settlement oracle is the semantic form. Accepted
+contracts, validators, and raw artifacts are append/version-only. Analytical or
+source-derived numeric bounds close outside those tiers only when enforced
+production maxima cover the complete admitted domain and every assumption is a
+checked invariant; sampled allocator, runtime, or environment terms remain
+empirical.
+
+Memory authorities never combine incompatible scaling axes merely because one
+instrument can reach them. Transport custody, subject-scaled terminal results,
+projection retention, and complete runtime containment have separate roots and
+policies. Prefer analytical source bounds, compact shared identities, paging,
+and out-of-line detail over broad heap gates when those designs preserve full
+operation truth. Before a new or changed retained representation is accepted,
+its corpus must populate or explicitly classify every retained dataclass field
+and reachable mapping family/key. An unclassified change invalidates the new
+evidence even when its default value happens to be small.
+
+The authority registry is pointer-only so it cannot become a competing status
+ledger:
+
+| Authority | Form | Owning authority |
+| --- | --- | --- |
+| Executor settlement | Tier 3 deterministic semantic | `docs/TOOLS.md` |
+| BR-G-42 / SH-G-8 transport custody | Tier 3 empirical plus Tier 1 live drift | `M1_BRIDGE.md` |
+| BR-G-42 event latency | Tier 1 behavior advancing to Tier 2 timing acceptance | `M1_BRIDGE.md` |
+| Remaining BR-G-42 performance rows | Tier 0 targets advancing to Tier 2 in their owning slice | `M1_BRIDGE.md` |
+| BR-G-45 terminal artifacts | Tier 0 contract advancing to Tier 3 | `M1_BRIDGE.md` |
+| SH-G-15 whole-runtime containment | Version-bound Tier 0 contract advancing to Tier 3 | `M1_SHELL.md` |
 
 ---
 

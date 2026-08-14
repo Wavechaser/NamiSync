@@ -1028,6 +1028,9 @@ carry the `headed` marker; all are collected by the release command.
   measured child, choosing a limit from its own holdout, treating calibration
   as validation, dropping thread/handle/topology growth, or silently carrying a
   pass across a version change.
+  Under `AGENTS.md` measurement authority this is a version-bound empirical
+  Tier 3 gate. Tier 0 reasoned targets or diagnostic whole-Job runs may guide
+  design, but cannot close it.
 
 SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
 themes with contrast, Mica apply/degrade, and reduced-motion with the motion

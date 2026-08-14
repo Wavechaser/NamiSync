@@ -5,6 +5,22 @@ harness plus its deterministic corpus generator. Run it with
 `python -m tools`. It is outside the shipped `namisync` package, but its safety
 and result-validation behavior is covered by pytest.
 
+## Measurement authority
+
+`AGENTS.md` is the sole normative definition of the repository's measurement
+tiers and escalation rules. Development tools declare which tier they serve,
+keep observation separate from verdict, and refuse input shapes they cannot
+account for. Compatible Tier 2 measurements may share one vertical-slice
+harness; structural count tests or serializer round trips do not promote a
+timing or memory target.
+
+The existing SH-G-8 files remain frozen in place. When BR-G-45 or SH-G-15
+becomes the second empirical Tier 3 consumer, shared `tools` support may extract
+only canonical artifact/schema/digest checks, process isolation, source/runtime
+receipts, verdict exclusion, and frozen-contract validation. Corpus generation,
+root selection, measurement statistic, scaling axes, aggregate policy, and the
+component validator remain component-owned.
+
 ## Boundary
 
 The harness replaces the workflow and persistence edges while keeping the
@@ -40,6 +56,12 @@ retry, cancellation, cleanup, and recording outcomes. It imports the executor
 only through the public `namisync.modules.executor` facade and does not import
 planner, scanner, preflight, workflow composition, tests, or executor-private
 symbols.
+
+This is the deterministic-semantic Tier 3 form: the in-code oracle declares
+expected truth independently, the committed baseline protects the complete
+observed trace, and three fresh normalized runs must be identical. Numeric
+calibration, headroom, and holdout are inapplicable; the common discipline is
+protected observations plus independently declared acceptance.
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools.executor_settlement_audit list
