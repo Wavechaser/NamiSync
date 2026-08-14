@@ -588,7 +588,8 @@ installed WebView2 composition; Node probes remain supplemental evidence.
 Status: the existing implementation, realigned 150 ms progress-only linger,
 frozen custody corpora, production-path runner, and normative calibration-a
 artifact plus frozen 1,966,080-byte ceiling have landed. Independent holdout-b
-passes, so SH-G-8 and BR-G-42 event/transport custody are closed.
+passes, so SH-G-8 and BR-G-42 event correctness/transport custody are closed;
+current-source latency acceptance remains on its separate BR-G-42 rows.
 
 The exact event command, queue policy, recovery cursor, explicit-`Gap`
 semantics, terminal reconciliation, retry behavior, and terminal-session
@@ -610,60 +611,10 @@ The explicit-`Gap`-only recovery decision and the command-specific
 named regressions. Numeric sequence holes alone are not a recovery signal, and
 session creation does not invent a revision.
 
-SH-G-8 is **closed**. The evidence proves attach-before-schedule and the
-exact deterministic normal shape: four tasks, 60 logical seconds, 6,000
-`Progress` emissions, 600 reliable item emissions, four exact terminal records, no
-`Gap`, per-session reliable ordering, monotonic coalesced progress, and a
-64-entry subscriber/adapter queue ceiling. The separate 260-reliable overflow
-case remains explicitly beyond that envelope and proves visible `Gap`, retained-tail
-recovery, and terminal reconciliation. The standalone installed-wheel WebView2
-benchmark harness also exists. The corrected contract adds one fixed,
-non-extending 150 ms wait only when a drain sees progress alone; reliable,
-`Gap`, terminal, close, supersession, and recovery values wake it immediately.
-That production behavior and its fixed-anchor, non-sliding, immediate-wake,
-supersession/retry, and stale-prequeue regressions have landed; 175 focused
-drain/command/host checks pass. Benchmark accounting now streams manifested
-browser/producer evidence, assembles it after child exit, assigns the actual
-child directly to the Job before product composition, and keeps per-PID
-resource evidence diagnostic. A path-local retained-state sizer reports root
-classes and their identity-deduplicated union. The frozen
-`sh-g-8-transport-v1` calibration-a/holdout-b corpora and test-owned runner now
-drive the real built-in deques through
-`Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. They
-prove the exact quiescent per-task replay/subscriber/adapter 128/64/64 maximum
-without a `Gap`, lossless ordered 129-item cleanup, and a terminal path-cut
-witness that reports result artifacts separately. Three fresh-process outputs
-are bound to clean committed source and instrument hashes, an isolated `-I -S`
-parent, safe-path `-P -S` children with fresh out-of-tree bytecode caches, a
-hashed active-venv `xxhash` root, stable corpus/runtime-qualifier hashes, and
-external digest receipts.
-The committed `tests/interfaces/web/sh_g_8_transport_calibration.json` artifact
-records the normative calibration-a union high water as 1,376,690 bytes / 4,890
-objects for ordinary quiescent transport and 1,534,946 bytes / 5,499 objects
-for the exact maximum no-`Gap` snapshot. The runner's predeclared
-integer 5/4 then 65,536-byte-round-up rule is now frozen by
-`tests/interfaces/web/sh_g_8_transport_ceiling.json` as a 1,966,080-byte
-(1.875 MiB) ceiling. The ceiling contract alone does not decide acceptance;
-custody acceptance was evaluated only by independent holdout-b. The validator-owning test
-file is frozen at Git blob `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`;
-`tests/interfaces/web/test_bridge_transport_custody_holdout.py` supplies the
-closure witness without changing it. A valid holdout uses three
-fresh processes under the exact frozen authorities and passes only when both
-ordinary and exact-maximum union measurements in every run are at or below the
-ceiling. The frozen holdout-b corpus SHA-256 is
-`b4f23a5c9452f11e06e5520e52c02a0c1fd3e94698e87f70d7d3144c09d787c9`.
-The accepted `tests/interfaces/web/sh_g_8_transport_holdout.json` artifact was
-generated from clean ceiling commit
-`455df3a6fdc1307af140bf91b1dea95774fb36fe`. Its three fresh runs record
-1,351,794 ordinary and 1,513,014 exact-maximum bytes, leaving 614,286 and
-453,066 bytes of ceiling margin. All frozen authorities plus no-`Gap`, ordering,
-128/64/64 custody, cleanup, and terminal truth pass. That evidence closes
-SH-G-8 and BR-G-42 event/transport custody only.
-Terminal result graphs belong to BR-G-45, and complete headed-runtime growth
-belongs to SH-G-15.
-The valid 2026-08-13 run's 67,375,104-byte whole-Job delta was not used for
-realigned SH-G-8 closure and is not the normative calibration measurement
-above.
+SH-G-8 acceptance evidence and its residual scale boundaries are consolidated
+under the gate in §5. `M1_BRIDGE.md` §9.4 remains the sole authority for the
+event contract, custody roots, corpus, measurement method, and BR-G-42 timing
+rows.
 
 ### GUI Break 1 - Presentation foundation (completed 2026-08-13)
 
@@ -850,47 +801,39 @@ carry the `headed` marker; all are collected by the release command.
   by* scanning a hand-maintained file list, asserting only the meta element's
   presence, testing the component gallery instead of the production shell, or
   measuring a copied/test-only tree implementation.
-- **SH-G-8 — CLOSED (2026-08-14): the drain attaches before work starts and transport custody
-  is bounded.** The deterministic ordinary fixture proves four observations
-  attach before tick zero, then drives 60 logical seconds with exactly 6,000
-  `Progress` and 600 reliable item emissions plus four terminal records. All
-  reliable ids arrive exactly once and per-session ordered, delivered progress
-  is strictly monotonic after coalescing, no normal `Gap` occurs, and neither
-  subscriber nor adapter custody exceeds 64. A separate 260-reliable
-  beyond-envelope burst surfaces `Gap`,
-  resumes from the retained replay tail when available, and reconciles terminal
-  truth without claiming the missing reliable events were recovered.
+- **SH-G-8 — CLOSED (2026-08-14): attach-before-start event delivery and
+  transport custody are bounded.** The ordinary four-task fixture covers 60
+  logical seconds, 6,000 `Progress` emissions, 600 reliable items, and four
+  terminal records. It proves attach before tick zero, ordered exactly-once
+  reliable delivery, monotonic coalesced progress, terminal truth, no normal
+  `Gap`, and subscriber/adapter queues no larger than 64. A separate
+  260-reliable beyond-envelope case proves visible `Gap`, retained-tail
+  recovery, and terminal reconciliation without claiming lost events returned.
 
-  A progress-only drain anchors one non-extending 150 ms server deadline from
-  first progress availability, capped by its existing long-poll deadline.
-  An active long poll may therefore hold the first detailed `Progress` for the
-  full 150 ms; command receipt and reliable running-state feedback bypass it.
-  Replacement progress does not slide it; reliable, `Gap`, terminal, close,
-  supersession, and recovery values wake immediately. Transport-memory
-  acceptance follows `M1_BRIDGE.md` §9.4 and counts the identity-deduplicated
-  dispatcher replay, subscriber, and adapter queue graph with distinct
-  realistic path/detail values, per-root totals, achieved high-water marks, and
-  the maximum reachable no-`Gap` shape. The committed calibration-a artifact
-  records the normative measurement, and the separate committed contract
-  freezes the 1,966,080-byte limit before an independent holdout. That holdout
-  passed at 1,351,794 ordinary and 1,513,014 exact-maximum bytes. Terminal
-  result graphs belong to BR-G-45 and complete headed-runtime growth to SH-G-15.
-  A path-local retained-state sizer now reports replay, subscriber, adapter,
-  and identity-deduplicated union graphs without charging terminal-result
-  subtrees to transport. The frozen/disjoint realistic corpora and
-  production-path runner have landed. They exercise real built-in custody
-  deques, prove the quiescent per-task 128/64/64 no-`Gap` shape and ordered
-  cleanup, witness the terminal path cut, and enforce clean source/runtime and
-  external receipt authority. **The three fresh holdout-b runs pass the frozen
-  real-Git validator and every correctness/authority predicate, closing this
-  gate.** A separate current-source one-child regression applies the same
-  1,966,080-byte ceiling to both live custody shapes on every ordinary suite
-  run; it is a drift guard, not new acceptance evidence.
-  *Not satisfied by* attaching after start, relying on replay for the
-  normal path, sliding the progress deadline, delaying a reliable value,
-  hiding loss behind terminal recovery, reusing short/shared fixture strings,
-  measuring payload bytes or whole-process memory, folding terminal artifacts
-  into custody, or letting calibration validate its own chosen limit.
+  Progress-only drains use one non-sliding 150 ms deadline from first
+  availability. The first detailed progress on an idle task may wait that full
+  interval; receipt and reliable running-state feedback bypass it, as do
+  `Gap`, terminal, close, supersession, and recovery values.
+
+  Custody acceptance follows `M1_BRIDGE.md` §9.4 and counts the
+  identity-deduplicated replay, subscriber, and adapter graph while excluding
+  terminal-result subtrees. The real production queue path reaches the exact
+  per-task 128/64/64 no-`Gap` shape and ordered cleanup under frozen, disjoint
+  realistic corpora. Calibration-a measured 1,376,690 ordinary and 1,534,946
+  exact-maximum bytes; a later contract froze the independently derived
+  1,966,080-byte ceiling. Three fresh holdout-b runs passed at 1,351,794 and
+  1,513,014 bytes under the frozen real-Git validator. A one-child current-
+  source regression guards both live shapes against the same ceiling without
+  becoming new acceptance evidence.
+
+  This closes SH-G-8 and BR-G-42 event correctness/transport custody only.
+  Current-source latency acceptance remains open on its BR-G-42 row; terminal
+  result retention belongs to BR-G-45, and complete headed-runtime containment
+  belongs to SH-G-15. The earlier 67,375,104-byte whole-Job result is diagnostic
+  only. *Not satisfied by* attaching after start, sliding the progress deadline,
+  delaying reliable values, hiding loss behind terminal recovery, measuring
+  payload or whole-process bytes as transport custody, charging terminal
+  artifacts to custody, or letting calibration validate its own limit.
 - **SH-G-9 — The history pager terminates on the empty terminal page.** A
   fault-injected traversal whose live cursor is ahead of durability renders
   the committed prefix and stops on the empty terminal page; a later repair

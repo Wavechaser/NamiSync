@@ -26,6 +26,11 @@ complete 100,000-subject terminal artifact set and aggregate completed-task
 retention policy. Shell-owned SH-G-15 separately remains open for version-bound
 whole-runtime containment. Slices 5-8 remain product work.
 
+Documentation follow-up consolidated SH-G-8 evidence under the §5 shell gate,
+leaving Slice 3 as delivery placement only. Root `CHANGELOG.md` now owns dated
+task history while README retains milestone/phase summaries, and `AGENTS.md`
+ratifies category-prefixed commit titles plus the changelog specificity rules.
+
 ## Contract Realignment
 
 - SH-G-8 and BR-G-42's event clause now count one identity-deduplicated deep
@@ -316,6 +321,9 @@ from one duration.
 - Broader verification: the focused closure selection passed 133 tests; the
   non-headed, non-supplemental suite passed 2,273 with 2 skipped and 34
   deselected.
+- Documentation structure review found no task heading or task bullet in the
+  README changelog summary; all 24 detailed task headings are dated in
+  `CHANGELOG.md`, and Slice 3 no longer duplicates the §5 SH-G-8 evidence.
 - Two independent read-only adversarial reviews of the measurement-authority
   ratification found no remaining escalation, analytical-bypass, ownership,
   status-scope, or evidence-classification blocker.

@@ -184,321 +184,48 @@ never hides the other result axes in rendered output.
   [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
   [Handoff](docs/HANDOFF.md) — present and future scope, known issues, and session context.
+- [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
+  or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
   executor/verifier harness, deterministic corpora, and the settlement oracle.
 
 ## Changelog
 
-### Cross-cutting Measurement Authority Ratification
+Detailed task history and dates live in [CHANGELOG.md](CHANGELOG.md). This
+README intentionally stops at milestone and phase summaries.
 
-- Ratified four evidence tiers so reasoned targets, live drift guards,
-  named-reference acceptance, and frozen release authority cannot substitute
-  for one another.
-  - **Escalation:** failed or calibration-derived release limits require
-    disjoint calibration/holdout, a pre-frozen derivation, verdict-free raw
-    artifacts, exact authorities, fresh processes, and fail-closed validation.
-  - **Existing authority:** the executor settlement oracle is the deterministic
-    semantic sibling; SH-G-8 is the empirical model plus a live drift guard.
-  - **Cost control:** compatible Tier 2 metrics share vertical-slice artifacts;
-    shared tooling waits for a second empirical Tier 3 consumer while domain
-    corpora, roots, statistics, and aggregate policy stay local.
+## M1
 
-### M1 Stage 6 - SH-G-8 Closure Hardening
-
-- Added a current-source live custody regression against the frozen 1,966,080-
-  byte ceiling without modifying the accepted runner, artifacts, or blob-pinned
-  validator. Both ordinary and maximum no-`Gap` custody must remain in budget.
-- Pinned the intentional first-progress tradeoff: an idle task's first detailed
-  `Progress` may wait the full fixed 150 ms, while receipt, reliable state,
-  terminal, recovery, and lifecycle feedback bypass that linger.
-
-### M1 Stage 6 - SH-G-8 Transport Custody Closure
-
-- Closed SH-G-8 and BR-G-42's event/transport-custody predicate against the
-  production queue path; other BR-G-42 feature rows remain on their owning
-  slices.
-  - **Bounded custody:** calibration fixed the realistic corpus, a separate
-    commit froze the 1,966,080-byte limit, and three fresh holdout-b runs passed
-    at 1,351,794 ordinary and 1,513,014 exact-maximum bytes.
-  - **Correctness and authority:** no-`Gap`, ordering, 128/64/64 custody,
-    cleanup, terminal truth, clean-commit hashes, and the frozen real-Git
-    validator plus current-source live guard passed in the 63-test custody
-    selection.
-  - **Residual scale:** BR-G-45 terminal-result retention and SH-G-15 headed
-    cold/warm containment remain open and untested by this closure.
-
-### M1 Stage 6 - Early Shell Realignment Hardening
-
-- Realigned the Slice 1-3 desktop shell with its original authority and
-  lifecycle without adding later product workflow UI.
-  - **Protocol and ownership:** restored `M1_BRIDGE.md` as the sole transport
-    authority, separated terminal-session release from explicit task disposal,
-    preserved plan review after terminal delivery, and retained bounded retry,
-    admission, receipts, and native owners through safe teardown.
-  - **Trust and evidence:** added typed pre-teardown startup diagnostics,
-    ratified explicit-`Gap`-only recovery and command-specific `start_plan`
-    identity, exhaustively crossed every approved public view through dispatch,
-    and moved authoritative browser behavior into installed real WebView2.
-  - **Scale hardening:** demoted optional Node probes to supplemental evidence,
-    fixed real `sync-plan` terminal validation, and built the original
-    60-second SH-G-8 reference harness. Its event and latency checks passed;
-    later contract realignment treats its whole-Job result as diagnostic rather
-    than transport-custody or version-bound containment evidence.
-
-### M1 Stage 6 - GUI And Presentation Realignment Hardening
-
-- Closed the audited GUI Break 1 and Slice 4 regressions without adding product
-  workflow controls.
-  - **Appearance and design:** pinned the Fluent token transcription, published
-    live UISettings accents through a fixed receiver, made fallback evidence
-    structured, added a truthful opaque-page `degraded` state for an unconfirmed
-    live reapply, retained appearance through retryable close, and restored
-    transparent task rests, selected surfaces, and compatible dialog motion.
-  - **Tree core and evidence:** consumes workflow nodes directly, owns an exact
-    bounded renderer view and O(chain-depth) anchors, restores the 65,536-byte
-    literal field ceiling, and proves keyboard/platform accessibility, 120k-node
-    scale, hostile text, zoom, forced colors, geometry, and stale refusal.
-
-### M1 Stage 6 - Post-Delivery Hardening
-
-- Hardened the early desktop shell without expanding its product workflow UI.
-  - **Host and transport:** changed pywebview to one function-only dispatch
-    entry, bounded handler/task admission and shutdown, added terminal-gated
-    `close_task`, receipt-safe pre-slot replay, finite recovery, sanitized
-    command logging, and retained the hidden-`mirror` refusal.
-  - **Native ownership:** pinned app directories and ready database mains with
-    process-lifetime handles, authenticated activation by executable/base-image,
-    and made fresh-pair rollback exact-object and interrupt-safe;
-    same-principal mutex or base-interpreter spoofing remains outside the
-    single-instance security boundary.
-  - **Evidence:** regressions cover saturation, cleanup compensation and retry,
-    service receipt shutdown races, replacement attacks, private raw bridge
-    receiver names, and a real headed 25-second drain concurrent with another
-    RPC and settling on close.
-
-### M1 Stage 6 — Presentation Checkpoint
-
-- Completed Slice 4 without claiming the later product surfaces or beta
-  package.
-  - **Shared presentation core:** added the frozen tree-agnostic visible
-    sequence, strict structural/search/filter contracts, exact 256-row windows,
-    and visible-ancestor anchoring.
-  - **Installed shell:** added the accessible fixed-28-pixel tree renderer with
-    two spacers and stale-generation refusal, plus labelled focusable task/work
-    regions with honest empty states and no synthetic domain data or new bridge
-    command.
-  - **Evidence:** installed-wheel SH-G-7 covers renderer-level shell Tab traversal,
-    native 200% zoom reflow, forced-colors focus, hostile and long labels,
-    row/DOM bounds, and an older response unable to replace a newer window.
-
-### M1 Stage 6 — GUI Foundation
-
-- Completed GUI Break 1 without claiming the later product surfaces or beta
-  package.
-  - **Design system:** added the exact authored palette, contrast-tested semantic
-    status/operation aliases, shared Fluent controls and motion guardrails, plus
-    a fixed four-glyph local Fluent icon registry with pinned provenance.
-  - **Native appearance:** added system theme/accent observation, progressive
-    Mica and immersive-dark handling, and a system-color opaque fallback while
-    preserving the secured host lifecycle.
-  - **Evidence:** clean-wheel headed gates cover light, dark, forced-colors, and
-    reduced-motion gallery modes; real DWM readbacks and renderer transparency
-    prove the capable path and two injected opaque fallback sequences.
-
-### M1 Stage 6 — Transport Checkpoint
-
-- Completed the desktop shell foundation through Slice 3 without claiming the
-  later product UI or beta package.
-  - **Host:** retained the secured installed-wheel WebView2 composition and
-    hardened repeated-load close status so late workers do not query a destroyed
-    document or let presentation failure change shutdown truth.
-  - **Transport:** added the strict Slice 2/3 transport now specified solely in
-    `M1_BRIDGE.md`, bounded purpose-bound path slots, receipt-safe plan replay,
-    transactional task observation, and a bounded
-    progress-coalescing/reliable-backpressure drain.
-  - **Frontend and evidence:** added the sole strict `render.js` text sink, the
-    generation-counted browser drain manager, and constructor-only headed
-    harness; gates cover native picker confinement, independent off-origin
-    refusal, hostile text/log privacy, gap recovery, terminal settlement, and
-    repeated bridge readiness without duplicate drains.
-
-### Development Tooling
-
-- Flattened the executor/verifier measurement harness into `tools/` and made
-  unsafe or semantically mixed benchmark samples fail instead of reporting
-  plausible throughput.
-  - **Safety and evidence:** bound owned workspaces to directory identity under
-    an exclusive lease, made corpus regeneration deterministic, isolated report
-    artifacts, and made sidecar schemas, bound identity, and writes strict.
-  - **Measurements and tests:** retained diagnostics-on tool defaults with a
-    complete opt-out, disclosed empty correspondence, validated execution and
-    readback coverage, and added focused corpus, verifier, sidecar, and CLI tests.
+M1 expands the reviewed-sync runtime into a complete headless integrity,
+history, and workflow product while building its secured headed WebView2 shell.
 
 ### M1 Hardening
 
-- Closed post-refactor effect-settlement and verifier authority seams without
-  weakening the stabilized package boundaries.
-  - **Executor:** generic collaborator failures now settle active effects and
-    pending directories from the original operation error before propagating;
-    source/target guards also bind the operational root to reviewed authority.
-  - **Verifier:** native subclasses and timing decorators use an explicit
-    authority-bound reader protocol, while engine retains selected-root and
-    opened-volume policy and sidecar shares the pure stat predicate.
-  - **Oracle and tests:** expanded the retained oracle to 30 scenarios and 70
-    exact rows for collaborator escapes and restored, missing, and unreadable
-    settlement states, then replaced its baseline and semantic pin separately.
-- Consolidated the recent safety hardening behind stable authority, execution,
-  verification, and settlement boundaries without changing persisted contracts.
-  - **Root authority:** centralized fresh ephemeral anchor, volume, and no-follow
-    facts in core while preserving each consumer's timing and refusal policy.
-  - **Executor and verifier:** introduced stable package facades with coarse
-    runtime/native/pipeline and engine/native ownership respectively.
-  - **Settlement:** replaced parallel retained-state maps with a typed effect
-    journal and pure reducer, guarded by the retained 30-scenario oracle.
-  - **Tests:** consolidated shared fixtures and matrices, then organized executor
-    and verifier coverage by the production boundary each case protects.
-- Closed the remaining actionable LOW audit findings and tightened adjacent
-  malformed-input boundaries without changing deferred feature scope.
-  - **Planner and executor:** share one managed Windows-attribute mask so
-    unmanaged ARCHIVE/TEMPORARY drift converges, while copied UPDATE backups
-    bind reviewed target evidence to one stable open handle before publication.
-  - **Defensive boundaries:** classify SQLite contention by result code, reject
-    the remaining documented DOS-device aliases and non-finite workflow JSON,
-    and surface malformed recorder context through typed rollback-safe errors.
-  - **Tests:** cover managed/unmanaged attribute behavior and native rerun,
-    grow/truncate/rewrite backup drift, extended BUSY/LOCKED codes, reserved
-    names, strict payload constants, and malformed recorder transactions.
-- Restored FULL scan availability when a managed root is exactly a trusted
-  folder-mounted volume anchor, without relaxing junction refusal.
-  - **Scanner:** requires the resolved root, reviewed/current anchor, and volume
-    evidence mount to agree, then uses followed metadata only for that exact
-    mount root while retaining the surrounding anchor and `VolumeId` checks.
-  - **Tests:** cover inventory-reviewed and native-derived anchors, accurate
-    mounted-root identity, forged/placeholder/invalid states, scoped scans, and
-    continued descendant and configured-root reparse refusal.
-- Closed a cancellation-settlement composition gap that could hide an earlier
-  readonly mutation.
-  - **Executor:** now evaluates retained byte-publication and mutation-marker
-    state independently; confirmed publication stays authoritative, while
-    changed or unverified marker truth degrades recording even when publication
-    probing fails.
-  - **Tests:** cover restored readonly pre-state, failed restoration with an
-    unavailable publication probe, and committed-publication precedence without
-    false success evidence.
-- Closed managed-root redirection, owned-trash parent substitution, sticky
-  mismatch projection, and native-path diagnostic gaps without expanding the
-  external-writer threat contract.
-  - **Filesystem safety:** kept managed roots lexical while no-follow admitting
-    configured root-chain components below trusted or reviewed volume anchors,
-    bound scans, execution, and verifier opens to full reviewed volume identity,
-    and revalidated target and owned-trash parents after blocking barriers.
-  - **Evidence and diagnostics:** made sticky hash mismatch dominate later stat
-    drift and normalized enumeration/temp-cleanup filenames before public or
-    durable rendering.
-  - **Tests:** added real junction and deterministic remount substitutions across
-    scan, execution, trash/update, and verification, plus inventory-preservation,
-    projection, and serialized-detail regressions.
-- Closed executor attestation and durable-settlement gaps without changing the
-  full-intent/safe-selection contract or adding normal-path filesystem probes.
-  - **Executor:** moved UPDATE's recorder wait ahead of all final prepared/live
-    validation, bound published identity to the prepared temp, and made failed
-    non-byte and readonly mutations report ledger-behind truth.
-  - **Controls and tests:** covered commit-then-raise, exact pre-state,
-    probe failure, deferred mkdir, temp substitution, and retry pause/cancel.
-- Closed the remaining selected medium audit findings without broadening
-  deferred feature scope.
-  - **Windows paths:** made service-to-verifier native I/O explicitly long-path
-    safe while keeping logical paths unprefixed and refusing ambiguous/device
-    roots instead of risking wrong-tree normalization.
-  - **History:** introduced reset-only history v5 receipts so exact duplicate
-    items are non-counting and one oversized valid event degrades audit without
-    discarding the later run or terminal truth; receipt/order and summary
-    projections are authenticated and indexed classification is append-only.
-  - **Inventory:** replaced full-location materialization for frozen resume and
-    stale integrity selection with location-scoped, snapshot-bounded row reads.
-  - **Tests:** added deep-root end-to-end mutation/verification, path-boundary
-    refusal/diagnostic, receipt state-machine/tamper, bounded selection, and
-    million-item history benchmark coverage.
-- Closed the planned M1 safety-audit findings while preserving full reviewed
-  intent and executing only the derived safe selection.
-  - **Planner and selection:** pinned blocked parent/type and unsupported-source
-  cases as visible raw intent whose corresponding removals stay deferred.
-  - **Executor:** moved destructive flush waits before every final mutation
-    guard and made confirmed or unverified post-publish failures
-    recording-degraded.
-  - **Inventory and verifier:** introduced ledger v3 sticky verification
-    invalidation with explicit four-state inventory projections.
-  - **Dispatcher:** keyed workers, reservations, and leases by process-local
-    generation so cancel/resume handoffs cannot overlap or clean up successors.
-  - **Tests:** added adversarial planning, path-swap, published-failure,
-    invalidation, and dispatcher acquisition/shutdown race regressions.
-- Resolved M1 integration and adversarial-review findings without weakening the
-  reviewed-plan safety model or making history/audit failures alter sync truth.
-  - **Executor:** shared ordered publication settlement across COPY, UPDATE, and
-    MOVE_UPDATE; retries preserve owned state, pause safely, and disclose only
-    validated backups, partial publishes, and target drift.
-  - **Dispatcher and history:** bounded writer, audit, and close budgets; made
-    terminal cleanup retryable; and kept live and retained audit results,
-    sparse-page traversal, subscriptions, and lifecycle order consistent.
-  - **Workflows and CLI:** closed custody, replan-generation, idempotent-command,
-    cancellation-projection, confirmation, and shutdown-reporting races across
-    the service facade and command-line surface.
-  - **Database, inventory, and protocols:** bounded SQLite contention, preserved
-    read snapshots and incomplete-scan authority, and rejected coercive persisted
-    event, workflow, settings, and bridge JSON.
-  - **Interface host:** constrained native WebView2 access to the UI thread,
-    failed closed on guard attachment, and closed navigation, frame, popup, and
-    fallback-renderer escape paths.
-  - **Tests:** pinned temporal, concurrency, recovery, and bounded-work
-    regressions, including retry/delay stress cases and independent pipeline
-    queue-capacity checks.
+Safety, settlement, authority, and measurement work made high-risk release
+claims explicit, independently reviewable, and regression-backed.
 
-### M1
+### M1 GUI
 
-- Delivered M1 Stages 1–5.5 as a headless integrity and reviewed-sync product;
-  Stage 6's headed WebView2 desktop remains unshipped.
-  - **Executor:** moved content evidence to XXH3-128 and added a bounded
-    reader/hasher/writer pipeline, adaptive chunks, preallocation, and leaner
-    Windows publication and finalization paths.
-  - **Scanner and preflight:** added recursive multi-root inventory scope,
-    bounded missing inference, typed scan warnings, and folder-scoped integrity
-    that continues visibly past unreadable subjects.
-  - **Workflows and CLI:** added role-free inventory, baseline/verify/rebaseline,
-    optional execute-to-verify readback, deterministic workflow trees, opaque
-    identifiers, revisioned selection, and typed result views.
-  - **Dispatcher and history:** added retry-safe facade commands and the
-    reset-only history v4 journal with committed nonterminal recovery, fixed-cost
-    summaries, bounded keyset detail, and live reliable-event repair.
-  - **Database:** established the `m1-ledger-xxh3-128` ledger v2 boundary,
-    separated semantic settings from cosmetic UI state, and preserved local
-    history as an independent audit axis.
-  - **Interfaces and security:** added the shared service facade and location
-    CLI commands, plus a WebView2 bridge/host foundation with a read-only runtime
-    probe, hardened renderer settings, and exact packaged-asset origins.
-  - **Development tools:** added executor/verifier measurement harness and corpus
-    generator, with owned-workspace safety and strict benchmark-result validation.
-  - **Tests:** added focused integration coverage for scoped inventory,
-    selection/replan provenance, retry-safe commands, durable history pages, and
-    the WebView2 host foundation.
+Stage 6 delivered the secured desktop host, command/event transport, design
+foundation, and bounded presentation core; later workflow surfaces and beta
+packaging remain future phases.
+
+### M1 Features
+
+Stages 1–5.5 delivered the headless reviewed-sync, inventory/integrity, history,
+CLI, and reusable workflow product plus its development measurement tooling.
+
+## M0
+
+M0 established the reusable headless reviewed-sync baseline and its explicit-
+plan safety model.
 
 ### M0 Hardening
 
-- Hardened the reviewed-sync baseline against filesystem drift and unsafe edge
-  cases without weakening its explicit-plan safety model.
-  - **Planning and scanning:** hardened fingerprints, database placement,
-    built-in artifact ignores, hostile filenames, incomplete scans, and
-    case/Unicode filename handling.
-  - **Execution:** added exact prior-run temp recovery and hardened Windows
-    updates, directory cleanup, metadata preservation, and retry behavior.
-  - **Reporting:** made blocked/deferred safe subsets and partial outcomes
-    explicit in review, history, and CLI exit classification.
+Filesystem and reporting edge cases were hardened without weakening explicit
+review or guarded execution.
 
-### M0
+### M0 Features
 
-- Shipped the headless reviewed-sync product and its reusable layered runtime.
-  - **Core sync:** added scanning, deterministic planning, fresh preflight, and
-    guarded Windows copy/update/delete execution with atomic publication.
-  - **Runtime:** added dispatcher volume custody, cooperative controls, typed
-    events/results, local ledger recording, and independent activity history.
-  - **Access:** added workflow composition and the `nami-sync` CLI for reviewed
-    sync and history browsing.
+The first milestone shipped reviewed one-way sync through reusable core,
+runtime, persistence, workflow, and CLI layers.

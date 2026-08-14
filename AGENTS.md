@@ -57,7 +57,10 @@ reused by CLI, queue, or service entry points.
   for historical context but must not describe current behavior or guide new
   implementation.
 - `README.md` at the repository root is the project-level README, package
-  readme, active documentation index, roadmap/future directions, and changelog.
+  readme, active documentation index, roadmap/future directions, and concise
+  milestone/phase changelog summary.
+- `CHANGELOG.md` at the repository root is the detailed task history, grouped
+  by milestone or released version and then by phase.
 - `AGENTS.md` stays at the repository root as the repository instruction file.
 
 ## System Integrity Principles
@@ -200,24 +203,38 @@ their contract, and update the matching tests and documentation when it does.
   retained. An unclassified representation change invalidates that acceptance
   evidence.
 
+## Commit Titles
+
+- Start every commit title with a category using
+  `<category>(<optional-scope>): <imperative summary>`.
+- Use the narrowest primary category: `feat`, `fix`, `perf`, `test`, `docs`,
+  `refactor`, `build`, or `chore`. The optional lowercase scope names the owning
+  component, such as `web`, `executor`, or `dispatcher`; omit it when the change
+  is genuinely cross-cutting.
+- Keep one coherent checkpoint per commit. The title describes the commit's
+  primary effect even when matching tests and documentation travel with it.
+
 ## Commit Readiness
 
 - Before any future commit, review whether the relevant files under `docs/`,
   `docs/obsolete/`, `README.md`, or `AGENTS.md` need updates for the committed
   behavior.
 - Do not commit behavior changes whose matching documentation is stale.
-- Update the README changelog once when a delivery stage is complete, using one
-  concise summary of its user-meaningful changes. Intermediate slice commits do
-  not each add fragmented changelog entries.
+- Update `CHANGELOG.md` when a task-level delivery is complete. Multiple
+  sessions and commits may accumulate under one task; do not create a new task
+  entry for every intermediate checkpoint. Update the README summary only when
+  its milestone or phase synopsis changes.
 
 ## Documentation Maintenance
 
-- Keep README changelog sections compact and newest-first: use one milestone
-  synopsis followed by specific nested bullets for the owning modules, including
-  tests. Keep each module bullet to about three rendered lines.
-- Record post-delivery fixes in a separate hardening section above the relevant
-  milestone delivery section; do not append hardening detail to the original
-  feature-delivery synopsis.
+- Keep both changelogs newest-first. README contains only `##` milestone or
+  released-version summaries and `###` phase summaries; it never lists task
+  details. `CHANGELOG.md` repeats those two levels and adds dated `####` task
+  entries with concise bullets describing what happened.
+- Before named releases, use milestone headings such as `M1`. After versioning,
+  use the version and codename, such as `v0.1.0 Gertrud`. Group related sessions
+  under one task and put post-delivery work in the relevant hardening phase
+  rather than appending it to the original feature task.
 - Keep `docs/BUGS.md` as a concise module-first defect ledger. Categories name
   the causal failure boundary, never a milestone, review gate, test outcome, or
   broad consequence. Target 6–12 rendered lines per entry, retaining only the
