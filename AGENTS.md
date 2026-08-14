@@ -236,10 +236,14 @@ their contract, and update the matching tests and documentation when it does.
   use the version and codename, such as `v0.1.0 "Gertrud"`. Group related
   sessions under one task and put post-delivery work in the relevant hardening
   phase rather than appending it to the original feature task.
-- Keep `docs/BUGS.md` as a concise module-first defect ledger. Categories name
-  the causal failure boundary, never a milestone, review gate, test outcome, or
-  broad consequence. Target 6–12 rendered lines per entry, retaining only the
-  consequence, cause, fix, and essential residual boundary or test context.
+- Keep `docs/BUGS.md` as a concise module-first defect ledger. A category is a
+  reusable causal class stated as a short noun phrase (for example, `TOCTOU
+  parent redirection` or `shutdown ownership race`), not the incident's observed
+  behavior, affected filename, milestone, review gate, test outcome, or broad
+  consequence. Assign severity from the worst supported product consequence,
+  not from the importance of the audit or gate that found it. Target 6–12
+  rendered lines per entry, retaining only the consequence, cause, fix, and
+  essential residual boundary or test context.
 
 ## Cleanup
 

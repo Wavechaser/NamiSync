@@ -31,6 +31,8 @@ claims explicit, independently reviewable, and regression-backed.
 - Consolidated shell acceptance evidence in its owning gate, reduced the README
   to product and status summaries, and made category-prefixed commits plus
   task-level changelog grouping repository conventions.
+- Audited the bug ledger against cause-based categories and consequence-based
+  severity, then made that classification rule explicit for future entries.
 
 #### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
 
