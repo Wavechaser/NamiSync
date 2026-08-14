@@ -1,17 +1,17 @@
 # Session Handoff
 
-Status (2026-08-14): the benchmark/accounting checkpoint has landed after the
-progress-only drain behavior checkpoint. Browser samples and producer timings
-now stream in bounded batches to SHA-256-manifested sidecars; the child retains
-no growing sample dictionary or repeated full producer snapshots, and final
-evidence assembly occurs only after child exit. The actual child enters the Job
-before product composition. Per-PID role/private bytes and sampled thread,
-handle, and topology evidence remain diagnostic, with no whole-runtime
-acceptance predicate. Event `passed`/`event_passed` is independent of diagnostic
-completeness and explicitly leaves SH-G-8 incomplete without custody evidence.
-A separate path-local retained-state sizer has also landed. SH-G-8 remains open
-for realistic-payload transport-custody calibration, a limit fixed in a later
-commit, and an independent holdout. BR-G-45 separately remains open for the
+Status (2026-08-14): the frozen-corpus custody-runner checkpoint has landed
+after the progress-only behavior and benchmark/accounting checkpoints. The
+`sh-g-8-transport-v1` calibration-a/holdout-b corpora now drive real built-in
+dispatcher, subscriber, and adapter deques through the production composition
+path. The runner proves the exact quiescent per-task 128/64/64 maximum without
+`Gap`, ordered cleanup, terminal path-cut accounting, and clean
+source/dependency/runtime/digest authority across three fresh processes. It emits raw
+measurements and a predeclared headroom rule, not a byte ceiling or acceptance
+decision. SH-G-8 remains open for a committed calibration-a artifact, a later
+ceiling commit, and independent holdout-b. The installed-wheel event harness
+still reports only the event envelope; whole-runtime diagnostics have no
+acceptance predicate. BR-G-45 separately remains open for the
 complete 100,000-subject terminal artifact set and aggregate completed-task
 retention policy. Shell-owned SH-G-15 separately remains open for version-bound
 whole-runtime containment. Slices 5-8 remain product work.
@@ -20,10 +20,29 @@ whole-runtime containment. Slices 5-8 remain product work.
 
 - SH-G-8 and BR-G-42's event clause now count one identity-deduplicated deep
   Python graph rooted only at dispatcher replay, subscriber, and adapter task
-  queues. Corrected evidence uses distinct realistic path/detail values,
-  reports each root class and the union, exercises the ordinary event envelope
-  and maximum reachable no-`Gap` custody shape, calibrates first, freezes a
-  limit in a later commit, then applies it to an independent holdout.
+  queues. The frozen/disjoint calibration-a and holdout-b corpora use distinct
+  named realistic path/detail values. The landed runner drives the actual
+  built-in deques through
+  `Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`, samples
+  60 exact-body producer-quiescent ordinary checkpoints, and constructs the
+  exact quiescent per-task replay/subscriber/adapter 128/64/64 maximum without
+  synthetic insertion or `Gap`. Cleanup delivers all 129 reliable items per
+  task exactly once and ordered before each exact terminal record.
+- The runner counts a terminal transport slot while cutting and separately
+  reporting the result graph; that witness is explicitly nonnormative for
+  BR-G-45. Each dataset requires an isolated `-I -S` parent and three fresh
+  safe-path `-P -S` Windows CPython 3.13 children with `no_site=1` and fresh
+  out-of-tree bytecode caches. The parent manually compiles the verified child
+  bytes only after establishing clean committed authority, then rechecks the
+  tree and exact active-venv `xxhash` dependency files around every child. The
+  full product/runner source manifest, separate retained-sizer digest,
+  dependency/corpus/runtime-qualifier digests, and external exact-schema child
+  receipt are verified.
+  The predeclared rule applies 25 percent headroom to the largest calibration
+  `transport_custody_bytes` value and rounds upward to 65,536 bytes. The runner
+  contains no ceiling or pass/fail field; calibration-a must be recorded before
+  a later commit freezes
+  a byte ceiling, and only then may independent holdout-b be run.
 - BR-G-33/SH-G-8 now require a single non-extending 150 ms server linger when a
   drain first sees progress alone. Replacement progress does not slide the
   deadline. Reliable, `Gap`, terminal, close, supersession, and recovery values
@@ -141,14 +160,15 @@ acknowledgment races; those paths were fixed or removed before the valid run.
 
 ## Immediate Next Work
 
-1. Build the named realistic SH-G-8 corpus and production-path custody runner on
-   the landed retained-state helper. Use distinct path/detail values, assert
-   ordinary high-water marks and the quiescent maximum no-`Gap` shape, and
-   preserve the existing event/capacity/ordering predicates. The helper alone
-   is not calibration or acceptance evidence.
-2. Record calibration without a pass/fail limit. In a later commit freeze the
-   corpus, allocation method, interpreter, ceiling, and headroom; only a later
-   independent artifact may close SH-G-8.
+1. From a clean commit, record calibration-a without a pass/fail limit:
+   `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`.
+   Preserve the complete three-fresh-process raw artifact and receipts. The
+   focused one-child seam smoke below is not this dataset and cannot substitute
+   for it.
+2. In a later commit, derive and freeze the byte ceiling from calibration-a by
+   applying the already-frozen 25-percent headroom rule and rounding upward to
+   65,536 bytes. Only after that commit may a separate clean run execute
+   holdout-b and decide SH-G-8 acceptance; never retune after holdout.
 3. Design BR-G-45 before clearing terminal state. Measure every simultaneous
    core/adapter/browser representation at 100,000 subjects and decide what may
    survive presentation/release when history is degraded. Then freeze both
@@ -177,17 +197,46 @@ from one duration.
 - `tests/interfaces/web/test_bridge_event_benchmark.py`: 21 passed for the
   streamed evidence/manifests, direct-Job admission, diagnostic separation, and
   retained-state accounting contracts.
-- Total focused Python evidence: 174 passed. No new custody, BR-G-45, SH-G-15,
-  or headed benchmark result is claimed by the linger checkpoint; checkpoint 3
-  adds the separate 21-test accounting file without a new headed result.
-- Required before commit: active-doc contradiction search and `git diff --check`.
+- `.\.venv\Scripts\python.exe -m pytest tests/interfaces/web/test_bridge_transport_custody.py -q`:
+  40 passed in 3.22 seconds for the frozen corpus, real-deque/path, artifact,
+  clean source/dependency authority, isolated-parent/safe-child runtime,
+  receipt, corruption, and no-implicit-limit contracts. An independent builder
+  repeat also passed all 40 in 3.36 seconds; the exact reachability subset passed
+  7 in 1.38 seconds.
+- The focused file's one-fresh-safe-path-child system-TEMP seam validated its
+  external receipt. Its smoke-only measurements were ordinary quiescent
+  transport 1,376,690 bytes / 4,890 objects; maximum no-`Gap` transport
+  1,534,946 bytes / 5,499 objects; and terminal-path-cut transport 1,351,741
+  bytes / 4,820 objects versus 2,047,533 terminal-artifact bytes / 6,313
+  objects. The smoke qualifier was final non-debug Windows x64 CPython 3.13.14
+  with explicit `pymalloc`, `PYTHONHASHSEED=0`, `no_site=1`, `safe_path=true`, a
+  fresh external bytecode cache, and the exact active-venv `xxhash` manifest.
+  Evidence SHA-256:
+  `62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea`;
+  corpus SHA-256:
+  `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`;
+  normalized runtime-qualifier SHA-256:
+  `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`;
+  dependency-authority SHA-256:
+  `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
+  This seam uses one child and a test sentinel commit, not the parent runner's
+  clean-authority three-process dataset. These values are non-calibration smoke:
+  they set no normative measurement, ceiling, acceptance result, or holdout.
+- Existing linger subtotal: 174 passed; the 21 accounting tests and 40 custody
+  runner tests are separately stated above. No BR-G-45, SH-G-15, headed
+  benchmark, or normative custody result is claimed by this checkpoint.
+- Active-doc contradiction search found no stale runner/corpus, runtime-command,
+  warning-family, measurement, limit, or gate-status claim; `git diff --check`
+  is clean.
 
 ## Immediate Context
 
-The 150 ms linger and checkpoint-3 accounting infrastructure are implemented;
-the named realistic corpus and production-path custody runner are not. Do
-not reuse the old 67,375,104-byte delta as SH-G-8 failure, SH-G-15 calibration
-limit, or BR-G-45 evidence. Preserve explicit
+The 150 ms linger, checkpoint-3 accounting infrastructure, frozen/disjoint
+realistic corpus, and production-path custody runner are implemented. The next
+SH-G-8 operation is a clean-commit calibration-a dataset, still without a
+pass/fail limit. Do not reuse either the smoke numbers above or the old
+67,375,104-byte whole-Job delta as a normative SH-G-8 measurement, SH-G-15
+calibration limit, or BR-G-45 evidence. Preserve explicit
 terminal-session-release versus task-close authority while designing aggregate
 terminal retention, and keep all three gates open until their own frozen
 holdout evidence exists.

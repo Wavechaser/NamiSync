@@ -19,8 +19,12 @@ The existing installed-wheel event harness has also been decontaminated: it
 streams bounded manifested evidence, assembles the report after the measured
 child exits, admits that child directly to the Job before product composition,
 and reports per-PID/runtime resources only as non-acceptance diagnostics.
-Realigned SH-G-8 remains open for calibrated, independently held-out transport
-custody; BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
+The frozen/disjoint realistic custody corpora and production-path runner have
+also landed, including exact real-deque 128/64/64 no-`Gap`, terminal path-cut,
+cleanup, and clean source/dependency/runtime/digest-authority witnesses. They set no byte
+ceiling or acceptance result. Realigned SH-G-8 remains open for a committed
+calibration-a artifact, a later byte ceiling, and independent holdout-b;
+BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
 completed-task retention open, while shell-owned SH-G-15 leaves version-bound
 whole-runtime containment open. The earlier whole-Job delta is diagnostic input
 to SH-G-15 design, not SH-G-8 custody evidence or a limit for either gate.
@@ -1107,9 +1111,12 @@ resting task cards expose Mica; selected cards are opaque. Slice 5 remains the f
 UI, release, and beta claims stay open. The installed real-WebView2
 browser-behavior witness migration is complete. The existing four-task event
 truth remains useful, and the fixed 150 ms linger plus immediate-wake focused
-regressions have landed. SH-G-8's realigned BR-G-42 custody clause remains open
-until realistic-payload calibration, a frozen limit, and an independent holdout
-land. BR-G-45's terminal-artifact retention policy and
+regressions have landed. The frozen/disjoint realistic corpus and
+production-path runner now prove the exact real-deque 128/64/64 no-`Gap` shape,
+ordered cleanup, terminal cut, and clean source/dependency/runtime authority without setting a
+limit. SH-G-8's realigned BR-G-42 custody clause remains open until a committed
+calibration-a artifact, later byte ceiling, and independent holdout-b land.
+BR-G-45's terminal-artifact retention policy and
 SH-G-15's version-bound whole-runtime calibration/holdouts remain independently
 open; the 2026-08-13 whole-Job delta closes none of them.
 

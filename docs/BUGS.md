@@ -569,9 +569,12 @@ defect, and move implementation-level test choreography out of the log.
   custody. Cause: transport custody, completed artifacts, and whole-runtime
   containment shared one memory predicate. The separate sizer now reports each
   replay/subscriber/adapter graph and their identity-deduplicated union while
-  cutting terminal results only on terminal paths. Closure still requires the
-  named realistic corpus, production-path high water, calibration, a later
-  frozen limit, and independent holdout. BR-G-45 and SH-G-15 remain open.
+  cutting terminal results only on terminal paths. Frozen/disjoint realistic
+  corpora and a production-path three-fresh-process runner now prove the real
+  built-in queue roots, exact 128/64/64 no-`Gap` shape, terminal cut, cleanup,
+  and clean source/dependency/runtime/digest authority. Closure still requires a committed
+  calibration-a artifact, a later byte ceiling, and independent holdout-b.
+  BR-G-45 and SH-G-15 remain open.
 - MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
   documents delegated exact errors and retry rules to `M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers

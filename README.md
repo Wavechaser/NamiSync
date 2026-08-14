@@ -53,16 +53,24 @@ assigned directly to the Job before product composition, with per-PID
 role/private-byte plus thread/handle/topology diagnostics. A separate
 retained-state sizer reports replay, subscriber, adapter, and
 identity-deduplicated union graphs while cutting terminal-result subtrees only
-along terminal paths.
-Realigned SH-G-8 remains open for realistic-payload transport-custody
-calibration, a frozen limit, and an independent holdout.
+along terminal paths. The frozen `sh-g-8-transport-v1` calibration-a and
+holdout-b corpora and production-path custody runner have now landed. They
+drive the real built-in dispatcher, subscriber, and adapter deques, prove the
+quiescent per-task 128/64/64 maximum no-`Gap` shape and terminal path cut, and
+bind three fresh-process artifacts to clean committed source, an isolated
+`-I -S` parent and safe-path `-P -S` children, a hashed dependency root, and an
+external digest receipt. Realigned BR-G-42
+event-custody and SH-G-8 remain open for a committed calibration-a artifact, a
+byte ceiling fixed under the predeclared headroom rule, and an independent
+holdout-b run.
 BR-G-45 separately leaves the complete 100,000-subject terminal artifact set
 and aggregate completed-task retention policy open. Shell-owned SH-G-15
 separately leaves version-bound absolute cold/settled and repeated/long warm
 whole-runtime containment open. A valid prior real-60-second run passed event
 truth, ordering, latency, and shutdown and measured a 67,375,104-byte whole-Job
 delta; that diagnostic neither passes nor fails any of the realigned memory
-predicates, and no replacement limit or measurement is claimed yet.
+predicates. No custody calibration artifact, normative measurement, byte
+ceiling, acceptance result, or holdout result is claimed yet.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as

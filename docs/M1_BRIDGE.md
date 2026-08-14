@@ -8,13 +8,15 @@ landed. The fixed 150 ms progress-only linger has landed with focused
 fixed-anchor, non-sliding replacement, immediate-wake, and lifecycle-race
 evidence. Benchmark/accounting support now provides bounded manifested streams,
 post-exit assembly, direct-Job admission, event/diagnostic result separation,
-and a path-local retained-state sizer. The realistic-corpus transport-custody
-runner, calibration, frozen limit, and holdout remain implementation work.
+and a path-local retained-state sizer. The frozen `sh-g-8-transport-v1`
+calibration-a/holdout-b corpora and production-path transport-custody runner
+have also landed; no calibration artifact, normative measurement, byte ceiling,
+acceptance result, or holdout result has landed.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
-migration is complete. SH-G-8 remains open pending realistic-payload custody
-calibration, a limit fixed before an independent holdout, and that independent
-holdout. BR-G-45 separately keeps the 100,000-subject terminal
+migration is complete. SH-G-8 remains open pending a committed calibration-a
+artifact, a byte ceiling fixed before independent holdout-b, and that holdout.
+BR-G-45 separately keeps the 100,000-subject terminal
 artifact set and aggregate completed-task retention policy open. Shell-owned
 SH-G-15 separately keeps version-bound whole-runtime containment open. The
 explicit-`Gap`-only recovery and command-specific `start_plan` revision
@@ -2487,7 +2489,7 @@ require a later schema-version decision rather than an M1 fallback
    | 256-row history detail window | 500 ms p95; 1 s maximum |
    | Incremental plan projection memory | 128 MiB maximum |
    | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
-   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: fix after realistic-payload calibration, before an independent holdout |
+   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: runner landed; calibration-a artifact, later byte ceiling, and independent holdout-b pending |
    | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | OPEN under BR-G-45; per-completion and aggregate ceilings are separate |
 
    **BR-G-42 event-custody definition (required by SH-G-8; REALIGNED, OPEN).**
@@ -2500,18 +2502,48 @@ require a later schema-version decision rather than an M1 fallback
    BR-G-45. The instrument reports each root class separately as well as their
    deduplicated union so one scaling axis cannot be charged to another.
 
-   The corrected evidence preserves the existing capacities, event rates,
+   The named corpus is `sh-g-8-transport-v1`: four tasks use distinct,
+   Windows-legal subject/prior paths at depth 32 and exactly 240, 1,024, or
+   4,096 UTF-16 code units, with a 2:1:1 ASCII/BMP/non-BMP alphabet ratio;
+   derived MOVE_UPDATE trash paths add their real `.synctrash` prefix. The
+   ordinary 6,000 progress values distribute those lengths 5,700/240/60; its
+   600 reliable outcomes distribute them 570/24/6. The maximum no-`Gap` fixture
+   emits 516 reliable outcomes with a 490/21/5 distribution. Reachable failure
+   details rotate among the committed failed-COPY cleanup/unverified branch
+   (`io-error`, primary and publication-state `PermissionError`, and
+   `cleanup_error`), failed `move_update` / `recorder-failed`, and failed update
+   mutation / `io-error`; none fabricates a `durability_warnings` entry. This is
+   not the distinct post-flush warning branch. Subject paths, ids, and
+   path-bearing detail values are each unique while fixed categorical strings
+   retain their production values. The COPY and MOVE_UPDATE `published_path`
+   fields deliberately reuse the exact `ItemOutcome.path` object, matching
+   production identity instead of inflating the graph; MOVE_UPDATE's trash path
+   embeds an equal but separately allocated prior path. Item ids are 32
+   lowercase hexadecimal characters from the first 128 SHA-256 bits over
+   corpus/variant/fixture/task/local identity and are disjoint across variants
+   and fixtures. Calibration-a uses rank
+   `(ordinal*37+17) mod population` and
+   alphabet `ordinal mod 4`; holdout-b uses `(ordinal*41+31) mod population`
+   and alphabet `(ordinal+1) mod 4`, so their generated values are disjoint.
+
+   The landed corpus and runner preserve the existing capacities, event rates,
    ordering, coalescing, no-`Gap`, and latency predicates while using a declared
-   realistic upper-bound path/detail corpus with distinct values rather than
+   named realistic path/detail corpus with distinct values rather than
    shared test strings. It records both the ordinary four-task run and the
    maximum reachable no-`Gap` custody shape: per task, the 128-entry replay,
    64-entry subscriber, and 64-entry adapter bounds are driven through the
-   production offer/observation path and sampled from a quiescent snapshot. A
-   calibration commit records that corpus, raw root measurements, interpreter,
-   allocation method, and every achieved high-water mark. A later commit fixes
-   a tighter ceiling from that evidence before an independent holdout run; the
-   calibration run cannot validate its own limit. The former 16 MiB whole-Job
-   ceiling is retired rather than inherited or raised.
+   production offer/observation path and sampled from a quiescent snapshot. The
+   construction emits 64 outcomes per task to fill adapter custody, admits one
+   further production transfer, then emits the 64-outcome tail; no queue value
+   is inserted synthetically. A
+   clean-commit calibration artifact records the frozen corpus version/hash,
+   raw root measurements, interpreter, allocation method, and every achieved
+   high-water mark. The already-declared derivation rule applies 25 percent
+   headroom to the largest calibration
+   `transport_custody_bytes` measurement and rounds upward to 65,536 bytes. A
+   later commit fixes the resulting byte ceiling before an independent holdout
+   run; the calibration run cannot validate its own limit. The former 16 MiB
+   whole-Job ceiling is retired rather than inherited or raised.
    Payload-byte totals and complete-process memory are invalid substitutes for
    retained transport custody.
 
@@ -2537,9 +2569,46 @@ require a later schema-version decision rather than an M1 fallback
    requires two identical structural captures, refuses unknown graph types,
    reports those three non-additive graphs plus one identity-deduplicated union,
    and stops at terminal-result subtrees only along terminal paths. It is
-   accounting support, not acceptance evidence: the named realistic corpus,
-   production-path high-water fixture, calibration, frozen limit, and
-   independent holdout remain required.
+   accounting support, not acceptance evidence. The frozen
+   `sh-g-8-transport-v1` corpus and its disjoint calibration-a/holdout-b variants
+   now drive the real built-in deques through
+   `Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. The
+   runner samples 60 exact-body producer-quiescent ordinary checkpoints, then
+   constructs the quiescent per-task replay/subscriber/adapter 128/64/64
+   maximum without a synthetic `Gap`; cleanup proves all 129 reliable items per
+   task arrive exactly once and ordered before exact terminal records. Its
+   ordinary report retains independent observed high-water values across those
+   checkpoints plus the terminal transport projection; in particular,
+   `transport_custody_bytes` is an observed union high water, never a sum of
+   component maxima. The 128/64/64 measurement is one unchanged exact
+   quiescent snapshot. Its terminal witness includes the queue slot while
+   cutting and separately reporting result artifacts, so it is not BR-G-45
+   calibration. Each dataset
+   requires an isolated/safe-path parent launched with `-I -S`
+   (`isolated=1`, `ignore_environment=1`, `no_site=1`, `safe_path=true`). After
+   proving clean committed source authority, the parent manually compiles the
+   exact verified child bytes; it does not import that contract through an
+   executable site-package startup path. It then launches three fresh Windows
+   CPython 3.13 children with `-P -S`, `no_site=1`, safe-path mode, and a fresh empty
+   per-child bytecode-cache prefix outside the source tree. Source and dependency
+   authority are rechecked around every child. Stable source, dependency,
+   corpus, instrument, and normalized runtime-qualifier hashes plus each
+   child's external exact-schema digest receipt bind the dataset; each child's
+   exact runtime and cache path are also recorded and hashed.
+
+   The runtime qualifier is final non-debug 64-bit CPython 3.13 on Windows with
+   explicit `pymalloc` and optimization/dev/tracemalloc disabled. All inherited
+   `PYTHON*` variables are removed before setting only `PYTHONHASHSEED=0`,
+   `PYTHONMALLOC=pymalloc`, `PYTHONNOUSERSITE=1`, `PYTHONUTF8=1`, and the fresh
+   `PYTHONPYCACHEPREFIX`. The exact active-venv `xxhash/__init__.py`,
+   `xxhash/version.py`, and sole `_xxhash*.pyd` file, their origins, and their
+   combined digest are recorded. The runner emits raw measurements and the
+   predeclared headroom rule, but no pass/fail field or byte ceiling. A
+   committed calibration-a artifact, later ceiling commit, and independent
+   holdout-b remain required.
+   From a clean commit, calibration is recorded with
+   `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`.
+   Do not run or interpret holdout-b before the later ceiling commit.
 
    The standalone `tests/bridge_event_benchmark.py` harness builds and installs
    the archived-HEAD wheel, loads a test-owned benchmark page with the installed
@@ -3320,14 +3389,19 @@ because its local tests are easier.
   is now bounded/streamed and manifest-checked, final assembly is outside the
   measured child lifetime, event acceptance is independent of diagnostic
   whole-runtime completeness, and the old 16 MiB line is retired. The
-  path-local retained-state sizer has also landed. Realistic-payload corpus and
-  production-path high-water evidence, custody calibration, a frozen limit,
-  and an independent holdout have not landed. The 2026-08-13 run of
+  path-local retained-state sizer, frozen/disjoint realistic corpus, and
+  production-path three-fresh-process runner have also landed. The runner
+  verifies real built-in deque roots, the exact quiescent per-task 128/64/64
+  no-`Gap` shape and ordered cleanup, terminal path-cut reporting, and clean
+  source/dependency/runtime/digest authority. A committed calibration-a artifact,
+  normative measurement, byte ceiling, acceptance result, and independent
+  holdout-b have not landed. The 2026-08-13 run of
   archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
   event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
   predicates. Its 67,375,104-byte whole-Job delta is not transport-custody
   evidence and neither passes nor fails this realigned clause. BR-G-42's event
-  portion and SH-G-8 remain open without claiming a new measurement or limit.
+  portion and SH-G-8 remain open without claiming a new calibration result or
+  limit.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
   separately.** For one exact 100,000-subject completion, calibration and a
   later independent holdout measure the complete per-completion artifact set:
@@ -3391,8 +3465,9 @@ in `test_visible_sequence.py`;
 sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
 `test_inventory_surface.py`, and `test_lifecycle.py`; scale tests live in
 `tests/test_bridge_scale.py`, the event artifact validator lives in
-`tests/interfaces/web/test_bridge_event_benchmark.py`, and BR-G-45's focused
-artifact/retention cases will live in
+`tests/interfaces/web/test_bridge_event_benchmark.py`, the custody-runner
+contract lives in `tests/interfaces/web/test_bridge_transport_custody.py`, and
+BR-G-45's focused artifact/retention cases will live in
 `tests/interfaces/web/test_terminal_artifact_scale.py`. Their gate tests retain the
 `test_br_g_<number>_` prefix. A slice may add narrower unit files, but moving a
 gate test elsewhere requires updating this table in the same change so no

@@ -17,10 +17,12 @@ the installed real-WebView2 browser-behavior migration and fixed, non-sliding
 150 ms progress-only linger are complete. The benchmark/accounting checkpoint
 has also landed: streamed manifested evidence, post-exit final assembly,
 direct-Job child admission, diagnostic-only whole-runtime accounting, and a
-path-local retained-state sizer. Realigned SH-G-8 remains open for
-calibrated and independently held-out transport custody. BR-G-45 separately
-keeps terminal artifact/retention scale open, and shell-owned SH-G-15 keeps version-bound
-whole-runtime containment open. GUI Break 1's token,
+path-local retained-state sizer. The frozen/disjoint realistic custody corpora
+and production-path runner have also landed. Realigned SH-G-8 remains open for
+a committed calibration-a artifact, a later byte ceiling, and an independent
+holdout-b. BR-G-45 separately keeps terminal artifact/retention scale open, and
+shell-owned SH-G-15 keeps version-bound whole-runtime containment open. GUI
+Break 1's token,
 component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame have completed their
 audited realignment and restored headed gates. Slice 5 is the next delivery
@@ -580,8 +582,9 @@ installed WebView2 composition; Node probes remain supplemental evidence.
 
 ### Slice 3 - Event drain
 
-Status: the existing implementation and realigned 150 ms progress-only linger
-have landed; SH-G-8 custody calibration/freeze/holdout evidence remains open.
+Status: the existing implementation, realigned 150 ms progress-only linger,
+frozen custody corpora, and production-path runner have landed; SH-G-8's
+calibration-a artifact, later byte ceiling, and holdout-b remain open.
 
 The exact event command, queue policy, recovery cursor, explicit-`Gap`
 semantics, terminal reconciliation, retry behavior, and terminal-session
@@ -607,8 +610,8 @@ SH-G-8 is **open**. Current evidence proves attach-before-schedule and the
 exact deterministic normal shape: four tasks, 60 logical seconds, 6,000
 `Progress` emissions, 600 reliable item emissions, four exact terminal records, no
 `Gap`, per-session reliable ordering, monotonic coalesced progress, and a
-64-entry queue ceiling. The separate 260-reliable overflow case remains
-explicitly beyond that envelope and proves visible `Gap`, retained-tail
+64-entry subscriber/adapter queue ceiling. The separate 260-reliable overflow
+case remains explicitly beyond that envelope and proves visible `Gap`, retained-tail
 recovery, and terminal reconciliation. The standalone installed-wheel WebView2
 benchmark harness also exists. The corrected contract adds one fixed,
 non-extending 150 ms wait only when a drain sees progress alone; reliable,
@@ -619,14 +622,26 @@ drain/command/host checks pass. Benchmark accounting now streams manifested
 browser/producer evidence, assembles it after child exit, assigns the actual
 child directly to the Job before product composition, and keeps per-PID
 resource evidence diagnostic. A path-local retained-state sizer reports root
-classes and their identity-deduplicated union. Custody acceptance separately
-deep-sizes the identity-deduplicated dispatcher replay, subscriber, and adapter queue
-graphs with distinct realistic path/detail values, fixes a limit after
-calibration, and applies it to a later independent holdout. Terminal result
-graphs belong to BR-G-45, and complete headed-runtime growth belongs to SH-G-15.
+classes and their identity-deduplicated union. The frozen
+`sh-g-8-transport-v1` calibration-a/holdout-b corpora and test-owned runner now
+drive the real built-in deques through
+`Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. They
+prove the exact quiescent per-task replay/subscriber/adapter 128/64/64 maximum
+without a `Gap`, lossless ordered 129-item cleanup, and a terminal path-cut
+witness that reports result artifacts separately. Three fresh-process outputs
+are bound to clean committed source and instrument hashes, an isolated `-I -S`
+parent, safe-path `-P -S` children with fresh out-of-tree bytecode caches, a
+hashed active-venv `xxhash` root, stable corpus/runtime-qualifier hashes, and
+external digest receipts.
+The runner contains the predeclared 25-percent-then-65,536-byte-round-up
+headroom rule, but sets no byte
+ceiling and makes no acceptance decision. Custody closure still requires a
+committed calibration-a artifact, a later ceiling commit, and an independent
+holdout-b. Terminal result graphs belong to BR-G-45, and complete headed-runtime
+growth belongs to SH-G-15.
 The valid 2026-08-13 run's 67,375,104-byte whole-Job delta therefore neither
-passes nor fails realigned SH-G-8; no replacement measurement or ceiling is
-claimed yet.
+passes nor fails realigned SH-G-8; no normative custody calibration measurement
+or ceiling is claimed yet.
 
 ### GUI Break 1 - Presentation foundation (completed 2026-08-13)
 
@@ -818,8 +833,9 @@ carry the `headed` marker; all are collected by the release command.
   attach before tick zero, then drives 60 logical seconds with exactly 6,000
   `Progress` and 600 reliable item emissions plus four terminal records. All
   reliable ids arrive exactly once and per-session ordered, delivered progress
-  is strictly monotonic after coalescing, no normal `Gap` occurs, and no queue
-  exceeds 64. A separate 260-reliable beyond-envelope burst surfaces `Gap`,
+  is strictly monotonic after coalescing, no normal `Gap` occurs, and neither
+  subscriber nor adapter custody exceeds 64. A separate 260-reliable
+  beyond-envelope burst surfaces `Gap`,
   resumes from the retained replay tail when available, and reconciles terminal
   truth without claiming the missing reliable events were recovered.
 
@@ -835,8 +851,12 @@ carry the `headed` marker; all are collected by the release command.
   result graphs belong to BR-G-45 and complete headed-runtime growth to SH-G-15.
   A path-local retained-state sizer now reports replay, subscriber, adapter,
   and identity-deduplicated union graphs without charging terminal-result
-  subtrees to transport. **The named realistic corpus, production-path
-  high-water instrument, calibration limit, and holdout have not landed.**
+  subtrees to transport. The frozen/disjoint realistic corpora and
+  production-path runner have landed. They exercise real built-in custody
+  deques, prove the quiescent per-task 128/64/64 no-`Gap` shape and ordered
+  cleanup, witness the terminal path cut, and enforce clean source/runtime and
+  external receipt authority. **No committed calibration-a artifact, normative
+  measurement, byte ceiling, acceptance result, or holdout-b has landed.**
   *Not satisfied by* attaching after start, relying on replay for the
   normal path, sliding the progress deadline, delaying a reliable value,
   hiding loss behind terminal recovery, reusing short/shared fixture strings,
@@ -1009,10 +1029,16 @@ structure clause),
 `tests/interfaces/web/test_drain.py` (SH-G-8 deterministic, linger, and
 overflow fixtures), `tests/interfaces/web/test_bridge_event_benchmark.py`
 (ordinary streamed-evidence, event/diagnostic-separation, direct-Job, and
-retained-state accounting checks), and the opt-in
+retained-state accounting checks),
+`tests/interfaces/web/test_bridge_transport_custody.py` (frozen corpus,
+production-deque, source/runtime/digest-authority, and exact-shape contracts),
+and the opt-in
 installed-wheel command
 `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`
-(SH-G-8 event evidence; its realistic-corpus custody runner is pending),
+(SH-G-8 event evidence). The separate clean-commit calibration command is
+`.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`;
+it records raw three-process calibration-a evidence and does not set or apply a
+ceiling,
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
 `tests/interfaces/web/test_design_tokens.py` (ordinary SH-G-11),
@@ -1040,7 +1066,7 @@ clause lands:
 | Phase 0 | SH-G-4 |
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
-| Slice 3 | SH-G-8 remains open pending custody calibration, a frozen limit, and an independent holdout; the 150 ms linger has landed |
+| Slice 3 | SH-G-8 remains open pending a calibration-a artifact, a later byte ceiling, and independent holdout-b; the linger/corpus/runner have landed |
 | GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
 | Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
@@ -1057,7 +1083,7 @@ This table maps shell delivery order to the sole BR-G definitions in
 | Phase 0 | prerequisites for BR-G-19/31/32 | complete |
 | Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
 | Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | complete, including installed real-WebView2 browser witnesses |
-| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation and 150 ms linger landed; SH-G-8 custody calibration/freeze/holdout pending |
+| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation, linger, frozen corpus, and runner landed; SH-G-8 calibration-a/ceiling/holdout-b pending |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
 | Slice 5 | BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
@@ -1072,9 +1098,12 @@ The fixed 150 ms linger and focused regressions have also landed.
 Benchmark/accounting support now streams manifested evidence, assembles the
 artifact after the child exits, reports whole-runtime memory without an
 acceptance predicate, and sizes transport roots separately from terminal
-results. SH-G-8 remains open because the named realistic corpus,
-production-path high-water evidence, custody calibration, a frozen limit, and
-an independent holdout have not landed. The valid
+results. The frozen/disjoint realistic corpus and production-path runner now
+prove the exact built-in-deque roots, quiescent per-task 128/64/64 no-`Gap`
+shape and ordered cleanup, terminal path cut, and clean source/dependency/runtime/digest
+authority. SH-G-8 remains open because no committed calibration-a artifact,
+normative measurement, byte ceiling, acceptance result, or independent
+holdout-b has landed. The valid
 2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but
 its whole-Job delta is neither corrected transport-custody evidence nor a
 version-bound SH-G-15 containment result. BR-G-45 and SH-G-15 remain separately

@@ -2196,7 +2196,8 @@ implementation, including its progress-only linger, is present. The existing
 deterministic fixture drives four attached-before-tick-zero
 tasks through 60 logical seconds with exactly 6,000 `Progress` and 600 ordered,
 exactly-once reliable item emissions, monotonic coalesced progress, four exact
-terminal records, no `Gap`, and no queue above 64. The separate 260-reliable
+terminal records, no `Gap`, and no subscriber or adapter queue above 64. The
+separate 260-reliable
 overflow regression remains explicitly beyond-envelope and proves visible
 `Gap`, retained-tail recovery, and terminal reconciliation. The realigned
 transport contract's fixed, non-extending 150 ms linger for progress-only
@@ -2223,11 +2224,26 @@ valid event run into failure or provide whole-runtime acceptance. The separate
 retained-state sizer snapshots real replay/subscriber/adapter deques under their
 owner locks, requires two matching structural captures, refuses unknown graph
 types, reports each graph plus one identity-deduplicated union, and stops at
-terminal-result subtrees only on the paths where they are terminal. These
-mechanisms do not supply SH-G-8's realistic corpus, calibration, frozen limit,
-or holdout. The harness still supplies useful event and diagnostic data. Its
-valid 2026-08-13 run passed event truth, ordering, latency, no-`Gap`, and clean
-exit.
+terminal-result subtrees only on the paths where they are terminal. The frozen
+`sh-g-8-transport-v1` calibration-a/holdout-b corpora and test-owned runner now
+exercise the actual built-in custody deques through
+`Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. At a
+producer-quiescent maximum they prove per-task replay/subscriber/adapter lengths
+of 128/64/64 without `Gap`, followed by exactly-once ordered cleanup of all 129
+reliable items per task and exact terminal records. A terminal witness counts
+its transport slot while cutting and separately reporting its subject-scaled
+result graph. The three fresh-process dataset requires clean committed product
+and runner source, a separately hashed sizer, an isolated `-I -S` parent, and
+safe-path `-P -S` Windows CPython 3.13 children with fresh out-of-tree bytecode
+caches. The exact active-venv `xxhash` dependency files and module origins are
+also hashed. Stable source/dependency/corpus/runtime-qualifier hashes and an
+external exact-schema digest receipt bind the dataset. This machinery emits raw
+measurements and a predeclared
+25-percent headroom/65,536-byte-round-up rule, but no acceptance decision or
+byte ceiling. SH-G-8 still requires a committed calibration-a artifact, a later
+ceiling commit, and independent holdout-b. The harness still supplies useful
+event and diagnostic data. Its valid 2026-08-13 run passed event truth,
+ordering, latency, no-`Gap`, and clean exit.
 Its 67,375,104-byte whole-Job delta is not a transport-custody measurement and
 lacks SH-G-15's calibration/freeze/holdout contract, so it closes none of these
 gates. The existing diagnostic command remains `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
