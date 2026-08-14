@@ -1,100 +1,48 @@
 # NamiSync
 
 NamiSync is a safety-first, one-way file mirroring application for Windows 11
-x64. It scans a source and target, presents a deterministic dry-run plan, and
-only changes files after explicit human review and exact confirmation. It keeps
-inventory and XXH3-128 integrity evidence, records completed work in a local
-ledger, and retains independent activity history.
+x64. It is for people maintaining a backup, archive, media collection, or
+working-tree replica who want to see exactly what will happen before granting
+filesystem mutations. It is deliberately not a bidirectional conflict resolver
+or an unattended deletion engine.
 
-The product is designed to be cautious rather than clever: it never silently
-guesses a destructive action, rechecks reviewed intent before touching files,
-publishes copied files atomically on the target volume where supported, and
-keeps filesystem, integrity, ledger-recording, and history-audit outcomes as
-separate facts.
+Every sync scans both sides, builds a deterministic dry-run plan, and requires
+explicit human review and exact confirmation. The plan captures deletion,
+filter, preservation, and casing policy; execution then rechecks roots, volume
+identity, capacity, file types, metadata, and dependencies immediately before
+touching files. Copies use a bounded pipeline and atomic target-volume
+publication, and completed mutations reach the local WAL-backed ledger only
+after the corresponding filesystem operation succeeds.
+
+NamiSync also keeps an inventory of known locations and XXH3-128 integrity
+evidence for baseline, verification, and explicit rebaseline workflows. Its
+independent activity history and separate filesystem, integrity, ledger, and
+audit result axes prevent one failure from being hidden behind another result.
+
+The implemented core has been adversarially hardened and regression-tested
+against root, junction, and remount redirection; source/target substitution and
+review-to-execution drift; incomplete or hostile scans; case, Unicode,
+reserved-name, device-path, and long-path ambiguity; partial publication and
+retry/pause/cancel failures; recorder and SQLite contention; malformed stored
+or interface data; and dispatcher custody/lifecycle races. When safety evidence
+is missing or contradictory, NamiSync refuses or defers the affected work and
+reports the residual truth instead of guessing.
 
 ## Current state
 
-M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
-history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
-classified launcher, coordinated database gate, packaged bootstrap page, fixed
-single-instance identity, secured local WebView2 product host, and nonblocking
-orderly-close/retry controller. The existing transport chain through Slice 3
-has landed under the production mapping defined exclusively in
-`docs/M1_BRIDGE.md`, with real paths retained behind opaque server slots, task
-observation attached before work can start, a bounded event drain, and a strict
-inert-text return sink. Explicit-`Gap`-only recovery and command-specific
-`start_plan` revision are ratified with landed named regressions. GUI Break 1
-and Slice 4 have completed their audited
-realignment: pinned Fluent neutral and live Windows accent roles, structured
-appearance fallback and retry lifetime, direct workflow-owned visible arrays,
-a 65,536-byte literal-search field ceiling behind the separately bounded bridge
-envelope, indexed anchors, an operable platform-accessible virtual tree, and
-Mica-visible rail/task-card rest surfaces. User-facing workflow controls and
-product views are not yet available in the window. Clean-wheel Windows gates
-now exercise the real WebView2 host, packaged page and design assets,
-navigation/popup and per-dispatch origin guards, runtime refusal,
-single-instance activation, isolated data root, visible database refusal,
-native picker confinement, hostile-text transport, log privacy, the component
-gallery, real native material apply/fallback paths, and Slice 4 platform
-keyboard/accessibility, 200%-zoom reflow, forced-colors focus, hostile/long tree
-text, 28-pixel row bounds, scale, and stale-generation behavior. The plan, inventory,
-history, lifecycle, packaging, and beta closures remain open. The named
-browser-behavior witnesses now run through the installed production bridge and
-renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
-four-task logical-time fixture and standalone installed-wheel benchmark harness
-have landed. The fixed, non-sliding 150 ms progress-only linger has also landed
-with focused immediate-wake, lifecycle-race, ordering, and cursor regressions.
-An active long poll may hold the first detailed `Progress` snapshot for the
-full 150 ms; command receipt and reliable running-state feedback still bypass
-that wait.
-The installed-wheel benchmark now streams bounded browser and producer evidence
-to SHA-256-manifested sidecars, assembles the final artifact only after the
-measured child exits, and reports whole-runtime memory only as a non-acceptance
-diagnostic. Its `passed` field covers the event envelope alone and explicitly
-does not stand in for custody evidence. The separate accepted custody evidence
-below closes SH-G-8. The actual child is
-assigned directly to the Job before product composition, with per-PID
-role/private-byte plus thread/handle/topology diagnostics. A separate
-retained-state sizer reports replay, subscriber, adapter, and
-identity-deduplicated union graphs while cutting terminal-result subtrees only
-along terminal paths. The frozen `sh-g-8-transport-v1` calibration-a and
-holdout-b corpora and production-path custody runner have now landed. They
-drive the real built-in dispatcher, subscriber, and adapter deques, prove the
-quiescent per-task 128/64/64 maximum no-`Gap` shape and terminal path cut, and
-bind three fresh-process artifacts to clean committed source, an isolated
-`-I -S` parent and safe-path `-P -S` children, a hashed dependency root, and an
-external digest receipt. Realigned BR-G-42
-event-custody and SH-G-8 now have a committed calibration-a artifact and
-normative transport measurement plus a mechanically frozen 1,966,080-byte
-(1.875 MiB) ceiling. The independent holdout-b dataset passed, closing SH-G-8
-and BR-G-42's event/transport-custody predicate. Other BR-G-42 feature rows
-remain on their owning slices.
-BR-G-45 separately leaves the complete 100,000-subject terminal artifact set
-and aggregate completed-task retention policy open. Shell-owned SH-G-15
-separately leaves version-bound absolute cold/settled and repeated/long warm
-whole-runtime containment open. A valid prior real-60-second run passed event
-truth, ordering, latency, and shutdown and measured a 67,375,104-byte whole-Job
-delta; that diagnostic neither passes nor fails any of the realigned memory
-predicates. The durable
-`tests/interfaces/web/sh_g_8_transport_calibration.json` artifact records a
-1,376,690-byte ordinary union high water and a 1,534,946-byte exact maximum
-no-`Gap` union from clean commit
-`56c50b43dc19090ad33af031891503bfec80599b`. The separate
-`tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
-1,966,080-byte ceiling by integer 5/4 headroom and 65,536-byte round-up. The
-accepted `tests/interfaces/web/sh_g_8_transport_holdout.json` artifact records
-1,351,794 ordinary and 1,513,014 exact-maximum no-`Gap` bytes, leaving 614,286
-and 453,066 bytes of margin respectively. A separate one-child current-source
-regression now applies that frozen ceiling to both live custody shapes on every
-ordinary suite run; it detects drift but does not replace acceptance evidence.
+M1's headless product is implemented and usable through the service and CLI:
+reviewed sync, inventory, integrity baseline/verify/rebaseline, optional
+post-copy verification, and retained history. The Windows desktop shell now has
+a secured WebView2 host, bounded command/event transport, native folder picking,
+and the Fluent/accessibility foundation. User-facing workflow views and
+controls, final packaging, and beta closure remain open, so the window is not
+yet the complete desktop product.
 
-M1 state is process-local: queued sessions and unexecuted plans do not survive
-an application restart. Committed nonterminal history survives restart as
-`incomplete`, but is not classified as interrupted or executable. The active
-database boundary is ledger v3 plus history v5. Older, missing, transitional,
-or mismatched databases are refused; close
-NamiSync and reset both local database files together before creating a fresh
-matching pair.
+M1 state remains process-local: queued sessions and unexecuted plans do not
+survive an application restart, and committed nonterminal history returns only
+as `incomplete`. The active database boundary is ledger v3 plus history v5;
+older, missing, transitional, or mismatched databases are refused and the two
+local database files must be reset together before creating a fresh pair.
 
 ## Setup and dependencies
 

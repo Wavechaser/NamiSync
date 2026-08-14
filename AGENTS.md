@@ -220,10 +220,11 @@ their contract, and update the matching tests and documentation when it does.
   `docs/obsolete/`, `README.md`, or `AGENTS.md` need updates for the committed
   behavior.
 - Do not commit behavior changes whose matching documentation is stale.
-- Update `CHANGELOG.md` when a task-level delivery is complete. Multiple
-  sessions and commits may accumulate under one task; do not create a new task
-  entry for every intermediate checkpoint. Update the README summary only when
-  its milestone or phase synopsis changes.
+- Update `CHANGELOG.md` when a task-level delivery is complete. Before adding a
+  new task, first decide whether the session advances an existing task; extend
+  that task's date range and concise summary when it does. Create a new task
+  only when no existing entry accurately fits the outcome. Update the README
+  summary only when its milestone or phase synopsis changes.
 
 ## Documentation Maintenance
 
@@ -232,9 +233,9 @@ their contract, and update the matching tests and documentation when it does.
   details. `CHANGELOG.md` repeats those two levels and adds dated `####` task
   entries with concise bullets describing what happened.
 - Before named releases, use milestone headings such as `M1`. After versioning,
-  use the version and codename, such as `v0.1.0 Gertrud`. Group related sessions
-  under one task and put post-delivery work in the relevant hardening phase
-  rather than appending it to the original feature task.
+  use the version and codename, such as `v0.1.0 "Gertrud"`. Group related
+  sessions under one task and put post-delivery work in the relevant hardening
+  phase rather than appending it to the original feature task.
 - Keep `docs/BUGS.md` as a concise module-first defect ledger. Categories name
   the causal failure boundary, never a milestone, review gate, test outcome, or
   broad consequence. Target 6–12 rendered lines per entry, retaining only the
