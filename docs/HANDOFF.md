@@ -15,7 +15,10 @@ union measurements. The separate
 `tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
 1,966,080-byte (1.875 MiB) ceiling. The accepted holdout records 1,351,794
 ordinary and 1,513,014 exact-maximum bytes, leaving 614,286 and 453,066 bytes
-of margin. Other BR-G-42 feature rows remain on their owning slices. The
+of margin. A separate current-source one-child regression now authenticates the
+unchanged ceiling contract and applies it to both live custody shapes on every
+ordinary suite run; it is a drift guard rather than acceptance evidence. Other
+BR-G-42 feature rows remain on their owning slices. The
 installed-wheel event harness
 still reports only the event envelope; whole-runtime diagnostics have no
 acceptance predicate. BR-G-45 separately remains open for the
@@ -65,7 +68,10 @@ whole-runtime containment. Slices 5-8 remain product work.
 - BR-G-33/SH-G-8 now require a single non-extending 150 ms server linger when a
   drain first sees progress alone. Replacement progress does not slide the
   deadline. Reliable, `Gap`, terminal, close, supersession, and recovery values
-  wake immediately. This behavior and its stale-prequeue, supersession/retry,
+  wake immediately. With an active long poll, the first detailed progress value
+  may wait the full 150 ms; receipt and reliable running-state feedback bypass
+  that linger.
+  This behavior and its first-progress, stale-prequeue, supersession/retry,
   fixed-anchor, immediate-wake, ordering, and cursor regressions have landed.
 - The installed-wheel harness now labels itself the SH-G-8 event limb / BR-G-42
   event envelope. Browser and producer evidence is bounded, streamed, and
@@ -202,15 +208,16 @@ from one duration.
 
 ## Verification
 
-- `tests/interfaces/web/test_drain.py`: 48 passed.
+- `tests/interfaces/web/test_drain.py`: 49 passed.
 - `tests/interfaces/web/test_commands.py`: 77 passed.
 - `tests/interfaces/web/test_host.py`: 49 passed.
 - `tests/interfaces/web/test_bridge_event_benchmark.py`: 21 passed for the
   streamed evidence/manifests, direct-Job admission, diagnostic separation, and
   retained-state accounting contracts.
-- `.\.venv\Scripts\python.exe -m pytest tests/interfaces/web/test_bridge_transport_custody.py tests/interfaces/web/test_bridge_transport_custody_holdout.py -q`:
-  62 passed: 60 frozen-validator checks plus two explicitly pinned holdout
-  witness checks. Coverage includes the frozen corpus, real-deque/path, artifact,
+- `.\.venv\Scripts\python.exe -m pytest tests/interfaces/web/test_bridge_transport_custody.py tests/interfaces/web/test_bridge_transport_custody_holdout.py tests/interfaces/web/test_bridge_transport_custody_live.py -q`:
+  63 passed: 60 frozen-validator checks, two explicitly pinned holdout witness
+  checks, and one current-source live ceiling guard. Coverage includes the
+  frozen corpus, real-deque/path, artifact,
   clean source/dependency authority, isolated-parent/safe-child runtime,
   receipt, corruption, committed calibration/ceiling, frozen-validator,
   independent-holdout, exact-boundary, and authority-drift contracts. The exact
@@ -255,10 +262,10 @@ from one duration.
   and exact-maximum no-`Gap` custody is 1,513,014 bytes, leaving 614,286 and
   453,066 bytes of margin. No-`Gap`, ordering, 128/64/64 custody, cleanup, and
   terminal truth pass under the frozen validator's default real-Git authority.
-- Root `.gitattributes` pins the runner, frozen validator, new holdout witness,
-  and ceiling JSON to LF, and pins the calibration and holdout JSON artifacts
-  to CRLF. This preserves contracted Git blobs and raw artifact hashes across
-  Windows checkouts.
+- Root `.gitattributes` pins the runner, frozen validator, holdout witness, and
+  ceiling JSON to LF, and pins the calibration and holdout JSON artifacts to
+  CRLF. This preserves contracted Git blobs and raw artifact hashes across
+  Windows checkouts; the Tier-1 live guard is intentionally not byte authority.
 - The focused file's one-fresh-safe-path-child system-TEMP seam validated its
   external receipt. Its smoke-only measurements were ordinary quiescent
   transport 1,376,690 bytes / 4,890 objects; maximum no-`Gap` transport
@@ -279,12 +286,12 @@ from one duration.
   clean-authority three-process dataset. These values are non-calibration smoke
   and are not authority for either the landed calibration measurement or the
   frozen ceiling.
-- Existing linger subtotal: 174 passed; the 21 accounting tests and 62 custody
+- Existing linger subtotal: 175 passed; the 21 accounting tests and 63 custody
   checks are separately stated above. The calibration, ceiling, and holdout
   acceptance close SH-G-8/BR-G-42 event/transport custody only. No BR-G-45,
   SH-G-15, or headed-runtime containment result is claimed by this checkpoint.
-- Broader verification: the focused closure selection passed 131 tests; the
-  non-headed, non-supplemental suite passed 2,271 with 2 skipped and 34
+- Broader verification: the focused closure selection passed 133 tests; the
+  non-headed, non-supplemental suite passed 2,273 with 2 skipped and 34
   deselected.
 - Active-doc contradiction search found no stale runner/corpus, runtime-command,
   warning-family, measurement, limit, or gate-status claim; `git diff --check`

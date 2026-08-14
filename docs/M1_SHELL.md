@@ -621,7 +621,7 @@ benchmark harness also exists. The corrected contract adds one fixed,
 non-extending 150 ms wait only when a drain sees progress alone; reliable,
 `Gap`, terminal, close, supersession, and recovery values wake it immediately.
 That production behavior and its fixed-anchor, non-sliding, immediate-wake,
-supersession/retry, and stale-prequeue regressions have landed; 174 focused
+supersession/retry, and stale-prequeue regressions have landed; 175 focused
 drain/command/host checks pass. Benchmark accounting now streams manifested
 browser/producer evidence, assembles it after child exit, assigns the actual
 child directly to the Job before product composition, and keeps per-PID
@@ -863,6 +863,8 @@ carry the `headed` marker; all are collected by the release command.
 
   A progress-only drain anchors one non-extending 150 ms server deadline from
   first progress availability, capped by its existing long-poll deadline.
+  An active long poll may therefore hold the first detailed `Progress` for the
+  full 150 ms; command receipt and reliable running-state feedback bypass it.
   Replacement progress does not slide it; reliable, `Gap`, terminal, close,
   supersession, and recovery values wake immediately. Transport-memory
   acceptance follows `M1_BRIDGE.md` §9.4 and counts the identity-deduplicated
@@ -881,7 +883,9 @@ carry the `headed` marker; all are collected by the release command.
   cleanup, witness the terminal path cut, and enforce clean source/runtime and
   external receipt authority. **The three fresh holdout-b runs pass the frozen
   real-Git validator and every correctness/authority predicate, closing this
-  gate.**
+  gate.** A separate current-source one-child regression applies the same
+  1,966,080-byte ceiling to both live custody shapes on every ordinary suite
+  run; it is a drift guard, not new acceptance evidence.
   *Not satisfied by* attaching after start, relying on replay for the
   normal path, sliding the progress deadline, delaying a reliable value,
   hiding loss behind terminal recovery, reusing short/shared fixture strings,

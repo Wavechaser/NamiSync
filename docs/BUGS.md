@@ -537,15 +537,26 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-14). Historical-only custody ceiling. Ordinary
+  suites exercised the real current-source custody shape but checked only
+  positive size, plausible density, and component/union relations; the frozen
+  ceiling was applied only to committed or synthetic datasets. A retained view
+  could therefore grow past the accepted bound without failing current-source
+  tests. Fixed with a separate one-child live drift guard that authenticates
+  the unchanged ceiling contract and applies 1,966,080 bytes to both ordinary
+  and maximum no-`Gap` custody. The verdict-free runner and blob-pinned
+  acceptance validator remain unchanged.
 - MODERATE - FIXED (2026-08-14). Progress-only drain churn. An attentive client
   could return and rearm once per progress snapshot, making adapter coalescing
   schedule-dependent and multiplying cross-runtime work. Cause: the waiter
   returned for any nonempty queue and retained no task-owned first-availability
   deadline across replacement, supersession, or retry. Fixed with one capped,
   non-sliding 150 ms progress-only deadline; reliable, `Gap`, terminal,
-  recovery, close, and supersession still wake immediately. The 174 focused
+  recovery, close, and supersession still wake immediately. The 175 focused
   drain/command/host regressions cover cadence, stale custody, races, ordering,
-  and unchanged cursor behavior.
+  and unchanged cursor behavior. With an active long poll, the first detailed
+  progress value intentionally may wait the full 150 ms; command receipt and
+  reliable running-state feedback bypass it.
 - MODERATE - FIXED (2026-08-14). Benchmark accounting contamination. The headed
   harness retained every decoded browser sample, repeatedly serialized growing
   producer documents inside the measured child, admitted a wrapper rather than

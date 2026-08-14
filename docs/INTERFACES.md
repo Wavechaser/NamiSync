@@ -9,7 +9,9 @@ storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and hardened production
 transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
 authority. The installed real-WebView2 browser witnesses and fixed, non-sliding
-150 ms progress-only linger have landed. Benchmark accounting now uses bounded
+150 ms progress-only linger have landed. With an active long poll, the first
+detailed progress snapshot may use that full interval; receipt and reliable
+running-state feedback bypass that linger. Benchmark accounting now uses bounded
 manifested streams, post-exit assembly, direct-Job child admission, and an
 event-only pass separate from whole-runtime diagnostics. The frozen realistic
 custody corpora and production-path runner have also landed. SH-G-8's realigned
@@ -17,6 +19,9 @@ event/custody evidence now includes a committed normative calibration-a
 artifact, a frozen 1,966,080-byte ceiling, and an accepted independent
 holdout-b dataset. SH-G-8 and BR-G-42 event/transport custody are closed; other
 BR-G-42 feature rows remain on their owning slices.
+One current-source calibration-a child now runs as a separate ordinary-suite
+drift guard and requires both live custody shapes to remain within the frozen
+1,966,080-byte ceiling without modifying the accepted validator or artifacts.
 BR-G-45 terminal-artifact
 retention and shell-owned SH-G-15 whole-runtime containment remain independently
 open.
@@ -457,7 +462,9 @@ standalone installed-wheel WebView2 harness remains useful event and diagnostic
 infrastructure. Production progress-only drains now use one fixed,
 non-extending 150 ms first-availability deadline capped by the original long
 poll; reliable, `Gap`, terminal, recovery, close, and supersession wake
-immediately. The 174 focused drain/command/host checks pass. Corrected custody
+immediately. The first detailed progress value on an idle task may consume the
+full interval; receipt and reliable running-state feedback bypass that linger.
+Corrected custody
 support now includes a path-local retained-state sizer that reports replay,
 subscriber, adapter, and identity-deduplicated union graphs without charging
 terminal result subtrees to transport. The installed-wheel harness streams
@@ -503,7 +510,10 @@ the durable artifact was generated from tested commit
 measurement; the separate ceiling contract supplies the byte limit. Acceptance
 was then established by three fresh valid holdout-b runs under the exact
 authorities, with both ordinary and exact-maximum union measurements below the
-ceiling. No containment command/result is claimed yet.
+ceiling. A separate current-source live guard runs one child, validates its
+complete artifact, authenticates the frozen contract, and compares both live
+custody shapes directly with that ceiling. It is regression evidence, not a
+new acceptance run. No containment command/result is claimed yet.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

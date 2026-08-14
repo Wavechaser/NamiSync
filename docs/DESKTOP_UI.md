@@ -11,7 +11,9 @@ logging privacy. The named browser-behavior witnesses now run through the
 installed production bridge and renderer in real WebView2. Slice 3 evidence
 covers transactional observation, bounded drain behavior, recovery, and
 repeated bridge readiness. The fixed, non-sliding 150 ms progress-only linger
-and its immediate reliable/lifecycle wake regressions have landed. Benchmark
+and its immediate reliable/lifecycle wake regressions have landed. An active
+long poll may hold the first detailed progress snapshot for the full interval;
+receipt and reliable running-state feedback bypass that linger. Benchmark
 accounting now streams bounded browser/producer evidence, performs final
 assembly after the child exits, and labels whole-runtime memory as a
 non-acceptance diagnostic; its event pass alone is not SH-G-8 custody closure
@@ -23,7 +25,8 @@ committed calibration-a artifact records normative ordinary/exact-maximum
 transport measurements, the separate contract freezes the 1,966,080-byte
 ceiling, and three fresh holdout-b runs pass at 1,351,794 ordinary and 1,513,014
 exact-maximum bytes. This closes SH-G-8 and BR-G-42 event/transport custody
-only;
+only. A separate current-source one-child guard now requires both live custody
+shapes to remain within that frozen ceiling on ordinary suite runs;
 BR-G-45 separately leaves full terminal-artifact retention open, and
 shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
 earlier whole-Job delta is diagnostic input only, not a result for any of those

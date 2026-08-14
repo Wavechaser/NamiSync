@@ -44,6 +44,9 @@ renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
 four-task logical-time fixture and standalone installed-wheel benchmark harness
 have landed. The fixed, non-sliding 150 ms progress-only linger has also landed
 with focused immediate-wake, lifecycle-race, ordering, and cursor regressions.
+An active long poll may hold the first detailed `Progress` snapshot for the
+full 150 ms; command receipt and reliable running-state feedback still bypass
+that wait.
 The installed-wheel benchmark now streams bounded browser and producer evidence
 to SHA-256-manifested sidecars, assembles the final artifact only after the
 measured child exits, and reports whole-runtime memory only as a non-acceptance
@@ -81,7 +84,9 @@ no-`Gap` union from clean commit
 1,966,080-byte ceiling by integer 5/4 headroom and 65,536-byte round-up. The
 accepted `tests/interfaces/web/sh_g_8_transport_holdout.json` artifact records
 1,351,794 ordinary and 1,513,014 exact-maximum no-`Gap` bytes, leaving 614,286
-and 453,066 bytes of margin respectively.
+and 453,066 bytes of margin respectively. A separate one-child current-source
+regression now applies that frozen ceiling to both live custody shapes on every
+ordinary suite run; it detects drift but does not replace acceptance evidence.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -184,6 +189,15 @@ never hides the other result axes in rendered output.
 
 ## Changelog
 
+### M1 Stage 6 - SH-G-8 Closure Hardening
+
+- Added a current-source live custody regression against the frozen 1,966,080-
+  byte ceiling without modifying the accepted runner, artifacts, or blob-pinned
+  validator. Both ordinary and maximum no-`Gap` custody must remain in budget.
+- Pinned the intentional first-progress tradeoff: an idle task's first detailed
+  `Progress` may wait the full fixed 150 ms, while receipt, reliable state,
+  terminal, recovery, and lifecycle feedback bypass that linger.
+
 ### M1 Stage 6 - SH-G-8 Transport Custody Closure
 
 - Closed SH-G-8 and BR-G-42's event/transport-custody predicate against the
@@ -194,7 +208,8 @@ never hides the other result axes in rendered output.
     at 1,351,794 ordinary and 1,513,014 exact-maximum bytes.
   - **Correctness and authority:** no-`Gap`, ordering, 128/64/64 custody,
     cleanup, terminal truth, clean-commit hashes, and the frozen real-Git
-    validator passed in the 62-test custody suite.
+    validator plus current-source live guard passed in the 63-test custody
+    selection.
   - **Residual scale:** BR-G-45 terminal-result retention and SH-G-15 headed
     cold/warm containment remain open and untested by this closure.
 

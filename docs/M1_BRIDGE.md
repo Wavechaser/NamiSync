@@ -1805,6 +1805,9 @@ is protected only for what it already owns (`_plans` is lock-guarded).
 - **Progress-only drain linger** — once a drain first observes only queued
   `Progress`, it anchors one 150 ms server deadline capped by the drain's
   original 25-second deadline. Replacement progress never slides that anchor.
+  With an active long poll on an otherwise idle task, the first detailed
+  `Progress` may therefore wait the full 150 ms; command receipt and reliable
+  running-state feedback bypass that linger.
   Reliable events, `Gap`, terminal events/records, close, supersession, or
   recovery wake immediately; a response may include the latest progress before
   the reliable value when sequence order permits. This enables the coalescing
@@ -2092,7 +2095,9 @@ When the queued response is progress-only, the server waits at most one fixed
 150 ms linger from first progress availability. Further progress replaces the
 queued snapshot without extending that deadline. Any reliable event, `Gap`,
 terminal event/record, close, supersession, or recovery ends the linger
-immediately. The 25-second long-poll deadline remains the outer bound.
+immediately. This includes the first progress-only response: under an active
+long poll it may consume the full 150 ms, while receipt and reliable state
+bypass that linger. The 25-second long-poll deadline remains the outer bound.
 
 The browser validates the whole response before applying it. On an ordinary or
 uncertainty-recovery response, the first `Gap` remains visible, stops application
@@ -2563,7 +2568,7 @@ require a later schema-version decision rather than an M1 fallback
    and the production drain now anchors one fixed 150 ms deadline at first
    progress-only availability without restarting it for replacement,
    supersession, or retry. Reliable, `Gap`, terminal, recovery, close, and
-   supersession wake immediately; 174 focused drain/command/host checks pass.
+   supersession wake immediately; 175 focused drain/command/host checks pass.
    The former short-path 289,147-byte diagnostic does not close
    realistic-payload custody because it included terminal records and ran
    beside the whole-Job sampler. A separate retained-state sizer now snapshots
@@ -2645,10 +2650,19 @@ require a later schema-version decision rather than an M1 fallback
    default real-Git authority; its two tests and the 60 frozen-validator tests
    pass together as 62 focused checks.
 
-   Root `.gitattributes` pins the runner, frozen validator, new holdout witness,
-   and ceiling JSON to LF, while pinning the calibration and holdout JSON
-   artifacts to CRLF. This preserves the contracted Git blobs and raw artifact
-   hashes across Windows checkouts.
+   `tests/interfaces/web/test_bridge_transport_custody_live.py` separately runs
+   one current-source calibration-a child during the ordinary suite, validates
+   its full artifact with artifact-derived development authority, authenticates
+   this frozen contract, and requires both ordinary and maximum no-`Gap`
+   custody to remain at or below 1,966,080 bytes. This is a live drift guard,
+   not calibration, holdout, or replacement acceptance evidence. Together with
+   the frozen-validator and holdout selection above, custody has 63 focused
+   checks.
+
+   Root `.gitattributes` pins the runner, frozen validator, holdout witness, and
+   ceiling JSON to LF, while pinning the calibration and holdout JSON artifacts
+   to CRLF. This preserves the contracted Git blobs and raw artifact hashes
+   across Windows checkouts; the Tier-1 live guard is not byte authority.
    Calibration can be reproduced from a clean commit with
    `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`.
    The accepted holdout was recorded with

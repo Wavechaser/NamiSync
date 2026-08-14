@@ -935,6 +935,27 @@ def test_br_g_33_progress_only_linger_has_one_fixed_cadence_deadline() -> None:
         assert [update.event.sequence for update in result.updates] == [4]
 
 
+def test_br_g_33_first_progress_may_wait_the_full_default_linger() -> None:
+    with _progress_wait(
+        progress_linger=0.150,
+        progress_sequence=None,
+    ) as waiting:
+        waiting.clock.advance_to(1.0)
+        waiting.service.sink(_event(2, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+
+        waiting.clock.advance_to(1.149)
+        _wake_task(waiting.registry, waiting.task_id)
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(1.150)
+        _wake_task(waiting.registry, waiting.task_id)
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [2]
+
+
 def test_br_g_33_prequeued_progress_keeps_its_first_availability_deadline() -> None:
     clock = _ManualClock()
     registry, service = _registry(
