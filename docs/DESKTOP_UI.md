@@ -10,9 +10,12 @@ native picker path confinement, committed-origin refusal, hostile text, and
 logging privacy. The named browser-behavior witnesses now run through the
 installed production bridge and renderer in real WebView2. Slice 3 evidence
 covers transactional observation, bounded drain behavior, recovery, and
-repeated bridge readiness, while SH-G-8 remains open for the complete BR-G-42
-normal envelope after a valid reference run exceeded the fixed whole-Job
-private-memory ceiling. GUI Break 1
+repeated bridge readiness. Realigned SH-G-8 remains open for the pending 150 ms
+progress-only linger and calibrated/independently held-out transport custody;
+BR-G-45 separately leaves full terminal-artifact retention open, and
+shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
+earlier whole-Job delta is diagnostic input only, not a result for any of those
+new predicates. GUI Break 1
 and Slice 4 have completed their audited token/material/motion and
 visible-sequence/tree/shell realignment with ordinary, scale, and real
 clean-wheel headed evidence. User-facing plan, inventory, history,

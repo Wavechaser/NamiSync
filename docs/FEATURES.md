@@ -1,6 +1,6 @@
 # Features
 
-Implementation note (updated 2026-08-13): M1 Stages 1-5.5 have landed their
+Implementation note (updated 2026-08-14): M1 Stages 1-5.5 have landed their
 contract, schema/settings/security prerequisites, pipelined XXH3-128
 executor/verifier switch, role-free inventory, standalone integrity workflows,
 generic history items, production dispatcher registrations, and optional
@@ -14,10 +14,13 @@ Slice 3 plus later transport hardening are implemented. GUI Break 1 and Slice
 presentation/tree/shell realignment. Product plan,
 inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
 delivery order, host/package placement, SH-G definitions, and beta-package
-closure. The installed real-WebView2 browser-witness migration and SH-G-8's
-complete normal-envelope evidence have separate status: the browser witnesses
-have landed, while SH-G-8 remains open. Numeric-hole non-recovery and the
-`start_plan` revision decision are ratified with landed named regressions.
+closure. The installed real-WebView2 browser-witness migration has landed.
+Realigned SH-G-8 remains open for its required 150 ms progress-only linger and
+calibrated/independently held-out Python transport custody. BR-G-45 separately
+keeps the 100,000-subject terminal artifact set and aggregate completed-task
+retention policy open; SH-G-15 separately keeps version-bound whole-runtime
+containment open. Numeric-hole non-recovery and the `start_plan` revision
+decision are ratified with landed named regressions.
 
 This document lists implemented and planned NamiSync features. Within each
 section, bullets before the first blank line describe settled, built-toward
@@ -334,7 +337,7 @@ Stage 5 location activities through the shared service.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 - **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure.
-- **Desktop Command Transport Implemented**. One function-only pywebview dispatch entry, bounded opaque folder authority, sanitized failures, receipt-safe replay, and bounded task/drain ownership are implemented. `M1_BRIDGE.md` exclusively defines the production mapping, exact envelopes/errors, retry/revision rules, capacities, recovery, and terminal release versus task close. The named browser-behavior witnesses now run through the installed production bridge and renderer in real WebView2; browserless/Node evidence remains supplemental. SH-G-8's normal envelope and user-facing plan/inventory controls remain open.
+- **Desktop Command Transport Implemented**. One function-only pywebview dispatch entry, bounded opaque folder authority, sanitized failures, receipt-safe replay, and bounded task/drain ownership are implemented. `M1_BRIDGE.md` exclusively defines the production mapping, exact envelopes/errors, retry/revision rules, capacities, recovery, and terminal release versus task close. The named browser-behavior witnesses now run through the installed production bridge and renderer in real WebView2; browserless/Node evidence remains supplemental. The newly authoritative 150 ms progress-only linger is not implemented yet, and SH-G-8 remains open for that behavior plus realistic-payload custody calibration/freeze/holdout. BR-G-45 terminal-artifact retention and SH-G-15 whole-runtime containment remain separate open scale features rather than being inferred from the task-count cap or the old whole-Job delta.
 
 ## DESKTOP UI
 

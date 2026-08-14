@@ -6,7 +6,7 @@ ledger v3 verification-invalidation boundary and history v5 receipt journal in
 `DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
 unbounded history getter remains.
 
-Status (updated 2026-08-13): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (updated 2026-08-14): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. Stage 6's secured host and transport through Slice 3, GUI Break 1
@@ -14,9 +14,12 @@ foundation, and Slice 4 presentation core and honest shell frame are also
 implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
 `M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
 definitions, and beta-packaging work. The real-WebView2 browser-witness
-migration is complete; SH-G-8's complete normal-envelope evidence remains
-open after a valid reference run passed event and latency checks but exceeded
-the fixed whole-Job private-memory ceiling.
+migration is complete. Realigned SH-G-8 remains open for the required 150 ms
+progress-only linger and calibrated/independently held-out transport custody;
+BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
+completed-task retention open, while shell-owned SH-G-15 leaves version-bound
+whole-runtime containment open. The earlier whole-Job delta is diagnostic input
+to SH-G-15 design, not SH-G-8 custody evidence or a limit for either gate.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained
@@ -1098,9 +1101,12 @@ nodes directly and follows `M1_BRIDGE.md`'s bounded renderer/query/anchor
 contract while supplying an operable platform accessibility tree. The rail and
 resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
 UI, release, and beta claims stay open. The installed real-WebView2
-browser-behavior witness migration is complete; SH-G-8's complete BR-G-42
-normal four-task envelope remains open because the valid reference run exceeded
-only its fixed whole-Job private-memory ceiling.
+browser-behavior witness migration is complete. The existing four-task event
+truth remains useful, but SH-G-8's realigned BR-G-42 event clause remains open
+until the 150 ms linger, realistic-payload custody calibration, frozen limit,
+and independent holdout land. BR-G-45's terminal-artifact retention policy and
+SH-G-15's version-bound whole-runtime calibration/holdouts remain independently
+open; the 2026-08-13 whole-Job delta closes none of them.
 
 ---
 

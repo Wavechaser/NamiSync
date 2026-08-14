@@ -537,6 +537,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - OPEN (2026-08-14). Progress-only drain churn and invalid custody
+  attribution. The current adapter can return and rearm once for each progress
+  snapshot, while SH-G-8's old evidence charged the complete headed Job and its
+  Python diagnostic mixed subject-scaled terminal results into queue custody.
+  Cause: coalescing had no fixed server linger and three distinct ownership
+  domains shared one memory predicate. The authoritative fix requires a
+  non-extending 150 ms progress-only linger with immediate reliable/lifecycle
+  wakeup plus identity-deduplicated replay/subscriber/adapter custody
+  calibration and an independent holdout. No production or instrument change
+  has landed yet; BR-G-45 terminal artifacts and SH-G-15 whole-runtime
+  containment remain separate open gates.
 - MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
   documents delegated exact errors and retry rules to `M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers
@@ -546,7 +557,8 @@ defect, and move implementation-level test choreography out of the log.
   seam. Fixed by making `M1_BRIDGE.md` the sole bridge/BR-G authority, reducing
   `M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
   and status. Numeric-hole, `start_plan`, and installed real-WebView2 browser
-  witnesses have landed; SH-G-8 remains explicitly open.
+  witnesses have landed. Realigned SH-G-8 remains explicitly open under the
+  later transport-custody contract rather than the former whole-Job predicate.
 - SEVERE - FIXED (2026-08-13). Appearance authority was retired during task
   quiescence before `service.close()` proved terminal completion. An incomplete
   or exceptional close correctly leaves the window open for retry but silently

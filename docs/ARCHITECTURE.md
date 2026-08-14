@@ -2191,19 +2191,33 @@ bounded drain implementation preserves reliable ordering/backpressure while
 coalescing replaceable progress. The exact queue, deadline, recovery,
 sequence, terminal, and release behavior is exclusively in `M1_BRIDGE.md`.
 The explicit-`Gap`-only decision and command-specific `start_plan` revision
-decision are ratified with landed named regressions. BR-G-33 implementation is
-present. Its deterministic fixture now drives four attached-before-tick-zero
+decision are ratified with landed named regressions. BR-G-33's pre-realignment
+implementation is present; its new linger clause remains open. The existing
+deterministic fixture drives four attached-before-tick-zero
 tasks through 60 logical seconds with exactly 6,000 `Progress` and 600 ordered,
 exactly-once reliable item emissions, monotonic coalesced progress, four exact
 terminal records, no `Gap`, and no queue above 64. The separate 260-reliable
 overflow regression remains explicitly beyond-envelope and proves visible
-`Gap`, retained-tail recovery, and terminal reconciliation. The standalone
-installed-wheel real-WebView2 harness implements the conservative whole-Job
-memory contract and real 60-second latency measurement. Its valid 2026-08-13
-reference run passed event truth, ordering, latency, no-`Gap`, and clean-exit
-checks, but its 67,375,104-byte whole-Job private-memory delta exceeded the
-16,777,216-byte ceiling. SH-G-8 remains open without relaxing the bound;
-reproduce with `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
+`Gap`, retained-tail recovery, and terminal reconciliation. The realigned
+transport contract additionally requires one fixed, non-extending 150 ms linger
+for progress-only drains, with immediate reliable/terminal/recovery/lifecycle
+wakeup; that implementation has not landed.
+
+Scale custody is now split by architectural owner. SH-G-8 counts one
+identity-deduplicated deep Python graph rooted only at dispatcher replay,
+subscriber, and adapter queues, using realistic distinct path/detail values and
+calibration followed by a frozen limit and independent holdout. BR-G-45 owns
+the complete subject-scaled terminal artifact set and aggregate completed-task
+retention policy; a 48-task count is not a byte bound. Shell-owned SH-G-15 owns
+the version-bound whole headed runtime: absolute cold peak/settled plateau and
+repeated/long warm marginal/plateau evidence with bounded out-of-Job telemetry,
+per-PID roles/private bytes/threads/handles, topology, and explicit version
+restatement. All three gates remain open. The standalone installed-wheel
+WebView2 harness still supplies useful event and diagnostic data, and its valid
+2026-08-13 run passed event truth, ordering, latency, no-`Gap`, and clean exit.
+Its 67,375,104-byte whole-Job delta is not a transport-custody measurement and
+lacks SH-G-15's calibration/freeze/holdout contract, so it closes none of these
+gates. The existing diagnostic command remains `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
 
 **Stage 6 GUI Break 1 status (completed and realigned 2026-08-13).**
 `interfaces/web/appearance.py` owns Windows preference probes and observation,

@@ -9,7 +9,10 @@ storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and hardened production
 transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
 authority. The installed real-WebView2 browser witnesses have landed; SH-G-8's
-complete normal-envelope evidence remains open.
+realigned event/custody evidence remains open for the pending 150 ms
+progress-only linger, realistic-payload calibration, frozen limit, and
+independent holdout. BR-G-45 terminal-artifact retention and shell-owned
+SH-G-15 whole-runtime containment remain independently open.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
 visible-sequence, operable-tree, and shell realignment; the user-facing
 plan, inventory, history, and control surfaces remain, and the API remains
@@ -436,17 +439,22 @@ decisions are ratified and their named regressions have landed. Numeric holes
 alone are not recovery signals. Browserless/Node probes remain supplemental;
 the named browser-behavior witnesses now run through the installed production
 bridge and renderer in real WebView2. SH-G-8 remains open until the complete
-BR-G-42 reference evidence passes. The ordinary deterministic fixture now
+BR-G-42 event-custody evidence passes. The ordinary deterministic fixture now
 proves four observations precede tick zero, the exact 60-logical-second
 6,000-`Progress`/600-reliable-item shape is lossless and ordered, progress is
 monotonic after coalescing, all four terminal records arrive, and queues stay at
 or below 64. The separate 260-reliable overflow regression remains explicitly
 beyond-envelope and preserves visible `Gap`/tail/terminal reconciliation. The
-standalone installed-wheel WebView2 harness and whole-Job measurement contract
-are implemented. A valid 2026-08-13 reference run passed exact event,
-latency, no-`Gap`, and clean-shutdown checks, but measured a 67,375,104-byte
-whole-Job private-memory delta against the 16,777,216-byte ceiling. SH-G-8
-therefore remains open; reproduce with `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
+standalone installed-wheel WebView2 harness is useful event and diagnostic
+infrastructure, but its current progress-only drains do not implement the newly
+fixed, non-extending 150 ms linger. Corrected custody evidence must deep-size
+the identity-deduplicated dispatcher replay, subscriber, and adapter queues
+with distinct realistic path/detail values, then freeze a limit from
+calibration before a later holdout. Terminal result graphs belong to BR-G-45,
+not that custody total. A valid 2026-08-13 run passed its exact event, latency,
+no-`Gap`, and clean-shutdown checks and measured a 67,375,104-byte whole-Job
+delta, but that value neither passes nor fails realigned SH-G-8 or SH-G-15.
+The existing diagnostic command is `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`; no corrected custody or containment command/result is claimed yet.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

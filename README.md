@@ -18,8 +18,8 @@ M1 Stages 1–5.5 are implemented. The headless sync, inventory, integrity,
 history, dispatcher, and service/CLI surfaces are usable. Stage 6 now has its
 classified launcher, coordinated database gate, packaged bootstrap page, fixed
 single-instance identity, secured local WebView2 product host, and nonblocking
-orderly-close/retry controller. The transport chain through Slice 3 is
-complete under the production mapping defined exclusively in
+orderly-close/retry controller. The existing transport chain through Slice 3
+has landed under the production mapping defined exclusively in
 `docs/M1_BRIDGE.md`, with real paths retained behind opaque server slots, task
 observation attached before work can start, a bounded event drain, and a strict
 inert-text return sink. Explicit-`Gap`-only recovery and command-specific
@@ -42,10 +42,16 @@ history, lifecycle, packaging, and beta closures remain open. The named
 browser-behavior witnesses now run through the installed production bridge and
 renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
 four-task logical-time fixture and standalone installed-wheel benchmark harness
-have landed. A valid real-60-second reference run passed event truth, ordering,
-latency, and shutdown, but its 67,375,104-byte whole-Job private-memory delta
-exceeded the 16,777,216-byte ceiling, so the intentionally non-diagnostic gate
-remains open.
+have landed. The realigned SH-G-8 remains open for a required 150 ms
+progress-only linger that is not implemented yet, plus realistic-payload
+transport-custody calibration, a frozen limit, and an independent holdout.
+BR-G-45 separately leaves the complete 100,000-subject terminal artifact set
+and aggregate completed-task retention policy open. Shell-owned SH-G-15
+separately leaves version-bound absolute cold/settled and repeated/long warm
+whole-runtime containment open. A valid prior real-60-second run passed event
+truth, ordering, latency, and shutdown and measured a 67,375,104-byte whole-Job
+delta; that diagnostic neither passes nor fails any of the realigned memory
+predicates, and no replacement limit or measurement is claimed yet.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as
@@ -161,9 +167,10 @@ never hides the other result axes in rendered output.
     identity, exhaustively crossed every approved public view through dispatch,
     and moved authoritative browser behavior into installed real WebView2.
   - **Scale hardening:** demoted optional Node probes to supplemental evidence,
-    fixed real `sync-plan` terminal validation, and built the 60-second SH-G-8
-    reference harness; its event and latency checks pass, while the measured
-    whole-Job memory overage deliberately leaves the gate open.
+    fixed real `sync-plan` terminal validation, and built the original
+    60-second SH-G-8 reference harness. Its event and latency checks passed;
+    later contract realignment treats its whole-Job result as diagnostic rather
+    than transport-custody or version-bound containment evidence.
 
 ### M1 Stage 6 - GUI And Presentation Realignment Hardening
 

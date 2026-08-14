@@ -1,15 +1,18 @@
 # M1 Bridge and Presentation Contract
 
-Status (2026-07-30, implementation updated 2026-08-13): design, decision, and
+Status (2026-07-30, contract realigned 2026-08-14): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
-transport chain through Slice 3 and the post-Slice-3 hardening are complete.
+existing transport chain through Slice 3 and the post-Slice-3 hardening have
+landed. The fixed 150 ms progress-only linger and corrected transport-custody
+evidence remain implementation work.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
-migration is complete; SH-G-8's complete BR-G-42 normal-envelope evidence
-remains open. Its deterministic ordinary fixture and standalone installed-wheel
-benchmark harness are implemented, but no passing reference-machine artifact
-has been recorded. The
+migration is complete. SH-G-8 remains open pending realistic-payload custody
+calibration, a limit fixed before an independent holdout, and a fresh event run
+after the linger lands. BR-G-45 separately keeps the 100,000-subject terminal
+artifact set and aggregate completed-task retention policy open. Shell-owned
+SH-G-15 separately keeps version-bound whole-runtime containment open. The
 explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed.
 Stage 5.5 landed its tree substrate,
@@ -21,8 +24,10 @@ selection binds, and what the bridge may carry. Closing that seam necessarily
 reaches below the facade where information would otherwise be lost: the
 execution continuation retains user-selection provenance, and selected
 inventory refresh gains an explicit recursive-subtree scan-and-record scope.
-The design is complete for implementation: §9 records the last five resolved
-prerequisites, and no product or bridge-design choice remains open.
+The implemented seam remains authoritative, while §9 and BR-G-45 now identify
+the terminal-retention policy and evidence limits that must be fixed before
+their independent holdouts; those open gates are not silently resolved by the
+existing implementation.
 
 **Standing.** `FEATURES.md` owns behavior and `ARCHITECTURE.md` owns
 contracts; both outrank this file. `M1_PLAN.md` owns the milestone's decision
@@ -1677,6 +1682,14 @@ session while retaining the task id, request id, start receipt, presentation
 state, capacity slot, and plan artifact. Only an explicit `close_task` drops the
 plan and removes the adapter task.
 
+The full terminal result is not ordinary transport custody. One completion can
+simultaneously exist as a core `Terminal(OperationResult)`, its adapter event
+view, the terminal `SessionRecordView`, the serialized response, and a browser
+retry/presentation value. BR-G-45 owns that complete artifact set and the
+aggregate policy for completed tasks. Until its policy and ceilings pass an
+independent holdout, neither the 48-task count bound nor successful session
+release is evidence that retained result bytes are bounded acceptably.
+
 For a compound execute-then-verify run, the two phases are one session
 producing one result with ordered `PhaseResultView`s. The rail summarizes the
 latest phase; the Sync pane reads `phase="execute"` and the Integrity pane
@@ -1782,6 +1795,13 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   drain waits or is refused explicitly. Each blocking drain has a bounded
   25–30 second wait, returns an empty batch on timeout, and is explicitly woken
   on close so pywebview threads cannot accumulate forever.
+- **Progress-only drain linger** — once a drain first observes only queued
+  `Progress`, it anchors one 150 ms server deadline capped by the drain's
+  original 25-second deadline. Replacement progress never slides that anchor.
+  Reliable events, `Gap`, terminal events/records, close, supersession, or
+  recovery wake immediately; a response may include the latest progress before
+  the reliable value when sequence order permits. This enables the coalescing
+  already promised by the queue without changing retry or cursor semantics.
 - **Reliable queue overflow** — the bridge queue is a second bounded handoff
   after the dispatcher's already-bounded `EventStream`, so it must not invent a
   second silent-loss policy. `Progress` is replaceable: a newer snapshot
@@ -1842,6 +1862,13 @@ and record updates are ordered and backpressure at capacity. **Never hold a task
 lock across a facade call, JSON encoding, or other I/O.** DR-BR-11's
 deterministic ids remove what would otherwise have been a node-table lock site,
 since a concurrent rebuild produces identical output.
+
+Transport-memory accounting follows those custody roots rather than process
+ownership: dispatcher replay deques, subscriber deques, and adapter task queues
+form one identity-deduplicated graph. Terminal-result subgraphs reachable from
+queue slots are reported separately under BR-G-45, never omitted and never
+double-charged. Whole-process and renderer/runtime growth belongs only to
+shell-owned SH-G-15.
 
 ---
 
@@ -2054,6 +2081,12 @@ and `replay_from=last accepted non-Gap sequence + 1`; an ordinary explicit
 numeric holes caused by legal progress coalescing do not. The response contains
 no acknowledgment, cursor, receipt, `has_more`, or echoed replay value.
 
+When the queued response is progress-only, the server waits at most one fixed
+150 ms linger from first progress availability. Further progress replaces the
+queued snapshot without extending that deadline. Any reliable event, `Gap`,
+terminal event/record, close, supersession, or recovery ends the linger
+immediately. The 25-second long-poll deadline remains the outer bound.
+
 The browser validates the whole response before applying it. On an ordinary or
 uncertainty-recovery response, the first `Gap` remains visible, stops application
 of later updates, and arms recovery from its `first_missed_seq`. A recovery
@@ -2085,6 +2118,12 @@ close-receipt LRU also proves success to a delayed release retry. Browser drain,
 session-release, and explicit-close recovery use finite delayed schedules and
 become visibly retryable when their budget is exhausted; no uncertainty path
 implicitly disposes of the task.
+
+BR-G-45 remains open on which terminal-result representation, if any, survives
+successful presentation and session release. The eventual aggregate policy
+must preserve callback/release retry truth, reviewed-plan authority, and a
+truthful fallback when durable history is degraded; it may not treat the
+48-task count ceiling as a byte ceiling or clear the only exact result early.
 
 Task start is single-flight per `(command_id, resolved source, resolved target,
 deletion policy)`. One provisional adapter task exists while the facade call is
@@ -2444,35 +2483,35 @@ require a later schema-version decision rather than an M1 fallback
    | 256-row history detail window | 500 ms p95; 1 s maximum |
    | Incremental plan projection memory | 128 MiB maximum |
    | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
-   | Incremental bridge event-queue memory under the event fixture | 16 MiB maximum |
+   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: fix after realistic-payload calibration, before an independent holdout |
+   | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | OPEN under BR-G-45; per-completion and aggregate ceilings are separate |
 
-   **SH-G-8 memory-accounting definition (OPEN).** The acceptance measurement
-   is the conservative private-memory delta of the complete headed Job Object.
-   Its idle baseline is taken only after the real installed production host and
-   WebView2 have loaded the test-owned benchmark page plus wheel-installed
-   bridge/render assets and are blocked on a test-only start handshake. The
-   parent samples one full second of idle Job membership, then samples the Job
-   on a target 20 ms cadence throughout the event fixture and records the
-   actual maximum sample interval—including the tail from the final sample to
-   fixture completion—and membership. The conservative idle
-   baseline is the minimum complete private-byte sample in that fixed one-second
-   window; the fixture value is the maximum complete sample. Any missing member,
-   unreadable process sample, membership that omits the headed root process, or
-   blind interval above 100 ms refuses the evidence rather than allowing a
-   friendly baseline or catch-up samples to hide a peak. Acceptance uses
-   `max(0, sampled private-memory peak - conservative idle baseline)` against
-   the 16 MiB ceiling. This deliberately includes Python, the renderer, CLR/IPC,
-   and unrelated runtime growth: a pass proves the upper bound, while a failure
-   is intentionally non-diagnostic and leaves SH-G-8 open. Identity-deduplicated
-   deep sizing of the live Python `EventHub` replay/subscriber and
-   `TaskRegistry` queue/terminal graphs, and an optional precise renderer-heap
-   series, may be recorded only as diagnostics; each records its actual sample
-   cadence. No payload-byte proxy or subtraction of transient/runtime memory is
-   accepted. This definition does not close SH-G-8: the complete
-   normal-envelope benchmark must still pass and record the baseline, sampled
-   peak, delta, cadence, and membership.
+   **BR-G-42 event-custody definition (required by SH-G-8; REALIGNED, OPEN).**
+   Transport custody
+   includes only the live dispatcher replay deques, subscriber deques, and
+   adapter task queues, measured as one identity-deduplicated deep Python graph.
+   Queue containers and nonterminal event values count. A terminal event or
+   `SessionRecordView` occupies its queue slot, but its result graph does not:
+   terminal artifacts scale with subject count and are measured only by
+   BR-G-45. The instrument reports each root class separately as well as their
+   deduplicated union so one scaling axis cannot be charged to another.
 
-   **SH-G-8 evidence status (OPEN, 2026-08-13).** The deterministic ordinary
+   The corrected evidence preserves the existing capacities, event rates,
+   ordering, coalescing, no-`Gap`, and latency predicates while using a declared
+   realistic upper-bound path/detail corpus with distinct values rather than
+   shared test strings. It records both the ordinary four-task run and the
+   maximum reachable no-`Gap` custody shape: per task, the 128-entry replay,
+   64-entry subscriber, and 64-entry adapter bounds are driven through the
+   production offer/observation path and sampled from a quiescent snapshot. A
+   calibration commit records that corpus, raw root measurements, interpreter,
+   allocation method, and every achieved high-water mark. A later commit fixes
+   a tighter ceiling from that evidence before an independent holdout run; the
+   calibration run cannot validate its own limit. The former 16 MiB whole-Job
+   ceiling is retired rather than inherited or raised.
+   Payload-byte totals and complete-process memory are invalid substitutes for
+   retained transport custody.
+
+   **BR-G-42 / SH-G-8 evidence status (REALIGNED, OPEN, 2026-08-14).** The deterministic ordinary
    fixture now drives four simultaneous tasks through 60 logical seconds with
    exactly 6,000 `Progress` emissions, 600 reliable item emissions, and terminal
    truth for every task. It proves every observer is attached before tick zero,
@@ -2482,14 +2521,20 @@ require a later schema-version decision rather than an M1 fallback
    dispatcher subscriber queue nor adapter task queue exceeds 64. The existing
    260-reliable fault-injected overflow case remains a
    separate, explicitly beyond-envelope witness for visible `Gap`, retained-tail
-   recovery, and terminal reconciliation.
+   recovery, and terminal reconciliation. Those pre-realignment correctness
+   predicates pass, but the newly fixed 150 ms linger still needs production
+   implementation and regression evidence. The current short-path 289,147-byte
+   diagnostic does not close realistic-payload custody because it also included
+   terminal records and ran beside the whole-Job sampler. Corrected calibration
+   and independent holdout evidence remain required.
 
    The standalone `tests/bridge_event_benchmark.py` harness builds and installs
    the archived-HEAD wheel, loads a test-owned benchmark page with the installed
    production bridge/render assets in real WebView2, waits on a
    test-only start handshake, runs the same aggregate rates for a real 60
    seconds, and records latency, `Gap`, fixture, runtime, dirty-state, and
-   whole-Job memory evidence under the definition above. The artifact also
+   whole-Job diagnostics that may inform, but cannot close, shell-owned SH-G-15.
+   The artifact also
    identifies and enforces the declared Windows build, CPU/core shape, RAM,
    repository NVMe, AC-power state, and declared Python/SQLite plus pinned
    pywebview/pythonnet profile; it records the resolved Bottle, evergreen
@@ -2508,13 +2553,16 @@ require a later schema-version decision rather than an M1 fallback
    monotonic progress, no `Gap`, and clean shutdown. Measured producer rates
    were 100.043 `Progress`/s and 10.004 reliable items/s. Progress latency was
    4 ms p95 / 17 ms maximum; reliable/terminal
-   latency was 5 ms p95 / 28 ms maximum. All archive, machine, runtime, event,
-   latency, cadence, and terminal predicates passed. The complete headed Job
+   latency was 5 ms p95 / 28 ms maximum. Its declared archive, machine/runtime
+   identity-profile, event, latency, cadence, and terminal predicates passed;
+   those were not SH-G-15 containment predicates. The complete headed Job
    sampled 287,506,432 idle-baseline bytes and a 354,881,536-byte peak, a
    67,375,104-byte delta against the 16,777,216-byte ceiling, over 3,006
    fixture samples with a 21.042 ms maximum interval. That conservative
-   overage is intentionally non-diagnostic, but it means the reference run did
-   not pass and SH-G-8 remains open; capacities and budgets are unchanged. The
+   overage is intentionally non-diagnostic. It does not measure transport
+   custody and therefore neither passes nor fails realigned SH-G-8. Queue
+   capacities and event latency budgets are unchanged; no replacement custody
+   ceiling is set by this checkpoint. The
    archived source scope was clean; its recorded worktree status contained only
    the two approved temporary root references, removed during final cleanup.
 
@@ -3062,12 +3110,14 @@ because its local tests are easier.
   are maps/pending publication and scheduler notification atomic. An
   attach/shutdown race rolls back the unpublished session and starts no work. Concurrent drains
   cannot reorder or split one task's sequence;
-  progress coalesces without displacing reliable data; a reliable flood reaches
+  progress coalesces behind one fixed 150 ms progress-only deadline without
+  displacing or delaying reliable data; a reliable flood reaches
   the existing visible `Gap`/resubscribe path and terminal truth is recovered;
   shutdown refuses new handlers, waits for admitted handlers, and wakes drains
   and capacity-blocked producers before closing observations. A failed drain
   without a `Gap` resubscribes after the last client-accepted non-`Gap`
-  sequence. An ordinary explicit `Gap` remains visible, stops later updates,
+  sequence. Repeated progress cannot extend the deadline; reliable and terminal
+  values wake it immediately. An ordinary explicit `Gap` remains visible, stops later updates,
   and resubscribes from its exact `first_missed_seq`; a recovery response's
   matching leading `Gap` proves the prefix unavailable and permits its retained
   tail without another loop
@@ -3222,30 +3272,57 @@ because its local tests are easier.
   unchanged-parameter and changed-parameter window latency, bounded detail-query
   row and decode counts, `preview_selection` at depth 32, and history
   summary/detail latency over the exact retained-item fixture. It also records
-  event-drain latency and peak bridge-queue memory under the stated normal
-  burst/rate using the SH-G-8 whole-Job definition above and proves no `Gap`
-  occurs below that envelope. The ordinary pytest
+  event-drain latency and peak identity-deduplicated transport custody under
+  the stated normal burst/rate and maximum reachable no-`Gap` shape using the
+  SH-G-8 definition above. It proves no `Gap` occurs below the ordinary
+  envelope. The ordinary pytest
   deterministically asserts query count, decoded row count,
   allocation-sensitive object count, queue bound/coalescing, and fixture shape;
   the named benchmark command runs cold and warm cases separately and records
   machine/runtime identity. *Not satisfied by* choosing sizes after seeing
   results, reporting averages without the declared percentile/maximum,
-  measuring payload bytes or a selected component instead of the complete
-  headed Job, taking the baseline before the real installed host/WebView2 and
-  wheel-installed bridge/render assets reach the blocked
-  start handshake, treating a target sampling cadence as a guaranteed interval,
-  accepting a sampling blind interval above 100 ms, omitting Job membership,
-  allowing normal-load gaps, or using many empty
-  history runs instead of a large retained run.
+  measuring payload bytes, whole-process memory, or a short/shared-string
+  fixture instead of the declared live custody roots, folding terminal result
+  graphs into transport, omitting one root class or achieved high-water mark,
+  allowing normal-load gaps, or using many empty history runs instead of a
+  large retained run.
 
   **Current status:** the exact logical-time fixture and standalone
   installed-wheel benchmark harness have landed, while the separate
-  beyond-envelope overflow regression remains passing. The 2026-08-13 run of
+  beyond-envelope overflow regression remains passing. The fixed 150 ms
+  progress-only linger, realistic-payload custody calibration, frozen limit,
+  and independent holdout have not landed. The 2026-08-13 run of
   archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
   event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
-  predicates, but its conservative whole-Job private-memory delta was
-  67,375,104 bytes against the 16,777,216-byte ceiling. BR-G-42's event budget
-  and SH-G-8 therefore stay open without relaxing the fixed bound.
+  predicates. Its 67,375,104-byte whole-Job delta is not transport-custody
+  evidence and neither passes nor fails this realigned clause. BR-G-42's event
+  portion and SH-G-8 remain open without claiming a new measurement or limit.
+- **BR-G-45 — Terminal artifacts and completed-task retention are bounded
+  separately.** For one exact 100,000-subject completion, calibration and a
+  later independent holdout measure the complete per-completion artifact set:
+  the core `Terminal(OperationResult.items)` retained by dispatcher custody,
+  its adapter `SessionEventView`, the terminal `SessionRecordView` and
+  `OperationResultView.items`, serialization/native return values, browser
+  retry/presentation copies, and the post-callback representation. The
+  identity ledger reports shared and distinct objects without either omitting
+  or double-charging them. Calibration fixes separate native, serialized, and
+  renderer-retained ceilings before holdout; it also records construction,
+  delivery, presentation, release, and settlement latency so a memory pass
+  cannot hide a frozen window.
+
+  A separate aggregate policy fixes the maximum completed-task bytes and exact
+  representations retained before presentation, during callback or release
+  retry, after successful `release_terminal_session`, and after explicit
+  `close_task`. It preserves the reviewed plan, exact retry authority, and a
+  truthful result when durable history is degraded. Repeated complete/release/
+  close cycles and the maximum permitted completed-task set must reach the
+  declared plateau; a task-count cap alone is not a byte policy. **Current
+  status: OPEN.** No realistic 100,000-subject calibration, frozen ceilings,
+  aggregate policy, or independent holdout has landed. *Not satisfied by*
+  measuring only `SessionRecordView`, excluding the full terminal event,
+  reusing one interned path/detail value, measuring an empty/summary result,
+  clearing truth before its presentation/retry boundary, assuming degraded
+  history can reconstruct it, or treating SH-G-8/SH-G-15 as substitutes.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**
   `DESKTOP_UI.md`, the focused component documents, README overview/index/
   limitations/changelog, and `ui_mockup/` status agree with the implemented
@@ -3282,7 +3359,10 @@ parity lives in `tests/test_pywebview_runtime.py`; pure presentation tests live
 in `test_visible_sequence.py`;
 sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
 `test_inventory_surface.py`, and `test_lifecycle.py`; scale tests live in
-`tests/test_bridge_scale.py`. Their gate tests retain the
+`tests/test_bridge_scale.py`, the event artifact validator lives in
+`tests/interfaces/web/test_bridge_event_benchmark.py`, and BR-G-45's focused
+artifact/retention cases will live in
+`tests/interfaces/web/test_terminal_artifact_scale.py`. Their gate tests retain the
 `test_br_g_<number>_` prefix. A slice may add narrower unit files, but moving a
 gate test elsewhere requires updating this table in the same change so no
 acceptance test becomes undiscoverable.
@@ -3315,10 +3395,10 @@ its row and the applicable regression rows are green.
 | DR-BR-18 | BR-G-34, BR-G-36 |
 | DR-BR-19 | BR-G-34, BR-G-36 |
 | DR-BR-20 | BR-G-16, BR-G-23, BR-G-38, BR-G-39 |
-| DR-BR-21 | BR-G-35, BR-G-41 |
-| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41 |
+| DR-BR-21 | BR-G-35, BR-G-41, BR-G-45 |
+| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41, BR-G-45 |
 | DR-BR-23 | BR-G-31 |
-| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41 |
+| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41, BR-G-42 |
 | DR-BR-25 | BR-G-32, BR-G-35, BR-G-39 |
 | DR-BR-26 | BR-G-1–3, BR-G-35 |
 | DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33 |
@@ -3396,8 +3476,8 @@ a parallel pair.
 | 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 closed |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
-| 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown | 5, 6 | BR-G-40, BR-G-41 and the history portion of BR-G-42 |
-| 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | 7 | BR-G-43, BR-G-44 |
+| 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown, terminal-artifact retention policy | 5, 6 | BR-G-40, BR-G-41, BR-G-45, and the history portion of BR-G-42 |
+| 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | 7 | BR-G-43, BR-G-44, and shell-owned SH-G-15 |
 
 **Ordering and parallelism.** Slice 0 shares nothing with Stage 5.5 and runs
 beside it. It is the falsification gate for the chosen host and must complete

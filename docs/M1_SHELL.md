@@ -1,6 +1,6 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, implementation updated 2026-08-13): plan and progress for
+Status (2026-08-04, contract realigned 2026-08-14): plan and progress for
 the remaining M1 desktop shell. The 2026-08-06 revision folded in the
 bounded-history and terminal-cleanup contracts now recorded in `HISTORY.md`
 and `DISPATCHER.md` and added sections 5-8; the 2026-08-07 revision settles
@@ -10,11 +10,14 @@ gate, the GUI argument grammar, and constructor-only command composition; the
 2026-08-08 revision added the Fluent visual design language, motion, and the
 two GUI Breaks that bound the visual work; their visual authority now lives in
 `DESKTOP_UI.md`.
-Stages 1-5.5, Phase 0, the WebView2 reality spike, and Slices 1-3 are
-implemented. Their secured host, transport, picker, origin, privacy, event
-drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`; the installed
-real-WebView2 browser-behavior migration is complete, while SH-G-8's
-normal-envelope evidence remains explicitly open below. GUI Break 1's token,
+Stages 1-5.5, Phase 0, the WebView2 reality spike, and the existing Slice 1-3
+implementation have landed. Their secured host, transport, picker, origin,
+privacy, event-drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`;
+the installed real-WebView2 browser-behavior migration is complete. Realigned
+SH-G-8 remains open for the fixed 150 ms progress-only linger plus calibrated
+and independently held-out transport custody. BR-G-45 separately keeps terminal
+artifact/retention scale open, and shell-owned SH-G-15 keeps version-bound
+whole-runtime containment open. GUI Break 1's token,
 component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame have completed their
 audited realignment and restored headed gates. Slice 5 is the next delivery
@@ -574,7 +577,8 @@ installed WebView2 composition; Node probes remain supplemental evidence.
 
 ### Slice 3 - Event drain
 
-Status: implementation complete; SH-G-8 remains open.
+Status: the existing implementation has landed; the realigned 150 ms
+progress-only linger and SH-G-8 custody evidence remain open.
 
 The exact event command, queue policy, recovery cursor, explicit-`Gap`
 semantics, terminal reconciliation, retry behavior, and terminal-session
@@ -603,11 +607,17 @@ exact deterministic normal shape: four tasks, 60 logical seconds, 6,000
 64-entry queue ceiling. The separate 260-reliable overflow case remains
 explicitly beyond that envelope and proves visible `Gap`, retained-tail
 recovery, and terminal reconciliation. The standalone installed-wheel WebView2
-benchmark harness also exists. Its valid 2026-08-13 reference run passed exact
-event truth, latency, no-`Gap`, and shutdown checks, but measured a 67,375,104-byte
-whole-Job private-memory delta against the 16,777,216-byte ceiling. The
-conservative failure is intentionally non-diagnostic, so the gate remains open
-without changing its capacities or budgets.
+benchmark harness also exists. The corrected contract adds one fixed,
+non-extending 150 ms wait only when a drain sees progress alone; reliable,
+`Gap`, terminal, close, supersession, and recovery values wake it immediately.
+That production behavior has not landed. Custody acceptance separately deep
+sizes the identity-deduplicated dispatcher replay, subscriber, and adapter queue
+graphs with distinct realistic path/detail values, fixes a limit after
+calibration, and applies it to a later independent holdout. Terminal result
+graphs belong to BR-G-45, and complete headed-runtime growth belongs to SH-G-15.
+The valid 2026-08-13 run's 67,375,104-byte whole-Job delta therefore neither
+passes nor fails realigned SH-G-8; no replacement measurement or ceiling is
+claimed yet.
 
 ### GUI Break 1 - Presentation foundation (completed 2026-08-13)
 
@@ -647,8 +657,10 @@ BR-G-39, and the inventory portion of BR-G-42.
 
 Land database-paged history, semantic settings, cosmetic `ui-state.json`,
 and the task-owned cleanup UI. The exact lifecycle and history bridge rows
-remain exclusively in `M1_BRIDGE.md`. Close BR-G-40, BR-G-41, and the
-history portion of BR-G-42.
+remain exclusively in `M1_BRIDGE.md`. Design and prove BR-G-45's complete
+100,000-subject terminal artifact set and aggregate completed-task retention
+policy, then close BR-G-40, BR-G-41, BR-G-45, and the history portion of
+BR-G-42.
 
 ### GUI Break 2 - Visual cohesion
 
@@ -661,7 +673,8 @@ review defined by `DESKTOP_UI.md`. It precedes Slice 8.
 Add the frozen specification, dependency lock and CI, third-party notices,
 source-release material, frozen smoke, and clean-checkout release proof.
 Reconcile active documentation and the `ui_mockup/` reference against the
-as-built product. Close BR-G-43 and BR-G-44.
+as-built product. Close BR-G-43, BR-G-44, and the version-bound SH-G-15
+whole-runtime containment gate.
 
 ## 3. Test Commands
 
@@ -791,20 +804,32 @@ carry the `headed` marker; all are collected by the release command.
   by* scanning a hand-maintained file list, asserting only the meta element's
   presence, testing the component gallery instead of the production shell, or
   measuring a copied/test-only tree implementation.
-- **SH-G-8 — OPEN: the drain attaches before work starts.** The deterministic
-  ordinary fixture proves four observations attach before tick zero, then
-  drives 60 logical seconds with exactly 6,000 `Progress` and 600 reliable item
-  emissions plus four terminal records. All reliable ids arrive exactly once
-  and per-session ordered, delivered progress is strictly monotonic after
-  coalescing, no normal `Gap` occurs, and no queue exceeds 64. A separate
-  260-reliable beyond-envelope burst surfaces `Gap`, resumes from the retained
-  replay tail when available, and reconciles terminal truth without claiming
-  the missing reliable events were recovered. Peak memory uses
-  `M1_BRIDGE.md` §9.4's conservative whole headed Job Object delta; component
-  or payload-byte measurements are diagnostic only. *Not satisfied by*
-  attaching after start, relying on replay for the normal path, hiding loss
-  behind terminal recovery, or treating logical-time/contract tests as the
-  real-60-second latency and memory artifact.
+- **SH-G-8 — OPEN: the drain attaches before work starts and transport custody
+  is bounded.** The deterministic ordinary fixture proves four observations
+  attach before tick zero, then drives 60 logical seconds with exactly 6,000
+  `Progress` and 600 reliable item emissions plus four terminal records. All
+  reliable ids arrive exactly once and per-session ordered, delivered progress
+  is strictly monotonic after coalescing, no normal `Gap` occurs, and no queue
+  exceeds 64. A separate 260-reliable beyond-envelope burst surfaces `Gap`,
+  resumes from the retained replay tail when available, and reconciles terminal
+  truth without claiming the missing reliable events were recovered.
+
+  A progress-only drain anchors one non-extending 150 ms server deadline from
+  first progress availability, capped by its existing long-poll deadline.
+  Replacement progress does not slide it; reliable, `Gap`, terminal, close,
+  supersession, and recovery values wake immediately. Transport-memory
+  acceptance follows `M1_BRIDGE.md` §9.4 and counts the identity-deduplicated
+  dispatcher replay, subscriber, and adapter queue graph with distinct
+  realistic path/detail values, per-root totals, achieved high-water marks, and
+  the maximum reachable no-`Gap` shape. Calibration records raw measurements;
+  a later commit freezes the limit before an independent holdout. Terminal
+  result graphs belong to BR-G-45 and complete headed-runtime growth to SH-G-15.
+  **The linger, corrected instrument, calibration limit, and holdout have not
+  landed.** *Not satisfied by* attaching after start, relying on replay for the
+  normal path, sliding the progress deadline, delaying a reliable value,
+  hiding loss behind terminal recovery, reusing short/shared fixture strings,
+  measuring payload bytes or whole-process memory, folding terminal artifacts
+  into custody, or letting calibration validate its own chosen limit.
 - **SH-G-9 — The history pager terminates on the empty terminal page.** A
   fault-injected traversal whose live cursor is ahead of durability renders
   the committed prefix and stops on the empty terminal page; a later repair
@@ -905,6 +930,44 @@ carry the `headed` marker; all are collected by the release command.
   only status cue. Later slices may extend the registry only through reviewed
   source, asset/provenance, packaging, and test changes.
 
+- **SH-G-15 — OPEN: the complete headed runtime is version-bound and
+  contained.** This is distinct from SH-G-8's Python transport-custody graph
+  and BR-G-45's subject-scaled terminal artifacts. A parent instrument outside
+  the headed Job begins sampling when the root is assigned, before window
+  startup, and records absolute cold peak plus a fixed post-fixture settled
+  plateau without subtracting an idle baseline. In the same loaded process,
+  repeated ordinary fixtures and a separately declared long fixture use equal
+  fixed pre/post quiescent windows to record warm marginal peak and plateau
+  growth. Private bytes, process count, thread count, and handle count retain
+  independent absolute and growth predicates rather than collapsing into one
+  friendly total.
+
+  Every sample records Job membership and, for each member, PID plus creation
+  time, executable/role, private bytes, threads, and handles. Member birth,
+  exit, or role change remains visible; an unreadable live member, missing root,
+  PID-reuse ambiguity, or asymmetric pre/post topology refuses the affected
+  evidence. Raw telemetry is streamed or held in fixed bounded buffers outside
+  the Job. The child performs no whole-evidence serialization during a measured
+  window, and final artifact assembly begins only after the last post-fixture
+  plateau closes. Test-only in-Job state is declared and bounded rather than
+  subtracted after measurement.
+
+  Calibration fixes the fixture counts/durations, plateau statistic, ceilings,
+  and a predeclared headroom rule in one commit. A later commit runs independent
+  holdouts without retuning them. Each accepted artifact binds the exact source
+  and wheel, Windows build, CPU/RAM profile, CPython, SQLite, pywebview,
+  pythonnet/CLR, Bottle, and WebView2 identities. A changed runtime tuple has no
+  inherited pass: its limits and evidence are explicitly reaffirmed or
+  recalibrated through the same calibration/freeze/holdout sequence. **No
+  calibration limits or holdout exist yet.** The 2026-08-13 67,375,104-byte
+  whole-Job delta is diagnostic input only because that run lacks cold absolute
+  and settled plateaus, symmetric repeated/long warm windows, decontaminated
+  telemetry, and frozen independent limits. *Not satisfied by* one baseline
+  delta, aggregate-only PID sampling, serializing growing evidence in the
+  measured child, choosing a limit from its own holdout, treating calibration
+  as validation, dropping thread/handle/topology growth, or silently carrying a
+  pass across a version change.
+
 SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
 themes with contrast, Mica apply/degrade, and reduced-motion with the motion
 tokens — is proven on GUI Break 1's gallery. Slice 4 closes the shared-shell
@@ -931,11 +994,12 @@ headed BR-G-32 transport evidence),
 `tests/interfaces/web/test_visible_sequence.py` (BR-G-34 and BR-G-2's Stage 6
 structure clause),
 `tests/interfaces/web/test_shell_headed.py` (installed-wheel headed SH-G-7),
-`tests/interfaces/web/test_drain.py` (SH-G-8 deterministic and overflow
-fixtures), `tests/interfaces/web/test_bridge_event_benchmark.py` (ordinary
-benchmark-contract checks), and the opt-in installed-wheel command
+`tests/interfaces/web/test_drain.py` (SH-G-8 deterministic, linger, and
+overflow fixtures), `tests/interfaces/web/test_bridge_event_benchmark.py`
+(ordinary event/custody artifact-contract checks), and the opt-in
+installed-wheel command
 `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`
-(SH-G-8 reference evidence),
+(SH-G-8 event evidence; its custody instrument is pending),
 `tests/interfaces/web/test_history_pager.py` (SH-G-9),
 `tests/interfaces/web/test_single_instance.py` (ordinary/static SH-G-10),
 `tests/interfaces/web/test_design_tokens.py` (ordinary SH-G-11),
@@ -945,7 +1009,10 @@ benchmark-contract checks), and the opt-in installed-wheel command
 `tests/interfaces/web/test_motion.py` (ordinary SH-G-13), plus
 `tests/interfaces/web/test_icons.py` and
 `tests/interfaces/web/test_component_gallery_headed.py` (installed-wheel
-headed SH-G-11/13/14).
+headed SH-G-11/13/14). SH-G-15 implementation must add an ordinary artifact
+validator under `tests/interfaces/web/` and a separate opt-in installed-wheel
+runtime command under `tests/`; this list and the command become exact in the
+same change rather than borrowing SH-G-8's `passed` field.
 A gate test may live elsewhere
 only when the owning slice updates this list in the same change.
 Release evidence records the collected `test_sh_g_*` node ids alongside the
@@ -960,11 +1027,12 @@ clause lands:
 | Phase 0 | SH-G-4 |
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
-| Slice 3 | SH-G-8 remains open pending a passing recorded BR-G-42 reference-machine event artifact |
+| Slice 3 | SH-G-8 remains open pending the 150 ms linger, custody calibration, frozen limit, and independent holdout |
 | GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
 | Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
 | Slice 7 | SH-G-9 |
+| Slice 8 | SH-G-15 remains open pending version-bound calibration, frozen limits, and independent holdouts |
 
 ## 6. Slice-to-gate map
 
@@ -976,22 +1044,23 @@ This table maps shell delivery order to the sole BR-G definitions in
 | Phase 0 | prerequisites for BR-G-19/31/32 | complete |
 | Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
 | Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | complete, including installed real-WebView2 browser witnesses |
-| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation complete; SH-G-8 remains open pending a passing recorded reference-machine event artifact |
+| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | existing implementation landed; 150 ms linger and SH-G-8 custody calibration/freeze/holdout pending |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
 | Slice 5 | BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
 | Slice 6 | BR-G-22, BR-G-23, BR-G-38, BR-G-39; inventory portion of BR-G-42 | pending |
-| Slice 7 | BR-G-40, BR-G-41; history portion of BR-G-42 | pending |
-| Slice 8 | BR-G-43 and BR-G-44 | pending |
+| Slice 7 | BR-G-40, BR-G-41, BR-G-45; history portion of BR-G-42 | pending |
+| Slice 8 | BR-G-43, BR-G-44, and shell-owned SH-G-15 | pending |
 
 The explicit-`Gap`-only recovery decision and the command-specific
 `start_plan` revision decision are ratified in `M1_BRIDGE.md`; their named
 regressions have landed. A numeric sequence hole alone does not reopen recovery.
-SH-G-8 remains open because the deterministic normal fixture, separate
-beyond-envelope overflow regression, and committed benchmark harness do not
-substitute for a passing recorded reference-machine artifact. The valid
-2026-08-13 run passed duration/rate/event/latency/shutdown predicates but
-exceeded the fixed whole-Job memory ceiling.
+SH-G-8 remains open because the 150 ms linger, realistic-payload custody
+calibration, frozen limit, and independent holdout have not landed. The valid
+2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but
+its whole-Job delta is neither corrected transport-custody evidence nor a
+version-bound SH-G-15 containment result. BR-G-45 and SH-G-15 remain separately
+open; no gate inherits a limit or pass from that run.
 
 ## 7. Contract pointers and change control
 
