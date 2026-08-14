@@ -4,13 +4,14 @@ Status (2026-07-30, contract realigned 2026-08-14): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
 existing transport chain through Slice 3 and the post-Slice-3 hardening have
-landed. The fixed 150 ms progress-only linger and corrected transport-custody
-evidence remain implementation work.
+landed. The fixed 150 ms progress-only linger has landed with focused
+fixed-anchor, non-sliding replacement, immediate-wake, and lifecycle-race
+evidence. Corrected transport-custody evidence remains implementation work.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
 migration is complete. SH-G-8 remains open pending realistic-payload custody
-calibration, a limit fixed before an independent holdout, and a fresh event run
-after the linger lands. BR-G-45 separately keeps the 100,000-subject terminal
+calibration, a limit fixed before an independent holdout, and that independent
+holdout. BR-G-45 separately keeps the 100,000-subject terminal
 artifact set and aggregate completed-task retention policy open. Shell-owned
 SH-G-15 separately keeps version-bound whole-runtime containment open. The
 explicit-`Gap`-only recovery and command-specific `start_plan` revision
@@ -2521,9 +2522,12 @@ require a later schema-version decision rather than an M1 fallback
    dispatcher subscriber queue nor adapter task queue exceeds 64. The existing
    260-reliable fault-injected overflow case remains a
    separate, explicitly beyond-envelope witness for visible `Gap`, retained-tail
-   recovery, and terminal reconciliation. Those pre-realignment correctness
-   predicates pass, but the newly fixed 150 ms linger still needs production
-   implementation and regression evidence. The current short-path 289,147-byte
+   recovery, and terminal reconciliation. Those correctness predicates pass,
+   and the production drain now anchors one fixed 150 ms deadline at first
+   progress-only availability without restarting it for replacement,
+   supersession, or retry. Reliable, `Gap`, terminal, recovery, close, and
+   supersession wake immediately; 174 focused drain/command/host checks pass.
+   The current short-path 289,147-byte
    diagnostic does not close realistic-payload custody because it also included
    terminal records and ran beside the whole-Job sampler. Corrected calibration
    and independent holdout evidence remain required.
@@ -3290,8 +3294,9 @@ because its local tests are easier.
   **Current status:** the exact logical-time fixture and standalone
   installed-wheel benchmark harness have landed, while the separate
   beyond-envelope overflow regression remains passing. The fixed 150 ms
-  progress-only linger, realistic-payload custody calibration, frozen limit,
-  and independent holdout have not landed. The 2026-08-13 run of
+  progress-only linger and focused regressions have landed. Realistic-payload
+  custody calibration, a frozen limit, and an independent holdout have not
+  landed. The 2026-08-13 run of
   archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
   event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
   predicates. Its 67,375,104-byte whole-Job delta is not transport-custody

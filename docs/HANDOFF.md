@@ -1,11 +1,13 @@
 # Session Handoff
 
-Status (2026-08-14): this checkpoint realigns documentation authority only; it
-does not change production behavior, instruments, limits, or evidence. The
-existing early-shell implementation still lacks the newly authoritative fixed
-150 ms progress-only linger. SH-G-8 remains open pending that implementation,
-realistic-payload transport-custody calibration, a limit fixed in a later
-commit, and an independent holdout. BR-G-45 separately remains open for the
+Status (2026-08-14): the progress-only drain behavior checkpoint has landed.
+Each task retains one fixed 150 ms deadline from first progress-only
+availability; replacement, supersession, and retry cannot restart it, and the
+original long-poll deadline remains the outer cap. Reliable, `Gap`, terminal,
+recovery, close, and supersession wake immediately. The 174 focused
+drain/command/host checks pass. SH-G-8 remains open for realistic-payload
+transport-custody calibration, a limit fixed in a later commit, and an
+independent holdout. BR-G-45 separately remains open for the
 complete 100,000-subject terminal artifact set and aggregate completed-task
 retention policy. Shell-owned SH-G-15 separately remains open for version-bound
 whole-runtime containment. Slices 5-8 remain product work.
@@ -21,7 +23,8 @@ whole-runtime containment. Slices 5-8 remain product work.
 - BR-G-33/SH-G-8 now require a single non-extending 150 ms server linger when a
   drain first sees progress alone. Replacement progress does not slide the
   deadline. Reliable, `Gap`, terminal, close, supersession, and recovery values
-  wake immediately. This behavior is specified but not implemented.
+  wake immediately. This behavior and its stale-prequeue, supersession/retry,
+  fixed-anchor, immediate-wake, ordering, and cursor regressions have landed.
 - BR-G-45 owns the entire subject-scaled completion set: core
   `Terminal(OperationResult.items)`, adapter terminal event view,
   `SessionRecordView`/`OperationResultView.items`, serialized/native return,
@@ -118,23 +121,20 @@ acknowledgment races; those paths were fixed or removed before the valid run.
 
 ## Immediate Next Work
 
-1. Implement the non-extending 150 ms progress-only linger in `drain.py` and
-   prove immediate reliable/terminal/recovery/lifecycle wakeup, fixed-anchor
-   behavior, shutdown/supersession races, ordering, and unchanged capacity.
-2. Replace the old deep-size diagnostic with an explicit SH-G-8 custody
+1. Replace the old deep-size diagnostic with an explicit SH-G-8 custody
    instrument. Use production offer/observation paths, distinct realistic
    path/detail values, exact replay/subscriber/adapter roots, strong identity
    deduplication, achieved high-water marks, and a quiescent maximum no-`Gap`
    snapshot. Bound or stream telemetry and perform no growing full serialization
    during the measured interval.
-3. Record calibration without a pass/fail limit. In a later commit freeze the
+2. Record calibration without a pass/fail limit. In a later commit freeze the
    corpus, allocation method, interpreter, ceiling, and headroom; only a later
    independent artifact may close SH-G-8.
-4. Design BR-G-45 before clearing terminal state. Measure every simultaneous
+3. Design BR-G-45 before clearing terminal state. Measure every simultaneous
    core/adapter/browser representation at 100,000 subjects and decide what may
    survive presentation/release when history is degraded. Then freeze both
    per-completion and aggregate limits before holdout.
-5. Build SH-G-15 as a distinct artifact and `passed` field, not an extension of
+4. Build SH-G-15 as a distinct artifact and `passed` field, not an extension of
    SH-G-8's result. Move raw telemetry ownership outside the Job; retain
    per-PID/role/thread/handle/topology series; use equal pre/post windows; add
    repeated and long warm fixtures plus cold absolute/settled phases. Diagnose
@@ -152,16 +152,18 @@ from one duration.
 
 ## Verification
 
-- Documentation-only checkpoint; no production tests or benchmarks claim new
-  coverage.
-- Required before commit: active-doc contradiction search and
-  `git diff --check`.
+- `tests/interfaces/web/test_drain.py`: 48 passed.
+- `tests/interfaces/web/test_commands.py`: 77 passed.
+- `tests/interfaces/web/test_host.py`: 49 passed.
+- Total focused Python evidence: 174 passed. No new custody, BR-G-45, SH-G-15,
+  or headed benchmark result is claimed by this checkpoint.
+- Required before commit: active-doc contradiction search and `git diff --check`.
 
 ## Immediate Context
 
-Do not mark the 150 ms linger or corrected custody instrument implemented in
-this checkpoint. Do not reuse the old 67,375,104-byte delta as SH-G-8 failure,
-SH-G-15 calibration limit, or BR-G-45 evidence. Preserve explicit
+The 150 ms linger is implemented; the corrected custody instrument is not. Do
+not reuse the old 67,375,104-byte delta as SH-G-8 failure, SH-G-15 calibration
+limit, or BR-G-45 evidence. Preserve explicit
 terminal-session-release versus task-close authority while designing aggregate
 terminal retention, and keep all three gates open until their own frozen
 holdout evidence exists.

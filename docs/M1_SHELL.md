@@ -13,10 +13,10 @@ two GUI Breaks that bound the visual work; their visual authority now lives in
 Stages 1-5.5, Phase 0, the WebView2 reality spike, and the existing Slice 1-3
 implementation have landed. Their secured host, transport, picker, origin,
 privacy, event-drain, and lifecycle contracts are recorded in `M1_BRIDGE.md`;
-the installed real-WebView2 browser-behavior migration is complete. Realigned
-SH-G-8 remains open for the fixed 150 ms progress-only linger plus calibrated
-and independently held-out transport custody. BR-G-45 separately keeps terminal
-artifact/retention scale open, and shell-owned SH-G-15 keeps version-bound
+the installed real-WebView2 browser-behavior migration and fixed, non-sliding
+150 ms progress-only linger are complete. Realigned SH-G-8 remains open for
+calibrated and independently held-out transport custody. BR-G-45 separately
+keeps terminal artifact/retention scale open, and shell-owned SH-G-15 keeps version-bound
 whole-runtime containment open. GUI Break 1's token,
 component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame have completed their
@@ -577,8 +577,8 @@ installed WebView2 composition; Node probes remain supplemental evidence.
 
 ### Slice 3 - Event drain
 
-Status: the existing implementation has landed; the realigned 150 ms
-progress-only linger and SH-G-8 custody evidence remain open.
+Status: the existing implementation and realigned 150 ms progress-only linger
+have landed; SH-G-8 custody calibration/freeze/holdout evidence remains open.
 
 The exact event command, queue policy, recovery cursor, explicit-`Gap`
 semantics, terminal reconciliation, retry behavior, and terminal-session
@@ -610,7 +610,9 @@ recovery, and terminal reconciliation. The standalone installed-wheel WebView2
 benchmark harness also exists. The corrected contract adds one fixed,
 non-extending 150 ms wait only when a drain sees progress alone; reliable,
 `Gap`, terminal, close, supersession, and recovery values wake it immediately.
-That production behavior has not landed. Custody acceptance separately deep
+That production behavior and its fixed-anchor, non-sliding, immediate-wake,
+supersession/retry, and stale-prequeue regressions have landed; 174 focused
+drain/command/host checks pass. Custody acceptance separately deep
 sizes the identity-deduplicated dispatcher replay, subscriber, and adapter queue
 graphs with distinct realistic path/detail values, fixes a limit after
 calibration, and applies it to a later independent holdout. Terminal result
@@ -824,8 +826,8 @@ carry the `headed` marker; all are collected by the release command.
   the maximum reachable no-`Gap` shape. Calibration records raw measurements;
   a later commit freezes the limit before an independent holdout. Terminal
   result graphs belong to BR-G-45 and complete headed-runtime growth to SH-G-15.
-  **The linger, corrected instrument, calibration limit, and holdout have not
-  landed.** *Not satisfied by* attaching after start, relying on replay for the
+  **The corrected instrument, calibration limit, and holdout have not landed.**
+  *Not satisfied by* attaching after start, relying on replay for the
   normal path, sliding the progress deadline, delaying a reliable value,
   hiding loss behind terminal recovery, reusing short/shared fixture strings,
   measuring payload bytes or whole-process memory, folding terminal artifacts
@@ -1027,7 +1029,7 @@ clause lands:
 | Phase 0 | SH-G-4 |
 | Slice 1 | SH-G-1, SH-G-2, SH-G-5, SH-G-6, SH-G-10 |
 | Slice 2 | SH-G-3 |
-| Slice 3 | SH-G-8 remains open pending the 150 ms linger, custody calibration, frozen limit, and independent holdout |
+| Slice 3 | SH-G-8 remains open pending custody calibration, a frozen limit, and an independent holdout; the 150 ms linger has landed |
 | GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
 | Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
@@ -1044,7 +1046,7 @@ This table maps shell delivery order to the sole BR-G definitions in
 | Phase 0 | prerequisites for BR-G-19/31/32 | complete |
 | Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
 | Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | complete, including installed real-WebView2 browser witnesses |
-| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | existing implementation landed; 150 ms linger and SH-G-8 custody calibration/freeze/holdout pending |
+| Slice 3 | BR-G-33, BR-G-41, and event portion of BR-G-42 | implementation and 150 ms linger landed; SH-G-8 custody calibration/freeze/holdout pending |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
 | Slice 5 | BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
@@ -1055,8 +1057,9 @@ This table maps shell delivery order to the sole BR-G definitions in
 The explicit-`Gap`-only recovery decision and the command-specific
 `start_plan` revision decision are ratified in `M1_BRIDGE.md`; their named
 regressions have landed. A numeric sequence hole alone does not reopen recovery.
-SH-G-8 remains open because the 150 ms linger, realistic-payload custody
-calibration, frozen limit, and independent holdout have not landed. The valid
+The fixed 150 ms linger and focused regressions have also landed. SH-G-8
+remains open because realistic-payload custody calibration, a frozen limit,
+and an independent holdout have not landed. The valid
 2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but
 its whole-Job delta is neither corrected transport-custody evidence nor a
 version-bound SH-G-15 containment result. BR-G-45 and SH-G-15 remain separately

@@ -537,17 +537,23 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
-- MODERATE - OPEN (2026-08-14). Progress-only drain churn and invalid custody
-  attribution. The current adapter can return and rearm once for each progress
-  snapshot, while SH-G-8's old evidence charged the complete headed Job and its
-  Python diagnostic mixed subject-scaled terminal results into queue custody.
-  Cause: coalescing had no fixed server linger and three distinct ownership
-  domains shared one memory predicate. The authoritative fix requires a
-  non-extending 150 ms progress-only linger with immediate reliable/lifecycle
-  wakeup plus identity-deduplicated replay/subscriber/adapter custody
-  calibration and an independent holdout. No production or instrument change
-  has landed yet; BR-G-45 terminal artifacts and SH-G-15 whole-runtime
-  containment remain separate open gates.
+- MODERATE - FIXED (2026-08-14). Progress-only drain churn. An attentive client
+  could return and rearm once per progress snapshot, making adapter coalescing
+  schedule-dependent and multiplying cross-runtime work. Cause: the waiter
+  returned for any nonempty queue and retained no task-owned first-availability
+  deadline across replacement, supersession, or retry. Fixed with one capped,
+  non-sliding 150 ms progress-only deadline; reliable, `Gap`, terminal,
+  recovery, close, and supersession still wake immediately. The 174 focused
+  drain/command/host regressions cover cadence, stale custody, races, ordering,
+  and unchanged cursor behavior.
+- MODERATE - OPEN (2026-08-14). Invalid transport-custody attribution. The old
+  SH-G-8 evidence charged the complete headed Job, while its Python diagnostic
+  mixed subject-scaled terminal results and short/shared values into queue
+  custody. Cause: transport custody, completed artifacts, and whole-runtime
+  containment shared one memory predicate. Closure requires realistic distinct
+  values, one identity-deduplicated replay/subscriber/adapter graph, calibration,
+  a later frozen limit, and an independent holdout. BR-G-45 terminal artifacts
+  and SH-G-15 whole-runtime containment remain separate open gates.
 - MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
   documents delegated exact errors and retry rules to `M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers

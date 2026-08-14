@@ -8,10 +8,10 @@ classification are implemented. M1 Stage 1's isolated cosmetic UI-state
 storage, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and hardened production
 transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
-authority. The installed real-WebView2 browser witnesses have landed; SH-G-8's
-realigned event/custody evidence remains open for the pending 150 ms
-progress-only linger, realistic-payload calibration, frozen limit, and
-independent holdout. BR-G-45 terminal-artifact retention and shell-owned
+authority. The installed real-WebView2 browser witnesses and fixed, non-sliding
+150 ms progress-only linger have landed. SH-G-8's realigned event/custody
+evidence remains open for realistic-payload calibration, a frozen limit, and
+an independent holdout. BR-G-45 terminal-artifact retention and shell-owned
 SH-G-15 whole-runtime containment remain independently open.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
 visible-sequence, operable-tree, and shell realignment; the user-facing
@@ -445,9 +445,12 @@ proves four observations precede tick zero, the exact 60-logical-second
 monotonic after coalescing, all four terminal records arrive, and queues stay at
 or below 64. The separate 260-reliable overflow regression remains explicitly
 beyond-envelope and preserves visible `Gap`/tail/terminal reconciliation. The
-standalone installed-wheel WebView2 harness is useful event and diagnostic
-infrastructure, but its current progress-only drains do not implement the newly
-fixed, non-extending 150 ms linger. Corrected custody evidence must deep-size
+standalone installed-wheel WebView2 harness remains useful event and diagnostic
+infrastructure. Production progress-only drains now use one fixed,
+non-extending 150 ms first-availability deadline capped by the original long
+poll; reliable, `Gap`, terminal, recovery, close, and supersession wake
+immediately. The 174 focused drain/command/host checks pass. Corrected custody
+evidence must deep-size
 the identity-deduplicated dispatcher replay, subscriber, and adapter queues
 with distinct realistic path/detail values, then freeze a limit from
 calibration before a later holdout. Terminal result graphs belong to BR-G-45,

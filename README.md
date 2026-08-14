@@ -42,9 +42,10 @@ history, lifecycle, packaging, and beta closures remain open. The named
 browser-behavior witnesses now run through the installed production bridge and
 renderer in real WebView2; Node probes remain supplemental. SH-G-8's exact
 four-task logical-time fixture and standalone installed-wheel benchmark harness
-have landed. The realigned SH-G-8 remains open for a required 150 ms
-progress-only linger that is not implemented yet, plus realistic-payload
-transport-custody calibration, a frozen limit, and an independent holdout.
+have landed. The fixed, non-sliding 150 ms progress-only linger has also landed
+with focused immediate-wake, lifecycle-race, ordering, and cursor regressions.
+Realigned SH-G-8 remains open for realistic-payload transport-custody
+calibration, a frozen limit, and an independent holdout.
 BR-G-45 separately leaves the complete 100,000-subject terminal artifact set
 and aggregate completed-task retention policy open. Shell-owned SH-G-15
 separately leaves version-bound absolute cold/settled and repeated/long warm

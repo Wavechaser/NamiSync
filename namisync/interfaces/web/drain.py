@@ -6,6 +6,7 @@ import re
 from collections import OrderedDict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from math import isfinite
 from threading import Condition, Lock, get_ident
 from time import monotonic
 from typing import Protocol
@@ -19,6 +20,7 @@ _CAPACITY = 64
 _TASK_CAPACITY = 48
 _CLOSE_RECEIPT_CAPACITY = 48
 _DRAIN_WAIT_SECONDS = 25.0
+_PROGRESS_LINGER_SECONDS = 0.150
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 
@@ -138,6 +140,10 @@ class TaskDrainView:
             raise ValueError("task drain updates are invalid")
 
 
+def _is_progress_update(update: SessionUpdate) -> bool:
+    return type(update) is SessionEventView and update.body_type == "Progress"
+
+
 @dataclass(slots=True)
 class _DrainClaim:
     drain_id: str
@@ -178,11 +184,13 @@ class _TaskState:
     task_id: str
     command_id: str
     intent: tuple[str, str, str | None]
+    clock: Callable[[], float]
     condition: Condition = field(default_factory=Condition)
     session_id: str | None = None
     request_id: str | None = None
     generation: int = 0
     queue: deque[SessionUpdate] = field(default_factory=deque)
+    progress_available_at: float | None = None
     terminal_record: SessionRecordView | None = None
     terminal_pending: bool = False
     active_drain: _DrainClaim | None = None
@@ -219,17 +227,22 @@ class _TaskState:
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
-            if type(update) is SessionEventView and update.body_type == "Progress":
+            if _is_progress_update(update):
+                replacing_progress = any(
+                    _is_progress_update(item) for item in self.queue
+                )
                 self.queue = deque(
                     item
                     for item in self.queue
-                    if not (
-                        type(item) is SessionEventView
-                        and item.body_type == "Progress"
-                    )
+                    if not _is_progress_update(item)
                 )
                 if len(self.queue) >= _CAPACITY:
+                    self.progress_available_at = None
                     return
+                if self.queue:
+                    self.progress_available_at = None
+                elif not replacing_progress or self.progress_available_at is None:
+                    self.progress_available_at = self.clock()
                 self.queue.append(update)
                 self.condition.notify_all()
                 return
@@ -238,11 +251,9 @@ class _TaskState:
                 self.queue = deque(
                     item
                     for item in self.queue
-                    if not (
-                        type(item) is SessionEventView
-                        and item.body_type == "Progress"
-                    )
+                    if not _is_progress_update(item)
                 )
+                self.progress_available_at = None
             while (
                 len(self.queue) >= _CAPACITY
                 and not self.closing
@@ -256,6 +267,7 @@ class _TaskState:
             if self.closing or generation != self.generation:
                 return
             self.queue.append(update)
+            self.progress_available_at = None
             self.condition.notify_all()
 
 
@@ -281,6 +293,7 @@ class TaskRegistry:
         token: Callable[[], str] | None = None,
         clock: Callable[[], float] = monotonic,
         drain_wait: float = _DRAIN_WAIT_SECONDS,
+        progress_linger: float = _PROGRESS_LINGER_SECONDS,
         task_capacity: int = _TASK_CAPACITY,
     ) -> None:
         if not callable(token) and token is not None:
@@ -289,6 +302,19 @@ class TaskRegistry:
             raise TypeError("task clock must be callable")
         if drain_wait <= 0:
             raise ValueError("task drain wait must be positive")
+        if isinstance(progress_linger, bool) or not isinstance(
+            progress_linger, (int, float)
+        ):
+            raise TypeError("task progress linger must be a number")
+        try:
+            normalized_progress_linger = float(progress_linger)
+        except OverflowError:
+            normalized_progress_linger = float("inf")
+        if (
+            not isfinite(normalized_progress_linger)
+            or normalized_progress_linger <= 0
+        ):
+            raise ValueError("task progress linger must be positive and finite")
         if isinstance(task_capacity, bool) or not isinstance(task_capacity, int):
             raise TypeError("task capacity must be an integer")
         if task_capacity <= 0 or task_capacity > _TASK_CAPACITY:
@@ -297,6 +323,7 @@ class TaskRegistry:
         self._token = token if token is not None else _new_token
         self._clock = clock
         self._drain_wait = drain_wait
+        self._progress_linger = normalized_progress_linger
         self._task_capacity = task_capacity
         self._condition = Condition(Lock())
         self._tasks: dict[str, _TaskState] = {}
@@ -328,7 +355,7 @@ class TaskRegistry:
                 if len(self._tasks) >= self._task_capacity:
                     raise TaskUnavailableError("task capacity is exhausted")
                 task_id = self._mint_task_id()
-                task = _TaskState(task_id, command_id, intent)
+                task = _TaskState(task_id, command_id, intent, self._clock)
                 entry = _StartEntry(command_id, intent, wire_intent, task)
                 self._commands[command_id] = entry
                 self._tasks[task_id] = task
@@ -479,13 +506,23 @@ class TaskRegistry:
             if replay_from is not None:
                 self._recover(task, session_id, replay_from)
             with task.condition:
-                while (
-                    not task.queue
-                    and not task.terminal_pending
-                    and not claim.superseded
-                    and not task.closing
-                ):
-                    remaining = deadline - self._clock()
+                while not claim.superseded and not task.closing:
+                    if replay_from is not None or task.terminal_pending or any(
+                        not _is_progress_update(update) for update in task.queue
+                    ):
+                        break
+                    now = self._clock()
+                    if task.queue:
+                        if task.progress_available_at is None:
+                            task.progress_available_at = now
+                        wake_deadline = min(
+                            deadline,
+                            task.progress_available_at + self._progress_linger,
+                        )
+                    else:
+                        task.progress_available_at = None
+                        wake_deadline = deadline
+                    remaining = wake_deadline - now
                     if remaining <= 0:
                         break
                     task.condition.wait(remaining)
@@ -504,6 +541,10 @@ class TaskRegistry:
                         drained.append(task.terminal_record)
                         task.terminal_pending = False
                     updates = tuple(drained)
+                    if not any(
+                        _is_progress_update(update) for update in task.queue
+                    ):
+                        task.progress_available_at = None
                     if any(type(update) is SessionRecordView for update in updates):
                         task.terminal_delivered = True
                     task.condition.notify_all()
@@ -537,6 +578,7 @@ class TaskRegistry:
             generation = task.generation
             task.recovery_caller = get_ident()
             task.queue.clear()
+            task.progress_available_at = None
             task.terminal_record = None
             task.terminal_pending = False
             task.condition.notify_all()
@@ -569,10 +611,12 @@ class TaskRegistry:
                 task.generation += 1
                 task.transition = False
                 task.queue.clear()
+                task.progress_available_at = None
                 task.terminal_record = None
                 task.terminal_pending = False
             if not stale and failure is None and terminal is not None:
                 task.terminal_record = terminal
+                task.progress_available_at = None
                 if len(task.queue) < _CAPACITY:
                     task.queue.append(terminal)
                     task.terminal_pending = False

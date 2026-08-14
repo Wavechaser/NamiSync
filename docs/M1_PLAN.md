@@ -14,9 +14,9 @@ foundation, and Slice 4 presentation core and honest shell frame are also
 implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
 `M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
 definitions, and beta-packaging work. The real-WebView2 browser-witness
-migration is complete. Realigned SH-G-8 remains open for the required 150 ms
-progress-only linger and calibrated/independently held-out transport custody;
-BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
+migration and fixed, non-sliding 150 ms progress-only linger are complete.
+Realigned SH-G-8 remains open for calibrated, independently held-out transport
+custody; BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
 completed-task retention open, while shell-owned SH-G-15 leaves version-bound
 whole-runtime containment open. The earlier whole-Job delta is diagnostic input
 to SH-G-15 design, not SH-G-8 custody evidence or a limit for either gate.
@@ -1102,9 +1102,10 @@ contract while supplying an operable platform accessibility tree. The rail and
 resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
 UI, release, and beta claims stay open. The installed real-WebView2
 browser-behavior witness migration is complete. The existing four-task event
-truth remains useful, but SH-G-8's realigned BR-G-42 event clause remains open
-until the 150 ms linger, realistic-payload custody calibration, frozen limit,
-and independent holdout land. BR-G-45's terminal-artifact retention policy and
+truth remains useful, and the fixed 150 ms linger plus immediate-wake focused
+regressions have landed. SH-G-8's realigned BR-G-42 custody clause remains open
+until realistic-payload calibration, a frozen limit, and an independent holdout
+land. BR-G-45's terminal-artifact retention policy and
 SH-G-15's version-bound whole-runtime calibration/holdouts remain independently
 open; the 2026-08-13 whole-Job delta closes none of them.
 

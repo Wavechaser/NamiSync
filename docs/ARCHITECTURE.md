@@ -2191,17 +2191,18 @@ bounded drain implementation preserves reliable ordering/backpressure while
 coalescing replaceable progress. The exact queue, deadline, recovery,
 sequence, terminal, and release behavior is exclusively in `M1_BRIDGE.md`.
 The explicit-`Gap`-only decision and command-specific `start_plan` revision
-decision are ratified with landed named regressions. BR-G-33's pre-realignment
-implementation is present; its new linger clause remains open. The existing
+decision are ratified with landed named regressions. BR-G-33's realigned
+implementation, including its progress-only linger, is present. The existing
 deterministic fixture drives four attached-before-tick-zero
 tasks through 60 logical seconds with exactly 6,000 `Progress` and 600 ordered,
 exactly-once reliable item emissions, monotonic coalesced progress, four exact
 terminal records, no `Gap`, and no queue above 64. The separate 260-reliable
 overflow regression remains explicitly beyond-envelope and proves visible
 `Gap`, retained-tail recovery, and terminal reconciliation. The realigned
-transport contract additionally requires one fixed, non-extending 150 ms linger
-for progress-only drains, with immediate reliable/terminal/recovery/lifecycle
-wakeup; that implementation has not landed.
+transport contract's fixed, non-extending 150 ms linger for progress-only
+drains has landed. Focused regressions prove the first-availability anchor,
+original long-poll cap, non-sliding replacement cadence, and immediate
+reliable/`Gap`/terminal/recovery/close/supersession wakeup.
 
 Scale custody is now split by architectural owner. SH-G-8 counts one
 identity-deduplicated deep Python graph rooted only at dispatcher replay,

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Event, Thread
+from threading import Condition, Event, Thread
 from time import monotonic, sleep
 
 import pytest
@@ -28,6 +30,7 @@ from namisync.interfaces.web.drain import (
     ObservationConflictError,
     TaskIntentConflictError,
     TaskCloseView,
+    TaskDrainView,
     TaskRegistry,
     TaskSessionReleaseView,
     TaskUnavailableError,
@@ -39,6 +42,38 @@ from namisync.workflows.views import SessionEventView, SessionRecordView
 REQUEST = "1" * 32
 SESSION = "2" * 32
 DRAIN = "3" * 32
+
+
+class _ManualClock:
+    def __init__(self) -> None:
+        self._condition = Condition()
+        self._value = 0.0
+        self._calls = 0
+
+    def __call__(self) -> float:
+        with self._condition:
+            self._calls += 1
+            self._condition.notify_all()
+            return self._value
+
+    @property
+    def calls(self) -> int:
+        with self._condition:
+            return self._calls
+
+    def advance_to(self, value: float) -> None:
+        with self._condition:
+            if value < self._value:
+                raise ValueError("manual clock cannot move backward")
+            self._value = value
+
+    def wait_for_calls(self, expected: int) -> None:
+        deadline = monotonic() + 1
+        with self._condition:
+            while self._calls < expected:
+                remaining = deadline - monotonic()
+                assert remaining > 0
+                self._condition.wait(remaining)
 
 
 def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
@@ -96,13 +131,109 @@ class _Service:
         self.cleanup.append(("drop_plan", request_id))
 
 
-def _registry(service=None, *, drain_wait=0.2):
+def _registry(
+    service=None,
+    *,
+    clock=monotonic,
+    drain_wait=0.2,
+    progress_linger=drain_module._PROGRESS_LINGER_SECONDS,
+):
     service = service or _Service()
     return TaskRegistry(
         service,
         token=lambda: "a" * 32,
+        clock=clock,
         drain_wait=drain_wait,
+        progress_linger=progress_linger,
     ), service
+
+
+def _wake_task(registry: TaskRegistry, task_id: str) -> None:
+    task = registry._tasks[task_id]
+    with task.condition:
+        task.condition.notify_all()
+
+
+@dataclass
+class _ProgressWait:
+    clock: _ManualClock
+    registry: TaskRegistry
+    service: _Service
+    task_id: str
+    baseline_calls: int
+    thread: Thread
+    done: Event
+    results: list[TaskDrainView]
+    errors: list[BaseException]
+
+    def finish(self) -> TaskDrainView:
+        assert self.done.wait(1)
+        self.thread.join(1)
+        assert not self.errors
+        assert len(self.results) == 1
+        return self.results[0]
+
+    def stop(self) -> None:
+        if self.thread.is_alive():
+            self.registry.begin_close()
+            self.thread.join(1)
+
+
+@contextmanager
+def _progress_wait(
+    *,
+    drain_wait: float = 25.0,
+    progress_linger: float = 10.0,
+    progress_sequence: int | None = 2,
+) -> Iterator[_ProgressWait]:
+    clock = _ManualClock()
+    registry, service = _registry(
+        clock=clock,
+        drain_wait=drain_wait,
+        progress_linger=progress_linger,
+    )
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    if progress_sequence is not None:
+        service.sink(_event(progress_sequence, "Progress"))
+    baseline_calls = clock.calls
+    done = Event()
+    results: list[TaskDrainView] = []
+    errors: list[BaseException] = []
+
+    def drain() -> None:
+        try:
+            results.append(
+                registry.drain(
+                    start.task_id,
+                    SESSION,
+                    "5" * 32,
+                    replay_from=None,
+                )
+            )
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            done.set()
+
+    thread = Thread(target=drain)
+    thread.start()
+    waiting = _ProgressWait(
+        clock,
+        registry,
+        service,
+        start.task_id,
+        baseline_calls,
+        thread,
+        done,
+        results,
+        errors,
+    )
+    try:
+        clock.wait_for_calls(baseline_calls + 2)
+        yield waiting
+    finally:
+        waiting.stop()
 
 
 def _start(registry: TaskRegistry, command_id: str = "4" * 32):
@@ -553,7 +684,12 @@ def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
 
     monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
     task_tokens = iter(f"{index:032x}" for index in range(1, 16))
-    registry = TaskRegistry(service, token=lambda: next(task_tokens), drain_wait=0.1)
+    registry = TaskRegistry(
+        service,
+        token=lambda: next(task_tokens),
+        drain_wait=0.1,
+        progress_linger=0.001,
+    )
     drain_ids = iter(f"{index:032x}" for index in range(100, 2_000))
     starts = []
     delivered_reliable: dict[str, list[str]] = {}
@@ -767,6 +903,155 @@ def test_br_g_33_start_is_singleflight_and_changed_intent_conflicts() -> None:
     assert results == [results[0], results[0]]
 
 
+def test_br_g_33_progress_linger_default_and_constructor_boundary() -> None:
+    assert TaskRegistry(_Service())._progress_linger == 0.150
+    assert TaskRegistry(_Service(), progress_linger=1)._progress_linger == 1.0
+    for value in (True, False, None, "0.150"):
+        with pytest.raises(TypeError, match="progress linger"):
+            TaskRegistry(_Service(), progress_linger=value)
+    invalid_numbers = (
+        0.0,
+        -0.001,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    )
+    for value in invalid_numbers:
+        with pytest.raises(ValueError, match="positive and finite"):
+            TaskRegistry(_Service(), progress_linger=value)
+
+
+def test_br_g_33_progress_only_linger_has_one_fixed_cadence_deadline() -> None:
+    with _progress_wait() as waiting:
+        waiting.clock.advance_to(9.0)
+        waiting.service.sink(_event(3, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(10.0)
+        waiting.service.sink(_event(4, "Progress"))
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [4]
+
+
+def test_br_g_33_prequeued_progress_keeps_its_first_availability_deadline() -> None:
+    clock = _ManualClock()
+    registry, service = _registry(
+        clock=clock,
+        drain_wait=25.0,
+        progress_linger=0.150,
+    )
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_event(2, "Progress"))
+
+    clock.advance_to(0.151)
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+
+    assert [update.event.sequence for update in drained.updates] == [2]
+
+
+def test_br_g_33_progress_linger_starts_at_availability_and_keeps_outer_cap() -> None:
+    with _progress_wait(
+        drain_wait=12.0,
+        progress_linger=10.0,
+        progress_sequence=None,
+    ) as waiting:
+        waiting.clock.advance_to(5.0)
+        waiting.service.sink(_event(2, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+
+        waiting.clock.advance_to(10.0)
+        _wake_task(waiting.registry, waiting.task_id)
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(12.0)
+        _wake_task(waiting.registry, waiting.task_id)
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [2]
+
+
+@pytest.mark.parametrize(
+    "body_type",
+    ["StateChanged", "Gap", "Terminal"],
+)
+def test_br_g_33_reliable_events_bypass_progress_linger(body_type: str) -> None:
+    with _progress_wait() as waiting:
+        waiting.service.sink(_event(3, body_type))
+        result = waiting.finish()
+
+        assert [
+            (update.event.sequence, update.event.body_type)
+            for update in result.updates
+        ] == [(2, "Progress"), (3, body_type)]
+
+
+def test_br_g_33_terminal_record_bypasses_progress_linger() -> None:
+    with _progress_wait() as waiting:
+        terminal = _record()
+        waiting.service.sink(terminal)
+        result = waiting.finish()
+
+        assert [update.update_type for update in result.updates] == [
+            "event",
+            "record",
+        ]
+        assert result.updates[1].record is terminal
+        assert waiting.registry._tasks[waiting.task_id].terminal_delivered
+
+
+def test_br_g_33_recovered_progress_bypasses_progress_linger() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            sink(_event(from_sequence, "Progress"))
+            return self.reobserve_result
+
+    clock = _ManualClock()
+    service = Service()
+    registry, _ = _registry(
+        service,
+        clock=clock,
+        drain_wait=25.0,
+        progress_linger=10.0,
+    )
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    baseline_calls = clock.calls
+
+    recovered = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=2,
+    )
+
+    assert clock.calls == baseline_calls + 2
+    assert service.reobserve_calls[0][2] == 2
+    assert [update.event.sequence for update in recovered.updates] == [2]
+
+
+def test_br_g_33_progress_coalescing_keeps_numeric_holes_without_recovery() -> None:
+    with _progress_wait() as waiting:
+        waiting.service.sink(_event(4, "Progress"))
+        waiting.service.sink(_event(5))
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [4, 5]
+        assert all(
+            update.event.body_type != "Gap" for update in result.updates
+        )
+        assert waiting.service.reobserve_calls == []
+
+
 def test_br_g_33_progress_coalesces_and_reliable_never_drops_or_reorders() -> None:
     registry, service = _registry()
     start = _start(registry)
@@ -835,56 +1120,39 @@ def test_br_g_33_reliable_capacity_blocks_until_drain_and_close_wakes() -> None:
 
 
 def test_br_g_33_superseding_drain_consumes_nothing_and_busy_waits_for_release() -> None:
-    registry, service = _registry(drain_wait=1.0)
-    start = _start(registry)
-    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
-    first_results = []
-    first = Thread(
-        target=lambda: first_results.append(
-            registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+    with _progress_wait(drain_wait=1.0) as waiting:
+        with pytest.raises(DrainBusyError):
+            waiting.registry.drain(
+                waiting.task_id,
+                SESSION,
+                "6" * 32,
+                replay_from=None,
+            )
+        superseded = waiting.finish()
+        waiting.clock.advance_to(10.0)
+        after = waiting.registry.drain(
+            waiting.task_id,
+            SESSION,
+            "7" * 32,
+            replay_from=None,
         )
-    )
-    first.start()
-    deadline = monotonic() + 1
-    while registry._tasks[start.task_id].active_drain is None:
-        assert monotonic() < deadline
 
-    with pytest.raises(DrainBusyError):
-        registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
-    first.join(1)
-    service.sink(_event(2))
-    after = registry.drain(start.task_id, SESSION, "7" * 32, replay_from=None)
-
-    assert first_results[0].updates == ()
-    assert [item.event.sequence for item in after.updates] == [2]
+        assert superseded.updates == ()
+        assert [item.event.sequence for item in after.updates] == [2]
 
 
 def test_br_g_33_competing_recovery_cannot_reobserve_before_busy_refusal() -> None:
-    registry, service = _registry(drain_wait=1.0)
-    start = _start(registry)
-    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
-    first_results = []
-    first = Thread(
-        target=lambda: first_results.append(
-            registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
-        )
-    )
-    first.start()
-    deadline = monotonic() + 1
-    while registry._tasks[start.task_id].active_drain is None:
-        assert monotonic() < deadline
+    with _progress_wait(drain_wait=1.0) as waiting:
+        with pytest.raises(DrainBusyError):
+            waiting.registry.drain(
+                waiting.task_id,
+                SESSION,
+                "6" * 32,
+                replay_from=2,
+            )
 
-    with pytest.raises(DrainBusyError):
-        registry.drain(
-            start.task_id,
-            SESSION,
-            "6" * 32,
-            replay_from=2,
-        )
-    first.join(1)
-
-    assert first_results[0].updates == ()
-    assert service.reobserve_calls == []
+        assert waiting.finish().updates == ()
+        assert waiting.service.reobserve_calls == []
 
 
 def test_br_g_33_recovery_clears_uncertain_queue_and_calls_facade_outside_lock() -> None:
@@ -1101,31 +1369,18 @@ def test_br_g_33_task_session_mismatch_and_concurrent_recovery_are_named() -> No
 
 
 def test_br_g_33_shutdown_wakes_then_unsubscribes_after_handler_barrier() -> None:
-    registry, service = _registry(drain_wait=1.0)
-    start = _start(registry)
-    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
-    errors = []
+    with _progress_wait(drain_wait=1.0) as waiting:
+        waiting.registry.begin_close()
+        assert waiting.done.wait(1)
+        waiting.thread.join(1)
 
-    def drain() -> None:
-        try:
-            registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
-        except BaseException as error:
-            errors.append(error)
-
-    waiting = Thread(target=drain)
-    waiting.start()
-    deadline = monotonic() + 1
-    while registry._tasks[start.task_id].active_drain is None:
-        assert monotonic() < deadline
-    registry.begin_close()
-    waiting.join(1)
-
-    assert isinstance(errors[0], TaskUnavailableError)
-    assert service.cleanup == []
-    registry.unsubscribe_all()
-    assert service.cleanup == [("unsubscribe", SESSION)]
-    registry.unsubscribe_all()
-    assert service.cleanup == [("unsubscribe", SESSION)]
+        assert len(waiting.errors) == 1
+        assert isinstance(waiting.errors[0], TaskUnavailableError)
+        assert waiting.service.cleanup == []
+        waiting.registry.unsubscribe_all()
+        assert waiting.service.cleanup == [("unsubscribe", SESSION)]
+        waiting.registry.unsubscribe_all()
+        assert waiting.service.cleanup == [("unsubscribe", SESSION)]
 
 
 def test_br_g_33_close_task_cleanup_order_and_retry_authority() -> None:
