@@ -2237,11 +2237,14 @@ and runner source, a separately hashed sizer, an isolated `-I -S` parent, and
 safe-path `-P -S` Windows CPython 3.13 children with fresh out-of-tree bytecode
 caches. The exact active-venv `xxhash` dependency files and module origins are
 also hashed. Stable source/dependency/corpus/runtime-qualifier hashes and an
-external exact-schema digest receipt bind the dataset. This machinery emits raw
-measurements and a predeclared
-25-percent headroom/65,536-byte-round-up rule, but no acceptance decision or
-byte ceiling. SH-G-8 still requires a committed calibration-a artifact, a later
-ceiling commit, and independent holdout-b. The harness still supplies useful
+external exact-schema digest receipt bind the dataset. The committed
+`tests/interfaces/web/sh_g_8_transport_calibration.json` dataset now supplies
+the normative calibration-a measurement: 1,376,690 bytes / 4,890 objects for
+ordinary quiescent transport and 1,534,946 bytes / 5,499 objects for the exact
+maximum no-`Gap` snapshot. Its predeclared 25-percent
+headroom/65,536-byte-round-up rule has not yet been converted into a byte
+ceiling, and the artifact makes no acceptance decision. SH-G-8 still requires
+that later ceiling commit and independent holdout-b. The harness still supplies useful
 event and diagnostic data. Its valid 2026-08-13 run passed event truth,
 ordering, latency, no-`Gap`, and clean exit.
 Its 67,375,104-byte whole-Job delta is not a transport-custody measurement and

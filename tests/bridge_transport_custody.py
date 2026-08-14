@@ -250,6 +250,9 @@ def _validate_run_artifact(
     source_authority: dict[str, object],
     dependency_authority: dict[str, object],
     expected_pycache_prefix: Path,
+    expected_source_root: Path | None = None,
+    expected_python: str | None = None,
+    expected_executable: Path | None = None,
 ) -> None:
     if set(source_authority) != {
         "tested_commit",
@@ -329,8 +332,13 @@ def _validate_run_artifact(
         )
     ):
         raise ValueError("custody run dependency manifest is invalid")
+    source_root = (
+        contract._ROOT
+        if expected_source_root is None
+        else expected_source_root
+    )
     expected_origins = {
-        name: str((contract._ROOT / relative).resolve())
+        name: str((source_root / relative).resolve())
         for name, relative in contract._MODULE_PATHS.items()
     }
     extension = next(
@@ -398,7 +406,8 @@ def _validate_run_artifact(
     version_info = runtime["version_info"]
     if (
         runtime["implementation"] != "CPython"
-        or runtime["python"] != contract.sys.version
+        or runtime["python"]
+        != (contract.sys.version if expected_python is None else expected_python)
         or type(version_info) is not list
         or len(version_info) != 5
         or version_info[:2] != [3, 13]
@@ -406,7 +415,14 @@ def _validate_run_artifact(
         or runtime["pointer_bits"] != 64
         or runtime["py_debug"] != 0
         or not runtime["platform"].startswith("Windows-")
-        or runtime["executable"] != str(Path(sys.executable).resolve())
+        or runtime["executable"]
+        != str(
+            (
+                Path(sys.executable)
+                if expected_executable is None
+                else expected_executable
+            ).resolve()
+        )
         or runtime["with_pymalloc_config"] is not None
         or runtime["allocator_predicate"]
         != "explicit-pymalloc-on-qualified-Windows-CPython"
@@ -597,6 +613,48 @@ def _validate_run_artifact(
         witness["measurement"],
         preterminal=False,
         strict_shared=False,
+    )
+
+
+def _validate_archived_run_artifact(
+    value: object,
+    contract: ModuleType,
+    *,
+    variant: str,
+    source_authority: dict[str, object],
+    dependency_authority: dict[str, object],
+    expected_pycache_prefix: Path,
+) -> None:
+    if type(value) is not dict or type(value.get("module_origins")) is not dict:
+        raise ValueError("archived custody run artifact is invalid")
+    module_origins = value["module_origins"]
+    roots: set[Path] = set()
+    for name, relative in contract._MODULE_PATHS.items():
+        origin = module_origins.get(name)
+        if type(origin) is not str:
+            raise ValueError("archived custody module origin is invalid")
+        root = Path(origin)
+        for _ in Path(relative).parts:
+            root = root.parent
+        roots.add(root.resolve())
+    if len(roots) != 1:
+        raise ValueError("archived custody source roots disagree")
+
+    runtime = value.get("runtime")
+    if type(runtime) is not dict or type(runtime.get("python")) is not str:
+        raise ValueError("archived custody runtime is invalid")
+    dependency_root = Path(dependency_authority["root"])
+    expected_executable = dependency_root.parent.parent / "Scripts" / "python.exe"
+    _validate_run_artifact(
+        value,
+        contract,
+        variant=variant,
+        source_authority=source_authority,
+        dependency_authority=dependency_authority,
+        expected_pycache_prefix=expected_pycache_prefix,
+        expected_source_root=next(iter(roots)),
+        expected_python=runtime["python"],
+        expected_executable=expected_executable,
     )
 
 

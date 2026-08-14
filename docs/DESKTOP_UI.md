@@ -18,8 +18,9 @@ non-acceptance diagnostic; its event pass explicitly cannot close SH-G-8.
 The frozen/disjoint realistic corpus and production-path runner have also
 landed, including exact real-deque 128/64/64 no-`Gap`, terminal path-cut,
 cleanup, and clean source/dependency/runtime/digest-authority witnesses. They set no byte
-ceiling or acceptance result. Realigned SH-G-8 remains open for a committed
-calibration-a artifact, a later byte ceiling, and independent holdout-b;
+ceiling or acceptance result. The committed calibration-a artifact now records
+normative ordinary/exact-maximum transport measurements; realigned SH-G-8
+remains open for a later byte ceiling and independent holdout-b;
 BR-G-45 separately leaves full terminal-artifact retention open, and
 shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
 earlier whole-Job delta is diagnostic input only, not a result for any of those

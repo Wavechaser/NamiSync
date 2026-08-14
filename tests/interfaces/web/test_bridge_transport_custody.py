@@ -20,8 +20,14 @@ ROOT = Path(__file__).parents[2]
 PARENT = ROOT / "bridge_transport_custody.py"
 CHILD = Path(__file__).with_name("_bridge_transport_custody.py")
 RETAINED = Path(__file__).with_name("_bridge_retained_memory.py")
+CALIBRATION = Path(__file__).with_name("sh_g_8_transport_calibration.json")
 TESTED_COMMIT = "0" * 40
 VARIANT = "calibration-a"
+
+_CALIBRATION_COMMIT = "56c50b43dc19090ad33af031891503bfec80599b"
+_CALIBRATION_SHA256 = (
+    "13589307538eb90f05da2322c7e0ba627234e060c8455d9b7e3013aa575cece8"
+)
 
 
 def _module(path: Path, name: str):
@@ -839,6 +845,162 @@ def test_dataset_uses_three_distinct_runs_without_acceptance_or_limit(
     assert "passed" not in evidence_keys
     assert "ceiling_bytes" not in evidence_keys
     assert "limit_bytes" not in evidence_keys
+
+
+def test_committed_calibration_is_raw_three_process_evidence() -> None:
+    parent = _parent_module()
+    child = _child_module()
+    artifact = json.loads(CALIBRATION.read_text(encoding="utf-8"))
+
+    assert hashlib.sha256(CALIBRATION.read_bytes()).hexdigest() == (
+        _CALIBRATION_SHA256
+    )
+    assert set(artifact) == {
+        "schema_version",
+        "gate",
+        "dataset_kind",
+        "dataset_variant",
+        "tested_commit",
+        "dependency_authority",
+        "corpus_version",
+        "run_count",
+        "headroom_policy",
+        "hashes",
+        "structural_facts",
+        "measurement_maxima",
+        "run_receipts",
+        "runs",
+    }
+    assert artifact["schema_version"] == 1
+    assert artifact["gate"] == "SH-G-8 transport custody"
+    assert artifact["dataset_kind"] == "calibration"
+    assert artifact["dataset_variant"] == "calibration-a"
+    assert artifact["tested_commit"] == _CALIBRATION_COMMIT
+    assert artifact["run_count"] == 3
+    assert artifact["corpus_version"] == child.CORPUS_VERSION
+    assert artifact["headroom_policy"] == child.HEADROOM_POLICY
+    assert artifact["structural_facts"] == child._structural_facts(
+        "calibration-a"
+    )
+
+    runs = artifact["runs"]
+    receipts = artifact["run_receipts"]
+    assert len(runs) == len(receipts) == 3
+    assert len({run["process_id"] for run in runs}) == 3
+    assert artifact["hashes"] == runs[0]["hashes"]
+    source_authority = _artifact_source_authority(runs[0])
+    dependency_authority = artifact["dependency_authority"]
+    for run, receipt in zip(runs, receipts, strict=True):
+        assert _artifact_source_authority(run) == source_authority
+        assert _artifact_dependency_authority(run) == dependency_authority
+        parent._validate_archived_run_artifact(
+            run,
+            child,
+            variant="calibration-a",
+            source_authority=source_authority,
+            dependency_authority=dependency_authority,
+            expected_pycache_prefix=_artifact_pycache_prefix(run),
+        )
+        parsed_receipt = parent._read_child_receipt(
+            json.dumps(receipt),
+            variant="calibration-a",
+            tested_commit=_CALIBRATION_COMMIT,
+        )
+        parent._validate_child_receipt(parsed_receipt, run)
+
+    assert artifact["measurement_maxima"] == parent._measurement_maxima(
+        runs
+    )
+    assert artifact["measurement_maxima"]["ordinary_quiescent_peak"][
+        "transport_custody_bytes"
+    ] == 1_376_690
+    assert artifact["measurement_maxima"]["maximum_no_gap_custody"][
+        "transport_custody_bytes"
+    ] == 1_534_946
+
+    def keys(value: object):
+        if isinstance(value, dict):
+            for key, child_value in value.items():
+                yield str(key)
+                yield from keys(child_value)
+        elif isinstance(value, list):
+            for child_value in value:
+                yield from keys(child_value)
+
+    evidence_keys = set(keys(artifact))
+    assert "acceptance" not in evidence_keys
+    assert "passed" not in evidence_keys
+    assert "ceiling_bytes" not in evidence_keys
+    assert "limit_bytes" not in evidence_keys
+
+
+def test_archived_run_validation_is_checkout_path_independent(
+    tmp_path: Path,
+) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    artifact = json.loads(CALIBRATION.read_text(encoding="utf-8"))
+    run = copy.deepcopy(artifact["runs"][0])
+    source_root = tmp_path / "relocated" / "NamiSync"
+    dependency_root = source_root / ".venv" / "Lib" / "site-packages"
+    pycache_prefix = tmp_path / "relocated-cache"
+    dependency_authority = copy.deepcopy(run["dependency_authority"])
+    dependency_authority["root"] = str(dependency_root.resolve())
+    run["dependency_authority"] = dependency_authority
+
+    module_origins = {
+        name: str((source_root / relative).resolve())
+        for name, relative in child._MODULE_PATHS.items()
+    }
+    extension = next(
+        name
+        for name in dependency_authority["files"]
+        if name.startswith("xxhash/_xxhash")
+    )
+    module_origins.update(
+        {
+            "xxhash": str(
+                (dependency_root / "xxhash/__init__.py").resolve()
+            ),
+            "xxhash.version": str(
+                (dependency_root / "xxhash/version.py").resolve()
+            ),
+            "xxhash._xxhash": str((dependency_root / extension).resolve()),
+        }
+    )
+    run["module_origins"] = module_origins
+    runtime = run["runtime"]
+    runtime["executable"] = str(
+        (source_root / ".venv" / "Scripts" / "python.exe").resolve()
+    )
+    runtime["dependency_root"] = str(dependency_root.resolve())
+    runtime["pycache_prefix"] = str(pycache_prefix.resolve())
+    runtime["qualifier_environment"]["PYTHONPYCACHEPREFIX"] = str(
+        pycache_prefix.resolve()
+    )
+    run["hashes"]["runtime_sha256"] = parent._canonical_hash(runtime)
+    run["hashes"]["runtime_qualifier_sha256"] = parent._canonical_hash(
+        parent._runtime_qualifier(runtime)
+    )
+    source_authority = _artifact_source_authority(run)
+
+    with pytest.raises(ValueError, match="module origins drifted"):
+        parent._validate_run_artifact(
+            run,
+            child,
+            variant="calibration-a",
+            source_authority=source_authority,
+            dependency_authority=dependency_authority,
+            expected_pycache_prefix=pycache_prefix,
+        )
+    parent._validate_archived_run_artifact(
+        run,
+        child,
+        variant="calibration-a",
+        source_authority=source_authority,
+        dependency_authority=dependency_authority,
+        expected_pycache_prefix=pycache_prefix,
+    )
 
 
 def test_authoritative_parent_requires_isolated_safe_no_site_startup() -> None:

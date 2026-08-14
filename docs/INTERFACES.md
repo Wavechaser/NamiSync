@@ -13,8 +13,9 @@ authority. The installed real-WebView2 browser witnesses and fixed, non-sliding
 manifested streams, post-exit assembly, direct-Job child admission, and an
 event-only pass separate from whole-runtime diagnostics. The frozen realistic
 custody corpora and production-path runner have also landed. SH-G-8's realigned
-event/custody evidence remains open for a committed calibration-a artifact, a
-later byte ceiling, and independent holdout-b. BR-G-45 terminal-artifact
+event/custody evidence now includes a committed normative calibration-a
+artifact and remains open for a later byte ceiling and independent holdout-b.
+BR-G-45 terminal-artifact
 retention and shell-owned SH-G-15 whole-runtime containment remain independently
 open.
 GUI Break 1 and Slice 4 have completed their audited token/material/motion,
@@ -463,8 +464,7 @@ after child exit, and assigns the actual child directly to the Job before
 product composition. Its per-PID role/private-byte and thread/handle/topology
 series remain diagnostic; `passed` is the event-envelope result,
 `sh_g_8_acceptance` remains `incomplete-without-custody`, and whole-runtime
-acceptance remains explicitly undefined. Corrected custody evidence must still
-be recorded, but its instrument and path have landed. The frozen
+acceptance remains explicitly undefined. The frozen
 `sh-g-8-transport-v1` calibration-a/holdout-b corpora drive the real built-in
 dispatcher replay, subscriber, and adapter deques through
 `Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. The
@@ -475,16 +475,21 @@ source and instrument authority, an isolated `-I -S` parent, safe-path `-P -S`
 children, fresh out-of-tree bytecode caches, hashed active-venv `xxhash`
 dependencies, stable qualifier hashes, and an external exact-schema receipt. Its predeclared
 headroom rule sets no byte ceiling and the runner makes no acceptance decision.
-A committed calibration-a artifact, later ceiling commit, and independent
-holdout-b remain required. Terminal result graphs belong to BR-G-45, not that
+The committed `tests/interfaces/web/sh_g_8_transport_calibration.json` artifact
+now records the normative calibration-a union measurements: 1,376,690 bytes /
+4,890 objects ordinary and 1,534,946 bytes / 5,499 objects at the exact maximum
+no-`Gap` snapshot. A later ceiling commit and independent holdout-b remain
+required. Terminal result graphs belong to BR-G-45, not that
 custody total. A valid 2026-08-13 run passed its exact event, latency,
 no-`Gap`, and clean-shutdown checks and measured a 67,375,104-byte whole-Job
 delta, but that value neither passes nor fails realigned SH-G-8 or SH-G-15.
 The existing diagnostic command is `.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"`.
-The clean-commit custody calibration command is
+The clean-commit custody calibration reproduction command is
 `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`;
-it produces raw calibration-a evidence, not a normative result or limit. No
-containment command/result is claimed yet.
+the durable artifact was generated from tested commit
+`56c50b43dc19090ad33af031891503bfec80599b`. It is a normative calibration
+measurement, not a byte limit or acceptance result. No containment
+command/result is claimed yet.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

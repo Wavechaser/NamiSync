@@ -10,12 +10,13 @@ evidence. Benchmark/accounting support now provides bounded manifested streams,
 post-exit assembly, direct-Job admission, event/diagnostic result separation,
 and a path-local retained-state sizer. The frozen `sh-g-8-transport-v1`
 calibration-a/holdout-b corpora and production-path transport-custody runner
-have also landed; no calibration artifact, normative measurement, byte ceiling,
-acceptance result, or holdout result has landed.
+have also landed. The committed calibration-a artifact now supplies the
+normative transport measurement; no byte ceiling, acceptance result, or
+holdout result has landed.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
-migration is complete. SH-G-8 remains open pending a committed calibration-a
-artifact, a byte ceiling fixed before independent holdout-b, and that holdout.
+migration is complete. SH-G-8 remains open pending a byte ceiling fixed before
+independent holdout-b and that holdout.
 BR-G-45 separately keeps the 100,000-subject terminal
 artifact set and aggregate completed-task retention policy open. Shell-owned
 SH-G-15 separately keeps version-bound whole-runtime containment open. The
@@ -2489,7 +2490,7 @@ require a later schema-version decision rather than an M1 fallback
    | 256-row history detail window | 500 ms p95; 1 s maximum |
    | Incremental plan projection memory | 128 MiB maximum |
    | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
-   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: runner landed; calibration-a artifact, later byte ceiling, and independent holdout-b pending |
+   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: runner and normative calibration-a artifact landed; later byte ceiling and independent holdout-b pending |
    | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | OPEN under BR-G-45; per-completion and aggregate ceilings are separate |
 
    **BR-G-42 event-custody definition (required by SH-G-8; REALIGNED, OPEN).**
@@ -2535,8 +2536,8 @@ require a later schema-version decision rather than an M1 fallback
    production offer/observation path and sampled from a quiescent snapshot. The
    construction emits 64 outcomes per task to fill adapter custody, admits one
    further production transfer, then emits the 64-outcome tail; no queue value
-   is inserted synthetically. A
-   clean-commit calibration artifact records the frozen corpus version/hash,
+   is inserted synthetically. The committed calibration artifact, generated
+   from clean source, records the frozen corpus version/hash,
    raw root measurements, interpreter, allocation method, and every achieved
    high-water mark. The already-declared derivation rule applies 25 percent
    headroom to the largest calibration
@@ -2602,11 +2603,25 @@ require a later schema-version decision rather than an M1 fallback
    `PYTHONMALLOC=pymalloc`, `PYTHONNOUSERSITE=1`, `PYTHONUTF8=1`, and the fresh
    `PYTHONPYCACHEPREFIX`. The exact active-venv `xxhash/__init__.py`,
    `xxhash/version.py`, and sole `_xxhash*.pyd` file, their origins, and their
-   combined digest are recorded. The runner emits raw measurements and the
-   predeclared headroom rule, but no pass/fail field or byte ceiling. A
-   committed calibration-a artifact, later ceiling commit, and independent
-   holdout-b remain required.
-   From a clean commit, calibration is recorded with
+   combined digest are recorded. The durable normative calibration-a artifact
+   is `tests/interfaces/web/sh_g_8_transport_calibration.json`. It was generated
+   from clean tested commit
+   `56c50b43dc19090ad33af031891503bfec80599b`; its file SHA-256 is
+   `13589307538eb90f05da2322c7e0ba627234e060c8455d9b7e3013aa575cece8`, and
+   its three measured child PIDs are 47288, 47520, and 26968. It records an
+   ordinary union high water of 1,376,690 bytes / 4,890 objects and an exact
+   maximum no-`Gap` union of 1,534,946 bytes / 5,499 objects. Its stable
+   evidence, corpus, normalized runtime-qualifier, and dependency-authority
+   SHA-256 values are respectively
+   `62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea`,
+   `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`,
+   `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`, and
+   `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
+   The artifact contains no byte ceiling or pass/fail field and makes no
+   acceptance decision. The next commit mechanically freezes the ceiling as
+   `ceil((1,534,946 * 5 / 4) / 65,536) * 65,536`; only a later independent
+   holdout-b may decide acceptance.
+   Calibration can be reproduced from a clean commit with
    `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`.
    Do not run or interpret holdout-b before the later ceiling commit.
 
@@ -3393,15 +3408,16 @@ because its local tests are easier.
   production-path three-fresh-process runner have also landed. The runner
   verifies real built-in deque roots, the exact quiescent per-task 128/64/64
   no-`Gap` shape and ordered cleanup, terminal path-cut reporting, and clean
-  source/dependency/runtime/digest authority. A committed calibration-a artifact,
-  normative measurement, byte ceiling, acceptance result, and independent
-  holdout-b have not landed. The 2026-08-13 run of
+  source/dependency/runtime/digest authority. The committed calibration-a
+  artifact now records the normative 1,376,690-byte ordinary and
+  1,534,946-byte exact-maximum union measurements. A byte ceiling, acceptance
+  result, and independent holdout-b have not landed. The 2026-08-13 run of
   archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
   event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
   predicates. Its 67,375,104-byte whole-Job delta is not transport-custody
   evidence and neither passes nor fails this realigned clause. BR-G-42's event
-  portion and SH-G-8 remain open without claiming a new calibration result or
-  limit.
+  portion and SH-G-8 remain open without claiming a byte limit or acceptance
+  result.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
   separately.** For one exact 100,000-subject completion, calibration and a
   later independent holdout measure the complete per-completion artifact set:

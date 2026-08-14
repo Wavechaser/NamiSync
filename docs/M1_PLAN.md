@@ -22,8 +22,9 @@ and reports per-PID/runtime resources only as non-acceptance diagnostics.
 The frozen/disjoint realistic custody corpora and production-path runner have
 also landed, including exact real-deque 128/64/64 no-`Gap`, terminal path-cut,
 cleanup, and clean source/dependency/runtime/digest-authority witnesses. They set no byte
-ceiling or acceptance result. Realigned SH-G-8 remains open for a committed
-calibration-a artifact, a later byte ceiling, and independent holdout-b;
+ceiling or acceptance result. The committed calibration-a artifact now records
+normative ordinary/exact-maximum transport measurements. Realigned SH-G-8
+remains open for a later byte ceiling and independent holdout-b;
 BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
 completed-task retention open, while shell-owned SH-G-15 leaves version-bound
 whole-runtime containment open. The earlier whole-Job delta is diagnostic input
@@ -1113,9 +1114,10 @@ browser-behavior witness migration is complete. The existing four-task event
 truth remains useful, and the fixed 150 ms linger plus immediate-wake focused
 regressions have landed. The frozen/disjoint realistic corpus and
 production-path runner now prove the exact real-deque 128/64/64 no-`Gap` shape,
-ordered cleanup, terminal cut, and clean source/dependency/runtime authority without setting a
-limit. SH-G-8's realigned BR-G-42 custody clause remains open until a committed
-calibration-a artifact, later byte ceiling, and independent holdout-b land.
+ordered cleanup, terminal cut, and clean source/dependency/runtime authority
+without setting a limit. The committed calibration-a artifact now supplies the
+normative transport measurement. SH-G-8's realigned BR-G-42 custody clause
+remains open until the later byte ceiling and independent holdout-b land.
 BR-G-45's terminal-artifact retention policy and
 SH-G-15's version-bound whole-runtime calibration/holdouts remain independently
 open; the 2026-08-13 whole-Job delta closes none of them.

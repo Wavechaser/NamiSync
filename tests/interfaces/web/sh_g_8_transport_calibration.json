@@ -1,0 +1,1447 @@
+{
+  "corpus_version": "sh-g-8-transport-v1",
+  "dataset_kind": "calibration",
+  "dataset_variant": "calibration-a",
+  "dependency_authority": {
+    "files": {
+      "xxhash/__init__.py": "98f11d8a1c43314d2b8cb5ae9b716b53d51ada343eaf37dec1880883e27e2657",
+      "xxhash/_xxhash.cp313-win_amd64.pyd": "53f666d7b2585a7de84fc0cfcbc7a673b16da0695e22cd63e34626e34be08950",
+      "xxhash/version.py": "c3acd5376d6a2ff680c10a0a8fe78bf88d1e0a72936af90e0fd8c203b0a8fc47"
+    },
+    "root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+    "sha256": "8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30"
+  },
+  "gate": "SH-G-8 transport custody",
+  "hashes": {
+    "corpus_sha256": "a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec",
+    "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+    "instrument_sha256": "629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9",
+    "runtime_qualifier_sha256": "a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e",
+    "runtime_sha256": "9f745c6f5a480c48bf5dee00bb145dc932478fdc7221ce864ff37d314dc2c425",
+    "source_files": {
+      "namisync/__init__.py": "e3079988b7a318bda8133791b504490b4991e8aac26b5a00ee3b2767bd415a13",
+      "namisync/__main__.py": "adb799b0256f775a330c2b62336881d5369ff64b4e9408989053caf386f2143e",
+      "namisync/core/__init__.py": "6f49fb1995b1338163cebb42352bfdf727bbd39d23861b4daae21e7c3f33c04d",
+      "namisync/core/events.py": "94f30a528f5198b583e13be36442efcc533acae583965604d84ebd018f1974b3",
+      "namisync/core/evidence.py": "d156e8d3a7b7221e688b678ea77d3dfd399ed6b9b6d8ba9c0d30f05e1a5fd073",
+      "namisync/core/execution.py": "f78a1ff2b13cb856380e8001e1b6e50573416f6677bfe9ec5bea5ed8f5e3da90",
+      "namisync/core/integrity.py": "6f5262d77906edb7efb4aafc4c69d25b6ff3313ac31661e5389659c1245f764a",
+      "namisync/core/models.py": "e03d6fd6e3057659ab2c57a6a9f1e4fb2e2e6624a17ef2ed13588c6b7f3f939b",
+      "namisync/core/pathing.py": "e26f4172f3d36b1abdf9500cfbff31fc0923efccd1a6ebbfea0ff8fc1830e654",
+      "namisync/core/planning.py": "5dbf27b42932a7015204b91498973e5626bd17156257a56daeab8392c416b100",
+      "namisync/core/preflight.py": "927da69343a68e99cea8969d1e05c58f1a25062250cc0ffdc83dff7d4885fe7e",
+      "namisync/core/recording.py": "ef3a48fb7eef6b2da7cf56210fbc79bd3e5bdbca8b164cb2316f3fa05a19b0f8",
+      "namisync/core/root_authority.py": "89545b0c15cf9e8a97da7c797231d80b3c6b619eee65f9ac133b161009beede8",
+      "namisync/core/session.py": "fa59767b98fd03b5092dcf70ab614d49602e4656de436ef1e5a09636a9416579",
+      "namisync/db/__init__.py": "fe537c75012f233ee7015e2fd1bc9e9f375e90078e4f26af44593e5c2a355391",
+      "namisync/db/connections.py": "cbd07b8c95ed7115bf2a91a2999cd60a4ce03070f39156b05fd65930f465122d",
+      "namisync/db/contracts.py": "4b429e182225ac4e11c637edc1b2a6e85bf7b92c2e0221c054a9ffba06e5b6dd",
+      "namisync/db/history.py": "ec3b352bbdc8cc96b30faef16a88553eeb9907014dbe3653bd10bfe757ff328a",
+      "namisync/db/recorder.py": "e72420534dfeb13e9c9041a55943f8bbddd9cfca72b2b34618f30a89b678c7c9",
+      "namisync/db/repositories.py": "baba056a06e285c35cae5cb58196520941aa7cbb624ee109415b37dedb34422b",
+      "namisync/db/schema.py": "e5c8a9ef36b2996e23cd516b3becad73353da55c5330ba7aa4a7a5edf1fa9de4",
+      "namisync/db/settings.py": "107f5326adbfdd8247d8669c1923cecf6b88d7627dea918a6897a6ca17bf4083",
+      "namisync/db/timestamps.py": "af9a818fa3883483f9ebefbcbce0ae0d40a608aa50157676a709ebe3dc564fa0",
+      "namisync/db/writer.py": "d29c19d962ee3a765e8e278cec0b207c50b056940a71067e11c330bead21320c",
+      "namisync/dispatcher/__init__.py": "357ae621397f19283ccabd3120c3f235aaebc592fed8612e1e81b96154d60fc7",
+      "namisync/dispatcher/contracts.py": "a09c2c6097a0ef5aa59a15e9fda37b3abd99491b5902bd44c6dc81b9a00a7d41",
+      "namisync/dispatcher/custody.py": "23b22a45e53377e1dc227bf3d84f00ee9fe6ac38bdc952f882bb3e187b0f780b",
+      "namisync/dispatcher/dispatcher.py": "600a38169100003610ee0d15f988bb6ab8d3531d87667727e1915169240d0f86",
+      "namisync/dispatcher/event_bus.py": "bf713e61d187450af691b9a8a61a8c24d4f6164d38a7ced048e9736e3713bded",
+      "namisync/dispatcher/store.py": "d46ca375e03aa34c05e974e1896c8f6154b6124b51055f8f8fca82dfde625fdb",
+      "namisync/interfaces/__init__.py": "12d901de87d3d73456209980929e3477ec344a588a97f8b5bc2e58624feef535",
+      "namisync/interfaces/cli.py": "1696f8a8ee057a2807c4702133bbd546daeb06f8c4bd3249eab17f0275889d99",
+      "namisync/interfaces/launcher.py": "391d723a533686916d82df08cc4aea6f59f63ee3c85ad436ef1d0d103d13ca32",
+      "namisync/interfaces/service.py": "7c31a9bc5a64156625cef6f71cf15aa2d50695bcb5c07ab9bf3ae0f516c19560",
+      "namisync/interfaces/ui_state.py": "8eb7058cc03988a91189362ff32dccac174e1c6488fd71aebec1fc49bc4f60cf",
+      "namisync/interfaces/web/__init__.py": "d55f227b3f4b64b8d432846490adb6b94e913edffd1e39cc6a8a6a01e3569675",
+      "namisync/interfaces/web/appearance.py": "150f3740726620fcea98c43c78f8f4f2fca0a17adceaf2a1a19de60145460597",
+      "namisync/interfaces/web/bridge.py": "fe0525fc94841582d968369586f8e5294adf582777432c8058437d32abdba2e8",
+      "namisync/interfaces/web/commands.py": "254cebed3e23fa4e73ae82871c4c1e409bdc7b4f7824825e0b80365ff6d958ef",
+      "namisync/interfaces/web/drain.py": "92ce337ff96eaad9a81ee7d91d8cae4d1634e96defee5c2447244fa2fef27150",
+      "namisync/interfaces/web/host.py": "8cbf2d39e0b9ca46522fa84140adabd47902769a5408bfb41b69acc67d33b9b4",
+      "namisync/interfaces/web/logging_config.py": "865fcaff62ead90d30160e161d52b29c7f4725afd536466e893a8649c79e1529",
+      "namisync/interfaces/web/paths.py": "420cc51e6851d1678f2db6a6f39303b8af31f61828d4c7e0df71632d54ff1abd",
+      "namisync/interfaces/web/pywebview_runtime.py": "167731fdae4198423ac97e52b09154c63855a568a18860ab31f652ff03ff4331",
+      "namisync/interfaces/web/slots.py": "5c40be6fabc4140e05d208710bd2b678ee10c47fcc15f988bedb7e34e1fc4396",
+      "namisync/interfaces/web/visible_sequence.py": "28dd40befa83bb7394529686ec57e802be239d9f2f9464e0e6595709cdb1eca5",
+      "namisync/modules/__init__.py": "4069d9933abd8bbcdb3b998bd413c917bd01eaee9b54712d5c3340af38e1ded3",
+      "namisync/modules/executor/__init__.py": "c50b92ba81e64dfbaa7925bf311f3bcc8ec123c4de1da9ba1a32cd45e040e9b3",
+      "namisync/modules/executor/native.py": "91044cfef2699467f73655c27c933467d9338b2aba2c851e25a3e8c93d83e88f",
+      "namisync/modules/executor/pipeline.py": "8ca2ba98bb36280639afc0ab34fba9d4079ba6fa67f308fea935c71c99dd0e96",
+      "namisync/modules/executor/runtime.py": "3f9e2a01e390a2f762404b16ddb5de3c0f77149af32a38a6601edc57e3ef0500",
+      "namisync/modules/planner.py": "1fb18ca683f74a87708fb31c784cbf772876f44ff7fd62d9951ba0be7a610a4a",
+      "namisync/modules/preflight.py": "0c7650b0bc6e14040b72aeebd7485ac6a019f8471539c699693c5250c92d8ee6",
+      "namisync/modules/scanner.py": "bf4439ebe02803270322b9d1d440b2a3646182722e0f8f4620a3db6733b43686",
+      "namisync/modules/verifier/__init__.py": "617b7bb90b04a5b8bc6b3ac77403b592ed7f8a00d3dd6fee6c49faecdb0ccb87",
+      "namisync/modules/verifier/engine.py": "3cb16574d7a942eb0f76df8c25e690c32a6ae38a5c5d4851e873afe1fc8d64be",
+      "namisync/modules/verifier/native.py": "e0f355f89704f84cf3ec5576411416ac9318759aa6abc88744df0094135e211e",
+      "namisync/version.py": "7f12ab5b23da2e105ad49e1c292c274e45894f46b734cd678ece32b270536d48",
+      "namisync/workflows/__init__.py": "b8104344f3d970cdda24ec75d09a774525d1990b4aadea0ecdd41f290f7ea04a",
+      "namisync/workflows/_database_pair_native.py": "8cf611c31d5a4a591706f06e2cf9151fb21d8e0e763fc0d958957cfe27d8a60e",
+      "namisync/workflows/database_pair.py": "ac487dd4efd92613dfd6031af6ae85dd44dd8e9e2ecf8f5745dc9d02615c9d28",
+      "namisync/workflows/inventory.py": "68f46f68b0cc240629ca2731b14b4e8d8352316f0f72cc5efd15aad97f5eb5f4",
+      "namisync/workflows/models.py": "71cbd7ce0d15dd8b654e5e918678712dd93269c7da73b52e31a9eba550be8c17",
+      "namisync/workflows/node_tree.py": "2d53722851f5f638c411727332ea912262c6e540313a78dd626e53e463f109b0",
+      "namisync/workflows/payloads.py": "5d43cfb555b7a4d501ceeaf49b2508c3bab3ec69f2ae1e3a889acc47868849ea",
+      "namisync/workflows/runtime.py": "e80185d31b140bdf68eb427be80fb09d98fbdff04f31e351d7621920822fd034",
+      "namisync/workflows/selection.py": "b305fc6e6c5e65d163cfa2965346ec05d37caabb70b4499264df20d86e54840c",
+      "namisync/workflows/sync.py": "5dda40107d34ed130718a56aad80891c60585e86577453b37c555c71287844b3",
+      "namisync/workflows/views.py": "c7fde04c39ef9ef8f3ec9fa8557a771d1cc70d69937fe817005d30926ac976d7",
+      "tests/bridge_transport_custody.py": "a5f067ffbffa2982a04307da8d10da6203689a651094fba9c6400c5786017084",
+      "tests/interfaces/web/_bridge_transport_custody.py": "ca125c0d32712ba0110598bd5f65f38f19147b979569129d4aff93d8d6e2a2b5"
+    },
+    "source_sha256": "e0a69a23056c399a8ff12545a17a6cdfe04a6205c27377c7e05f5c39684dea80"
+  },
+  "headroom_policy": {
+    "factor_denominator": 4,
+    "factor_numerator": 5,
+    "round_up_bytes": 65536,
+    "rule": "round upward to 65536 bytes after applying 25 percent headroom to the largest calibration transport_custody_bytes measurement"
+  },
+  "measurement_maxima": {
+    "maximum_no_gap_custody": {
+      "adapter_queue_bytes": 701435,
+      "adapter_queue_objects": 2253,
+      "replay_queue_bytes": 1339242,
+      "replay_queue_objects": 4435,
+      "subscriber_queue_bytes": 701518,
+      "subscriber_queue_objects": 2239,
+      "terminal_artifact_bytes": 0,
+      "terminal_artifact_objects": 0,
+      "transport_custody_bytes": 1534946,
+      "transport_custody_objects": 5499
+    },
+    "ordinary_quiescent_peak": {
+      "adapter_queue_bytes": 72953,
+      "adapter_queue_objects": 182,
+      "replay_queue_bytes": 1361524,
+      "replay_queue_objects": 4812,
+      "subscriber_queue_bytes": 3040,
+      "subscriber_queue_objects": 4,
+      "terminal_artifact_bytes": 0,
+      "terminal_artifact_objects": 0,
+      "transport_custody_bytes": 1376690,
+      "transport_custody_objects": 4890
+    }
+  },
+  "run_count": 3,
+  "run_receipts": [
+    {
+      "artifact_sha256": "a03578b8ed32f9300cc6130cc6aa9fde3176d95541b181db4cb605df64b690f8",
+      "dataset_variant": "calibration-a",
+      "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+      "gate": "SH-G-8 transport custody",
+      "process_id": 47288,
+      "schema_version": 1,
+      "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+    },
+    {
+      "artifact_sha256": "9626855b3a8fc445786f69c5807ac32d3d7c9a7042764781cb169f82b7ca98d8",
+      "dataset_variant": "calibration-a",
+      "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+      "gate": "SH-G-8 transport custody",
+      "process_id": 47520,
+      "schema_version": 1,
+      "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+    },
+    {
+      "artifact_sha256": "9a356dbbc79469b778e296b61e3b6d9a7f86c2778191d503175f92780b0ba53e",
+      "dataset_variant": "calibration-a",
+      "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+      "gate": "SH-G-8 transport custody",
+      "process_id": 26968,
+      "schema_version": 1,
+      "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+    }
+  ],
+  "runs": [
+    {
+      "corpus_version": "sh-g-8-transport-v1",
+      "dataset_variant": "calibration-a",
+      "dependency_authority": {
+        "files": {
+          "xxhash/__init__.py": "98f11d8a1c43314d2b8cb5ae9b716b53d51ada343eaf37dec1880883e27e2657",
+          "xxhash/_xxhash.cp313-win_amd64.pyd": "53f666d7b2585a7de84fc0cfcbc7a673b16da0695e22cd63e34626e34be08950",
+          "xxhash/version.py": "c3acd5376d6a2ff680c10a0a8fe78bf88d1e0a72936af90e0fd8c203b0a8fc47"
+        },
+        "root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+        "sha256": "8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30"
+      },
+      "gate": "SH-G-8 transport custody",
+      "hashes": {
+        "corpus_sha256": "a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec",
+        "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+        "instrument_sha256": "629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9",
+        "runtime_qualifier_sha256": "a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e",
+        "runtime_sha256": "9f745c6f5a480c48bf5dee00bb145dc932478fdc7221ce864ff37d314dc2c425",
+        "source_files": {
+          "namisync/__init__.py": "e3079988b7a318bda8133791b504490b4991e8aac26b5a00ee3b2767bd415a13",
+          "namisync/__main__.py": "adb799b0256f775a330c2b62336881d5369ff64b4e9408989053caf386f2143e",
+          "namisync/core/__init__.py": "6f49fb1995b1338163cebb42352bfdf727bbd39d23861b4daae21e7c3f33c04d",
+          "namisync/core/events.py": "94f30a528f5198b583e13be36442efcc533acae583965604d84ebd018f1974b3",
+          "namisync/core/evidence.py": "d156e8d3a7b7221e688b678ea77d3dfd399ed6b9b6d8ba9c0d30f05e1a5fd073",
+          "namisync/core/execution.py": "f78a1ff2b13cb856380e8001e1b6e50573416f6677bfe9ec5bea5ed8f5e3da90",
+          "namisync/core/integrity.py": "6f5262d77906edb7efb4aafc4c69d25b6ff3313ac31661e5389659c1245f764a",
+          "namisync/core/models.py": "e03d6fd6e3057659ab2c57a6a9f1e4fb2e2e6624a17ef2ed13588c6b7f3f939b",
+          "namisync/core/pathing.py": "e26f4172f3d36b1abdf9500cfbff31fc0923efccd1a6ebbfea0ff8fc1830e654",
+          "namisync/core/planning.py": "5dbf27b42932a7015204b91498973e5626bd17156257a56daeab8392c416b100",
+          "namisync/core/preflight.py": "927da69343a68e99cea8969d1e05c58f1a25062250cc0ffdc83dff7d4885fe7e",
+          "namisync/core/recording.py": "ef3a48fb7eef6b2da7cf56210fbc79bd3e5bdbca8b164cb2316f3fa05a19b0f8",
+          "namisync/core/root_authority.py": "89545b0c15cf9e8a97da7c797231d80b3c6b619eee65f9ac133b161009beede8",
+          "namisync/core/session.py": "fa59767b98fd03b5092dcf70ab614d49602e4656de436ef1e5a09636a9416579",
+          "namisync/db/__init__.py": "fe537c75012f233ee7015e2fd1bc9e9f375e90078e4f26af44593e5c2a355391",
+          "namisync/db/connections.py": "cbd07b8c95ed7115bf2a91a2999cd60a4ce03070f39156b05fd65930f465122d",
+          "namisync/db/contracts.py": "4b429e182225ac4e11c637edc1b2a6e85bf7b92c2e0221c054a9ffba06e5b6dd",
+          "namisync/db/history.py": "ec3b352bbdc8cc96b30faef16a88553eeb9907014dbe3653bd10bfe757ff328a",
+          "namisync/db/recorder.py": "e72420534dfeb13e9c9041a55943f8bbddd9cfca72b2b34618f30a89b678c7c9",
+          "namisync/db/repositories.py": "baba056a06e285c35cae5cb58196520941aa7cbb624ee109415b37dedb34422b",
+          "namisync/db/schema.py": "e5c8a9ef36b2996e23cd516b3becad73353da55c5330ba7aa4a7a5edf1fa9de4",
+          "namisync/db/settings.py": "107f5326adbfdd8247d8669c1923cecf6b88d7627dea918a6897a6ca17bf4083",
+          "namisync/db/timestamps.py": "af9a818fa3883483f9ebefbcbce0ae0d40a608aa50157676a709ebe3dc564fa0",
+          "namisync/db/writer.py": "d29c19d962ee3a765e8e278cec0b207c50b056940a71067e11c330bead21320c",
+          "namisync/dispatcher/__init__.py": "357ae621397f19283ccabd3120c3f235aaebc592fed8612e1e81b96154d60fc7",
+          "namisync/dispatcher/contracts.py": "a09c2c6097a0ef5aa59a15e9fda37b3abd99491b5902bd44c6dc81b9a00a7d41",
+          "namisync/dispatcher/custody.py": "23b22a45e53377e1dc227bf3d84f00ee9fe6ac38bdc952f882bb3e187b0f780b",
+          "namisync/dispatcher/dispatcher.py": "600a38169100003610ee0d15f988bb6ab8d3531d87667727e1915169240d0f86",
+          "namisync/dispatcher/event_bus.py": "bf713e61d187450af691b9a8a61a8c24d4f6164d38a7ced048e9736e3713bded",
+          "namisync/dispatcher/store.py": "d46ca375e03aa34c05e974e1896c8f6154b6124b51055f8f8fca82dfde625fdb",
+          "namisync/interfaces/__init__.py": "12d901de87d3d73456209980929e3477ec344a588a97f8b5bc2e58624feef535",
+          "namisync/interfaces/cli.py": "1696f8a8ee057a2807c4702133bbd546daeb06f8c4bd3249eab17f0275889d99",
+          "namisync/interfaces/launcher.py": "391d723a533686916d82df08cc4aea6f59f63ee3c85ad436ef1d0d103d13ca32",
+          "namisync/interfaces/service.py": "7c31a9bc5a64156625cef6f71cf15aa2d50695bcb5c07ab9bf3ae0f516c19560",
+          "namisync/interfaces/ui_state.py": "8eb7058cc03988a91189362ff32dccac174e1c6488fd71aebec1fc49bc4f60cf",
+          "namisync/interfaces/web/__init__.py": "d55f227b3f4b64b8d432846490adb6b94e913edffd1e39cc6a8a6a01e3569675",
+          "namisync/interfaces/web/appearance.py": "150f3740726620fcea98c43c78f8f4f2fca0a17adceaf2a1a19de60145460597",
+          "namisync/interfaces/web/bridge.py": "fe0525fc94841582d968369586f8e5294adf582777432c8058437d32abdba2e8",
+          "namisync/interfaces/web/commands.py": "254cebed3e23fa4e73ae82871c4c1e409bdc7b4f7824825e0b80365ff6d958ef",
+          "namisync/interfaces/web/drain.py": "92ce337ff96eaad9a81ee7d91d8cae4d1634e96defee5c2447244fa2fef27150",
+          "namisync/interfaces/web/host.py": "8cbf2d39e0b9ca46522fa84140adabd47902769a5408bfb41b69acc67d33b9b4",
+          "namisync/interfaces/web/logging_config.py": "865fcaff62ead90d30160e161d52b29c7f4725afd536466e893a8649c79e1529",
+          "namisync/interfaces/web/paths.py": "420cc51e6851d1678f2db6a6f39303b8af31f61828d4c7e0df71632d54ff1abd",
+          "namisync/interfaces/web/pywebview_runtime.py": "167731fdae4198423ac97e52b09154c63855a568a18860ab31f652ff03ff4331",
+          "namisync/interfaces/web/slots.py": "5c40be6fabc4140e05d208710bd2b678ee10c47fcc15f988bedb7e34e1fc4396",
+          "namisync/interfaces/web/visible_sequence.py": "28dd40befa83bb7394529686ec57e802be239d9f2f9464e0e6595709cdb1eca5",
+          "namisync/modules/__init__.py": "4069d9933abd8bbcdb3b998bd413c917bd01eaee9b54712d5c3340af38e1ded3",
+          "namisync/modules/executor/__init__.py": "c50b92ba81e64dfbaa7925bf311f3bcc8ec123c4de1da9ba1a32cd45e040e9b3",
+          "namisync/modules/executor/native.py": "91044cfef2699467f73655c27c933467d9338b2aba2c851e25a3e8c93d83e88f",
+          "namisync/modules/executor/pipeline.py": "8ca2ba98bb36280639afc0ab34fba9d4079ba6fa67f308fea935c71c99dd0e96",
+          "namisync/modules/executor/runtime.py": "3f9e2a01e390a2f762404b16ddb5de3c0f77149af32a38a6601edc57e3ef0500",
+          "namisync/modules/planner.py": "1fb18ca683f74a87708fb31c784cbf772876f44ff7fd62d9951ba0be7a610a4a",
+          "namisync/modules/preflight.py": "0c7650b0bc6e14040b72aeebd7485ac6a019f8471539c699693c5250c92d8ee6",
+          "namisync/modules/scanner.py": "bf4439ebe02803270322b9d1d440b2a3646182722e0f8f4620a3db6733b43686",
+          "namisync/modules/verifier/__init__.py": "617b7bb90b04a5b8bc6b3ac77403b592ed7f8a00d3dd6fee6c49faecdb0ccb87",
+          "namisync/modules/verifier/engine.py": "3cb16574d7a942eb0f76df8c25e690c32a6ae38a5c5d4851e873afe1fc8d64be",
+          "namisync/modules/verifier/native.py": "e0f355f89704f84cf3ec5576411416ac9318759aa6abc88744df0094135e211e",
+          "namisync/version.py": "7f12ab5b23da2e105ad49e1c292c274e45894f46b734cd678ece32b270536d48",
+          "namisync/workflows/__init__.py": "b8104344f3d970cdda24ec75d09a774525d1990b4aadea0ecdd41f290f7ea04a",
+          "namisync/workflows/_database_pair_native.py": "8cf611c31d5a4a591706f06e2cf9151fb21d8e0e763fc0d958957cfe27d8a60e",
+          "namisync/workflows/database_pair.py": "ac487dd4efd92613dfd6031af6ae85dd44dd8e9e2ecf8f5745dc9d02615c9d28",
+          "namisync/workflows/inventory.py": "68f46f68b0cc240629ca2731b14b4e8d8352316f0f72cc5efd15aad97f5eb5f4",
+          "namisync/workflows/models.py": "71cbd7ce0d15dd8b654e5e918678712dd93269c7da73b52e31a9eba550be8c17",
+          "namisync/workflows/node_tree.py": "2d53722851f5f638c411727332ea912262c6e540313a78dd626e53e463f109b0",
+          "namisync/workflows/payloads.py": "5d43cfb555b7a4d501ceeaf49b2508c3bab3ec69f2ae1e3a889acc47868849ea",
+          "namisync/workflows/runtime.py": "e80185d31b140bdf68eb427be80fb09d98fbdff04f31e351d7621920822fd034",
+          "namisync/workflows/selection.py": "b305fc6e6c5e65d163cfa2965346ec05d37caabb70b4499264df20d86e54840c",
+          "namisync/workflows/sync.py": "5dda40107d34ed130718a56aad80891c60585e86577453b37c555c71287844b3",
+          "namisync/workflows/views.py": "c7fde04c39ef9ef8f3ec9fa8557a771d1cc70d69937fe817005d30926ac976d7",
+          "tests/bridge_transport_custody.py": "a5f067ffbffa2982a04307da8d10da6203689a651094fba9c6400c5786017084",
+          "tests/interfaces/web/_bridge_transport_custody.py": "ca125c0d32712ba0110598bd5f65f38f19147b979569129d4aff93d8d6e2a2b5"
+        },
+        "source_sha256": "e0a69a23056c399a8ff12545a17a6cdfe04a6205c27377c7e05f5c39684dea80"
+      },
+      "headroom_policy": {
+        "factor_denominator": 4,
+        "factor_numerator": 5,
+        "round_up_bytes": 65536,
+        "rule": "round upward to 65536 bytes after applying 25 percent headroom to the largest calibration transport_custody_bytes measurement"
+      },
+      "maximum_no_gap": {
+        "cleanup_delivery": {
+          "failed_state_headline_records": 4,
+          "outcomes": 516,
+          "outcomes_per_task": [
+            129,
+            129,
+            129,
+            129
+          ],
+          "terminal_events": 4,
+          "terminal_order_exact": true,
+          "terminal_records": 4
+        },
+        "custody": {
+          "adapter_queue_bytes": 701435,
+          "adapter_queue_objects": 2253,
+          "replay_queue_bytes": 1339242,
+          "replay_queue_objects": 4435,
+          "subscriber_queue_bytes": 701518,
+          "subscriber_queue_objects": 2239,
+          "terminal_artifact_bytes": 0,
+          "terminal_artifact_objects": 0,
+          "transport_custody_bytes": 1534946,
+          "transport_custody_objects": 5499
+        },
+        "custody_sampling": "exact producer-quiescent maximum no-Gap shape",
+        "emissions": {
+          "outcomes": 516
+        },
+        "no_gap": true,
+        "observed_queue_high_water": {
+          "adapter": {
+            "maximum": 64,
+            "per_queue": [
+              64,
+              64,
+              64,
+              64
+            ]
+          },
+          "replay": {
+            "maximum": 128,
+            "per_queue": [
+              128,
+              128,
+              128,
+              128
+            ]
+          },
+          "subscriber": {
+            "maximum": 64,
+            "per_queue": [
+              64,
+              64,
+              64,
+              64
+            ]
+          }
+        },
+        "queue_lengths": {
+          "adapter": [
+            64,
+            64,
+            64,
+            64
+          ],
+          "replay": [
+            128,
+            128,
+            128,
+            128
+          ],
+          "subscriber": [
+            64,
+            64,
+            64,
+            64
+          ]
+        },
+        "root_container_type": "collections.deque"
+      },
+      "module_origins": {
+        "namisync": "F:\\GitHubRepositories\\NamiSync\\namisync\\__init__.py",
+        "namisync.core.events": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\events.py",
+        "namisync.dispatcher.event_bus": "F:\\GitHubRepositories\\NamiSync\\namisync\\dispatcher\\event_bus.py",
+        "namisync.interfaces.service": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\service.py",
+        "namisync.interfaces.web.drain": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py",
+        "namisync.workflows.views": "F:\\GitHubRepositories\\NamiSync\\namisync\\workflows\\views.py",
+        "xxhash": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\__init__.py",
+        "xxhash._xxhash": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\_xxhash.cp313-win_amd64.pyd",
+        "xxhash.version": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\version.py"
+      },
+      "ordinary": {
+        "custody_sampling": "60 exact-body producer-quiescent checkpoints plus terminal transport projection",
+        "delivered": {
+          "outcomes": 600,
+          "progress": 240,
+          "terminal_events": 4,
+          "terminal_records": 4
+        },
+        "emissions": {
+          "outcomes": 600,
+          "progress": 6000
+        },
+        "no_gap": true,
+        "observed_checkpoint_peak": {
+          "adapter": {
+            "maximum": 4,
+            "per_queue": [
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "replay": {
+            "maximum": 128,
+            "per_queue": [
+              128,
+              128,
+              128,
+              128
+            ]
+          },
+          "subscriber": {
+            "maximum": 0,
+            "per_queue": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "ordering": {
+          "event_sequences_strict": true,
+          "reliable_ids_exact": true,
+          "terminal_order_exact": true
+        },
+        "ordinary_quiescent_peak": {
+          "adapter_queue_bytes": 72953,
+          "adapter_queue_objects": 182,
+          "replay_queue_bytes": 1361524,
+          "replay_queue_objects": 4812,
+          "subscriber_queue_bytes": 3040,
+          "subscriber_queue_objects": 4,
+          "terminal_artifact_bytes": 0,
+          "terminal_artifact_objects": 0,
+          "transport_custody_bytes": 1376690,
+          "transport_custody_objects": 4890
+        },
+        "progress_per_task": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "root_container_type": "collections.deque",
+        "terminal_path_cut_witness": {
+          "authority": "BR-G-45-nonnormative",
+          "measurement": {
+            "adapter_queue_bytes": 7768,
+            "adapter_queue_objects": 63,
+            "replay_queue_bytes": 1344489,
+            "replay_queue_objects": 4769,
+            "subscriber_queue_bytes": 0,
+            "subscriber_queue_objects": 0,
+            "terminal_artifact_bytes": 2047533,
+            "terminal_artifact_objects": 6313,
+            "transport_custody_bytes": 1351741,
+            "transport_custody_objects": 4820
+          },
+          "transport_result_exclusion_exercised": true
+        }
+      },
+      "process_id": 47288,
+      "runtime": {
+        "allocation_method": "recursive sys.getsizeof with identity deduplication, real queue shallow sizes, and path-local terminal-result exclusion",
+        "allocator_predicate": "explicit-pymalloc-on-qualified-Windows-CPython",
+        "dependency_root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+        "dev_mode": false,
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "implementation": "CPython",
+        "no_site": 1,
+        "optimize": 0,
+        "platform": "Windows-11-10.0.26200-SP0",
+        "pointer_bits": 64,
+        "py_debug": 0,
+        "pycache_prefix": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-sh-g-8-custody-d2z4d4ls\\run-1-pycache",
+        "pycache_prefix_role": "fresh-empty-per-child-outside-source-tree",
+        "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+        "python_hash_seed": "0",
+        "python_malloc": "pymalloc",
+        "qualifier_environment": {
+          "PYTHONHASHSEED": "0",
+          "PYTHONMALLOC": "pymalloc",
+          "PYTHONNOUSERSITE": "1",
+          "PYTHONPYCACHEPREFIX": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-sh-g-8-custody-d2z4d4ls\\run-1-pycache",
+          "PYTHONUTF8": "1"
+        },
+        "safe_path": true,
+        "tracemalloc": false,
+        "version_info": [
+          3,
+          13,
+          14,
+          "final",
+          0
+        ],
+        "with_pymalloc_config": null
+      },
+      "schema_version": 1,
+      "structural_facts": {
+        "active_alphabet_offset": 0,
+        "active_length_permutation": {
+          "multiplier": 37,
+          "offset": 17
+        },
+        "alphabet_counts_ratio": {
+          "ascii": 2,
+          "bmp": 1,
+          "non_bmp": 1
+        },
+        "dataset_variant": "calibration-a",
+        "dataset_variants": {
+          "calibration-a": "rank=(ordinal*37+17) mod population; alphabet=ordinal mod 4",
+          "holdout-b": "rank=(ordinal*41+31) mod population; alphabet=(ordinal+1) mod 4"
+        },
+        "detail_families": {
+          "move_update": {
+            "durability_warnings": 0,
+            "kind": "move_update",
+            "outcome": "failed",
+            "reason": "recorder-failed"
+          },
+          "mutation": {
+            "durability_warnings": 0,
+            "kind": "update",
+            "outcome": "failed",
+            "reason": "io-error"
+          },
+          "publication": {
+            "durability_warnings": 0,
+            "kind": "copy",
+            "outcome": "failed",
+            "reason": "io-error"
+          }
+        },
+        "dynamic_nonaliased_values_distinct": true,
+        "identity_aliases": {
+          "copy_published_path": "ItemOutcome.path",
+          "move_update_published_path": "ItemOutcome.path"
+        },
+        "item_ids": {
+          "derivation": "first 128 bits of SHA-256 over corpus/variant/fixture/task/local",
+          "disjoint_across_variants_and_fixtures": true,
+          "format": "32 lowercase hexadecimal characters"
+        },
+        "maximum_no_gap": {
+          "outcome_count": 516,
+          "outcome_length_counts": {
+            "1024": 21,
+            "240": 490,
+            "4096": 5
+          },
+          "per_task": {
+            "adapter": 64,
+            "in_flight": 1,
+            "replay": 128,
+            "subscriber": 64
+          }
+        },
+        "ordinary": {
+          "logical_ticks": 60,
+          "outcome_count": 600,
+          "outcome_length_counts": {
+            "1024": 24,
+            "240": 570,
+            "4096": 6
+          },
+          "progress_count": 6000,
+          "progress_length_counts": {
+            "1024": 240,
+            "240": 5700,
+            "4096": 60
+          }
+        },
+        "path_depth": 32,
+        "path_length_scope": "subject and prior paths use the frozen distribution; derived trash paths include their production prefix",
+        "path_utf16_units": [
+          240,
+          1024,
+          4096
+        ],
+        "task_count": 4,
+        "version": "sh-g-8-transport-v1"
+      },
+      "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+    },
+    {
+      "corpus_version": "sh-g-8-transport-v1",
+      "dataset_variant": "calibration-a",
+      "dependency_authority": {
+        "files": {
+          "xxhash/__init__.py": "98f11d8a1c43314d2b8cb5ae9b716b53d51ada343eaf37dec1880883e27e2657",
+          "xxhash/_xxhash.cp313-win_amd64.pyd": "53f666d7b2585a7de84fc0cfcbc7a673b16da0695e22cd63e34626e34be08950",
+          "xxhash/version.py": "c3acd5376d6a2ff680c10a0a8fe78bf88d1e0a72936af90e0fd8c203b0a8fc47"
+        },
+        "root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+        "sha256": "8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30"
+      },
+      "gate": "SH-G-8 transport custody",
+      "hashes": {
+        "corpus_sha256": "a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec",
+        "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+        "instrument_sha256": "629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9",
+        "runtime_qualifier_sha256": "a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e",
+        "runtime_sha256": "58e9b3f693fd6455d4809c760336652d2cfca3ac683e84989fdda64e6e507c3d",
+        "source_files": {
+          "namisync/__init__.py": "e3079988b7a318bda8133791b504490b4991e8aac26b5a00ee3b2767bd415a13",
+          "namisync/__main__.py": "adb799b0256f775a330c2b62336881d5369ff64b4e9408989053caf386f2143e",
+          "namisync/core/__init__.py": "6f49fb1995b1338163cebb42352bfdf727bbd39d23861b4daae21e7c3f33c04d",
+          "namisync/core/events.py": "94f30a528f5198b583e13be36442efcc533acae583965604d84ebd018f1974b3",
+          "namisync/core/evidence.py": "d156e8d3a7b7221e688b678ea77d3dfd399ed6b9b6d8ba9c0d30f05e1a5fd073",
+          "namisync/core/execution.py": "f78a1ff2b13cb856380e8001e1b6e50573416f6677bfe9ec5bea5ed8f5e3da90",
+          "namisync/core/integrity.py": "6f5262d77906edb7efb4aafc4c69d25b6ff3313ac31661e5389659c1245f764a",
+          "namisync/core/models.py": "e03d6fd6e3057659ab2c57a6a9f1e4fb2e2e6624a17ef2ed13588c6b7f3f939b",
+          "namisync/core/pathing.py": "e26f4172f3d36b1abdf9500cfbff31fc0923efccd1a6ebbfea0ff8fc1830e654",
+          "namisync/core/planning.py": "5dbf27b42932a7015204b91498973e5626bd17156257a56daeab8392c416b100",
+          "namisync/core/preflight.py": "927da69343a68e99cea8969d1e05c58f1a25062250cc0ffdc83dff7d4885fe7e",
+          "namisync/core/recording.py": "ef3a48fb7eef6b2da7cf56210fbc79bd3e5bdbca8b164cb2316f3fa05a19b0f8",
+          "namisync/core/root_authority.py": "89545b0c15cf9e8a97da7c797231d80b3c6b619eee65f9ac133b161009beede8",
+          "namisync/core/session.py": "fa59767b98fd03b5092dcf70ab614d49602e4656de436ef1e5a09636a9416579",
+          "namisync/db/__init__.py": "fe537c75012f233ee7015e2fd1bc9e9f375e90078e4f26af44593e5c2a355391",
+          "namisync/db/connections.py": "cbd07b8c95ed7115bf2a91a2999cd60a4ce03070f39156b05fd65930f465122d",
+          "namisync/db/contracts.py": "4b429e182225ac4e11c637edc1b2a6e85bf7b92c2e0221c054a9ffba06e5b6dd",
+          "namisync/db/history.py": "ec3b352bbdc8cc96b30faef16a88553eeb9907014dbe3653bd10bfe757ff328a",
+          "namisync/db/recorder.py": "e72420534dfeb13e9c9041a55943f8bbddd9cfca72b2b34618f30a89b678c7c9",
+          "namisync/db/repositories.py": "baba056a06e285c35cae5cb58196520941aa7cbb624ee109415b37dedb34422b",
+          "namisync/db/schema.py": "e5c8a9ef36b2996e23cd516b3becad73353da55c5330ba7aa4a7a5edf1fa9de4",
+          "namisync/db/settings.py": "107f5326adbfdd8247d8669c1923cecf6b88d7627dea918a6897a6ca17bf4083",
+          "namisync/db/timestamps.py": "af9a818fa3883483f9ebefbcbce0ae0d40a608aa50157676a709ebe3dc564fa0",
+          "namisync/db/writer.py": "d29c19d962ee3a765e8e278cec0b207c50b056940a71067e11c330bead21320c",
+          "namisync/dispatcher/__init__.py": "357ae621397f19283ccabd3120c3f235aaebc592fed8612e1e81b96154d60fc7",
+          "namisync/dispatcher/contracts.py": "a09c2c6097a0ef5aa59a15e9fda37b3abd99491b5902bd44c6dc81b9a00a7d41",
+          "namisync/dispatcher/custody.py": "23b22a45e53377e1dc227bf3d84f00ee9fe6ac38bdc952f882bb3e187b0f780b",
+          "namisync/dispatcher/dispatcher.py": "600a38169100003610ee0d15f988bb6ab8d3531d87667727e1915169240d0f86",
+          "namisync/dispatcher/event_bus.py": "bf713e61d187450af691b9a8a61a8c24d4f6164d38a7ced048e9736e3713bded",
+          "namisync/dispatcher/store.py": "d46ca375e03aa34c05e974e1896c8f6154b6124b51055f8f8fca82dfde625fdb",
+          "namisync/interfaces/__init__.py": "12d901de87d3d73456209980929e3477ec344a588a97f8b5bc2e58624feef535",
+          "namisync/interfaces/cli.py": "1696f8a8ee057a2807c4702133bbd546daeb06f8c4bd3249eab17f0275889d99",
+          "namisync/interfaces/launcher.py": "391d723a533686916d82df08cc4aea6f59f63ee3c85ad436ef1d0d103d13ca32",
+          "namisync/interfaces/service.py": "7c31a9bc5a64156625cef6f71cf15aa2d50695bcb5c07ab9bf3ae0f516c19560",
+          "namisync/interfaces/ui_state.py": "8eb7058cc03988a91189362ff32dccac174e1c6488fd71aebec1fc49bc4f60cf",
+          "namisync/interfaces/web/__init__.py": "d55f227b3f4b64b8d432846490adb6b94e913edffd1e39cc6a8a6a01e3569675",
+          "namisync/interfaces/web/appearance.py": "150f3740726620fcea98c43c78f8f4f2fca0a17adceaf2a1a19de60145460597",
+          "namisync/interfaces/web/bridge.py": "fe0525fc94841582d968369586f8e5294adf582777432c8058437d32abdba2e8",
+          "namisync/interfaces/web/commands.py": "254cebed3e23fa4e73ae82871c4c1e409bdc7b4f7824825e0b80365ff6d958ef",
+          "namisync/interfaces/web/drain.py": "92ce337ff96eaad9a81ee7d91d8cae4d1634e96defee5c2447244fa2fef27150",
+          "namisync/interfaces/web/host.py": "8cbf2d39e0b9ca46522fa84140adabd47902769a5408bfb41b69acc67d33b9b4",
+          "namisync/interfaces/web/logging_config.py": "865fcaff62ead90d30160e161d52b29c7f4725afd536466e893a8649c79e1529",
+          "namisync/interfaces/web/paths.py": "420cc51e6851d1678f2db6a6f39303b8af31f61828d4c7e0df71632d54ff1abd",
+          "namisync/interfaces/web/pywebview_runtime.py": "167731fdae4198423ac97e52b09154c63855a568a18860ab31f652ff03ff4331",
+          "namisync/interfaces/web/slots.py": "5c40be6fabc4140e05d208710bd2b678ee10c47fcc15f988bedb7e34e1fc4396",
+          "namisync/interfaces/web/visible_sequence.py": "28dd40befa83bb7394529686ec57e802be239d9f2f9464e0e6595709cdb1eca5",
+          "namisync/modules/__init__.py": "4069d9933abd8bbcdb3b998bd413c917bd01eaee9b54712d5c3340af38e1ded3",
+          "namisync/modules/executor/__init__.py": "c50b92ba81e64dfbaa7925bf311f3bcc8ec123c4de1da9ba1a32cd45e040e9b3",
+          "namisync/modules/executor/native.py": "91044cfef2699467f73655c27c933467d9338b2aba2c851e25a3e8c93d83e88f",
+          "namisync/modules/executor/pipeline.py": "8ca2ba98bb36280639afc0ab34fba9d4079ba6fa67f308fea935c71c99dd0e96",
+          "namisync/modules/executor/runtime.py": "3f9e2a01e390a2f762404b16ddb5de3c0f77149af32a38a6601edc57e3ef0500",
+          "namisync/modules/planner.py": "1fb18ca683f74a87708fb31c784cbf772876f44ff7fd62d9951ba0be7a610a4a",
+          "namisync/modules/preflight.py": "0c7650b0bc6e14040b72aeebd7485ac6a019f8471539c699693c5250c92d8ee6",
+          "namisync/modules/scanner.py": "bf4439ebe02803270322b9d1d440b2a3646182722e0f8f4620a3db6733b43686",
+          "namisync/modules/verifier/__init__.py": "617b7bb90b04a5b8bc6b3ac77403b592ed7f8a00d3dd6fee6c49faecdb0ccb87",
+          "namisync/modules/verifier/engine.py": "3cb16574d7a942eb0f76df8c25e690c32a6ae38a5c5d4851e873afe1fc8d64be",
+          "namisync/modules/verifier/native.py": "e0f355f89704f84cf3ec5576411416ac9318759aa6abc88744df0094135e211e",
+          "namisync/version.py": "7f12ab5b23da2e105ad49e1c292c274e45894f46b734cd678ece32b270536d48",
+          "namisync/workflows/__init__.py": "b8104344f3d970cdda24ec75d09a774525d1990b4aadea0ecdd41f290f7ea04a",
+          "namisync/workflows/_database_pair_native.py": "8cf611c31d5a4a591706f06e2cf9151fb21d8e0e763fc0d958957cfe27d8a60e",
+          "namisync/workflows/database_pair.py": "ac487dd4efd92613dfd6031af6ae85dd44dd8e9e2ecf8f5745dc9d02615c9d28",
+          "namisync/workflows/inventory.py": "68f46f68b0cc240629ca2731b14b4e8d8352316f0f72cc5efd15aad97f5eb5f4",
+          "namisync/workflows/models.py": "71cbd7ce0d15dd8b654e5e918678712dd93269c7da73b52e31a9eba550be8c17",
+          "namisync/workflows/node_tree.py": "2d53722851f5f638c411727332ea912262c6e540313a78dd626e53e463f109b0",
+          "namisync/workflows/payloads.py": "5d43cfb555b7a4d501ceeaf49b2508c3bab3ec69f2ae1e3a889acc47868849ea",
+          "namisync/workflows/runtime.py": "e80185d31b140bdf68eb427be80fb09d98fbdff04f31e351d7621920822fd034",
+          "namisync/workflows/selection.py": "b305fc6e6c5e65d163cfa2965346ec05d37caabb70b4499264df20d86e54840c",
+          "namisync/workflows/sync.py": "5dda40107d34ed130718a56aad80891c60585e86577453b37c555c71287844b3",
+          "namisync/workflows/views.py": "c7fde04c39ef9ef8f3ec9fa8557a771d1cc70d69937fe817005d30926ac976d7",
+          "tests/bridge_transport_custody.py": "a5f067ffbffa2982a04307da8d10da6203689a651094fba9c6400c5786017084",
+          "tests/interfaces/web/_bridge_transport_custody.py": "ca125c0d32712ba0110598bd5f65f38f19147b979569129d4aff93d8d6e2a2b5"
+        },
+        "source_sha256": "e0a69a23056c399a8ff12545a17a6cdfe04a6205c27377c7e05f5c39684dea80"
+      },
+      "headroom_policy": {
+        "factor_denominator": 4,
+        "factor_numerator": 5,
+        "round_up_bytes": 65536,
+        "rule": "round upward to 65536 bytes after applying 25 percent headroom to the largest calibration transport_custody_bytes measurement"
+      },
+      "maximum_no_gap": {
+        "cleanup_delivery": {
+          "failed_state_headline_records": 4,
+          "outcomes": 516,
+          "outcomes_per_task": [
+            129,
+            129,
+            129,
+            129
+          ],
+          "terminal_events": 4,
+          "terminal_order_exact": true,
+          "terminal_records": 4
+        },
+        "custody": {
+          "adapter_queue_bytes": 701435,
+          "adapter_queue_objects": 2253,
+          "replay_queue_bytes": 1339242,
+          "replay_queue_objects": 4435,
+          "subscriber_queue_bytes": 701518,
+          "subscriber_queue_objects": 2239,
+          "terminal_artifact_bytes": 0,
+          "terminal_artifact_objects": 0,
+          "transport_custody_bytes": 1534946,
+          "transport_custody_objects": 5499
+        },
+        "custody_sampling": "exact producer-quiescent maximum no-Gap shape",
+        "emissions": {
+          "outcomes": 516
+        },
+        "no_gap": true,
+        "observed_queue_high_water": {
+          "adapter": {
+            "maximum": 64,
+            "per_queue": [
+              64,
+              64,
+              64,
+              64
+            ]
+          },
+          "replay": {
+            "maximum": 128,
+            "per_queue": [
+              128,
+              128,
+              128,
+              128
+            ]
+          },
+          "subscriber": {
+            "maximum": 64,
+            "per_queue": [
+              64,
+              64,
+              64,
+              64
+            ]
+          }
+        },
+        "queue_lengths": {
+          "adapter": [
+            64,
+            64,
+            64,
+            64
+          ],
+          "replay": [
+            128,
+            128,
+            128,
+            128
+          ],
+          "subscriber": [
+            64,
+            64,
+            64,
+            64
+          ]
+        },
+        "root_container_type": "collections.deque"
+      },
+      "module_origins": {
+        "namisync": "F:\\GitHubRepositories\\NamiSync\\namisync\\__init__.py",
+        "namisync.core.events": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\events.py",
+        "namisync.dispatcher.event_bus": "F:\\GitHubRepositories\\NamiSync\\namisync\\dispatcher\\event_bus.py",
+        "namisync.interfaces.service": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\service.py",
+        "namisync.interfaces.web.drain": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py",
+        "namisync.workflows.views": "F:\\GitHubRepositories\\NamiSync\\namisync\\workflows\\views.py",
+        "xxhash": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\__init__.py",
+        "xxhash._xxhash": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\_xxhash.cp313-win_amd64.pyd",
+        "xxhash.version": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\version.py"
+      },
+      "ordinary": {
+        "custody_sampling": "60 exact-body producer-quiescent checkpoints plus terminal transport projection",
+        "delivered": {
+          "outcomes": 600,
+          "progress": 240,
+          "terminal_events": 4,
+          "terminal_records": 4
+        },
+        "emissions": {
+          "outcomes": 600,
+          "progress": 6000
+        },
+        "no_gap": true,
+        "observed_checkpoint_peak": {
+          "adapter": {
+            "maximum": 4,
+            "per_queue": [
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "replay": {
+            "maximum": 128,
+            "per_queue": [
+              128,
+              128,
+              128,
+              128
+            ]
+          },
+          "subscriber": {
+            "maximum": 0,
+            "per_queue": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "ordering": {
+          "event_sequences_strict": true,
+          "reliable_ids_exact": true,
+          "terminal_order_exact": true
+        },
+        "ordinary_quiescent_peak": {
+          "adapter_queue_bytes": 72953,
+          "adapter_queue_objects": 182,
+          "replay_queue_bytes": 1361524,
+          "replay_queue_objects": 4812,
+          "subscriber_queue_bytes": 3040,
+          "subscriber_queue_objects": 4,
+          "terminal_artifact_bytes": 0,
+          "terminal_artifact_objects": 0,
+          "transport_custody_bytes": 1376690,
+          "transport_custody_objects": 4890
+        },
+        "progress_per_task": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "root_container_type": "collections.deque",
+        "terminal_path_cut_witness": {
+          "authority": "BR-G-45-nonnormative",
+          "measurement": {
+            "adapter_queue_bytes": 7768,
+            "adapter_queue_objects": 63,
+            "replay_queue_bytes": 1344489,
+            "replay_queue_objects": 4769,
+            "subscriber_queue_bytes": 0,
+            "subscriber_queue_objects": 0,
+            "terminal_artifact_bytes": 2047533,
+            "terminal_artifact_objects": 6313,
+            "transport_custody_bytes": 1351741,
+            "transport_custody_objects": 4820
+          },
+          "transport_result_exclusion_exercised": true
+        }
+      },
+      "process_id": 47520,
+      "runtime": {
+        "allocation_method": "recursive sys.getsizeof with identity deduplication, real queue shallow sizes, and path-local terminal-result exclusion",
+        "allocator_predicate": "explicit-pymalloc-on-qualified-Windows-CPython",
+        "dependency_root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+        "dev_mode": false,
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "implementation": "CPython",
+        "no_site": 1,
+        "optimize": 0,
+        "platform": "Windows-11-10.0.26200-SP0",
+        "pointer_bits": 64,
+        "py_debug": 0,
+        "pycache_prefix": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-sh-g-8-custody-d2z4d4ls\\run-2-pycache",
+        "pycache_prefix_role": "fresh-empty-per-child-outside-source-tree",
+        "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+        "python_hash_seed": "0",
+        "python_malloc": "pymalloc",
+        "qualifier_environment": {
+          "PYTHONHASHSEED": "0",
+          "PYTHONMALLOC": "pymalloc",
+          "PYTHONNOUSERSITE": "1",
+          "PYTHONPYCACHEPREFIX": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-sh-g-8-custody-d2z4d4ls\\run-2-pycache",
+          "PYTHONUTF8": "1"
+        },
+        "safe_path": true,
+        "tracemalloc": false,
+        "version_info": [
+          3,
+          13,
+          14,
+          "final",
+          0
+        ],
+        "with_pymalloc_config": null
+      },
+      "schema_version": 1,
+      "structural_facts": {
+        "active_alphabet_offset": 0,
+        "active_length_permutation": {
+          "multiplier": 37,
+          "offset": 17
+        },
+        "alphabet_counts_ratio": {
+          "ascii": 2,
+          "bmp": 1,
+          "non_bmp": 1
+        },
+        "dataset_variant": "calibration-a",
+        "dataset_variants": {
+          "calibration-a": "rank=(ordinal*37+17) mod population; alphabet=ordinal mod 4",
+          "holdout-b": "rank=(ordinal*41+31) mod population; alphabet=(ordinal+1) mod 4"
+        },
+        "detail_families": {
+          "move_update": {
+            "durability_warnings": 0,
+            "kind": "move_update",
+            "outcome": "failed",
+            "reason": "recorder-failed"
+          },
+          "mutation": {
+            "durability_warnings": 0,
+            "kind": "update",
+            "outcome": "failed",
+            "reason": "io-error"
+          },
+          "publication": {
+            "durability_warnings": 0,
+            "kind": "copy",
+            "outcome": "failed",
+            "reason": "io-error"
+          }
+        },
+        "dynamic_nonaliased_values_distinct": true,
+        "identity_aliases": {
+          "copy_published_path": "ItemOutcome.path",
+          "move_update_published_path": "ItemOutcome.path"
+        },
+        "item_ids": {
+          "derivation": "first 128 bits of SHA-256 over corpus/variant/fixture/task/local",
+          "disjoint_across_variants_and_fixtures": true,
+          "format": "32 lowercase hexadecimal characters"
+        },
+        "maximum_no_gap": {
+          "outcome_count": 516,
+          "outcome_length_counts": {
+            "1024": 21,
+            "240": 490,
+            "4096": 5
+          },
+          "per_task": {
+            "adapter": 64,
+            "in_flight": 1,
+            "replay": 128,
+            "subscriber": 64
+          }
+        },
+        "ordinary": {
+          "logical_ticks": 60,
+          "outcome_count": 600,
+          "outcome_length_counts": {
+            "1024": 24,
+            "240": 570,
+            "4096": 6
+          },
+          "progress_count": 6000,
+          "progress_length_counts": {
+            "1024": 240,
+            "240": 5700,
+            "4096": 60
+          }
+        },
+        "path_depth": 32,
+        "path_length_scope": "subject and prior paths use the frozen distribution; derived trash paths include their production prefix",
+        "path_utf16_units": [
+          240,
+          1024,
+          4096
+        ],
+        "task_count": 4,
+        "version": "sh-g-8-transport-v1"
+      },
+      "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+    },
+    {
+      "corpus_version": "sh-g-8-transport-v1",
+      "dataset_variant": "calibration-a",
+      "dependency_authority": {
+        "files": {
+          "xxhash/__init__.py": "98f11d8a1c43314d2b8cb5ae9b716b53d51ada343eaf37dec1880883e27e2657",
+          "xxhash/_xxhash.cp313-win_amd64.pyd": "53f666d7b2585a7de84fc0cfcbc7a673b16da0695e22cd63e34626e34be08950",
+          "xxhash/version.py": "c3acd5376d6a2ff680c10a0a8fe78bf88d1e0a72936af90e0fd8c203b0a8fc47"
+        },
+        "root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+        "sha256": "8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30"
+      },
+      "gate": "SH-G-8 transport custody",
+      "hashes": {
+        "corpus_sha256": "a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec",
+        "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+        "instrument_sha256": "629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9",
+        "runtime_qualifier_sha256": "a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e",
+        "runtime_sha256": "697521c76259d3597da5e9556fce47ea84a2edce66ae1ab05f84d0f0c48de80a",
+        "source_files": {
+          "namisync/__init__.py": "e3079988b7a318bda8133791b504490b4991e8aac26b5a00ee3b2767bd415a13",
+          "namisync/__main__.py": "adb799b0256f775a330c2b62336881d5369ff64b4e9408989053caf386f2143e",
+          "namisync/core/__init__.py": "6f49fb1995b1338163cebb42352bfdf727bbd39d23861b4daae21e7c3f33c04d",
+          "namisync/core/events.py": "94f30a528f5198b583e13be36442efcc533acae583965604d84ebd018f1974b3",
+          "namisync/core/evidence.py": "d156e8d3a7b7221e688b678ea77d3dfd399ed6b9b6d8ba9c0d30f05e1a5fd073",
+          "namisync/core/execution.py": "f78a1ff2b13cb856380e8001e1b6e50573416f6677bfe9ec5bea5ed8f5e3da90",
+          "namisync/core/integrity.py": "6f5262d77906edb7efb4aafc4c69d25b6ff3313ac31661e5389659c1245f764a",
+          "namisync/core/models.py": "e03d6fd6e3057659ab2c57a6a9f1e4fb2e2e6624a17ef2ed13588c6b7f3f939b",
+          "namisync/core/pathing.py": "e26f4172f3d36b1abdf9500cfbff31fc0923efccd1a6ebbfea0ff8fc1830e654",
+          "namisync/core/planning.py": "5dbf27b42932a7015204b91498973e5626bd17156257a56daeab8392c416b100",
+          "namisync/core/preflight.py": "927da69343a68e99cea8969d1e05c58f1a25062250cc0ffdc83dff7d4885fe7e",
+          "namisync/core/recording.py": "ef3a48fb7eef6b2da7cf56210fbc79bd3e5bdbca8b164cb2316f3fa05a19b0f8",
+          "namisync/core/root_authority.py": "89545b0c15cf9e8a97da7c797231d80b3c6b619eee65f9ac133b161009beede8",
+          "namisync/core/session.py": "fa59767b98fd03b5092dcf70ab614d49602e4656de436ef1e5a09636a9416579",
+          "namisync/db/__init__.py": "fe537c75012f233ee7015e2fd1bc9e9f375e90078e4f26af44593e5c2a355391",
+          "namisync/db/connections.py": "cbd07b8c95ed7115bf2a91a2999cd60a4ce03070f39156b05fd65930f465122d",
+          "namisync/db/contracts.py": "4b429e182225ac4e11c637edc1b2a6e85bf7b92c2e0221c054a9ffba06e5b6dd",
+          "namisync/db/history.py": "ec3b352bbdc8cc96b30faef16a88553eeb9907014dbe3653bd10bfe757ff328a",
+          "namisync/db/recorder.py": "e72420534dfeb13e9c9041a55943f8bbddd9cfca72b2b34618f30a89b678c7c9",
+          "namisync/db/repositories.py": "baba056a06e285c35cae5cb58196520941aa7cbb624ee109415b37dedb34422b",
+          "namisync/db/schema.py": "e5c8a9ef36b2996e23cd516b3becad73353da55c5330ba7aa4a7a5edf1fa9de4",
+          "namisync/db/settings.py": "107f5326adbfdd8247d8669c1923cecf6b88d7627dea918a6897a6ca17bf4083",
+          "namisync/db/timestamps.py": "af9a818fa3883483f9ebefbcbce0ae0d40a608aa50157676a709ebe3dc564fa0",
+          "namisync/db/writer.py": "d29c19d962ee3a765e8e278cec0b207c50b056940a71067e11c330bead21320c",
+          "namisync/dispatcher/__init__.py": "357ae621397f19283ccabd3120c3f235aaebc592fed8612e1e81b96154d60fc7",
+          "namisync/dispatcher/contracts.py": "a09c2c6097a0ef5aa59a15e9fda37b3abd99491b5902bd44c6dc81b9a00a7d41",
+          "namisync/dispatcher/custody.py": "23b22a45e53377e1dc227bf3d84f00ee9fe6ac38bdc952f882bb3e187b0f780b",
+          "namisync/dispatcher/dispatcher.py": "600a38169100003610ee0d15f988bb6ab8d3531d87667727e1915169240d0f86",
+          "namisync/dispatcher/event_bus.py": "bf713e61d187450af691b9a8a61a8c24d4f6164d38a7ced048e9736e3713bded",
+          "namisync/dispatcher/store.py": "d46ca375e03aa34c05e974e1896c8f6154b6124b51055f8f8fca82dfde625fdb",
+          "namisync/interfaces/__init__.py": "12d901de87d3d73456209980929e3477ec344a588a97f8b5bc2e58624feef535",
+          "namisync/interfaces/cli.py": "1696f8a8ee057a2807c4702133bbd546daeb06f8c4bd3249eab17f0275889d99",
+          "namisync/interfaces/launcher.py": "391d723a533686916d82df08cc4aea6f59f63ee3c85ad436ef1d0d103d13ca32",
+          "namisync/interfaces/service.py": "7c31a9bc5a64156625cef6f71cf15aa2d50695bcb5c07ab9bf3ae0f516c19560",
+          "namisync/interfaces/ui_state.py": "8eb7058cc03988a91189362ff32dccac174e1c6488fd71aebec1fc49bc4f60cf",
+          "namisync/interfaces/web/__init__.py": "d55f227b3f4b64b8d432846490adb6b94e913edffd1e39cc6a8a6a01e3569675",
+          "namisync/interfaces/web/appearance.py": "150f3740726620fcea98c43c78f8f4f2fca0a17adceaf2a1a19de60145460597",
+          "namisync/interfaces/web/bridge.py": "fe0525fc94841582d968369586f8e5294adf582777432c8058437d32abdba2e8",
+          "namisync/interfaces/web/commands.py": "254cebed3e23fa4e73ae82871c4c1e409bdc7b4f7824825e0b80365ff6d958ef",
+          "namisync/interfaces/web/drain.py": "92ce337ff96eaad9a81ee7d91d8cae4d1634e96defee5c2447244fa2fef27150",
+          "namisync/interfaces/web/host.py": "8cbf2d39e0b9ca46522fa84140adabd47902769a5408bfb41b69acc67d33b9b4",
+          "namisync/interfaces/web/logging_config.py": "865fcaff62ead90d30160e161d52b29c7f4725afd536466e893a8649c79e1529",
+          "namisync/interfaces/web/paths.py": "420cc51e6851d1678f2db6a6f39303b8af31f61828d4c7e0df71632d54ff1abd",
+          "namisync/interfaces/web/pywebview_runtime.py": "167731fdae4198423ac97e52b09154c63855a568a18860ab31f652ff03ff4331",
+          "namisync/interfaces/web/slots.py": "5c40be6fabc4140e05d208710bd2b678ee10c47fcc15f988bedb7e34e1fc4396",
+          "namisync/interfaces/web/visible_sequence.py": "28dd40befa83bb7394529686ec57e802be239d9f2f9464e0e6595709cdb1eca5",
+          "namisync/modules/__init__.py": "4069d9933abd8bbcdb3b998bd413c917bd01eaee9b54712d5c3340af38e1ded3",
+          "namisync/modules/executor/__init__.py": "c50b92ba81e64dfbaa7925bf311f3bcc8ec123c4de1da9ba1a32cd45e040e9b3",
+          "namisync/modules/executor/native.py": "91044cfef2699467f73655c27c933467d9338b2aba2c851e25a3e8c93d83e88f",
+          "namisync/modules/executor/pipeline.py": "8ca2ba98bb36280639afc0ab34fba9d4079ba6fa67f308fea935c71c99dd0e96",
+          "namisync/modules/executor/runtime.py": "3f9e2a01e390a2f762404b16ddb5de3c0f77149af32a38a6601edc57e3ef0500",
+          "namisync/modules/planner.py": "1fb18ca683f74a87708fb31c784cbf772876f44ff7fd62d9951ba0be7a610a4a",
+          "namisync/modules/preflight.py": "0c7650b0bc6e14040b72aeebd7485ac6a019f8471539c699693c5250c92d8ee6",
+          "namisync/modules/scanner.py": "bf4439ebe02803270322b9d1d440b2a3646182722e0f8f4620a3db6733b43686",
+          "namisync/modules/verifier/__init__.py": "617b7bb90b04a5b8bc6b3ac77403b592ed7f8a00d3dd6fee6c49faecdb0ccb87",
+          "namisync/modules/verifier/engine.py": "3cb16574d7a942eb0f76df8c25e690c32a6ae38a5c5d4851e873afe1fc8d64be",
+          "namisync/modules/verifier/native.py": "e0f355f89704f84cf3ec5576411416ac9318759aa6abc88744df0094135e211e",
+          "namisync/version.py": "7f12ab5b23da2e105ad49e1c292c274e45894f46b734cd678ece32b270536d48",
+          "namisync/workflows/__init__.py": "b8104344f3d970cdda24ec75d09a774525d1990b4aadea0ecdd41f290f7ea04a",
+          "namisync/workflows/_database_pair_native.py": "8cf611c31d5a4a591706f06e2cf9151fb21d8e0e763fc0d958957cfe27d8a60e",
+          "namisync/workflows/database_pair.py": "ac487dd4efd92613dfd6031af6ae85dd44dd8e9e2ecf8f5745dc9d02615c9d28",
+          "namisync/workflows/inventory.py": "68f46f68b0cc240629ca2731b14b4e8d8352316f0f72cc5efd15aad97f5eb5f4",
+          "namisync/workflows/models.py": "71cbd7ce0d15dd8b654e5e918678712dd93269c7da73b52e31a9eba550be8c17",
+          "namisync/workflows/node_tree.py": "2d53722851f5f638c411727332ea912262c6e540313a78dd626e53e463f109b0",
+          "namisync/workflows/payloads.py": "5d43cfb555b7a4d501ceeaf49b2508c3bab3ec69f2ae1e3a889acc47868849ea",
+          "namisync/workflows/runtime.py": "e80185d31b140bdf68eb427be80fb09d98fbdff04f31e351d7621920822fd034",
+          "namisync/workflows/selection.py": "b305fc6e6c5e65d163cfa2965346ec05d37caabb70b4499264df20d86e54840c",
+          "namisync/workflows/sync.py": "5dda40107d34ed130718a56aad80891c60585e86577453b37c555c71287844b3",
+          "namisync/workflows/views.py": "c7fde04c39ef9ef8f3ec9fa8557a771d1cc70d69937fe817005d30926ac976d7",
+          "tests/bridge_transport_custody.py": "a5f067ffbffa2982a04307da8d10da6203689a651094fba9c6400c5786017084",
+          "tests/interfaces/web/_bridge_transport_custody.py": "ca125c0d32712ba0110598bd5f65f38f19147b979569129d4aff93d8d6e2a2b5"
+        },
+        "source_sha256": "e0a69a23056c399a8ff12545a17a6cdfe04a6205c27377c7e05f5c39684dea80"
+      },
+      "headroom_policy": {
+        "factor_denominator": 4,
+        "factor_numerator": 5,
+        "round_up_bytes": 65536,
+        "rule": "round upward to 65536 bytes after applying 25 percent headroom to the largest calibration transport_custody_bytes measurement"
+      },
+      "maximum_no_gap": {
+        "cleanup_delivery": {
+          "failed_state_headline_records": 4,
+          "outcomes": 516,
+          "outcomes_per_task": [
+            129,
+            129,
+            129,
+            129
+          ],
+          "terminal_events": 4,
+          "terminal_order_exact": true,
+          "terminal_records": 4
+        },
+        "custody": {
+          "adapter_queue_bytes": 701435,
+          "adapter_queue_objects": 2253,
+          "replay_queue_bytes": 1339242,
+          "replay_queue_objects": 4435,
+          "subscriber_queue_bytes": 701518,
+          "subscriber_queue_objects": 2239,
+          "terminal_artifact_bytes": 0,
+          "terminal_artifact_objects": 0,
+          "transport_custody_bytes": 1534946,
+          "transport_custody_objects": 5499
+        },
+        "custody_sampling": "exact producer-quiescent maximum no-Gap shape",
+        "emissions": {
+          "outcomes": 516
+        },
+        "no_gap": true,
+        "observed_queue_high_water": {
+          "adapter": {
+            "maximum": 64,
+            "per_queue": [
+              64,
+              64,
+              64,
+              64
+            ]
+          },
+          "replay": {
+            "maximum": 128,
+            "per_queue": [
+              128,
+              128,
+              128,
+              128
+            ]
+          },
+          "subscriber": {
+            "maximum": 64,
+            "per_queue": [
+              64,
+              64,
+              64,
+              64
+            ]
+          }
+        },
+        "queue_lengths": {
+          "adapter": [
+            64,
+            64,
+            64,
+            64
+          ],
+          "replay": [
+            128,
+            128,
+            128,
+            128
+          ],
+          "subscriber": [
+            64,
+            64,
+            64,
+            64
+          ]
+        },
+        "root_container_type": "collections.deque"
+      },
+      "module_origins": {
+        "namisync": "F:\\GitHubRepositories\\NamiSync\\namisync\\__init__.py",
+        "namisync.core.events": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\events.py",
+        "namisync.dispatcher.event_bus": "F:\\GitHubRepositories\\NamiSync\\namisync\\dispatcher\\event_bus.py",
+        "namisync.interfaces.service": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\service.py",
+        "namisync.interfaces.web.drain": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py",
+        "namisync.workflows.views": "F:\\GitHubRepositories\\NamiSync\\namisync\\workflows\\views.py",
+        "xxhash": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\__init__.py",
+        "xxhash._xxhash": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\_xxhash.cp313-win_amd64.pyd",
+        "xxhash.version": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages\\xxhash\\version.py"
+      },
+      "ordinary": {
+        "custody_sampling": "60 exact-body producer-quiescent checkpoints plus terminal transport projection",
+        "delivered": {
+          "outcomes": 600,
+          "progress": 240,
+          "terminal_events": 4,
+          "terminal_records": 4
+        },
+        "emissions": {
+          "outcomes": 600,
+          "progress": 6000
+        },
+        "no_gap": true,
+        "observed_checkpoint_peak": {
+          "adapter": {
+            "maximum": 4,
+            "per_queue": [
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "replay": {
+            "maximum": 128,
+            "per_queue": [
+              128,
+              128,
+              128,
+              128
+            ]
+          },
+          "subscriber": {
+            "maximum": 0,
+            "per_queue": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "ordering": {
+          "event_sequences_strict": true,
+          "reliable_ids_exact": true,
+          "terminal_order_exact": true
+        },
+        "ordinary_quiescent_peak": {
+          "adapter_queue_bytes": 72953,
+          "adapter_queue_objects": 182,
+          "replay_queue_bytes": 1361524,
+          "replay_queue_objects": 4812,
+          "subscriber_queue_bytes": 3040,
+          "subscriber_queue_objects": 4,
+          "terminal_artifact_bytes": 0,
+          "terminal_artifact_objects": 0,
+          "transport_custody_bytes": 1376690,
+          "transport_custody_objects": 4890
+        },
+        "progress_per_task": [
+          60,
+          60,
+          60,
+          60
+        ],
+        "root_container_type": "collections.deque",
+        "terminal_path_cut_witness": {
+          "authority": "BR-G-45-nonnormative",
+          "measurement": {
+            "adapter_queue_bytes": 7768,
+            "adapter_queue_objects": 63,
+            "replay_queue_bytes": 1344489,
+            "replay_queue_objects": 4769,
+            "subscriber_queue_bytes": 0,
+            "subscriber_queue_objects": 0,
+            "terminal_artifact_bytes": 2047533,
+            "terminal_artifact_objects": 6313,
+            "transport_custody_bytes": 1351741,
+            "transport_custody_objects": 4820
+          },
+          "transport_result_exclusion_exercised": true
+        }
+      },
+      "process_id": 26968,
+      "runtime": {
+        "allocation_method": "recursive sys.getsizeof with identity deduplication, real queue shallow sizes, and path-local terminal-result exclusion",
+        "allocator_predicate": "explicit-pymalloc-on-qualified-Windows-CPython",
+        "dependency_root": "F:\\GitHubRepositories\\NamiSync\\.venv\\Lib\\site-packages",
+        "dev_mode": false,
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "implementation": "CPython",
+        "no_site": 1,
+        "optimize": 0,
+        "platform": "Windows-11-10.0.26200-SP0",
+        "pointer_bits": 64,
+        "py_debug": 0,
+        "pycache_prefix": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-sh-g-8-custody-d2z4d4ls\\run-3-pycache",
+        "pycache_prefix_role": "fresh-empty-per-child-outside-source-tree",
+        "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+        "python_hash_seed": "0",
+        "python_malloc": "pymalloc",
+        "qualifier_environment": {
+          "PYTHONHASHSEED": "0",
+          "PYTHONMALLOC": "pymalloc",
+          "PYTHONNOUSERSITE": "1",
+          "PYTHONPYCACHEPREFIX": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-sh-g-8-custody-d2z4d4ls\\run-3-pycache",
+          "PYTHONUTF8": "1"
+        },
+        "safe_path": true,
+        "tracemalloc": false,
+        "version_info": [
+          3,
+          13,
+          14,
+          "final",
+          0
+        ],
+        "with_pymalloc_config": null
+      },
+      "schema_version": 1,
+      "structural_facts": {
+        "active_alphabet_offset": 0,
+        "active_length_permutation": {
+          "multiplier": 37,
+          "offset": 17
+        },
+        "alphabet_counts_ratio": {
+          "ascii": 2,
+          "bmp": 1,
+          "non_bmp": 1
+        },
+        "dataset_variant": "calibration-a",
+        "dataset_variants": {
+          "calibration-a": "rank=(ordinal*37+17) mod population; alphabet=ordinal mod 4",
+          "holdout-b": "rank=(ordinal*41+31) mod population; alphabet=(ordinal+1) mod 4"
+        },
+        "detail_families": {
+          "move_update": {
+            "durability_warnings": 0,
+            "kind": "move_update",
+            "outcome": "failed",
+            "reason": "recorder-failed"
+          },
+          "mutation": {
+            "durability_warnings": 0,
+            "kind": "update",
+            "outcome": "failed",
+            "reason": "io-error"
+          },
+          "publication": {
+            "durability_warnings": 0,
+            "kind": "copy",
+            "outcome": "failed",
+            "reason": "io-error"
+          }
+        },
+        "dynamic_nonaliased_values_distinct": true,
+        "identity_aliases": {
+          "copy_published_path": "ItemOutcome.path",
+          "move_update_published_path": "ItemOutcome.path"
+        },
+        "item_ids": {
+          "derivation": "first 128 bits of SHA-256 over corpus/variant/fixture/task/local",
+          "disjoint_across_variants_and_fixtures": true,
+          "format": "32 lowercase hexadecimal characters"
+        },
+        "maximum_no_gap": {
+          "outcome_count": 516,
+          "outcome_length_counts": {
+            "1024": 21,
+            "240": 490,
+            "4096": 5
+          },
+          "per_task": {
+            "adapter": 64,
+            "in_flight": 1,
+            "replay": 128,
+            "subscriber": 64
+          }
+        },
+        "ordinary": {
+          "logical_ticks": 60,
+          "outcome_count": 600,
+          "outcome_length_counts": {
+            "1024": 24,
+            "240": 570,
+            "4096": 6
+          },
+          "progress_count": 6000,
+          "progress_length_counts": {
+            "1024": 240,
+            "240": 5700,
+            "4096": 60
+          }
+        },
+        "path_depth": 32,
+        "path_length_scope": "subject and prior paths use the frozen distribution; derived trash paths include their production prefix",
+        "path_utf16_units": [
+          240,
+          1024,
+          4096
+        ],
+        "task_count": 4,
+        "version": "sh-g-8-transport-v1"
+      },
+      "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+    }
+  ],
+  "schema_version": 1,
+  "structural_facts": {
+    "active_alphabet_offset": 0,
+    "active_length_permutation": {
+      "multiplier": 37,
+      "offset": 17
+    },
+    "alphabet_counts_ratio": {
+      "ascii": 2,
+      "bmp": 1,
+      "non_bmp": 1
+    },
+    "dataset_variant": "calibration-a",
+    "dataset_variants": {
+      "calibration-a": "rank=(ordinal*37+17) mod population; alphabet=ordinal mod 4",
+      "holdout-b": "rank=(ordinal*41+31) mod population; alphabet=(ordinal+1) mod 4"
+    },
+    "detail_families": {
+      "move_update": {
+        "durability_warnings": 0,
+        "kind": "move_update",
+        "outcome": "failed",
+        "reason": "recorder-failed"
+      },
+      "mutation": {
+        "durability_warnings": 0,
+        "kind": "update",
+        "outcome": "failed",
+        "reason": "io-error"
+      },
+      "publication": {
+        "durability_warnings": 0,
+        "kind": "copy",
+        "outcome": "failed",
+        "reason": "io-error"
+      }
+    },
+    "dynamic_nonaliased_values_distinct": true,
+    "identity_aliases": {
+      "copy_published_path": "ItemOutcome.path",
+      "move_update_published_path": "ItemOutcome.path"
+    },
+    "item_ids": {
+      "derivation": "first 128 bits of SHA-256 over corpus/variant/fixture/task/local",
+      "disjoint_across_variants_and_fixtures": true,
+      "format": "32 lowercase hexadecimal characters"
+    },
+    "maximum_no_gap": {
+      "outcome_count": 516,
+      "outcome_length_counts": {
+        "1024": 21,
+        "240": 490,
+        "4096": 5
+      },
+      "per_task": {
+        "adapter": 64,
+        "in_flight": 1,
+        "replay": 128,
+        "subscriber": 64
+      }
+    },
+    "ordinary": {
+      "logical_ticks": 60,
+      "outcome_count": 600,
+      "outcome_length_counts": {
+        "1024": 24,
+        "240": 570,
+        "4096": 6
+      },
+      "progress_count": 6000,
+      "progress_length_counts": {
+        "1024": 240,
+        "240": 5700,
+        "4096": 60
+      }
+    },
+    "path_depth": 32,
+    "path_length_scope": "subject and prior paths use the frozen distribution; derived trash paths include their production prefix",
+    "path_utf16_units": [
+      240,
+      1024,
+      4096
+    ],
+    "task_count": 4,
+    "version": "sh-g-8-transport-v1"
+  },
+  "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+}
