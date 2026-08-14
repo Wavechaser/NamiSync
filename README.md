@@ -204,6 +204,12 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+### M1 Maintenance Refactor
+
+Shared root authority, stable executor/verifier package boundaries, and an
+oracle-guarded typed settlement reducer separated internal ownership without
+changing public or persisted contracts.
+
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design

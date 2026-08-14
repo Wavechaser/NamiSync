@@ -2,13 +2,16 @@
 
 This file is the detailed task history. Entries are newest-first and use three
 levels: `##` for a milestone or released version, `###` for a phase, and
-`#### YYYY-MM-DD — task` for a task-level delivery. The task date is the date
-the summarized delivery landed; related sessions and commits stay under one
-task. `README.md` repeats only milestone and phase summaries.
+`#### task (YYYY-MM-DD)` or `#### task (YYYY-MM-DD – YYYY-MM-DD)` for a
+task-level delivery. The date or date range covers the summarized delivery;
+related sessions and commits stay under one task. `README.md` repeats only
+milestone and phase summaries.
 
 Before named releases, milestone headings use names such as `M1`. After
 versioning begins, headings use the version and codename, such as
 `v0.1.0 Gertrud`.
+
+----
 
 ## M1
 
@@ -20,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### 2026-08-14 — Consolidate shell acceptance and project history conventions
+#### Consolidate shell acceptance and project history conventions (2026-08-14)
 
 - Moved detailed SH-G-8 evidence out of the Slice 3 delivery sequence and into
   one concise §5 acceptance gate with explicit closure and residual boundaries.
@@ -29,7 +32,7 @@ claims explicit, independently reviewable, and regression-backed.
 - Split dated task history into this file and reduced the README changelog to
   milestone and phase summaries.
 
-#### 2026-08-14 — Ratify cross-cutting measurement authority
+#### Ratify cross-cutting measurement authority (2026-08-14)
 
 - Separated reasoned targets, current-source drift guards, named-reference
   acceptance, and protected release authority so one cannot substitute for
@@ -42,7 +45,7 @@ claims explicit, independently reviewable, and regression-backed.
   vertical-slice artifacts and deferring shared Tier 3 machinery until a second
   empirical consumer exists.
 
-#### 2026-08-11 — Close post-refactor settlement and verifier authority seams
+#### Close post-refactor settlement and verifier authority seams (2026-08-11)
 
 - Generic executor collaborator failures settle active effects and pending
   directories from the original operation error before propagating; source and
@@ -53,17 +56,7 @@ claims explicit, independently reviewable, and regression-backed.
 - Expanded the retained settlement oracle to 30 scenarios and 70 exact rows,
   then replaced its baseline and semantic pin separately.
 
-#### 2026-08-11 — Consolidate safety hardening behind stable boundaries
-
-- Centralized fresh ephemeral root-authority facts in core while preserving
-  each consumer's timing and refusal policy.
-- Introduced stable executor and verifier facades with coarse runtime/native/
-  pipeline and engine/native ownership.
-- Replaced parallel settlement maps with a typed effect journal and pure
-  reducer guarded by the retained 30-scenario oracle, then consolidated tests
-  by the production boundary each case protects.
-
-#### 2026-08-10 — Close the remaining actionable low audit findings
+#### Close the remaining actionable low audit findings (2026-08-10)
 
 - Shared one managed Windows-attribute mask between planner and executor while
   binding copied UPDATE backups to reviewed target evidence through one stable
@@ -74,7 +67,7 @@ claims explicit, independently reviewable, and regression-backed.
 - Added managed/unmanaged attribute, native rerun, backup drift, extended
   BUSY/LOCKED, reserved-name, payload, and recorder-transaction coverage.
 
-#### 2026-08-09 — Restore trusted folder-mounted volume scans
+#### Restore trusted folder-mounted volume scans (2026-08-09)
 
 - Allowed FULL scans only when the resolved root, reviewed/current anchor, and
   volume-evidence mount agree exactly; descendant junction refusal remains.
@@ -82,7 +75,7 @@ claims explicit, independently reviewable, and regression-backed.
   identity, forged or invalid evidence, scoped scans, and configured-root
   reparse refusal.
 
-#### 2026-08-09 — Close cancellation-settlement composition gaps
+#### Close cancellation-settlement composition gaps (2026-08-09)
 
 - Evaluated retained byte-publication and mutation-marker state independently:
   confirmed publication remains authoritative, while changed or unverified
@@ -90,7 +83,7 @@ claims explicit, independently reviewable, and regression-backed.
 - Covered restored readonly pre-state, failed restoration with an unavailable
   publication probe, and committed-publication precedence.
 
-#### 2026-08-09 — Harden root redirection, trash custody, and mismatch truth
+#### Harden root redirection, trash custody, and mismatch truth (2026-08-09)
 
 - Kept managed roots lexical while no-follow admitting root-chain components,
   bound scans/execution/verifier opens to reviewed volume identity, and
@@ -101,7 +94,7 @@ claims explicit, independently reviewable, and regression-backed.
   execution, trash/update, and verification plus projection and serialization
   regressions.
 
-#### 2026-08-09 — Close executor attestation and durable-settlement gaps
+#### Close executor attestation and durable-settlement gaps (2026-08-09)
 
 - Moved UPDATE's recorder wait ahead of final prepared/live validation, bound
   published identity to the prepared temp, and made failed non-byte and
@@ -109,7 +102,7 @@ claims explicit, independently reviewable, and regression-backed.
 - Covered commit-then-raise, exact pre-state, probe failure, deferred mkdir,
   temp substitution, and retry pause/cancel.
 
-#### 2026-08-08 — Close selected medium audit findings
+#### Close selected medium audit findings (2026-08-08)
 
 - Made service-to-verifier native I/O long-path safe while keeping logical
   paths unprefixed and refusing ambiguous/device roots.
@@ -118,7 +111,7 @@ claims explicit, independently reviewable, and regression-backed.
 - Added deep-root mutation/verification, path refusal, receipt tamper, bounded
   selection, and million-item history benchmark coverage.
 
-#### 2026-08-08 — Close the planned M1 safety audit
+#### Close the planned M1 safety audit (2026-08-08)
 
 - Kept blocked parent/type and unsupported-source cases visible in raw intent
   while their removals remain deferred.
@@ -127,16 +120,32 @@ claims explicit, independently reviewable, and regression-backed.
 - Added ledger v3 sticky verification invalidation, generation-keyed dispatcher
   custody, and adversarial planning/path-swap/publication/race regressions.
 
-#### 2026-08-06 — Resolve M1 integration and adversarial-review findings
+#### Close integrated lifecycle, settlement, and audit-review gaps (2026-07-30 – 2026-08-05)
 
 - Shared ordered publication settlement across COPY, UPDATE, and MOVE_UPDATE;
   retries preserve owned state and disclose only validated backup, publication,
   and drift truth.
-- Bounded dispatcher/history writer, audit, close, cleanup, and repair work;
-  closed service custody, replan, command, cancellation, and shutdown races.
+- Bounded audit, close, cleanup, and repair work; closed service custody,
+  replan, command, cancellation, and shutdown races.
 - Hardened database snapshots and incomplete-scan authority, rejected coercive
-  persisted and bridge JSON, constrained WebView2 access to the UI thread, and
-  added temporal/concurrency/recovery stress coverage.
+  persisted and bridge JSON, and added temporal/concurrency/recovery stress
+  coverage.
+
+### M1 Maintenance Refactor
+
+Shared root authority, stable executor/verifier package boundaries, and an
+oracle-guarded typed settlement reducer separated internal ownership without
+changing public or persisted contracts.
+
+#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
+
+- Centralized fresh root-authority evidence in core while preserving the
+  distinct admission policies and probe timing of scanner, preflight,
+  workflows, executor, and verifier.
+- Corrected and froze executor settlement behavior in a retained three-run,
+  30-scenario oracle before splitting executor and verifier behind stable
+  facades; a typed effect journal, pure reducer, and ownership-aligned tests
+  replaced the monolithic implementation.
 
 ### M1 GUI
 
@@ -144,7 +153,7 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
-#### 2026-08-14 — Guard live custody and document first-progress latency
+#### Guard live custody and document first-progress latency (2026-08-14)
 
 - Added a current-source one-child transport-custody guard against the frozen
   1,966,080-byte ceiling without modifying accepted artifacts or the blob-
@@ -154,7 +163,7 @@ packaging remain future phases.
   `Progress` may wait the full fixed 150 ms, while receipt, reliable state,
   terminal, recovery, and lifecycle feedback bypass that linger.
 
-#### 2026-08-14 — Close SH-G-8 transport custody
+#### Close SH-G-8 transport custody (2026-08-14)
 
 - Closed SH-G-8 and BR-G-42 event correctness/transport custody against the
   production queue path while leaving other BR-G-42 rows on their owning
@@ -166,7 +175,7 @@ packaging remain future phases.
   hashes, the frozen real-Git validator, and the live drift guard passed;
   BR-G-45 terminal retention and SH-G-15 runtime containment remain open.
 
-#### 2026-08-13 — Harden and realign the early shell through Slice 3
+#### Harden and realign the early shell through Slice 3 (2026-08-13)
 
 - Restored `M1_BRIDGE.md` as sole transport authority, separated terminal-
   session release from task disposal, preserved review after terminal delivery,
@@ -178,7 +187,7 @@ packaging remain future phases.
   validation, and built the 60-second reference harness whose whole-Job result
   is diagnostic rather than transport-custody or containment evidence.
 
-#### 2026-08-13 — Harden GUI Break 1 and Slice 4 realignment
+#### Harden GUI Break 1 and Slice 4 realignment (2026-08-13)
 
 - Pinned Fluent token transcription, published live UISettings accents through
   a fixed receiver, made appearance fallback structured and truthful, retained
@@ -189,7 +198,7 @@ packaging remain future phases.
   accessibility, 120k-node scale, hostile text, zoom, forced colors, geometry,
   and stale refusal.
 
-#### 2026-08-13 — Harden the delivered early desktop shell
+#### Harden the delivered early desktop shell (2026-08-13)
 
 - Changed pywebview to one function-only dispatch entry, bounded handler/task
   admission and shutdown, added terminal-gated `close_task`, finite recovery,
@@ -200,7 +209,7 @@ packaging remain future phases.
 - Added saturation, compensation/retry, shutdown-race, replacement, private-
   receiver, and real headed long-drain coverage.
 
-#### 2026-08-13 — Complete the Slice 4 presentation checkpoint
+#### Complete the Slice 4 presentation checkpoint (2026-08-13)
 
 - Added the tree-agnostic visible sequence, strict structural/search/filter
   contracts, exact 256-row windows, and visible-ancestor anchoring.
@@ -209,7 +218,7 @@ packaging remain future phases.
 - Installed-wheel evidence covers Tab order, 200% zoom, forced colors, hostile
   labels, row/DOM bounds, and stale-generation refusal.
 
-#### 2026-08-12 — Complete the GUI foundation
+#### Complete the GUI foundation (2026-08-12)
 
 - Added the authored palette, contrast-tested status/operation aliases, shared
   Fluent controls and motion guardrails, and a fixed local Fluent icon registry.
@@ -218,7 +227,7 @@ packaging remain future phases.
 - Clean-wheel headed gates cover light, dark, forced-colors, reduced motion,
   DWM readback, renderer transparency, and two opaque fallback sequences.
 
-#### 2026-08-12 — Complete the Slice 3 transport checkpoint
+#### Complete the Slice 3 transport checkpoint (2026-08-12)
 
 - Retained the secured installed-wheel WebView2 composition and hardened close
   status against late workers and destroyed-document presentation failures.
@@ -228,12 +237,19 @@ packaging remain future phases.
   headed gates for picker/origin confinement, privacy, recovery, terminal truth,
   and repeated readiness without duplicate drains.
 
+#### Establish the secured WebView2 bridge foundation (2026-07-31 – 2026-08-03)
+
+- Pinned and validated the Edge WebView2 host path, refusing an MSHTML fallback
+  before window creation.
+- Enforced exact packaged origins, native navigation/frame/popup guards, and a
+  strict bridge boundary resilient to reinjection.
+
 ### M1 Features
 
 Stages 1–5.5 delivered the headless reviewed-sync, inventory/integrity, history,
 CLI, and reusable workflow product plus its development measurement tooling.
 
-#### 2026-08-06 — Harden development measurement tooling
+#### Harden development measurement tooling (2026-08-06)
 
 - Bound tool workspaces to directory identity under an exclusive lease, made
   corpus regeneration deterministic, isolated reports, and made sidecar schema,
@@ -242,16 +258,36 @@ CLI, and reusable workflow product plus its development measurement tooling.
   correspondence, validated execution/readback coverage, and added focused
   corpus, verifier, sidecar, and CLI tests.
 
-#### 2026-07-25 — Deliver M1 Stages 1–5.5
+#### Add bounded durable history readback (2026-08-05 – 2026-08-06)
 
-- Added XXH3-128 content evidence, bounded copy pipelines, recursive inventory,
-  typed scan warnings, folder-scoped integrity, and reviewed workflow trees.
-- Added role-free inventory, baseline/verify/rebaseline, execute-to-verify
-  readback, revisioned selection, retry-safe commands, and typed result views.
-- Added reset-only history v4, local ledger v2, settings separation, the shared
-  service/CLI surface, and the secured WebView2 host foundation.
-- Added executor/verifier measurement tooling and focused integration coverage
-  for inventory, provenance, commands, history, and the desktop host foundation.
+- Added windowed durable reliable-event history, bounded keyset detail pages,
+  and incomplete-prefix recovery.
+- Hardened replay and close behavior without allowing audit/history failure to
+  rewrite sync truth.
+
+#### Add scoped review trees and revisioned selection (2026-07-30)
+
+- Added deterministic review trees, full/path/subtree inventory scopes, and
+  folder-level operations.
+- Added deselection provenance, dependency closure, authoritative selection
+  re-derivation, risk previews, and retry-safe facade admission.
+
+#### Complete headless integrity workflows, service, and CLI (2026-07-25)
+
+- Added the bounded XXH3 copy pipeline, role-free inventory,
+  baseline/verify/rebaseline, and optional post-copy verification.
+- Completed the reusable service facade and typed CLI commands/results for
+  sync, history, and integrity work.
+
+#### Establish M1 contracts and persistence boundaries (2026-07-24 – 2026-07-27)
+
+- Made reviewed plans immutable at execution, separated semantic settings from
+  cosmetic UI state, and added the XXH3 hashing seam.
+- Established reset-only ledger v2/history v3 contracts and strict bridge/
+  UI-state inputs.
+- Removed persisted mapping-filter projections: filters stay immutable per-plan
+  scan input while the ledger retains role-free inventory and mapping
+  correspondence.
 
 ## M0
 
@@ -263,25 +299,46 @@ plan safety model.
 Filesystem and reporting edge cases were hardened without weakening explicit
 review or guarded execution.
 
-#### 2026-07-25 — Harden the reviewed-sync baseline
+#### Make filename-form differences safe and reviewable (2026-07-20 – 2026-07-21)
 
-- Hardened planning fingerprints, database placement, artifact ignores,
-  hostile names, incomplete scans, and case/Unicode handling.
-- Added exact prior-run temp recovery and hardened Windows updates, directory
-  cleanup, metadata preservation, and retry behavior.
-- Made blocked/deferred subsets and partial outcomes explicit in review,
-  history, and CLI exit classification.
+- Made invalid raw names incomplete-scan evidence without aborting safe sibling
+  work; case-only and unique NFC/NFD differences remain visible to reviewers.
+- Kept filename-form advisories from suppressing ordinary update/no-op work and
+  made review output show the prior target path for move, move-update, and
+  recase operations.
+
+#### Recover interrupted work and harden Windows finalization (2026-07-20)
+
+- Made directory cleanup tolerate only same-run child-induced metadata churn
+  while preserving replacement and nonempty-directory refusal.
+- Corrected directory flush access, restored identity-less FAT-style cleanup
+  where identity was never reviewed, and reclaimed only exact prior-run
+  temporary files after preflight.
 
 ### M0 Features
 
 The first milestone shipped reviewed one-way sync through reusable core,
 runtime, persistence, workflow, and CLI layers.
 
-#### 2026-07-25 — Ship the headless reviewed-sync product
+#### Add safe-subset execution (2026-07-20)
 
-- Added scanning, deterministic planning, fresh preflight, and guarded Windows
-  copy/update/delete execution with atomic publication.
-- Added dispatcher volume custody, cooperative controls, typed events/results,
-  ledger recording, and independent activity history.
-- Added workflow composition and the `nami-sync` CLI for reviewed sync and
-  history browsing.
+- Quarantined blocked and dependent operations while allowing independent safe
+  work; incomplete scans use an additive-only subset that withholds moves and
+  deletions.
+- Added itemized blocked/deferred results, history, and CLI partial-completion
+  reporting.
+
+#### Deliver reviewed-sync workflows and CLI (2026-07-19)
+
+- Composed scan, deterministic plan, commitment validation, fresh preflight,
+  execution, ledger recording, dispatcher custody, and independent history
+  into the reusable workflow layer.
+- Added the reviewed two-session `nami-sync sync` flow, read-only `history`
+  browsing, real process entry points, and safe retry/admission fixes.
+
+#### Establish the M0 backend foundation (2026-07-18)
+
+- Added core session/event/evidence contracts; scanner, planner, preflight,
+  guarded Windows executor, and standalone integrity-verifier primitives.
+- Added bounded dispatcher custody/event fan-out plus WAL-backed ledger, typed
+  repositories, and independent history persistence.
