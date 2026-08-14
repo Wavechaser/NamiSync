@@ -1,8 +1,8 @@
 # Session Handoff
 
-Status (2026-08-14): the calibration-a evidence checkpoint has landed after
-the progress-only behavior, benchmark/accounting, and frozen-corpus
-custody-runner checkpoints. The
+Status (2026-08-14): the transport-custody ceiling checkpoint has landed after
+the progress-only behavior, benchmark/accounting, frozen-corpus runner, and
+calibration-a evidence checkpoints. The
 `sh-g-8-transport-v1` calibration-a/holdout-b corpora now drive real built-in
 dispatcher, subscriber, and adapter deques through the production composition
 path. The runner proves the exact quiescent per-task 128/64/64 maximum without
@@ -10,8 +10,10 @@ path. The runner proves the exact quiescent per-task 128/64/64 maximum without
 source/dependency/runtime/digest authority across three fresh processes. The
 committed `tests/interfaces/web/sh_g_8_transport_calibration.json` artifact
 records normative 1,376,690-byte ordinary and 1,534,946-byte exact-maximum
-union measurements. It contains no byte ceiling or acceptance decision.
-SH-G-8 remains open for a later ceiling commit and independent holdout-b. The
+union measurements. The separate
+`tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
+1,966,080-byte (1.875 MiB) ceiling. It contains no acceptance result. SH-G-8
+remains open only for independent holdout-b. The
 installed-wheel event harness
 still reports only the event envelope; whole-runtime diagnostics have no
 acceptance predicate. BR-G-45 separately remains open for the
@@ -43,9 +45,18 @@ whole-runtime containment. Slices 5-8 remain product work.
   receipt are verified.
   The predeclared rule applies 25 percent headroom to the largest calibration
   `transport_custody_bytes` value and rounds upward to 65,536 bytes. The
-  normative calibration-a measurement has now been recorded. Its artifact
-  contains no ceiling or pass/fail field; a later commit must freeze the byte
-  ceiling, and only then may independent holdout-b be run.
+  normative calibration-a measurement has been recorded, and the separate
+  ceiling contract mechanically freezes its result at 1,966,080 bytes. The
+  contract file SHA-256 is
+  `09170695e6b8b2404c220289213d998fbef9b721f140e3e7c0090d6328b0302d`.
+  Its acceptance authority pins
+  `tests/interfaces/web/test_bridge_transport_custody.py` to Git blob
+  `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`; holdout work must use a new test
+  file. The holdout-b corpus SHA-256 is
+  `b4f23a5c9452f11e06e5520e52c02a0c1fd3e94698e87f70d7d3144c09d787c9`.
+  Acceptance requires a valid three-fresh-process holdout dataset under the
+  exact frozen authorities with both ordinary and exact-maximum union values at
+  or below the ceiling. No holdout or acceptance result exists yet.
 - BR-G-33/SH-G-8 now require a single non-extending 150 ms server linger when a
   drain first sees progress alone. Replacement progress does not slide the
   deadline. Reliable, `Gap`, terminal, close, supersession, and recovery values
@@ -163,14 +174,17 @@ acknowledgment races; those paths were fixed or removed before the valid run.
 
 ## Immediate Next Work
 
-1. In a later commit, mechanically derive and freeze the byte ceiling from the
-   committed calibration-a maximum as
-   `ceil((1,534,946 * 5 / 4) / 65,536) * 65,536`. Independently verify the
-   arithmetic before recording the resulting value; this evidence checkpoint
-   intentionally records neither that value nor a pass/fail result.
-2. Only after the ceiling commit may a separate clean run execute holdout-b and
-   decide SH-G-8 acceptance. Preserve the calibration artifact and receipts,
-   and never retune the ceiling after seeing holdout data.
+1. From a clean commit containing the frozen ceiling contract, record the
+   independent holdout-b dataset with
+   `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py holdout --output "$env:TEMP\namisync-bridge-transport-custody-holdout.json"`.
+   Preserve all three fresh-process outputs and external receipts without
+   changing the frozen corpus, source, runtime, dependency, calibration, or
+   ceiling authorities.
+2. Add the holdout acceptance witness in a new test file; do not modify
+   `tests/interfaces/web/test_bridge_transport_custody.py`, whose Git blob is
+   part of the ceiling contract. Accept only when the valid three-run dataset's
+   ordinary and exact-maximum union values are each at or below 1,966,080
+   bytes. Never retune after seeing holdout data.
 3. Design BR-G-45 before clearing terminal state. Measure every simultaneous
    core/adapter/browser representation at 100,000 subjects and decide what may
    survive presentation/release when history is degraded. Then freeze both
@@ -200,10 +214,11 @@ from one duration.
   streamed evidence/manifests, direct-Job admission, diagnostic separation, and
   retained-state accounting contracts.
 - `.\.venv\Scripts\python.exe -m pytest tests/interfaces/web/test_bridge_transport_custody.py -q`:
-  42 passed in 3.38 seconds for the frozen corpus, real-deque/path, artifact,
+  60 passed for the frozen corpus, real-deque/path, artifact,
   clean source/dependency authority, isolated-parent/safe-child runtime,
-  receipt, corruption, no-implicit-limit, and committed calibration-artifact
-  contracts. The exact reachability subset previously passed 7 in 1.38 seconds.
+  receipt, corruption, committed calibration/ceiling, frozen-validator,
+  independent-holdout, exact-boundary, and authority-drift contracts. The exact
+  reachability subset previously passed 7 in 1.38 seconds.
 - Durable normative calibration-a evidence:
   `tests/interfaces/web/sh_g_8_transport_calibration.json` was generated clean
   from tested commit `56c50b43dc19090ad33af031891503bfec80599b`. Its file
@@ -219,8 +234,19 @@ from one duration.
   `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`;
   dependency-authority SHA-256 is
   `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
-  This artifact is the normative calibration measurement. It contains no byte
-  ceiling or pass/fail field and supplies no acceptance or holdout result.
+  This artifact is the normative calibration measurement; limit authority lives
+  only in the separate ceiling contract below.
+- Durable transport-custody ceiling contract:
+  `tests/interfaces/web/sh_g_8_transport_ceiling.json` freezes 1,966,080 bytes
+  (1.875 MiB) from integer 5/4 headroom plus 65,536-byte round-up. Its file
+  SHA-256 is
+  `09170695e6b8b2404c220289213d998fbef9b721f140e3e7c0090d6328b0302d`.
+  It pins the validator-owning test file to Git blob
+  `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`, records holdout-b corpus SHA-256
+  `b4f23a5c9452f11e06e5520e52c02a0c1fd3e94698e87f70d7d3144c09d787c9`,
+  and requires three fresh valid runs under exact authorities with both
+  ordinary and exact-maximum union values at or below the ceiling. No holdout
+  or acceptance result has landed.
 - The focused file's one-fresh-safe-path-child system-TEMP seam validated its
   external receipt. Its smoke-only measurements were ordinary quiescent
   transport 1,376,690 bytes / 4,890 objects; maximum no-`Gap` transport
@@ -238,12 +264,13 @@ from one duration.
   dependency-authority SHA-256:
   `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
   This seam uses one child and a test sentinel commit, not the parent runner's
-  clean-authority three-process dataset. These values are non-calibration smoke:
-  they set no normative measurement, ceiling, acceptance result, or holdout.
-- Existing linger subtotal: 174 passed; the 21 accounting tests and 42 custody
-  runner tests are separately stated above. The calibration measurement is
-  normative, but no byte ceiling, acceptance result, holdout-b, BR-G-45,
-  SH-G-15, or headed-benchmark result is claimed by this checkpoint.
+  clean-authority three-process dataset. These values are non-calibration smoke
+  and are not authority for either the landed calibration measurement or the
+  frozen ceiling.
+- Existing linger subtotal: 174 passed; the 21 accounting tests and 60 custody
+  runner tests are separately stated above. The calibration measurement and
+  ceiling are normative, but no acceptance result, holdout-b, BR-G-45, SH-G-15,
+  or headed-benchmark result is claimed by this checkpoint.
 - Active-doc contradiction search found no stale runner/corpus, runtime-command,
   warning-family, measurement, limit, or gate-status claim; `git diff --check`
   is clean.
@@ -251,12 +278,13 @@ from one duration.
 ## Immediate Context
 
 The 150 ms linger, checkpoint-3 accounting infrastructure, frozen/disjoint
-realistic corpus, production-path custody runner, and durable normative
-calibration-a artifact are implemented. The next SH-G-8 operation is the later
-mechanical ceiling commit using the frozen formula above, followed only then by
-independent holdout-b. Treat only the committed artifact as calibration
-authority; neither the one-child smoke nor the old 67,375,104-byte whole-Job
-delta supplies an SH-G-15 limit or BR-G-45 evidence. Preserve explicit
+realistic corpus, production-path custody runner, durable normative
+calibration-a artifact, and 1,966,080-byte ceiling contract are implemented.
+The next SH-G-8 operation is independent holdout-b from a clean ceiling-bearing
+commit, with acceptance evidence in a new test file. Treat only the committed
+calibration and ceiling artifacts as authority; neither the one-child smoke nor
+the old 67,375,104-byte whole-Job delta supplies an SH-G-15 limit or BR-G-45
+evidence. Preserve explicit
 terminal-session-release versus task-close authority while designing aggregate
 terminal retention, and keep all three gates open until their own frozen
 holdout evidence exists.

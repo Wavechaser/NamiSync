@@ -2242,9 +2242,14 @@ external exact-schema digest receipt bind the dataset. The committed
 the normative calibration-a measurement: 1,376,690 bytes / 4,890 objects for
 ordinary quiescent transport and 1,534,946 bytes / 5,499 objects for the exact
 maximum no-`Gap` snapshot. Its predeclared 25-percent
-headroom/65,536-byte-round-up rule has not yet been converted into a byte
-ceiling, and the artifact makes no acceptance decision. SH-G-8 still requires
-that later ceiling commit and independent holdout-b. The harness still supplies useful
+headroom/65,536-byte-round-up rule is now frozen by
+`tests/interfaces/web/sh_g_8_transport_ceiling.json` as a 1,966,080-byte
+(1.875 MiB) ceiling. The contract pins the validator-owning test file to Git
+blob `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`; holdout work must use a new test
+file. Acceptance requires three fresh valid holdout-b runs under the exact
+frozen authorities with both ordinary and exact-maximum union measurements at
+or below the ceiling. SH-G-8 still requires that independent holdout-b; no
+acceptance result exists. The harness still supplies useful
 event and diagnostic data. Its valid 2026-08-13 run passed event truth,
 ordering, latency, no-`Gap`, and clean exit.
 Its 67,375,104-byte whole-Job delta is not a transport-custody measurement and

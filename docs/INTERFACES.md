@@ -14,7 +14,8 @@ manifested streams, post-exit assembly, direct-Job child admission, and an
 event-only pass separate from whole-runtime diagnostics. The frozen realistic
 custody corpora and production-path runner have also landed. SH-G-8's realigned
 event/custody evidence now includes a committed normative calibration-a
-artifact and remains open for a later byte ceiling and independent holdout-b.
+artifact plus a frozen 1,966,080-byte ceiling, and remains open only for
+independent holdout-b.
 BR-G-45 terminal-artifact
 retention and shell-owned SH-G-15 whole-runtime containment remain independently
 open.
@@ -474,12 +475,15 @@ artifacts separately. It binds three fresh-process artifacts to clean committed
 source and instrument authority, an isolated `-I -S` parent, safe-path `-P -S`
 children, fresh out-of-tree bytecode caches, hashed active-venv `xxhash`
 dependencies, stable qualifier hashes, and an external exact-schema receipt. Its predeclared
-headroom rule sets no byte ceiling and the runner makes no acceptance decision.
+headroom rule is now mechanically frozen by a separate ceiling contract; the
+runner makes no acceptance decision.
 The committed `tests/interfaces/web/sh_g_8_transport_calibration.json` artifact
 now records the normative calibration-a union measurements: 1,376,690 bytes /
 4,890 objects ordinary and 1,534,946 bytes / 5,499 objects at the exact maximum
-no-`Gap` snapshot. A later ceiling commit and independent holdout-b remain
-required. Terminal result graphs belong to BR-G-45, not that
+no-`Gap` snapshot. The committed
+`tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
+1,966,080-byte (1.875 MiB) ceiling. Independent holdout-b remains required.
+Terminal result graphs belong to BR-G-45, not that
 custody total. A valid 2026-08-13 run passed its exact event, latency,
 no-`Gap`, and clean-shutdown checks and measured a 67,375,104-byte whole-Job
 delta, but that value neither passes nor fails realigned SH-G-8 or SH-G-15.
@@ -488,8 +492,10 @@ The clean-commit custody calibration reproduction command is
 `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`;
 the durable artifact was generated from tested commit
 `56c50b43dc19090ad33af031891503bfec80599b`. It is a normative calibration
-measurement, not a byte limit or acceptance result. No containment
-command/result is claimed yet.
+measurement; the separate ceiling contract supplies the byte limit. Acceptance
+still requires three fresh valid holdout-b runs under the exact authorities,
+with both ordinary and exact-maximum union measurements at or below the
+ceiling. No containment command/result is claimed yet.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the

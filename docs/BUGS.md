@@ -574,8 +574,10 @@ defect, and move implementation-level test choreography out of the log.
   built-in queue roots, exact 128/64/64 no-`Gap` shape, terminal cut, cleanup,
   and clean source/dependency/runtime/digest authority. The committed
   calibration-a artifact records 1,376,690 ordinary and 1,534,946 exact-maximum
-  transport bytes. Closure still requires a later byte ceiling and independent
-  holdout-b. BR-G-45 and SH-G-15 remain open.
+  transport bytes; the separate contract freezes a 1,966,080-byte ceiling by
+  the predeclared integer 5/4 and 65,536-byte round-up. Closure now requires
+  only an independent three-fresh-process holdout-b with both measurements at
+  or below that ceiling. BR-G-45 and SH-G-15 remain open.
 - MODERATE - FIXED (2026-08-13). Competing bridge contract authority. Active
   documents delegated exact errors and retry rules to `M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers

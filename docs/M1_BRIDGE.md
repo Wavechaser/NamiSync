@@ -11,12 +11,11 @@ post-exit assembly, direct-Job admission, event/diagnostic result separation,
 and a path-local retained-state sizer. The frozen `sh-g-8-transport-v1`
 calibration-a/holdout-b corpora and production-path transport-custody runner
 have also landed. The committed calibration-a artifact now supplies the
-normative transport measurement; no byte ceiling, acceptance result, or
-holdout result has landed.
+normative transport measurement, and the separate contract freezes the
+1,966,080-byte ceiling. No acceptance or holdout result has landed.
 GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
-migration is complete. SH-G-8 remains open pending a byte ceiling fixed before
-independent holdout-b and that holdout.
+migration is complete. SH-G-8 remains open only pending independent holdout-b.
 BR-G-45 separately keeps the 100,000-subject terminal
 artifact set and aggregate completed-task retention policy open. Shell-owned
 SH-G-15 separately keeps version-bound whole-runtime containment open. The
@@ -2490,7 +2489,7 @@ require a later schema-version decision rather than an M1 fallback
    | 256-row history detail window | 500 ms p95; 1 s maximum |
    | Incremental plan projection memory | 128 MiB maximum |
    | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six |
-   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: runner and normative calibration-a artifact landed; later byte ceiling and independent holdout-b pending |
+   | Identity-deduplicated bridge transport custody under the event fixture | OPEN: runner, normative calibration-a artifact, and 1,966,080-byte ceiling landed; independent holdout-b pending |
    | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | OPEN under BR-G-45; per-completion and aggregate ceilings are separate |
 
    **BR-G-42 event-custody definition (required by SH-G-8; REALIGNED, OPEN).**
@@ -2541,9 +2540,10 @@ require a later schema-version decision rather than an M1 fallback
    raw root measurements, interpreter, allocation method, and every achieved
    high-water mark. The already-declared derivation rule applies 25 percent
    headroom to the largest calibration
-   `transport_custody_bytes` measurement and rounds upward to 65,536 bytes. A
-   later commit fixes the resulting byte ceiling before an independent holdout
-   run; the calibration run cannot validate its own limit. The former 16 MiB
+   `transport_custody_bytes` measurement and rounds upward to 65,536 bytes. The
+   separate committed ceiling contract now freezes the resulting 1,966,080-byte
+   limit before an independent holdout run; the calibration run cannot validate
+   its own limit. The former 16 MiB
    whole-Job ceiling is retired rather than inherited or raised.
    Payload-byte totals and complete-process memory are invalid substitutes for
    retained transport custody.
@@ -2617,13 +2617,25 @@ require a later schema-version decision rather than an M1 fallback
    `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`,
    `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`, and
    `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
-   The artifact contains no byte ceiling or pass/fail field and makes no
-   acceptance decision. The next commit mechanically freezes the ceiling as
-   `ceil((1,534,946 * 5 / 4) / 65,536) * 65,536`; only a later independent
-   holdout-b may decide acceptance.
+   That calibration artifact remains measurement-only. The committed
+   `tests/interfaces/web/sh_g_8_transport_ceiling.json` contract mechanically
+   freezes `ceil((1,534,946 * 5 / 4) / 65,536) * 65,536` as 1,966,080 bytes
+   (1.875 MiB). Its file SHA-256 is
+   `09170695e6b8b2404c220289213d998fbef9b721f140e3e7c0090d6328b0302d`.
+   The acceptance validator remains frozen in
+   `tests/interfaces/web/test_bridge_transport_custody.py` at Git blob
+   `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`; holdout implementation must use
+   a new test file rather than changing that authority. The frozen holdout-b
+   corpus SHA-256 is
+   `b4f23a5c9452f11e06e5520e52c02a0c1fd3e94698e87f70d7d3144c09d787c9`.
+   Acceptance requires one valid holdout-b dataset containing three fresh runs
+   under the exact frozen authorities, with both its ordinary and exact-maximum
+   `transport_custody_bytes` measurements less than or equal to 1,966,080.
+   No holdout or acceptance result has landed.
    Calibration can be reproduced from a clean commit with
    `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`.
-   Do not run or interpret holdout-b before the later ceiling commit.
+   Run holdout-b only from a clean commit containing the frozen ceiling
+   contract, and do not retune any authority after seeing its values.
 
    The standalone `tests/bridge_event_benchmark.py` harness builds and installs
    the archived-HEAD wheel, loads a test-owned benchmark page with the installed
@@ -3410,14 +3422,15 @@ because its local tests are easier.
   no-`Gap` shape and ordered cleanup, terminal path-cut reporting, and clean
   source/dependency/runtime/digest authority. The committed calibration-a
   artifact now records the normative 1,376,690-byte ordinary and
-  1,534,946-byte exact-maximum union measurements. A byte ceiling, acceptance
-  result, and independent holdout-b have not landed. The 2026-08-13 run of
+  1,534,946-byte exact-maximum union measurements. The separate committed
+  contract freezes the 1,966,080-byte ceiling. An acceptance result and
+  independent holdout-b have not landed. The 2026-08-13 run of
   archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
   event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
   predicates. Its 67,375,104-byte whole-Job delta is not transport-custody
   evidence and neither passes nor fails this realigned clause. BR-G-42's event
-  portion and SH-G-8 remain open without claiming a byte limit or acceptance
-  result.
+  portion and SH-G-8 remain open only pending holdout-b, without claiming an
+  acceptance result.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
   separately.** For one exact 100,000-subject completion, calibration and a
   later independent holdout measure the complete per-completion artifact set:

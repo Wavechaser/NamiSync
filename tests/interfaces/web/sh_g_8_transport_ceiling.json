@@ -1,0 +1,44 @@
+{
+  "calibration": {
+    "artifact": "tests/interfaces/web/sh_g_8_transport_calibration.json",
+    "artifact_commit": "10cd8f2165f232537779d993796e551f851f3260",
+    "artifact_sha256": "13589307538eb90f05da2322c7e0ba627234e060c8455d9b7e3013aa575cece8",
+    "corpus_sha256": "a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec",
+    "corpus_version": "sh-g-8-transport-v1",
+    "dataset_variant": "calibration-a",
+    "dependency_sha256": "8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30",
+    "evidence_sha256": "62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea",
+    "instrument_sha256": "629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9",
+    "maximum_transport_custody_bytes": 1534946,
+    "runtime_qualifier_sha256": "a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e",
+    "source_sha256": "e0a69a23056c399a8ff12545a17a6cdfe04a6205c27377c7e05f5c39684dea80",
+    "tested_commit": "56c50b43dc19090ad33af031891503bfec80599b"
+  },
+  "acceptance": {
+    "authority": {
+      "git_blob_oid": "c6da8e17de96e2c73a677c091b8bfb13e261cbd2",
+      "path": "tests/interfaces/web/test_bridge_transport_custody.py"
+    },
+    "calibration_may_self_validate": false,
+    "comparator": "less-than-or-equal",
+    "measurements": [
+      "ordinary_quiescent_peak.transport_custody_bytes",
+      "maximum_no_gap_custody.transport_custody_bytes"
+    ],
+    "scope": "each valid three-run holdout dataset"
+  },
+  "ceiling": {
+    "factor_denominator": 4,
+    "factor_numerator": 5,
+    "round_up_bytes": 65536,
+    "transport_custody_bytes": 1966080
+  },
+  "gate": "SH-G-8 transport custody ceiling",
+  "holdout": {
+    "corpus_sha256": "b4f23a5c9452f11e06e5520e52c02a0c1fd3e94698e87f70d7d3144c09d787c9",
+    "dataset_kind": "holdout",
+    "dataset_variant": "holdout-b",
+    "run_count": 3
+  },
+  "schema_version": 1
+}

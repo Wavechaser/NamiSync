@@ -61,9 +61,8 @@ bind three fresh-process artifacts to clean committed source, an isolated
 `-I -S` parent and safe-path `-P -S` children, a hashed dependency root, and an
 external digest receipt. Realigned BR-G-42
 event-custody and SH-G-8 now have a committed calibration-a artifact and
-normative transport measurement. They remain open for a byte ceiling fixed in
-a later commit under the predeclared headroom rule and an independent holdout-b
-run.
+normative transport measurement plus a mechanically frozen 1,966,080-byte
+(1.875 MiB) ceiling. They remain open only for an independent holdout-b run.
 BR-G-45 separately leaves the complete 100,000-subject terminal artifact set
 and aggregate completed-task retention policy open. Shell-owned SH-G-15
 separately leaves version-bound absolute cold/settled and repeated/long warm
@@ -74,8 +73,10 @@ predicates. The durable
 `tests/interfaces/web/sh_g_8_transport_calibration.json` artifact records a
 1,376,690-byte ordinary union high water and a 1,534,946-byte exact maximum
 no-`Gap` union from clean commit
-`56c50b43dc19090ad33af031891503bfec80599b`. No byte ceiling, acceptance result,
-or holdout result is claimed yet.
+`56c50b43dc19090ad33af031891503bfec80599b`. The separate
+`tests/interfaces/web/sh_g_8_transport_ceiling.json` contract freezes the
+1,966,080-byte ceiling by integer 5/4 headroom and 65,536-byte round-up. No
+acceptance or holdout result is claimed yet.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 an application restart. Committed nonterminal history survives restart as

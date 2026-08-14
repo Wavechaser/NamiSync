@@ -21,6 +21,9 @@ PARENT = ROOT / "bridge_transport_custody.py"
 CHILD = Path(__file__).with_name("_bridge_transport_custody.py")
 RETAINED = Path(__file__).with_name("_bridge_retained_memory.py")
 CALIBRATION = Path(__file__).with_name("sh_g_8_transport_calibration.json")
+CEILING_CONTRACT = Path(__file__).with_name(
+    "sh_g_8_transport_ceiling.json"
+)
 TESTED_COMMIT = "0" * 40
 VARIANT = "calibration-a"
 
@@ -28,8 +31,6 @@ _CALIBRATION_COMMIT = "56c50b43dc19090ad33af031891503bfec80599b"
 _CALIBRATION_SHA256 = (
     "13589307538eb90f05da2322c7e0ba627234e060c8455d9b7e3013aa575cece8"
 )
-
-
 def _module(path: Path, name: str):
     specification = importlib.util.spec_from_file_location(name, path)
     assert specification is not None and specification.loader is not None
@@ -65,6 +66,541 @@ def _artifact_dependency_authority(
 
 def _artifact_pycache_prefix(artifact: dict[str, object]) -> Path:
     return Path(artifact["runtime"]["pycache_prefix"])
+
+
+def _validate_archived_run_artifact(
+    parent,
+    child,
+    value: object,
+    *,
+    variant: str,
+    source_authority: dict[str, object],
+    dependency_authority: dict[str, object],
+    expected_pycache_prefix: Path,
+    receipt: dict[str, object] | None = None,
+) -> None:
+    if type(value) is not dict or type(value.get("module_origins")) is not dict:
+        raise ValueError("archived custody run artifact is invalid")
+    module_origins = value["module_origins"]
+    roots: set[Path] = set()
+    for name, relative in child._MODULE_PATHS.items():
+        origin = module_origins.get(name)
+        if type(origin) is not str:
+            raise ValueError("archived custody module origin is invalid")
+        root = Path(origin)
+        for _ in Path(relative).parts:
+            root = root.parent
+        roots.add(root.resolve())
+    if len(roots) != 1:
+        raise ValueError("archived custody source roots disagree")
+    source_root = next(iter(roots))
+    if any(
+        module_origins.get(name) != str((source_root / relative).resolve())
+        for name, relative in child._MODULE_PATHS.items()
+    ):
+        raise ValueError("archived custody module origin is invalid")
+
+    runtime = value.get("runtime")
+    hashes = value.get("hashes")
+    if type(runtime) is not dict or type(hashes) is not dict:
+        raise ValueError("archived custody runtime is invalid")
+    dependency_root = Path(dependency_authority["root"])
+    expected_executable = dependency_root.parent.parent / "Scripts" / "python.exe"
+    if runtime.get("executable") != str(expected_executable.resolve()):
+        raise ValueError("archived custody executable origin is invalid")
+    evidence = {
+        "ordinary": value.get("ordinary"),
+        "maximum_no_gap": value.get("maximum_no_gap"),
+    }
+    if (
+        hashes.get("runtime_sha256") != parent._canonical_hash(runtime)
+        or hashes.get("runtime_qualifier_sha256")
+        != parent._canonical_hash(parent._runtime_qualifier(runtime))
+        or hashes.get("source_sha256")
+        != parent._canonical_hash(hashes.get("source_files"))
+        or hashes.get("corpus_sha256")
+        != parent._canonical_hash(value.get("structural_facts"))
+        or hashes.get("evidence_sha256") != parent._canonical_hash(evidence)
+        or dependency_authority.get("sha256")
+        != parent._canonical_hash(dependency_authority.get("files"))
+    ):
+        raise ValueError("archived custody canonical hashes are invalid")
+    if receipt is not None:
+        parent._validate_child_receipt(receipt, value)
+
+    normalized = copy.deepcopy(value)
+    normalized["module_origins"].update(
+        {
+            name: str((child._ROOT / relative).resolve())
+            for name, relative in child._MODULE_PATHS.items()
+        }
+    )
+    normalized_runtime = normalized["runtime"]
+    normalized_runtime["python"] = child.sys.version
+    normalized_runtime["executable"] = str(Path(sys.executable).resolve())
+    normalized["hashes"]["runtime_sha256"] = parent._canonical_hash(
+        normalized_runtime
+    )
+    normalized["hashes"]["runtime_qualifier_sha256"] = (
+        parent._canonical_hash(parent._runtime_qualifier(normalized_runtime))
+    )
+    parent._validate_run_artifact(
+        normalized,
+        child,
+        variant=variant,
+        source_authority=source_authority,
+        dependency_authority=dependency_authority,
+        expected_pycache_prefix=expected_pycache_prefix,
+    )
+
+
+def _load_transport_custody_ceiling_contract(parent, child):
+    contract_bytes = CEILING_CONTRACT.read_bytes()
+    contract = json.loads(contract_bytes)
+    calibration_bytes = CALIBRATION.read_bytes()
+    calibration = json.loads(calibration_bytes)
+    if (
+        type(contract) is not dict
+        or set(contract)
+        != {
+            "schema_version",
+            "gate",
+            "calibration",
+            "holdout",
+            "ceiling",
+            "acceptance",
+        }
+        or contract["schema_version"] != 1
+        or contract["gate"] != "SH-G-8 transport custody ceiling"
+        or set(contract["calibration"])
+        != {
+            "artifact",
+            "artifact_commit",
+            "artifact_sha256",
+            "corpus_sha256",
+            "corpus_version",
+            "dataset_variant",
+            "dependency_sha256",
+            "evidence_sha256",
+            "instrument_sha256",
+            "maximum_transport_custody_bytes",
+            "runtime_qualifier_sha256",
+            "source_sha256",
+            "tested_commit",
+        }
+        or set(contract["holdout"])
+        != {"corpus_sha256", "dataset_kind", "dataset_variant", "run_count"}
+        or set(contract["ceiling"])
+        != {
+            "factor_denominator",
+            "factor_numerator",
+            "round_up_bytes",
+            "transport_custody_bytes",
+        }
+        or contract["acceptance"]
+        != {
+            "authority": contract["acceptance"].get("authority"),
+            "calibration_may_self_validate": False,
+            "comparator": "less-than-or-equal",
+            "measurements": [
+                "ordinary_quiescent_peak.transport_custody_bytes",
+                "maximum_no_gap_custody.transport_custody_bytes",
+            ],
+            "scope": "each valid three-run holdout dataset",
+        }
+    ):
+        raise ValueError("transport-custody ceiling contract schema drifted")
+    authority = contract["acceptance"]["authority"]
+    authority_path = Path(__file__).resolve().relative_to(ROOT.parent).as_posix()
+    if (
+        type(authority) is not dict
+        or set(authority) != {"path", "git_blob_oid"}
+        or authority.get("path") != authority_path
+        or re.fullmatch(r"[0-9a-f]{40}", str(authority.get("git_blob_oid")))
+        is None
+    ):
+        raise ValueError("transport-custody acceptance authority drifted")
+    working_blob = subprocess.run(
+        [
+            "git",
+            "hash-object",
+            f"--path={authority_path}",
+            authority_path,
+        ],
+        cwd=ROOT.parent,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if (
+        working_blob.returncode != 0
+        or working_blob.stdout.strip() != authority["git_blob_oid"]
+    ):
+        raise ValueError("transport-custody acceptance authority drifted")
+
+    frozen = contract["calibration"]
+    calibration_hashes = calibration["hashes"]
+    calibration_maxima = calibration["measurement_maxima"]
+    maximum = max(
+        calibration_maxima[name]["transport_custody_bytes"]
+        for name in (
+            "ordinary_quiescent_peak",
+            "maximum_no_gap_custody",
+        )
+    )
+    expected_frozen = {
+        "artifact": CALIBRATION.relative_to(ROOT.parent).as_posix(),
+        "artifact_commit": "10cd8f2165f232537779d993796e551f851f3260",
+        "artifact_sha256": hashlib.sha256(calibration_bytes).hexdigest(),
+        "corpus_sha256": calibration_hashes["corpus_sha256"],
+        "corpus_version": calibration["corpus_version"],
+        "dataset_variant": calibration["dataset_variant"],
+        "dependency_sha256": calibration["dependency_authority"]["sha256"],
+        "evidence_sha256": calibration_hashes["evidence_sha256"],
+        "instrument_sha256": calibration_hashes["instrument_sha256"],
+        "maximum_transport_custody_bytes": maximum,
+        "runtime_qualifier_sha256": calibration_hashes[
+            "runtime_qualifier_sha256"
+        ],
+        "source_sha256": calibration_hashes["source_sha256"],
+        "tested_commit": calibration["tested_commit"],
+    }
+    if frozen != expected_frozen:
+        raise ValueError("transport-custody calibration authority drifted")
+    expected_holdout = {
+        "corpus_sha256": parent._canonical_hash(
+            child._structural_facts("holdout-b")
+        ),
+        "dataset_kind": "holdout",
+        "dataset_variant": "holdout-b",
+        "run_count": 3,
+    }
+    if contract["holdout"] != expected_holdout:
+        raise ValueError("transport-custody holdout authority drifted")
+
+    policy = calibration["headroom_policy"]
+    ceiling = contract["ceiling"]
+    if any(
+        type(ceiling[name]) is not int or ceiling[name] <= 0
+        for name in (
+            "factor_denominator",
+            "factor_numerator",
+            "round_up_bytes",
+            "transport_custody_bytes",
+        )
+    ):
+        raise ValueError("transport-custody ceiling values are invalid")
+    if ceiling != {
+        "factor_denominator": policy["factor_denominator"],
+        "factor_numerator": policy["factor_numerator"],
+        "round_up_bytes": policy["round_up_bytes"],
+        "transport_custody_bytes": ceiling["transport_custody_bytes"],
+    }:
+        raise ValueError("transport-custody headroom policy drifted")
+    denominator = ceiling["factor_denominator"] * ceiling["round_up_bytes"]
+    derived = (
+        (
+            maximum * ceiling["factor_numerator"]
+            + denominator
+            - 1
+        )
+        // denominator
+    ) * ceiling["round_up_bytes"]
+    if derived != ceiling["transport_custody_bytes"]:
+        raise ValueError("transport-custody byte ceiling is not derived")
+    return contract, calibration
+
+
+def _holdout_commit_references(
+    contract: dict[str, object],
+    calibration: dict[str, object],
+) -> dict[str, str]:
+    source_files = calibration["runs"][0]["hashes"]["source_files"]
+    return {
+        **{
+            path: contract["calibration"]["tested_commit"]
+            for path in source_files
+        },
+        RETAINED.relative_to(ROOT.parent).as_posix(): contract["calibration"][
+            "tested_commit"
+        ],
+        CALIBRATION.relative_to(ROOT.parent).as_posix(): contract[
+            "calibration"
+        ]["artifact_commit"],
+    }
+
+
+def _git_blob_oid(commit: str, path: str) -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{commit}:{path}"],
+        cwd=ROOT.parent,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    object_id = completed.stdout.strip()
+    if (
+        completed.returncode != 0
+        or re.fullmatch(r"[0-9a-f]{40}", object_id) is None
+    ):
+        raise ValueError("transport-custody frozen Git blob is unavailable")
+    return object_id
+
+
+def _require_holdout_commit_authority(
+    tested_commit: str,
+    contract: dict[str, object],
+    calibration: dict[str, object],
+) -> None:
+    if (
+        type(tested_commit) is not str
+        or re.fullmatch(r"[0-9a-f]{40}", tested_commit) is None
+    ):
+        raise ValueError("transport-custody holdout tested commit is invalid")
+    ceiling_path = CEILING_CONTRACT.relative_to(ROOT.parent).as_posix()
+    history = subprocess.run(
+        [
+            "git",
+            "log",
+            "--diff-filter=A",
+            "--format=%H",
+            "--",
+            ceiling_path,
+        ],
+        cwd=ROOT.parent,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    introductions = history.stdout.splitlines()
+    if (
+        history.returncode != 0
+        or len(introductions) != 1
+        or re.fullmatch(r"[0-9a-f]{40}", introductions[0]) is None
+    ):
+        raise ValueError(
+            "transport-custody ceiling was not frozen before holdout"
+        )
+    ancestry = subprocess.run(
+        [
+            "git",
+            "merge-base",
+            "--is-ancestor",
+            introductions[0],
+            tested_commit,
+        ],
+        cwd=ROOT.parent,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if ancestry.returncode != 0:
+        raise ValueError(
+            "transport-custody ceiling was not frozen before holdout"
+        )
+    references = _holdout_commit_references(contract, calibration)
+    references[ceiling_path] = introductions[0]
+    references[contract["acceptance"]["authority"]["path"]] = introductions[0]
+    for path, reference_commit in references.items():
+        try:
+            holdout_blob = _git_blob_oid(tested_commit, path)
+            frozen_blob = _git_blob_oid(reference_commit, path)
+        except ValueError as error:
+            raise ValueError(
+                "transport-custody holdout commit lacks frozen authority"
+            ) from error
+        if holdout_blob != frozen_blob:
+            raise ValueError(
+                "transport-custody holdout commit lacks frozen authority"
+            )
+
+
+def _validate_holdout_acceptance(
+    parent,
+    child,
+    value: object,
+    *,
+    commit_authority=_require_holdout_commit_authority,
+) -> dict[str, int]:
+    contract, calibration = _load_transport_custody_ceiling_contract(
+        parent, child
+    )
+    if type(value) is not dict:
+        raise ValueError("transport-custody holdout must be an object")
+    if (
+        value.get("dataset_kind") != "holdout"
+        or value.get("dataset_variant") != "holdout-b"
+    ):
+        raise ValueError("transport-custody calibration cannot be a holdout")
+    if set(value) != set(calibration):
+        raise ValueError("transport-custody holdout fields do not match schema")
+    if (
+        value.get("schema_version") != 1
+        or value.get("gate") != "SH-G-8 transport custody"
+        or value.get("run_count") != contract["holdout"]["run_count"]
+        or value.get("corpus_version")
+        != contract["calibration"]["corpus_version"]
+        or value.get("headroom_policy") != calibration["headroom_policy"]
+        or value.get("structural_facts")
+        != child._structural_facts("holdout-b")
+    ):
+        raise ValueError("transport-custody holdout authority drifted")
+    commit_authority(value.get("tested_commit"), contract, calibration)
+    runs = value.get("runs")
+    receipts = value.get("run_receipts")
+    if (
+        type(runs) is not list
+        or type(receipts) is not list
+        or len(runs) != 3
+        or len(receipts) != 3
+    ):
+        raise ValueError("transport-custody holdout requires exactly three runs")
+    process_ids = [run.get("process_id") for run in runs if type(run) is dict]
+    pycache_prefixes = [
+        run.get("runtime", {}).get("pycache_prefix")
+        for run in runs
+        if type(run) is dict and type(run.get("runtime")) is dict
+    ]
+    if (
+        len(process_ids) != 3
+        or any(type(process_id) is not int for process_id in process_ids)
+        or len(set(process_ids)) != 3
+        or len(pycache_prefixes) != 3
+        or any(type(prefix) is not str for prefix in pycache_prefixes)
+        or len(set(pycache_prefixes)) != 3
+        or len({parent._canonical_hash(receipt) for receipt in receipts}) != 3
+    ):
+        raise ValueError("transport-custody holdout runs are not fresh and distinct")
+
+    first = runs[0]
+    if (
+        value.get("tested_commit") != first.get("tested_commit")
+        or value.get("hashes") != first.get("hashes")
+        or value.get("dependency_authority")
+        != first.get("dependency_authority")
+    ):
+        raise ValueError("transport-custody holdout top-level authority drifted")
+    source_authority = _artifact_source_authority(first)
+    calibration_run = calibration["runs"][0]
+    calibration_source = _artifact_source_authority(calibration_run)
+    if (
+        source_authority["source_files"] != calibration_source["source_files"]
+        or source_authority["source_sha256"]
+        != contract["calibration"]["source_sha256"]
+        or source_authority["instrument_sha256"]
+        != contract["calibration"]["instrument_sha256"]
+    ):
+        raise ValueError("transport-custody holdout source authority drifted")
+    dependency_authority = value["dependency_authority"]
+    calibration_dependency = calibration["dependency_authority"]
+    if (
+        dependency_authority.get("files") != calibration_dependency["files"]
+        or dependency_authority.get("sha256")
+        != contract["calibration"]["dependency_sha256"]
+    ):
+        raise ValueError("transport-custody holdout dependency authority drifted")
+
+    ceiling = contract["ceiling"]["transport_custody_bytes"]
+    ordinary_maximum = 0
+    maximum_maximum = 0
+    for run, receipt in zip(runs, receipts, strict=True):
+        hashes = run.get("hashes") if type(run) is dict else None
+        if (
+            type(hashes) is not dict
+            or _artifact_source_authority(run) != source_authority
+            or _artifact_dependency_authority(run) != dependency_authority
+            or hashes.get("runtime_qualifier_sha256")
+            != contract["calibration"]["runtime_qualifier_sha256"]
+            or hashes.get("corpus_sha256")
+            != contract["holdout"]["corpus_sha256"]
+            or hashes.get("instrument_sha256")
+            != contract["calibration"]["instrument_sha256"]
+        ):
+            raise ValueError("transport-custody holdout run authority drifted")
+        parsed_receipt = parent._read_child_receipt(
+            json.dumps(receipt),
+            variant="holdout-b",
+            tested_commit=value["tested_commit"],
+        )
+        _validate_archived_run_artifact(
+            parent,
+            child,
+            run,
+            variant="holdout-b",
+            source_authority=source_authority,
+            dependency_authority=dependency_authority,
+            expected_pycache_prefix=_artifact_pycache_prefix(run),
+            receipt=parsed_receipt,
+        )
+        ordinary = run["ordinary"]["ordinary_quiescent_peak"][
+            "transport_custody_bytes"
+        ]
+        maximum = run["maximum_no_gap"]["custody"][
+            "transport_custody_bytes"
+        ]
+        if ordinary > ceiling or maximum > ceiling:
+            raise ValueError("transport-custody holdout exceeds frozen ceiling")
+        ordinary_maximum = max(ordinary_maximum, ordinary)
+        maximum_maximum = max(maximum_maximum, maximum)
+    if value.get("measurement_maxima") != parent._measurement_maxima(runs):
+        raise ValueError("transport-custody holdout maxima drifted")
+    return {
+        "ceiling_bytes": ceiling,
+        "ordinary_transport_custody_bytes": ordinary_maximum,
+        "maximum_transport_custody_bytes": maximum_maximum,
+    }
+
+
+def _refresh_synthetic_holdout(parent, value: dict[str, object]) -> None:
+    receipts = []
+    for run in value["runs"]:
+        run["hashes"]["evidence_sha256"] = parent._canonical_hash(
+            {
+                "ordinary": run["ordinary"],
+                "maximum_no_gap": run["maximum_no_gap"],
+            }
+        )
+        receipts.append(
+            {
+                "schema_version": 1,
+                "gate": run["gate"],
+                "dataset_variant": run["dataset_variant"],
+                "tested_commit": run["tested_commit"],
+                "process_id": run["process_id"],
+                "evidence_sha256": run["hashes"]["evidence_sha256"],
+                "artifact_sha256": parent._canonical_hash(run),
+            }
+        )
+    value["run_receipts"] = receipts
+    value["hashes"] = copy.deepcopy(value["runs"][0]["hashes"])
+    value["dependency_authority"] = copy.deepcopy(
+        value["runs"][0]["dependency_authority"]
+    )
+    value["measurement_maxima"] = parent._measurement_maxima(value["runs"])
+
+
+def _synthetic_holdout(parent, child) -> dict[str, object]:
+    _contract, calibration = _load_transport_custody_ceiling_contract(
+        parent, child
+    )
+    value = copy.deepcopy(calibration)
+    value["dataset_kind"] = "holdout"
+    value["dataset_variant"] = "holdout-b"
+    value["tested_commit"] = "f" * 40
+    value["structural_facts"] = child._structural_facts("holdout-b")
+    corpus_hash = parent._canonical_hash(value["structural_facts"])
+    for index, run in enumerate(value["runs"]):
+        run["dataset_variant"] = "holdout-b"
+        run["tested_commit"] = value["tested_commit"]
+        run["process_id"] = 80_001 + index
+        run["structural_facts"] = copy.deepcopy(value["structural_facts"])
+        run["hashes"]["corpus_sha256"] = corpus_hash
+    _refresh_synthetic_holdout(parent, value)
+    return value
 
 
 @pytest.fixture(scope="module")
@@ -847,6 +1383,319 @@ def test_dataset_uses_three_distinct_runs_without_acceptance_or_limit(
     assert "limit_bytes" not in evidence_keys
 
 
+def test_transport_custody_ceiling_is_mechanically_frozen() -> None:
+    parent = _parent_module()
+    child = _child_module()
+    contract, calibration = _load_transport_custody_ceiling_contract(
+        parent, child
+    )
+    maximum = max(
+        calibration["measurement_maxima"][name][
+            "transport_custody_bytes"
+        ]
+        for name in (
+            "ordinary_quiescent_peak",
+            "maximum_no_gap_custody",
+        )
+    )
+    assert maximum == 1_534_946
+    policy = contract["ceiling"]
+    denominator = policy["factor_denominator"] * policy["round_up_bytes"]
+    derived = (
+        (maximum * policy["factor_numerator"] + denominator - 1)
+        // denominator
+    ) * policy["round_up_bytes"]
+    assert derived == policy["transport_custody_bytes"] == 1_966_080
+    assert hashlib.sha256(CALIBRATION.read_bytes()).hexdigest() == (
+        contract["calibration"]["artifact_sha256"]
+    )
+    assert hashlib.sha256(PARENT.read_bytes()).hexdigest() == (
+        calibration["runs"][0]["hashes"]["source_files"][
+            "tests/bridge_transport_custody.py"
+        ]
+    )
+    assert "passed" not in json.dumps(contract)
+    assert "result" not in json.dumps(contract)
+
+
+def test_transport_custody_holdout_refuses_calibration() -> None:
+    parent = _parent_module()
+    child = _child_module()
+    calibration = json.loads(CALIBRATION.read_text(encoding="utf-8"))
+    with pytest.raises(ValueError, match="calibration cannot be a holdout"):
+        _validate_holdout_acceptance(parent, child, calibration)
+
+
+def test_transport_custody_clean_synthetic_holdout_is_accepted() -> None:
+    parent = _parent_module()
+    child = _child_module()
+    holdout = _synthetic_holdout(parent, child)
+    result = _validate_holdout_acceptance(
+        parent,
+        child,
+        holdout,
+        commit_authority=lambda *_args: None,
+    )
+    assert result == {
+        "ceiling_bytes": 1_966_080,
+        "ordinary_transport_custody_bytes": 1_376_690,
+        "maximum_transport_custody_bytes": 1_534_946,
+    }
+
+
+def test_transport_custody_holdout_accepts_exact_ceiling_and_refuses_plus_one(
+) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    holdout = _synthetic_holdout(parent, child)
+    for run in holdout["runs"]:
+        run["maximum_no_gap"]["custody"][
+            "transport_custody_bytes"
+        ] = 1_966_080
+    _refresh_synthetic_holdout(parent, holdout)
+    result = _validate_holdout_acceptance(
+        parent,
+        child,
+        holdout,
+        commit_authority=lambda *_args: None,
+    )
+    assert result["maximum_transport_custody_bytes"] == 1_966_080
+
+    holdout["runs"][2]["maximum_no_gap"]["custody"][
+        "transport_custody_bytes"
+    ] += 1
+    _refresh_synthetic_holdout(parent, holdout)
+    with pytest.raises(ValueError, match="exceeds frozen ceiling"):
+        _validate_holdout_acceptance(
+            parent,
+            child,
+            holdout,
+            commit_authority=lambda *_args: None,
+        )
+
+
+def test_transport_custody_holdout_refuses_ordinary_only_over_ceiling() -> None:
+    parent = _parent_module()
+    child = _child_module()
+    holdout = _synthetic_holdout(parent, child)
+    ordinary = holdout["runs"][1]["ordinary"]["ordinary_quiescent_peak"]
+    ordinary["adapter_queue_bytes"] = 700_000
+    ordinary["transport_custody_bytes"] = 1_966_081
+    _refresh_synthetic_holdout(parent, holdout)
+    assert holdout["measurement_maxima"]["maximum_no_gap_custody"][
+        "transport_custody_bytes"
+    ] < 1_966_080
+    with pytest.raises(ValueError, match="exceeds frozen ceiling"):
+        _validate_holdout_acceptance(
+            parent,
+            child,
+            holdout,
+            commit_authority=lambda *_args: None,
+        )
+
+
+@pytest.mark.parametrize(
+    "case", ["missing", "duplicate", "duplicate_receipt", "duplicate_prefix"]
+)
+def test_transport_custody_holdout_requires_three_fresh_runs(case: str) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    holdout = _synthetic_holdout(parent, child)
+    if case == "missing":
+        holdout["runs"].pop()
+        holdout["run_receipts"].pop()
+    elif case == "duplicate":
+        holdout["runs"][1]["process_id"] = holdout["runs"][0]["process_id"]
+        _refresh_synthetic_holdout(parent, holdout)
+    elif case == "duplicate_receipt":
+        holdout["run_receipts"][1] = copy.deepcopy(
+            holdout["run_receipts"][0]
+        )
+    else:
+        first_prefix = holdout["runs"][0]["runtime"]["pycache_prefix"]
+        runtime = holdout["runs"][1]["runtime"]
+        runtime["pycache_prefix"] = first_prefix
+        runtime["qualifier_environment"]["PYTHONPYCACHEPREFIX"] = first_prefix
+        holdout["runs"][1]["hashes"]["runtime_sha256"] = (
+            parent._canonical_hash(runtime)
+        )
+        holdout["runs"][1]["hashes"]["runtime_qualifier_sha256"] = (
+            parent._canonical_hash(parent._runtime_qualifier(runtime))
+        )
+        _refresh_synthetic_holdout(parent, holdout)
+    with pytest.raises(ValueError, match="exactly three|fresh and distinct"):
+        _validate_holdout_acceptance(
+            parent,
+            child,
+            holdout,
+            commit_authority=lambda *_args: None,
+        )
+
+
+def test_transport_custody_holdout_commit_must_contain_frozen_blobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    contract, calibration = _load_transport_custody_ceiling_contract(
+        parent, child
+    )
+    expected = _holdout_commit_references(contract, calibration)
+    seen = []
+    introduction = "e" * 40
+
+    def exact(arguments, **_kwargs):
+        if arguments[1] == "log":
+            return subprocess.CompletedProcess(
+                arguments, 0, introduction + "\n", ""
+            )
+        if arguments[1] == "merge-base":
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        assert arguments[1] == "rev-parse"
+        _commit, path = arguments[-1].split(":", 1)
+        seen.append(path)
+        return subprocess.CompletedProcess(
+            arguments,
+            0,
+            "a" * 40 + "\n",
+            "",
+        )
+
+    monkeypatch.setattr(subprocess, "run", exact)
+    _require_holdout_commit_authority("f" * 40, contract, calibration)
+    frozen_paths = [
+        *expected,
+        CEILING_CONTRACT.relative_to(ROOT.parent).as_posix(),
+        contract["acceptance"]["authority"]["path"],
+    ]
+    assert seen == [
+        path
+        for path in frozen_paths
+        for _ in range(2)
+    ]
+
+    def missing(arguments, **_kwargs):
+        if arguments[1] == "log":
+            return subprocess.CompletedProcess(
+                arguments, 0, introduction + "\n", ""
+            )
+        if arguments[1] == "merge-base":
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        return subprocess.CompletedProcess(arguments, 1, "", "missing")
+
+    monkeypatch.setattr(subprocess, "run", missing)
+    with pytest.raises(ValueError, match="lacks frozen authority"):
+        _require_holdout_commit_authority("f" * 40, contract, calibration)
+
+    def mismatched(arguments, **_kwargs):
+        if arguments[1] == "log":
+            return subprocess.CompletedProcess(
+                arguments, 0, introduction + "\n", ""
+            )
+        if arguments[1] == "merge-base":
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        assert arguments[1] == "rev-parse"
+        object_id = "b" * 40 if arguments[-1].startswith("f" * 40) else "a" * 40
+        return subprocess.CompletedProcess(
+            arguments, 0, object_id + "\n", ""
+        )
+
+    monkeypatch.setattr(subprocess, "run", mismatched)
+    with pytest.raises(ValueError, match="lacks frozen authority"):
+        _require_holdout_commit_authority("f" * 40, contract, calibration)
+
+
+def test_transport_custody_holdout_may_use_ceiling_introduction_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    contract, calibration = _load_transport_custody_ceiling_contract(
+        parent, child
+    )
+    introduction = "e" * 40
+
+    def same_commit(arguments, **_kwargs):
+        if arguments[1] == "log":
+            return subprocess.CompletedProcess(
+                arguments, 0, introduction + "\n", ""
+            )
+        if arguments[1] == "merge-base":
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+        assert arguments[1] == "rev-parse"
+        return subprocess.CompletedProcess(arguments, 0, "a" * 40 + "\n", "")
+
+    monkeypatch.setattr(subprocess, "run", same_commit)
+    _require_holdout_commit_authority(introduction, contract, calibration)
+
+    def pre_ceiling(arguments, **_kwargs):
+        if arguments[1] == "log":
+            return subprocess.CompletedProcess(
+                arguments, 0, introduction + "\n", ""
+            )
+        assert arguments[1] == "merge-base"
+        return subprocess.CompletedProcess(arguments, 1, "", "")
+
+    monkeypatch.setattr(subprocess, "run", pre_ceiling)
+    with pytest.raises(ValueError, match="not frozen before holdout"):
+        _require_holdout_commit_authority("d" * 40, contract, calibration)
+
+
+def test_known_calibration_git_blob_authority_is_exact() -> None:
+    assert _git_blob_oid(
+        _CALIBRATION_COMMIT,
+        "tests/bridge_transport_custody.py",
+    ) == "c13b0d93ae27b4281391122179851f27a84fcd37"
+    assert _git_blob_oid(
+        "10cd8f2165f232537779d993796e551f851f3260",
+        "tests/interfaces/web/sh_g_8_transport_calibration.json",
+    ) == "8ba52a38c124ce23d5000608ecb006394956ec15"
+    with pytest.raises(ValueError, match="Git blob is unavailable"):
+        _git_blob_oid(
+            _CALIBRATION_COMMIT,
+            "tests/interfaces/web/sh_g_8_transport_calibration.json",
+        )
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["variant", "corpus", "runtime", "dependency", "source", "instrument"],
+)
+def test_transport_custody_holdout_refuses_authority_drift(case: str) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    holdout = _synthetic_holdout(parent, child)
+    if case == "variant":
+        holdout["dataset_variant"] = "calibration-a"
+    elif case == "corpus":
+        holdout["runs"][0]["hashes"]["corpus_sha256"] = "0" * 64
+    elif case == "runtime":
+        holdout["runs"][0]["hashes"]["runtime_qualifier_sha256"] = "0" * 64
+    elif case == "dependency":
+        dependency = copy.deepcopy(holdout["dependency_authority"])
+        dependency["files"]["xxhash/version.py"] = "0" * 64
+        dependency["sha256"] = parent._canonical_hash(dependency["files"])
+        for run in holdout["runs"]:
+            run["dependency_authority"] = copy.deepcopy(dependency)
+    elif case == "source":
+        for run in holdout["runs"]:
+            run["hashes"]["source_files"]["namisync/__init__.py"] = "0" * 64
+            run["hashes"]["source_sha256"] = parent._canonical_hash(
+                run["hashes"]["source_files"]
+            )
+    else:
+        for run in holdout["runs"]:
+            run["hashes"]["instrument_sha256"] = "0" * 64
+    _refresh_synthetic_holdout(parent, holdout)
+    with pytest.raises(ValueError):
+        _validate_holdout_acceptance(
+            parent,
+            child,
+            holdout,
+            commit_authority=lambda *_args: None,
+        )
+
+
 def test_committed_calibration_is_raw_three_process_evidence() -> None:
     parent = _parent_module()
     child = _child_module()
@@ -893,20 +1742,21 @@ def test_committed_calibration_is_raw_three_process_evidence() -> None:
     for run, receipt in zip(runs, receipts, strict=True):
         assert _artifact_source_authority(run) == source_authority
         assert _artifact_dependency_authority(run) == dependency_authority
-        parent._validate_archived_run_artifact(
-            run,
-            child,
-            variant="calibration-a",
-            source_authority=source_authority,
-            dependency_authority=dependency_authority,
-            expected_pycache_prefix=_artifact_pycache_prefix(run),
-        )
         parsed_receipt = parent._read_child_receipt(
             json.dumps(receipt),
             variant="calibration-a",
             tested_commit=_CALIBRATION_COMMIT,
         )
-        parent._validate_child_receipt(parsed_receipt, run)
+        _validate_archived_run_artifact(
+            parent,
+            child,
+            run,
+            variant="calibration-a",
+            source_authority=source_authority,
+            dependency_authority=dependency_authority,
+            expected_pycache_prefix=_artifact_pycache_prefix(run),
+            receipt=parsed_receipt,
+        )
 
     assert artifact["measurement_maxima"] == parent._measurement_maxima(
         runs
@@ -993,9 +1843,10 @@ def test_archived_run_validation_is_checkout_path_independent(
             dependency_authority=dependency_authority,
             expected_pycache_prefix=pycache_prefix,
         )
-    parent._validate_archived_run_artifact(
-        run,
+    _validate_archived_run_artifact(
+        parent,
         child,
+        run,
         variant="calibration-a",
         source_authority=source_authority,
         dependency_authority=dependency_authority,
