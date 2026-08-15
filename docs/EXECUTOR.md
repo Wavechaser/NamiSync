@@ -97,9 +97,10 @@ condition: an unrelated process can replace the path between those calls even
 though NamiSync's own volume lock is held. Conditional primitives close the
 occupancy/emptiness cases named above. Update's backup-then-replace sequence
 retains one external path-swap window between its final guard and replacing the
-live name. External processes mutating a managed target root during execution
-are outside the safety contract; this residual must remain visible in tests and
-documentation rather than becoming a false compare-and-swap guarantee.
+live name. `DEFENSE.md` makes full preservation conditional on managed-root
+quiescence and classifies this post-final-guard path as EW-3; the residual must
+remain visible in tests and documentation rather than becoming a false compare-
+and-swap guarantee.
 
 ## Copy State Machine
 
@@ -244,9 +245,8 @@ on target identity. If an external process swaps the live target after backup
 and guard but before replacement, that external file can be replaced without
 being the version preserved in trash. NamiSync still records only the
 post-publish target it actually created, so the ledger is not falsely attached
-to the displaced object. The inter-call interval is normally very short but is
-not scheduler-bounded; tests assert the bounded data consequence, not a timing
-claim.
+to the displaced object. `DEFENSE.md` classifies this as EW-3. Tests assert the
+data consequence and settlement, never a timing-based safety claim.
 
 ## Other Operations
 
@@ -705,8 +705,9 @@ chunk bands remain private constants, not settings.
   guard and touch prove only the condition owned by the mutation primitive:
   non-replacing rename rejects destination appearance and `RemoveDirectory`
   rejects nonempty directories. Source-object swaps are rejected only by an
-  explicitly handle-bound mutation; otherwise they remain inside the disclosed
-  external-writer boundary. Update fault injection proves an external swap may
+  explicitly handle-bound mutation; otherwise they remain inside the EW-1
+  through EW-4 external-writer classes in `DEFENSE.md`. Update fault injection
+  proves an external swap may
   replace the swapped file without trashing it but cannot publish partial bytes.
   A prepared-temp substitution during UPDATE's recorder flush is rejected by
   the post-flush guard, and a stable-identity temp substitution between guard

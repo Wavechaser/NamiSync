@@ -669,6 +669,10 @@ review defined by `DESKTOP_UI.md`. It precedes Slice 8.
 
 Add the frozen specification, dependency lock and CI, third-party notices,
 source-release material, frozen smoke, and clean-checkout release proof.
+Enforce and headed-test the `DEFENSE.md` standard-integrity host requirement
+before any command is exposed; an elevated launch refuses actionably unless the
+defense model is first revised. Treat exact dependency pins as behavioral
+authority and separately document the supported security-update posture.
 Reconcile active documentation and the `ui_mockup/` reference against the
 as-built product. Close BR-G-43, BR-G-44, and the version-bound SH-G-15
 whole-runtime containment gate.

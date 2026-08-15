@@ -47,6 +47,8 @@ reused by CLI, queue, or service entry points.
   the fixed registry, CSS mask class, provenance, package manifest, and tests.
 - `tests/`: pytest tests mirroring package boundaries where practical.
 - Active focused documentation lives in `docs/`:
+  - `DEFENSE.md` for supported assumptions, trusted boundaries, hard walls,
+    tolerance policy, and residual-risk dispositions.
   - `BUGS.md` for substantive defects, verified fixes, and current status.
   - `FEATURES.md` for all planned and existing features.
   - `ARCHITECTURE.md` for project architectural decisions and design principles. 
@@ -236,6 +238,11 @@ their contract, and update the matching tests and documentation when it does.
   use the version and codename, such as `v0.1.0 "Gertrud"`. Group related
   sessions under one task and put post-delivery work in the relevant hardening
   phase rather than appending it to the original feature task.
+- Keep `docs/DEFENSE.md` as the normative owner of supported assumptions,
+  trusted boundaries, hard walls, tolerance classes, residual-risk
+  dispositions, and model-reopen triggers. Other documents link to that policy
+  and own their mechanisms or behavior; they do not restate its tables or
+  accept a residual merely by describing it.
 - Keep `docs/ARCHITECTURE.md` limited to durable decisions, contracts,
   layering, coordination, invariants, type/protocol meaning, and milestone-level
   direction. Dated build status, acceptance results, exact measurement evidence,

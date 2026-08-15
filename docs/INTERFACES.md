@@ -308,6 +308,10 @@ through a lazy wrapper.
 
 ## M1 Stage 1 Desktop Foundations
 
+`DEFENSE.md` owns the desktop trusted-base and tolerance policy;
+`M1_BRIDGE.md` owns the exact transport mechanisms and acceptance gates below
+it. This document records their interface-layer implementation.
+
 `interfaces/ui_state.py` owns strict-shape `ui-state.json` independently
 from database-owned semantic defaults. It retains at most five source and five
 target recents separately, deduplicates Windows spellings, and stores only

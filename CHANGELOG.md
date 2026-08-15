@@ -23,6 +23,19 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Establish the threat and tolerance model (2026-08-15)
+
+- Added one normative defense model for supported assumptions, trusted
+  boundaries, hard walls, user authorization, tolerance classes, and explicit
+  residual-risk dispositions.
+- Reconciled the external-writer, TOCTOU, and WebView contracts around a
+  quiescent-root preservation baseline, a trusted packaged renderer with
+  untrusted data, and consequence-based stopping and mitigation rules.
+- Indexed the new authority across the current compact architecture, feature,
+  defect, executor, preflight, interface, bridge, and project documentation
+  without duplicating its policy tables, and archived the stale pre-M0 design
+  review under `docs/obsolete/`.
+
 #### Ratify measurement and documentation authority (2026-08-14 – 2026-08-15)
 
 - Separated reasoned targets, live drift guards, named-reference acceptance,

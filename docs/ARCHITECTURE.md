@@ -572,10 +572,17 @@ See also `COMMANDLINE.md`.
 
 ## 5. Cross-cutting invariants
 
-1. **One terminal, always.** The session runner owns terminal emission.
+These invariants apply under the supported assumptions and tolerance policy in
+`DEFENSE.md`.
+
+1. **One terminal for every ordinary runner exit.** The session runner owns
+   terminal emission for return, cooperative cancel, and ordinary failure;
+   process termination may preclude emission and is recovered as incomplete
+   work rather than invented terminal truth.
 2. **Checkpoint everywhere.** Long loops yield to one pause/cancel contract.
-3. **Never wrong, only behind.** Durable evidence is truthful; reconciliation
-   advances from it instead of deleting truth to make state look tidy.
+3. **Never wrong, only behind.** Durable evidence truthfully describes its
+   observation or effect time; reconciliation advances from it instead of
+   deleting truth to make state look tidy.
 4. **Records fail loudly; telemetry may be replaced.** Ledger and required
    audit failures are visible. Progress is explicitly lossy.
 5. **Policies decide; machines enforce.** Extension points return decisions and
@@ -599,9 +606,10 @@ See also `COMMANDLINE.md`.
 15. **Evidence authority matches the claim.** A target, drift guard,
     named-reference result, and protected release authority are distinct.
 16. **External writers remain external.** Volume custody coordinates NamiSync
-    processes, not arbitrary filesystem writers. Fresh final-touch guards and
-    conditional primitives bound each residual race; a pathname check never
-    claims handle-bound exclusion it does not provide.
+    processes, not arbitrary filesystem writers. Full preservation is
+    conditional on the quiescent-root baseline in `DEFENSE.md`; fresh final-
+    touch guards detect observable drift, while a pathname check never claims
+    handle-bound exclusion it does not provide.
 
 ### 5.1 Measurement authority
 
@@ -678,6 +686,8 @@ existing identity, evidence, custody, and settlement contracts.
 
 ## 7. Documentation ownership
 
+- `DEFENSE.md` owns supported assumptions, trusted boundaries, hard walls,
+  tolerance classes, and residual-risk dispositions.
 - `ARCHITECTURE.md` owns durable structure, coordination, contracts, and
   milestone direction.
 - `FEATURES.md` owns implemented and planned product behavior.

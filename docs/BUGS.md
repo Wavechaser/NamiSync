@@ -27,6 +27,10 @@ symptom, cause, and fix.
   test-only race, or hypothetical future caller does not inherit the severity
   of the production bug it was guarding against.
 
+`DEFENSE.md` owns supported assumptions, tolerance classes, and residual-risk
+dispositions. A residual sentence here records the remaining technical
+boundary; it does not accept that boundary or close policy work by itself.
+
 Entries are module/function-first, not a project-wide timeline: `##` headings
 are owning modules or feature boundaries, and `###` headings are their
 functional scope or delivery phase. Add an entry under the module/function that
@@ -658,13 +662,15 @@ defect, and move implementation-level test choreography out of the log.
   with no `js_api` object and exposing one function-only `dispatch` entry.
   Ordinary and real-WebView2 probes send private dotted names and confirm that
   no private receiver or document mutation is reachable.
-- SEVERE - FIXED (2026-08-13). Unbounded admission and teardown ownership. The
-  pinned host creates a thread per admitted call, admission had no cap, and
-  teardown could wait forever or release logging, path, and instance owners
-  after quiescence failed. Fixed with a 64-handler admission ceiling, bounded
-  monotonic handler wait, one fail-closed quiescence sequence, retryable close,
-  and owner release only after complete service shutdown. Drains and producers
-  are woken before the wait; saturation returns the fixed `bridge_busy` error.
+- SEVERE - FIXED (2026-08-13). Unbounded domain admission and teardown
+  ownership. Pinned pywebview creates an exposed-call thread before NamiSync
+  admission; the dispatcher then had no cap, and teardown could wait forever or
+  release logging, path, and instance owners after quiescence failed. Fixed with
+  a 64-handler admitted-work ceiling, bounded monotonic handler wait, one fail-
+  closed quiescence sequence, retryable close, and owner release only after
+  complete service shutdown. Drains and producers wake before the wait;
+  saturation returns `bridge_busy`. Raw exposed-call thread creation remains a
+  dependency-owned availability boundary classified in `DEFENSE.md` §4.
 - MODERATE - FIXED (2026-08-13). Unbounded task retention and recovery retry.
   Terminal tasks and start receipts had no production release command, an
   uncertain start could lose replay when its folder slots expired, and repeated

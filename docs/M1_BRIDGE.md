@@ -36,8 +36,10 @@ the terminal-retention policy and evidence limits that must be fixed before
 their independent holdouts; those open gates are not silently resolved by the
 existing implementation.
 
-**Standing.** `FEATURES.md` owns behavior and `ARCHITECTURE.md` owns
-contracts; both outrank this file. `M1_PLAN.md` owns the milestone's decision
+**Standing.** `DEFENSE.md` owns the trusted-base decision, threat ceiling,
+tolerance policy, and model-reopen triggers; `FEATURES.md` owns behavior and
+`ARCHITECTURE.md` owns contracts. All three outrank this file within those
+scopes. `M1_PLAN.md` owns the milestone's decision
 log, and DR-M1-14 through DR-M1-19 remain the governing bridge decisions —
 this document refines them with implementation detail settled afterward and
 does not overrule them. Where it adds a decision M1_PLAN did not make, it is
@@ -1776,10 +1778,12 @@ same-principal security boundary.
 
 ### DR-BR-24 — Bridge handlers are concurrent and must be synchronized
 
-The pinned host creates one thread per exposed-function call, so the bridge
-admits at most 64 handlers and returns the fixed `bridge_busy` refusal at
-saturation. The same admission condition closes the race between handler entry
-and teardown; no bridge-global lock spans a command handler.
+The pinned host creates one thread per exposed-function call before NamiSync
+admission. The bridge admits at most 64 handlers past that gate and returns the
+fixed `bridge_busy` refusal at saturation. This bounds admitted domain work and
+teardown ownership, not raw WebMessage thread creation. The same admission
+condition closes the race between admitted handler entry and teardown; no
+bridge-global lock spans a command handler.
 
 The product window is constructed with `js_api=None` and receives one
 function-table entry named `dispatch`. Pywebview never walks the dispatcher
@@ -1884,6 +1888,11 @@ shell-owned SH-G-15.
 
 ## 7. Inherited Bridge Posture
 
+`DEFENSE.md` owns the trust model: the packaged document is trusted code, all
+values crossing or rendered by it are untrusted data, and arbitrary code in the
+allowed origin is a trusted-base compromise rather than a contained principal.
+This section owns the concrete bridge mechanisms beneath that policy.
+
 Unchanged from `M1_PLAN.md` and restated only so this document is
 self-contained: exactly one exposed `dispatch(command_json)`, versioned and
 schema-validated and allowlisted (DR-M1-15/17); forced Edge Chromium with an
@@ -1892,8 +1901,9 @@ actionable failure and no MSHTML fallback; hardened pywebview settings with
 `NewWindowRequested` cancellation plus an independent per-call origin
 recheck; no NamiSync-owned `evaluate_js`, `run_js`, `Window.state`, or
 JavaScript construction as an application-data channel; opaque ids inbound
-and escaped display text outbound; `textContent` only and no `innerHTML`; the
-packaged asset server serves static assets and is not an API channel. Pinned
+and escaped display text outbound; `textContent` only and no `innerHTML`;
+NamiSync uses the packaged asset server only for static assets and authorizes
+no domain API through it. Pinned
 pywebview 6.2.1 internally constructs JavaScript for exposed-function returns,
 so its serializer/escaper is audited on every version change and covered by
 the real-browser hostile-name round trip.

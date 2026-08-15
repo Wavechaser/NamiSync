@@ -28,6 +28,12 @@ or interface data; and dispatcher custody/lifecycle races. When safety evidence
 is missing or contradictory, NamiSync refuses or defers the affected work and
 reports the residual truth instead of guessing.
 
+The full data-preservation guarantee assumes managed roots are not being
+changed by other software while NamiSync is mutating them. Observable drift is
+refused or reported, but a writer that wins after a final path-based guard is a
+documented external-writer boundary. The supported assumptions, tolerance
+classes, and exact residual dispositions live in the defense model.
+
 ## Current state
 
 M1's headless product is implemented and usable through the service and CLI:
@@ -116,9 +122,13 @@ never hides the other result axes in rendered output.
 - No cross-process desktop task visibility, background integrity, concurrent
   file execution, general database migration, backup, or history retention.
 - No automatic execution or bypass of reviewed-plan confirmation.
+- No supported elevated desktop host; standard-integrity startup is the
+  defense baseline, and enforced elevated-launch refusal remains beta work.
 
 ## Documentation
 
+- [Defense model](docs/DEFENSE.md) — supported assumptions, threat ceiling,
+  hard walls, tolerance policy, and residual-risk decisions.
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
 - [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
 - [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.

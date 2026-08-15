@@ -184,7 +184,8 @@ acceptable shortcut.
   operation-specific mutation primitives can enforce touch-time conditions.
   Non-replacing destinations and emptiness checks do not by themselves bind a
   source pathname to the object previously observed; that requires an explicit
-  handle-bound operation or remains inside the external-writer boundary.
+  handle-bound operation or remains inside the external-writer residual classes
+  and quiescent-root precondition owned by `DEFENSE.md`.
 
 ## Acceptance Criteria
 

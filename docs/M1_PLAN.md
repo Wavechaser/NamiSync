@@ -43,7 +43,7 @@ the milestone plan and the decision log for the choices made
 while shaping it. Cross-cutting decisions are summarized in `ARCHITECTURE.md`,
 `FEATURES.md`, and `WORKFLOWS.md`; individual component documents update as
 their code stages land. This file remains the detailed record of *why* and of
-the integration gates, the same role `DESIGN_REVIEW.md` plays for M0.
+the integration gates, the same role `obsolete/DESIGN_REVIEW.md` plays for M0.
 
 **Documentation precedence**, stated once here because it resolved a real
 conflict during this planning pass (DR-M1-20, retention): `FEATURES.md` owns
@@ -58,7 +58,7 @@ where it changes a settled bullet (DR-M1-03's settings-file split, DR-M1-05's
 worker-count removal), the active document is edited **as that stage
 lands**, not deferred indefinitely. Once a decision is promoted, the active
 document wins and this file becomes history — the same lifecycle
-`DESIGN_REVIEW.md` has.
+`obsolete/DESIGN_REVIEW.md` has.
 
 For the seam between Stage 5 and Stage 6, `M1_BRIDGE.md` refines this plan and
 is the sole normative authority for envelopes/limits, command schemas/errors,
@@ -139,7 +139,8 @@ module changes would hide the very semantic failures the stage exists to find.
 ## 2. Decision Log
 
 Grouped by theme; each item states the tension, the resolution, and why.
-Numbered `DR-M1-##` to avoid colliding with `DESIGN_REVIEW.md`'s M0 numbering.
+Numbered `DR-M1-##` to avoid colliding with
+`obsolete/DESIGN_REVIEW.md`'s M0 numbering.
 
 ### Layering
 
