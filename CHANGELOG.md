@@ -23,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Ratify measurement, acceptance, and project-history authority (2026-08-14)
+#### Ratify measurement and documentation authority (2026-08-14 – 2026-08-15)
 
 - Separated reasoned targets, live drift guards, named-reference acceptance,
   and protected release authority; pinned the stronger calibration/holdout and
@@ -33,6 +33,9 @@ claims explicit, independently reviewable, and regression-backed.
   task-level changelog grouping repository conventions.
 - Audited the bug ledger against cause-based categories and consequence-based
   severity, then made that classification rule explicit for future entries.
+- Recast the architecture reference around durable contracts, layering,
+  coordination, and milestone direction; removed build/evidence duplication
+  and stale M0 feature recaps while correcting active feature status.
 
 #### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
 

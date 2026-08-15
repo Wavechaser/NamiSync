@@ -1,39 +1,16 @@
 # Features
 
-Implementation note (updated 2026-08-14): M1 Stages 1-5.5 have landed their
-contract, schema/settings/security prerequisites, pipelined XXH3-128
-executor/verifier switch, role-free inventory, standalone integrity workflows,
-generic history items, production dispatcher registrations, and optional
-post-execution compound verification. The CLI and Stage 5.5
-facade/tree/selection/subtree surfaces are implemented. `M1_BRIDGE.md` is the
-sole normative bridge protocol and BR-G acceptance authority for the
-implemented Stage 5.5 prerequisite and active Stage 6 headed desktop shell.
-Stage 6's host and transport through
-Slice 3 plus later transport hardening are implemented. GUI Break 1 and Slice
-4 have completed their audited token/material/motion and shared
-presentation/tree/shell realignment. Product plan,
-inventory, history, and control surfaces remain. `M1_SHELL.md` owns their
-delivery order, host/package placement, SH-G definitions, and beta-package
-closure. The installed real-WebView2 browser-witness migration and fixed,
-non-sliding 150 ms progress-only linger have landed.
-The event benchmark's bounded streamed evidence, post-exit assembly, direct-Job
-admission, and diagnostic-only whole-runtime accounting have also landed.
-The frozen/disjoint realistic corpora and production-path three-fresh-process
-custody runner have also landed. Realigned BR-G-42 event-custody and SH-G-8
-now have a committed normative calibration-a artifact and frozen 1,966,080-byte
-ceiling. Three fresh independent holdout-b runs pass, closing SH-G-8 and
-BR-G-42's event/transport-custody predicate; other BR-G-42 feature rows remain
-on their owning slices.
-BR-G-45 separately keeps the 100,000-subject terminal
-artifact set and aggregate completed-task retention policy open; SH-G-15
-separately keeps version-bound whole-runtime containment open. Numeric-hole
-non-recovery and the `start_plan` revision decision are ratified with landed
-named regressions.
+Status note (updated 2026-08-15): the headless sync, inventory, integrity,
+history, selection, and CLI capabilities are active. The secured desktop host,
+transport, and shared presentation foundation are active; its product plan,
+inventory, history, and lifecycle surfaces remain unrealized. Exact M1 delivery
+status and acceptance evidence live in `M1_PLAN.md`, `M1_BRIDGE.md`, and
+`M1_SHELL.md`.
 
-This document lists implemented and planned NamiSync features. Within each
-section, bullets before the first blank line describe settled, built-toward
-behavior; bullets after it are unrealized future work — some already
-reflected as a seam in the settled design, some not yet begun.
+This document lists active and unrealized NamiSync features. A feature states
+its unrealized status directly when the distinction is not obvious; milestone
+status belongs to the roadmap in `ARCHITECTURE.md`, and detailed delivery status
+belongs to the active M1 documents.
 
 Reference documentation imported from the proof-of-concept lives in
 `PoC_import/`; its `BUGS.md` is the evidence base behind many of this
@@ -50,19 +27,19 @@ document's rules.
 - **Session-Typed Operations**. Every long-running activity (scan, plan, execute, verify, baseline, import) runs inside one typed session contract: a shared state machine, a tagged-union event stream, and a cooperative checkpoint that pause and cancellation both resolve through, so no module invents its own lifecycle or terminal shape.
 - **Workflow-Sequenced Pipelines**. Modules never call each other directly; an application workflow function sequences scan, plan, preflight, and execute by passing typed data forward, so coordination stays readable top to bottom instead of emergent from signals or callbacks.
 - **Preflight as a Callable, Not a Gate**. Preflight validates a plan-and-selection pair against current filesystem state and can be invoked repeatedly — at start, at resume, after a selection change — instead of running once as an unrepeatable ritual.
-- **Recorded Ledger, Observed History**. Execution and verification report through the Recorder module rather than writing SQL directly; both ledger evidence and the independent append-only history stream commit incrementally in bounded windows rather than writing one transaction per operation.
+- **Recorded Ledger, Observed History**. Execution and verification report through the Recorder module rather than writing SQL directly. Ledger commands commit through explicit durability boundaries, while the independent append-only history stream commits incrementally in bounded windows.
 - **Axis-Separated Compound Results**. Filesystem execution, integrity readback, ledger recording, and audit history remain four independent truths. A copied file can be published successfully, verify as matching, and still report degraded ledger recording; no later phase rewrites an already-settled earlier phase.
 - **Canonical Content Evidence**. Copy attestation, baseline, and verification use one fixed `xxh3_128` evidence format with a 16-byte digest and matching content/subject sizes. Plan fingerprints, dispatcher custody, history identity, and other small non-content hashes remain SHA-256.
 - **Policy Extension Points**. New behavior (copy backends, retry and failure handling, deletion policy) plugs in as a protocol that returns a decision to the machine, never as a hook that receives control, so invariants stay enforced centrally regardless of which policy is active.
 - **Pipeline-Only Mutation**. Every mutation to user data inside a managed root flows through plan, preflight, and execute — including undo and repair — so a corrective action's conflicts with later changes surface in ordinary plan review instead of a special-cased overwrite. App-owned artifacts (trash purge, database maintenance) are exempt from this law but stay type- and ownership-guarded and history-logged.
 - **Sessions Never Block on a Human**. A conflict or error during execution is logged and the run continues past it; nothing pauses mid-run to wait on a decision. Review and any corrective action happen after the run ends, through the same pipeline as any other plan.
-- **Never Wrong, Only Behind**. Because the recorder commits only after a filesystem mutation succeeds, every committed row is a true statement about a past observation; recovery from a crash or interruption never discards committed evidence to reach a tidier state — it reconciles by marking the interrupted session and re-scanning to converge.
+- **Never Wrong, Only Behind**. Because the recorder commits only after a filesystem mutation succeeds, every committed row is a true statement about a past observation. Current process-loss recovery re-scans and re-plans from that evidence; M2 durable-session recovery will additionally mark abandoned work interrupted before converging.
 - **Injected Clock**. Time-dependent behavior — retention sweeps, staleness views, day-boundary filters — reads the current time through one injected clock dependency, keeping timezone- and DST-edge behavior testable rather than incidental.
 - **Degenerate First Implementations**. A protocol earns its sophistication before its first implementation does; the recorder's batching, the event stream's conflation, and the queue's persistence each ship as the simplest correct behavior behind their real interface, with the interface — not a rewrite — absorbing later hardening.
 - **Layer Benchmarks Before Scale-Up**. The recorder, the event pipeline, and the scanner walk are each benchmarked in isolation under synthetic load before broader features build on top of them, rather than discovering per-item overhead only at full scale.
 - **Interaction Clusters**. Most feature interactions concentrate around four shared resources — disk space, inventory semantics, volume locks, and run bookkeeping. Features outside these clusters are reviewed for orthogonality alone; features touching them get deliberate pairwise review and note what they interact with inline.
 
-- **Queue and Service Reuse**. The same headless workflows will support future queue and service entry points without moving sync policy into the GUI.
+- **Queue and Service Reuse**. The same headless workflows serve the active process-local queue, service facade, CLI, and desktop host without moving sync policy into an interface. Durable queue ownership extends those workflows in M2 rather than replacing them.
 
 ## SYNC WORKFLOW
 
@@ -73,7 +50,7 @@ document's rules.
 - **Deletion Policies**. Paired sync supports `trash` by default and `additive`, while `mirror` is available only as an internal policy.
 - **Recent Folders**. The application remembers up to five recent source and destination folders separately.
 
-- **Durable Job Queue**. Queued jobs persist in the dispatcher's own session table, retain stale-plan defenses through the same preflight re-check every resume uses, and support optional re-planning with material-difference review before execution.
+- **Durable Job Queue**. Durable queued jobs remain unrealized until M2. They will persist in the dispatcher's own session table, retain stale-plan defenses through the same preflight re-check every resume uses, and support optional re-planning with material-difference review before execution.
 
 ## INGEST
 
@@ -99,25 +76,20 @@ provision.
 
 ## DISPATCHER
 
-Implementation status (M0): generic process-local admission/control, bounded
-event delivery, opaque continuation snapshots, and real cross-process Windows
-volume custody are implemented. SQLite session persistence, startup
-reconciliation, and unique durable queue ownership remain M2; their bullets
-below describe settled behavior, not current M0 runtime claims.
-
 - **Domain-Blind Session Scheduling**. The dispatcher admits, schedules, and tracks sessions by their generic contract alone; no dispatcher method or code path is named for a specific activity such as sync or verify.
 - **Volume-Scoped Concurrency**. Sessions whose required volumes don't overlap may run concurrently; sessions contending for the same volume queue behind each other. Concurrency is a property of the resources a session needs, not a single global one-at-a-time rule.
-- **Single Queue Owner**. Multiple NamiSync processes may run at once; cross-process volume locks arbitrate disk access between them, and a file lock on the persisted queue ensures exactly one process at a time owns queued-session admission.
+- **Cross-Process Volume Custody**. Multiple NamiSync processes may run at once; cross-process volume locks arbitrate managed disk access between them.
+- **Durable Single Queue Owner**. M2 will add a file lock on the persisted queue so exactly one process at a time owns durable queued-session admission.
 - **Resource Custody**. Each dispatcher worker attempt has a process-local generation key that owns its reservations and lease. A session has exactly one current attempt through pause/resume/cancel retirement handoffs, and custody is released only by the generation that acquired it.
 - **Control Plane**. Pause, resume, and cancel are dispatcher operations that flip a flag a running session's checkpoint resolves against; the dispatcher enforces the legal state-transition table so illegal requests fail cleanly instead of corrupting session state. Pause is a per-kind capability declared at workflow registration: only session kinds with a continuation state (sync execution; verification's item-list sessions) accept it, while short continuation-less sessions refuse pause cleanly and stay cancelable.
 - **Resume Outcomes**. Resuming a paused or interrupted session always preflights first. Fresh/unstarted work may be refused with reasons, but a started execute resume that has already mutated settles `FAILED+RAN` with its partial counters, and a verify resume preserves settled filesystem truth while reporting an incomplete verify phase; neither is mislabeled as a fresh refusal.
 - **Resume Never Preempts**. A resumed session re-enters admission at the back of its volumes' queue: if another session took over the contended volume while it was paused, the resumed session runs when that session finishes or is itself paused or canceled. Jumping the queue would mean either force-pausing the running session or running two sessions on one volume — the first is confusing, the second is forbidden.
-- **Persisted Session Table**. The dispatcher persists its own session table — lifecycle state and an opaque per-workflow payload — independent of the ledger and history; this is the one exception to never writing a database, and the dispatcher never interprets the payload it stores.
-- **Startup Reconciliation**. On launch, the dispatcher reloads its session table; anything left running by a process that is no longer alive is marked interrupted, queued sessions become pending again, and interrupted sessions flow into the same preflight-then-continue path as any other resume.
+- **Persisted Session Table**. M2 will persist lifecycle state and an opaque per-workflow payload independently of the ledger and history. This is the one exception to never writing a database, and the dispatcher will not interpret the payload it stores.
+- **Startup Reconciliation**. M2 launch will reload the session table, mark work abandoned by a dead process interrupted, return queued sessions to pending, and route interrupted sessions through the same preflight-then-continue path as any other resume.
 - **Event Plumbing**. The dispatcher sequences and fans out each session's event stream to GUI, CLI, history recorder — and buffers for replay so a late or reconnecting subscriber can catch up without the operation knowing.
 - **Event Delivery Classes**. Progress events may be coalesced or dropped in favor of the latest snapshot; item outcomes and state transitions reach the history observer under the timeout-guarded audit guarantee, and are never silently dropped for any subscriber — ejection is always announced explicitly. A subscriber attaching late receives current state plus a bounded tail and a detectable gap; sparse committed reliable-event pages provide bounded catch-up through a fixed watermark, while a live cursor ahead of durability ends that traversal cleanly and retries against a fresh watermark.
 - **Versioned Event Envelope**. Every event carries a schema version, so a persisted or cached event can still be read correctly after the shape evolves.
-- **Session Table**. The dispatcher is the single source of truth for which sessions exist and their current state. It does not own desktop task identity: an M1 task is adapter state that can retain a reviewed plan while no session exists, and sessions come and go beneath it.
+- **Session Table**. The dispatcher is the single source of truth for which sessions exist and their current state. It does not own desktop task identity: a desktop task is adapter state that can retain a reviewed plan while no session exists, and sessions come and go beneath it.
 - **Orderly Teardown**. Application shutdown stops admission, drains or cancels running sessions, and confirms every lock released before exit. Terminal close distinguishes a reversible pre-hub timeout from irreversible stream detachment, retains unfinished ownership for caller/shutdown retry, and reports cleanup-pending attachment truthfully. The desktop vetoes synchronous WinForms close, performs teardown on one worker, destroys only after complete service shutdown, and offers Retry without a force-close path after an incomplete attempt.
 - **What the Dispatcher Is Not**. The dispatcher never sequences a workflow's internal steps, never interprets a domain result beyond its terminal status, and never writes to the main ledger or history database (its own persisted session table is the sole exception); coordination, recording, and domain meaning stay in workflows, the recorder, and observers.
 
@@ -126,7 +98,7 @@ below describe settled behavior, not current M0 runtime claims.
 ## SCANNER
 
 - **Recursive Metadata Scan**. The scanner records root-relative regular files with size, nanosecond modification time, and filesystem identity.
-- **Directory Inventory**. Every walked directory is retained as a directory record carrying the same metadata snapshot as files plus optional filesystem identity — created directories need reviewed metadata, empty directories need creation and cleanup planning, and a future directory-level move operation needs identity, all served by the same record.
+- **Directory Inventory**. Every walked directory is retained as a directory record carrying the same metadata snapshot as files plus optional filesystem identity, supporting reviewed metadata, empty-directory creation and cleanup, and conservative correspondence evidence.
 - **Ignored-Path Filtering**. NamiSync excludes application databases, checksum sidecars, common Windows metadata files, sync trash, and generated temporary files — always by exact, fully-qualified name shape, never by suffix or substring, so a user file can never be silently excluded for resembling an application artifact.
 - **Scan Warnings**. Access errors, filesystem case collisions, and names outside the safe root-relative path contract are retained in scan results for plan review; hostile names are escaped for display and make the scan incomplete without aborting safe siblings.
 - **Cooperative Scan Cancellation**. Scans check for cancellation while walking directories and files.
@@ -135,8 +107,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Trusted Mount-Root Admission**. A FULL scan may use the exact reviewed/native folder-mounted volume anchor as its root even though Windows marks that anchor as a mount-point reparse. The exception requires matching current mount and full volume identity, records followed mounted-root metadata, and never extends to final/intermediate configured-root junctions, scoped starts, placeholders, or descendants.
 - **Junction Cycle Protection**. The scanner tracks visited directory identities while walking so a directory junction or reparse loop cannot recurse indefinitely.
 - **Explicit Scan Scope Shapes**. Scanner scope distinguishes a full root, exact paths, and recursive subtrees. Mixed exact/subtree requests canonicalize overlapping roots, and a selected root becomes a full scan; reconciliation mirrors those three shapes rather than treating a subtree as one selected path.
-- **Scope-Honest Completeness**. Owned artifacts and harmless file placeholders/reparse entries are typed exclusions without making the scan incomplete. Unreadable directories, directory placeholders/reparse points, repeated directory identity, collisions, and unsafe names retain typed warnings and make the affected scope incomplete. Known limitation: PATHS/SUBTREES do not yet no-follow validate every intermediate component inside a requested relative path, so an intermediate reparse can redirect scoped observation even though the final start itself is no-follow checked.
-- **M0 Scanner Implemented**. Native walking and selected-path observation produce deterministic typed snapshots with exact owned-artifact ignores, conservative capabilities, cooperative cancellation, placeholder/reparse blocking, collision/hostile-path warnings, and explicit completeness. On stable-identity volumes, the native walk recovers an entry identity with a second metadata-only stat when Windows directory enumeration omits it, preserving correspondence-qualified moves without inventing evidence.
+- **Scope-Honest Completeness**. Owned artifacts and harmless file placeholders/reparse entries are typed exclusions without making the scan incomplete. Unreadable directories, directory placeholders/reparse points, repeated directory identity, collisions, and unsafe names retain typed warnings and make the affected scope incomplete. PATHS and SUBTREES no-follow admit every existing intermediate component before observing their requested subjects.
 
 - **Change-Journal Scanning**. The scanner sits behind a pluggable change-source interface; a future NTFS USN-journal-backed source will supply incremental changes without the planner or executor knowing the difference. It requires elevated access or a background service and remains unrealized.
 
@@ -150,7 +121,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Filter Snapshot in Plans**. Live planning applies filter patterns symmetrically to both scanned sides before diffing, then records and fingerprints that filter set in the plan. Later global-default changes affect only future plans; editing a task-local bound filter during review invalidates that plan and requires fresh planning and commitment.
 
 - **Filter Rule Editor**. The desktop UI will offer a rule editor with a live preview of what a filter set would exclude.
-- **Filter Exclusion Explanation**. Plan review will eventually explain why a filtered file has no operation row; Stage 6 does not invent such rows or claim this existing gap is solved.
+- **Filter Exclusion Explanation**. Plan review will eventually explain why a filtered file has no operation row; current interfaces do not invent such rows or claim this gap is solved.
 
 ## PLANNER
 
@@ -168,7 +139,6 @@ below describe settled behavior, not current M0 runtime claims.
 - **Conflict Blocking**. Case collisions and file-directory conflicts remain visible as blocked conflict operations instead of being guessed through. Planning preserves the full reviewed intent, including related removal operations, while the derived safe selection quarantines blocked correspondence and dependencies without erasing them from review.
 - **Capacity Planning**. Plans conservatively compute required bytes for all copy and update work, with temporary-file accounting sized for the maximum number of concurrently in-flight temp files rather than assuming one at a time; target free space is never baked into the plan — it is observed at review and preflight time, where the one shared capacity formula judges it.
 - **Stable Plan Ordering**. Operations receive deterministic per-plan identifiers and dependency-aware ordering.
-- **M0 Planner Implemented**. Pure path-preserving planning now emits deterministic copy, update, no-op, zero-byte recase, correspondence-qualified move/move-update, explicit directory, policy removal, cleanup, non-blocking name-form advisories, and blocked collision/unsupported review items using the shared capacity function; canonical serialization is total for malformed surrogate code units without changing valid-Unicode fingerprints.
 
 - **Content-Aware No-Op Detection**. Planning will use hashes or another content check before accepting metadata-equal files as unchanged.
 - **Hash-Based Move Detection**. Move detection will extend beyond source filesystem identity to evidence-aware content matching.
@@ -185,14 +155,9 @@ below describe settled behavior, not current M0 runtime claims.
 - **Capacity Check**. Recomputes required bytes for the remaining selection against current target free space, counting only exact prior-run NamiSync temps in the observed touched-parent scope as recoverable so a nearly-full target cannot loop-refuse over space the run itself will free.
 - **Safety Check**. No-follow admits every component in each configured root path below its trusted volume anchor before physical or volume observation, confirms roots still resolve to their recorded volume identity, and confirms the trash directory remains writable on the target root's own volume without crossing an admitted reparse component.
 - **No Repair**. A refused verdict carries per-operation reasons and the observed snapshot; preflight never re-plans, drops, or patches operations to make them pass. Workflow derives the reviewed safe subset before preflight, and preflight independently rejects any caller that reintroduces blocked, quarantined, or completeness-unsafe work.
-- **M0 Preflight Implemented**. Scoped read-only observation and pure judgment now validate selection-aware scan completeness, blocked correspondence, remaining dependencies, touched evidence and parents, roots/volumes, semantic settings, capacity, trash safety, containment, and path representation with typed refusal reasons.
 
 ## EXECUTOR
 
-- **M0 Native Executor Implemented**. A single-worker Windows executor now runs
-  reviewed copy, update, recase, move, move-update, mkdir, trash, delete, and no-op
-  operations with operation-local evidence guards, typed continuation outcomes,
-  injected copy/failure/filesystem seams, and post-filesystem recorder calls.
 - **Atomic Copy and Update**. File content is written to a target-volume temporary file, finalized with intended metadata and one pre-publish `FlushFileBuffers`, atomically published, and followed by a best-effort parent-directory flush through a writable Windows directory handle. Post-publish metadata is observed and repaired only when publication changed a required value; a refused directory flush remains a per-operation warning, and durability is claimed only for barriers that actually succeeded.
 - **Source-Drift Guard**. Copy and update operations re-stat the source after the read stream closes; a mismatch against the plan's recorded evidence fails the operation instead of recording a hash for content that changed underneath it.
 - **Hash on Copy**. Successful copies and updates calculate the canonical XXH3-128 digest from the source stream while copying, then bind its byte count to the published target's observed size before evidence can be recorded.
@@ -205,18 +170,18 @@ below describe settled behavior, not current M0 runtime claims.
 - **Guarded Deletion**. Internal mirror deletes and empty-directory cleanup validate type and emptiness before removal. Cleanup of a directory emptied by its successful child operations requires exact kind, size, and immutable metadata while tolerating only self-induced mtime/link-count churn; stable identity binds when the reviewed scan supplied it, and absent identity is absent evidence rather than a veto. `RemoveDirectory` remains the atomic final emptiness guard.
 - **Directory Metadata**. Created directories receive the source directory's recorded attributes, and directory timestamps are applied only after every child operation inside that directory has settled — child creates and renames churn parent directory times, so directory times are restored last.
 - **Partial Result Reporting**. Independent operations continue after failures, with per-operation succeeded, skipped, failed, and canceled results.
-- **Validated Safe-Subset Execution**. M0 derives and commits the maximal safe dependency-closed selection. Directly blocked plan items are excluded as `BLOCKED`; operations overlapping their source/target correspondence or depending on them are `DEFERRED`; and incomplete scans withhold move, move-update, trash, and delete globally. Copy, update, recase, mkdir, and guarded no-op work continues. Exclusions are itemized in result/history without changing successful selected filesystem work to failure.
+- **Validated Safe-Subset Execution**. The workflow derives and commits the maximal safe dependency-closed selection. Directly blocked plan items are excluded as `BLOCKED`; operations overlapping their source/target correspondence or depending on them are `DEFERRED`; and incomplete scans withhold move, move-update, trash, and delete globally. Copy, update, recase, mkdir, and guarded no-op work continues. Exclusions are itemized in result/history without changing successful selected filesystem work to failure.
+- **User-Edited Partial Execution**. Reviewers can change the runnable subset through revisioned service-owned selection state. The service recalculates dependency closure, summary and capacity, binds the exact selection into commitment, and re-derives it before execution; direct user deselection remains distinct from plan-derived safety exclusion.
 - **Progress and Cancellation**. Execution reports overall and per-file byte progress and checks pause/cancellation between operations, at adaptive copy-chunk admission, while a bounded pipeline is backpressured, and around retry backoff. Cancellation remains immediate: a retained pre-publish UPDATE backup is reported without deletion, a published-but-unfinished byte operation fails with `canceled-after-publish`, and a durable or ambiguous non-byte attempt fails with `canceled-after-mutation`; both mutation cases carry explicit state detail, degraded recording, and no false success evidence. When byte-continuation state and a readonly/non-byte marker coexist, cancellation settles both: confirmed publication remains authoritative, while a byte-probe failure cannot mask changed or unverified marker truth.
 - **Content-Byte Accounting**. Progress and throughput totals count transferred copy and update content only; same-volume move, trash, and delete metadata operations never inflate byte progress or ETA.
 - **Temporary-File Recovery**. Once per successfully preflighted execution, before copying, orphaned NamiSync temporary files are cleaned from the same touched target-parent set used for capacity accounting. Recovery matches only `<name>.synctmp-<run-id>-<op-id>`, removes only same-volume regular files owned by a different run, preserves current-run temps, off-volume mounts, and substring lookalikes, never enters `.synctrash`, and never walks the full tree.
+- **Adaptive Pipelined Single-File Copy**. Every normal copy uses one bounded `reader → hasher → writer` pipeline with an adaptive chunk size. Progress advances only after each chunk is both hashed and fully written; this is internal pipelining, not concurrent file execution.
+- **Reduced Windows Copy Finalization**. Native bindings are reused, source reads carry the sequential-access hint, large temporary files may be preallocated, and metadata plus the required pre-publish flush share one finalization handle. Publication repairs only metadata that actually changed.
 
-- **ADS Preservation**. Alternate-data-stream preservation remains unrealized executor flesh, but its contract is settled: enumeration happens at copy time in the executor, which already holds the file — no scanner, planner, or schema change, and the scanner stays role-free. NTFS updates a file's modification time when any stream is written, so ordinary metadata diffing already schedules the update that re-copies streams (a test-verified assumption before the feature ships) — though a writer that suppresses or restores mtime evades that signal, so the feature claims stream refresh only through ordinary update scheduling, never independent ADS-only convergence. Streams are user data: a requested stream that fails to copy on a capable target fails the operation, and a mapping requesting ADS onto a stream-incapable target volume surfaces as a mapping-level warning at plan time. Documented residuals: stream bytes are not counted by capacity planning, and stream content is copied but not attested — ledger hashes cover the main data stream only.
-- **User-Edited Partial Execution**. Future user-selected subsets will reuse M0's dependency closure, summary/capacity recomputation, commitment binding, and explicit deferred-outcome foundation.
-- **Adaptive Pipelined Single-File Copy**. Every normal copy uses one immutable `reader → hasher → writer` pipeline: 256 KiB chunks below 8 MiB, 1 MiB chunks from 8 MiB through less than 32 MiB, and 4 MiB chunks from 32 MiB upward. One combined 32 MiB payload budget and 32-entry FIFO caps bound memory; progress is emitted only after each chunk is both hashed and fully written. This is internal pipelining, not concurrent file execution.
-- **Cheaper Windows Copy Finalization**. M1 binds Win32 functions once, opens sources with the sequential-access cache hint, preallocates target temps only above a measured crossover, applies temp metadata and the one required flush through one handle, and skips a second full metadata write when readonly or other publication repair is unnecessary. The hashless copied-backup loop remains serial with fixed 4 MiB reads and no preallocation.
+- **ADS Preservation**. Alternate-data-stream preservation remains unrealized, but its contract is settled: enumeration happens at copy time in the executor, which already holds the file — no scanner, planner, or schema change, and the scanner stays role-free. NTFS updates a file's modification time when any stream is written, so ordinary metadata diffing already schedules the update that re-copies streams (a test-verified assumption before the feature ships) — though a writer that suppresses or restores mtime evades that signal, so the feature claims stream refresh only through ordinary update scheduling, never independent ADS-only convergence. Streams are user data: a requested stream that fails to copy on a capable target fails the operation, and a mapping requesting ADS onto a stream-incapable target volume surfaces as a mapping-level warning at plan time. Documented residuals: stream bytes are not counted by capacity planning, and stream content is copied but not attested — ledger hashes cover the main data stream only.
 - **Restartable Large-File Copy**. Large-file copies will support resuming from an interrupted offset with a persisted partial digest, instead of restarting from zero.
 - **Conditional Parallel File Execution**. File-level workers remain deferred after the XXH3-128 content-hash replacement; they are introduced only if post-replacement measurements show a real multi-device or small-file workload leaving relevant devices underutilized. Single-file read/write/hash pipelining is independent of this decision.
-- **Deferred Copy Experiments**. File batching, direct/unbuffered copy IO, overlapping one file's publish with another file's write, and size-selected serial/pipelined engines remain outside M1. If directory-level measurements later show worker startup matters, prefer lazy worker startup within the one pipeline over maintaining two engines.
+- **Deferred Copy Experiments**. File batching, direct/unbuffered copy IO, overlapping one file's publish with another file's write, and size-selected serial/pipelined engines remain unrealized. If directory-level measurements later show worker startup matters, prefer lazy worker startup within the one pipeline over maintaining two engines.
 - **Background IO Throttling**. Execution will support a pacing knob for background or lower-priority runs, independent of the progress-reporting throttle.
 - **Robocopy Copy Backend**. NamiSync will evaluate an optional Robocopy backend for bulk moves that accept copy-now, baseline-later trust, while retaining its own planning, trash, and safety controls.
 
@@ -232,8 +197,8 @@ below describe settled behavior, not current M0 runtime claims.
 - **Recursive Folder Refresh**. Refreshing a folder scans and reconciles its complete subtree. Completed subtree reconciliation marks missing descendants with an indexed literal prefix range, never SQL wildcard matching; exact-path refresh still never infers descendant absence.
 - **Causal Inventory Re-Read**. Inventory has no database generation token. A
   view re-reads on open, after an observed terminal for its location, and after
-  acknowledge/restore; M1 does not pretend to provide partial cross-process
-  snapshot consistency and never auto-scans in the background.
+  acknowledge/restore; current inventory does not pretend to provide partial
+  cross-process snapshot consistency and never auto-scans in the background.
 - **Evidence Staleness**. Inventory derives `unverified`, `verified`, `modified`, or `mismatched` from retained evidence and a durable invalidation marker; age remains a separate stale-selection filter. Scan/verifier drift invalidates immediately regardless of age, ordinary matching scans cannot restore trust, and a hash mismatch dominates later metadata drift until guarded positive evidence replaces it.
 - **Five-State Volume Resolution**. Every inventory/integrity start, resume, and queued wakeup distinguishes resolved, offline, ambiguous clone, missing root, and unavailable root before scan/hash work; only resolved state can reconcile.
 
@@ -249,7 +214,7 @@ below describe settled behavior, not current M0 runtime claims.
 - **Post-Execution Verification**. A sync can continue directly into an optional verification phase while retaining the same session and volume custody. Every successfully published copy, update, or move-update carries transient published evidence into readback even if its ledger write failed; no-op, metadata-only move, directory, trash, and delete work is ineligible. Readback mismatch or incompleteness changes the integrity axis, never the already-settled filesystem result. Same-process pause retains an explicit execute/verify continuation; process close offers no resume. Cancellation starts no new verification work, preserves already-settled filesystem truth, and attempts terminal finish once without ever double-finishing; a finish failure degrades recording.
 - **Safe Conditional Recording**. Positive hash/verification evidence and negative missing/modified/mismatched invalidations are persisted only when the file state and prior evidence still match the observation being recorded.
 - **Accept and Re-Baseline**. A file correctly reported as modified can be explicitly re-baselined, accepting its current content as new evidence through the same conditional-recording path, instead of remaining reported modified forever with no path forward.
-- **Standalone Integrity Implemented**. Baseline, verify, and explicit rebaseline now compose cache-honest Windows reads with fresh inventory selection, conditional ledger recording, exact-candidate pause continuation, subject-scoped generic history, and volume-custodied dispatcher registrations. The Stage 5 CLI reaches them through the shared facade; desktop controls remain Stage 6.
+- **Standalone Integrity**. Baseline, verify, and explicit rebaseline compose cache-honest Windows reads with fresh inventory selection, conditional ledger recording, exact-candidate pause continuation, subject-scoped generic history, and volume-custodied dispatcher registrations. The CLI reaches them through the shared facade; desktop controls remain unrealized.
 - **Mode-Aware Integrity Admission**. A fresh baseline admits only eligible files without evidence, a fresh rebaseline only files with evidence, and verify admits both. Resume retains the frozen ordered candidate ids instead of reapplying mode filters after evidence changes.
 
 - **Conditional Parallel Verification**. Verification remains single-stream after the XXH3-128 content-hash replacement unless post-replacement measurements demonstrate an IO-utilization problem that file-level workers solve.
@@ -261,11 +226,10 @@ below describe settled behavior, not current M0 runtime claims.
 - **Single Write Path**. The recorder is the only code path that writes the main ledger; execution, verification, and baseline all call it rather than issuing SQL of their own.
 - **Conditional Recording Primitive**. Every hash or verification write is conditional on the row's current id, state, size, and modification time still matching what was observed; a mismatch discards the write instead of recording evidence about a file that has already moved on. This one primitive makes hash-on-copy, baseline, and verify safe against the same race.
 - **Provenance Tagging**. Every hash write records how it was attested — inherited from a copy's source stream, a direct read-back, or an independent verification — so displayed trust never overstates what was actually checked.
-- **Bounded-Window Durability**. Ledger commits batch by operation count or elapsed time rather than one write per operation, with an immediate forced flush before any destructive operation, at pause-drain, and at session terminal — bounding the crash window to at most one batch without weakening the never-wrong-only-behind guarantee.
+- **Explicit Durability Boundaries**. The active recorder commits each command eagerly behind a real `flush()` seam. Any later bounded batching must force that seam before destructive operations, at pause-drain, and at session terminal so the crash window stays bounded without weakening the never-wrong-only-behind guarantee.
 - **Idempotent Recording**. The recorder treats a repeated run token as a no-op, backed by the ledger's own uniqueness constraint as the last line of defense.
 - **Serialized Writer**. All in-process sessions record through one serialized writer, so legitimately parallel disjoint-volume runs can never silently lose bookkeeping to ledger lock contention; cross-process writers get a generous busy timeout with bounded retry only for SQLite `BUSY`/`LOCKED` result codes, never message text, and a recording failure is always surfaced, never swallowed.
 - **Axis-Separated Truth**. A session's terminal state reports its filesystem work alone; ledger bookkeeping and audit history report through separate recording and audit statuses carried in the result. Completed work with a failed or lagging write on either store surfaces as completed-with-degraded-recording (or -audit) — loudly, in the UI, CLI exit detail, and history — and the behind store converges rather than the result lying on any axis.
-- **M0 Recorder Implemented**. One run-bound serialized recorder now covers every sync operation, eager per-command durability behind the final flush seam, idempotent run/operation tokens, bounded cross-process retry, scalable inventory reconciliation, and the shared conditional baseline/verify/rebaseline evidence transaction.
 
 ## FILES LEDGER
 
@@ -285,7 +249,6 @@ below describe settled behavior, not current M0 runtime claims.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
 - **M1 Evidence Reset Boundary**. Ledger v3/history v5 require immutable final-contract markers. Ledger v1-v2, every history v1-v4 file, and current-version files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
 - **M1 Windowed History Contract**. History v5 stores an append-only reliable receipt journal, dense canonical item projections, exact semantic-duplicate links, bounded hash-only rejection receipts, provisional run watermarks/counts, and bounded terminal phase summaries. The reset boundary is deliberate: history v4 lacks the receipt facts needed to reconstruct the new authenticated chain.
-- **M0 Ledger Implemented**. The active ledger/history schemas freeze identity and evidence fields, enforce mapping-correspondence location integrity, separate observed from attested stats, expose read-only typed inventory/mapping/run repositories, and refuse configured database paths inside managed roots.
 
 - **Hardlink Groups**. Schema room is reserved for grouping paths that share one file identity, so hard-link-aware correspondence and, later, hard-link preservation on copy remain additive rather than a rework.
 - **Named Mappings**. A mapping will carry a user-assigned display name distinct from its source and target paths.
@@ -311,10 +274,10 @@ below describe settled behavior, not current M0 runtime claims.
 - **Blocked And Deferred Audit**. Safe-subset runs retain every direct blocker as the sixth `BLOCKED` outcome and retain quarantined or incomplete-scan-withheld work as `DEFERRED` with typed reasons and itemized paths. The history schema stores a blocked summary count without multiplying quarantine/withholding into new top-level categories.
 - **History Idempotency**. Repeating a recorded run token or the same sequence/payload is idempotent. A new sequence carrying an exact semantic item duplicate remains a visible non-counting receipt; changing that item's payload is producer corruption.
 - **History Retention**. Summary and detail retention will preserve the run envelope while pruning eligible old detail, but it is deferred beyond M1 until a maintenance session can coordinate cross-process custody with every audit writer. M1 exposes no retention setting, command, or GUI action.
-- **History Browsing**. Retained runs and their details can be inspected in the desktop History dialog or through the CLI.
+- **History Browsing**. Retained runs and their details can be inspected through the CLI; the desktop History dialog remains unrealized.
 - **Database-Paged History**. Summary listing uses fixed-query primitive aggregates without decoding event JSON. Item and reliable-event readback use keyset pages of at most 256 rows through a captured immutable watermark, so an active writer can append later windows without changing the reader's selected prefix.
 - **Incomplete History Views**. A provisional run exposes current lifecycle/phase, durable sequence/item watermarks, counts, and commit time with nullable terminal axes. Restart shows that prefix as `incomplete`; it never infers interruption or filesystem-execution resumability before M2 process/session custody exists.
-- **M1 Generic History Implemented**. The independent store consumes the dispatcher's reliable preterminal observer/flush protocol and incrementally persists idempotent sync/inventory/integrity envelopes, axis-separated summaries, ordered operation/integrity details, and compound phase summaries. Retained summary/item/event views expose the same finalized classification as live results and bounded recovery data for incomplete runs.
+- **Generic History**. The independent store consumes the dispatcher's reliable preterminal observer/flush protocol and incrementally persists idempotent sync/inventory/integrity envelopes, axis-separated summaries, ordered operation/integrity details, and compound phase summaries. Retained summary/item/event views expose the same finalized classification as live results and bounded recovery data for incomplete runs.
 
 - **Task-Grouped History**. GUI activities will be grouped under durable task records while CLI and service activities remain valid without a task parent.
 - **Task Annotations**. Users will be able to add a trimmed plain-text task annotation of up to 256 characters.
@@ -326,7 +289,7 @@ below describe settled behavior, not current M0 runtime claims.
 ## COMMANDLINE
 
 The parser and production registry expose reviewed sync/history plus all four
-Stage 5 location activities through the shared service.
+location activities through the shared service.
 
 - **Sync Command**. `nami-sync sync` runs the plan session, prints the reviewable plan, and asks for explicit terminal confirmation; confirming commits the plan and immediately runs the execution session, declining leaves it uncommitted. `--verify-after-copy` retains the same session/custody for readback. No flag combination plans and executes without a review.
 - **Inventory Command**. `nami-sync inventory` scans one explicitly selected root or retained location and prints its inventory plus zero/one/many mapping guidance.
@@ -337,17 +300,19 @@ Stage 5 location activities through the shared service.
 - **Database Overrides**. CLI integrity commands can select separate main-ledger and history database paths.
 - **Location Binding**. Location commands require exactly one positional root or named location id; repeatable exact paths define scope, and clone ambiguity requires a listed mount rather than inferred fallback.
 - **Typed Exit Classification**. The workflow headline precedence is failed, partial, refused, mismatch, canceled, verification-incomplete, recording/audit degradation, all-noop, then success. CLI codes 0 and 2-9 map those categories without hiding secondary axes or parsing diagnostic text.
-- **No-Subcommand Behavior**. Running `nami-sync` or `python -m namisync` with no subcommand prints usage, points to `nami-sync-gui` once available, and exits nonzero; nothing ever runs implicitly.
+- **No-Subcommand Behavior**. Running `nami-sync` or `python -m namisync` with no subcommand prints usage, points to `nami-sync-gui`, and exits nonzero; nothing ever runs implicitly.
 - **Concurrent Read-Only Commands**. The read-only history command runs alongside a GUI session or other CLI invocations; mutating commands are subject to the same volume and queue arbitration as any other session.
-- **M0 Workflow And CLI Implemented**. `nami-sync sync` and `python -m namisync sync` now execute the real two-session scanner → planner → safe-selection/preflight → explicit commitment → fresh-preflight → executor/recorder pipeline through dispatcher custody. Review and execution distinguish runnable, blocked, and deferred work; completed safe subsets exit with the dedicated partial status while `nami-sync history` retains itemized exclusions. Real entry points, no-op correspondence/history, stale-plan refusal, declined-review non-mutation, database isolation, and import boundaries have integration coverage.
-
-- **M1 Facade And CLI Implemented**. One process-local service owns the exact registry, runtime/dispatcher lifecycle, sink-only observation, primitive settings/inventory/result views, and both database overrides. The CLI adds all four location commands, optional execute-to-verify, actionable five-state binding, guarded selected rebaseline, typed phase/item rendering, and deterministic exit codes.
+- **Service Facade And CLI**. One process-local service owns the exact registry, runtime/dispatcher lifecycle, sink-only observation, primitive settings/inventory/result views, and both database overrides. The CLI exposes all four location commands, optional execute-to-verify, actionable five-state binding, guarded selected rebaseline, typed phase/item rendering, and deterministic exit codes.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 - **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure.
-- **Desktop Command Transport Implemented**. One function-only pywebview dispatch entry, bounded opaque folder authority, sanitized failures, receipt-safe replay, and bounded task/drain ownership are implemented. `M1_BRIDGE.md` exclusively defines the production mapping, exact envelopes/errors, retry/revision rules, capacities, recovery, and terminal release versus task close. The named browser-behavior witnesses now run through the installed production bridge and renderer in real WebView2; browserless/Node evidence remains supplemental. The fixed, non-sliding 150 ms progress-only linger has landed with immediate reliable/`Gap`/terminal/recovery/lifecycle wake evidence. The installed-wheel harness now streams bounded SHA-256-manifested browser/producer evidence, admits the actual child to the Job before product composition, records per-PID resource/topology diagnostics, and makes event acceptance independent of diagnostic whole-runtime completeness. A separate retained-state sizer reports replay/subscriber/adapter graphs plus their identity-deduplicated union while excluding terminal-result subtrees only on terminal paths. Frozen/disjoint realistic corpora and a production-path three-fresh-process runner now prove real built-in queue roots, the quiescent per-task 128/64/64 no-`Gap` shape and cleanup, the terminal path cut, and clean source/dependency/runtime/digest authority. The durable calibration-a artifact adds normative 1,376,690-byte ordinary and 1,534,946-byte exact-maximum transport measurements; the separate ceiling contract freezes the resulting 1,966,080-byte limit. Independent holdout-b then passed at 1,351,794 ordinary and 1,513,014 exact-maximum bytes with all correctness and authority predicates, closing SH-G-8 and BR-G-42 event/transport custody only. Other BR-G-42 feature rows remain on their owning slices. BR-G-45 terminal-artifact retention and SH-G-15 whole-runtime containment remain separate open scale features rather than being inferred from the task-count cap or the old whole-Job delta.
+- **Desktop Command Transport**. One function-only pywebview dispatch entry provides bounded requests, opaque folder authority, sanitized failures, idempotent replay, and bounded task/event-drain ownership. Reliable events retain ordering and explicit-gap recovery while progress is coalesced without delaying terminal or control feedback. `M1_BRIDGE.md` owns the exact envelopes, capacities, timing, recovery rules, browser evidence, and acceptance status.
 
 ## DESKTOP UI
+
+The appearance, bridge, shell, and generic presentation foundations are active.
+Task-backed plan, inventory, history, and lifecycle product surfaces remain
+unrealized unless an entry says otherwise.
 
 - **Desktop Presentation Foundation Realignment**. One pure tree-agnostic
   `visible_sequence.py` consumes workflow-owned pre-order arrays directly and owns literal
@@ -368,8 +333,8 @@ Stage 5 location activities through the shared service.
   a scrollable newest-first rail of adapter-owned task cards with status, paths,
   completion date, close controls, and mini progress bars. A task may hold a
   reviewed plan without a live session; closing a busy task confirms, cancels,
-  waits for a terminal record, then unsubscribes and closes the session. Stage
-  6 must also release every process-local plan, execution, inventory, selection,
+  waits for a terminal record, then unsubscribes and closes the session. Closing
+  must also release every process-local plan, execution, inventory, selection,
   and presentation artifact owned by that task; repeated create/close cycles
   must keep all registries bounded.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
@@ -420,8 +385,8 @@ Stage 5 location activities through the shared service.
   sizes and components own alignment/states. Remote loading, runtime
   registration, icon fonts, generated SVG, and data-derived asset paths are
   absent. Later surfaces add only the glyphs their real controls need.
-- **History Dialog**. The desktop UI lists history runs and shows retained activity detail. Retention controls remain absent from the M1 shell until coordinated maintenance exists.
-- **Bridge Responsiveness Envelope**. The M1 bridge is measured on the documented reference machine at up to roughly 100,000 file-backed subjects, 120,000 tree nodes, 50 history runs/1,000,000 detail items, and 256-row pages. Execute/control feedback is immediate, progress may be late but never incorrect, and `M1_BRIDGE.md` owns the exact latency and memory gates.
+- **History Dialog**. The unrealized desktop History dialog will list runs and retained activity detail. Retention controls remain out of scope until coordinated maintenance exists.
+- **Bridge Responsiveness Envelope**. The desktop bridge has bounded scale, paging, latency, and retained-memory contracts. Execute/control feedback is immediate, progress may be late but never incorrect, and `M1_BRIDGE.md` owns the exact limits and evidence.
 
 - **Drag-and-Drop Setup**. Dropping folders onto a task will populate its source and destination fields.
 - **Status Layout Refinement**. The task header will unify live and completed detail while promoting activity state over the affected-byte figure.

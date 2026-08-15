@@ -236,6 +236,13 @@ their contract, and update the matching tests and documentation when it does.
   use the version and codename, such as `v0.1.0 "Gertrud"`. Group related
   sessions under one task and put post-delivery work in the relevant hardening
   phase rather than appending it to the original feature task.
+- Keep `docs/ARCHITECTURE.md` limited to durable decisions, contracts,
+  layering, coordination, invariants, type/protocol meaning, and milestone-level
+  direction. Dated build status, acceptance results, exact measurement evidence,
+  and module implementation walkthroughs belong in the changelog, active
+  delivery plan, or owning module document. `docs/FEATURES.md` owns product
+  behavior and states whether behavior is active or unrealized without carrying
+  milestone build recaps.
 - Keep `docs/BUGS.md` as a concise module-first defect ledger. A category is a
   reusable causal class stated as a short noun phrase (for example, `TOCTOU
   parent redirection` or `shutdown ownership race`), not the incident's observed
