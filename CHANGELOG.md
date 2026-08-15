@@ -34,8 +34,9 @@ claims explicit, independently reviewable, and regression-backed.
 - Audited the bug ledger against cause-based categories and consequence-based
   severity, then made that classification rule explicit for future entries.
 - Recast the architecture reference around durable contracts, layering,
-  coordination, and milestone direction; removed build/evidence duplication
-  and stale M0 feature recaps while correcting active feature status.
+  coordination, and milestone direction; indexed each standardized contract
+  family to its authoritative core source while removing build/evidence
+  duplication and stale feature status.
 
 #### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
 

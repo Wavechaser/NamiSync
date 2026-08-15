@@ -240,9 +240,15 @@ their contract, and update the matching tests and documentation when it does.
   layering, coordination, invariants, type/protocol meaning, and milestone-level
   direction. Dated build status, acceptance results, exact measurement evidence,
   and module implementation walkthroughs belong in the changelog, active
-  delivery plan, or owning module document. `docs/FEATURES.md` owns product
-  behavior and states whether behavior is active or unrealized without carrying
-  milestone build recaps.
+  delivery plan, or owning module document. Architecture defines a shared
+  contract's meaning and invariants; the owning symbol under `namisync/core/`
+  defines its exact standardized fields, enum values, inheritance, protocols,
+  and signatures; module documents explain use and extension policy without
+  redefining that shape. Keep the architecture contract-to-source locator
+  current, and reproduce exact shapes only when the shape itself explains an
+  architectural decision. `docs/FEATURES.md` owns product behavior and states
+  whether behavior is active or unrealized without carrying milestone build
+  recaps.
 - Keep `docs/BUGS.md` as a concise module-first defect ledger. A category is a
   reusable causal class stated as a short noun phrase (for example, `TOCTOU
   parent redirection` or `shutdown ownership race`), not the incident's observed

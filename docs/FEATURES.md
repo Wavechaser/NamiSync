@@ -109,7 +109,7 @@ provision.
 - **Explicit Scan Scope Shapes**. Scanner scope distinguishes a full root, exact paths, and recursive subtrees. Mixed exact/subtree requests canonicalize overlapping roots, and a selected root becomes a full scan; reconciliation mirrors those three shapes rather than treating a subtree as one selected path.
 - **Scope-Honest Completeness**. Owned artifacts and harmless file placeholders/reparse entries are typed exclusions without making the scan incomplete. Unreadable directories, directory placeholders/reparse points, repeated directory identity, collisions, and unsafe names retain typed warnings and make the affected scope incomplete. PATHS and SUBTREES no-follow admit every existing intermediate component before observing their requested subjects.
 
-- **Change-Journal Scanning**. The scanner sits behind a pluggable change-source interface; a future NTFS USN-journal-backed source will supply incremental changes without the planner or executor knowing the difference. It requires elevated access or a background service and remains unrealized.
+- **Change-Journal Scanning**. An unrealized change-source protocol will allow a future NTFS USN-journal-backed scanner to supply incremental changes without the planner or executor knowing the difference. The exact protocol will be standardized with its first production consumer; journal access may require elevation or a background service.
 
 ## FILTERS
 

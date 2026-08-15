@@ -213,7 +213,39 @@ phase summaries are the common live/history projection source.
 
 ## 3. Core contracts
 
-### 3.1 Identity and path meaning
+### 3.1 Contract authority and source locator
+
+Architecture defines what a shared contract means and the invariants that all
+consumers must preserve. The owning symbol in `namisync/core/` is authoritative
+for its exact fields, enum values, inheritance, protocol methods, and function
+signature. Module documents explain how a component uses or extends that
+contract; they do not redefine its standardized shape.
+
+If prose and source disagree about exact shape, treat the source as canonical
+and repair the stale prose. Do not introduce an adjacent dataclass, enum, or
+protocol merely because a module document omits or misstates the existing one.
+Architectural snippets remain only when the shape itself explains a decision,
+such as the session states, outcome vocabulary, or observation/judgment split.
+
+| Contract family | Canonical source |
+| --- | --- |
+| Sessions, phase/run results, and `SessionStore` | `namisync/core/session.py` |
+| Event bodies, envelopes, delivery classes, and event codecs | `namisync/core/events.py` |
+| Filesystem identity, capability, metadata, records, and scan scopes | `namisync/core/models.py` |
+| Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
+| Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
+| Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
+| Preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
+| Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
+| Commitments, execution state/evidence, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
+| Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
+| Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
+
+Workflow-owned continuation envelopes and interface wire views are not core
+contracts. Their owning workflow or interface source defines exact shape,
+subject to the meanings and invariants established here.
+
+### 3.2 Identity and path meaning
 
 - Persisted relative paths are root-relative strings with a Windows canonical
   key based on one-codepoint uppercase, never Unicode `casefold()`.
@@ -229,7 +261,7 @@ phase summaries are the common live/history projection source.
 - Ordinary logical spelling is retained in domain values. Extended Windows
   spelling is added only at native I/O and removed before evidence or display.
 
-### 3.2 Root authority
+### 3.3 Root authority
 
 `RootAuthority` is immutable, ephemeral evidence binding a logical root to its
 reviewed mount and expected volume identity. It is never persisted, cached as
@@ -248,7 +280,7 @@ typed observations. Each consumer retains its own policy and timing:
 The remaining path-check-to-use boundary is explicit. A prior successful probe
 never authorizes a later filesystem action.
 
-### 3.3 Scan and inventory types
+### 3.4 Scan and inventory types
 
 | Contract | Meaning |
 | --- | --- |
@@ -264,13 +296,13 @@ Completeness is a property of the observed scope. An incomplete scan may still
 authorize evidence-positive additive work, but cannot authorize conclusions
 that depend on absence or stable identity.
 
-### 3.4 Plan and execution types
+### 3.5 Plan and execution types
 
 | Contract | Meaning |
 | --- | --- |
 | `MappingSnapshot` | Prior accepted correspondence supplied to the pure planner by a workflow. |
 | `Plan` | Deterministic immutable intent, operations, dependencies, semantic settings, capacity requirement, and fingerprint. |
-| `Selection` | Dependency-closed executable subset, distinct from the full reviewed plan. |
+| `ExecutionSet.selection` | Dependency-closed executable subset, distinct from the full reviewed plan. |
 | `Commitment` | Binding from human approval to plan fingerprint and selection digest. |
 | `ExecutionSet` | Plan, authoritative selection, commitment, operation status, and continuation evidence. |
 | `ObservedWorld` | Fresh, scoped filesystem facts used by pure preflight judgment. |
@@ -297,7 +329,7 @@ class Outcome(StrEnum):
 `NOOP` is an operation kind, not a skipped outcome: a selected no-op still
 checks current evidence and records correspondence.
 
-### 3.5 Evidence and attestation
+### 3.6 Evidence and attestation
 
 Copy, baseline, and verification use one canonical `xxh3_128` content format.
 Content evidence carries algorithm, digest, byte count, provenance, and time;
@@ -309,28 +341,30 @@ Plan fingerprints, custody keys, history identities, and other small
 non-content hashes use SHA-256. Repositories retain the algorithm identifier so
 stored evidence remains self-describing.
 
-### 3.6 Protocol seams
+### 3.7 Protocol seams
 
 The core declares narrow protocols for infrastructure and replaceable policy:
 
-- `Recorder` is the only main-ledger mutation path.
-- `Clock` is the only source of current time.
+- `execution.Recorder` and `integrity.IntegrityRecorder` are the core ledger
+  mutation protocols; database-owned recording commands cover the remaining
+  ledger boundaries.
+- Core clock protocols are the only source of current time.
 - `FailurePolicy` returns retry/continue/stop decisions to the executor.
 - `StreamingHasher` and `HasherFactory` abstract the concrete content hasher
   without importing it into core.
 - `CopyBackend` owns byte transfer, not publication, retry, or recording.
-- `ChangeSource` supplies scan evidence behind walking or future incremental
-  implementations.
 - `DestinationPolicy` assigns target paths for a batch before diffing.
-- `MetadataExtractor` is an unrealized ingest seam and has no production
-  consumer yet.
 - `SessionStore` retains generic lifecycle plus opaque workflow payloads; its
   durable implementation is unrealized until M2.
+
+Incremental `ChangeSource` and ingest `MetadataExtractor` seams are accepted
+but unrealized directions, not standardized core protocols. Their exact shapes
+will be defined only with their first production consumer.
 
 Protocols return data or decisions. They do not receive control of the state
 machine.
 
-### 3.7 Persistence boundary
+### 3.8 Persistence boundary
 
 The main ledger and audit history are independent SQLite databases in WAL
 mode. The ledger stores current inventory, correspondence, and integrity
@@ -376,8 +410,9 @@ See `CORE.md`.
 Owns filesystem enumeration, capability observation, typed unsupported and
 warning evidence, scope completeness, and cancellation checkpoints. It records
 what exists without assigning source/destination roles or deciding sync work.
-Walking is active; incremental journal and network-aware change sources are
-unrealized behind `ChangeSource`.
+Walking is active. An incremental change-source protocol and journal/network
+implementations are unrealized and will be standardized with their first
+production consumer.
 
 See `SCANNER.md` and `INVENTORY.md`.
 
