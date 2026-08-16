@@ -159,6 +159,8 @@ def validate_department_manifest(
     if problems:
         raise DepartmentManifestError(
             "department manifest is invalid:\n- " + "\n- ".join(problems)
+            + "\nUpdate tests/_departments.py so every collected test module has "
+            "exactly one primary owner."
         )
     return ownership
 

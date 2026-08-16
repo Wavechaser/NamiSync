@@ -211,6 +211,44 @@ def test_component_gallery_evidence_runs_only_requested_mode_once(
     ]
 
 
+def test_installed_asset_assertion_materializes_light_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    installed = HeadedInstalledWheel(
+        wheel=tmp_path / "namisync.whl",
+        root=tmp_path / "installed",
+        python=tmp_path / "python.exe",
+        scripts=tmp_path / "Scripts",
+    )
+    calls: list[str] = []
+
+    def run(*_args, mode: str, **_kwargs) -> dict[str, object]:
+        calls.append(mode)
+        return {"installed_assets": {}}
+
+    class WheelValidationReached(RuntimeError):
+        pass
+
+    def stop_at_wheel(*_args, **_kwargs):
+        raise WheelValidationReached
+
+    monkeypatch.setitem(globals(), "_run_gallery_mode", run)
+    monkeypatch.setattr(zipfile, "ZipFile", stop_at_wheel)
+    evidence = _GalleryEvidence(
+        installed,
+        tmp_path / "evidence",
+        tmp_path / "gallery.js",
+        {},
+        {},
+    )
+
+    with pytest.raises(WheelValidationReached):
+        _assert_installed_assets(evidence)
+
+    assert calls == ["light"]
+
+
 def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() -> None:
     child = _CHILD.read_text(encoding="utf-8")
 
@@ -831,6 +869,7 @@ def _run_gallery_mode(
 
 
 def _assert_installed_assets(evidence: _GalleryEvidence) -> None:
+    light = evidence.result("light")
     wheel = evidence.installed.wheel
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
@@ -853,7 +892,7 @@ def _assert_installed_assets(evidence: _GalleryEvidence) -> None:
                 assert Path(record["path"]).resolve().is_relative_to(
                     evidence.installed.root.resolve()
                 )
-    first = evidence.results["light"]["installed_assets"]
+    first = light["installed_assets"]
     for result in evidence.results.values():
         for name in _ASSET_NAMES:
             assert result["installed_assets"][name]["bytes_b64"] == first[name][

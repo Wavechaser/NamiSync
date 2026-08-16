@@ -89,8 +89,9 @@ ownership explicit without changing public or persisted contracts.
   installation, success-only junction capability reuse, exact-boundary native
   verifier data, test-sized log rollover, and lazy headed scenario evidence.
 - Consolidated duplicate coverage and shared helpers without merging behavioral
-  cases; selection-independence and lazy-failure guards keep collected modules
-  self-contained and preserve original headed failures.
+  cases; selection-independence guards reject test-tree back edges into
+  collected modules, while lazy-failure guards preserve original headed
+  failures.
 - Left protected custody and settlement evidence, the live 33k-row database
   scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
 

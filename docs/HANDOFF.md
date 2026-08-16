@@ -8,12 +8,13 @@ focused, department, cross-department, ordinary, and complete/headed runs.
 ## Delivered
 
 - Added repeatable `--dept` with equivalent `--department`, union selection,
-  clear unknown-department errors, and fail-closed validation that every pytest
-  module has exactly one primary owner. Both pytest default module naming forms
-  are covered.
-- Added a repository guard against imports between collected test modules and
-  moved the existing shared web, inventory-runtime, and database helpers into
-  non-collected underscore-prefixed support modules.
+  clear unknown-department errors, and action-guiding fail-closed validation
+  that every pytest module has exactly one primary owner. Both pytest default
+  module naming forms are covered.
+- Added a repository guard against imports from any Python source under
+  `tests/` into a collected test module, and moved the existing shared web,
+  inventory-runtime, and database helpers into non-collected underscore-
+  prefixed support modules.
 - Made the ordinary installed-wheel fixture use a pip-less venv installed by
   the parent pip while retaining target-prefix, package-resource, and pip-
   absence evidence. The headed installed-wheel fixture remains unchanged.
@@ -26,7 +27,8 @@ focused, department, cross-department, ordinary, and complete/headed runs.
 - Made gallery modes and transport scenarios lazy for focused headed reruns.
   Complete headed selection still requests all four gallery modes and both
   transport scenarios. Successes and failures are cached so later nodes cannot
-  retry a used root or obscure the original failure.
+  retry a used root or obscure the original failure. Installed-asset validation
+  materializes its own light comparison baseline.
 - Removed the duplicate six-case WebView2 version matrix from the bridge tests;
   the runtime-owned matrix remains authoritative.
 
@@ -45,14 +47,15 @@ focused, department, cross-department, ordinary, and complete/headed runs.
 ## Verification
 
 - Affected helper owners and consumers: 208 passed, 7 capability skips.
-- Department policy after adversarial correction: 15 passed.
-- Ordinary repository: 2,287 passed, 9 capability skips, 27 headed deselected.
-- Headed interface gate on the real installed-wheel/WebView2 host: 27 passed.
+- Department policy after follow-up hardening: 16 passed.
+- Ordinary repository: 2,289 passed, 9 capability skips, 27 headed deselected.
+- Headed interface gate on the real installed-wheel/WebView2 host: 27 passed;
+  the follow-up gallery rerun passed all 3 affected headed cases.
 - Import boundary lint: 11 contracts kept, 0 broken.
 - Independent adversarial review found two issues before closure: incomplete
   pytest filename discovery and lazy scenario failure retries. Both received
   regressions, were corrected, and passed re-review; no other actionable
-  finding remained.
+  finding remained. Independent review of the follow-up guardrails was clean.
 
 The next test operation should begin at the narrowest useful level in
 `docs/TESTS.md`. A release still uses the documented unfiltered complete command

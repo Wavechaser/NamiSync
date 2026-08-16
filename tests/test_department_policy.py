@@ -58,6 +58,21 @@ def _imported_collected_modules(
     return tuple(sorted(found))
 
 
+def _test_tree_import_offenders(project_root: Path) -> tuple[str, ...]:
+    collected_names = _collected_module_names(
+        discover_test_modules(project_root)
+    )
+    return tuple(
+        f"{path.relative_to(project_root).as_posix()}:{line}: {target}"
+        for path in sorted((project_root / "tests").rglob("*.py"))
+        if path.is_file()
+        for line, target in _imported_collected_modules(
+            path.read_text(encoding="utf-8"),
+            collected_names,
+        )
+    )
+
+
 def test_department_manifest_owns_every_test_module_exactly_once() -> None:
     ownership = validate_department_manifest()
 
@@ -100,19 +115,20 @@ def test_collected_import_guard_recognizes_import_forms_without_false_positives(
     assert tuple(target for _, target in imported) == expected
 
 
-def test_collected_test_modules_do_not_import_one_another() -> None:
-    modules = discover_test_modules()
-    collected_names = _collected_module_names(modules)
-    offenders = [
-        f"{module}:{line}: {target}"
-        for module in sorted(modules)
-        for line, target in _imported_collected_modules(
-            (PROJECT_ROOT / module).read_text(encoding="utf-8"),
-            collected_names,
-        )
-    ]
+def test_test_tree_python_modules_do_not_import_collected_test_modules() -> None:
+    assert _test_tree_import_offenders(PROJECT_ROOT) == ()
 
-    assert offenders == []
+
+def test_collected_import_guard_scans_noncollected_support_modules(
+    tmp_path: Path,
+) -> None:
+    _test_module(tmp_path, "tests/test_owned.py")
+    support = tmp_path / "tests" / "_support.py"
+    support.write_text("from test_owned import helper\n", encoding="utf-8")
+
+    assert _test_tree_import_offenders(tmp_path) == (
+        "tests/_support.py:1: test_owned",
+    )
 
 
 def test_department_manifest_rejects_duplicate_ownership(tmp_path: Path) -> None:
@@ -155,6 +171,10 @@ def test_department_manifest_rejects_missing_and_unowned_modules(
     message = str(raised.value)
     assert "missing manifest paths: tests/test_missing.py" in message
     assert "unowned test modules: tests/test_unowned.py" in message
+    assert message.endswith(
+        "Update tests/_departments.py so every collected test module has "
+        "exactly one primary owner."
+    )
 
 
 def test_requested_departments_deduplicate_unions_and_reject_unknown() -> None:

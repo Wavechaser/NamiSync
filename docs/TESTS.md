@@ -101,7 +101,7 @@ collected test without a department filter.
 When adding, moving, or deleting a collected test module, update
 `tests/_departments.py` in the same change. Shared test support belongs in a
 non-collected underscore-prefixed module rather than another collected test
-module.
+module. No Python source under `tests/` may import a collected test module.
 
 ## Markers and skips
 
