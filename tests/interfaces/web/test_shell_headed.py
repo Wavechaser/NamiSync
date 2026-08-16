@@ -79,6 +79,7 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "DesktopInstanceIdentity(arguments.mutex, arguments.title)" in source
     assert "original(window)" in source
     assert '"Input.dispatchKeyEvent"' in source
+    assert '"Input.dispatchMouseEvent"' in source
     assert '"Emulation.setEmulatedMedia"' in source
     assert '"Accessibility.getFullAXTree"' in source
     assert "ZoomFactor = 2.0" in source
@@ -185,16 +186,36 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     assert page["keyboard_tree"] == {
         "row_count": 3,
         "tab_index": 0,
+        "client_height": 28,
+        "row_h": 28,
         "active_node": "keyboard-root",
     }
     assert page["first_focus"] == {
         "label": "Keyboard tree evidence",
         "tag": "DIV",
         "active_node": "keyboard-root",
+        "scroll_top": 0,
+        "client_height": 28,
+        "fully_visible": True,
     }
     assert page["second_focus"] == {
         "label": "Keyboard tree evidence",
         "tag": "DIV",
+        "active_node": "keyboard-child",
+        "scroll_top": 28,
+        "client_height": 28,
+        "fully_visible": True,
+    }
+    assert page["disclosure_click"] == {
+        "toggles": [["keyboard-child", True]],
+        "activations": [],
+        "focus_is_tree": True,
+        "active_node": "keyboard-child",
+    }
+    assert page["label_click"] == {
+        "toggles": [["keyboard-child", True]],
+        "activations": ["keyboard-child"],
+        "focus_is_tree": True,
         "active_node": "keyboard-child",
     }
     assert page["controller_zoom"] == 2.0
@@ -366,6 +387,8 @@ def _assert_report_schema(result: object) -> None:
         "keyboard_tree",
         "first_focus",
         "second_focus",
+        "disclosure_click",
+        "label_click",
         "controller_zoom",
         "final",
         "accessibility",
@@ -403,12 +426,24 @@ def _assert_report_schema(result: object) -> None:
     assert set(result["page"]["keyboard_tree"]) == {
         "row_count",
         "tab_index",
+        "client_height",
+        "row_h",
         "active_node",
     }
     for focus_name in ("first_focus", "second_focus"):
         assert set(result["page"][focus_name]) == {
             "label",
             "tag",
+            "active_node",
+            "scroll_top",
+            "client_height",
+            "fully_visible",
+        }
+    for pointer_name in ("disclosure_click", "label_click"):
+        assert set(result["page"][pointer_name]) == {
+            "toggles",
+            "activations",
+            "focus_is_tree",
             "active_node",
         }
     final = result["page"]["final"]

@@ -439,6 +439,12 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
     )
     assert 'root.removeAttribute("aria-activedescendant");' in tree
     assert "root.ariaActiveDescendant" not in tree
+    assert ".scrollIntoView(" not in tree
+    assert "root.clientHeight <= 0" in tree
+    assert "root.scrollTop = rowTop;" in tree
+    assert "root.scrollTop = Math.max(rowBottom - root.clientHeight, 0);" in tree
+    assert 'disclosure.addEventListener("click", onDisclosureClick);' in tree
+    assert "event.stopPropagation();" in tree
     assert ".slice(" not in tree
     assert "Object.keys(" not in tree
     assert "Reflect.ownKeys(" not in tree

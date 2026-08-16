@@ -51,6 +51,9 @@ class TestElement {
     this.attributes = new Map();
     this.value = "";
     this.listeners = new Map();
+    this.parentElement = null;
+    this.scrollTop = 0;
+    this.clientHeight = 0;
   }
 
   addEventListener(name, listener) {
@@ -60,16 +63,34 @@ class TestElement {
   }
 
   dispatch(name, event = {}) {
+    if (event.target === undefined) {
+      event.target = this;
+    }
+    event.currentTarget = this;
     for (const listener of this.listeners.get(name) ?? []) {
       listener(event);
+    }
+    if (!event.cancelBubble && this.parentElement !== null) {
+      this.parentElement.dispatch(name, event);
     }
   }
 
   append(...children) {
+    for (const child of children) {
+      child.parentElement = this;
+    }
     this.children.push(...children);
   }
 
   replaceChildren(...children) {
+    for (const child of this.children) {
+      if (child.parentElement === this) {
+        child.parentElement = null;
+      }
+    }
+    for (const child of children) {
+      child.parentElement = this;
+    }
     this.children = [...children];
   }
 
@@ -254,6 +275,93 @@ assert.ok(
   ),
 );
 
+// Disclosure owns its pointer event. A synchronous replacement from toggle
+// must not bubble into the detached row and activate it a second time.
+const pointerDocument = new TestDocument();
+const pointerRoot = pointerDocument.createElement("div");
+const pointerToggles = [];
+const pointerActivations = [];
+let pointerTree;
+pointerTree = createTree(pointerRoot, {
+  toggle: (...value) => {
+    pointerToggles.push(value);
+    const generation = pointerTree.beginWindowRequest();
+    pointerTree.commitWindow(generation, {
+      offset: 0,
+      total: 2,
+      rows: [
+        row(0, "pointer-container", "Pointer container", {
+          container: true,
+          expanded: true,
+          firstChild: 1,
+        }),
+        row(1, "pointer-leaf", "Pointer leaf", {depth: 1, parent: 0}),
+      ],
+    });
+  },
+  activate: (nodeId) => pointerActivations.push(nodeId),
+});
+const pointerGeneration = pointerTree.beginWindowRequest();
+assert.equal(pointerTree.commitWindow(pointerGeneration, {
+  offset: 0,
+  total: 1,
+  rows: [
+    row(0, "pointer-container", "Pointer container", {
+      container: true,
+      expanded: false,
+    }),
+  ],
+}), true);
+const pointerRows = treeItems(pointerRoot);
+dispatchClick(pointerRows[0].children[0]);
+assert.deepEqual(pointerToggles, [["pointer-container", true]]);
+assert.deepEqual(pointerActivations, []);
+assert.equal(pointerDocument.activeElement, pointerRoot);
+assert.equal(
+  pointerRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-2-row-0",
+);
+dispatchClick(treeItems(pointerRoot)[0].children[1]);
+assert.deepEqual(pointerToggles, [["pointer-container", true]]);
+assert.deepEqual(pointerActivations, ["pointer-container"]);
+dispatchClick(treeItems(pointerRoot)[1].children[0]);
+assert.deepEqual(pointerToggles, [["pointer-container", true]]);
+assert.deepEqual(pointerActivations, ["pointer-container"]);
+dispatchClick(treeItems(pointerRoot)[1]);
+assert.deepEqual(pointerActivations, ["pointer-container", "pointer-leaf"]);
+assert.equal(
+  pointerRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-2-row-1",
+);
+
+const thrown = new Error("toggle sentinel");
+const throwingRoot = new TestDocument().createElement("div");
+const throwingActivations = [];
+const throwingTree = createTree(throwingRoot, {
+  toggle: () => {
+    throw thrown;
+  },
+  activate: (nodeId) => throwingActivations.push(nodeId),
+});
+const throwingGeneration = throwingTree.beginWindowRequest();
+throwingTree.commitWindow(throwingGeneration, {
+  offset: 0,
+  total: 1,
+  rows: [row(0, "throwing-container", "Throwing container", {
+    container: true,
+  })],
+});
+const throwingEvent = clickEvent();
+assert.throws(
+  () => treeItems(throwingRoot)[0].children[0].dispatch(
+    "click",
+    throwingEvent,
+  ),
+  (error) => error === thrown,
+);
+assert.equal(throwingEvent.cancelBubble, true);
+assert.deepEqual(throwingActivations, []);
+
 dispatchKey(root, "ArrowRight");
 assert.deepEqual(toggled, [["node-container", true]]);
 dispatchKey(root, "Enter");
@@ -290,6 +398,90 @@ dispatchKey(root, "ArrowDown");
 assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-1");
 dispatchKey(root, "End");
 assert.deepEqual(requested, [0, 9]);
+
+// Active-descendant navigation scrolls only the tree viewport and only when
+// the complete fixed-height row falls outside it.
+const viewportRoot = new TestDocument().createElement("div");
+viewportRoot.clientHeight = 2 * ROW_H;
+const viewportTree = createTree(viewportRoot);
+const viewportGeneration = viewportTree.beginWindowRequest();
+viewportTree.commitWindow(viewportGeneration, {
+  offset: 0,
+  total: 4,
+  rows: [
+    row(0, "viewport-0", "Viewport 0"),
+    row(1, "viewport-1", "Viewport 1"),
+    row(2, "viewport-2", "Viewport 2"),
+    row(3, "viewport-3", "Viewport 3"),
+  ],
+});
+assert.equal(viewportRoot.scrollTop, 0);
+dispatchKey(viewportRoot, "ArrowDown");
+assert.equal(viewportRoot.scrollTop, 0);
+viewportRoot.scrollTop = ROW_H;
+dispatchKey(viewportRoot, "ArrowDown");
+assert.equal(viewportRoot.scrollTop, ROW_H);
+dispatchKey(viewportRoot, "ArrowDown");
+assert.equal(viewportRoot.scrollTop, 2 * ROW_H);
+dispatchKey(viewportRoot, "Home");
+assert.equal(viewportRoot.scrollTop, 0);
+assert.equal(
+  viewportRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-4-row-0",
+);
+
+const pagedRoot = new TestDocument().createElement("div");
+pagedRoot.clientHeight = 2 * ROW_H;
+const pagedRequests = [];
+let pagedGeneration = null;
+let pagedTree;
+pagedTree = createTree(pagedRoot, {
+  requestIndex: (index) => {
+    pagedRequests.push(index);
+    pagedGeneration = pagedTree.beginWindowRequest(index);
+  },
+});
+const pagedInitial = pagedTree.beginWindowRequest();
+pagedTree.commitWindow(pagedInitial, {
+  offset: 0,
+  total: 6,
+  rows: [row(0, "paged-0", "Paged 0"), row(1, "paged-1", "Paged 1")],
+});
+dispatchKey(pagedRoot, "End");
+assert.deepEqual(pagedRequests, [5]);
+assert.equal(pagedRoot.scrollTop, 0);
+assert.equal(pagedTree.commitWindow(pagedGeneration, {
+  offset: 4,
+  total: 6,
+  rows: [row(4, "paged-4", "Paged 4"), row(5, "paged-5", "Paged 5")],
+}), true);
+assert.equal(
+  pagedRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-5-row-5",
+);
+assert.equal(pagedRoot.scrollTop, 4 * ROW_H);
+dispatchKey(pagedRoot, "Home");
+assert.deepEqual(pagedRequests, [5, 0]);
+assert.equal(pagedTree.commitWindow(pagedGeneration, {
+  offset: 0,
+  total: 6,
+  rows: [row(0, "paged-0", "Paged 0"), row(1, "paged-1", "Paged 1")],
+}), true);
+assert.equal(pagedRoot.scrollTop, 0);
+
+const unmeasuredRoot = new TestDocument().createElement("div");
+unmeasuredRoot.scrollTop = 17;
+const unmeasuredTree = createTree(unmeasuredRoot);
+const unmeasuredGeneration = unmeasuredTree.beginWindowRequest();
+unmeasuredTree.commitWindow(unmeasuredGeneration, {
+  offset: 5,
+  total: 6,
+  rows: [row(5, "unmeasured", "Unmeasured")],
+});
+assert.equal(unmeasuredRoot.scrollTop, 17);
+unmeasuredRoot.clientHeight = ROW_H;
+unmeasuredRoot.focus();
+assert.equal(unmeasuredRoot.scrollTop, 5 * ROW_H);
 
 // Arbitrary recycling cannot leave a stale active index or descendant.
 const recycledGeneration = tree.beginWindowRequest();
@@ -380,6 +572,19 @@ function dispatchKey(element, key) {
     },
   });
   assert.equal(prevented, true);
+}
+
+function clickEvent() {
+  return {
+    cancelBubble: false,
+    stopPropagation() {
+      this.cancelBubble = true;
+    },
+  };
+}
+
+function dispatchClick(element) {
+  element.dispatch("click", clickEvent());
 }
 
 function assertSpacer(element) {

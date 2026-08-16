@@ -37,7 +37,11 @@ export function createTree(root, callbacks = {}) {
 
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("focus", () => {
-    if (activeElement === null && !initializedActive) {
+    if (activeElement !== null) {
+      revealActiveRow();
+      return;
+    }
+    if (!initializedActive) {
       const first = firstRenderedEntry();
       if (first !== null) {
         setActive(first);
@@ -56,8 +60,17 @@ export function createTree(root, callbacks = {}) {
       return false;
     }
     const entries = window.rows.map((row) => {
-      const element = createRow(document, treeId, row);
-      const entry = Object.freeze({element, row});
+      let entry;
+      const element = createRow(document, treeId, row, (event) => {
+        event.stopPropagation();
+        if (row.expanded === null) {
+          return;
+        }
+        setActive(entry);
+        root.focus();
+        toggle(row.node_id, !row.expanded);
+      });
+      entry = Object.freeze({element, row});
       element.addEventListener("click", () => {
         setActive(entry);
         root.focus();
@@ -120,6 +133,22 @@ export function createTree(root, callbacks = {}) {
     pendingVisibleIndex = null;
     initializedActive = true;
     root.setAttribute("aria-activedescendant", activeElement.id);
+    revealActiveRow();
+  }
+
+  function revealActiveRow() {
+    if (activeVisibleIndex === null || root.clientHeight <= 0) {
+      return;
+    }
+    const rowTop = activeVisibleIndex * ROW_H;
+    const rowBottom = rowTop + ROW_H;
+    const viewportTop = root.scrollTop;
+    const viewportBottom = viewportTop + root.clientHeight;
+    if (rowTop < viewportTop) {
+      root.scrollTop = rowTop;
+    } else if (rowBottom > viewportBottom) {
+      root.scrollTop = Math.max(rowBottom - root.clientHeight, 0);
+    }
   }
 
   function clearActive() {
@@ -242,7 +271,7 @@ function createSpacer(document) {
   return spacer;
 }
 
-function createRow(document, treeId, row) {
+function createRow(document, treeId, row, onDisclosureClick) {
   const element = document.createElement("div");
   element.classList.add("nami-tree-row");
   element.id = `nami-tree-${treeId}-row-${row.visible_index}`;
@@ -262,6 +291,7 @@ function createRow(document, treeId, row) {
   if (row.expanded === null) {
     disclosure.classList.add("nami-tree-row__disclosure--leaf");
   }
+  disclosure.addEventListener("click", onDisclosureClick);
   const label = document.createElement("span");
   label.classList.add("nami-tree-row__label");
   renderText(label, row.display);

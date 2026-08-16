@@ -1306,6 +1306,10 @@ deepest-visible ancestor anchoring proportional to chain depth. It retains no pr
 filter vocabulary, or active-view cache. The installed frontend consumes only
 the generic `{offset,total,rows}` window through a fixed-height renderer with
 two spacers, stale-generation refusal, and a single-tab-stop operable tree.
+Keyboard and completed off-window targets are revealed inside that tree with
+the exact global-index/28-pixel geometry. The disclosure owns its pointer event:
+it focuses the row and emits one desired expansion change without invoking row
+activation, while a projected end node remains inert.
 The focused structural/security regressions and real clean-wheel shell evidence pass,
 closing BR-G-34 and SH-G-7. The 120,000-node fixture is a complete retained-
 representation witness plus a deterministic field-access scaling guard, not a

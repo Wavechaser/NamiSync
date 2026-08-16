@@ -820,7 +820,10 @@ carry the `headed` marker; all are collected by the release command.
   region without fake data, preserves keyboard focus and usable reflow at 200%
   zoom, retains visible system-color focus cues under forced colors, and reads
   the operable hierarchy from Chromium's platform accessibility tree. The
-  same scenario imports the installed `tree.js`, renders complete hostile and
+  same scenario imports the installed `tree.js`, keeps a natively moved active
+  descendant fully visible in a one-row viewport, uses CDP pointer hit testing
+  to prove disclosure toggle without activation and ordinary label activation,
+  renders complete hostile and
   long display strings through its production text path, measures every row at
   28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,
   and proves a stale generation cannot replace a newer window. The matching

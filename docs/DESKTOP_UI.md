@@ -425,7 +425,11 @@ across a window boundary. `aria-expanded` and the disclosure appear only when
 the active filtered projection retains an immediate child: expanded and
 collapsed projected parents emit `true` and `false`, while leaves and
 structural containers with no retained child emit no expansion state. It never
-filters a viewport, reconstructs ancestry,
+lets an active descendant remain outside the tree viewport: keyboard movement
+and a completed off-window target use the fixed 28-pixel global index to reveal
+the entire row without scrolling an outer surface. Clicking a disclosure
+focuses that row and requests exactly one expand/collapse change without
+activating it; clicking the label activates as usual. It never filters a viewport, reconstructs ancestry,
 searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree

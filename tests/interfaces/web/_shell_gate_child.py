@@ -93,11 +93,18 @@ _KEYBOARD_TREE_PROBE = r"""
   if (!(work instanceof HTMLElement)) {
     throw new Error("production work panel is unavailable");
   }
-  const {createTree} = await import("/tree.js");
+  const {ROW_H, createTree} = await import("/tree.js");
   const root = document.createElement("div");
   root.ariaLabel = "Keyboard tree evidence";
+  root.style.boxSizing = "content-box";
+  root.style.blockSize = `${ROW_H}px`;
   work.append(root);
-  const controller = createTree(root);
+  const interactions = {toggles: [], activations: []};
+  globalThis.__namiShellTreeEvidence = {root, interactions};
+  const controller = createTree(root, {
+    toggle: (...value) => interactions.toggles.push(value),
+    activate: (nodeId) => interactions.activations.push(nodeId),
+  });
   const generation = controller.beginWindowRequest();
   controller.commitWindow(generation, {
     offset: 0,
@@ -119,13 +126,13 @@ _KEYBOARD_TREE_PROBE = r"""
         node_id: "keyboard-child",
         display: "Keyboard child",
         depth: 1,
-        is_container: false,
+        is_container: true,
         visible_index: 1,
         parent_visible_index: 0,
         first_child_visible_index: null,
         position_in_set: 1,
         set_size: 2,
-        expanded: null,
+        expanded: false,
       },
       {
         node_id: "keyboard-sibling",
@@ -145,6 +152,8 @@ _KEYBOARD_TREE_PROBE = r"""
   return {
     row_count: root.querySelectorAll(".nami-tree-row").length,
     tab_index: root.tabIndex,
+    client_height: root.clientHeight,
+    row_h: ROW_H,
     active_node: document.getElementById(activeDescendant)
       ?.dataset.nodeId ?? null,
   };
@@ -155,12 +164,56 @@ _ACTIVE_PROBE = r"""
 (() => {
   const active = document.activeElement;
   const descendant = active?.getAttribute("aria-activedescendant");
+  const activeRow = descendant === null || descendant === undefined
+    ? null
+    : document.getElementById(descendant);
+  const rootRect = active?.getBoundingClientRect();
+  const rowRect = activeRow?.getBoundingClientRect();
   return {
     label: active?.getAttribute("aria-label") ?? null,
     tag: active?.tagName ?? null,
-    active_node: descendant === null || descendant === undefined
-      ? null
-      : document.getElementById(descendant)?.dataset.nodeId ?? null,
+    active_node: activeRow?.dataset.nodeId ?? null,
+    scroll_top: active?.scrollTop ?? null,
+    client_height: active?.clientHeight ?? null,
+    fully_visible: rootRect !== undefined && rowRect !== undefined &&
+      rowRect.top >= rootRect.top - 0.01 &&
+      rowRect.bottom <= rootRect.bottom + 0.01,
+  };
+})()
+"""
+
+_POINTER_TARGET_PROBE = r"""
+(() => {
+  const state = globalThis.__namiShellTreeEvidence;
+  const row = state?.root?.querySelector(
+    '[data-node-id="keyboard-child"]',
+  );
+  const disclosure = row?.querySelector(".nami-tree-row__disclosure");
+  const label = row?.querySelector(".nami-tree-row__label");
+  if (!(disclosure instanceof HTMLElement) || !(label instanceof HTMLElement)) {
+    throw new Error("keyboard tree pointer targets are unavailable");
+  }
+  return {disclosure: center(disclosure), label: center(label)};
+
+  function center(element) {
+    const rect = element.getBoundingClientRect();
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+  }
+})()
+"""
+
+_INTERACTION_PROBE = r"""
+(() => {
+  const state = globalThis.__namiShellTreeEvidence;
+  const descendant = state?.root?.getAttribute("aria-activedescendant");
+  if (state === undefined) {
+    throw new Error("keyboard tree interaction evidence is unavailable");
+  }
+  return {
+    toggles: state.interactions.toggles,
+    activations: state.interactions.activations,
+    focus_is_tree: document.activeElement === state.root,
+    active_node: document.getElementById(descendant)?.dataset.nodeId ?? null,
   };
 })()
 """
@@ -589,6 +642,41 @@ def _begin_probe(
             ),
         )
 
+    def click(
+        point: object,
+        callback: Callable[[object], None],
+    ) -> None:
+        if type(point) is not dict:
+            raise TypeError("pointer target is invalid")
+        x = point.get("x")
+        y = point.get("y")
+        if type(x) not in {int, float} or type(y) not in {int, float}:
+            raise TypeError("pointer coordinates are invalid")
+
+        def mouse(
+            event_type: str,
+            buttons: int,
+            complete: Callable[[object], None],
+        ) -> None:
+            protocol(
+                "Input.dispatchMouseEvent",
+                {
+                    "type": event_type,
+                    "x": x,
+                    "y": y,
+                    "button": "left",
+                    "buttons": buttons,
+                    "clickCount": 1,
+                },
+                complete,
+            )
+
+        mouse(
+            "mousePressed",
+            1,
+            lambda _value: mouse("mouseReleased", 0, callback),
+        )
+
     def after_initial(value: object) -> None:
         page["initial"] = value
         evaluate(_KEYBOARD_TREE_PROBE, after_keyboard_tree)
@@ -609,6 +697,30 @@ def _begin_probe(
 
     def after_second_focus(value: object) -> None:
         page["second_focus"] = value
+        evaluate(_POINTER_TARGET_PROBE, after_pointer_targets)
+
+    def after_pointer_targets(value: object) -> None:
+        if type(value) is not dict:
+            raise TypeError("pointer targets are invalid")
+        click(value.get("disclosure"), after_disclosure_pointer)
+
+    def after_disclosure_pointer(_value: object) -> None:
+        evaluate(_INTERACTION_PROBE, after_disclosure_evidence)
+
+    def after_disclosure_evidence(value: object) -> None:
+        page["disclosure_click"] = value
+        evaluate(_POINTER_TARGET_PROBE, after_disclosure_targets)
+
+    def after_disclosure_targets(value: object) -> None:
+        if type(value) is not dict:
+            raise TypeError("pointer targets are invalid")
+        click(value.get("label"), after_label_pointer)
+
+    def after_label_pointer(_value: object) -> None:
+        evaluate(_INTERACTION_PROBE, after_label_evidence)
+
+    def after_label_evidence(value: object) -> None:
+        page["label_click"] = value
         native.browser.webview.ZoomFactor = 2.0
         page["controller_zoom"] = float(native.browser.webview.ZoomFactor)
         protocol(

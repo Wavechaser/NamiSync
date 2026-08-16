@@ -324,7 +324,8 @@ unrealized unless an entry says otherwise.
   parent with a retained child; leaves, empty roots, and filtered-empty
   containers expose no disclosure. The installed `tree.js` renders only those decided
   windows as an operable single-tab-stop fixed-height tree with two spacers, an
-  exact 28-pixel row, inert full labels, and stale-generation refusal. The production
+  exact 28-pixel row, inert full labels, visible active-descendant navigation,
+  pointer-owned disclosure toggles that never activate a row, and stale-generation refusal. The production
   shell exposes labelled task navigation and work regions
   with honest empty guidance; it fabricates no task, session, or product row
   and adds no presentation command. The exact bridge surface remains solely in

@@ -703,6 +703,13 @@ defect, and move implementation-level test choreography out of the log.
   container bit rather than the filtered projection. Fixed with immutable
   retained-child metadata: only projected parents emit Boolean expansion;
   leaves and containers with no retained child emit `null` and no disclosure.
+- MODERATE - FIXED (2026-08-17). Virtual-tree interaction ownership gaps.
+  Keyboard navigation changed the active descendant without ensuring its row
+  stayed inside the scroll viewport, while the visible disclosure had no
+  pointer-owned toggle path and bubbled to row activation. Fixed with exact
+  fixed-row reveal math and a disclosure listener that stops propagation,
+  focuses the tree, and requests one toggle without activation. A projected
+  end node remains inert, and callback failure cannot leak into row activation.
 - MINOR - FIXED (2026-08-13). Presentation-state acceptance drift.
   The entire task rail inherited an opaque generic card, neutral hover/pressed
   and primary rest/pressed states collapsed visually, and dialog exit motion was
