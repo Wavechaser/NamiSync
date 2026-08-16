@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import subprocess
 from pathlib import Path
 from threading import Event, Lock, Thread
@@ -49,6 +48,7 @@ from tests.interfaces.web._public_view_witnesses import (
     PublicViewWitness,
     iter_public_view_witnesses,
 )
+from _frontend_test_support import _node_executable
 
 
 REQUEST_ID = "a1" * 16
@@ -360,11 +360,6 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
         "The desktop action contains invalid data.",
     )
     assert handled == []
-
-
-def _node_executable() -> Path | None:
-    installed = shutil.which("node")
-    return Path(installed) if installed is not None else None
 
 
 @pytest.mark.supplemental_node

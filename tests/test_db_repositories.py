@@ -18,13 +18,14 @@ from namisync.db.repositories import LedgerRepository
 
 from _db_fixtures import (
     NOW,
+    _file,
+    _scan,
     attestation,
     file_stat,
     operation,
     plan,
     setup_recorder,
 )
-from test_recorder_inventory_integrity import _file, _scan
 
 
 def test_mapping_repository_round_trips_paired_noop_correspondence(tmp_path: Path) -> None:

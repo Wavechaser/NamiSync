@@ -30,8 +30,7 @@ from namisync.core.session import (
 from namisync.interfaces.web.commands import production_command_specs
 from namisync.workflows.views import ResultCategory
 
-from test_wheel_assets import ASSET_ROOT, INITIAL_ASSETS
-from test_transport import _node_executable
+from _frontend_test_support import ASSET_ROOT, INITIAL_ASSETS, _node_executable
 
 
 CSP = (

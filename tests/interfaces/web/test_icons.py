@@ -14,8 +14,7 @@ import pytest
 
 from conftest import BuiltWheel
 
-from test_transport import _node_executable
-from test_wheel_assets import ASSET_ROOT
+from _frontend_test_support import ASSET_ROOT, _node_executable
 
 
 PROJECT_ROOT = Path(__file__).parents[3]

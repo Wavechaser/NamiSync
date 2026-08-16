@@ -1534,7 +1534,7 @@ def test_br_g_29_folder_verify_continues_past_one_unreadable_frozen_subject(
         VolumeEvidence,
     )
     from namisync.interfaces.service import SessionObserver, _dispatcher
-    from test_inventory_runtime import (
+    from _inventory_fixtures import (
         PROFILE,
         VOLUME_ID,
         _Resolver,

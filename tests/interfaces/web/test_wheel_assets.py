@@ -10,30 +10,10 @@ import zipfile
 from pathlib import Path
 
 from conftest import BuiltWheel, InstalledWheel
+from _frontend_test_support import ASSET_ROOT, INITIAL_ASSETS
 
 
 PROJECT_ROOT = Path(__file__).parents[3]
-ASSET_ROOT = "namisync/interfaces/web/assets/"
-INITIAL_ASSETS = {
-    "app.css",
-    "app.js",
-    "appearance.js",
-    "bridge.js",
-    "components.css",
-    "icons.js",
-    "icons/LICENSE.txt",
-    "icons/SOURCE.json",
-    "icons/checkmark_circle_20_regular.svg",
-    "icons/dismiss_circle_20_regular.svg",
-    "icons/info_20_regular.svg",
-    "icons/warning_20_regular.svg",
-    "index.html",
-    "panels.js",
-    "rail.js",
-    "render.js",
-    "tokens.css",
-    "tree.js",
-}
 
 
 def test_sh_g_6_built_wheel_contains_exact_initial_web_assets(

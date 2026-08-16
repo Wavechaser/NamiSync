@@ -17,11 +17,9 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import (
     FileRecord,
-    ScanResult,
     ScanScope,
     UnsupportedReason,
     UnsupportedRecord,
-    VolumeEvidence,
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.recording import (
@@ -33,43 +31,7 @@ from namisync.db.connections import connect_ledger_reader
 from namisync.db.repositories import LedgerRepository
 from namisync.workflows.views import inventory_row_view
 
-from _db_fixtures import NOW, attestation, file_stat, plan, setup_recorder
-
-
-def _scan(
-    setup,
-    records: tuple[FileRecord, ...],
-    *,
-    complete: bool = True,
-    scope: ScanScope | None = None,
-    unsupported: tuple[UnsupportedRecord, ...] = (),
-) -> ScanResult:
-    sync_plan = plan(())
-    return ScanResult(
-        root=sync_plan.source_root,
-        volume_id=sync_plan.source_volume_id,
-        volume_evidence=VolumeEvidence("Source", "C:"),
-        profile=sync_plan.source_profile,
-        files=records,
-        directories=(),
-        unsupported=unsupported,
-        warnings=(),
-        scope=scope or ScanScope.full(),
-        complete=complete,
-    )
-
-
-def _file(path: str, index: int, *, size: int = 7) -> FileRecord:
-    stat = file_stat(size=size, identity_index=index)
-    return FileRecord(
-        path,
-        normalize_relative_path(path),
-        stat.size,
-        stat.mtime_ns,
-        stat.file_identity,
-        stat.nlink,
-        stat.metadata,
-    )
+from _db_fixtures import NOW, _file, _scan, attestation, plan, setup_recorder
 
 
 def _unsupported(path: str) -> UnsupportedRecord:
