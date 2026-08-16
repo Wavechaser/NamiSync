@@ -1,6 +1,7 @@
 # M1 Bridge and Presentation Contract
 
-Status (2026-07-30, contract realigned 2026-08-14): design, decision, and
+Status (2026-07-30, contract realigned 2026-08-14, hardened and reverified
+2026-08-17): design, decision, and
 acceptance log for implemented M1 Stage 5.5 (facade completion) and active
 Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
 existing transport chain through Slice 3 and the post-Slice-3 hardening have
@@ -14,9 +15,11 @@ have also landed. The committed calibration-a artifact now supplies the
 normative transport measurement, and the separate contract freezes the
 1,966,080-byte ceiling. Independent holdout-b passes, closing SH-G-8 and
 BR-G-42 event/transport custody only.
-GUI Break 1 and Slice 4 have completed the audited realignment recorded here;
+GUI Break 1 and Slice 4 completed the audited realignment recorded here and
+were hardened and reverified on 2026-08-17;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
-migration is complete. Other BR-G-42 feature rows remain on their owning slices.
+migration is complete. Other BR-G-42 rows, including current-source event
+timing and later feature surfaces, remain open on their owning slices.
 BR-G-45 separately keeps the 100,000-subject terminal
 artifact set and aggregate completed-task retention policy open. Shell-owned
 SH-G-15 separately keeps version-bound whole-runtime containment open. The
@@ -62,8 +65,9 @@ ordering aid, not an alternative definition of done.
 
 **Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
 secured host and production transport are promoted into the active focused
-documents and README. GUI Break 1 and Slice 4 completion claims are restored
-after their ordinary, scale, security, and clean-wheel headed gates passed. The
+documents and README. GUI Break 1 and Slice 4 completion claims were hardened
+and reverified on 2026-08-17 after their ordinary, scale, security, and clean-
+wheel headed gates passed. The
 complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
 the remaining product-surface, second GUI-break, and packaging work, while
 slice 8 still performs the
@@ -1349,7 +1353,8 @@ an actual U+202E query matches actual U+202E data, while the typed characters
 `⟦U+202E⟧` match only that literal spelling. This presentation projection adds
 no field cap or second wire shape.
 
-**Realignment completed after audit (2026-08-13).**
+**Realignment completed after audit (2026-08-13; hardened and reverified
+2026-08-17).**
 `interfaces/web/visible_sequence.py` remains the single tree-agnostic pure
 implementation. The corrected seam uses
 the workflow-owned array directly, retains source/visible indexes once, and
@@ -1372,10 +1377,11 @@ canonical temporary JSON manifest produced through the production
 `build_node_tree` -> `derive_visible_sequence` ->
 `window_visible_sequence` -> `to_visible_window_view` chain. Direct Node and
 the installed WebView2 child consume those exact bytes, and Python, child, and
-page report the same SHA-256. Its cases cover named head, next, tail, empty,
-exact-256, and layout-control windows, all three expansion states on one real
-node, and ordinary-Unicode and long display values admitted by the real
-`NodeTree` path contract. The exhaustive fixed-set sink probe remains
+page report the same SHA-256. Its cases cover the `head`, `next`, `tail`,
+`empty`, `maximum`, and `layout_control` windows, all three expansion states on
+one real node across the pointer and projected-empty windows, and ordinary-
+Unicode and long display values in `next` admitted by the real `NodeTree` path
+contract. The exhaustive fixed-set sink probe remains
 renderer-local because C0 characters are not valid Windows filename input; it
 proves the presentation transform, not workflow authority. The manifest is
 test-only and absent from package data. Plan and inventory command rows and
@@ -2303,9 +2309,10 @@ absolute physical local page/data root. It automates the real native folder
 picker without a foreground-forcing API, localized-label lookup, or synthetic
 mouse/keystroke input: UI Automation classifies the exact edit and confirmation
 controls, then a visible, enabled, same-dialog/process/thread native `Button`
-with control id `1` receives one queued `BM_CLICK`. Exact dialog closure and the
-later selected-path assertions prove processing rather than treating
-`PostMessageW` admission as selection. The gate proves selected paths stay
+with control id `1` receives one queued `BM_CLICK` per validated attempt, with
+at most one reclassification-bound retry. Exact dialog closure and the later
+selected-path assertions prove processing rather than treating `PostMessageW`
+admission as selection. The gate proves selected paths stay
 behind purpose-bound ids, commits an independent second loopback origin and
 verifies zero handler calls, and round-trips the hostile corpus through the real
 pinned return transport and production sink. Renderer/log evidence is read from
@@ -3465,9 +3472,10 @@ because its local tests are easier.
   canonical temporary JSON bytes generated through `build_node_tree` ->
   `derive_visible_sequence` -> `window_visible_sequence` ->
   `to_visible_window_view` in both the direct Node probe and installed WebView2
-  child. Python, child, and page SHA-256 values must agree. Its cases cover
-  named head, next, tail, empty, exact-256, and layout-control windows,
-  expansion tri-state, and ordinary-Unicode and long-label values;
+  child. Python, child, and page SHA-256 values must agree. Its cases cover the
+  `head`, `next`, `tail`, `empty`, `maximum`, and `layout_control` windows,
+  expansion tri-state across the pointer and projected-empty windows, and
+  ordinary-Unicode and long-label values in `next`;
   independently authored positive row dictionaries are insufficient evidence.
   The separate renderer-local control corpus tests the fixed sink set without
   pretending invalid Windows filename characters traversed `NodeTree`. The
@@ -3648,7 +3656,8 @@ because its local tests are easier.
   predicates. Its 67,375,104-byte whole-Job delta is not transport-custody
   evidence and did not decide this realigned clause. SH-G-8 and BR-G-42
   event/transport custody are closed by the independent holdout; other BR-G-42
-  feature rows remain on their owning slices.
+  rows, including current-source event timing and later feature surfaces,
+  remain open on their owning slices.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
   separately.** For one exact 100,000-subject completion, calibration and a
   later independent holdout measure the complete per-completion artifact set:
@@ -3824,13 +3833,14 @@ a parallel pair.
 | 0 | Host | pywebview reality spike | nothing | BR-G-30 |
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
-| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33 plus XV-18 |
+| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33, BR-G-41 transport/lifecycle foundations, the closed BR-G-42 event/transport-custody portion, plus XV-18 |
 | GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; visual contract in `DESKTOP_UI.md` |
-| 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-34, SH-G-7 closed |
+| 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-32 generic-tree-sink portion, BR-G-34, SH-G-7 closed |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
 | 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown, terminal-artifact retention policy | 5, 6 | BR-G-40, BR-G-41, BR-G-45, and the history portion of BR-G-42 |
-| 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | 7 | BR-G-43, BR-G-44, and shell-owned SH-G-15 |
+| GUI 2 | Visual cohesion | Holistic spacing, motion, empty/error-state, accessibility, and responsive review across the completed product surfaces | 7 | `DESKTOP_UI.md` holistic review before release |
+| 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | GUI Break 2 | BR-G-43, BR-G-44, and shell-owned SH-G-15 |
 
 **Ordering and parallelism.** Slice 0 shares nothing with Stage 5.5 and runs
 beside it. It is the falsification gate for the chosen host and must complete
@@ -3843,9 +3853,9 @@ normative in `DESKTOP_UI.md`.
 Slice 4 additionally needs GUI Break 1, while its Lane A logic may be prepared
 earlier. **Slices 5 and 6 are a parallel pair**
 only once the host/transport chain through slice 3, slice 4, and Lane D are all
-in. Slice 7 needs 5 and 6; slice 8 needs 7.
+in. Slice 7 needs 5 and 6; GUI Break 2 needs 7; slice 8 needs GUI Break 2.
 
 There is no fixed critical path without duration estimates. The dependency
 shape is
-`max(max(0→1→2→3→GUI1, A)→4, max(A,B,C)→D) → (5 ∥ 6) → 7 → 8`. Lanes B and C and slices
+`max(max(0→1→2→3→GUI1, A)→4, max(A,B,C)→D) → (5 ∥ 6) → 7 → GUI2 → 8`. Lanes B and C and slices
 0–3 are therefore parallelizable prerequisites, not work "off" the path.

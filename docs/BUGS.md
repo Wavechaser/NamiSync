@@ -595,15 +595,16 @@ defect, and move implementation-level test choreography out of the log.
   and retaining `GrayText` for disabled cards. Static and clean-wheel gallery
   evidence covers both selectors, all enabled states, exact system colors, and
   text contrast; ordinary transparent, hover, and press behavior is unchanged.
-- SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. A loaded-time
-  appearance or guard refusal attempted window destruction while the exposed
-  dispatcher was still accepting; if public destruction threw or returned
-  without closing, the real GUI loop could remain alive with trusted command
-  authority. Fixed by rejecting dispatch and waking the registry before
-  presentation teardown, making the refusal transition idempotent, checking
-  the closed event, and posting one owner-bound `WM_CLOSE` after a failed or
-  ineffective public destroy. Both close paths may still fail, but authority
-  then remains rejected and manual close enters the startup-refused finalizer.
+- SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. An initial,
+  pre-open appearance or guard refusal attempted window destruction while the
+  exposed dispatcher was still accepting; if public destruction threw or
+  returned without closing, the real GUI loop could remain alive with trusted
+  command authority. Fixed by rejecting dispatch and waking the registry
+  before presentation teardown, making the refusal transition idempotent,
+  checking the closed event, and posting one owner-bound `WM_CLOSE` after a
+  failed or ineffective public destroy. Both close paths may still fail, but
+  authority then remains rejected. Manual or later native closure lets the GUI
+  loop return, after which the startup-refused finalizer runs.
 - MODERATE - FIXED (2026-08-17). Selected-state boundary contrast. Selected
   and current task cards used the subtle neutral boundary that belongs to
   quiet surfaces, leaving their actionable edge below the 3:1 non-text

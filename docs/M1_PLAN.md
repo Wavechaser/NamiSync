@@ -6,7 +6,7 @@ ledger v3 verification-invalidation boundary and history v5 receipt journal in
 `DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
 unbounded history getter remains.
 
-Status (updated 2026-08-14): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (updated 2026-08-17): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. Stage 6's secured host and transport through Slice 3, GUI Break 1
@@ -1101,12 +1101,13 @@ Stage 6 presentation helper.
 - Rewrite `DESKTOP_UI.md` for the web target and update `ui_mockup/` from
   staging artifact to implementation starting point.
 
-The exact eight implementation slices, dependency graph, 44 BR-G gates,
+The exact eight implementation slices, dependency graph, 45 BR-G gates,
 regression watchlist, reference-machine latency/memory budgets, and 100k-file /
 120k-node / one-million-history-item scale envelope live in `M1_BRIDGE.md` and
 are normative for this stage.
 
-**Implementation checkpoint (realigned 2026-08-13).** Stage 6's secured host,
+**Implementation checkpoint (realigned 2026-08-13; hardened and reverified
+2026-08-17).** Stage 6's secured host,
 transport through Slice 3, and post-Slice-3 hardening remain complete under
 the production mapping recorded only in `M1_BRIDGE.md`. The explicit-`Gap`-only
 recovery and command-specific `start_plan` revision decisions are ratified and
@@ -1121,9 +1122,10 @@ renderer evidence now comes from one canonical temporary JSON manifest built
 through the production workflow-tree, visible-sequence, window, and wire-view
 functions; direct Node and installed WebView2 consume the same bytes and agree
 with Python on SHA-256. This binds the generic Slice 4 seam without claiming a
-Slice 5/6 bridge command, product DOM, or latency result. The rail and
-resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
-UI, release, and beta claims stay open. The installed real-WebView2
+Slice 5/6 bridge command, product DOM, or latency result. The rail and resting
+task cards expose Mica; selected/current cards are opaque. Slice 5 remains the
+first real plan surface; the remaining product UI, release, and beta claims
+stay open. The installed real-WebView2
 browser-behavior witness migration is complete. The existing four-task event
 truth remains useful, and the fixed 150 ms linger plus immediate-wake focused
 regressions have landed. The frozen/disjoint realistic corpus and

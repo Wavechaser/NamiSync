@@ -1,6 +1,6 @@
 # Features
 
-Status note (updated 2026-08-15): the headless sync, inventory, integrity,
+Status note (updated 2026-08-17): the headless sync, inventory, integrity,
 history, selection, and CLI capabilities are active. The secured desktop host,
 transport, and shared presentation foundation are active; its product plan,
 inventory, history, and lifecycle surfaces remain unrealized. Exact M1 delivery
@@ -348,14 +348,16 @@ unrealized unless an entry says otherwise.
   fallback base. Unselected cards are transparent, hover/press use distinct
   tokenized overlays, and the selected/current card uses the opaque selected
   surface with an accessible neutral boundary without conflating selection
-  with running status. The window provides
-  a scrollable newest-first rail of adapter-owned task cards with status, paths,
-  completion date, close controls, and mini progress bars. A task may hold a
-  reviewed plan without a live session; closing a busy task confirms, cancels,
-  waits for a terminal record, then unsubscribes and closes the session. Closing
-  must also release every process-local plan, execution, inventory, selection,
-  and presentation artifact owned by that task; repeated create/close cycles
-  must keep all registries bounded.
+  with running status. This rail/card visual component contract is active. The
+  task-backed behavior remains unrealized: a scrollable newest-first rail of
+  adapter-owned task cards with status, paths, completion date, close controls,
+  and mini progress bars; reviewed-plan retention without a live session;
+  confirmed busy-task cancellation and terminal close; and bounded release of
+  every process-local artifact owned by a closed task. Closing a busy task must
+  confirm, cancel, wait for its terminal record, unsubscribe observations, and
+  only then close/release the session; repeated create/close cycles must keep
+  every task-owned plan, execution, inventory, selection, and presentation
+  registry bounded.
 - **Single-Page Task Shell**. Each task keeps source, destination, options, status, progress, plan, inventory, and log controls on one page.
 - **Folder Selection**. Source and destination support editable recent-folder dropdowns and folder browser buttons.
 - **Plan Tree**. The Plan view displays literal operations in a directory-nested tree with rolled-up counts, sizes, reasons, hashes, and statuses. Move-shaped decompositions use paired old-path annotations and noninteractive ghosts without becoming rename operations or independent selection units; nested move annotations are suppressed where an outer pairing already explains the structure.

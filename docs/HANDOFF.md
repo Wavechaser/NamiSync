@@ -1,62 +1,82 @@
 # Session Handoff
 
-Status (2026-08-16): the repository now has a documented five-level test run
-policy and an executable primary-ownership selector. Exact module membership
-lives only in `tests/_departments.py`; `docs/TESTS.md` explains how to choose
-focused, department, cross-department, ordinary, and complete/headed runs.
+Status (2026-08-17): GUI Break 1 and Slice 4 have completed the requested
+clean-room realignment and follow-up hardening. The implementation was split
+into 19 independently reviewable code/test checkpoints from `ce124e0` through
+`e287ab5`; this documentation closeout records their final verified state.
 
 ## Delivered
 
-- Added repeatable `--dept` with equivalent `--department`, union selection,
-  clear unknown-department errors, and action-guiding fail-closed validation
-  that every pytest module has exactly one primary owner. Both pytest default
-  module naming forms are covered.
-- Added a repository guard against imports from any Python source under
-  `tests/` into a collected test module, and moved the existing shared web,
-  inventory-runtime, and database helpers into non-collected underscore-
-  prefixed support modules.
-- Made the ordinary installed-wheel fixture use a pip-less venv installed by
-  the parent pip while retaining target-prefix, package-resource, and pip-
-  absence evidence. The headed installed-wheel fixture remains unchanged.
-- Cached only successful directory-junction capability probes by source/target
-  device pair. Every behavioral test still creates its own actual junction;
-  failed probes remain uncached.
-- Sized the native verifier witness to exactly one 4 MiB chunk plus a tail and
-  the rollover mechanism fixture to a test-only threshold while preserving
-  independent production-configuration assertions.
-- Made gallery modes and transport scenarios lazy for focused headed reruns.
-  Complete headed selection still requests all four gallery modes and both
-  transport scenarios. Successes and failures are cached so later nodes cannot
-  retry a used root or obscure the original failure. Installed-asset validation
-  materializes its own light comparison baseline.
-- Removed the duplicate six-case WebView2 version matrix from the bridge tests;
-  the runtime-owned matrix remains authoritative.
+- Restored the native Fluent foundation: live UISettings accent roles,
+  theme-aware opaque fallback, truthful material landing, current-generation
+  appearance publication, exact observation lifetime, presentation-ready
+  document admission, and fail-closed initial versus post-open refusal paths.
+- Kept the task rail and unselected cards transparent over Mica, made
+  selected/current cards opaque with an accessible boundary, and paired their
+  forced-color `Highlight` background with `HighlightText` while preserving
+  disabled `GrayText`.
+- Realigned `visible_sequence.py` to workflow-owned arrays and the complete
+  65,536-byte ingress ceiling, retained raw Unicode/search authority, emitted
+  one exact bounded wire view, made anchor lookup proportional to ancestor
+  depth, and exposed expansion only for parents retained by the active
+  projection.
+- Made the generic virtual tree keyboard-, pointer-, scroll-, resize-, and
+  accessibility-operable without moving hierarchy, filtering, selection, or
+  bridge authority into JavaScript. Tree-owned generations reject stale pages;
+  controller disposal disconnects observation and invalidates pending work.
+- Neutralized the fixed filesystem layout-control set only at the final text
+  sink while preserving raw workflow, wire, search, and opaque callback
+  identities. Residual Unicode ambiguity remains documented rather than being
+  overstated as universal spoof prevention.
+- Bound positive renderer evidence to one canonical temporary manifest built
+  by `build_node_tree` -> `derive_visible_sequence` ->
+  `window_visible_sequence` -> `to_visible_window_view`; Python, direct Node,
+  and installed WebView2 consume the same bytes and agree on SHA-256. The
+  exhaustive fixed-set sink corpus remains explicitly renderer-local because
+  invalid Windows filename characters cannot claim workflow provenance.
+- Repaired every custom headed composition to preserve the production
+  `shell_ready`/appearance handshake and immutable command mapping. The native
+  picker witness uses an exact validated `BM_CLICK` target without synthetic
+  focus or keystroke input, and mutable headed result snapshots now tolerate
+  only bounded Windows sharing violations while retaining atomic replacement.
 
-## Rigor Boundaries
+## Adversarial Review
 
-- Departments indicate primary ownership and routing, never complete blast-
-  radius analysis. Public contracts require explicit consumer departments;
-  uncertain or cross-cutting changes require the ordinary repository suite.
-- `--dept` intersects explicit path and node selections. It does not expand
-  dependencies or imply headed coverage.
-- Protected transport-custody calibration, holdout, and live guards were not
-  changed. Settlement capture caching, the proposed SQLite-limit substitution
-  for the live 33k-row guard, CLI lifecycle repartition, and default xdist were
-  deliberately deferred.
+- Separate builder/reviewer passes found and corrected lifecycle leaks, stale
+  observation ordering, CSP-incompatible accent publication, false fallback
+  evidence, startup-authority races, stale document epochs, inaccessible tree
+  semantics, missing scroll/resize paging, request ping-pong, forced-color
+  mismatches, raw directional-control rendering, fixture laundering, and stale
+  headed wrappers.
+- The last code pass specifically caught the raw-readiness supersession race,
+  selected-card forced-color mismatch, and missing passive resize ownership.
+  Each received a reproducing regression and an independent clear verdict.
+- The final documentation truth audit reconciled initial versus post-open
+  refusal, active bridge API versus absent product callers, exact manifest
+  names, gate counts, measurement status, and remaining-slice ownership. No
+  actionable documentation finding remains.
 
 ## Verification
 
-- Affected helper owners and consumers: 208 passed, 7 capability skips.
-- Department policy after follow-up hardening: 16 passed.
-- Ordinary repository: 2,289 passed, 9 capability skips, 27 headed deselected.
-- Headed interface gate on the real installed-wheel/WebView2 host: 27 passed;
-  the follow-up gallery rerun passed all 3 affected headed cases.
-- Import boundary lint: 11 contracts kept, 0 broken.
-- Independent adversarial review found two issues before closure: incomplete
-  pytest filename discovery and lazy scenario failure retries. Both received
-  regressions, were corrected, and passed re-review; no other actionable
-  finding remained. Independent review of the follow-up guardrails was clean.
+- Ordinary repository suite: `2,351 passed, 10 skipped, 27 deselected`.
+- Interfaces headed gate on the installed wheel and real WebView2 host:
+  `27 passed, 2,361 deselected`.
+- Complete unfiltered repository suite: `2,378 passed, 10 skipped`.
+- Import boundary lint: `11 kept, 0 broken`.
+- Every checkpoint also passed its focused Python, direct bundled-Node, and/or
+  installed-wheel headed witness before commit. The final diff check is clean
+  apart from expected line-ending notices.
 
-The next test operation should begin at the narrowest useful level in
-`docs/TESTS.md`. A release still uses the documented unfiltered complete command
-and import lint; no case catalog or timing threshold belongs in the policy.
+## Remaining Work
+
+- Slice 5–7 product plan, inventory, history, settings, and lifecycle surfaces;
+  GUI Break 2 visual cohesion; and Slice 8 beta/release closure remain open.
+- BR-G-32's plan- and inventory-DOM clauses, full BR-G-41 lifecycle closure,
+  BR-G-42 current-source event timing and later product-view rows, BR-G-45
+  terminal-artifact/completed-task retention, and SH-G-15 version-bound whole-
+  runtime containment remain open on their owning phases.
+- Slice 4's 120,000-node evidence is a retained-representation witness and
+  deterministic scaling guard, not Tier 2 latency acceptance. Slice 5/6 must
+  supply the named product-view measurements without retuning these contracts.
+- The temporary pre-Stage-6 root `M1_SHELL.md` is absent after verified
+  realignment; active delivery authority remains `docs/M1_SHELL.md`.

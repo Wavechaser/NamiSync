@@ -30,9 +30,8 @@ shapes to remain within that frozen ceiling on ordinary suite runs;
 BR-G-45 separately leaves full terminal-artifact retention open, and
 shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
 earlier whole-Job delta is diagnostic input only, not a result for any of those
-new predicates. GUI Break 1
-and Slice 4 have completed their audited token/material/motion and
-visible-sequence/tree/shell realignment with ordinary, scale, and real
+new predicates. GUI Break 1 and Slice 4 completed their audited realignment and
+were hardened and reverified on 2026-08-17 with ordinary, scale, and real
 clean-wheel headed evidence. User-facing plan, inventory, history,
 and control surfaces remain; `M1_SHELL.md` owns their implementation order and
 beta-package closure.
@@ -114,9 +113,12 @@ document and a dispatcher snapshotted from the production command mapping
 defined exclusively by `M1_BRIDGE.md`, and starts only Edge Chromium with
 the packaged page served on a random loopback origin. The initialized callback
 binds that exact origin once. Renderer/origin failure aborts before native
-window creation; guard/load failure destroys the created window exactly once.
-Both paths close the service, logging, and mutex without replacing the original
-failure diagnosis.
+window creation. An initial guard failure or pre-open loaded refusal rejects
+authority, attempts public destruction once, and, if that call throws or
+returns without closing, posts one owner-bound `WM_CLOSE`. Neither request
+guarantees that a broken native window closes. Service, logging, and mutex
+finalization follows only after the WebView loop returns; authority remains
+rejected meanwhile, and cleanup never replaces the original failure diagnosis.
 
 Native test and gallery compositions may supply an existing absolute physical
 local index file directly to `run_desktop`. The production launcher never
@@ -140,11 +142,12 @@ GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
 establishes the completed design-token foundation. NamiSync presents as a
 Fluent 2 Windows 11 app using Segoe UI Variable for body text and
 Cascadia Mono/Consolas for paths and hashes. It retains the standard native
-frame. Mica is the whole-window base, with transparent page/controller
-backgrounds and opaque Fluent cards for readable scrolling content; high
-contrast, unavailable material, or a transparency failure falls back to an
-opaque system-appropriate neutral surface. M1 adds neither Acrylic nor a
-custom caption.
+frame. Mica is the whole-window base: the page, controller, task rail, and
+unselected task cards are transparent, while selected/current cards and
+scrolling work/tree panes are opaque for readability. High contrast,
+unavailable material, or a transparency failure falls back to an opaque
+system-appropriate neutral surface. M1 adds neither Acrylic nor a custom
+caption.
 
 `tokens.css` is the only source file allowed to contain these exact 13 authored
 red/green/blue/yellow/purple palette primitives:
@@ -263,13 +266,13 @@ cursor and command-receipt identity exposed across the wire. The desktop owns th
 presentation queue fed by that sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe on task close and close every observation before service shutdown.
 
-A loaded-time security, material, or presentation refusal closes dispatcher
-admission and wakes the task registry before appearance teardown or any window
-close request. Public destruction is attempted once; if that API throws, the
-host also checks the closed event and posts one `WM_CLOSE` to its retained
-native window handle after either a throw or a return without closure, so the
-normal startup-refused path can release the GUI loop. A failure of both close
-paths never reopens authority or replaces the original startup diagnosis.
+An initial loaded-time security, material, or presentation refusal closes
+dispatcher admission and wakes the task registry before appearance teardown or
+any window close request. Public destruction is attempted once; after a throw
+or a return without closure, the host posts one `WM_CLOSE` to its retained
+native window handle so the startup-refused path can release the GUI loop. A
+failure of both close paths never reopens authority or replaces the original
+startup diagnosis.
 
 Native load alone does not open a document. The packaged module installs its
 appearance receiver and shell DOM, then sends the exact startup-only
@@ -279,13 +282,17 @@ API notification cannot advance a superseded attempt into an acknowledgement.
 Ordinary commands remain unavailable until native security/material readiness,
 that acknowledgement, and a successful current initial appearance post have all
 converged for the current document generation. A fixed five-second product
-deadline starts at each native `loaded`;
-missing acknowledgement or failed publication enters the same fail-closed
-startup-refusal path. The visible `Ready` label waits until the receiver has
-actually applied that generation's first valid appearance envelope. A
-same-origin reload closes normal admission until the new packaged document
-completes the same handshake; stale timers, acknowledgements, and publication
-callbacks cannot settle a later generation.
+deadline starts at each native `loaded`. Before the first open generation,
+missing acknowledgement or failed publication enters the direct, fail-closed
+startup-refusal path. After an earlier generation opened, a reload refusal that
+wins while the host remains open records the diagnosis and uses the ordinary
+bounded service-close state machine, preserving active-work teardown. A close
+already in flight retains ownership and the later refusal cannot replace it.
+The visible `Ready` label waits until
+the receiver has actually applied that generation's first valid appearance
+envelope. A same-origin reload closes normal admission until the new packaged
+document completes the same handshake; stale timers, acknowledgements, and
+publication callbacks cannot settle a later generation.
 
 `NamiSyncService.close()` is bounded but not instantaneous: its derived
 allowance is twelve seconds, reached only when the audit writer is genuinely
@@ -440,9 +447,10 @@ collapsed projected parents emit `true` and `false`, while leaves and
 structural containers with no retained child emit no expansion state. It never
 lets an active descendant remain outside the tree viewport: keyboard movement
 and a completed off-window target use the fixed 28-pixel global index to reveal
-the entire row without scrolling an outer surface. User scroll bursts collapse
-to one final animation-frame reconciliation. Crossing a virtual spacer requests
-the missing leading or trailing global index with the tree-owned generation;
+the entire row without scrolling an outer surface. User scroll bursts and
+layout-only tree-root resizes enter the same coalesced animation-frame
+reconciliation. Crossing a virtual spacer requests the missing leading or
+trailing global index with the tree-owned generation;
 the returned page preserves `scrollTop` and cannot snap the viewport. Scrolling
 within a covered window sends no request and moves only presentation focus to a
 fully visible rendered row when one is available; otherwise it clears the
@@ -478,13 +486,17 @@ validation/window authority and emits the exact renderer view. One canonical
 temporary JSON manifest is produced through the real workflow tree,
 visible-sequence, window, and wire-view functions; the direct Node probe and
 installed WebView2 child consume those same bytes, and Python, child, and page
-SHA-256 values match. Its cases cover the named head, next, tail, empty,
-exact-256, and layout-control views plus expansion tri-state and ordinary-
-Unicode and long-label values carried by those views.
+SHA-256 values match. Its cases cover the `head`, `next`, `tail`, `empty`,
+`maximum`, and `layout_control` views, expansion tri-state across the pointer
+and projected-empty views, and ordinary-Unicode and long-label values carried
+by `next`.
 The real workflow fixture uses representative admitted layout controls; the
 exhaustive fixed-set sink probe is renderer-local because C0 characters are not
 valid Windows filename input. JavaScript does not duplicate structural
-validation. The manifest remains test-only and absent from the wheel. This
+validation. Before removing a tree root, its owner disposes the controller;
+that idempotently disconnects resize observation, removes controller-owned root
+listeners, invalidates pending work, and makes an already queued frame inert.
+The manifest remains test-only and absent from the wheel. This
 evidence adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
 

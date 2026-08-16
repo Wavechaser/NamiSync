@@ -18,17 +18,19 @@ custody corpora and production-path runner have also landed. SH-G-8's realigned
 event/custody evidence now includes a committed normative calibration-a
 artifact, a frozen 1,966,080-byte ceiling, and an accepted independent
 holdout-b dataset. SH-G-8 and BR-G-42 event/transport custody are closed; other
-BR-G-42 feature rows remain on their owning slices.
+BR-G-42 rows, including current-source event timing and later feature surfaces,
+remain open on their owning slices.
 One current-source calibration-a child now runs as a separate ordinary-suite
 drift guard and requires both live custody shapes to remain within the frozen
 1,966,080-byte ceiling without modifying the accepted validator or artifacts.
 BR-G-45 terminal-artifact
 retention and shell-owned SH-G-15 whole-runtime containment remain independently
 open.
-GUI Break 1 and Slice 4 have completed their audited token/material/motion,
-visible-sequence, operable-tree, and shell realignment; the user-facing
-plan, inventory, history, and control surfaces remain, and the API remains
-latent.
+GUI Break 1 and Slice 4 completed their audited realignment and were hardened
+and reverified on 2026-08-17; the user-facing
+plan, inventory, history, and control surfaces remain. The gated desktop bridge
+API and production mapping are active, while the current empty product page
+invokes only startup and has no later workflow-surface callers yet.
 
 ## Purpose
 
@@ -39,8 +41,8 @@ sync policy, filesystem mutation, SQL, plan dependencies, integrity
 classification, or session lifecycle.
 
 CLI and desktop must produce the same workflow request for the same intent and
-interpret the same typed result consistently. API, when added, follows the same
-rule.
+interpret the same typed result consistently. A future remote/non-bridge API
+adapter, when added, follows the same rule.
 
 ## Service-Backed CLI Adapter
 
@@ -557,11 +559,14 @@ prepares the renderer before service/window construction, validates and if
 needed initializes the database pair before command admission, creates one
 pending `NativeDocumentState`, and binds its loopback origin once during the
 renderer-checked initialized callback. The host snapshots the immutable
-production mapping defined in `M1_BRIDGE.md` before exposing the page. Loaded attachment failure
-destroys the window once; pre-native initialization failure does not call
-destroy. One finalizer closes any constructed service, then releases logging,
-app-path leases, and the mutex only after complete quiescence, preserving the
-initiating startup diagnosis. Every failure caught after logging configuration
+production mapping defined in `M1_BRIDGE.md` before exposing the page. Initial
+loaded attachment refusal rejects authority, attempts public destruction once,
+and requests one owner-bound native close if the public call throws or returns
+without closing; pre-native initialization failure does not call destroy.
+Neither close request guarantees closure. After the GUI loop returns, one
+finalizer closes any constructed service, then releases logging, app-path
+leases, and the mutex only after complete quiescence, preserving the initiating
+startup diagnosis. Every failure caught after logging configuration
 records one typed `startup.failed` traceback before that finalizer; diagnostic
 failure cannot replace the native report or process exit status.
 Native `loaded` starts a fixed five-second document-readiness deadline rather
@@ -569,9 +574,11 @@ than opening commands. The packaged module installs its receiver and shell,
 acknowledges the current generation through `dispatch`, and waits for the first
 valid appearance envelope before showing `Ready`. A true reload or same-page
 pywebview reinjection repeats that handshake. Initial refusal uses the
-startup-only teardown; refusal after a previously open generation records the
-diagnosis before entering the ordinary bounded service-close state machine, so
-active work is never bypassed by direct destruction.
+startup-only teardown. After a previously open generation, a readiness refusal
+that wins while the host remains open records the diagnosis before entering the
+ordinary bounded service-close state machine, so active work is never bypassed
+by direct destruction. A close already in flight retains ownership and the
+later refusal cannot replace it.
 Clean-wheel headed gates exercise this composition through the real pinned
 WebView2/pythonnet stack, including packaged-page popup composition, canceled
 navigation, guard-attachment failure, runtime refusal, activation, and the
@@ -648,12 +655,12 @@ Read-only commands/views may coexist with active writers under WAL. Mutating
 interfaces use the same dispatcher and physical-volume custody; GUI single
 instance is a presentation-instance rule, not a global ban on safe CLI work.
 
-## Latent API
+## Future Remote API
 
-The future API exposes versioned request/result/event schemas, authentication,
-local binding by default, explicit replay gaps, and no direct module endpoints.
-It is not scaffolded until a concrete client exists; core event schema version
-is the provisioning seam.
+A future remote/non-bridge API adapter exposes versioned request/result/event
+schemas, authentication, local binding by default, explicit replay gaps, and no
+direct module endpoints. It is not scaffolded until a concrete client exists;
+the core event schema version is the provisioning seam.
 
 ## Expectations
 

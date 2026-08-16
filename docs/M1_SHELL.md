@@ -1,6 +1,7 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, contract realigned 2026-08-14): plan and progress for
+Status (2026-08-04, contract realigned 2026-08-14, hardened and reverified
+2026-08-17): plan and progress for
 the remaining M1 desktop shell. The 2026-08-06 revision folded in the
 bounded-history and terminal-cleanup contracts now recorded in `HISTORY.md`
 and `DISPATCHER.md` and added sections 5-8; the 2026-08-07 revision settles
@@ -27,8 +28,8 @@ separately keeps terminal artifact/retention scale open, and
 shell-owned SH-G-15 keeps version-bound whole-runtime containment open. GUI
 Break 1's token,
 component, icon, motion, and native-material
-foundation and Slice 4's presentation core/shell frame have completed their
-audited realignment and restored headed gates. Slice 5 is the next delivery
+foundation and Slice 4's presentation core/shell frame completed their audited
+realignment and were hardened and reverified on 2026-08-17. Slice 5 is the next delivery
 slice. NamiSync remains version `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
@@ -323,8 +324,11 @@ tests/assets/
 `visible_sequence.py` owns tree-agnostic flatten/window/search/filter/anchor
 presentation. `tree.js` virtualizes and renders windows already decided by the
 server; it never reconstructs hierarchy or filters an already-windowed page.
-It coalesces passive scroll events to one animation-frame check and requests a
-missing spacer index through the generation it supplies to the owning view.
+It coalesces passive scroll events and layout-only root resizes through one
+animation-frame check and requests a missing spacer index through the
+generation it supplies to the owning view. Before root removal, the owner calls
+the controller's idempotent disposal to disconnect resize observation, remove
+root listeners, invalidate pending work, and suppress an already queued frame.
 `plan.js` and `inventory.js` keep the two vertical renderers disjoint;
 `panels.js` owns only their shared panel frame. `tokens.css` holds the Fluent
 design tokens defined in `DESKTOP_UI.md`, `components.css` the Fluent control set built on
@@ -423,8 +427,11 @@ third-party notices, signing, or a WebView2 bootstrapper.
        fresh   -> coordinated database initialization
        refused -> native reporter, run finalizer, exit nonzero
    create pending NativeDocumentState
-   create BridgeDispatcher(document=pending_state)
-   create_window(local index path, js_api=dispatcher)
+   create startup gate and immutable production command mapping
+   create BridgeDispatcher(document=pending_state, commands=mapping,
+                           availability=startup_gate.command_availability)
+   create_window(local index path, js_api=None)
+   expose only dispatch(command_json) through the function table
    start_edge_chromium(http_server=True, private_mode=True,
                        storage_path=paths.webview2)
        initialized -> renderer check
@@ -451,38 +458,48 @@ third-party notices, signing, or a WebView2 bootstrapper.
    and exit nonzero. The losing second instance never configures the rotating
    logger, so two GUI processes cannot rotate the same file.
 
-   Two failures happen *inside* `start_edge_chromium` and converge on that same
-   finalizer, because pywebview swallows event-handler exceptions and its
+   Two failures happen *inside* `start_edge_chromium` and are routed toward
+   that same finalizer, because pywebview swallows event-handler exceptions and its
    decorated close can wait ~20 seconds for a window that was never shown:
 
    - **Initialized failure** (renderer or origin, which pywebview invokes
      *before* it creates the native window): record the renderer/origin
      failure, return `False` to abort creation, let `start_edge_chromium`
      return, and do **not** call `window.destroy()` — no native window exists.
-   - **Guard or loaded failure** (native attachment on the UI thread): store the
-     sticky failure, synchronously reject bridge admission and wake the task
-     registry, mark the host startup-refused, and call `window.destroy()`
-     exactly once. If that public call throws or returns without setting the
-     closed event, post one `WM_CLOSE` through the retained HWND. The `loaded`
-     watchdog stores state and closes rather than raising; both close paths
-     leave authority rejected if they fail.
+   - **Initial guard or pre-open loaded failure** (native attachment on the UI
+     thread): store the sticky failure, synchronously reject bridge admission
+     and wake the task registry, mark the host startup-refused, and call
+     `window.destroy()` exactly once. If that public call throws or returns
+     without setting the closed event, post one `WM_CLOSE` through the retained
+     HWND. The `loaded` watchdog stores state and closes rather than raising;
+     both close paths leave authority rejected if they fail. The finalizer
+     cannot run until a successful request or later manual/native closure lets
+     the GUI loop return.
 
    Native `loaded` is necessary but not sufficient for an open document. The
    packaged module must acknowledge receiver/DOM installation through the sole
    dispatch entry, and the host must successfully post the current initial
    appearance envelope. Missing acknowledgement or publication failure before
-   the five-second deadline enters the same terminal startup-refused path;
-   close and late callbacks cannot reopen it. The visible `Ready` label waits
-   until the packaged receiver applies that generation's first valid envelope.
-   A same-origin reload closes ordinary admission before reinjection and must
-   repeat the handshake; stale timers, acknowledgements, and publication
-   callbacks cannot settle its new generation. Raw pywebview API injection is
-   sufficient only for `shell_ready`; normal calls, retries, and retained task
-   drains stay paused until the current envelope is applied.
+   the five-second deadline and before the first open generation enters the
+   same terminal startup-refused path; close and late callbacks cannot reopen
+   it. The visible `Ready` label waits until the packaged receiver applies that
+   generation's first valid envelope. A same-origin reload closes ordinary
+   admission before reinjection and must repeat the handshake; stale timers,
+   acknowledgements, and publication callbacks cannot settle its new
+   generation. If that reload handshake refuses after an earlier generation
+   opened and the host remains open, it records the failure and uses the
+   ordinary bounded service-close path rather than bypassing active work with
+   the startup-only destroy. A close already in flight retains ownership and a
+   later readiness refusal cannot replace it.
+   Raw pywebview API injection is sufficient only for `shell_ready`; normal
+   calls, retries, and retained task drains stay paused until the current
+   envelope is applied.
 
-   After `start_edge_chromium` returns, both in-loop paths run the finalizer
-   above. Because dispatch never opened, `service.close()` should return a
-   complete shutdown view; an incomplete result or exception is logged, but
+   After `start_edge_chromium` returns, both initial in-loop refusal paths run
+   the finalizer above. If both close requests fail, authority remains rejected
+   until later manual/native closure makes that return possible. Because
+   ordinary dispatch never opened on this initial path, `service.close()`
+   should return a complete shutdown view; an incomplete result or exception is logged, but
    there is no Retry Close affordance and startup still terminates nonzero.
    Tests cover both the pre-native initialized failure and the post-native
    guard-attachment failure.
@@ -499,11 +516,14 @@ third-party notices, signing, or a WebView2 bootstrapper.
    close that observer twice. At most one teardown attempt runs at a time. An
    incomplete result or teardown exception leaves the window open with the
    unfinished state and a Retry Close action; retry starts another off-thread
-   attempt, and there is no force-destroy path. The startup-refused phase from
-   step 5 is the one exception: its closing handler recognizes that phase and
-   bypasses this veto/Retry machine entirely, letting the single startup
-   public-destroy/native-close request fall straight through to the bounded
-   finalizer. Slice 1
+   attempt, and there is no force-destroy path. The initial, pre-open startup-
+   refused phase from step 5 is the one exception: its closing handler
+   recognizes that phase and bypasses this veto/Retry machine entirely. Its
+   single public-destroy/native-close request asks the GUI loop to return; the
+   bounded finalizer follows only after it does. If both requests fail,
+   authority remains rejected until later manual/native closure. A readiness
+   refusal after an earlier open generation uses this ordinary teardown machine
+   instead. Slice 1
    supplies empty wake/subscription hooks for later slices rather than blocking
    the UI thread.
 7. Add a per-logon-session single instance built on one injected
@@ -642,7 +662,7 @@ under the gate in §5. `M1_BRIDGE.md` §9.4 remains the sole authority for the
 event contract, custody roots, corpus, measurement method, and BR-G-42 timing
 rows.
 
-### GUI Break 1 - Presentation foundation (completed 2026-08-13)
+### GUI Break 1 - Presentation foundation (completed 2026-08-13; hardened and reverified 2026-08-17)
 
 GUI Break 1 sits after Slice 3 and before Slice 4. It placed `tokens.css`,
 `components.css`, `icons.js`, `appearance.js`, and the fixed local icon
@@ -651,7 +671,7 @@ data. The exact visual contract lives in `DESKTOP_UI.md`; SH-G-11 through
 SH-G-14 below map its installed/headed evidence to the BR-G dependencies in
 `M1_BRIDGE.md`.
 
-### Slice 4 - Presentation core and shell frame (completed 2026-08-13)
+### Slice 4 - Presentation core and shell frame (completed 2026-08-13; hardened and reverified 2026-08-17)
 
 Slice 4 placed `visible_sequence.py`, `tree.js`, `rail.js`, and
 `panels.js`, then connected the honest empty shell frame. It introduced no
@@ -827,10 +847,13 @@ carry the `headed` marker; all are collected by the release command.
   same scenario imports the installed `tree.js`, keeps a natively moved active
   descendant fully visible in a one-row viewport, uses CDP pointer hit testing
   to prove disclosure toggle without activation and ordinary label activation,
-  sends a native CDP mouse-wheel gesture through a four-row viewport, accepts
-  the requested five-row page without changing scroll position, and proves the
+  grows a settled two-row viewport to four without scrolling, requests and
+  covers the newly exposed index, sends a native CDP mouse-wheel gesture
+  through that four-row viewport, accepts the requested five-row page without
+  changing scroll position, and proves the
   visible region stays nonblank with a fully visible active descendant and no
-  domain activation,
+  domain activation, then disposes the controller before root removal and
+  proves queued or later resize/scroll work admits no request,
   renders every defended layout character and input marker delimiter as its
   exact injective `⟦U+XXXX⟧` marker with no surviving active layout control in
   either the DOM or Chromium accessibility name, preserves ordinary markup-
@@ -843,9 +866,10 @@ carry the `headed` marker; all are collected by the release command.
   JSON manifest generated through the production workflow-tree,
   visible-sequence, window, and wire-view chain. Direct Node and the installed
   WebView2 child consume those exact bytes; Python, child, and page SHA-256
-  values match. The cases cover named head, next, tail, empty, exact-256, and
-  layout-control views plus expansion tri-state and ordinary-Unicode and long-
-  label values. The exhaustive fixed-set sink case remains renderer-local
+  values match. The cases cover the `head`, `next`, `tail`, `empty`, `maximum`,
+  and `layout_control` views, expansion tri-state across the pointer and
+  projected-empty views, and ordinary-Unicode and long-label values in `next`.
+  The exhaustive fixed-set sink case remains renderer-local
   because C0 characters are not valid Windows filename input; it proves the final
   transform without fabricating workflow provenance. The manifest and helper
   remain test-only and absent from package data. *Not satisfied
@@ -1129,13 +1153,14 @@ This table maps shell delivery order to the sole BR-G definitions in
 | --- | --- | --- |
 | Phase 0 | prerequisites for BR-G-19/31/32 | complete |
 | Slice 1 | BR-G-19 and BR-G-31 host clauses | complete |
-| Slice 2 | BR-G-32 transport, picker, origin, and hostile-text clauses | complete, including installed real-WebView2 browser witnesses |
-| Slice 3 | BR-G-33, BR-G-41, and event/transport-custody portion of BR-G-42 | complete, including accepted independent holdout-b; other BR-G-42 rows remain on later owning slices |
+| Slice 2 | BR-G-32 transport, picker, origin, and static-sink clauses | complete, including installed real-WebView2 browser witnesses; later DOM clauses remain open |
+| Slice 3 | BR-G-33, BR-G-41 transport/lifecycle foundations, and event/transport-custody portion of BR-G-42 | complete, including accepted independent holdout-b; full BR-G-41 and other BR-G-42 rows remain on later owning slices |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
-| Slice 4 | BR-G-2 Stage 6 clause and BR-G-34 | complete |
-| Slice 5 | BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
-| Slice 6 | BR-G-22, BR-G-23, BR-G-38, BR-G-39; inventory portion of BR-G-42 | pending |
+| Slice 4 | BR-G-2 Stage 6 clause, BR-G-32 generic-tree-sink portion, and BR-G-34 | complete |
+| Slice 5 | BR-G-32 plan-DOM portion, BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
+| Slice 6 | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39; inventory portion of BR-G-42 | pending |
 | Slice 7 | BR-G-40, BR-G-41, BR-G-45; history portion of BR-G-42 | pending |
+| GUI Break 2 | holistic `DESKTOP_UI.md` visual/accessibility review | pending after Slice 7 |
 | Slice 8 | BR-G-43, BR-G-44, and shell-owned SH-G-15 | pending |
 
 The explicit-`Gap`-only recovery decision and the command-specific

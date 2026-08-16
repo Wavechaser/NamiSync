@@ -111,6 +111,33 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
+#### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-17)
+
+- Secured the installed-wheel host lifecycle with bounded admission, drains,
+  recovery, and shutdown; pinned app/database identity, activation, native
+  picker/path confinement, receipt-safe plan replay, and sanitized logging.
+- Added the authored Fluent palette and local icons, live Windows theme/accent,
+  Mica and dark-mode handling, truthful opaque fallback, and motion/contrast
+  guardrails.
+- Built a workflow-owned visible tree, exact bounded row windows, and an
+  accessible virtualized shell, with headed keyboard, zoom, forced-color,
+  hostile-text, scale, geometry, and stale-generation coverage.
+- Hardened the foundation for the admitted renderer floor, presentation-ready
+  document generations, fail-closed loaded refusal, projected expansion,
+  pointer operation, visible active descendants, and last-state-wins passive
+  scroll paging, including layout-only resize reconciliation and bounded tree-
+  controller disposal.
+- Neutralized the fixed filesystem layout-control set only at the final text
+  sink while preserving raw workflow/wire/search values, and bound Python,
+  direct Node, and installed WebView2 tree evidence to one canonical manifest
+  and SHA-256.
+- Added exact `Highlight`/`HighlightText` pairing for enabled selected/current
+  cards to the native/high-contrast forced-color composition evidence while
+  retaining the selected-card boundary and disabled-state distinctions.
+- Kept Slice 5–7 product surfaces, GUI Break 2, current-source BR-G-42 event
+  timing and product-view rows, BR-G-45 terminal retention, Slice 8 release
+  closure, and SH-G-15 whole-runtime containment open.
+
 #### Close transport custody and realign the bridge boundary (2026-08-13 – 2026-08-14)
 
 - Realigned bridge ownership around one function-only dispatch entry, the exact
@@ -123,18 +150,6 @@ packaging remain future phases.
 - Coalesced progress-only drains behind a fixed 150 ms maximum wait while
   receipts, reliable state, terminal, recovery, and lifecycle feedback bypass
   it; installed WebView2 witnesses are authoritative and Node is supplemental.
-
-#### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-13)
-
-- Secured the installed-wheel host lifecycle with bounded admission, drains,
-  recovery, and shutdown; pinned app/database identity, activation, native
-  picker/path confinement, receipt-safe plan replay, and sanitized logging.
-- Added the authored Fluent palette and local icons, live Windows theme/accent,
-  Mica and dark-mode handling, truthful opaque fallback, and motion/contrast
-  guardrails.
-- Built a workflow-owned visible tree, exact bounded row windows, and an
-  accessible virtualized shell, with headed keyboard, zoom, forced-color,
-  hostile-text, scale, geometry, and stale-generation coverage.
 
 #### Establish the secured WebView2 bridge foundation (2026-07-31 – 2026-08-03)
 
