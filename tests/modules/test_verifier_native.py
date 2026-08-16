@@ -147,7 +147,11 @@ def test_windows_reader_refuses_a_final_root_reparse_before_api_setup(
 def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback(
     tmp_path: Path,
 ) -> None:
-    payload = (b"NamiSync cache-honest verifier\n" * 262_144) + b"tail"
+    chunk_size = 4 * 1024 * 1024
+    pattern = b"NamiSync cache-honest verifier\n"
+    payload = (
+        pattern * ((chunk_size // len(pattern)) + 1)
+    )[:chunk_size] + b"tail"
     path = tmp_path / "payload.bin"
     subprocess.run(
         [
@@ -155,7 +159,9 @@ def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback
             "-c",
             (
                 "import os, sys\n"
-                "payload = (b'NamiSync cache-honest verifier\\n' * 262_144)"
+                "size = int(sys.argv[2])\n"
+                "pattern = b'NamiSync cache-honest verifier\\n'\n"
+                "payload = (pattern * ((size // len(pattern)) + 1))[:size]"
                 " + b'tail'\n"
                 "with open(sys.argv[1], 'wb') as handle:\n"
                 "    handle.write(payload)\n"
@@ -163,9 +169,11 @@ def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback
                 "    os.fsync(handle.fileno())\n"
             ),
             str(path),
+            str(chunk_size),
         ],
         check=True,
     )
+    assert len(payload) == chunk_size + len(b"tail")
     os_stat = path.stat()
     expected = _stat(
         size=len(payload),
@@ -179,7 +187,7 @@ def test_windows_reader_verifies_externally_flushed_file_without_cached_fallback
         hasher_factory=xxh3_128,
         root_authority=_native_context([], tmp_path).root_authority,
     )
-    assert context.chunk_size == 4 * 1024 * 1024
+    assert context.chunk_size == chunk_size
     reader = WindowsUnbufferedReader()
     item = _item(
         tmp_path,
