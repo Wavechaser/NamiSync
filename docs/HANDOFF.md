@@ -1,44 +1,59 @@
 # Session Handoff
 
-Status (2026-08-15): `DEFENSE.md` is the normative threat, fault, and tolerance
-model. It centralizes the supported standard-integrity single-user baseline,
-trusted computing base, hard walls, user-authorization boundary, T0–T4
-tolerance policy, WebView trust decision, TOCTOU mitigation ladder and stopping
-rule, and EW-1 through EW-4 residual dispositions.
+Status (2026-08-16): the repository now has a documented five-level test run
+policy and an executable primary-ownership selector. Exact module membership
+lives only in `tests/_departments.py`; `docs/TESTS.md` explains how to choose
+focused, department, cross-department, ordinary, and complete/headed runs.
 
-The policy was reconciled against the compact `ARCHITECTURE.md` and
-`FEATURES.md` forms landed on 2026-08-15 rather than the older documents used
-during the initial discussion. Full data preservation is now explicitly
-conditional on managed-root quiescence during mutation. Observable external
-drift remains guarded, while post-final-guard path races are classified by
-their exact consequence instead of timing or guessed intent.
+## Delivered
 
-The packaged desktop document is trusted code and every value it displays,
-receives, or sends remains untrusted data. Arbitrary same-origin script is a
-trusted-base compromise, not a contained renderer principal. The 64-handler
-bridge ceiling is documented as bounding admitted domain work after
-pywebview's exposed-call thread creation, not raw WebMessage threads.
+- Added repeatable `--dept` with equivalent `--department`, union selection,
+  clear unknown-department errors, and fail-closed validation that every pytest
+  module has exactly one primary owner. Both pytest default module naming forms
+  are covered.
+- Added a repository guard against imports between collected test modules and
+  moved the existing shared web, inventory-runtime, and database helpers into
+  non-collected underscore-prefixed support modules.
+- Made the ordinary installed-wheel fixture use a pip-less venv installed by
+  the parent pip while retaining target-prefix, package-resource, and pip-
+  absence evidence. The headed installed-wheel fixture remains unchanged.
+- Cached only successful directory-junction capability probes by source/target
+  device pair. Every behavioral test still creates its own actual junction;
+  failed probes remain uncached.
+- Sized the native verifier witness to exactly one 4 MiB chunk plus a tail and
+  the rollover mechanism fixture to a test-only threshold while preserving
+  independent production-configuration assertions.
+- Made gallery modes and transport scenarios lazy for focused headed reruns.
+  Complete headed selection still requests all four gallery modes and both
+  transport scenarios. Successes and failures are cached so later nodes cannot
+  retry a used root or obscure the original failure.
+- Removed the duplicate six-case WebView2 version matrix from the bridge tests;
+  the runtime-owned matrix remains authoritative.
 
-## Documentation Propagation
+## Rigor Boundaries
 
-- `AGENTS.md`, `README.md`, and `ARCHITECTURE.md` index the new authority.
-- `FEATURES.md`, `EXECUTOR.md`, and `PREFLIGHT.md` point their external-writer
-  descriptions to the defense dispositions. The stale pre-M0
-  `DESIGN_REVIEW.md` moved unchanged to `docs/obsolete/`.
-- `BUGS.md` distinguishes a technical residual from policy acceptance.
-- `M1_BRIDGE.md` and `INTERFACES.md` defer the trusted-base decision to
-  `DEFENSE.md` while retaining exact mechanism and gate ownership;
-  `M1_SHELL.md` carries the standard-integrity release work.
-
-No production behavior or test code changed. The next mutating desktop command,
-new principal, elevated host, network authority, or promise of safe concurrent
-external mutation must reopen the applicable defense review before
-implementation.
+- Departments indicate primary ownership and routing, never complete blast-
+  radius analysis. Public contracts require explicit consumer departments;
+  uncertain or cross-cutting changes require the ordinary repository suite.
+- `--dept` intersects explicit path and node selections. It does not expand
+  dependencies or imply headed coverage.
+- Protected transport-custody calibration, holdout, and live guards were not
+  changed. Settlement capture caching, the proposed SQLite-limit substitution
+  for the live 33k-row guard, CLI lifecycle repartition, and default xdist were
+  deliberately deferred.
 
 ## Verification
 
-- Read the complete final `DEFENSE.md` and reviewed the complete documentation
-  diff.
-- Confirmed `DEFENSE.md` contains no elevation-based snapshot rung.
-- Confirmed external-writer, residual-acceptance, renderer-trust, and bridge-
-  admission wording is consistent across the propagated documents.
+- Affected helper owners and consumers: 208 passed, 7 capability skips.
+- Department policy after adversarial correction: 15 passed.
+- Ordinary repository: 2,287 passed, 9 capability skips, 27 headed deselected.
+- Headed interface gate on the real installed-wheel/WebView2 host: 27 passed.
+- Import boundary lint: 11 contracts kept, 0 broken.
+- Independent adversarial review found two issues before closure: incomplete
+  pytest filename discovery and lazy scenario failure retries. Both received
+  regressions, were corrected, and passed re-review; no other actionable
+  finding remained.
+
+The next test operation should begin at the narrowest useful level in
+`docs/TESTS.md`. A release still uses the documented unfiltered complete command
+and import lint; no case catalog or timing threshold belongs in the policy.

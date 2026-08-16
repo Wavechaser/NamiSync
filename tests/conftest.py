@@ -1,4 +1,4 @@
-"""Shared installed-wheel evidence for shell acceptance tests."""
+"""Shared pytest policy and installed-wheel evidence."""
 
 from __future__ import annotations
 

@@ -17,7 +17,7 @@ repository suite.
 Use an exact node or file while editing and diagnosing a failure.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q tests\test_executor_runtime.py::test_name
+.\.venv\Scripts\python.exe -m pytest -q tests\test_executor_runtime.py::test_executor_rejects_a_nonpositive_maximum_chunk
 .\.venv\Scripts\python.exe -m pytest -q tests\test_executor_runtime.py
 ```
 
@@ -131,6 +131,12 @@ acceptance threshold:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest --collect-only -q
 .\.venv\Scripts\python.exe -m pytest -q --durations=25 --durations-min=0.05
+```
+
+Show skip reasons for a selected run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -rs --dept tools
 ```
 
 The suite remains serial by default. Do not introduce a default xdist worker

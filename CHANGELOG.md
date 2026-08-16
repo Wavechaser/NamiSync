@@ -76,9 +76,23 @@ claims explicit, independently reviewable, and regression-backed.
 
 ### M1 Maintenance Refactor
 
-Shared root authority, stable executor/verifier package boundaries, and an
-oracle-guarded typed settlement reducer separated internal ownership without
-changing public or persisted contracts.
+Shared root authority, stable executor/verifier package boundaries, an oracle-
+guarded typed settlement reducer, and layered test operations made internal
+ownership explicit without changing public or persisted contracts.
+
+#### Establish layered test operations (2026-08-16)
+
+- Added focused, department, cross-department, ordinary, and complete/headed
+  run policy with short and long department selectors backed by one exhaustive,
+  fail-closed primary-ownership manifest.
+- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
+  installation, success-only junction capability reuse, exact-boundary native
+  verifier data, test-sized log rollover, and lazy headed scenario evidence.
+- Consolidated duplicate coverage and shared helpers without merging behavioral
+  cases; selection-independence and lazy-failure guards keep collected modules
+  self-contained and preserve original headed failures.
+- Left protected custody and settlement evidence, the live 33k-row database
+  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
 
 #### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
 

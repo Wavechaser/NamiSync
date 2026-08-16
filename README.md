@@ -69,8 +69,8 @@ Run the tests and check the import boundaries:
 .\.venv\Scripts\lint-imports.exe
 ```
 
-Focused, departmental, ordinary, and headed verification commands are defined
-in [Tests](docs/TESTS.md).
+Focused, departmental, cross-department neighborhood, ordinary, and complete/
+headed verification commands are defined in [Tests](docs/TESTS.md).
 
 M1's desktop host additionally requires Microsoft Edge WebView2 Runtime.
 Declaring pywebview does not make explicit CLI commands initialize a GUI; the
@@ -169,9 +169,9 @@ claims explicit, independently reviewable, and regression-backed.
 
 ### M1 Maintenance Refactor
 
-Shared root authority, stable executor/verifier package boundaries, and an
-oracle-guarded typed settlement reducer separated internal ownership without
-changing public or persisted contracts.
+Shared root authority, stable executor/verifier package boundaries, an oracle-
+guarded typed settlement reducer, and layered test operations made internal
+ownership explicit without changing public or persisted contracts.
 
 ### M1 GUI
 
