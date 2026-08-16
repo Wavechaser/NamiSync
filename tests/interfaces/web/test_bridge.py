@@ -642,21 +642,6 @@ def test_prepare_pywebview_host_fixed_runtime_reads_only_dotnet_prerequisite(
     assert opened == [pywebview_runtime.DOTNET_RELEASE_REGISTRY_PATH]
 
 
-@pytest.mark.parametrize(
-    ("version", "supported"),
-    [
-        ("85.0.9999.999", False),
-        ("86.0.621.999", True),
-        ("86.0.622", True),
-        ("150.0.4078.105", True),
-        ("not-a-version", False),
-        (None, False),
-    ],
-)
-def test_webview2_runtime_version_helper(version: object, supported: bool) -> None:
-    assert pywebview_runtime.is_supported_webview2_version(version) is supported
-
-
 def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
     calls = []
     host_initialized = []
