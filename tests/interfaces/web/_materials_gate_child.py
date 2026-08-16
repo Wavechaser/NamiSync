@@ -12,7 +12,7 @@ import sys
 import threading
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from unittest.mock import patch
 
 
@@ -99,6 +99,21 @@ _PAGE_PROBE = r"""
   const bodyStyle = getComputedStyle(document.body);
   const cardStyle = getComputedStyle(first);
   const cardRect = first.getBoundingClientRect();
+  const systemColors = {};
+  for (const name of ["Canvas", "CanvasText", "ButtonBorder"]) {
+    const probe = document.createElement("span");
+    if (name === "ButtonBorder") {
+      probe.style.border = "1px solid ButtonBorder";
+    } else {
+      probe.style.color = name;
+    }
+    app.append(probe);
+    const probeStyle = getComputedStyle(probe);
+    systemColors[name] = name === "ButtonBorder"
+      ? probeStyle.borderColor
+      : probeStyle.color;
+    probe.remove();
+  }
   return {
     ready_state: document.readyState,
     dispatch_type: typeof window.pywebview.api.dispatch,
@@ -106,6 +121,7 @@ _PAGE_PROBE = r"""
     material: root.getAttribute("data-window-material"),
     theme: root.getAttribute("data-theme"),
     high_contrast: root.getAttribute("data-high-contrast"),
+    forced_colors_active: matchMedia("(forced-colors: active)").matches,
     inline_accent: root.style.getPropertyValue("--color-accent").trim(),
     inline_accent_hover: root.style
       .getPropertyValue("--color-accent-hover").trim(),
@@ -119,8 +135,18 @@ _PAGE_PROBE = r"""
       .getPropertyValue("--color-accent-pressed-foreground").trim(),
     root_background: rootStyle.backgroundColor,
     body_background: bodyStyle.backgroundColor,
+    body_foreground: bodyStyle.color,
     window_base: rootStyle.getPropertyValue("--color-window-base").trim(),
+    neutral_surface: rootStyle
+      .getPropertyValue("--color-neutral-surface").trim(),
+    neutral_foreground: rootStyle
+      .getPropertyValue("--color-neutral-foreground").trim(),
+    neutral_border: rootStyle
+      .getPropertyValue("--color-neutral-border").trim(),
     card_background: cardStyle.backgroundColor,
+    card_foreground: cardStyle.color,
+    card_border: cardStyle.borderColor,
+    system_colors: systemColors,
     card_rect: {
       left: cardRect.left,
       top: cardRect.top,
@@ -508,6 +534,52 @@ def _begin_page_probe(
     task.GetAwaiter().OnCompleted(completion)
 
 
+def _emulate_forced_colors(
+    window: object,
+    *,
+    callback: Callable[[], None],
+    recorder: _Recorder,
+    retained: list[object],
+) -> None:
+    from System import Action
+
+    native_window = window.native
+    if native_window.InvokeRequired:
+        raise RuntimeError("media emulation left the UI thread")
+    task = native_window.browser.webview.CoreWebView2.CallDevToolsProtocolMethodAsync(
+        "Emulation.setEmulatedMedia",
+        json.dumps(
+            {
+                "media": "screen",
+                "features": [
+                    {"name": "forced-colors", "value": "active"},
+                ],
+            },
+            separators=(",", ":"),
+        ),
+    )
+
+    def completed() -> None:
+        def on_ui() -> None:
+            try:
+                if task.IsFaulted or task.IsCanceled:
+                    raise RuntimeError("native media emulation failed")
+                response = json.loads(str(task.Result))
+                if response != {}:
+                    raise TypeError("native media emulation result is invalid")
+                callback()
+            except BaseException as error:
+                recorder.failure("page_probe", error)
+
+        action = Action(on_ui)
+        retained.append(action)
+        native_window.BeginInvoke(action)
+
+    completion = Action(completed)
+    retained.append(completion)
+    task.GetAwaiter().OnCompleted(completion)
+
+
 def _install_native_boundary_observers(
     stack: ExitStack,
     *,
@@ -680,14 +752,26 @@ def _install_native_boundary_observers(
                         and not actual_system.high_contrast
                         else "opaque"
                     )
-                    _begin_page_probe(
-                        window,
-                        scenario=scenario,
-                        expected_material=expected_material,
-                        screenshot=screenshot,
-                        recorder=recorder,
-                        retained=retained,
-                    )
+
+                    def begin_page_probe() -> None:
+                        _begin_page_probe(
+                            window,
+                            scenario=scenario,
+                            expected_material=expected_material,
+                            screenshot=screenshot,
+                            recorder=recorder,
+                            retained=retained,
+                        )
+
+                    if scenario == "high-contrast":
+                        _emulate_forced_colors(
+                            window,
+                            callback=begin_page_probe,
+                            recorder=recorder,
+                            retained=retained,
+                        )
+                    else:
+                        begin_page_probe()
                 except BaseException as error:
                     recorder.failure("page_probe", error)
 

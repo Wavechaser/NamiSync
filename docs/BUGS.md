@@ -571,6 +571,14 @@ defect, and move implementation-level test choreography out of the log.
   and coalescing generations into one UI-owned current-state drain. Each UI
   turn handles one generation and defers newer work, so sustained events yield;
   dispatch/read failures remain recoverable and close invalidates queued work.
+- MODERATE - FIXED (2026-08-17). High-contrast composition evidence gap. The
+  headed materials case injected a native high-contrast snapshot but left the
+  renderer in normal-color mode, so it could claim palette coverage without
+  exercising the production forced-colors branch. Fixed by activating CDP
+  `forced-colors` in that same clean-wheel WebView2 child and comparing body and
+  card styles with independently resolved `Canvas`, `CanvasText`, and
+  `ButtonBorder` values while retaining every native Mica-off assertion. This
+  is a composition witness, not a real Windows contrast-theme toggle witness.
 - SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. A loaded-time
   appearance or guard refusal attempted window destruction while the exposed
   dispatcher was still accepting; if public destruction threw or returned

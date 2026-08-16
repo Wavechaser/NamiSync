@@ -212,6 +212,11 @@ Observation subscribes before its mandatory initial read. Later native events
 advance one coalesced generation whose current state is read and applied on the
 window UI thread; a newer generation is deferred to another UI turn so stale
 callback-thread snapshots cannot become newest or starve the message pump.
+The installed materials composition gate applies an injected native
+high-contrast snapshot and CDP `forced-colors` emulation in the same production
+window, then compares resolved surfaces with dynamic system-color probes while
+retaining the native Mica-off checks. It does not claim to exercise a real OS
+contrast-theme transition.
 Opaque fallback requires sufficient structured backdrop/glass/form/controller
 landing evidence. A live reapply that confirms neither native path publishes
 `degraded`, which returns the page itself to its theme-correct opaque base;

@@ -103,6 +103,8 @@ def test_materials_gate_child_is_test_owned_and_preserves_production_stack() -> 
     assert "AppPaths.from_root(arguments.data_dir)" in source
     assert "DesktopInstanceIdentity(arguments.mutex, arguments.title)" in source
     assert "CallDevToolsProtocolMethodAsync" in source
+    assert '"Emulation.setEmulatedMedia"' in source
+    assert '{"name": "forced-colors", "value": "active"}' in source
     assert "Page.captureScreenshot" in source
     assert "evaluate_js" not in source
     assert "set_foreground" not in source.casefold()
@@ -194,6 +196,12 @@ def test_materials_gate_report_and_page_probe_are_bounded_and_sanitized() -> Non
     )
     assert 'command: "materials_probe"' in materials_gate_child._PAGE_PROBE
     assert 'error?.code !== "unknown_command"' in materials_gate_child._PAGE_PROBE
+    assert 'matchMedia("(forced-colors: active)").matches' in (
+        materials_gate_child._PAGE_PROBE
+    )
+    assert 'for (const name of ["Canvas", "CanvasText", "ButtonBorder"])' in (
+        materials_gate_child._PAGE_PROBE
+    )
     observer_source = inspect.getsource(
         materials_gate_child._install_native_boundary_observers
     )
@@ -250,6 +258,31 @@ def test_materials_gate_renderer_alpha_matches_the_material_layer() -> None:
         _assert_renderer_surfaces(result("mica", opaque))
     with pytest.raises(AssertionError):
         _assert_renderer_surfaces(result("opaque", transparent))
+
+
+def test_materials_gate_forced_color_evidence_is_not_vacuous() -> None:
+    page = {
+        "forced_colors_active": True,
+        "window_base": "Canvas",
+        "neutral_surface": "Canvas",
+        "neutral_foreground": "CanvasText",
+        "neutral_border": "ButtonBorder",
+        "body_background": "rgb(0, 0, 0)",
+        "body_foreground": "rgb(255, 255, 255)",
+        "card_background": "rgb(0, 0, 0)",
+        "card_foreground": "rgb(255, 255, 255)",
+        "card_border": "rgb(255, 255, 255)",
+        "system_colors": {
+            "Canvas": "rgb(0, 0, 0)",
+            "CanvasText": "rgb(255, 255, 255)",
+            "ButtonBorder": "rgb(255, 255, 255)",
+        },
+    }
+
+    _assert_forced_color_rendering({"page": page})
+    page["forced_colors_active"] = False
+    with pytest.raises(AssertionError):
+        _assert_forced_color_rendering({"page": page})
 
 
 @pytest.mark.headed
@@ -461,6 +494,7 @@ def test_sh_g_12_high_contrast_disables_mica_and_uses_system_opaque_color(
     _assert_opaque_landed(result)
     _assert_common_health(result)
     _assert_renderer_surfaces(result)
+    _assert_forced_color_rendering(result)
 
 
 def _require_material_build() -> None:
@@ -675,6 +709,7 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
         "material",
         "theme",
         "high_contrast",
+        "forced_colors_active",
         "inline_accent",
         "inline_accent_hover",
         "inline_accent_pressed",
@@ -683,8 +718,15 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
         "inline_accent_pressed_foreground",
         "root_background",
         "body_background",
+        "body_foreground",
         "window_base",
+        "neutral_surface",
+        "neutral_foreground",
+        "neutral_border",
         "card_background",
+        "card_foreground",
+        "card_border",
+        "system_colors",
         "card_rect",
         "card_sample",
         "viewport",
@@ -702,6 +744,16 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
     assert type(result["page"]["gutter_points"]) is list
     assert len(result["page"]["gutter_points"]) == 3
     assert all(set(point) == {"x", "y"} for point in result["page"]["gutter_points"])
+    assert type(result["page"]["forced_colors_active"]) is bool
+    assert set(result["page"]["system_colors"]) == {
+        "Canvas",
+        "CanvasText",
+        "ButtonBorder",
+    }
+    assert all(
+        type(value) is str
+        for value in result["page"]["system_colors"].values()
+    )
     assert set(result["screenshot"]) == {"path", "sha256", "size", "samples"}
     samples = result["screenshot"]["samples"]
     assert set(samples) == {
@@ -808,6 +860,22 @@ def _assert_renderer_surfaces(result: dict[str, object]) -> None:
         assert all(pixel["a"] == 255 for pixel in gutters)
     assert card["a"] == 255
     assert _opaque_css(result["page"]["card_background"])
+
+
+def _assert_forced_color_rendering(result: dict[str, object]) -> None:
+    page = result["page"]
+    system = page["system_colors"]
+    assert page["forced_colors_active"] is True
+    assert page["window_base"] == "Canvas"
+    assert page["neutral_surface"] == "Canvas"
+    assert page["neutral_foreground"] == "CanvasText"
+    assert page["neutral_border"] == "ButtonBorder"
+    assert page["body_background"] == system["Canvas"]
+    assert page["body_foreground"] == system["CanvasText"]
+    assert page["card_background"] == system["Canvas"]
+    assert page["card_foreground"] == system["CanvasText"]
+    assert page["card_border"] == system["ButtonBorder"]
+    assert all(_opaque_css(value) for value in system.values())
 
 
 def _assert_native_operation_sequence(

@@ -919,7 +919,11 @@ carry the `headed` marker; all are collected by the release command.
   title bar, rail, and card gutters — while the virtualized plan/inventory tree
   renders on an opaque card rather than compositing the material behind scrolling
   rows; under high contrast Mica is disabled and the high-contrast palette is
-  honored; on a pre-material system or an injected transparency failure the
+  honored. The clean-wheel composition witness injects the native
+  high-contrast snapshot and activates renderer `forced-colors` in the same
+  real WebView2 window, asserts dynamic system-color resolution, and retains
+  every native Mica-off check; it is not evidence of a real OS theme toggle.
+  On a pre-material system or an injected transparency failure the
   window falls back to a theme-correct opaque Fluent neutral base. A fallback
   is claimed only from structured backdrop/glass/form/controller landing
   evidence sufficient to prove that the client is readable. If a later live
