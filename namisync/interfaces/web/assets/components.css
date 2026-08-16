@@ -1019,6 +1019,14 @@ body {
     color: var(--color-accent-foreground);
   }
 
+  .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]),
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]) {
+    background: var(--color-neutral-surface-selected);
+    box-shadow: none;
+    color: var(--color-accent-foreground);
+    forced-color-adjust: none;
+  }
+
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
   .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
     outline: 1px solid var(--color-accent-foreground);

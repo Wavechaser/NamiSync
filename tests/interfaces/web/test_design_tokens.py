@@ -519,6 +519,7 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "HighlightText",
     } <= set(re.findall(r"\b[A-Z][A-Za-z]+\b", forced))
     assert "--color-neutral-surface-selected: Highlight;" in forced
+    assert "--color-accent-foreground: HighlightText;" in forced
     assert "--color-neutral-border: ButtonBorder;" in forced
     for family in (
         "positive",
@@ -666,6 +667,32 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         selected_forced_pressed
     )
     assert "outline-offset: -2px;" in selected_forced_pressed
+    selected_forced = _block(
+        forced,
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]),',
+    )
+    selected_start = forced.index(
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]),'
+    )
+    selected_open = forced.index("{", selected_start)
+    assert {
+        selector.strip()
+        for selector in forced[selected_start:selected_open].split(",")
+    } == {
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"])',
+        '.nami-task-card[aria-current="true"]:'
+        'not([aria-disabled="true"])',
+    }
+    assert (
+        "background: var(--color-neutral-surface-selected);"
+        in selected_forced
+    )
+    assert "box-shadow: none;" in selected_forced
+    assert "color: var(--color-accent-foreground);" in selected_forced
+    assert "forced-color-adjust: none;" in selected_forced
     toggle_thumb = _block(
         forced,
         ".nami-toggle__control:not(:disabled):hover::after",
@@ -713,6 +740,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "background: var(--color-neutral-surface-selected);" in selected_task
     assert "border-color: var(--color-neutral-border);" in selected_task
     assert "box-shadow: var(--elevation-2);" in selected_task
+    assert re.search(r"(?:^|;)\s*color\s*:", selected_task) is None
     assert '.nami-task-card[aria-current="true"]' in source
     assert ".nami-task-card:not([aria-disabled=\"true\"]):hover" in source
     assert ".nami-task-card:not([aria-disabled=\"true\"]):active" in source

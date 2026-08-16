@@ -579,6 +579,14 @@ defect, and move implementation-level test choreography out of the log.
   card styles with independently resolved `Canvas`, `CanvasText`, and
   `ButtonBorder` values while retaining every native Mica-off assertion. This
   is a composition witness, not a real Windows contrast-theme toggle witness.
+- MODERATE - FIXED (2026-08-17). Selected-state forced-color mismatch. Enabled
+  selected/current task cards resolved their background to `Highlight` but
+  inherited `CanvasText` at rest and focus, so contrast-theme text could lose
+  its intended foreground pairing. Fixed by binding those cards to
+  `HighlightText` under forced colors, suppressing their decorative shadow,
+  and retaining `GrayText` for disabled cards. Static and clean-wheel gallery
+  evidence covers both selectors, all enabled states, exact system colors, and
+  text contrast; ordinary transparent, hover, and press behavior is unchanged.
 - SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. A loaded-time
   appearance or guard refusal attempted window destruction while the exposed
   dispatcher was still accepting; if public destruction threw or returned

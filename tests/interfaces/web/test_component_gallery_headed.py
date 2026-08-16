@@ -708,9 +708,25 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert _contrast(row["shape_color"], row["background"]) >= 3.0
     for control in forced["controls"]:
         if control["control"] in _SELECTED_TASK_CARD_KEYS:
-            assert control["background"] in system_colors
+            assert (
+                control["background"]
+                == forced["icons"]["system_colors"]["Highlight"]
+            )
             assert control["border"] in system_colors
-            if control["state"] != "disabled":
+            if control["state"] == "disabled":
+                assert (
+                    control["foreground"]
+                    == forced["icons"]["system_colors"]["GrayText"]
+                )
+            else:
+                assert (
+                    control["foreground"]
+                    == forced["icons"]["system_colors"]["HighlightText"]
+                )
+                assert (
+                    _contrast(control["foreground"], control["background"])
+                    >= 4.5
+                )
                 assert _control_boundary_contrast(control) >= 3.0
         if control["state"] == "focused":
             assert control["outline_width"] not in {"0px", "0"}
