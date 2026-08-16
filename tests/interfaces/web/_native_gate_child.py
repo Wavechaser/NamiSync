@@ -14,6 +14,7 @@ import webbrowser
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
 
@@ -55,19 +56,24 @@ _PACKAGED_POPUP_SCRIPT = r"""
       return;
     }
     state.stage = 2;
-    const response = await window.pywebview.api.dispatch(JSON.stringify({
-      schema_version: 1,
-      request_id: "6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c",
-      command: "packaged_probe",
-      payload: {
+    const bridge = await import("./bridge.js");
+    await bridge.whenBridgeReady();
+    const result = await bridge.dispatchInteractive(
+      "packaged_probe",
+      Object.freeze({
         initial_url: state.initialUrl,
         final_url: window.location.href,
         document_token: state.documentToken,
         ready_count: state.readyCount,
-      },
-    }));
+      }),
+      (value) => value !== null
+        && typeof value === "object"
+        && !Array.isArray(value)
+        && Object.keys(value).length === 1
+        && value.token === "packaged-popup-ok",
+    );
     document.getElementById("host-status").textContent =
-      response.result.token === "packaged-popup-ok"
+      result.token === "packaged-popup-ok"
         ? "Packaged popup gate passed"
         : "Packaged popup gate failed";
   };
@@ -520,6 +526,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_nami_frame = bridge._NativeNavigationGuard._on_frame_navigation_starting
     original_nami_popup = bridge._NativeNavigationGuard._on_new_window_requested
     original_nami_source = bridge._NativeNavigationGuard._on_source_changed
+    original_dispatcher = host._bridge_dispatcher
 
     def prepare(module: object) -> None:
         recorder.event("prepare.begin")
@@ -618,8 +625,11 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     document_holder: dict[str, object] = {}
     delayed_handler_started = threading.Event()
 
-    def probe_dispatcher(document: object, commands: object) -> object:
-        del commands
+    def probe_dispatcher(
+        document: object,
+        commands: object,
+        startup_gate: object,
+    ) -> object:
         document_holder["value"] = document
 
         def native_probe(payload: Mapping[str, object]) -> object:
@@ -724,10 +734,16 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 recorder.write()
             return result
 
-        dispatcher = bridge.BridgeDispatcher(
-            document=document,
-            commands={"native_probe": test_spec(native_probe)},
+        production = dict(commands)
+        if "native_probe" in production:
+            raise RuntimeError("production unexpectedly owns the native probe")
+        combined = MappingProxyType(
+            {**production, "native_probe": test_spec(native_probe)}
         )
+        recorder.set("production_command_names", sorted(production))
+        recorder.set("combined_command_names", sorted(combined))
+        recorder.set("combined_mapping_type", type(combined).__name__)
+        dispatcher = original_dispatcher(document, combined, startup_gate)
         dispatcher_holder["value"] = dispatcher
         return dispatcher
 
@@ -936,6 +952,7 @@ def _run_packaged_popup(
     recorder.set("runtime", _runtime_identity())
     original_nami_popup = bridge._NativeNavigationGuard._on_new_window_requested
     observed_configure = _install_native_observer(host, recorder, runtime)
+    original_dispatcher = host._bridge_dispatcher
     probe_injected = False
 
     def observe_nami_popup(
@@ -989,8 +1006,11 @@ def _run_packaged_popup(
 
         window.events.before_load += execute_packaged_probe
 
-    def probe_dispatcher(document: object, commands: object) -> object:
-        del commands
+    def probe_dispatcher(
+        document: object,
+        commands: object,
+        startup_gate: object,
+    ) -> object:
 
         def packaged_probe(payload: Mapping[str, object]) -> object:
             recorder.event("dispatch", phase="packaged_popup")
@@ -1006,10 +1026,16 @@ def _run_packaged_popup(
             timeout=CommandTimeout.INTERACTIVE,
             retry=CommandRetry.NONE,
         )
-        return bridge.BridgeDispatcher(
-            document=document,
-            commands={"packaged_probe": spec},
+        production = dict(commands)
+        if "packaged_probe" in production:
+            raise RuntimeError("production unexpectedly owns the packaged probe")
+        combined = MappingProxyType(
+            {**production, "packaged_probe": spec}
         )
+        recorder.set("production_command_names", sorted(production))
+        recorder.set("combined_command_names", sorted(combined))
+        recorder.set("combined_mapping_type", type(combined).__name__)
+        return original_dispatcher(document, combined, startup_gate)
 
     def browser_open(*values: object, **keywords: object) -> bool:
         recorder.append(

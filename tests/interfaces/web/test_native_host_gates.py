@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -47,6 +48,7 @@ _POISONED_SETTINGS = {
 class _NativeLiveEvidence:
     installed_root: Path
     live_data_root: Path
+    live_index: Path
     live: dict[str, object]
     packaged_popup: dict[str, object]
 
@@ -65,7 +67,7 @@ def native_live_gate_evidence(
     root = require_absolute_local_test_root(
         tmp_path_factory.mktemp("native-host-gates")
     )
-    index = require_absolute_local_test_root(_INDEX)
+    index = _stage_live_page(headed_installed_wheel, root)
     live_root = require_absolute_local_test_root(root / "live")
     live = _run_live_probe(
         headed_installed_wheel,
@@ -82,6 +84,7 @@ def native_live_gate_evidence(
     return _NativeLiveEvidence(
         installed_root=headed_installed_wheel.root.resolve(),
         live_data_root=live_root,
+        live_index=index,
         live=live,
         packaged_popup=packaged_popup,
     )
@@ -121,12 +124,18 @@ def native_failure_gate_evidence(
 def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     html = _INDEX.read_text(encoding="utf-8")
     script = _SCRIPT.read_text(encoding="utf-8")
+    child = _CHILD.read_text(encoding="utf-8")
     runtime = native_gate_child._runtime_identity()
     transport = native_gate_child._transport_evidence()
 
+    compile(child, str(_CHILD), "exec")
     assert "script-src 'self'" in html
     assert "unsafe-inline" not in html
-    assert '<script src="probe.js"></script>' in html
+    assert '<script type="module" src="probe.js"></script>' in html
+    assert 'from "./appearance.js"' in script
+    assert "await becomePresentationReady();" in script
+    assert 'dispatchCommand("shell_ready", {})' in script
+    assert "await appearance.whenAppliedAfter(baseline);" in script
     assert "window.pywebview.api.dispatch" in script
     assert "window.location.assign(NAVIGATION_TARGET)" in script
     assert "window.open(POPUP_TARGET)" in script
@@ -139,6 +148,14 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert "if (window.__namiPackagedPopupGate)" in packaged_probe
     assert "window.addEventListener(\"pywebviewready\", onReady)" in packaged_probe
     assert "if (window.pywebview?.api?.dispatch)" in packaged_probe
+    assert 'await import("./bridge.js")' in packaged_probe
+    assert "await bridge.whenBridgeReady();" in packaged_probe
+    assert "await bridge.dispatchInteractive(" in packaged_probe
+    assert child.count("startup_gate: object,") == 2
+    assert child.count(
+        "original_dispatcher(document, combined, startup_gate)"
+    ) == 2
+    assert child.count("combined = MappingProxyType(") == 2
 
 
 @pytest.mark.headed
@@ -261,6 +278,22 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert observations["afterNavigation"]["page_ready_count"] == 2
     assert observations["afterPopup"]["page_ready_count"] == 3
     assert page["ready_count"] == 3
+    presentation_revisions = observations["presentationRevisions"]
+    assert len(presentation_revisions) == 3
+    assert presentation_revisions == sorted(set(presentation_revisions))
+    assert all(revision > 0 for revision in presentation_revisions)
+    assert evidence["production_command_names"] == [
+        "close_task",
+        "next_events",
+        "pick_folder",
+        "release_terminal_session",
+        "shell_ready",
+        "start_plan",
+    ]
+    assert evidence["combined_command_names"] == sorted(
+        [*evidence["production_command_names"], "native_probe"]
+    )
+    assert evidence["combined_mapping_type"] == "mappingproxy"
 
     assert transport["uses_js_bridge_call"] is True
     assert transport["uses_window_evaluate_js"] is True
@@ -364,7 +397,9 @@ def test_br_g_31_installed_host_composition_preserves_security_boundaries(
         native_live_gate_evidence.live_data_root
     )
     assert evidence["renderer"] == "edgechromium"
-    assert Path(evidence["input_index"]).resolve() == _INDEX.resolve()
+    assert Path(evidence["input_index"]).resolve() == (
+        native_live_gate_evidence.live_index.resolve()
+    )
 
     guard_attach = _only_event(events, "guard_attach.begin")
     assert guard_attach["at"] < _phase_event(events, "baseline")["at"]
@@ -539,6 +574,29 @@ def _run_live_probe(
             terminate_process_tree(process, deadline=deadline)
     assert completed.returncode == 0, completed.stdout + completed.stderr
     return json.loads(read_text(output, deadline=deadline))
+
+
+def _stage_live_page(
+    installed: HeadedInstalledWheel,
+    root: Path,
+) -> Path:
+    page = require_absolute_local_test_root(root / "live-page")
+    shutil.copytree(_INDEX.parent, page)
+    installed_asset = (
+        installed.root
+        / "Lib"
+        / "site-packages"
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "appearance.js"
+    ).resolve(strict=True)
+    assert installed_asset.is_relative_to(installed.root.resolve())
+    destination = page / "appearance.js"
+    shutil.copy2(installed_asset, destination)
+    assert destination.read_bytes() == installed_asset.read_bytes()
+    return require_absolute_local_test_root(page / "index.html")
 
 
 def _run_noninteractive_probe(
@@ -739,10 +797,27 @@ def _assert_packaged_popup_evidence(
         < popup["at"]
         < dispatch["at"]
     )
+    ready_events = [
+        event for event in events if event["name"] == "pywebviewready"
+    ]
+    assert len(ready_events) >= 2
+    assert ready_events[1]["at"] < dispatch["at"]
     page = evidence["packaged_page"]
     assert page["initial_url"] == page["final_url"]
     assert page["document_token"].startswith("packaged-")
     assert page["ready_count"] >= 2
+    assert evidence["production_command_names"] == [
+        "close_task",
+        "next_events",
+        "pick_folder",
+        "release_terminal_session",
+        "shell_ready",
+        "start_plan",
+    ]
+    assert evidence["combined_command_names"] == sorted(
+        [*evidence["production_command_names"], "packaged_probe"]
+    )
+    assert evidence["combined_mapping_type"] == "mappingproxy"
     assert evidence["system_browser_calls"] == []
 
 

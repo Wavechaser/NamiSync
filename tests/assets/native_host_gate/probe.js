@@ -1,3 +1,5 @@
+import { installAppearanceReceiver } from "./appearance.js";
+
 (function () {
   "use strict";
 
@@ -15,13 +17,26 @@
     observations: {},
   };
   window.__namiNativeHostGate = state;
+  const appearance = installAppearanceReceiver(
+    window.chrome.webview,
+    document.documentElement,
+  );
 
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
 
-  function dispatch(phase, extra) {
+  function dispatchCommand(command, payload) {
     state.request += 1;
+    return window.pywebview.api.dispatch(JSON.stringify({
+      schema_version: 1,
+      request_id: state.request.toString(16).padStart(32, "0"),
+      command: command,
+      payload: payload,
+    }));
+  }
+
+  function dispatch(phase, extra) {
     const payload = Object.assign(
       {
         phase: phase,
@@ -31,12 +46,19 @@
       },
       extra || {}
     );
-    return window.pywebview.api.dispatch(JSON.stringify({
-      schema_version: 1,
-      request_id: state.request.toString(16).padStart(32, "0"),
-      command: "native_probe",
-      payload: payload,
-    }));
+    return dispatchCommand("native_probe", payload);
+  }
+
+  async function becomePresentationReady() {
+    const baseline = appearance.revision();
+    const response = await dispatchCommand("shell_ready", {});
+    if (response === null || typeof response !== "object" || response.ok !== true) {
+      throw new Error("Native host gate shell acknowledgement was refused");
+    }
+    await appearance.whenAppliedAfter(baseline);
+    const revisions = state.observations.presentationRevisions || [];
+    revisions.push(appearance.revision());
+    state.observations.presentationRevisions = revisions;
   }
 
   async function onFirstReady() {
@@ -110,6 +132,7 @@
     }
     state.running = true;
     try {
+      await becomePresentationReady();
       if (state.stage === 0) {
         await onFirstReady();
       } else if (state.stage === 1) {
