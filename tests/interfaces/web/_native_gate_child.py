@@ -818,6 +818,7 @@ def _run_attachment_failure(
     original_pending = host._pending_document
     original_load = host._load_webview
     original_configure = host._configure_window_security
+    original_native_close = host._post_native_window_close
 
     def pending_document() -> object:
         document = original_pending()
@@ -831,11 +832,11 @@ def _run_attachment_failure(
 
         def create_window(*args: object, **kwargs: object) -> object:
             window = original_create(*args, **kwargs)
-            original_destroy = window.destroy
 
             def observe_destroy(*values: object, **keywords: object) -> object:
+                del values, keywords
                 recorder.event("attachment.window.destroy")
-                return original_destroy(*values, **keywords)
+                raise RuntimeError("native gate injected public destroy failure")
 
             window.destroy = observe_destroy
             runtime["window"] = window
@@ -843,6 +844,10 @@ def _run_attachment_failure(
 
         module.create_window = create_window
         return module
+
+    def native_close(window: object) -> None:
+        recorder.event("attachment.window.native_close")
+        original_native_close(window)
 
     def fail_attachment(guard: object, core: object) -> None:
         del guard, core
@@ -877,6 +882,9 @@ def _run_attachment_failure(
         stack.enter_context(patch.object(host, "_load_webview", load_webview))
         stack.enter_context(
             patch.object(host, "_configure_window_security", configure)
+        )
+        stack.enter_context(
+            patch.object(host, "_post_native_window_close", native_close)
         )
         stack.enter_context(
             patch.object(

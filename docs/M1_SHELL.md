@@ -451,9 +451,11 @@ third-party notices, signing, or a WebView2 bootstrapper.
      failure, return `False` to abort creation, let `start_edge_chromium`
      return, and do **not** call `window.destroy()` — no native window exists.
    - **Guard or loaded failure** (native attachment on the UI thread): store the
-     sticky failure, mark the host startup-refused, and call `window.destroy()`
-     exactly once. The `loaded` watchdog stores state and destroys rather than
-     raising. Destruction happens first here, to escape the GUI loop.
+     sticky failure, synchronously reject bridge admission and wake the task
+     registry, mark the host startup-refused, and call `window.destroy()`
+     exactly once. If that public call throws, post one `WM_CLOSE` through the
+     retained HWND. The `loaded` watchdog stores state and closes rather than
+     raising; both close paths leave authority rejected if they fail.
 
    After `start_edge_chromium` returns, both in-loop paths run the finalizer
    above. Because dispatch never opened, `service.close()` should return a
@@ -477,7 +479,8 @@ third-party notices, signing, or a WebView2 bootstrapper.
    attempt, and there is no force-destroy path. The startup-refused phase from
    step 5 is the one exception: its closing handler recognizes that phase and
    bypasses this veto/Retry machine entirely, letting the single startup
-   `window.destroy()` fall straight through to the bounded finalizer. Slice 1
+   public-destroy/native-close request fall straight through to the bounded
+   finalizer. Slice 1
    supplies empty wake/subscription hooks for later slices rather than blocking
    the UI thread.
 7. Add a per-logon-session single instance built on one injected

@@ -554,6 +554,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. A loaded-time
+  appearance or guard refusal attempted window destruction while the exposed
+  dispatcher was still accepting; if public destruction threw, the real GUI
+  loop could remain alive with trusted command authority. Fixed by rejecting
+  dispatch and waking the registry before presentation teardown, making the
+  refusal transition idempotent, and posting one owner-bound `WM_CLOSE` after
+  a failed public destroy. Both close paths may still fail, but authority then
+  remains rejected and manual close enters the startup-refused finalizer.
 - MODERATE - FIXED (2026-08-17). Selected-state boundary contrast. Selected
   and current task cards used the subtle neutral boundary that belongs to
   quiet surfaces, leaving their actionable edge below the 3:1 non-text

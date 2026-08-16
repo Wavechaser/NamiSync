@@ -1142,6 +1142,8 @@ def test_guard_or_loaded_refusal_destroys_once(
 
     assert result == 1
     assert webview.window.destroy_count == 1
+    assert order.index("reject_dispatch") < order.index("appearance.close")
+    assert order.index("registry.begin_close") < order.index("appearance.close")
     assert order.index("appearance.close") < order.index("destroy")
     assert reports == [
         "WebView2 security guards could not attach: "
@@ -1348,6 +1350,11 @@ def test_loaded_watchdog_records_destroy_failure_without_raising(
         configure_security=failed_attachment,
         start=start,
     )
+    monkeypatch.setattr(
+        host,
+        "_post_native_window_close",
+        lambda _window: order.append("native_close"),
+    )
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
 
@@ -1361,6 +1368,201 @@ def test_loaded_watchdog_records_destroy_failure_without_raising(
         "RuntimeError",
         None,
     ) in order
+    assert order.index("reject_dispatch") < order.index("native_close")
+    assert order.index("registry.begin_close") < order.index("native_close")
+
+
+def test_loaded_refusal_closes_authority_before_destroy_fallback_and_unblocks_loop(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failed_attachment(window, url, document, renderer_callback) -> None:
+        del window, url, renderer_callback
+        document.attachment_error = "guard attachment failed"
+
+    dispatcher_holder: dict[str, object] = {}
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def begin_close(self) -> None:
+            order.append("reject_dispatch")
+            self.closed = True
+
+        def wait_for_handlers(self) -> None:
+            order.append("wait_handlers")
+
+        def dispatch(self, _body: str) -> str:
+            return "bridge_unavailable" if self.closed else "accepted"
+
+    def make_dispatcher(_document: object, _commands: object) -> Dispatcher:
+        dispatcher = Dispatcher()
+        dispatcher_holder["value"] = dispatcher
+        return dispatcher
+
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+
+        def refuse_public_destroy() -> None:
+            order.append("destroy")
+            raise RuntimeError("public destroy refused")
+
+        webview.window.destroy = refuse_public_destroy
+        webview.window.events.loaded.emit()
+        exposed_dispatch = webview.window.exposed_functions[0]
+        assert exposed_dispatch("{}") == "bridge_unavailable"
+        webview.window.events.loaded.emit()
+        assert webview.window.destroyed.wait(1.0)
+
+    paths, order, webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        configure_security=failed_attachment,
+        start=start,
+    )
+    monkeypatch.setattr(host, "_bridge_dispatcher", make_dispatcher)
+
+    def native_close(window: object) -> None:
+        dispatcher = dispatcher_holder["value"]
+        assert dispatcher.closed
+        assert "registry.begin_close" in order
+        order.append("native_close")
+        window.destroyed.set()
+
+    monkeypatch.setattr(host, "_post_native_window_close", native_close)
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == [
+        "WebView2 security guards could not attach: guard attachment failed"
+    ]
+    assert order.count("destroy") == 1
+    assert order.count("native_close") == 1
+    assert order.count("appearance.close") == 1
+    assert order.index("reject_dispatch") < order.index("registry.begin_close")
+    assert order.index("registry.begin_close") < order.index("appearance.close")
+    assert order.index("appearance.close") < order.index("destroy")
+    assert order.index("destroy") < order.index("native_close")
+
+
+def test_destroy_once_uses_one_native_fallback_and_does_not_claim_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+    state = host._StartupState()
+    window = SimpleNamespace(
+        destroy=lambda: order.append("destroy")
+        or (_ for _ in ()).throw(RuntimeError("public refusal"))
+    )
+    logged: list[str] = []
+    monkeypatch.setattr(
+        host,
+        "_post_native_window_close",
+        lambda _window: order.append("native_close")
+        or (_ for _ in ()).throw(RuntimeError("native refusal")),
+    )
+    monkeypatch.setattr(
+        host,
+        "_log_cleanup_failure",
+        lambda event, _error, **_options: logged.append(event),
+    )
+
+    assert state.destroy_once(window) is False
+    assert state.destroy_once(window) is False
+
+    assert order == ["destroy", "native_close"]
+    assert logged == [
+        "startup.window_destroy_failed",
+        "startup.native_window_close_failed",
+    ]
+
+
+def test_native_close_posts_one_wm_close_to_the_public_native_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[int, int, int, int]] = []
+
+    class PostMessage:
+        argtypes: object = None
+        restype: object = None
+
+        def __call__(
+            self,
+            handle: int,
+            message: int,
+            word: int,
+            long_value: int,
+        ) -> bool:
+            calls.append((handle, message, word, long_value))
+            return True
+
+    post_message = PostMessage()
+    monkeypatch.setattr(
+        host.ctypes,
+        "WinDLL",
+        lambda name, *, use_last_error: SimpleNamespace(
+            PostMessageW=post_message,
+            name=name,
+            use_last_error=use_last_error,
+        ),
+    )
+    handle = SimpleNamespace(ToInt64=lambda: 12345)
+
+    host._post_native_window_close(
+        SimpleNamespace(native=SimpleNamespace(Handle=handle))
+    )
+
+    assert calls == [(12345, host._WM_CLOSE, 0, 0)]
+    assert post_message.argtypes == (
+        host.wintypes.HWND,
+        host.wintypes.UINT,
+        host.wintypes.WPARAM,
+        host.wintypes.LPARAM,
+    )
+    assert post_message.restype is host.wintypes.BOOL
+
+
+@pytest.mark.parametrize("handle", (0, -1))
+def test_native_close_rejects_an_invalid_handle(
+    monkeypatch: pytest.MonkeyPatch,
+    handle: int,
+) -> None:
+    monkeypatch.setattr(
+        host.ctypes,
+        "WinDLL",
+        lambda *_args, **_kwargs: pytest.fail("invalid handle loaded user32"),
+    )
+
+    with pytest.raises(RuntimeError, match="no native close handle"):
+        host._post_native_window_close(
+            SimpleNamespace(native=SimpleNamespace(Handle=handle))
+        )
+
+
+def test_native_close_reports_a_failed_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PostMessage:
+        argtypes: object = None
+        restype: object = None
+
+        def __call__(self, *_args: object) -> bool:
+            return False
+
+    monkeypatch.setattr(
+        host.ctypes,
+        "WinDLL",
+        lambda *_args, **_kwargs: SimpleNamespace(PostMessageW=PostMessage()),
+    )
+    monkeypatch.setattr(host.ctypes, "get_last_error", lambda: 5)
+
+    with pytest.raises(OSError):
+        host._post_native_window_close(
+            SimpleNamespace(native=SimpleNamespace(Handle=12345))
+        )
 
 
 def _close_hooks(order: list[str]) -> host._DesktopCloseHooks:

@@ -432,12 +432,20 @@ def test_br_g_31_installed_host_composition_preserves_security_boundaries(
         < _only_event(failure_events, "attachment.guard.fail")["at"]
         < _only_event(failure_events, "attachment.before_load.after")["at"]
         < _only_event(failure_events, "attachment.window.destroy")["at"]
+        < _only_event(failure_events, "attachment.window.native_close")["at"]
     )
     assert len(
         [
             event
             for event in failure_events
             if event["name"] == "attachment.window.destroy"
+        ]
+    ) == 1
+    assert len(
+        [
+            event
+            for event in failure_events
+            if event["name"] == "attachment.window.native_close"
         ]
     ) == 1
     assert Path(failure["runtime"]["executable"]).resolve().is_relative_to(

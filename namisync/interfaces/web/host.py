@@ -29,6 +29,7 @@ _ID_RETRY = 4
 _MB_RETRYCANCEL = 0x00000005
 _MB_ICONWARNING = 0x00000030
 _MB_SETFOREGROUND = 0x00010000
+_WM_CLOSE = 0x0010
 _CLOSE_INCOMPLETE_CAPTION = "NamiSync - Close Incomplete"
 _CLOSE_INCOMPLETE_MESSAGE = (
     "NamiSync could not finish closing safely.\n\n"
@@ -294,7 +295,7 @@ class _StartupState:
     def __init__(self) -> None:
         self._lock = Lock()
         self._failure: Exception | None = None
-        self._destroyed = False
+        self._destroy_attempted = False
 
     @property
     def failure(self) -> Exception | None:
@@ -306,15 +307,45 @@ class _StartupState:
             if self._failure is None:
                 self._failure = error
 
-    def destroy_once(self, window: object) -> None:
+    def destroy_once(self, window: object) -> bool:
         with self._lock:
-            if self._destroyed:
-                return
-            self._destroyed = True
+            if self._destroy_attempted:
+                return False
+            self._destroy_attempted = True
         try:
             window.destroy()
         except Exception as error:
             _log_cleanup_failure("startup.window_destroy_failed", error)
+            try:
+                _post_native_window_close(window)
+            except Exception as fallback_error:
+                _log_cleanup_failure(
+                    "startup.native_window_close_failed",
+                    fallback_error,
+                )
+                return False
+        return True
+
+
+def _post_native_window_close(window: object) -> None:
+    """Request the normal Win32 close path after public destruction fails."""
+
+    native_handle = window.native.Handle
+    to_int64 = getattr(native_handle, "ToInt64", None)
+    handle = int(to_int64() if callable(to_int64) else native_handle)
+    if handle <= 0:
+        raise RuntimeError("desktop window has no native close handle")
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32.PostMessageW.argtypes = (
+        wintypes.HWND,
+        wintypes.UINT,
+        wintypes.WPARAM,
+        wintypes.LPARAM,
+    )
+    user32.PostMessageW.restype = wintypes.BOOL
+    ctypes.set_last_error(0)
+    if not user32.PostMessageW(handle, _WM_CLOSE, 0, 0):
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 class _ClosePhase(Enum):
@@ -454,7 +485,10 @@ class _DesktopCloseController:
 
     def _mark_startup_refused(self) -> bool:
         with self._lock:
-            if self._phase is _ClosePhase.PROGRAMMATIC_CLOSE:
+            if self._phase in {
+                _ClosePhase.PROGRAMMATIC_CLOSE,
+                _ClosePhase.STARTUP_REFUSED,
+            }:
                 return False
             self._phase = _ClosePhase.STARTUP_REFUSED
             return True
@@ -753,6 +787,14 @@ def run_desktop(
                 )
             state.refuse(error)
             if close_controller._mark_startup_refused():
+                for event, reject in (
+                    ("startup.dispatch_rejection_failed", dispatcher.begin_close),
+                    ("startup.registry_wake_failed", registry.begin_close),
+                ):
+                    try:
+                        reject()
+                    except Exception as close_error:
+                        _log_cleanup_failure(event, close_error)
                 close_appearance()
                 state.destroy_once(window)
 

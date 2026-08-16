@@ -254,6 +254,13 @@ cursor and command-receipt identity exposed across the wire. The desktop owns th
 presentation queue fed by that sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe on task close and close every observation before service shutdown.
 
+A loaded-time security, material, or presentation refusal closes dispatcher
+admission and wakes the task registry before appearance teardown or any window
+close request. Public destruction is attempted once; if that API throws, the
+host posts one `WM_CLOSE` to its retained native window handle so the normal
+startup-refused close path can release the GUI loop. A failure of both close
+paths never reopens authority or replaces the original startup diagnosis.
+
 `NamiSyncService.close()` is bounded but not instantaneous: its derived
 allowance is twelve seconds, reached only when the audit writer is genuinely
 wedged, and a healthy close returns in milliseconds. The host must therefore
