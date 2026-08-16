@@ -74,7 +74,28 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "WorkflowRegistration" in child
     assert "TaskRegistry" not in browser
     assert 'from "./bridge.js"' in browser
+    assert 'from "./appearance.js"' in browser
     assert 'from "./render.js"' in browser
+    assert "startup_gate: object," in child
+    assert "startup_gate=startup_gate," in child
+    assert "installAppearanceReceiver(" in browser
+    assert "await acknowledgeShellReady();" in browser
+    assert "await appearance.whenAppliedAfter(appearanceBaseline);" in browser
+    assert browser.index("installAppearanceReceiver(") < browser.index(
+        "await whenBridgeApiReady();"
+    )
+    assert browser.index("await whenBridgeApiReady();") < browser.index(
+        "await acknowledgeShellReady();"
+    )
+    assert browser.index("await acknowledgeShellReady();") < browser.index(
+        "await appearance.whenAppliedAfter(appearanceBaseline);"
+    )
+    assert browser.index(
+        "await appearance.whenAppliedAfter(appearanceBaseline);"
+    ) < browser.index("markBridgeOperational();")
+    assert 'id="host-status"' in (ASSETS / "index.html").read_text(
+        encoding="utf-8"
+    )
     assert "evaluate_js" not in parent
     assert "evaluate_js" not in child
     assert "evaluate_js" not in browser
@@ -1036,6 +1057,7 @@ def _passing_evidence(benchmark):
             "next_events",
             "pick_folder",
             "release_terminal_session",
+            "shell_ready",
             "start_plan",
         ],
         "combined_command_names": [
@@ -1045,6 +1067,7 @@ def _passing_evidence(benchmark):
             "next_events",
             "pick_folder",
             "release_terminal_session",
+            "shell_ready",
             "start_plan",
         ],
     }

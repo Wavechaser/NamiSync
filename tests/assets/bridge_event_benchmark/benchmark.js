@@ -1,12 +1,28 @@
 import {
+  acknowledgeShellReady,
+  BridgeTransportError,
   dispatchInteractive,
   markBridgeOperational,
   startTaskDrain,
   whenBridgeApiReady,
 } from "./bridge.js";
+import { installAppearanceReceiver } from "./appearance.js";
 import { renderText } from "./render.js";
 
+const appearance = installAppearanceReceiver(
+  window.chrome.webview,
+  document.documentElement,
+);
+const appearanceBaseline = appearance.revision();
 await whenBridgeApiReady();
+try {
+  await acknowledgeShellReady();
+} catch (error) {
+  if (!(error instanceof BridgeTransportError)) {
+    throw error;
+  }
+}
+await appearance.whenAppliedAfter(appearanceBaseline);
 markBridgeOperational();
 
 

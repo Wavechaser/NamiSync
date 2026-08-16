@@ -545,9 +545,20 @@ def main() -> int:
     def task_registry(service: object) -> object:
         return original_task_registry(service)
 
-    def commands(*, picker: object, slots: object, registry: object) -> object:
+    def commands(
+        *,
+        picker: object,
+        slots: object,
+        registry: object,
+        startup_gate: object,
+    ) -> object:
         production = dict(
-            original_commands(picker=picker, slots=slots, registry=registry)
+            original_commands(
+                picker=picker,
+                slots=slots,
+                registry=registry,
+                startup_gate=startup_gate,
+            )
         )
         combined = {
             **production,
