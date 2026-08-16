@@ -99,6 +99,7 @@ def test_sh_g_3_child_gui_path_emits_exact_startup_and_dependency_records(
 ) -> None:
     root = tmp_path / "child-app"
     script = """
+import json
 import logging
 import sys
 from pathlib import Path
@@ -125,7 +126,11 @@ class Hook:
 class Window:
     def __init__(self):
         self.real_url = "http://127.0.0.1:41700/assets/index.html"
-        self.events = SimpleNamespace(closing=Hook(), loaded=Hook())
+        self.events = SimpleNamespace(
+            before_load=Hook(),
+            closing=Hook(),
+            loaded=Hook(),
+        )
         self.dom = SimpleNamespace(
             get_element=lambda selector: (
                 SimpleNamespace(text="Ready")
@@ -177,7 +182,23 @@ class Service:
         return SimpleNamespace(complete=True, unfinished=(), custody_released=True)
 
 
+class Appearance:
+    startup_failure = None
+
+    def __init__(self):
+        self.publication_generations = []
+
+    def request_initial_publication(self, generation, callback):
+        assert generation == 1
+        self.publication_generations.append(generation)
+        callback(None)
+
+    def close(self):
+        pass
+
+
 webview = Webview()
+appearance = Appearance()
 lease = host.DesktopInstanceLease(object(), LeaseNative())
 host.acquire_desktop_instance = lambda _identity, native=None: (
     host.DesktopInstanceAdmission(lease, False, None)
@@ -199,7 +220,20 @@ def start_webview(webview_module, *, on_initialized, storage_path):
     assert webview_module is webview
     assert Path(storage_path) == Path(sys.argv[1]) / "webview2"
     on_initialized()
+    webview.window.events.before_load.emit()
     webview.window.events.loaded.emit()
+    response = webview.window.exposed[0](json.dumps({
+        "schema_version": 1,
+        "request_id": "a1" * 16,
+        "command": "shell_ready",
+        "payload": {},
+    }, separators=(",", ":")))
+    assert response == {
+        "schema_version": 1,
+        "request_id": "a1" * 16,
+        "ok": True,
+        "result": {"acknowledged": True},
+    }
 
 
 host._load_webview = load_webview
@@ -211,14 +245,13 @@ host._prepare_webview_host = lambda _module: None
 host._create_service = lambda _paths: Service()
 host._configure_window_security = configure_security
 host._opaque_window_background = lambda: "#F3F3F3"
-host._configure_window_appearance = lambda _window: SimpleNamespace(
-    close=lambda: None
-)
+host._configure_window_appearance = lambda _window: appearance
 host._start_webview = start_webview
 startup_errors = []
 launcher._report_startup_error = startup_errors.append
 
 assert launcher.gui_main(["--data-dir", sys.argv[1]]) == 0
+assert appearance.publication_generations == [1]
 assert startup_errors == []
     """
     environment = os.environ.copy()
