@@ -340,13 +340,19 @@ def test_sh_g_3_ascii_rollover_creates_the_numbered_backup(
 ) -> None:
     paths = AppPaths.from_root(tmp_path / "app")
     logging_config.configure_logging(paths)
+    handler = logging_config._handler
+    assert handler is not None
+    handler.maxBytes = 5 * 1024
     logger = logging.getLogger("namisync.test")
 
-    logger.info("a" * (3 * 1024 * 1024))
-    logger.info("b" * (3 * 1024 * 1024))
+    logger.info("before-rollover %s", "a" * (3 * 1024))
+    logger.info("after-rollover %s", "b" * (3 * 1024))
     _flush()
 
-    assert (paths.logs / "namisync.log.1").is_file()
+    backup = paths.logs / "namisync.log.1"
+    assert backup.is_file()
+    assert "before-rollover" in backup.read_text(encoding="utf-8")
+    assert "after-rollover" in paths.log_file.read_text(encoding="utf-8")
 
 
 def test_sh_g_3_unicode_and_surrogate_fallback_emit_without_internal_error(
