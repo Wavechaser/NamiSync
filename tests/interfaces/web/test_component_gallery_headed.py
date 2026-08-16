@@ -126,7 +126,21 @@ _RGB = re.compile(
 @dataclass(frozen=True, slots=True)
 class _GalleryEvidence:
     installed: HeadedInstalledWheel
+    root: Path
+    scenario: Path
     results: dict[str, dict[str, object]]
+
+    def result(self, mode: str) -> dict[str, object]:
+        if mode not in _MODES:
+            raise ValueError("unknown component gallery mode")
+        if mode not in self.results:
+            self.results[mode] = _run_gallery_mode(
+                self.installed,
+                mode=mode,
+                root=require_absolute_local_test_root(self.root / mode),
+                scenario=self.scenario,
+            )
+        return self.results[mode]
 
 
 @pytest.fixture(scope="session")
@@ -138,16 +152,42 @@ def component_gallery_evidence(
         tmp_path_factory.mktemp("component-gallery")
     )
     scenario = require_absolute_local_test_root(_SCENARIO)
-    results = {
-        mode: _run_gallery_mode(
-            headed_installed_wheel,
-            mode=mode,
-            root=require_absolute_local_test_root(root / mode),
-            scenario=scenario,
-        )
-        for mode in _MODES
-    }
-    return _GalleryEvidence(headed_installed_wheel, results)
+    return _GalleryEvidence(headed_installed_wheel, root, scenario, {})
+
+
+def test_component_gallery_evidence_runs_only_requested_mode_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    installed = HeadedInstalledWheel(
+        wheel=tmp_path / "namisync.whl",
+        root=tmp_path / "installed",
+        python=tmp_path / "python.exe",
+        scripts=tmp_path / "Scripts",
+    )
+    scenario = tmp_path / "gallery.js"
+    calls: list[tuple[str, Path, Path]] = []
+    result = {"mode": "dark"}
+
+    def run(
+        observed_installed: HeadedInstalledWheel,
+        *,
+        mode: str,
+        root: Path,
+        scenario: Path,
+    ) -> dict[str, object]:
+        assert observed_installed is installed
+        calls.append((mode, root, scenario))
+        return result
+
+    monkeypatch.setitem(globals(), "_run_gallery_mode", run)
+    evidence = _GalleryEvidence(installed, tmp_path, scenario, {})
+
+    assert calls == []
+    assert evidence.result("dark") is result
+    assert evidence.result("dark") is result
+    assert calls == [("dark", tmp_path / "dark", scenario)]
+    assert "light" not in evidence.results
 
 
 def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() -> None:
@@ -516,11 +556,10 @@ def test_component_gallery_enables_dom_before_css_pseudo_state_agent(
 def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
-    results = component_gallery_evidence.results
+    light = component_gallery_evidence.result("light")["report"]
+    dark = component_gallery_evidence.result("dark")["report"]
+    forced = component_gallery_evidence.result("forced")["report"]
     _assert_installed_assets(component_gallery_evidence)
-    light = results["light"]["report"]
-    dark = results["dark"]["report"]
-    forced = results["forced"]["report"]
 
     assert light["media"] == {
         "dark": False,
@@ -604,8 +643,8 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
 def test_sh_g_13_component_gallery_honors_reduced_motion(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
-    light = component_gallery_evidence.results["light"]["report"]
-    reduced = component_gallery_evidence.results["reduced"]["report"]
+    light = component_gallery_evidence.result("light")["report"]
+    reduced = component_gallery_evidence.result("reduced")["report"]
 
     assert light["media"]["reduced"] is False
     assert reduced["media"]["reduced"] is True
@@ -656,7 +695,12 @@ def _maximum_duration_ms(value: str) -> float:
 def test_sh_g_14_component_gallery_uses_closed_local_icon_registry(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
-    for result in component_gallery_evidence.results.values():
+    results = [
+        component_gallery_evidence.result(mode)
+        for mode in _MODES
+    ]
+    _assert_installed_assets(component_gallery_evidence)
+    for result in results:
         report = result["report"]
         icons = report["icons"]
         _assert_icon_registry_evidence(

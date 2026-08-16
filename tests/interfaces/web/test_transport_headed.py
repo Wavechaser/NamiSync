@@ -71,11 +71,35 @@ class _OffOriginEvidence:
     result: dict[str, object]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _HeadedTransportEvidence:
-    installed_root: Path
-    transport: _TransportEvidence
-    off_origin: _OffOriginEvidence
+    installed: HeadedInstalledWheel
+    root: Path
+    installed_assets: Path
+    transport_value: _TransportEvidence | None = None
+    off_origin_value: _OffOriginEvidence | None = None
+
+    @property
+    def installed_root(self) -> Path:
+        return self.installed.root.resolve()
+
+    def transport(self) -> _TransportEvidence:
+        if self.transport_value is None:
+            self.transport_value = _run_transport_scenario(
+                self.installed,
+                root=require_absolute_local_test_root(self.root / "transport"),
+                installed_assets=self.installed_assets,
+            )
+        return self.transport_value
+
+    def off_origin(self) -> _OffOriginEvidence:
+        if self.off_origin_value is None:
+            self.off_origin_value = _run_off_origin_scenario(
+                self.installed,
+                root=require_absolute_local_test_root(self.root / "off-origin"),
+                installed_assets=self.installed_assets,
+            )
+        return self.off_origin_value
 
 
 @pytest.fixture(scope="session")
@@ -87,21 +111,62 @@ def headed_transport_evidence(
         tmp_path_factory.mktemp("transport-headed")
     )
     installed_assets = _installed_asset_root(headed_installed_wheel)
-    transport = _run_transport_scenario(
-        headed_installed_wheel,
-        root=require_absolute_local_test_root(root / "transport"),
-        installed_assets=installed_assets,
-    )
-    off_origin = _run_off_origin_scenario(
-        headed_installed_wheel,
-        root=require_absolute_local_test_root(root / "off-origin"),
-        installed_assets=installed_assets,
-    )
     return _HeadedTransportEvidence(
-        installed_root=headed_installed_wheel.root.resolve(),
-        transport=transport,
-        off_origin=off_origin,
+        installed=headed_installed_wheel,
+        root=root,
+        installed_assets=installed_assets,
     )
+
+
+def test_headed_transport_evidence_runs_each_requested_scenario_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    installed = HeadedInstalledWheel(
+        wheel=tmp_path / "namisync.whl",
+        root=tmp_path / "installed",
+        python=tmp_path / "python.exe",
+        scripts=tmp_path / "Scripts",
+    )
+    installed_assets = tmp_path / "assets"
+    transport = object()
+    off_origin = object()
+    calls: list[tuple[str, Path, Path]] = []
+
+    def run_transport(
+        observed_installed: HeadedInstalledWheel,
+        *,
+        root: Path,
+        installed_assets: Path,
+    ) -> _TransportEvidence:
+        assert observed_installed is installed
+        calls.append(("transport", root, installed_assets))
+        return transport  # type: ignore[return-value]
+
+    def run_off_origin(
+        observed_installed: HeadedInstalledWheel,
+        *,
+        root: Path,
+        installed_assets: Path,
+    ) -> _OffOriginEvidence:
+        assert observed_installed is installed
+        calls.append(("off-origin", root, installed_assets))
+        return off_origin  # type: ignore[return-value]
+
+    monkeypatch.setitem(globals(), "_run_transport_scenario", run_transport)
+    monkeypatch.setitem(globals(), "_run_off_origin_scenario", run_off_origin)
+    evidence = _HeadedTransportEvidence(installed, tmp_path, installed_assets)
+
+    assert calls == []
+    assert evidence.transport() is transport
+    assert evidence.transport() is transport
+    assert calls == [("transport", tmp_path / "transport", installed_assets)]
+    assert evidence.off_origin() is off_origin
+    assert evidence.off_origin() is off_origin
+    assert calls == [
+        ("transport", tmp_path / "transport", installed_assets),
+        ("off-origin", tmp_path / "off-origin", installed_assets),
+    ]
 
 
 def test_transport_gate_assets_keep_test_implementation_outside_package() -> None:
@@ -549,7 +614,7 @@ def test_transport_gate_off_origin_fault_removes_only_top_level_precommit_guard(
 def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_sink(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
-    evidence = headed_transport_evidence.transport
+    evidence = headed_transport_evidence.transport()
     result = evidence.result
     report = result["report"]
     dom = report["dom"]
@@ -603,7 +668,7 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
 def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
-    evidence = headed_transport_evidence.transport
+    evidence = headed_transport_evidence.transport()
     calls = evidence.result["service_start_plan_calls"]
 
     assert len(calls) == 5
@@ -631,7 +696,7 @@ def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
 def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
-    result = headed_transport_evidence.off_origin.result
+    result = headed_transport_evidence.off_origin().result
 
     assert result["navigation_starting_removed"] is True
     assert result["off_origin_response"] == _BRIDGE_UNAVAILABLE
@@ -667,7 +732,7 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
 def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
-    result = headed_transport_evidence.transport.result
+    result = headed_transport_evidence.transport().result
 
     assert result["drain_probe_report"] == {
         "drain_entered": True,
@@ -686,7 +751,7 @@ def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
 def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
-    evidence = headed_transport_evidence.transport
+    evidence = headed_transport_evidence.transport()
     result = evidence.result
     browser = result["report"]["browser_gate"]
     server = result["browser_gate_server"]
@@ -788,7 +853,7 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
 def test_sh_g_3_headed_renderer_and_hostile_dispatch_are_logged_safely(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
-    evidence = headed_transport_evidence.transport
+    evidence = headed_transport_evidence.transport()
     native_version = evidence.result["native_browser_version"]
     hostile_bodies = [
         body
