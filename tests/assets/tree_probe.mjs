@@ -64,6 +64,14 @@ class TestElement {
     this.listeners.set(name, listeners);
   }
 
+  removeEventListener(name, listener) {
+    const listeners = this.listeners.get(name) ?? [];
+    this.listeners.set(
+      name,
+      listeners.filter((candidate) => candidate !== listener),
+    );
+  }
+
   dispatch(name, event = {}) {
     if (event.target === undefined) {
       event.target = this;
@@ -129,6 +137,26 @@ class TestElement {
 class TestWindow {
   constructor() {
     this.animationFrames = [];
+    this.resizeObservers = [];
+    const observers = this.resizeObservers;
+    this.ResizeObserver = class {
+      constructor(callback) {
+        assert.equal(typeof callback, "function");
+        this.callback = callback;
+        this.disconnectCalls = 0;
+        this.targets = new Set();
+        observers.push(this);
+      }
+
+      observe(target) {
+        this.targets.add(target);
+      }
+
+      disconnect() {
+        this.disconnectCalls += 1;
+        this.targets.clear();
+      }
+    };
   }
 
   requestAnimationFrame(callback) {
@@ -141,6 +169,14 @@ class TestWindow {
     this.animationFrames = [];
     for (const callback of callbacks) {
       callback(0);
+    }
+  }
+
+  triggerResize(target) {
+    for (const observer of this.resizeObservers) {
+      if (observer.targets.has(target)) {
+        observer.callback([{target}], observer);
+      }
     }
   }
 }
@@ -608,6 +644,72 @@ assert.equal(
   true,
 );
 assert.equal(pagedRoot.scrollTop, 0);
+
+// A passive viewport resize is reconciled by the same coalesced frame as
+// scroll paging. Enlarging without a scroll requests the newly exposed row.
+const resizeDocument = new TestDocument();
+const resizeRoot = resizeDocument.createElement("div");
+resizeRoot.clientHeight = 2 * ROW_H;
+const resizeRequests = [];
+const resizeTree = createTree(resizeRoot, {
+  requestIndex: (index, generation) => {
+    resizeRequests.push({index, generation});
+  },
+});
+assert.equal(resizeDocument.defaultView.resizeObservers.length, 1);
+const [resizeObserver] = resizeDocument.defaultView.resizeObservers;
+assert.deepEqual([...resizeObserver.targets], [resizeRoot]);
+const resizeInitial = resizeTree.beginWindowRequest();
+assert.equal(
+  resizeTree.commitWindow(resizeInitial, fixtureWindow(0, 2)),
+  true,
+);
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, []);
+assert.deepEqual(
+  treeItems(resizeRoot).map((element) => element.dataset.nodeId),
+  fixtureViews.maximum.rows.slice(0, 2).map((row) => row.node_id),
+);
+assert.equal(resizeRoot.scrollTop, 0);
+resizeRoot.clientHeight = 4 * ROW_H;
+resizeDocument.defaultView.triggerResize(resizeRoot);
+assert.equal(resizeDocument.defaultView.animationFrames.length, 1);
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
+assert.equal(
+  resizeTree.commitWindow(2, fixtureWindow(0, 4)),
+  true,
+);
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
+assert.deepEqual(
+  treeItems(resizeRoot).map((element) => element.dataset.nodeId),
+  fixtureViews.maximum.rows.slice(0, 4).map((row) => row.node_id),
+);
+assert.equal(resizeRoot.children[0].style.blockSize, "0px");
+assert.equal(treeItems(resizeRoot).length, 4);
+assert.equal(resizeRoot.scrollTop, 0);
+resizeRoot.clientHeight = 8 * ROW_H;
+resizeDocument.defaultView.triggerResize(resizeRoot);
+assert.equal(resizeDocument.defaultView.animationFrames.length, 1);
+resizeTree.dispose();
+resizeTree.dispose();
+assert.equal(resizeObserver.disconnectCalls, 1);
+assert.deepEqual([...resizeObserver.targets], []);
+for (const name of ["keydown", "scroll", "focus"]) {
+  assert.deepEqual(resizeRoot.listeners.get(name), []);
+}
+resizeDocument.defaultView.flushAnimationFrame();
+resizeDocument.defaultView.triggerResize(resizeRoot);
+resizeRoot.dispatch("scroll");
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
+assert.throws(
+  () => resizeTree.beginWindowRequest(),
+  /tree controller is disposed/,
+);
+assert.equal(resizeTree.commitWindow(2, unreadableWindow), false);
+assert.equal(staleReads, 0);
 
 // Scroll paging is last-state-wins and owns its request generations. The
 // viewport can temporarily contain only a spacer, but it must not retain an

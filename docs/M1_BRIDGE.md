@@ -1288,9 +1288,11 @@ changes and other external projection work do start a new generation through
 `beginWindowRequest`, and that authority is never superseded by interpreting
 scroll state from the now-stale DOM.
 
-User scrolling is a bounded presentation operation. A passive scroll listener
-coalesces a burst into one animation-frame reconciliation. For a viewport
-`[top, top + height)`, intersecting row indexes are
+Viewport reconciliation is a bounded presentation operation. A passive scroll
+listener and one per-tree `ResizeObserver` feed the same coalesced
+animation-frame check, so a layout-only resize cannot leave newly exposed
+spacer rows blank and does not create another paging controller. For a
+viewport `[top, top + height)`, intersecting row indexes are
 `floor(top / 28)` through `ceil((top + height) / 28) - 1`, clipped to the
 visible-sequence extent. If that range intersects a spacer, the renderer
 requests the missing leading or trailing index once. If the current window
@@ -1317,6 +1319,10 @@ ping-pong without imposing an undocumented page-width requirement on the
 owner.
 This is the last-request-wins behavior for viewport paging; it does not create
 selection, projection, or bridge authority in JavaScript.
+Before removing a tree root, its owner calls the controller's idempotent
+`dispose()`. Disposal disconnects the root observer, removes controller-owned
+root listeners, invalidates pending work, and makes an already queued viewport
+frame inert; later commits are refused before their payload is read.
 
 Search responsiveness is interaction-owned, not an excuse for a tiny semantic
 query limit. The first Slice 5/6 request owner uses a fixed 150 ms trailing

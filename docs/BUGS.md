@@ -618,6 +618,16 @@ defect, and move implementation-level test choreography out of the log.
   could therefore fail on a supported runtime. Fixed with own-property calls,
   explicit role attributes, and `getRandomValues`-backed 32-hex identities,
   plus a shipped-asset floor guard and supplemental/real-browser evidence.
+- MODERATE - FIXED (2026-08-17). Passive viewport resize paging gap. The
+  virtual tree reconciled its mounted window after scroll and commit but not
+  after a layout-only viewport resize, so newly exposed rows could remain a
+  blank spacer until another interaction. Fixed with one per-root
+  `ResizeObserver` feeding the existing coalesced viewport frame; it creates no
+  paging authority. Its idempotent controller disposal disconnects observation,
+  removes root listeners, invalidates pending work, and makes a queued frame
+  inert before root removal. Direct-module and installed-wheel WebView2
+  witnesses grow a settled two-row viewport to four without scrolling, prove
+  the newly exposed index is covered, then prove disposal admits no later page.
 - MINOR - FIXED (2026-08-14). Acceptance drift-guard omission. Ordinary
   suites exercised the real current-source custody shape but checked only
   positive size, plausible density, and component/union relations; the frozen

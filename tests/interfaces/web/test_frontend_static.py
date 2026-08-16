@@ -240,6 +240,9 @@ def test_renderer_assets_stay_within_the_admitted_webview2_api_floor(
     assert "Object.hasOwn(" not in javascript
     assert "crypto.randomUUID" not in javascript
     assert re.search(r"\.role\s*=", javascript) is None
+    assert javascript.count(
+        "new document.defaultView.ResizeObserver("
+    ) == 1
 
 
 def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
@@ -480,6 +483,27 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
         'root.addEventListener("scroll", onScroll, {passive: true});'
         in tree
     )
+    resize_observer = re.search(
+        r"const resizeObserver = new document\.defaultView\.ResizeObserver\("
+        r"\(\) => \{\s*scheduleViewportCheck\(\);\s*\}\);",
+        tree,
+    )
+    assert resize_observer is not None
+    assert tree.count("resizeObserver.observe(root);") == 1
+    assert tree.count("resizeObserver.disconnect();") == 1
+    assert 'addEventListener("resize"' not in tree
+    assert "if (disposed || scrollFramePending)" in tree
+    assert "if (!disposed)" in tree
+    assert (
+        "return Object.freeze({beginWindowRequest, commitWindow, dispose});"
+        in tree
+    )
+    for event, listener in (
+        ("keydown", "onKeyDown"),
+        ("scroll", "onScroll"),
+        ("focus", "onFocus"),
+    ):
+        assert f'root.removeEventListener("{event}", {listener});' in tree
     assert "requestIndex(visibleIndex, generation);" in tree
     assert 'disclosure.addEventListener("click", onDisclosureClick);' in tree
     assert "event.stopPropagation();" in tree

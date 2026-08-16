@@ -236,7 +236,7 @@ _SCROLL_TREE_SETUP = r"""
   const root = document.createElement("div");
   root.ariaLabel = "Scroll paging evidence";
   root.style.boxSizing = "content-box";
-  root.style.blockSize = `${4 * ROW_H}px`;
+  root.style.blockSize = `${2 * ROW_H}px`;
   work.append(root);
   const fixture = globalThis.__namiTreeFixtureEvidence?.fixture;
   if (fixture?.schema !== "namisync-tree-window-fixture-v1") {
@@ -269,11 +269,12 @@ _SCROLL_TREE_SETUP = r"""
       state.commits.push({accepted, generation, offset});
     },
   });
+  state.controller = controller;
   const generation = controller.beginWindowRequest();
   const accepted = controller.commitWindow(generation, {
     offset: 0,
     total,
-    rows: rows(0),
+    rows: maximum.rows.slice(0, 2),
   });
   root.focus();
   state.initial = {
@@ -287,6 +288,29 @@ _SCROLL_TREE_SETUP = r"""
   };
   globalThis.__namiScrollTreeEvidence = state;
   await new Promise((resolve) => requestAnimationFrame(resolve));
+  const scrollBeforeResize = root.scrollTop;
+  root.style.blockSize = `${4 * ROW_H}px`;
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const resizeRootRect = root.getBoundingClientRect();
+  const resizeViewportTop = resizeRootRect.top + root.clientTop;
+  const resizeViewportBottom = resizeViewportTop + root.clientHeight;
+  const resizeRendered = [...root.querySelectorAll(".nami-tree-row")];
+  const resizeRects = resizeRendered.map((row) => row.getBoundingClientRect());
+  state.resize = {
+    client_height: root.clientHeight,
+    nonblank_viewport: resizeRects.length > 0 &&
+      Math.min(...resizeRects.map((rect) => rect.top)) <=
+        resizeViewportTop + 0.01 &&
+      Math.max(...resizeRects.map((rect) => rect.bottom)) >=
+        resizeViewportBottom - 0.01,
+    rendered_indices: resizeRendered.map((row) =>
+      Number(row.id.slice(row.id.lastIndexOf("-") + 1))),
+    request: state.requests[0] ?? null,
+    row_count: resizeRendered.length,
+    scroll_top: root.scrollTop,
+    scroll_unchanged: root.scrollTop === scrollBeforeResize,
+  };
   const rect = root.getBoundingClientRect();
   return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
 
@@ -331,9 +355,26 @@ _SCROLL_TREE_EVIDENCE = r"""
       Math.max(...rects.map((rect) => rect.bottom)) >= viewportBottom - 0.01,
     rendered_indices: rendered.map((row) =>
       Number(row.id.slice(row.id.lastIndexOf("-") + 1))),
+    resize: state.resize,
     requests: state.requests,
     row_count: rendered.length,
     scroll_top: root.scrollTop,
+  };
+  const requestsBeforeDispose = state.requests.length;
+  const commitsBeforeDispose = state.commits.length;
+  root.style.blockSize = `${8 * state.initial.row_h}px`;
+  root.dispatchEvent(new Event("scroll"));
+  state.controller.dispose();
+  state.controller.dispose();
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  root.style.blockSize = `${9 * state.initial.row_h}px`;
+  root.dispatchEvent(new Event("scroll"));
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  result.disposal = {
+    commits_unchanged: state.commits.length === commitsBeforeDispose,
+    requests_unchanged: state.requests.length === requestsBeforeDispose,
   };
   state.previousFocus?.focus();
   root.remove();

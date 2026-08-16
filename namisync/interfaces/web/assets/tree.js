@@ -42,10 +42,17 @@ export function createTree(root, callbacks = {}) {
   let expectedProgrammaticScroll = null;
   let scrollFramePending = false;
   let initializedActive = false;
+  let disposed = false;
 
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("scroll", onScroll, {passive: true});
-  root.addEventListener("focus", () => {
+  root.addEventListener("focus", onFocus);
+  const resizeObserver = new document.defaultView.ResizeObserver(() => {
+    scheduleViewportCheck();
+  });
+  resizeObserver.observe(root);
+
+  function onFocus() {
     if (activeElement !== null) {
       revealActiveRow();
       return;
@@ -56,9 +63,12 @@ export function createTree(root, callbacks = {}) {
         acceptRenderedIntent(first);
       }
     }
-  });
+  }
 
   function beginWindowRequest(pendingIndex = null) {
+    if (disposed) {
+      throw new Error("tree controller is disposed");
+    }
     return beginRequest(pendingIndex, "external");
   }
 
@@ -76,7 +86,7 @@ export function createTree(root, callbacks = {}) {
   }
 
   function commitWindow(generation, window, preferredNodeId = null) {
-    if (generation !== currentGeneration) {
+    if (disposed || generation !== currentGeneration) {
       return false;
     }
     const offset = window.offset;
@@ -273,13 +283,15 @@ export function createTree(root, callbacks = {}) {
   }
 
   function scheduleViewportCheck() {
-    if (scrollFramePending) {
+    if (disposed || scrollFramePending) {
       return;
     }
     scrollFramePending = true;
     requestFrame(() => {
       scrollFramePending = false;
-      reconcileViewport();
+      if (!disposed) {
+        reconcileViewport();
+      }
     });
   }
 
@@ -480,7 +492,20 @@ export function createTree(root, callbacks = {}) {
     return null;
   }
 
-  return Object.freeze({beginWindowRequest, commitWindow});
+  function dispose() {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    currentGeneration += 1;
+    clearPendingRequest();
+    resizeObserver.disconnect();
+    root.removeEventListener("keydown", onKeyDown);
+    root.removeEventListener("scroll", onScroll);
+    root.removeEventListener("focus", onFocus);
+  }
+
+  return Object.freeze({beginWindowRequest, commitWindow, dispose});
 }
 
 function optionalCallback(callbacks, name) {

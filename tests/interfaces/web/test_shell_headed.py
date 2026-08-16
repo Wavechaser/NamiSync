@@ -96,6 +96,13 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert '"Input.dispatchMouseEvent"' in source
     assert '"type": "mouseWheel"' in source
     assert "wheel(value, 112, after_scroll_wheel)" in source
+    assert "root.style.blockSize = `${2 * ROW_H}px`;" in source
+    assert "root.style.blockSize = `${4 * ROW_H}px`;" in source
+    assert "request: state.requests[0] ?? null" in source
+    assert "state.controller.dispose();" in source
+    assert source.index("state.controller.dispose();") < source.index(
+        "root.remove();"
+    )
     assert '"Emulation.setEmulatedMedia"' in source
     assert '"Accessibility.getFullAXTree"' in source
     assert "ZoomFactor = 2.0" in source
@@ -281,21 +288,40 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     assert page["scroll_tree"] == {
         "active_node": views["maximum"]["rows"][7]["node_id"],
         "activations": [],
-        "commits": [{"accepted": True, "generation": 2, "offset": 4}],
+        "commits": [
+            {"accepted": True, "generation": 2, "offset": 0},
+            {"accepted": True, "generation": 3, "offset": 4},
+        ],
+        "disposal": {
+            "commits_unchanged": True,
+            "requests_unchanged": True,
+        },
         "fully_visible_active": True,
         "focus_is_tree": True,
         "initial": {
             "accepted": True,
-            "client_height": 112,
+            "client_height": 56,
             "generation": 1,
             "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
-            "row_count": 5,
+            "row_count": 2,
             "row_h": 28,
             "total": views["maximum"]["total"],
         },
         "nonblank_viewport": True,
         "rendered_indices": [4, 5, 6, 7, 8],
-        "requests": [{"generation": 2, "index": 7}],
+        "resize": {
+            "client_height": 112,
+            "nonblank_viewport": True,
+            "rendered_indices": [0, 1, 2, 3, 4],
+            "request": {"generation": 2, "index": 3},
+            "row_count": 5,
+            "scroll_top": 0,
+            "scroll_unchanged": True,
+        },
+        "requests": [
+            {"generation": 2, "index": 3},
+            {"generation": 3, "index": 7},
+        ],
         "row_count": 5,
         "scroll_top": 112,
     }
@@ -597,11 +623,13 @@ def _assert_report_schema(result: object) -> None:
         "active_node",
         "activations",
         "commits",
+        "disposal",
         "fully_visible_active",
         "focus_is_tree",
         "initial",
         "nonblank_viewport",
         "rendered_indices",
+        "resize",
         "requests",
         "row_count",
         "scroll_top",
@@ -614,6 +642,19 @@ def _assert_report_schema(result: object) -> None:
         "row_count",
         "row_h",
         "total",
+    }
+    assert set(result["page"]["scroll_tree"]["resize"]) == {
+        "client_height",
+        "nonblank_viewport",
+        "rendered_indices",
+        "request",
+        "row_count",
+        "scroll_top",
+        "scroll_unchanged",
+    }
+    assert set(result["page"]["scroll_tree"]["disposal"]) == {
+        "commits_unchanged",
+        "requests_unchanged",
     }
     final = result["page"]["final"]
     assert set(final) == {
