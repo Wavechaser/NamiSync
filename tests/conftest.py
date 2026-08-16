@@ -11,8 +11,44 @@ from pathlib import Path
 
 import pytest
 
+from _departments import (
+    DepartmentManifestError,
+    modules_for_departments,
+    repository_module_path,
+    requested_departments,
+    validate_department_manifest,
+)
+
 
 PROJECT_ROOT = Path(__file__).parents[1]
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config,
+    items: list[pytest.Item],
+) -> None:
+    try:
+        ownership = validate_department_manifest()
+        selected = requested_departments(config.getoption("departments") or ())
+        item_modules = {
+            item: repository_module_path(Path(item.path)) for item in items
+        }
+        unresolved = sorted(set(item_modules.values()) - set(ownership))
+        if unresolved:
+            raise DepartmentManifestError(
+                "collected items have no primary owner: " + ", ".join(unresolved)
+            )
+    except DepartmentManifestError as error:
+        raise pytest.UsageError(str(error)) from error
+
+    if not selected:
+        return
+    selected_modules = modules_for_departments(selected, ownership)
+    retained = [item for item in items if item_modules[item] in selected_modules]
+    deselected = [item for item in items if item_modules[item] not in selected_modules]
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+    items[:] = retained
 
 
 @dataclass(frozen=True, slots=True)

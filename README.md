@@ -69,6 +69,9 @@ Run the tests and check the import boundaries:
 .\.venv\Scripts\lint-imports.exe
 ```
 
+Focused, departmental, ordinary, and headed verification commands are defined
+in [Tests](docs/TESTS.md).
+
 M1's desktop host additionally requires Microsoft Edge WebView2 Runtime.
 Declaring pywebview does not make explicit CLI commands initialize a GUI; the
 Stage 6 host contract performs a read-only runtime preflight before window
@@ -127,6 +130,8 @@ never hides the other result axes in rendered output.
 
 ## Documentation
 
+- [Tests](docs/TESTS.md) — verification levels, department routing, markers,
+  and diagnostic commands.
 - [Defense model](docs/DEFENSE.md) — supported assumptions, threat ceiling,
   hard walls, tolerance policy, and residual-risk decisions.
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.

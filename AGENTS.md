@@ -149,6 +149,13 @@ their contract, and update the matching tests and documentation when it does.
 ## Testing And Verification
 
 - Use pytest.
+- Follow `docs/TESTS.md` for focused, departmental, neighborhood, ordinary,
+  and complete/headed verification. `tests/_departments.py` is the executable
+  authority for exact primary module ownership; keep prose free of parallel
+  module or case catalogs.
+- Departments route primary ownership rather than proving complete blast
+  radius. Add consumer departments explicitly for changed public contracts,
+  and use the ordinary repository suite when impact is broad or uncertain.
 - Import component public APIs through the component facade. Tests that inject
   or patch an internal collaborator patch the submodule that owns the symbol,
   not a facade re-export.
