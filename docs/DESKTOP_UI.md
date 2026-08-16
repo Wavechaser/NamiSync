@@ -413,7 +413,9 @@ command or synthetic domain state. Slice 5 remains the first real plan surface.
 The rail itself is a Mica seam: it has no card background, border, or shadow.
 An unselected task card is transparent, hover and pointer press use distinct
 tokenized overlays, and the selected/current card uses the opaque work-card
-surface. Selection is conveyed with `aria-selected`/`aria-current` and is not
+selected surface with an accessible neutral boundary and elevation. Forced
+colors retain distinct selected hover and press outlines. Selection is
+conveyed with `aria-selected`/`aria-current` and is not
 inferred from a task's running status. Work panels and tree viewports remain
 opaque for readability and scroll performance.
 

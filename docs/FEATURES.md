@@ -329,8 +329,9 @@ unrealized unless an entry says otherwise.
   `M1_BRIDGE.md`.
 - **Task Rail**. The transparent rail exposes the window's Mica or opaque
   fallback base. Unselected cards are transparent, hover/press use distinct
-  tokenized overlays, and the selected/current card uses the opaque work-card
-  surface without conflating selection with running status. The window provides
+  tokenized overlays, and the selected/current card uses the opaque selected
+  surface with an accessible neutral boundary without conflating selection
+  with running status. The window provides
   a scrollable newest-first rail of adapter-owned task cards with status, paths,
   completion date, close controls, and mini progress bars. A task may hold a
   reviewed plan without a live session; closing a busy task confirms, cancels,

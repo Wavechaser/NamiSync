@@ -103,6 +103,10 @@ _TEXT_CONTROL_KEYS = {
     "context_menu",
     "segmented_control",
 }
+_SELECTED_TASK_CARD_KEYS = {
+    "task_card_selected",
+    "task_card_current",
+}
 _BOUNDARY_CONTROL_KEYS = {
     "button",
     "dropdown",
@@ -116,7 +120,7 @@ _BOUNDARY_CONTROL_KEYS = {
     "dialog",
     "context_menu",
     "segmented_control",
-}
+} | _SELECTED_TASK_CARD_KEYS
 _RGB = re.compile(
     r"rgba?\(\s*([0-9.]+)(?:\s*,|\s+)\s*([0-9.]+)"
     r"(?:\s*,|\s+)\s*([0-9.]+)(?:\s*(?:,|/)\s*([0-9.]+))?\s*\)"
@@ -541,6 +545,8 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert _declared_keys(script, "STATUS_CASES") == _STATUS_KEYS
     assert _declared_keys(script, "OPERATION_CASES") == _OPERATION_KEYS
     assert _declared_keys(script, "CONTROL_CASES") == _CONTROL_KEYS
+    assert _SELECTED_TASK_CARD_KEYS <= _BOUNDARY_CONTROL_KEYS
+    assert "task_card" not in _BOUNDARY_CONTROL_KEYS
     assert _declared_keys(script, "CONTROL_STATES") == _CONTROL_STATES
     assert 'import("/bridge.js")' in script
     assert 'import("/render.js")' in script
@@ -674,6 +680,21 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                     )
                     >= 3.0
                 )
+        by_control = {
+            control: {
+                row["state"]: row
+                for row in report["controls"]
+                if row["control"] == control
+            }
+            for control in {"task_card", *_SELECTED_TASK_CARD_KEYS}
+        }
+        transparent = by_control["task_card"]
+        assert not _opaque_color(transparent["rest"]["background"])
+        assert not _opaque_color(transparent["rest"]["border"])
+        for control in _SELECTED_TASK_CARD_KEYS:
+            for row in by_control[control].values():
+                assert _opaque_color(row["background"])
+                assert _opaque_color(row["border"])
     system_colors = set(forced["icons"]["system_colors"].values())
     assert system_colors
     for row in (*forced["statuses"], *forced["operations"]):
@@ -685,6 +706,11 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert row["shape_color"] in system_colors
         assert _contrast(row["shape_color"], row["background"]) >= 3.0
     for control in forced["controls"]:
+        if control["control"] in _SELECTED_TASK_CARD_KEYS:
+            assert control["background"] in system_colors
+            assert control["border"] in system_colors
+            if control["state"] != "disabled":
+                assert _control_boundary_contrast(control) >= 3.0
         if control["state"] == "focused":
             assert control["outline_width"] not in {"0px", "0"}
             assert control["outline_style"] != "none"

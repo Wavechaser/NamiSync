@@ -466,8 +466,8 @@ body {
 
 .nami-task-card[aria-selected="true"],
 .nami-task-card[aria-current="true"] {
-  background: var(--color-neutral-surface);
-  border-color: var(--color-neutral-border-subtle);
+  background: var(--color-neutral-surface-selected);
+  border-color: var(--color-neutral-border);
   box-shadow: var(--elevation-2);
 }
 
@@ -1017,6 +1017,18 @@ body {
   .nami-segmented__item:not(:disabled):hover,
   .nami-segmented__item:not(:disabled):active {
     color: var(--color-accent-foreground);
+  }
+
+  .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
+    outline: 1px solid var(--color-accent-foreground);
+    outline-offset: -1px;
+  }
+
+  .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
+    outline: 2px solid var(--color-accent-foreground);
+    outline-offset: -2px;
   }
 
   .nami-toggle__control:not(:disabled):hover::after {

@@ -554,6 +554,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-17). Selected-state boundary contrast. Selected
+  and current task cards used the subtle neutral boundary that belongs to
+  quiet surfaces, leaving their actionable edge below the 3:1 non-text
+  contrast requirement in light mode. Fixed with the opaque selected surface,
+  accessible neutral boundary, retained elevation/focus, and distinct
+  forced-colors hover/press outlines. Transparent unselected rest cards remain
+  intentionally boundary-free and outside that selected-state assertion.
 - MODERATE - FIXED (2026-08-17). Renderer API floor mismatch. The packaged
   shell used `Object.hasOwn`, reflected `role` properties, and
   `crypto.randomUUID` even though the admitted WebView2 floor predates those

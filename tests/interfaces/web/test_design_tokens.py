@@ -17,6 +17,7 @@ ASSET_ROOT = (
 )
 TOKENS = ASSET_ROOT / "tokens.css"
 COMPONENTS = ASSET_ROOT / "components.css"
+APP_LAYOUT = ASSET_ROOT / "app.css"
 FLUENT_FIXTURE = Path(__file__).parents[2] / "assets" / "fluent_tokens"
 
 AUTHORED_PALETTE = {
@@ -517,6 +518,8 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "Highlight",
         "HighlightText",
     } <= set(re.findall(r"\b[A-Z][A-Za-z]+\b", forced))
+    assert "--color-neutral-surface-selected: Highlight;" in forced
+    assert "--color-neutral-border: ButtonBorder;" in forced
     for family in (
         "positive",
         "negative",
@@ -575,6 +578,7 @@ def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> No
 
 def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     source = COMPONENTS.read_text(encoding="utf-8")
+    layout = APP_LAYOUT.read_text(encoding="utf-8")
     controls = {
         "nami-button",
         "nami-select",
@@ -644,6 +648,24 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         ".nami-segmented__item:not(:disabled):hover",
         ".nami-segmented__item:not(:disabled):active",
     }
+    selected_forced_hover = _block(
+        forced,
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]):hover,',
+    )
+    assert "outline: 1px solid var(--color-accent-foreground);" in (
+        selected_forced_hover
+    )
+    assert "outline-offset: -1px;" in selected_forced_hover
+    selected_forced_pressed = _block(
+        forced,
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]):active,',
+    )
+    assert "outline: 2px solid var(--color-accent-foreground);" in (
+        selected_forced_pressed
+    )
+    assert "outline-offset: -2px;" in selected_forced_pressed
     toggle_thumb = _block(
         forced,
         ".nami-toggle__control:not(:disabled):hover::after",
@@ -676,6 +698,11 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
                 for role in ROLES
             }
     assert ".nami-state-cue" in source
+    task_rail = re.search(r"(?ms)^\.nami-task-rail\s*\{([^}]*)\}", layout)
+    assert task_rail is not None
+    assert "background: var(--color-neutral-subtle-background);" in (
+        task_rail.group(1)
+    )
     task_card = _block(source, ".nami-task-card ")
     assert "background: var(--color-neutral-subtle-background);" in task_card
     assert "border: 1px solid var(--color-neutral-subtle-background);" in task_card
@@ -683,7 +710,9 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         source,
         '.nami-task-card[aria-selected="true"],',
     )
-    assert "background: var(--color-neutral-surface);" in selected_task
+    assert "background: var(--color-neutral-surface-selected);" in selected_task
+    assert "border-color: var(--color-neutral-border);" in selected_task
+    assert "box-shadow: var(--elevation-2);" in selected_task
     assert '.nami-task-card[aria-current="true"]' in source
     assert ".nami-task-card:not([aria-disabled=\"true\"]):hover" in source
     assert ".nami-task-card:not([aria-disabled=\"true\"]):active" in source
@@ -695,6 +724,21 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         '.nami-task-card[aria-current="true"]:'
         'not([aria-disabled="true"]):active'
     ) in source
+    selected_hover = _block(
+        source,
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]):hover,',
+    )
+    assert "background: var(--color-neutral-surface-hover);" in selected_hover
+    selected_pressed = _block(
+        source,
+        '.nami-task-card[aria-selected="true"]:'
+        'not([aria-disabled="true"]):active,',
+    )
+    assert "background: var(--color-neutral-surface-pressed);" in selected_pressed
+    disabled_task = _block(source, '.nami-task-card[aria-disabled="true"] ')
+    assert "color: var(--color-neutral-foreground-disabled);" in disabled_task
+    assert "cursor: default;" in disabled_task
     selected_focus = _block(
         source,
         '.nami-task-card[aria-selected="true"]:focus-visible,',
