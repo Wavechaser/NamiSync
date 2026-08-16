@@ -554,6 +554,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-17). Raw-readiness supersession race. On initial
+  injection the bridge listener could resolve raw API readiness before the app
+  listener rejected its old startup epoch, allowing that stale attempt and its
+  required rerun to dispatch `shell_ready` for one native generation. Native
+  acknowledgement was idempotent, but the fresh attempt could then be refused
+  and never mark the JavaScript bridge operational. Fixed by rechecking epoch
+  ownership after every raced readiness wait; a bridge-first pending-readiness
+  probe proves the superseded attempt sends no acknowledgement.
 - SEVERE - FIXED (2026-08-17). Presentation-readiness admission gap. The
   desktop marked ordinary bridge commands available after native load, and
   kept them open across reload, even when the current packaged receiver had

@@ -35,6 +35,11 @@ globalThis.window = {
 
 const acknowledgements = [];
 let operationalMarks = 0;
+let rawApiReady = false;
+let resolveRawApiReadiness;
+const rawApiReadiness = new Promise((resolve) => {
+  resolveRawApiReadiness = resolve;
+});
 let appearanceRevision = 0;
 let appearanceWaiters = [];
 function applyAppearance() {
@@ -48,6 +53,13 @@ function applyAppearance() {
   for (const waiter of ready) waiter.resolve();
 }
 globalThis.startupHarness = {
+  whenBridgeApiReady() {
+    return rawApiReady ? Promise.resolve() : rawApiReadiness;
+  },
+  signalBridgeApiReady() {
+    rawApiReady = true;
+    resolveRawApiReadiness();
+  },
   acknowledge() {
     let resolve;
     let reject;
@@ -76,7 +88,7 @@ function moduleUrl(source) {
 const bridgeStub = moduleUrl(`
   export class BridgeTransportError extends Error {}
   globalThis.startupHarness.BridgeTransportError = BridgeTransportError;
-  export const whenBridgeApiReady = () => Promise.resolve();
+  export const whenBridgeApiReady = () => globalThis.startupHarness.whenBridgeApiReady();
   export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledge();
   export const markBridgeOperational = () => { globalThis.startupHarness.markOperational(); };
 `);
@@ -103,9 +115,24 @@ source = source
   .replace("./rail.js", railStub)
   .replace("./render.js", renderStub);
 
+window.addEventListener("pywebviewready", () => {
+  globalThis.startupHarness.signalBridgeApiReady();
+});
 await import(moduleUrl(source));
 for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
-assert.equal(acknowledgements.length, 1);
+assert.equal(
+  acknowledgements.length,
+  0,
+  "startup waits while the raw bridge API is absent",
+);
+
+for (const callback of listeners.get("pywebviewready") ?? []) callback();
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.equal(
+  acknowledgements.length,
+  1,
+  "raw readiness resolving before the app listener cannot acknowledge the superseded attempt",
+);
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();

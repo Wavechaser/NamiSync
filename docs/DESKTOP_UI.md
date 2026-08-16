@@ -273,9 +273,11 @@ paths never reopens authority or replaces the original startup diagnosis.
 
 Native load alone does not open a document. The packaged module installs its
 appearance receiver and shell DOM, then sends the exact startup-only
-`shell_ready` command through the existing sole `dispatch` function. Ordinary
-commands remain unavailable until native security/material readiness, that
-acknowledgement, and a successful current initial appearance post have all
+`shell_ready` command through the existing sole `dispatch` function. Startup
+rechecks document-epoch ownership after each readiness wait, so a raw
+API notification cannot advance a superseded attempt into an acknowledgement.
+Ordinary commands remain unavailable until native security/material readiness,
+that acknowledgement, and a successful current initial appearance post have all
 converged for the current document generation. A fixed five-second product
 deadline starts at each native `loaded`;
 missing acknowledgement or failed publication enters the same fail-closed

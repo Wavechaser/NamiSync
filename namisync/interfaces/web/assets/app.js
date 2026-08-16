@@ -36,7 +36,13 @@ async function finishStartup(epoch, appearanceBaseline) {
     }
     rejectSupersededStartup = reject;
   });
-  const awaitCurrent = (value) => Promise.race([value, superseded]);
+  const awaitCurrent = async (value) => {
+    const result = await Promise.race([value, superseded]);
+    if (epoch !== startupEpoch) {
+      throw new StartupSupersededError();
+    }
+    return result;
+  };
   await awaitCurrent(whenBridgeApiReady());
   try {
     await awaitCurrent(acknowledgeShellReady());

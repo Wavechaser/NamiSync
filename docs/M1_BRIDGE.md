@@ -2102,14 +2102,18 @@ foundation-only row outside Slice 2's two domain rows:
 | `shell_ready` | `{}` | `{"acknowledged":true}` | no `command_id`; no revision | startup only; 5,000 ms; no retry |
 
 The packaged module installs the fixed appearance receiver and shell DOM before
-sending this command through the existing sole `dispatch` function. The host
+sending this command through the existing sole `dispatch` function. It checks
+startup-epoch ownership after every readiness wait, so a bridge-first raw API
+notification cannot let a superseded initial attempt send an acknowledgement.
+The host
 does not admit any `OPEN` row until native load/security/material readiness,
 the current document's acknowledgement, and successful initial appearance
 publication all converge for one document generation. The product deadline
 starts at each native `loaded`; it is a fixed fail-closed startup policy, not
 empirical acceptance evidence. A same-origin reload begins a new closed
 generation before pywebview reinjects the bridge. Duplicate acknowledgement
-already admitted for that generation is idempotent. Once open, `shell_ready`
+already admitted for that generation remains idempotent as a native last
+defense. Once open, `shell_ready`
 is unavailable; once refusal or close wins, every row is unavailable. Timers,
 acknowledgements, and publication callbacks carry generation ownership and
 cannot settle a later document.
