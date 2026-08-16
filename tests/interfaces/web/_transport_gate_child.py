@@ -8,6 +8,7 @@ import json
 import re
 import sys
 import threading
+import time
 from collections.abc import Mapping
 from contextlib import ExitStack
 from dataclasses import dataclass, field
@@ -22,6 +23,11 @@ from unittest.mock import patch
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _SLOT_ID = re.compile(r"slot-[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
+# Ordinary Python readers deny delete sharing on Windows while the parent reads
+# a live evidence snapshot, so publication must tolerate that brief interval.
+_SNAPSHOT_REPLACE_ATTEMPTS = 101
+_SNAPSHOT_REPLACE_DELAY_SECONDS = 0.01
+_WINDOWS_SHARING_WINERRORS = frozenset({5, 32})
 
 
 class _Recorder:
@@ -54,7 +60,22 @@ class _Recorder:
             encoded = json.dumps(self._data, indent=2, sort_keys=True)
             temporary = self._output.with_suffix(self._output.suffix + ".tmp")
             temporary.write_text(encoded, encoding="utf-8")
-            temporary.replace(self._output)
+            _replace_snapshot(temporary, self._output)
+
+
+def _replace_snapshot(temporary: Path, output: Path) -> None:
+    for attempt in range(_SNAPSHOT_REPLACE_ATTEMPTS):
+        try:
+            temporary.replace(output)
+            return
+        except PermissionError as error:
+            if (
+                getattr(error, "winerror", None)
+                not in _WINDOWS_SHARING_WINERRORS
+                or attempt + 1 == _SNAPSHOT_REPLACE_ATTEMPTS
+            ):
+                raise
+            time.sleep(_SNAPSHOT_REPLACE_DELAY_SECONDS)
 
 
 @dataclass(frozen=True, slots=True)

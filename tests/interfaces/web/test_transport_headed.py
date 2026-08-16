@@ -7,12 +7,14 @@ import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event, Thread
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
 import _headed_host_child as headed_host_child
+import _transport_gate_child as transport_gate_child
 from conftest import HeadedInstalledWheel
 from namisync.version import NICKNAME, VERSION
 from _headed_native import (
@@ -229,6 +231,85 @@ def test_headed_transport_evidence_runs_each_requested_scenario_once(
             installed_assets,
         )
     ) == 1
+
+
+def test_transport_recorder_retries_snapshot_replace_while_reader_is_open(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "result.json"
+    recorder = transport_gate_child._Recorder(output, "transport")
+    recorder.write()
+    recorder.set("phase", "complete")
+    original_replace = Path.replace
+    first_attempt_finished = Event()
+    attempts: list[Path] = []
+    errors: list[BaseException] = []
+
+    def observed_replace(temporary: Path, target: Path) -> Path:
+        try:
+            return original_replace(temporary, target)
+        finally:
+            attempts.append(target)
+            if len(attempts) == 1:
+                first_attempt_finished.set()
+
+    def write_snapshot() -> None:
+        try:
+            recorder.write()
+        except BaseException as error:
+            errors.append(error)
+
+    monkeypatch.setattr(Path, "replace", observed_replace)
+    writer = Thread(target=write_snapshot, name="transport-snapshot-writer")
+    with output.open("rb") as reader:
+        assert reader.read(1) == b"{"
+        writer.start()
+        assert first_attempt_finished.wait(1.0)
+        assert writer.is_alive()
+    writer.join(2.0)
+
+    assert not writer.is_alive()
+    assert errors == []
+    assert len(attempts) >= 2
+    assert all(target == output for target in attempts)
+    assert json.loads(output.read_text(encoding="utf-8"))["phase"] == "complete"
+
+
+@pytest.mark.parametrize(
+    ("winerror", "expected_attempts"),
+    ((5, 3), (87, 1)),
+)
+def test_transport_recorder_snapshot_replace_failures_remain_bounded(
+    winerror: int,
+    expected_attempts: int,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    attempts: list[Path] = []
+    refusal = PermissionError("injected snapshot replacement refusal")
+    refusal.winerror = winerror  # type: ignore[attr-defined]
+
+    def refuse_replace(temporary: Path, target: Path) -> Path:
+        del temporary
+        attempts.append(target)
+        raise refusal
+
+    monkeypatch.setattr(transport_gate_child, "_SNAPSHOT_REPLACE_ATTEMPTS", 3)
+    monkeypatch.setattr(
+        transport_gate_child,
+        "_SNAPSHOT_REPLACE_DELAY_SECONDS",
+        0.0,
+    )
+    monkeypatch.setattr(Path, "replace", refuse_replace)
+    output = tmp_path / "result.json"
+    recorder = transport_gate_child._Recorder(output, "transport")
+
+    with pytest.raises(PermissionError) as raised:
+        recorder.write()
+
+    assert raised.value is refusal
+    assert attempts == [output] * expected_attempts
 
 
 def test_transport_gate_assets_keep_test_implementation_outside_package() -> None:
