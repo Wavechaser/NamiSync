@@ -614,7 +614,11 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     if arguments.mode == "off-origin":
         second_origin, off_origin_url = _serve_second_origin(arguments.index.parent)
 
-    def dispatcher(document: object, commands: object) -> object:
+    def dispatcher(
+        document: object,
+        commands: object,
+        startup_gate: object,
+    ) -> object:
         production = dict(commands)
         recorder.set("production_command_names", sorted(production))
         combined = MappingProxyType(
@@ -629,7 +633,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 ),
             }
         )
-        value = original_dispatcher(document, combined)
+        value = original_dispatcher(document, combined, startup_gate)
         recorder.set(
             "dispatcher_type",
             f"{type(value).__module__}.{type(value).__qualname__}",

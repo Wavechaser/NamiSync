@@ -12,12 +12,16 @@ from ctypes import wintypes
 from pathlib import Path
 from unittest.mock import patch
 
+from _headed_native import _user32
+
 
 _WAIT_OBJECT_0 = 0
 _WAIT_TIMEOUT = 258
 _SYNCHRONIZE = 0x00100000
 _GW_OWNER = 4
+_BM_CLICK = 0x00F5
 _DIALOG_WINDOW_CLASS = "#32770"
+_BUTTON_WINDOW_CLASS = "Button"
 _EDIT_CONTROL_TYPE = "ControlType.Edit"
 _BUTTON_CONTROL_TYPE = "ControlType.Button"
 _MAX_REDACTED_UIA_CANDIDATES = 16
@@ -197,7 +201,6 @@ def _select_folder_with_automation(
     from System.Windows.Automation import (
         AutomationElement,
         Condition,
-        InvokePattern,
         TreeScope,
         ValuePattern,
     )
@@ -207,7 +210,11 @@ def _select_folder_with_automation(
         object | None,
         dict[str, object],
     ]:
-        _require_exact_dialog_identity(handle, owner_handle, process_id)
+        _require_exact_dialog_identity(
+            handle,
+            owner_handle,
+            process_id,
+        )
         root = AutomationElement.FromHandle(IntPtr(handle))
         elements = root.FindAll(TreeScope.Descendants, Condition.TrueCondition)
         return _classify_folder_dialog_controls(elements)
@@ -216,31 +223,111 @@ def _select_folder_with_automation(
     if edit is None or button is None:
         return {"selected": False, "controls": observed}
     value_pattern = edit.GetCurrentPattern(ValuePattern.Pattern)
-    _require_exact_dialog_identity(handle, owner_handle, process_id)
+    _require_exact_dialog_identity(
+        handle,
+        owner_handle,
+        process_id,
+    )
     value_pattern.SetValue(path)
-    invokes = 0
-    while invokes < 2:
-        _require_exact_dialog_identity(handle, owner_handle, process_id)
-        button.GetCurrentPattern(InvokePattern.Pattern).Invoke()
-        invokes += 1
+    confirmation_posts = 0
+    while confirmation_posts < 2:
+        _post_exact_folder_confirmation(
+            handle,
+            button,
+            owner_handle=owner_handle,
+            process_id=process_id,
+        )
+        confirmation_posts += 1
         close_observation_until = min(deadline, time.monotonic() + 0.75)
         while time.monotonic() < close_observation_until:
             if not _native_window_exists(handle):
-                return {"selected": True, "invokes": invokes}
+                return {
+                    "selected": True,
+                    "confirmation_posts": confirmation_posts,
+                }
             time.sleep(0.025)
-        if invokes == 1:
+        if confirmation_posts == 1:
             _unused_edit, button, observed = exact_controls()
             if button is None:
                 return {
                     "selected": False,
-                    "invokes": invokes,
+                    "confirmation_posts": confirmation_posts,
                     "controls": observed,
                 }
     while time.monotonic() < deadline:
         if not _native_window_exists(handle):
-            return {"selected": True, "invokes": invokes}
+            return {
+                "selected": True,
+                "confirmation_posts": confirmation_posts,
+            }
         time.sleep(0.025)
-    return {"selected": False, "invokes": invokes}
+    return {
+        "selected": False,
+        "confirmation_posts": confirmation_posts,
+    }
+
+
+def _post_exact_folder_confirmation(
+    dialog_handle: int,
+    button: object,
+    *,
+    owner_handle: int,
+    process_id: int,
+) -> None:
+    try:
+        button_handle = int(button.Current.NativeWindowHandle)  # type: ignore[attr-defined]
+    except (AttributeError, TypeError, ValueError, OverflowError) as error:
+        raise RuntimeError("folder confirmation button has no native handle") from error
+    if button_handle <= 0:
+        raise RuntimeError("folder confirmation button has no native handle")
+    _require_exact_folder_confirmation_target(
+        dialog_handle,
+        button_handle,
+        owner_handle,
+        process_id,
+    )
+    if not _post_folder_confirmation_click(button_handle):
+        raise RuntimeError("failed to post folder confirmation click")
+
+
+def _require_exact_folder_confirmation_target(
+    dialog_handle: int,
+    button_handle: int,
+    owner_handle: int,
+    process_id: int,
+) -> None:
+    user32 = _user32()
+    dialog_thread_id = _require_exact_dialog_identity(
+        dialog_handle,
+        owner_handle,
+        process_id,
+        user32=user32,
+    )
+    button_thread_id, button_process_id = _window_identity(
+        button_handle,
+        user32=user32,
+    )
+    if (
+        not user32.IsWindow(button_handle)
+        or not user32.IsWindowVisible(button_handle)
+        or not user32.IsWindowEnabled(button_handle)
+        or _window_class(button_handle, user32=user32) != _BUTTON_WINDOW_CLASS
+        or int(user32.GetDlgCtrlID(button_handle)) != 1
+        or not user32.IsChild(dialog_handle, button_handle)
+        or button_thread_id != dialog_thread_id
+        or button_process_id != process_id
+    ):
+        raise RuntimeError("folder confirmation button identity changed")
+    _require_exact_dialog_identity(
+        dialog_handle,
+        owner_handle,
+        process_id,
+        user32=user32,
+    )
+
+
+def _post_folder_confirmation_click(button_handle: int) -> bool:
+    return bool(_user32().PostMessageW(button_handle, _BM_CLICK, 0, 0))
 
 
 def _classify_folder_dialog_controls(
@@ -368,40 +455,43 @@ def _require_exact_dialog_identity(
     handle: int,
     owner_handle: int,
     process_id: int,
-) -> None:
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
-    user32.IsWindow.argtypes = (wintypes.HWND,)
-    user32.IsWindow.restype = wintypes.BOOL
-    user32.IsWindowVisible.argtypes = (wintypes.HWND,)
-    user32.IsWindowVisible.restype = wintypes.BOOL
-    user32.GetWindow.argtypes = (wintypes.HWND, wintypes.UINT)
-    user32.GetWindow.restype = wintypes.HWND
-    user32.GetWindowThreadProcessId.argtypes = (
-        wintypes.HWND,
-        ctypes.POINTER(wintypes.DWORD),
+    *,
+    user32: object | None = None,
+) -> int:
+    actual_user32 = _user32() if user32 is None else user32
+    thread_id, observed_process_id = _window_identity(
+        handle,
+        user32=actual_user32,
     )
-    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
-    user32.GetClassNameW.argtypes = (
-        wintypes.HWND,
-        wintypes.LPWSTR,
-        ctypes.c_int,
-    )
-    user32.GetClassNameW.restype = ctypes.c_int
-    observed_process_id = wintypes.DWORD()
-    class_buffer = ctypes.create_unicode_buffer(256)
     if (
-        not user32.IsWindow(handle)
-        or not user32.IsWindowVisible(handle)
-        or int(user32.GetWindow(handle, _GW_OWNER) or 0) != owner_handle
-        or not user32.GetWindowThreadProcessId(
-            handle,
-            ctypes.byref(observed_process_id),
-        )
-        or int(observed_process_id.value) != process_id
-        or not user32.GetClassNameW(handle, class_buffer, len(class_buffer))
-        or class_buffer.value != _DIALOG_WINDOW_CLASS
+        not actual_user32.IsWindow(handle)  # type: ignore[attr-defined]
+        or not actual_user32.IsWindowVisible(handle)  # type: ignore[attr-defined]
+        or int(actual_user32.GetWindow(handle, _GW_OWNER) or 0)  # type: ignore[attr-defined]
+        != owner_handle
+        or thread_id == 0
+        or observed_process_id != process_id
+        or _window_class(handle, user32=actual_user32) != _DIALOG_WINDOW_CLASS
     ):
         raise RuntimeError("folder dialog identity changed")
+    return thread_id
+
+
+def _window_identity(handle: int, *, user32: object) -> tuple[int, int]:
+    process_id = wintypes.DWORD()
+    thread_id = int(
+        user32.GetWindowThreadProcessId(  # type: ignore[attr-defined]
+            handle,
+            ctypes.byref(process_id),
+        )
+    )
+    return thread_id, int(process_id.value)
+
+
+def _window_class(handle: int, *, user32: object) -> str:
+    buffer = ctypes.create_unicode_buffer(256)
+    if not user32.GetClassNameW(handle, buffer, len(buffer)):  # type: ignore[attr-defined]
+        return ""
+    return buffer.value
 
 
 class _BoundaryMappedNative:

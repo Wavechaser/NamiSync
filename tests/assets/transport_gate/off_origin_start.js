@@ -1,8 +1,11 @@
 import {
+  acknowledgeShellReady,
+  BridgeTransportError,
   dispatchInteractive,
   markBridgeOperational,
   whenBridgeApiReady,
 } from "./bridge.js";
+import { installAppearanceReceiver } from "./appearance.js";
 import { renderText } from "./render.js";
 
 const REPORT_COMMAND = "test_report";
@@ -21,7 +24,20 @@ function validTarget(value) {
 }
 
 async function run() {
+  const appearance = installAppearanceReceiver(
+    window.chrome.webview,
+    document.documentElement,
+  );
+  const appearanceBaseline = appearance.revision();
   await whenBridgeApiReady();
+  try {
+    await acknowledgeShellReady();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) {
+      throw error;
+    }
+  }
+  await appearance.whenAppliedAfter(appearanceBaseline);
   markBridgeOperational();
   const target = await dispatchInteractive(
     REPORT_COMMAND,

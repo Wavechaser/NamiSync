@@ -2290,12 +2290,16 @@ Browserless transport/render probes and the headed transport page live under
 The headed gate composes its single `test_report` row only through the same
 dispatcher constructor used by production, under a unique test identity and an
 absolute physical local page/data root. It automates the real native folder
-picker without a foreground-forcing API, localized-label lookup, or keystroke
-input, proves selected paths stay behind purpose-bound ids, commits an
-independent second loopback origin and verifies zero handler calls, and
-round-trips the hostile corpus through the real pinned return transport and
-production sink. Renderer/log evidence is read from native
-`BrowserVersionString`; logs contain neither request bodies,
+picker without a foreground-forcing API, localized-label lookup, or synthetic
+mouse/keystroke input: UI Automation classifies the exact edit and confirmation
+controls, then a visible, enabled, same-dialog/process/thread native `Button`
+with control id `1` receives one queued `BM_CLICK`. Exact dialog closure and the
+later selected-path assertions prove processing rather than treating
+`PostMessageW` admission as selection. The gate proves selected paths stay
+behind purpose-bound ids, commits an independent second loopback origin and
+verifies zero handler calls, and round-trips the hostile corpus through the real
+pinned return transport and production sink. Renderer/log evidence is read from
+native `BrowserVersionString`; logs contain neither request bodies,
 real paths, hostile sentinels, tracebacks, exception text, nor `NICKNAME`.
 The installed-wheel browser scenario also drives the production `bridge.js`
 drain manager through stale readiness and generation settlements, identical
@@ -2802,7 +2806,7 @@ require a later schema-version decision rather than an M1 fallback
 
    The standalone `tests/bridge_event_benchmark.py` harness builds and installs
    the archived-HEAD wheel, loads a test-owned benchmark page with the installed
-   production bridge/render assets in real WebView2, waits on a
+   production bridge/appearance/render assets in real WebView2, waits on a
    test-only start handshake, runs the same aggregate rates for a real 60
    seconds, and records latency, `Gap`, fixture, runtime, dirty-state, and
    whole-Job diagnostics that may inform, but cannot close, shell-owned SH-G-15.
@@ -3422,7 +3426,11 @@ because its local tests are easier.
   Repeated `pywebviewready` firings while a drain is outstanding install one
   listener set, retain at most one drain per task, pause it while the new
   document is presentation-pending, and re-arm delivery exactly once after
-  that bridge generation becomes operational.
+  that bridge generation becomes operational. The transport fault gate's
+  synthetic return-table loss stays explicitly renderer-only: it resets the
+  JavaScript bridge while the already-open native document generation remains
+  unchanged, and does not stand in for the separate production startup and
+  native reinjection evidence.
   *Not satisfied by* a single drain, a naturally finishing session, one task,
   or a queue that stays below capacity.
 - **BR-G-34 — One visible-sequence implementation defines both trees.** The

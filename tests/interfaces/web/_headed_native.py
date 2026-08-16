@@ -845,6 +845,12 @@ def _user32():
     user32.IsWindow.restype = wintypes.BOOL
     user32.IsWindowVisible.argtypes = (wintypes.HWND,)
     user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.IsWindowEnabled.argtypes = (wintypes.HWND,)
+    user32.IsWindowEnabled.restype = wintypes.BOOL
+    user32.IsChild.argtypes = (wintypes.HWND, wintypes.HWND)
+    user32.IsChild.restype = wintypes.BOOL
+    user32.GetDlgCtrlID.argtypes = (wintypes.HWND,)
+    user32.GetDlgCtrlID.restype = ctypes.c_int
     user32.PostMessageW.argtypes = (
         wintypes.HWND,
         wintypes.UINT,

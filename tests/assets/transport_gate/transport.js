@@ -31,11 +31,14 @@ globalThis.clearTimeout = (token) => {
   return nativeClearTimeout(token);
 };
 
-const [bridge, renderModule] = await Promise.all([
+const [bridge, appearanceModule, renderModule] = await Promise.all([
   import("./bridge.js"),
+  import("./appearance.js"),
   import("./render.js"),
 ]);
 const {
+  acknowledgeShellReady,
+  BridgeTransportError,
   closeTask,
   dispatchInteractive,
   markBridgeOperational,
@@ -44,7 +47,21 @@ const {
   startTaskDrain,
   whenBridgeApiReady,
 } = bridge;
+const { installAppearanceReceiver } = appearanceModule;
+const appearance = installAppearanceReceiver(
+  window.chrome.webview,
+  document.documentElement,
+);
+const appearanceBaseline = appearance.revision();
 await whenBridgeApiReady();
+try {
+  await acknowledgeShellReady();
+} catch (error) {
+  if (!(error instanceof BridgeTransportError)) {
+    throw error;
+  }
+}
+await appearance.whenAppliedAfter(appearanceBaseline);
 markBridgeOperational();
 const { renderText } = renderModule;
 
@@ -122,7 +139,7 @@ async function waitFor(predicate, message, timeoutMs = 12000) {
   }
 }
 
-function reincarnateBridge() {
+function injectRendererOnlyReturnTableLoss() {
   window.dispatchEvent(new Event("pywebviewready"));
   markBridgeOperational();
 }
@@ -201,7 +218,7 @@ async function proveBrowserGate(sourceId, targetId) {
 
   await report({ phase: "arm_start_uncertainty" }, validAccepted);
   browserStage = "start-plan-uncertainty";
-  setTimeout(reincarnateBridge, 50);
+  setTimeout(injectRendererOnlyReturnTableLoss, 50);
   const mainPlan = await startPlan(sourceId, targetId, "trash");
 
   const mainAccepted = [];
@@ -222,7 +239,7 @@ async function proveBrowserGate(sourceId, targetId) {
     (error) => mainRefusals.push(error),
   );
   browserStage = "stale-drain-reincarnation";
-  setTimeout(reincarnateBridge, 50);
+  setTimeout(injectRendererOnlyReturnTableLoss, 50);
   await waitFor(
     () => mainAccepted.length >= 2,
     "reincarnated drain did not recover its retained prefix",

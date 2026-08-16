@@ -34,7 +34,7 @@ from _headed_native import (
 
 _CHILD = Path(__file__).with_name("_transport_gate_child.py")
 _TEST_ASSETS = Path(__file__).parents[2] / "assets" / "transport_gate"
-_PRODUCTION_ASSETS = ("bridge.js", "render.js")
+_PRODUCTION_ASSETS = ("appearance.js", "bridge.js", "render.js")
 _BRIDGE_UNAVAILABLE = {
     "schema_version": 1,
     "request_id": None,
@@ -248,6 +248,15 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert "dispatchInteractive" in scripts
     assert "startTaskDrain" in scripts
     assert 'import("./bridge.js")' in scripts
+    transport = (_TEST_ASSETS / "transport.js").read_text(encoding="utf-8")
+    assert "function injectRendererOnlyReturnTableLoss()" in transport
+    assert "function reincarnateBridge()" not in transport
+    renderer_only = transport.split(
+        "function injectRendererOnlyReturnTableLoss()", 1
+    )[1].split("\n}", 1)[0]
+    assert 'window.dispatchEvent(new Event("pywebviewready"));' in renderer_only
+    assert "markBridgeOperational();" in renderer_only
+    assert "acknowledgeShellReady" not in renderer_only
     assert "pickFolder(" in scripts
     assert "startPlan(" in scripts
     assert '"next_events"' in scripts
@@ -258,6 +267,27 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert 'id="host-status"' in (_TEST_ASSETS / "off_origin.html").read_text(
         encoding="utf-8"
     )
+    assert 'id="host-status"' in (
+        _TEST_ASSETS / "off_origin_start.html"
+    ).read_text(encoding="utf-8")
+
+    for name in ("transport.js", "off_origin_start.js"):
+        startup = (_TEST_ASSETS / name).read_text(encoding="utf-8")
+        assert "installAppearanceReceiver(" in startup
+        assert "await acknowledgeShellReady();" in startup
+        assert "await appearance.whenAppliedAfter(appearanceBaseline);" in startup
+        assert startup.index("installAppearanceReceiver(") < startup.index(
+            "await whenBridgeApiReady();"
+        )
+        assert startup.index("await whenBridgeApiReady();") < startup.index(
+            "await acknowledgeShellReady();"
+        )
+        assert startup.index("await acknowledgeShellReady();") < startup.index(
+            "await appearance.whenAppliedAfter(appearanceBaseline);"
+        )
+        assert startup.index(
+            "await appearance.whenAppliedAfter(appearanceBaseline);"
+        ) < startup.index("markBridgeOperational();")
 
 
 def test_transport_gate_composes_one_immutable_test_row_at_constructor() -> None:
@@ -266,7 +296,8 @@ def test_transport_gate_composes_one_immutable_test_row_at_constructor() -> None
     assert "production = dict(commands)" in source
     assert "combined = MappingProxyType(" in source
     assert '"test_report": _test_spec(' in source
-    assert "original_dispatcher(document, combined)" in source
+    assert "startup_gate: object," in source
+    assert "original_dispatcher(document, combined, startup_gate)" in source
     assert "register" not in source.casefold()
     assert "extra_commands" not in source
 
@@ -289,13 +320,219 @@ def test_transport_gate_native_picker_automation_is_exact_and_fail_closed() -> N
     assert "ControlType.Edit" not in selection_source
     assert "ControlType.Button" not in selection_source
     assert "ValuePattern.Pattern" in selection_source
-    assert "InvokePattern.Pattern" in selection_source
-    assert "SendKeys" not in selection_source
-    assert "SetFocus" not in selection_source
+    assert "_post_exact_folder_confirmation(" in selection_source
+    assert "InvokePattern" not in selection_source
+    target_source = inspect.getsource(
+        headed_host_child._require_exact_folder_confirmation_target
+    )
+    post_source = inspect.getsource(
+        headed_host_child._post_folder_confirmation_click
+    )
+    assert "NativeWindowHandle" in inspect.getsource(
+        headed_host_child._post_exact_folder_confirmation
+    )
+    assert "IsWindow(button_handle)" in target_source
+    assert "IsWindowVisible(button_handle)" in target_source
+    assert "IsWindowEnabled(button_handle)" in target_source
+    assert "_BUTTON_WINDOW_CLASS" in target_source
+    assert "GetDlgCtrlID(button_handle)" in target_source
+    assert "IsChild(dialog_handle, button_handle)" in target_source
+    assert "button_process_id != process_id" in target_source
+    assert "PostMessageW" in post_source
+    assert headed_host_child._BM_CLICK == 0x00F5
+    picker_sources = "\n".join(
+        (
+            selection_source,
+            inspect.getsource(
+                headed_host_child._post_exact_folder_confirmation
+            ),
+            target_source,
+            post_source,
+        )
+    )
+    for forbidden in (
+        "SendInput",
+        "SendKeys",
+        "SetFocus",
+        "SetActiveWindow",
+        "SetForegroundWindow",
+        "mouse_event",
+        "keybd_event",
+    ):
+        assert forbidden not in picker_sources
     assert ".Current.Name" not in selection_source
     assert "process.process_ids()" in parent
     assert "_window_owner(handle) == owner_handle" in parent
     assert "require_absolute_local_test_root(path)" in parent
+
+
+@pytest.mark.parametrize(
+    "button_handle",
+    (None, "not-a-handle", 0, -1),
+)
+def test_transport_gate_native_picker_refuses_invalid_native_handles(
+    button_handle: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guarded: list[object] = []
+    monkeypatch.setattr(
+        headed_host_child,
+        "_require_exact_folder_confirmation_target",
+        lambda *args: guarded.append(args),
+    )
+
+    with pytest.raises(RuntimeError, match="has no native handle"):
+        headed_host_child._post_exact_folder_confirmation(
+            100,
+            SimpleNamespace(
+                Current=SimpleNamespace(NativeWindowHandle=button_handle)
+            ),
+            owner_handle=90,
+            process_id=7,
+        )
+
+    assert guarded == []
+
+
+def test_transport_gate_native_picker_refuses_failed_native_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    guarded: list[tuple[int, ...]] = []
+    posted: list[int] = []
+    monkeypatch.setattr(
+        headed_host_child,
+        "_require_exact_folder_confirmation_target",
+        lambda *args: guarded.append(args),
+    )
+    monkeypatch.setattr(
+        headed_host_child,
+        "_post_folder_confirmation_click",
+        lambda handle: posted.append(handle) is None and False,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="failed to post folder confirmation click",
+    ):
+        headed_host_child._post_exact_folder_confirmation(
+            100,
+            SimpleNamespace(Current=SimpleNamespace(NativeWindowHandle=101)),
+            owner_handle=90,
+            process_id=7,
+        )
+
+    assert guarded == [(100, 101, 90, 7)]
+    assert posted == [101]
+
+
+class _FakeFolderDialogUser32:
+    def __init__(self) -> None:
+        self.windows = {100, 101}
+        self.visible = {100, 101}
+        self.enabled = {100, 101}
+        self.owners = {100: 90}
+        self.identities = {100: (8, 7), 101: (8, 7)}
+        self.classes = {100: "#32770", 101: "Button"}
+        self.control_ids = {101: 1}
+        self.children = {(100, 101)}
+        self.posts: list[tuple[int, int, int, int]] = []
+
+    def IsWindow(self, handle: int) -> bool:
+        return handle in self.windows
+
+    def IsWindowVisible(self, handle: int) -> bool:
+        return handle in self.visible
+
+    def IsWindowEnabled(self, handle: int) -> bool:
+        return handle in self.enabled
+
+    def GetWindow(self, handle: int, _relation: int) -> int:
+        return self.owners.get(handle, 0)
+
+    def GetWindowThreadProcessId(self, handle: int, process: object) -> int:
+        thread_id, process_id = self.identities.get(handle, (0, 0))
+        process._obj.value = process_id
+        return thread_id
+
+    def GetClassNameW(self, handle: int, buffer: object, _length: int) -> int:
+        value = self.classes.get(handle, "")
+        buffer.value = value
+        return len(value)
+
+    def GetDlgCtrlID(self, handle: int) -> int:
+        return self.control_ids.get(handle, 0)
+
+    def IsChild(self, parent: int, child: int) -> bool:
+        return (parent, child) in self.children
+
+    def PostMessageW(
+        self,
+        handle: int,
+        message: int,
+        wparam: int,
+        lparam: int,
+    ) -> bool:
+        self.posts.append((handle, message, wparam, lparam))
+        return True
+
+
+def test_transport_gate_native_picker_posts_to_validated_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = _FakeFolderDialogUser32()
+    monkeypatch.setattr(headed_host_child, "_user32", lambda: native)
+
+    headed_host_child._require_exact_folder_confirmation_target(100, 101, 90, 7)
+    assert headed_host_child._post_folder_confirmation_click(101) is True
+
+    assert native.posts == [(101, headed_host_child._BM_CLICK, 0, 0)]
+
+
+@pytest.mark.parametrize(
+    "defect",
+    (
+        "not_live",
+        "not_visible",
+        "not_enabled",
+        "wrong_class",
+        "wrong_control_id",
+        "outside_dialog",
+        "wrong_thread",
+        "wrong_process",
+    ),
+)
+def test_transport_gate_native_picker_rejects_untrusted_button_target(
+    defect: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = _FakeFolderDialogUser32()
+    if defect == "not_live":
+        native.windows.remove(101)
+    elif defect == "not_visible":
+        native.visible.remove(101)
+    elif defect == "not_enabled":
+        native.enabled.remove(101)
+    elif defect == "wrong_class":
+        native.classes[101] = "Edit"
+    elif defect == "wrong_control_id":
+        native.control_ids[101] = 2
+    elif defect == "outside_dialog":
+        native.children.clear()
+    elif defect == "wrong_thread":
+        native.identities[101] = (9, 7)
+    elif defect == "wrong_process":
+        native.identities[101] = (8, 9)
+    monkeypatch.setattr(headed_host_child, "_user32", lambda: native)
+
+    with pytest.raises(RuntimeError, match="button identity changed"):
+        headed_host_child._require_exact_folder_confirmation_target(
+            100,
+            101,
+            90,
+            7,
+        )
+
+    assert native.posts == []
 
 
 def test_transport_gate_redacted_uia_classifier_uses_programmatic_type_names() -> None:
@@ -632,7 +869,7 @@ def test_transport_gate_uia_subcommands_parse_their_exact_headless_shapes(
                 "deadline": deadline,
             }
         )
-        return {"selected": True, "invokes": 1}
+        return {"selected": True, "confirmation_posts": 1}
 
     monkeypatch.setattr(
         headed_host_child,
@@ -695,6 +932,7 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "next_events",
         "pick_folder",
         "release_terminal_session",
+        "shell_ready",
         "start_plan",
     ]
     assert result["combined_command_names"] == [
@@ -702,6 +940,7 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "next_events",
         "pick_folder",
         "release_terminal_session",
+        "shell_ready",
         "start_plan",
         "test_report",
     ]
@@ -709,6 +948,13 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert result["dispatcher_type"] == (
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )
+    requests = [json.loads(body) for body in result["raw_dispatch_bodies"]]
+    acknowledgements = [
+        request for request in requests if request.get("command") == "shell_ready"
+    ]
+    assert len(acknowledgements) == 1
+    assert acknowledgements[0]["payload"] == {}
+    assert requests[0] == acknowledgements[0]
     assert result["pywebview_js_api_is_none"] is True
     assert result["pywebview_function_names"] == ["dispatch"]
     assert "https://attacker.invalid/" not in result.get("document_records", [])
@@ -749,7 +995,10 @@ def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
     assert evidence.result["report"]["source_id"].startswith("slot-")
     assert evidence.result["report"]["target_id"].startswith("slot-")
     assert all(item["selected"] is True for item in evidence.picker_automation)
-    assert all(item["invokes"] in {1, 2} for item in evidence.picker_automation)
+    assert all(
+        item["confirmation_posts"] in {1, 2}
+        for item in evidence.picker_automation
+    )
     assert evidence.source_after == evidence.source_before
     assert evidence.target_after == evidence.target_before
 
@@ -771,11 +1020,19 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
         "next_events",
         "pick_folder",
         "release_terminal_session",
+        "shell_ready",
         "start_plan",
     ]
     assert result["dispatcher_type"] == (
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )
+    requests = [json.loads(body) for body in result["raw_dispatch_bodies"]]
+    acknowledgements = [
+        request for request in requests if request.get("command") == "shell_ready"
+    ]
+    assert len(acknowledgements) == 1
+    assert acknowledgements[0]["payload"] == {}
+    assert requests[0] == acknowledgements[0]
     runtime = result["runtime"]
     assert Path(runtime["namisync_file"]).resolve().is_relative_to(
         headed_transport_evidence.installed_root
