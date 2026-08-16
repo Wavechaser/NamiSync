@@ -38,10 +38,14 @@ const [bridge, renderModule] = await Promise.all([
 const {
   closeTask,
   dispatchInteractive,
+  markBridgeOperational,
   pickFolder,
   startPlan,
   startTaskDrain,
+  whenBridgeApiReady,
 } = bridge;
+await whenBridgeApiReady();
+markBridgeOperational();
 const { renderText } = renderModule;
 
 const REPORT_COMMAND = "test_report";
@@ -120,6 +124,7 @@ async function waitFor(predicate, message, timeoutMs = 12000) {
 
 function reincarnateBridge() {
   window.dispatchEvent(new Event("pywebviewready"));
+  markBridgeOperational();
 }
 
 async function probeRawPrivateReceiverNames() {

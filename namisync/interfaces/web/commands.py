@@ -148,12 +148,30 @@ class CommandAccess(StrEnum):
     MUTATING = "mutating"
 
 
+class CommandAvailability(StrEnum):
+    STARTUP = "startup"
+    OPEN = "open"
+
+
+@dataclass(frozen=True, slots=True)
+class CommandAvailabilitySnapshot:
+    availability: CommandAvailability
+    generation: int
+
+    def __post_init__(self) -> None:
+        if type(self.availability) is not CommandAvailability:
+            raise TypeError("command availability must be exact")
+        if type(self.generation) is not int or self.generation < 0:
+            raise ValueError("command generation must be a nonnegative integer")
+
+
 class FieldRequirement(StrEnum):
     FORBIDDEN = "forbidden"
     REQUIRED = "required"
 
 
 class CommandTimeout(StrEnum):
+    STARTUP_5_SECONDS = "startup-5-seconds"
     INTERACTIVE = "interactive"
     MUTATION_30_SECONDS = "mutation-30-seconds"
     DRAIN_30_SECONDS = "drain-30-seconds"
@@ -224,9 +242,28 @@ class CommandSpec:
     revision: FieldRequirement
     timeout: CommandTimeout
     retry: CommandRetry
+    availability: CommandAvailability = CommandAvailability.OPEN
 
-    def invoke(self, payload: object) -> object:
-        return self.handler(self.validate_payload(payload))
+    def invoke(
+        self,
+        payload: object,
+        *,
+        generation: int | None = None,
+    ) -> object:
+        validated = self.validate_payload(payload)
+        if self.availability is CommandAvailability.STARTUP:
+            if type(generation) is not int or generation < 0:
+                raise TypeError("startup command requires its admitted generation")
+            return self.handler(_StartupCommandInvocation(validated, generation))
+        if generation is not None:
+            raise TypeError("open command cannot receive a startup generation")
+        return self.handler(validated)
+
+
+@dataclass(frozen=True, slots=True)
+class _StartupCommandInvocation:
+    payload: object
+    generation: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,11 +304,23 @@ def production_command_specs(
     picker: FolderPicker,
     slots: FolderSlotAuthority,
     registry: TaskAuthority,
+    shell_ready: Callable[[int], None],
 ) -> Mapping[str, CommandSpec]:
     """Bind the exact production rows to process-local dependencies."""
 
     if not callable(picker):
         raise TypeError("picker must be callable")
+    if not callable(shell_ready):
+        raise TypeError("shell readiness callback must be callable")
+
+    def acknowledge_shell(invocation: object) -> object:
+        if (
+            type(invocation) is not _StartupCommandInvocation
+            or invocation.payload is not None
+        ):
+            raise TypeError("shell_ready received an unvalidated payload")
+        shell_ready(invocation.generation)
+        return {"acknowledged": True}
 
     def pick_folder(payload: object) -> object:
         if not isinstance(payload, _PickFolderPayload):
@@ -399,6 +448,16 @@ def production_command_specs(
 
     return MappingProxyType(
         {
+            "shell_ready": CommandSpec(
+                validate_payload=_validate_empty_payload,
+                handler=acknowledge_shell,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.STARTUP_5_SECONDS,
+                retry=CommandRetry.NONE,
+                availability=CommandAvailability.STARTUP,
+            ),
             "pick_folder": CommandSpec(
                 validate_payload=_validate_pick_folder,
                 handler=pick_folder,
@@ -446,6 +505,11 @@ def production_command_specs(
             ),
         }
     )
+
+
+def _validate_empty_payload(value: object) -> None:
+    if not isinstance(value, dict) or value:
+        raise CommandPayloadError("shell_ready payload is invalid")
 
 
 def _validate_pick_folder(value: object) -> _PickFolderPayload:

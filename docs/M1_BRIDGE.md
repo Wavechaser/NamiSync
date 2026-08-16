@@ -1840,10 +1840,13 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   `NavigationCompleted`, including canceled or failed navigation, and rebuilds
   the in-flight return-callback table. The renderer can trigger this
   repeatedly. `pywebviewready` is therefore repeatable: frontend
-  initialization is idempotent, listener registration is not duplicated, and
-  every firing ensures exactly one drain is re-armed per nonterminal task. A lost mutation
-  response retries with the original gesture `command_id`; a lost drain uses
-  the sequence recovery above.
+  initialization is idempotent and listener registration is not duplicated.
+  Every firing invalidates operational readiness and pauses each nonterminal
+  drain; only `shell_ready` uses raw API-injection readiness. Normal calls,
+  automatic retries, and exactly one re-arm per retained drain resume after the
+  current appearance envelope is applied. A lost mutation response retries
+  with the original gesture `command_id`; a lost drain uses the sequence
+  recovery above.
 - **Subscription registry** — `SessionObserver.observe` raises when a session
   is already observed, so concurrent task opens must be guarded rather than
   treated as impossible.
@@ -2016,6 +2019,26 @@ path, exception text, traceback, Python type, or implementation detail; a
 handler exception never crosses pywebview as its native traceback-bearing error
 value.
 
+**The presentation-ready startup row is exact.** GUI Break 1 adds one
+foundation-only row outside Slice 2's two domain rows:
+
+| Command | Exact payload | Exact success `result` | Identity / revision | Availability, deadline, and retry |
+| --- | --- | --- | --- | --- |
+| `shell_ready` | `{}` | `{"acknowledged":true}` | no `command_id`; no revision | startup only; 5,000 ms; no retry |
+
+The packaged module installs the fixed appearance receiver and shell DOM before
+sending this command through the existing sole `dispatch` function. The host
+does not admit any `OPEN` row until native load/security/material readiness,
+the current document's acknowledgement, and successful initial appearance
+publication all converge for one document generation. The product deadline
+starts at each native `loaded`; it is a fixed fail-closed startup policy, not
+empirical acceptance evidence. A same-origin reload begins a new closed
+generation before pywebview reinjects the bridge. Duplicate acknowledgement
+already admitted for that generation is idempotent. Once open, `shell_ready`
+is unavailable; once refusal or close wins, every row is unavailable. Timers,
+acknowledgements, and publication callbacks carry generation ownership and
+cannot settle a later document.
+
 **The Slice 2 production allowlist has exactly two rows.** Payload and result
 schemas in this table are exact; Slice 2 adds no dormant or placeholder command
 name.
@@ -2052,8 +2075,9 @@ source-slot/target-slot/deletion-policy wire intent, and the resolved
 source/target/deletion intent. A different wire or resolved intent under the
 same command id remains a conflict.
 
-The immutable production command mapping is exactly `pick_folder`,
-`start_plan`, `next_events`, `release_terminal_session`, and `close_task`.
+The immutable production command mapping is exactly `shell_ready`,
+`pick_folder`, `start_plan`, `next_events`, `release_terminal_session`, and
+`close_task`.
 `test_report` is a test-owned constructor-only
 harness row: the harness builds a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
@@ -3259,9 +3283,10 @@ because its local tests are easier.
 - **BR-G-32 — The transport is one allowlisted, inert-data channel.** Slice 2
   proves every public view type round-trips through the production JSON codec
   and the one exposed `dispatch(command_json)`; the two Slice 2 rows are exactly
-  `pick_folder` and `start_plan`, and the current allowlist adds Slice 3's
-  `next_events` plus lifecycle-only `release_terminal_session` and
-  `close_task`, while `test_report` is possible only through test-owned
+  `pick_folder` and `start_plan`, and the current allowlist adds the
+  foundation-only startup row `shell_ready`, Slice 3's `next_events`, plus
+  lifecycle-only `release_terminal_session` and `close_task`, while
+  `test_report` is possible only through test-owned
   constructor composition. Unknown versions, commands,
   fields, malformed opaque ids, and input above 65,536 UTF-8 bytes are refused
   before handler invocation. Errors expose no filesystem path or internals even
@@ -3305,8 +3330,9 @@ because its local tests are easier.
   observe attempts create one subscription or a named refusal, and a
   fault-injected slow facade call proves no `TaskState` lock is held across it.
   Repeated `pywebviewready` firings while a drain is outstanding install one
-  listener set, retain at most one drain per task, and re-arm delivery after
-  each bridge reincarnation.
+  listener set, retain at most one drain per task, pause it while the new
+  document is presentation-pending, and re-arm delivery exactly once after
+  that bridge generation becomes operational.
   *Not satisfied by* a single drain, a naturally finishing session, one task,
   or a queue that stays below capacity.
 - **BR-G-34 — One visible-sequence implementation defines both trees.** The

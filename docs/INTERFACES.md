@@ -418,6 +418,16 @@ exposes one versioned, size-bounded, allowlisted function named `dispatch`.
 It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
+Each pywebview injection starts a host-owned closed document generation. The
+fixed `shell_ready` row is the only startup-available command; the dispatcher
+captures that generation with admission and rejects a stale acknowledgement.
+Normal rows become available only after native load, packaged receiver/DOM
+acknowledgement, and successful current appearance publication. Reinjection
+repeats the acknowledgement through the same function, while terminal gate
+states expose no command availability at all. Frontend code distinguishes raw
+pywebview API injection from operational readiness: only `shell_ready` may use
+the former, while normal calls, retries, and retained task drains remain paused
+until the receiver applies the new generation's appearance envelope.
 NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` to carry application data. Pinned pywebview does
 construct JavaScript internally for its exposed-function return transport;
@@ -432,7 +442,11 @@ publication defined in `M1_BRIDGE.md`, posted through WebView2 after native
 origin/security attachment. Its packaged receiver validates the complete schema and may update
 only fixed root appearance datasets and CSS custom properties. It exposes no
 browser-to-native sender, command, URL, path, HTML, or dynamic property name and
-therefore does not widen bridge authority.
+therefore does not widen bridge authority. Windows observation subscribes
+before its mandatory initial read; notifications only advance a generation,
+and one bounded UI-thread drain reads and applies current state before assigning
+the next publication revision. A newer notification is deferred to another UI
+turn, so an older callback-thread snapshot cannot win or starve the pump.
 
 GUI Break 1's icon helper is presentation-only and never becomes another bridge
 or asset-authority surface. It resolves one exact visual glyph name through a
@@ -540,6 +554,14 @@ app-path leases, and the mutex only after complete quiescence, preserving the
 initiating startup diagnosis. Every failure caught after logging configuration
 records one typed `startup.failed` traceback before that finalizer; diagnostic
 failure cannot replace the native report or process exit status.
+Native `loaded` starts a fixed five-second document-readiness deadline rather
+than opening commands. The packaged module installs its receiver and shell,
+acknowledges the current generation through `dispatch`, and waits for the first
+valid appearance envelope before showing `Ready`. A true reload or same-page
+pywebview reinjection repeats that handshake. Initial refusal uses the
+startup-only teardown; refusal after a previously open generation records the
+diagnosis before entering the ordinary bounded service-close state machine, so
+active work is never bypassed by direct destruction.
 Clean-wheel headed gates exercise this composition through the real pinned
 WebView2/pythonnet stack, including packaged-page popup composition, canceled
 navigation, guard-attachment failure, runtime refusal, activation, and the

@@ -5,6 +5,7 @@ const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
 const COMMAND_POLICY_JSON = `{
+  "shell_ready": {"timeout": "startup-5-seconds", "retry": "none"},
   "pick_folder": {"timeout": "interactive", "retry": "none"},
   "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none"},
@@ -15,10 +16,13 @@ export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
   JSON.parse(COMMAND_POLICY_JSON),
 );
 const TIMEOUT_MS_BY_POLICY = Object.freeze({
+  "startup-5-seconds": 5000,
   "interactive": null,
   "mutation-30-seconds": 30000,
   "drain-30-seconds": 30000,
 });
+const SHELL_READY_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.shell_ready.timeout];
 const START_PLAN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
 const DRAIN_TIMEOUT_MS =
@@ -156,22 +160,24 @@ const ERROR_MESSAGES = Object.freeze({
     "NamiSync is closing or this desktop page is no longer trusted.",
   internal_error: "NamiSync could not complete the desktop action.",
 });
-let readiness;
-let resolveReadiness;
+let rawReadiness;
+let resolveRawReadiness;
+let operationalReadiness;
+let resolveOperationalReadiness;
 let bridgeGeneration = 0;
+let operationalGeneration = -1;
 const taskDrains = new Map();
 
 window.addEventListener("pywebviewready", () => {
   bridgeGeneration += 1;
-  const resolve = resolveReadiness;
-  readiness = undefined;
-  resolveReadiness = undefined;
+  operationalGeneration = -1;
+  const resolve = resolveRawReadiness;
+  rawReadiness = undefined;
+  resolveRawReadiness = undefined;
   resolve?.();
   for (const task of taskDrains.values()) {
     if (!task.stopped && !task.terminal && task.pendingTerminalUpdate === null) {
-      task.busyRearmUsed = false;
-      task.transportFailures = 0;
-      rearmTask(task, task.lastAcceptedSequence + 1);
+      pauseTaskForBridge(task);
     }
   }
 });
@@ -228,15 +234,51 @@ function bridgeApi() {
 }
 
 export function whenBridgeReady() {
+  if (
+    operationalGeneration === bridgeGeneration &&
+    typeof bridgeApi()?.dispatch === "function"
+  ) {
+    return Promise.resolve();
+  }
+  if (!operationalReadiness) {
+    operationalReadiness = new Promise((resolve) => {
+      resolveOperationalReadiness = resolve;
+    });
+  }
+  return operationalReadiness;
+}
+
+export function whenBridgeApiReady() {
   if (typeof bridgeApi()?.dispatch === "function") {
     return Promise.resolve();
   }
-  if (!readiness) {
-    readiness = new Promise((resolve) => {
-      resolveReadiness = resolve;
+  if (!rawReadiness) {
+    rawReadiness = new Promise((resolve) => {
+      resolveRawReadiness = resolve;
     });
   }
-  return readiness;
+  return rawReadiness;
+}
+
+export function markBridgeOperational() {
+  if (operationalGeneration === bridgeGeneration) {
+    return;
+  }
+  if (typeof bridgeApi()?.dispatch !== "function") {
+    throw new BridgeTransportError();
+  }
+  operationalGeneration = bridgeGeneration;
+  for (const task of taskDrains.values()) {
+    if (!task.stopped && !task.terminal && task.pendingTerminalUpdate === null) {
+      task.busyRearmUsed = false;
+      task.transportFailures = 0;
+      rearmTask(task, task.desiredReplayFrom);
+    }
+  }
+  const resolve = resolveOperationalReadiness;
+  operationalReadiness = undefined;
+  resolveOperationalReadiness = undefined;
+  resolve?.();
 }
 
 export async function pickFolder(purpose) {
@@ -373,6 +415,16 @@ export function startTaskDrain(
   };
 }
 
+export function acknowledgeShellReady() {
+  return dispatchAttemptWithReadiness(
+    "shell_ready",
+    Object.freeze({}),
+    validateShellReadyResult,
+    SHELL_READY_TIMEOUT_MS,
+    whenBridgeApiReady,
+  );
+}
+
 export async function closeTask(taskId, sessionId) {
   const task = taskDrains.get(taskId);
   if (
@@ -430,10 +482,38 @@ function startPlanAttempt(payload) {
 }
 
 async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
-  return createDispatchAttempt(command, payload, validateResult, timeoutMs).promise;
+  return dispatchAttemptWithReadiness(
+    command,
+    payload,
+    validateResult,
+    timeoutMs,
+    whenBridgeReady,
+  );
 }
 
-function createDispatchAttempt(command, payload, validateResult, timeoutMs) {
+async function dispatchAttemptWithReadiness(
+  command,
+  payload,
+  validateResult,
+  timeoutMs,
+  waitUntilReady,
+) {
+  return createDispatchAttempt(
+    command,
+    payload,
+    validateResult,
+    timeoutMs,
+    waitUntilReady,
+  ).promise;
+}
+
+function createDispatchAttempt(
+  command,
+  payload,
+  validateResult,
+  timeoutMs,
+  waitUntilReady = whenBridgeReady,
+) {
   const requestId = mintId();
   const attempt = {
     cancelled: false,
@@ -447,7 +527,13 @@ function createDispatchAttempt(command, payload, validateResult, timeoutMs) {
   });
   return {
     promise: withDeadline(
-      dispatchReadyAttempt(request, requestId, validateResult, attempt),
+      dispatchReadyAttempt(
+        request,
+        requestId,
+        validateResult,
+        attempt,
+        waitUntilReady,
+      ),
       timeoutMs,
       () => cancelAttempt(attempt),
     ),
@@ -455,8 +541,14 @@ function createDispatchAttempt(command, payload, validateResult, timeoutMs) {
   };
 }
 
-async function dispatchReadyAttempt(request, requestId, validateResult, attempt) {
-  await whenBridgeReady();
+async function dispatchReadyAttempt(
+  request,
+  requestId,
+  validateResult,
+  attempt,
+  waitUntilReady,
+) {
+  await waitUntilReady();
   if (attempt.cancelled) {
     throw new BridgeTransportError();
   }
@@ -596,6 +688,12 @@ function rearmTask(task, replayFrom, delayMs = 0) {
   task.active?.control.cancel();
   task.active = null;
   cancelTaskArm(task);
+  if (operationalGeneration !== bridgeGeneration) {
+    if (task.desiredReplayFrom === null) {
+      task.desiredReplayFrom = task.lastAcceptedSequence + 1;
+    }
+    return;
+  }
   const epoch = task.epoch;
   task.armScheduled = true;
   task.scheduledEpoch = epoch;
@@ -616,8 +714,11 @@ function rearmTask(task, replayFrom, delayMs = 0) {
     }
     try {
       runTaskDrain(task, epoch, task.desiredReplayFrom);
-    } catch (_error) {
-      stopTaskWithRefusal(task, new BridgeTransportError());
+    } catch (error) {
+      stopTaskWithRefusal(
+        task,
+        error instanceof BridgeTransportError ? error : new BridgeTransportError(),
+      );
     }
   };
   if (delayMs > 0) {
@@ -708,6 +809,18 @@ function settleTaskDrain(task, active, result) {
     }
   }
   rearmTask(task, null);
+}
+
+function pauseTaskForBridge(task) {
+  task.epoch += 1;
+  task.desiredReplayFrom = task.lastAcceptedSequence + 1;
+  task.active?.control.cancel();
+  task.active = null;
+  cancelTaskArm(task);
+}
+
+function validateShellReadyResult(value) {
+  return isExactObject(value, ["acknowledged"]) && value.acknowledged === true;
 }
 
 function presentTerminalUpdate(task, update) {

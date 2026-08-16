@@ -25,6 +25,7 @@ from namisync.interfaces.web.bridge import BridgeProtocolError, to_primitive_vie
 from namisync.interfaces.web.commands import (
     ADAPTER_PUBLIC_VIEW_DATACLASSES,
     CommandAccess,
+    CommandAvailability,
     CommandConflictError,
     CommandPayloadError,
     CommandRetry,
@@ -139,7 +140,12 @@ def _commands(*, picker=lambda: None):
     slots = _Slots()
     service = _Service()
     return (
-        production_command_specs(picker=picker, slots=slots, registry=service),
+        production_command_specs(
+            picker=picker,
+            slots=slots,
+            registry=service,
+            shell_ready=lambda _generation: None,
+        ),
         slots,
         service,
     )
@@ -149,6 +155,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     commands, _, _ = _commands()
 
     assert tuple(commands) == (
+        "shell_ready",
         "pick_folder",
         "start_plan",
         "next_events",
@@ -156,6 +163,26 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "close_task",
     )
     assert "test_report" not in commands
+    assert (
+        commands["shell_ready"].access,
+        commands["shell_ready"].command_id,
+        commands["shell_ready"].revision,
+        commands["shell_ready"].timeout,
+        commands["shell_ready"].retry,
+        commands["shell_ready"].availability,
+    ) == (
+        CommandAccess.READ_ONLY,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.STARTUP_5_SECONDS,
+        CommandRetry.NONE,
+        CommandAvailability.STARTUP,
+    )
+    assert all(
+        spec.availability is CommandAvailability.OPEN
+        for name, spec in commands.items()
+        if name != "shell_ready"
+    )
     assert (
         commands["pick_folder"].access,
         commands["pick_folder"].command_id,
@@ -237,7 +264,12 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         )
     )
 
-    assert tuple(signature.parameters) == ("picker", "slots", "registry")
+    assert tuple(signature.parameters) == (
+        "picker",
+        "slots",
+        "registry",
+        "shell_ready",
+    )
     assert all(
         parameter.kind is inspect.Parameter.KEYWORD_ONLY
         for parameter in signature.parameters.values()
@@ -245,6 +277,29 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
     assert "extra_commands" not in source
     assert "register" not in source
     assert "test_report" not in source
+
+    assert signature.parameters["shell_ready"].default is inspect.Parameter.empty
+
+
+def test_shell_ready_requires_an_exact_empty_payload_and_calls_once() -> None:
+    acknowledgements: list[str] = []
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        shell_ready=lambda generation: acknowledgements.append(str(generation)),
+    )
+
+    assert commands["shell_ready"].invoke({}, generation=7) == {
+        "acknowledged": True
+    }
+    assert acknowledgements == ["7"]
+    with pytest.raises(TypeError, match="admitted generation"):
+        commands["shell_ready"].invoke({})
+    for payload in ({"unexpected": True}, [], None):
+        with pytest.raises(CommandPayloadError):
+            commands["shell_ready"].invoke(payload, generation=7)
+    assert acknowledgements == ["7"]
 
 
 def test_br_g_32_folder_picker_returns_only_opaque_presentation_data() -> None:
@@ -332,6 +387,7 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
         picker=lambda: (r"C:\private",),
         slots=slots,
         registry=_Service(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(RuntimeError, match="slot authority"):
@@ -438,6 +494,7 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
         picker=lambda: None,
         slots=slots,
         registry=registry,
+        shell_ready=lambda _generation: None,
     )
     payload = {
         "command_id": COMMAND_ID,
@@ -527,6 +584,7 @@ def test_terminal_session_release_refuses_mismatched_registry_result(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidRegistry(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(RuntimeError, match="invalid release data"):
@@ -555,6 +613,7 @@ def test_task_close_refuses_invalid_or_mismatched_registry_result(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidRegistry(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(RuntimeError, match="invalid close data"):
@@ -627,6 +686,7 @@ def test_br_g_33_next_events_refuses_invalid_or_mismatched_registry_result(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidRegistry(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(RuntimeError, match="invalid drain data"):
@@ -661,6 +721,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
         picker=lambda: None,
         slots=_Slots(),
         registry=RefusingService(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(adapter_error) as captured:
@@ -686,6 +747,7 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
         picker=lambda: None,
         slots=_Slots(),
         registry=BrokenService(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(ValueError, match="incidental implementation defect"):
@@ -723,6 +785,7 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidService(),
+        shell_ready=lambda _generation: None,
     )
 
     with pytest.raises(RuntimeError, match="invalid data"):

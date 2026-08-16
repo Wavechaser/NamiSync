@@ -430,6 +430,11 @@ third-party notices, signing, or a WebView2 bootstrapper.
        before_load -> UI thread -> record BrowserVersionString
                                 -> attach native guards
        loaded      -> verify attached/no attachment_error
+                   -> start fixed five-second readiness deadline
+       packaged JS -> install receiver and shell DOM
+                   -> dispatch startup-only shell_ready {}
+       host        -> post current initial appearance envelope
+                   -> open ordinary commands only after post succeeds
    ```
 
    Dispatch remains closed while document authority is pending or failed.
@@ -453,9 +458,23 @@ third-party notices, signing, or a WebView2 bootstrapper.
    - **Guard or loaded failure** (native attachment on the UI thread): store the
      sticky failure, synchronously reject bridge admission and wake the task
      registry, mark the host startup-refused, and call `window.destroy()`
-     exactly once. If that public call throws, post one `WM_CLOSE` through the
-     retained HWND. The `loaded` watchdog stores state and closes rather than
-     raising; both close paths leave authority rejected if they fail.
+     exactly once. If that public call throws or returns without setting the
+     closed event, post one `WM_CLOSE` through the retained HWND. The `loaded`
+     watchdog stores state and closes rather than raising; both close paths
+     leave authority rejected if they fail.
+
+   Native `loaded` is necessary but not sufficient for an open document. The
+   packaged module must acknowledge receiver/DOM installation through the sole
+   dispatch entry, and the host must successfully post the current initial
+   appearance envelope. Missing acknowledgement or publication failure before
+   the five-second deadline enters the same terminal startup-refused path;
+   close and late callbacks cannot reopen it. The visible `Ready` label waits
+   until the packaged receiver applies that generation's first valid envelope.
+   A same-origin reload closes ordinary admission before reinjection and must
+   repeat the handshake; stale timers, acknowledgements, and publication
+   callbacks cannot settle its new generation. Raw pywebview API injection is
+   sufficient only for `shell_ready`; normal calls, retries, and retained task
+   drains stay paused until the current envelope is applied.
 
    After `start_edge_chromium` returns, both in-loop paths run the finalizer
    above. Because dispatch never opened, `service.close()` should return a
@@ -906,7 +925,15 @@ carry the `headed` marker; all are collected by the release command.
   returns the page base itself to the theme-correct opaque neutral rather than
   preserving a stale Mica claim. Live UISettings changes publish the exact
   accent rest/hover/pressed and contrasting foreground roles through the fixed
-  revisioned appearance receiver.
+  revisioned appearance receiver. Observation subscribes before its mandatory
+  first read and coalesces native notifications into bounded UI-thread turns;
+  only a current-state read receives the latest revision, and close invalidates
+  queued turns. Native load, packaged `shell_ready` acknowledgement, and a
+  successful current initial appearance post must all converge within the
+  fixed five-second loaded-time deadline before ordinary bridge commands open
+  for each document generation; the page reports `Ready` only after applying
+  that envelope. Reload closes ordinary admission until the new generation
+  repeats the handshake.
   Material application changes neither the security guards nor the construction
   order. *Not satisfied by* a documentation lookup, a mock window, or a test that
   never exercises the fallback.

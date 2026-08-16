@@ -17,6 +17,8 @@ from namisync.interfaces.service import NamiSyncService
 from namisync.interfaces.web.bridge import BRIDGE_SCHEMA_VERSION, BridgeDispatcher
 from namisync.interfaces.web.commands import (
     CommandAccess,
+    CommandAvailability,
+    CommandAvailabilitySnapshot,
     CommandConflictError,
     CommandPayloadError,
     CommandRetry,
@@ -115,7 +117,12 @@ class _UntouchableBody:
         raise AssertionError("body was encoded")
 
 
-def _spec(handler, validator=lambda payload: payload) -> CommandSpec:
+def _spec(
+    handler,
+    validator=lambda payload: payload,
+    *,
+    availability: CommandAvailability = CommandAvailability.OPEN,
+) -> CommandSpec:
     return CommandSpec(
         validate_payload=validator,
         handler=handler,
@@ -124,7 +131,12 @@ def _spec(handler, validator=lambda payload: payload) -> CommandSpec:
         revision=FieldRequirement.FORBIDDEN,
         timeout=CommandTimeout.INTERACTIVE,
         retry=CommandRetry.NONE,
+        availability=availability,
     )
+
+
+def _open_availability() -> CommandAvailabilitySnapshot:
+    return CommandAvailabilitySnapshot(CommandAvailability.OPEN, 0)
 
 
 def _request(
@@ -182,6 +194,98 @@ def test_br_g_32_success_envelope_is_exact_and_encodes_before_return() -> None:
         "ok": True,
         "result": {"seen": "wave \U0001f30a"},
     }
+
+
+def test_startup_command_is_the_only_dispatch_admitted_before_open() -> None:
+    opened = False
+    generation = 3
+    calls: list[str] = []
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={
+            "shell_ready": _spec(
+                lambda invocation: calls.append(
+                    f"shell:{invocation.generation}"
+                )
+                or {"acknowledged": True},
+                availability=CommandAvailability.STARTUP,
+            ),
+            "probe": _spec(lambda _payload: calls.append("probe") or "open"),
+        },
+        availability=lambda: CommandAvailabilitySnapshot(
+            (
+                CommandAvailability.OPEN
+                if opened
+                else CommandAvailability.STARTUP
+            ),
+            generation,
+        ),
+    )
+
+    assert dispatcher.dispatch(_request(command="probe")) == _failure(
+        REQUEST_ID,
+        "bridge_unavailable",
+        ERRORS["bridge_unavailable"],
+    )
+    assert calls == []
+    assert dispatcher.dispatch(_request(command="shell_ready")) == {
+        "schema_version": 1,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": {"acknowledged": True},
+    }
+    assert calls == ["shell:3"]
+
+    opened = True
+    assert dispatcher.dispatch(_request(command="probe"))["ok"] is True
+    assert dispatcher.dispatch(_request(command="shell_ready")) == _failure(
+        REQUEST_ID,
+        "bridge_unavailable",
+        ERRORS["bridge_unavailable"],
+    )
+    assert calls == ["shell:3", "probe"]
+
+
+def test_startup_mapping_requires_an_availability_predicate() -> None:
+    with pytest.raises(TypeError, match="availability predicate"):
+        BridgeDispatcher(
+            document=_Document(),
+            commands={
+                "shell_ready": _spec(
+                    lambda payload: payload,
+                    availability=CommandAvailability.STARTUP,
+                )
+            },
+        )
+
+
+@pytest.mark.parametrize("readiness", [None, 1, "yes"])
+def test_invalid_or_failed_availability_predicate_fails_closed(
+    readiness: object,
+) -> None:
+    def availability() -> object:
+        if readiness is None:
+            raise RuntimeError("injected readiness failure")
+        return readiness
+
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={
+            "shell_ready": _spec(
+                lambda payload: payload,
+                availability=CommandAvailability.STARTUP,
+            ),
+            "probe": _spec(lambda payload: payload),
+        },
+        availability=availability,
+    )
+
+    for command in ("shell_ready", "probe"):
+        assert dispatcher.dispatch(_request(command=command)) == _failure(
+            REQUEST_ID,
+            "bridge_unavailable",
+            ERRORS["bridge_unavailable"],
+        )
 
 
 def test_br_g_32_dispatcher_snapshots_command_specs_at_construction() -> None:
@@ -417,7 +521,9 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
             picker=lambda: None,
             slots=Slots(),
             registry=Registry(),
+            shell_ready=lambda _generation: None,
         ),
+        availability=_open_availability,
     )
 
     assert dispatcher.dispatch(
@@ -472,8 +578,13 @@ def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
         picker=lambda: None,
         slots=SimpleNamespace(),
         registry=SimpleNamespace(),
+        shell_ready=lambda _generation: None,
     )
-    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=commands,
+        availability=_open_availability,
+    )
 
     assert dispatcher.dispatch(_request(command="test_report")) == _failure(
         REQUEST_ID,
@@ -522,8 +633,13 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
         picker=lambda: None,
         slots=SimpleNamespace(),
         registry=Registry(),
+        shell_ready=lambda _generation: None,
     )
-    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=commands,
+        availability=_open_availability,
+    )
 
     response = dispatcher.dispatch(
         _request(
@@ -589,7 +705,9 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
             picker=lambda: None,
             slots=SimpleNamespace(),
             registry=Registry(),
+            shell_ready=lambda _generation: None,
         ),
+        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -626,7 +744,9 @@ def test_terminal_session_release_crosses_dispatch_as_exact_echo() -> None:
             picker=lambda: None,
             slots=SimpleNamespace(),
             registry=Registry(),
+            shell_ready=lambda _generation: None,
         ),
+        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -656,7 +776,9 @@ def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None
             picker=lambda: None,
             slots=SimpleNamespace(),
             registry=Registry(),
+            shell_ready=lambda _generation: None,
         ),
+        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -986,8 +1108,13 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         picker=lambda: None,
         slots=slots,
         registry=Registry(),
+        shell_ready=lambda _generation: None,
     )
-    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands=commands,
+        availability=_open_availability,
+    )
     command_id = "c4" * 16
 
     first = dispatcher.dispatch(

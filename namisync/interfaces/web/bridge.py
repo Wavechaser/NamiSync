@@ -484,8 +484,13 @@ class BridgeDispatcher:
         *,
         document: NativeDocumentState,
         commands: Mapping[str, CommandSpec],
+        availability: Callable[[], object] | None = None,
     ) -> None:
-        from .commands import CommandSpec
+        from .commands import (
+            CommandAvailability,
+            CommandAvailabilitySnapshot,
+            CommandSpec,
+        )
 
         snapshot = dict(commands)
         if any(
@@ -499,8 +504,23 @@ class BridgeDispatcher:
             )
         if any(type(spec) is not CommandSpec for spec in snapshot.values()):
             raise TypeError("every bridge command must be an exact CommandSpec")
+        if availability is None:
+            if any(
+                spec.availability is CommandAvailability.STARTUP
+                for spec in snapshot.values()
+            ):
+                raise TypeError(
+                    "startup commands require an availability predicate"
+                )
+            availability = lambda: CommandAvailabilitySnapshot(
+                CommandAvailability.OPEN,
+                0,
+            )
+        if not callable(availability):
+            raise TypeError("bridge availability predicate must be callable")
         self._document = document
         self._commands = snapshot
+        self._availability = availability
         self._admission = Condition(Lock())
         self._accepting = True
         self._admitted = 0
@@ -564,6 +584,19 @@ class BridgeDispatcher:
             spec = self._commands.get(name)
             if spec is None:
                 return self._failure(request_id, None, "unknown_command")
+            from .commands import (
+                CommandAvailability,
+                CommandAvailabilitySnapshot,
+            )
+
+            try:
+                availability = self._availability()
+            except BaseException:
+                return self._failure(request_id, name, "bridge_unavailable")
+            if type(availability) is not CommandAvailabilitySnapshot:
+                return self._failure(request_id, name, "bridge_unavailable")
+            if spec.availability is not availability.availability:
+                return self._failure(request_id, name, "bridge_unavailable")
 
             payload = raw["payload"]
             if type(payload) is not dict:
@@ -587,7 +620,14 @@ class BridgeDispatcher:
             from .slots import SlotUnavailableError
 
             try:
-                result = spec.invoke(payload)
+                result = spec.invoke(
+                    payload,
+                    generation=(
+                        availability.generation
+                        if spec.availability is CommandAvailability.STARTUP
+                        else None
+                    ),
+                )
             except CommandPayloadError:
                 return self._failure(request_id, name, "invalid_payload")
             except SlotUnavailableError:

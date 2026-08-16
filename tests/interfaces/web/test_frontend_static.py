@@ -319,8 +319,39 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
             "--color-accent-hover-foreground": "#FFFFFF",
             "--color-accent-pressed-foreground": "#FFFFFF",
         },
+        "resolvedBeforeValidMessage": False,
+        "resolvedAfterValidMessage": True,
+        "resolvedBeforeNewRevision": False,
+        "resolvedAfterNewRevision": True,
         "listenerRemoved": True,
     }
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental startup probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "app_startup_probe.mjs"),
+            str(
+                PROJECT_ROOT
+                / "namisync"
+                / "interfaces"
+                / "web"
+                / "assets"
+                / "app.js"
+            ),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
 
 
 def test_br_g_32_production_inert_text_helper_owns_text_writes(
@@ -547,6 +578,7 @@ def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None
         picker=lambda: None,
         slots=object(),  # type: ignore[arg-type]
         registry=object(),  # type: ignore[arg-type]
+        shell_ready=lambda _generation: None,
     )
     native_policy = {
         name: {
@@ -635,13 +667,11 @@ def test_br_g_32_start_plan_deadline_includes_bridge_readiness() -> None:
     )[1].split("async function withDeadline(", 1)[0]
 
     assert "promise: withDeadline(" in attempt
-    assert (
-        "dispatchReadyAttempt(request, requestId, validateResult, attempt)"
-        in attempt
-    )
+    assert "dispatchReadyAttempt(" in attempt
+    assert "waitUntilReady," in attempt
     assert "() => cancelAttempt(attempt)" in attempt
     assert "await whenBridgeReady();" not in attempt
-    assert ready_attempt.index("await whenBridgeReady();") < ready_attempt.index(
+    assert ready_attempt.index("await waitUntilReady();") < ready_attempt.index(
         "const generation = bridgeGeneration;"
     )
 
@@ -693,6 +723,32 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
 ) -> None:
     app = _wheel_assets(built_wheel)["app.js"]
 
+    assert "acknowledgeShellReady," in app
+    assert "BridgeTransportError," in app
+    assert "markBridgeOperational," in app
+    assert "whenBridgeApiReady," in app
+    assert app.index("installAppearanceReceiver(") < app.index(
+        "app.append(createTaskRail(), createWorkPanel());"
+    )
+    startup = app.split("async function finishStartup(", 1)[1]
+    assert startup.index("whenBridgeApiReady()") < startup.index(
+        "acknowledgeShellReady()"
+    )
+    assert startup.index("acknowledgeShellReady()") < startup.index(
+        "appearance.whenAppliedAfter(appearanceBaseline)"
+    )
+    assert startup.index(
+        "appearance.whenAppliedAfter(appearanceBaseline)"
+    ) < startup.index("markBridgeOperational()")
+    assert startup.index("markBridgeOperational()") < startup.index(
+        'renderText(status, "Ready");'
+    )
+    assert 'window.addEventListener("pywebviewready"' in app
+    assert "startupRerunRequested ||= rerun;" in app
+    assert "rejectSupersededStartup?.(new StartupSupersededError());" in app
+    assert "error instanceof BridgeTransportError" in app
+    assert 'status.textContent === "Ready"' in app
+    assert 'renderText(status, "Starting...");' in app
     assert 'status.textContent === "Starting..."' in app
     assert app.count('renderText(status, "Ready")') == 1
 

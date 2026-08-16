@@ -98,6 +98,11 @@ testWindow.pywebview = {
   },
 };
 testWindow.emit("pywebviewready");
+for (let turn = 0; turn < 4; turn += 1) {
+  await Promise.resolve();
+}
+assert.equal(requests.length, 0, "raw injection does not admit normal commands");
+bridge.markBridgeOperational();
 
 assert.deepEqual(await planning, {
   task_id: `task-${"2".repeat(32)}`,

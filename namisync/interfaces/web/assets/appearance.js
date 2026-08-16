@@ -56,6 +56,7 @@ export function installAppearanceReceiver(webview, root) {
   }
 
   let revision = 0;
+  let applicationWaiters = [];
   const receive = (event) => {
     const value = event.data;
     if (!isAppearanceMessage(value, revision)) {
@@ -78,6 +79,42 @@ export function installAppearanceReceiver(webview, root) {
       value.accentPressedForeground,
     );
     revision = value.revision;
+    const ready = applicationWaiters.filter(
+      (waiter) => revision > waiter.previousRevision,
+    );
+    applicationWaiters = applicationWaiters.filter(
+      (waiter) => revision <= waiter.previousRevision,
+    );
+    for (const waiter of ready) waiter.resolve();
+  };
+
+  const whenAppliedAfter = (previousRevision) => {
+    if (
+      !Number.isSafeInteger(previousRevision)
+      || previousRevision < 0
+      || previousRevision > revision
+    ) {
+      throw new TypeError("Appearance baseline revision is invalid");
+    }
+    if (revision > previousRevision) {
+      return Promise.resolve();
+    }
+    const existing = applicationWaiters.find(
+      (waiter) => waiter.previousRevision === previousRevision,
+    );
+    if (existing !== undefined) {
+      return existing.promise;
+    }
+    let resolveApplication;
+    const promise = new Promise((resolve) => {
+      resolveApplication = resolve;
+    });
+    applicationWaiters.push({
+      previousRevision,
+      promise,
+      resolve: resolveApplication,
+    });
+    return promise;
   };
 
   webview.addEventListener("message", receive);
@@ -88,5 +125,9 @@ export function installAppearanceReceiver(webview, root) {
     revision() {
       return revision;
     },
+    whenApplied() {
+      return whenAppliedAfter(0);
+    },
+    whenAppliedAfter,
   });
 }

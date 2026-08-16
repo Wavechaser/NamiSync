@@ -6,7 +6,7 @@ import ctypes
 import inspect
 import json
 import sys
-from threading import Event
+from threading import Event, Thread, get_ident
 from types import SimpleNamespace
 
 import pytest
@@ -93,6 +93,10 @@ class _FakeNative:
         self.calls.append(("invoke", native_window))
         callback()
 
+    def defer(self, native_window: object, callback) -> None:
+        self.calls.append(("defer", native_window))
+        callback()
+
     def subscribe(self, callback):
         self.calls.append("subscribe")
         if self.subscribe_error is not None:
@@ -132,6 +136,15 @@ def _window() -> SimpleNamespace:
         events=SimpleNamespace(before_load=_Hook(), loaded=_Hook()),
         appearance_messages=core,
     )
+
+
+def _request_initial(controller: object) -> list[Exception | None]:
+    results: list[Exception | None] = []
+    controller.request_initial_publication(
+        controller._document_generation,
+        results.append,
+    )
+    return results
 
 
 def _patch_native_calls(
@@ -749,10 +762,195 @@ def test_initial_observation_failure_marks_startup_refused() -> None:
     controller.close()
 
 
+def test_initial_read_follows_subscription_and_rolls_it_back_on_failure() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    native.read_error = RuntimeError("injected initial read refusal")
+    controller = configure_window_appearance(window, native=native)
+
+    window.events.before_load.emit()
+
+    assert native.calls[:3] == ["subscribe", "read", "unsubscribe"]
+    assert native.preference_handlers == []
+    assert controller.startup_failure is not None
+    assert str(controller.startup_failure) == (
+        "Windows appearance state could not be read"
+    )
+    controller.close()
+
+
+def test_subscription_gap_change_is_included_in_the_initial_snapshot() -> None:
+    window = _window()
+
+    class GapNative(_FakeNative):
+        def subscribe(self, callback):
+            unsubscribe = super().subscribe(callback)
+            self.system = _system(dark=True, accent="#ABCDEF")
+            callback()
+            return unsubscribe
+
+    native = GapNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+
+    window.events.before_load.emit()
+
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert native.calls.index("subscribe") < native.calls.index("read")
+    assert native.calls.count("read") == 1
+    assert applied == [_system(dark=True, accent="#ABCDEF")]
+    controller.close()
+
+
+def test_deferred_initial_generation_finishes_before_loaded_publication() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_read = native.read
+    reads = 0
+
+    def read() -> SystemAppearance:
+        nonlocal reads
+        snapshot = original_read()
+        reads += 1
+        if reads == 1:
+            native.system = _system(dark=True, accent="#222222")
+            native.emit_preference_change()
+        return snapshot
+
+    native.read = read
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+    assert len(deferred) == 1
+    assert window.appearance_messages.messages == []
+    deferred[0]()
+    assert window.appearance_messages.messages == []
+    window.events.loaded.emit()
+
+    assert controller.startup_failure is None
+    assert results == [None]
+    assert [message["accent"] for message in window.appearance_messages.messages] == [
+        "#222222"
+    ]
+    controller.close()
+
+
+def test_loaded_before_deferred_initial_generation_waits_for_final_state() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_read = native.read
+    reads = 0
+
+    def read() -> SystemAppearance:
+        nonlocal reads
+        snapshot = original_read()
+        reads += 1
+        if reads == 1:
+            native.system = _system(dark=True, accent="#222222")
+            native.emit_preference_change()
+        return snapshot
+
+    native.read = read
+    controller = configure_window_appearance(window, native=native)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    results = _request_initial(controller)
+    assert window.appearance_messages.messages == []
+    deferred[0]()
+
+    assert controller.startup_failure is None
+    assert results == [None]
+    assert [message["accent"] for message in window.appearance_messages.messages] == [
+        "#222222"
+    ]
+    controller.close()
+
+
+def test_reload_requires_a_new_initial_publication_for_the_new_receiver() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#123456"))
+    controller = configure_window_appearance(window, native=native)
+
+    window.events.before_load.emit()
+    first = _request_initial(controller)
+    window.events.loaded.emit()
+    assert first == [None]
+    assert len(window.appearance_messages.messages) == 1
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    assert len(window.appearance_messages.messages) == 1
+    second = _request_initial(controller)
+
+    assert second == [None]
+    assert [
+        (message["revision"], message["accent"])
+        for message in window.appearance_messages.messages
+    ] == [(1, "#123456"), (2, "#123456")]
+    controller.close()
+
+
+def test_reload_invalidates_a_queued_prior_generation_publication() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#123456"))
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    _request_initial(controller)
+    window.events.loaded.emit()
+    assert len(window.appearance_messages.messages) == 1
+    queued: list[object] = []
+    native.invoke = lambda _window, callback: queued.append(callback)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    second = _request_initial(controller)
+    assert len(queued) == 1
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    third = _request_initial(controller)
+    assert len(queued) == 2
+
+    queued[0]()
+    assert second == []
+    assert third == []
+    queued[1]()
+
+    assert second == []
+    assert third == [None]
+    assert len(window.appearance_messages.messages) == 2
+    controller.close()
+
+
+def test_stale_publication_request_cannot_claim_the_new_generation() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    with pytest.raises(RuntimeError, match="generation is stale"):
+        controller.request_initial_publication(0, pytest.fail)
+    current = _request_initial(controller)
+
+    assert current == [None]
+    assert len(window.appearance_messages.messages) == 1
+    controller.close()
+
+
 def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -> None:
     window = _window()
     native = _FakeNative(_system(dark=True, accent="#A1B2C3"))
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
 
     window.events.before_load.emit()
     assert window.appearance_messages.messages == []
@@ -780,6 +978,7 @@ def test_document_publication_uses_the_native_ui_dispatcher_without_dom_eval() -
     window = _window()
     native = _FakeNative(_system(dark=True, accent="#A1B2C3"))
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
 
     window.events.before_load.emit()
     window.events.loaded.emit()
@@ -787,6 +986,31 @@ def test_document_publication_uses_the_native_ui_dispatcher_without_dom_eval() -
     assert ("invoke", window.native) in native.calls
     assert window.appearance_messages.messages[-1]["accent"] == "#A1B2C3"
     assert not hasattr(controller, "_publish_thread")
+    controller.close()
+
+
+def test_initial_publication_reports_document_post_failure_once() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    attempts = 0
+
+    def refuse_post(_value: str) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("injected document post refusal")
+
+    window.native.browser.webview.CoreWebView2.PostWebMessageAsJson = refuse_post
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    native.emit_preference_change()
+
+    assert attempts == 1
+    assert len(results) == 1
+    assert isinstance(results[0], RuntimeError)
+    assert window.appearance_messages.messages == []
     controller.close()
 
 
@@ -817,6 +1041,7 @@ def test_preference_change_republishes_after_loaded() -> None:
     window = _window()
     native = _FakeNative(_system())
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
     window.events.before_load.emit()
     window.events.loaded.emit()
     native.system = _system(dark=True, accent="#ABCDEF")
@@ -832,6 +1057,247 @@ def test_preference_change_republishes_after_loaded() -> None:
     controller.close()
 
 
+def test_preference_notifications_coalesce_before_the_ui_snapshot() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+    window.events.before_load.emit()
+    queued: list[object] = []
+    native.invoke = lambda _window, callback: queued.append(callback)
+
+    native.system = _system(dark=True, accent="#222222")
+    native.emit_preference_change()
+    native.system = _system(dark=False, accent="#333333")
+    native.emit_preference_change()
+
+    assert len(queued) == 1
+    queued[0]()
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-1] == _system(dark=False, accent="#333333")
+    assert _system(dark=True, accent="#222222") not in applied
+    assert native.calls.count("read") == 2
+    controller.close()
+
+
+def test_notification_during_ui_read_requeues_on_the_ui_owner() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    ui_thread = get_ident()
+    queued: list[object] = []
+    callback_queued = Event()
+
+    def queue_invoke(_window: object, callback: object) -> None:
+        assert get_ident() != ui_thread
+        queued.append(callback)
+        callback_queued.set()
+
+    native.invoke = queue_invoke
+    original_read = native.read
+    original_apply = native.apply
+    first_live_read_entered = Event()
+    second_notification_done = Event()
+    live_reads = 0
+    read_threads: list[int] = []
+    apply_threads: list[int] = []
+
+    def read() -> SystemAppearance:
+        nonlocal live_reads
+        snapshot = original_read()
+        read_threads.append(get_ident())
+        live_reads += 1
+        if live_reads == 1:
+            first_live_read_entered.set()
+            assert second_notification_done.wait(1.0)
+        return snapshot
+
+    def apply(native_window: object, system: SystemAppearance):
+        apply_threads.append(get_ident())
+        return original_apply(native_window, system)
+
+    native.read = read
+    native.apply = apply
+    native.system = _system(dark=True, accent="#222222")
+    first_notification = Thread(target=native.emit_preference_change)
+    first_notification.start()
+    assert callback_queued.wait(1.0)
+    first_notification.join(1.0)
+    assert not first_notification.is_alive()
+
+    def send_second_notification() -> None:
+        assert first_live_read_entered.wait(1.0)
+        native.system = _system(dark=False, accent="#333333")
+        native.emit_preference_change()
+        second_notification_done.set()
+
+    second_notification = Thread(target=send_second_notification)
+    second_notification.start()
+    assert len(queued) == 1
+    queued[0]()
+    second_notification.join(1.0)
+
+    assert not second_notification.is_alive()
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-2:] == [
+        _system(dark=True, accent="#222222"),
+        _system(dark=False, accent="#333333"),
+    ]
+    assert live_reads == 2
+    assert read_threads == [ui_thread, ui_thread]
+    assert apply_threads == [ui_thread, ui_thread]
+    controller.close()
+
+
+def test_preference_change_during_apply_defers_latest_state_to_next_ui_turn() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_apply = native.apply
+    emitted = False
+
+    def apply(native_window: object, system: SystemAppearance):
+        nonlocal emitted
+        result = original_apply(native_window, system)
+        if system.accent == "#222222" and not emitted:
+            emitted = True
+            native.system = _system(dark=False, accent="#333333")
+            native.emit_preference_change()
+            native.system = _system(dark=True, accent="#444444")
+            native.emit_preference_change()
+        return result
+
+    native.apply = apply
+    native.system = _system(dark=True, accent="#222222")
+
+    native.emit_preference_change()
+
+    assert len(deferred) == 1
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-1] == _system(dark=True, accent="#222222")
+    assert [message["accent"] for message in window.appearance_messages.messages] == [
+        "#111111"
+    ]
+
+    deferred[0]()
+
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-2:] == [
+        _system(dark=True, accent="#222222"),
+        _system(dark=True, accent="#444444"),
+    ]
+    assert _system(dark=False, accent="#333333") not in applied
+    assert native.calls.count("read") == 3
+    assert [message["accent"] for message in window.appearance_messages.messages] == [
+        "#111111",
+        "#444444",
+    ]
+    controller.close()
+
+
+def test_defer_failure_retries_the_already_known_pending_generation() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    original_apply = native.apply
+    emitted = False
+    defer_attempts = 0
+
+    def apply(native_window: object, system: SystemAppearance):
+        nonlocal emitted
+        result = original_apply(native_window, system)
+        if system.accent == "#222222" and not emitted:
+            emitted = True
+            native.system = _system(dark=False, accent="#333333")
+            native.emit_preference_change()
+        return result
+
+    def defer(_native_window: object, callback) -> None:
+        nonlocal defer_attempts
+        defer_attempts += 1
+        if defer_attempts == 1:
+            raise RuntimeError("injected deferred dispatch refusal")
+        callback()
+
+    native.apply = apply
+    native.defer = defer
+    native.system = _system(dark=True, accent="#222222")
+
+    native.emit_preference_change()
+
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert defer_attempts == 2
+    assert applied[-1] == _system(dark=False, accent="#333333")
+    controller.close()
+
+
+def test_ui_dispatch_failure_allows_the_next_notification_to_recover() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    attempts = 0
+    first_dispatch_entered = Event()
+    release_first_dispatch = Event()
+
+    def invoke(_native_window: object, callback) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            first_dispatch_entered.set()
+            assert release_first_dispatch.wait(1.0)
+            raise RuntimeError("injected UI dispatch refusal")
+        callback()
+
+    native.invoke = invoke
+    native.system = _system(dark=True, accent="#222222")
+    first_notification = Thread(target=native.emit_preference_change)
+    first_notification.start()
+    assert first_dispatch_entered.wait(1.0)
+    native.system = _system(dark=False, accent="#333333")
+    native.emit_preference_change()
+    release_first_dispatch.set()
+    first_notification.join(1.0)
+
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert not first_notification.is_alive()
+    assert attempts == 2
+    assert applied[-1] == _system(dark=False, accent="#333333")
+    assert _system(dark=True, accent="#222222") not in applied
+    controller.close()
+
+
 def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#111111"))
@@ -843,18 +1309,74 @@ def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
 
     native.invoke = queue_invoke
     controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
     window.events.before_load.emit()
     window.events.loaded.emit()
     native.system = _system(dark=True, accent="#222222")
     native.emit_preference_change()
     assert len(queued) == 2
     queued[1]()
-    assert len(queued) == 3
+    assert len(queued) == 2
+    assert results == []
     queued[0]()
+    assert len(queued) == 3
+    assert results == []
     queued[2]()
 
     assert [value["revision"] for value in window.appearance_messages.messages] == [2]
     assert window.appearance_messages.messages[0]["accent"] == "#222222"
+    assert results == [None]
+    controller.close()
+
+
+def test_initial_publication_cannot_complete_across_a_newer_observation() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    window.events.before_load.emit()
+    results: list[tuple[Exception | None, int]] = []
+    controller.request_initial_publication(
+        controller._document_generation,
+        lambda error: results.append(
+            (error, window.appearance_messages.messages[-1]["revision"])
+        ),
+    )
+    original_finish = controller._finish_initial_publication
+    old_finish_entered = Event()
+    release_old_finish = Event()
+
+    def finish(
+        generation: int,
+        error: Exception | None,
+        *,
+        expected_revision: int | None = None,
+    ) -> bool | None:
+        if error is None and expected_revision == 1:
+            old_finish_entered.set()
+            assert release_old_finish.wait(1.0)
+        return original_finish(
+            generation,
+            error,
+            expected_revision=expected_revision,
+        )
+
+    controller._finish_initial_publication = finish
+    loaded = Thread(target=window.events.loaded.emit)
+    loaded.start()
+    assert old_finish_entered.wait(1.0)
+    assert results == []
+
+    native.system = _system(dark=True, accent="#222222")
+    native.emit_preference_change()
+    release_old_finish.set()
+    loaded.join(1.0)
+
+    assert not loaded.is_alive()
+    assert [message["revision"] for message in window.appearance_messages.messages] == [
+        1,
+        2,
+    ]
+    assert results == [(None, 2)]
     controller.close()
 
 
@@ -864,6 +1386,7 @@ def test_close_invalidates_queued_publication_without_waiting() -> None:
     queued: list[object] = []
     native.invoke = lambda _window, callback: queued.append(callback)
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
     window.events.before_load.emit()
     window.events.loaded.emit()
     assert len(queued) == 1
@@ -901,6 +1424,7 @@ def test_preference_read_failure_restores_opaque_presentation() -> None:
     window = _window()
     native = _FakeNative(_system(dark=True))
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
     window.events.before_load.emit()
     window.events.loaded.emit()
     native.read_error = RuntimeError("injected preference read failure")
@@ -912,6 +1436,11 @@ def test_preference_read_failure_restores_opaque_presentation() -> None:
         for call in native.calls
     )
     assert window.appearance_messages.messages[-1]["material"] == "opaque"
+    native.read_error = None
+    native.system = _system(dark=False, accent="#ABCDEF")
+    native.emit_preference_change()
+    assert window.appearance_messages.messages[-1]["material"] == "mica"
+    assert window.appearance_messages.messages[-1]["accent"] == "#ABCDEF"
     controller.close()
 
 
@@ -934,6 +1463,7 @@ def test_unconfirmed_live_fallback_publishes_degraded_opaque_page_state() -> Non
     window = _window()
     native = _FakeNative(_system())
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
     window.events.before_load.emit()
     window.events.loaded.emit()
     native.system = _system(dark=True, accent="#ABCDEF")
@@ -963,6 +1493,7 @@ def test_material_failure_is_nonfatal_and_forces_opaque() -> None:
     native = _FakeNative(_system())
     native.apply_error = RuntimeError("injected DWM failure")
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
 
     window.events.before_load.emit()
     window.events.loaded.emit()
@@ -980,6 +1511,7 @@ def test_invalid_material_result_is_nonfatal_and_forces_opaque() -> None:
     native = _FakeNative(_system())
     native.apply_result = "unexpected"
     controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
 
     window.events.before_load.emit()
     window.events.loaded.emit()

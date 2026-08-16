@@ -166,6 +166,12 @@ assert.ok(modulePath, "bridge module path is required");
 const source = await readFile(modulePath, "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const bridge = await import(moduleUrl);
+bridge.markBridgeOperational();
+
+function reinjectBridge() {
+  testWindow.emit("pywebviewready");
+  bridge.markBridgeOperational();
+}
 
 const session = (digit) => digit.repeat(32);
 const task = (digit) => `task-${digit.repeat(32)}`;
@@ -298,6 +304,9 @@ assert.deepEqual(
   [1, 3],
 );
 testWindow.emit("pywebviewready");
+await turns();
+assert.equal(requests.length, 2);
+bridge.markBridgeOperational();
 const one2 = await nextRequest(2);
 assert.equal(one2.request.payload.replay_from, 4);
 success(one1, [event(session("1"), 4)]);
@@ -329,7 +338,7 @@ assert.deepEqual(
 assert.equal(refusedOne.length, 0);
 const countAfterTerminal = requests.length;
 await turns();
-testWindow.emit("pywebviewready");
+reinjectBridge();
 await turns();
 assert.equal(requests.length, countAfterTerminal);
 
@@ -455,7 +464,7 @@ refusal(
   "That desktop task already has an event request in progress.",
 );
 const four1 = await nextRequest(requests.length);
-testWindow.emit("pywebviewready");
+reinjectBridge();
 const four2 = await nextRequest(requests.length);
 refusal(
   four1,
@@ -523,6 +532,9 @@ const fiveIndex = requests.length;
 const five0 = await nextRequest(fiveIndex);
 testWindow.emit("pywebviewready");
 testWindow.emit("pywebviewready");
+await turns();
+assert.equal(requests.length, fiveIndex + 1);
+bridge.markBridgeOperational();
 const five1 = await nextRequest(fiveIndex + 1);
 await turns();
 assert.equal(requests.length, fiveIndex + 2);
@@ -535,7 +547,7 @@ await turns();
 assert.equal(acceptedFive.length, 1);
 assert.equal(acceptedFive[0].update_type, "record");
 const countAfterRecoveredTerminal = requests.length;
-testWindow.emit("pywebviewready");
+reinjectBridge();
 await turns();
 assert.equal(requests.length, countAfterRecoveredTerminal);
 
@@ -549,7 +561,7 @@ const stopReliable = bridge.startTaskDrain(
   assert.fail,
 );
 const reliable0 = await nextRequest(requests.length);
-testWindow.emit("pywebviewready");
+reinjectBridge();
 const reliable1 = await nextRequest(requests.length);
 success(reliable0, [event(session("9"), 1, "PhaseChanged", { phase: "scan" })]);
 await turns();
@@ -575,7 +587,7 @@ const stopCursor = bridge.startTaskDrain(
   (update) => {
     acceptedCursor.push(update);
     if (acceptedCursor.length === 1) {
-      testWindow.emit("pywebviewready");
+      reinjectBridge();
     }
   },
   assert.fail,

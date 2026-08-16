@@ -1,8 +1,13 @@
 import {
   dispatchInteractive,
+  markBridgeOperational,
   startTaskDrain,
+  whenBridgeApiReady,
 } from "./bridge.js";
 import { renderText } from "./render.js";
+
+await whenBridgeApiReady();
+markBridgeOperational();
 
 
 const status = document.querySelector("#status");

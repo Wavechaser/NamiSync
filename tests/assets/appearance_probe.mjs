@@ -26,6 +26,10 @@ const moduleUrl = pathToFileURL(process.argv[2]).href;
 const { installAppearanceReceiver } = await import(moduleUrl);
 const receiver = installAppearanceReceiver(webview, root);
 const receive = listeners.get("message");
+let applied = false;
+const firstApplication = receiver.whenApplied().then(() => {
+  applied = true;
+});
 const base = {
   kind: "namisync.appearance.v1",
   revision: 2,
@@ -40,17 +44,33 @@ const base = {
   accentPressedForeground: "#FFFFFF",
 };
 
+receive({ data: { ...base, revision: 1, accent: "red;url(x)" } });
+await Promise.resolve();
+const resolvedBeforeValidMessage = applied;
 receive({ data: base });
+await firstApplication;
+const resolvedAfterValidMessage = applied;
+let reapplied = false;
+const nextApplication = receiver.whenAppliedAfter(2).then(() => {
+  reapplied = true;
+});
 receive({ data: { ...base, revision: 1, accent: "#999999" } });
 receive({ data: { ...base, revision: 3, accent: "red;url(x)" } });
 receive({ data: { ...base, revision: 4, unexpected: true } });
 receive({ data: Object.assign(Object.create(null), { ...base, revision: 5 }) });
+await Promise.resolve();
+const resolvedBeforeNewRevision = reapplied;
 receive({ data: { ...base, revision: 6, material: "degraded", theme: "light" } });
+await nextApplication;
 
 const result = {
   revision: receiver.revision(),
   dataset: root.dataset,
   properties: Object.fromEntries(root.properties),
+  resolvedBeforeValidMessage,
+  resolvedAfterValidMessage,
+  resolvedBeforeNewRevision,
+  resolvedAfterNewRevision: reapplied,
 };
 receiver.close();
 result.listenerRemoved = !listeners.has("message");

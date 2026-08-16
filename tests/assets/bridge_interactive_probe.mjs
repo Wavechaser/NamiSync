@@ -59,6 +59,7 @@ assert.ok(modulePath, "bridge module path is required");
 const source = await readFile(modulePath, "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const bridge = await import(moduleUrl);
+bridge.markBridgeOperational();
 
 const invalidCommands = [
   null,

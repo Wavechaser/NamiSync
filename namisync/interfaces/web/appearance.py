@@ -152,6 +152,12 @@ class _AppearanceNative(Protocol):
         callback: Callable[[], None],
     ) -> None: ...
 
+    def defer(
+        self,
+        native_window: object,
+        callback: Callable[[], None],
+    ) -> None: ...
+
     def subscribe(self, callback: Callable[[], None]) -> Callable[[], None]: ...
 
 
@@ -322,6 +328,15 @@ class _WindowsAppearanceNative:
 
         native_window.BeginInvoke(Action(callback))
 
+    def defer(
+        self,
+        native_window: object,
+        callback: Callable[[], None],
+    ) -> None:
+        from System import Action
+
+        native_window.BeginInvoke(Action(callback))
+
     def subscribe(self, callback: Callable[[], None]) -> Callable[[], None]:
         from Microsoft.Win32 import SystemEvents
 
@@ -487,6 +502,18 @@ class WindowAppearanceController:
         self._presentation_revision = 0
         self._startup_failure: RuntimeError | None = None
         self._unsubscribe: Callable[[], None] | None = None
+        self._observation_active = False
+        self._observation_generation = 0
+        self._observation_scheduled = False
+        self._initial_observation_pending = False
+        self._initial_publication_requested = False
+        self._initial_publication_complete = False
+        self._initial_publication_failed = False
+        self._initial_publication_callback: (
+            Callable[[Exception | None], None] | None
+        ) = None
+        self._document_generation = 0
+        self._publication_in_flight: tuple[int, int] | None = None
 
     @property
     def startup_failure(self) -> RuntimeError | None:
@@ -509,6 +536,11 @@ class WindowAppearanceController:
             self._closed = True
             unsubscribe = self._unsubscribe
             self._unsubscribe = None
+            self._observation_active = False
+            self._observation_scheduled = False
+            self._initial_observation_pending = False
+            self._publication_in_flight = None
+            self._initial_publication_callback = None
         if unsubscribe is not None:
             try:
                 unsubscribe()
@@ -517,9 +549,41 @@ class WindowAppearanceController:
         self._remove_event_handler("before_load", self._before_load)
         self._remove_event_handler("loaded", self._on_loaded)
 
+    def request_initial_publication(
+        self,
+        generation: int,
+        callback: Callable[[Exception | None], None],
+    ) -> None:
+        if not callable(callback):
+            raise TypeError("initial publication callback must be callable")
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("appearance controller is closed")
+            if (
+                type(generation) is not int
+                or generation != self._document_generation
+            ):
+                raise RuntimeError("appearance document generation is stale")
+            if self._initial_publication_requested:
+                raise RuntimeError("initial appearance publication was already requested")
+            self._initial_publication_requested = True
+            self._initial_publication_callback = callback
+        self._schedule_publish()
+
     def _before_load(self) -> None:
         with self._lock:
-            if self._attempted or self._closed:
+            if self._closed:
+                return
+            self._document_generation += 1
+            self._loaded = False
+            if self._attempted:
+                if self._presentation is not None:
+                    self._presentation_revision += 1
+                self._initial_publication_requested = False
+                self._initial_publication_complete = False
+                self._initial_publication_failed = False
+                self._initial_publication_callback = None
+                self._publication_in_flight = None
                 return
             self._attempted = True
         try:
@@ -539,12 +603,19 @@ class WindowAppearanceController:
             if self._closed:
                 return
             self._native_window = native_window
+            self._observation_active = True
+            self._observation_generation += 1
+            self._observation_scheduled = True
+            self._initial_observation_pending = True
 
-        self._read_and_apply(native_window, publish=False)
         try:
             unsubscribe = self._native.subscribe(self._on_preference_changed)
         except Exception as error:
             _log_failure("appearance.preference_subscribe_failed", error)
+            with self._lock:
+                self._observation_active = False
+                self._observation_scheduled = False
+                self._initial_observation_pending = False
             self._record_startup_failure(
                 "Windows appearance observation could not start"
             )
@@ -552,6 +623,9 @@ class WindowAppearanceController:
         with self._lock:
             if self._closed:
                 keep_subscription = False
+                self._observation_active = False
+                self._observation_scheduled = False
+                self._initial_observation_pending = False
             else:
                 self._unsubscribe = unsubscribe
                 keep_subscription = True
@@ -560,54 +634,118 @@ class WindowAppearanceController:
                 unsubscribe()
             except Exception as error:
                 _log_failure("appearance.preference_unsubscribe_failed", error)
+            return
+        self._drain_observation()
 
     def _on_preference_changed(self) -> None:
         with self._lock:
-            if self._closed:
+            if self._closed or not self._observation_active:
                 return
+            self._observation_generation += 1
+            if self._observation_scheduled:
+                return
+            self._observation_scheduled = True
+            native_window = self._native_window
+            generation = self._observation_generation
+        if native_window is None:
+            with self._lock:
+                self._observation_scheduled = False
+            return
+        self._dispatch_observation(native_window, generation, deferred=False)
+
+    def _dispatch_observation(
+        self,
+        native_window: object,
+        generation: int,
+        *,
+        deferred: bool,
+        retry_newer: bool = True,
+    ) -> None:
+        try:
+            dispatch = self._native.defer if deferred else self._native.invoke
+            dispatch(native_window, self._drain_observation)
+        except Exception as error:
+            _log_failure("appearance.ui_dispatch_failed", error)
+            with self._lock:
+                newer = (
+                    not self._closed
+                    and self._observation_active
+                    and generation != self._observation_generation
+                )
+                self._observation_scheduled = False
+                if newer and retry_newer:
+                    self._observation_scheduled = True
+                    retry_generation = self._observation_generation
+                else:
+                    retry_generation = None
+            if retry_generation is not None:
+                self._dispatch_observation(
+                    native_window,
+                    retry_generation,
+                    deferred=deferred,
+                    retry_newer=False,
+                )
+
+    def _drain_observation(self) -> None:
+        with self._lock:
+            if self._closed or not self._observation_active:
+                self._observation_scheduled = False
+                return
+            generation = self._observation_generation
+            initial = self._initial_observation_pending
+            native_window = self._native_window
+        if native_window is None:
+            with self._lock:
+                self._observation_scheduled = False
+            return
         try:
             system = self._native.read()
         except Exception as error:
             _log_failure("appearance.system_read_failed", error)
+            if initial:
+                self._fail_initial_observation()
+                return
             with self._lock:
-                if self._closed:
+                if self._closed or not self._observation_active:
+                    self._observation_scheduled = False
                     return
                 previous = self._presentation
-                native_window = self._native_window
-            if previous is not None and native_window is not None:
-                try:
-                    self._native.invoke(
-                        native_window,
-                        lambda: self._force_opaque(
-                            native_window,
-                            previous.system,
-                            publish=True,
-                        ),
-                    )
-                except Exception as fallback_error:
-                    _log_failure(
-                        "appearance.ui_dispatch_failed",
-                        fallback_error,
-                    )
-            return
+            if previous is not None:
+                self._force_opaque(
+                    native_window,
+                    previous.system,
+                    publish=False,
+                    startup=False,
+                )
+        else:
+            self._apply(
+                native_window,
+                system,
+                publish=False,
+                startup=initial,
+            )
 
         with self._lock:
-            if self._closed:
+            if self._closed or not self._observation_active:
+                self._observation_scheduled = False
                 return
-            native_window = self._native_window
-        if native_window is None:
+            if generation == self._observation_generation:
+                self._observation_scheduled = False
+                self._initial_observation_pending = False
+                publish = self._loaded
+                defer_pending = False
+            else:
+                publish = False
+                defer_pending = True
+        if publish:
+            self._schedule_publish()
+        if not defer_pending:
             return
-
-        def reassert() -> None:
-            with self._lock:
-                if self._closed:
-                    return
-            self._apply(native_window, system, publish=True)
-
-        try:
-            self._native.invoke(native_window, reassert)
-        except Exception as error:
-            _log_failure("appearance.ui_dispatch_failed", error)
+        self._dispatch_observation(
+            native_window,
+            generation,
+            deferred=True,
+        )
 
     def _on_loaded(self) -> None:
         with self._lock:
@@ -616,16 +754,26 @@ class WindowAppearanceController:
             self._loaded = True
         self._schedule_publish()
 
-    def _read_and_apply(self, native_window: object, *, publish: bool) -> None:
-        try:
-            system = self._native.read()
-        except Exception as error:
-            _log_failure("appearance.system_read_failed", error)
-            self._record_startup_failure(
-                "Windows appearance state could not be read"
-            )
-            return
-        self._apply(native_window, system, publish=publish)
+    def _fail_initial_observation(
+        self,
+        message: str = "Windows appearance state could not be read",
+    ) -> None:
+        with self._lock:
+            if self._closed:
+                self._observation_scheduled = False
+                return
+            self._observation_active = False
+            self._observation_scheduled = False
+            self._initial_observation_pending = False
+            unsubscribe = self._unsubscribe
+            self._unsubscribe = None
+            self._startup_failure = RuntimeError(message)
+        if unsubscribe is not None:
+            try:
+                unsubscribe()
+            except Exception as error:
+                _log_failure("appearance.preference_unsubscribe_failed", error)
+        self._schedule_publish()
 
     def _apply(
         self,
@@ -633,6 +781,7 @@ class WindowAppearanceController:
         system: SystemAppearance,
         *,
         publish: bool,
+        startup: bool,
     ) -> None:
         with self._lock:
             if self._closed:
@@ -641,19 +790,39 @@ class WindowAppearanceController:
             material = self._native.apply(native_window, system)
         except Exception as error:
             _log_failure("appearance.material_apply_failed", error)
-            self._force_opaque(native_window, system, publish=publish)
+            self._force_opaque(
+                native_window,
+                system,
+                publish=publish,
+                startup=startup,
+            )
             return
         if material not in ("mica", "opaque"):
             if material is None:
-                self._record_presentation(system, None, publish=publish)
+                self._record_presentation(
+                    system,
+                    None,
+                    publish=publish,
+                    startup=startup,
+                )
                 return
             _log_failure(
                 "appearance.material_result_invalid",
                 RuntimeError("invalid material result"),
             )
-            self._force_opaque(native_window, system, publish=publish)
+            self._force_opaque(
+                native_window,
+                system,
+                publish=publish,
+                startup=startup,
+            )
             return
-        self._record_presentation(system, material, publish=publish)
+        self._record_presentation(
+            system,
+            material,
+            publish=publish,
+            startup=startup,
+        )
 
     def _force_opaque(
         self,
@@ -661,6 +830,7 @@ class WindowAppearanceController:
         system: SystemAppearance,
         *,
         publish: bool,
+        startup: bool,
     ) -> None:
         with self._lock:
             if self._closed:
@@ -674,6 +844,7 @@ class WindowAppearanceController:
             system,
             "opaque" if confirmed else None,
             publish=publish,
+            startup=startup,
         )
 
     def _record_presentation(
@@ -682,16 +853,22 @@ class WindowAppearanceController:
         material: Literal["mica", "opaque"] | None,
         *,
         publish: bool,
+        startup: bool,
     ) -> None:
         with self._lock:
             if self._closed:
                 return
+            startup_observation = startup or not self._loaded
             presented_material = (
-                "degraded" if self._loaded and material is None else material
+                "degraded"
+                if self._loaded
+                and not startup_observation
+                and material is None
+                else material
             )
             self._presentation = _Presentation(system, presented_material)
             self._presentation_revision += 1
-            if not self._loaded:
+            if startup_observation:
                 self._startup_failure = (
                     RuntimeError(
                         "NamiSync could not establish a readable window material"
@@ -704,40 +881,95 @@ class WindowAppearanceController:
             self._schedule_publish()
 
     def _schedule_publish(self) -> None:
+        initial_error: Exception | None = None
         with self._lock:
+            generation = self._document_generation
+            initial = (
+                self._initial_publication_requested
+                and not self._initial_publication_complete
+                and not self._initial_publication_failed
+            )
+            if (
+                initial
+                and not self._initial_observation_pending
+                and self._startup_failure is not None
+            ):
+                initial_error = self._startup_failure
             if (
                 self._closed
+                or not self._initial_publication_requested
+                or self._initial_publication_failed
+                or self._publication_in_flight is not None
                 or not self._loaded
+                or self._initial_observation_pending
                 or self._presentation is None
                 or self._presentation.material is None
             ):
-                return
-            native_window = self._native_window
-            revision = self._presentation_revision
-        if native_window is None:
+                native_window = None
+                revision = None
+            elif not initial and not self._initial_publication_complete:
+                native_window = None
+                revision = None
+            else:
+                native_window = self._native_window
+                revision = self._presentation_revision
+                self._publication_in_flight = (generation, revision)
+        if initial_error is not None:
+            self._finish_initial_publication(generation, initial_error)
+            return
+        if native_window is None or revision is None:
             return
         try:
             self._native.invoke(
                 native_window,
-                lambda: self._publish_document(native_window, revision),
+                lambda: self._publish_document(
+                    native_window,
+                    generation,
+                    revision,
+                    initial=initial,
+                ),
             )
         except Exception as error:
             _log_failure("appearance.ui_dispatch_failed", error)
+            with self._lock:
+                if self._publication_in_flight == (generation, revision):
+                    self._publication_in_flight = None
+            if initial:
+                self._finish_initial_publication(generation, error)
 
     def _publish_document(
         self,
         native_window: object,
+        generation: int,
         revision: int,
+        *,
+        initial: bool,
     ) -> None:
+        retry_current = False
         with self._lock:
+            if self._publication_in_flight != (generation, revision):
+                return
+            if self._closed:
+                self._publication_in_flight = None
+                return
+            if generation != self._document_generation:
+                self._publication_in_flight = None
+                return
             if (
-                self._closed
-                or revision != self._presentation_revision
+                revision != self._presentation_revision
                 or self._presentation is None
                 or self._presentation.material is None
             ):
-                return
-            presentation = self._presentation
+                self._publication_in_flight = None
+                retry_current = True
+                presentation = None
+            else:
+                presentation = self._presentation
+        if retry_current:
+            self._schedule_publish()
+            return
+        if presentation is None:
+            return
         system = presentation.system
         payload = {
             "kind": _APPEARANCE_MESSAGE_KIND,
@@ -759,6 +991,68 @@ class WindowAppearanceController:
             )
         except Exception as error:
             _log_failure("appearance.document_publish_failed", error)
+            with self._lock:
+                if self._publication_in_flight == (generation, revision):
+                    self._publication_in_flight = None
+            if initial:
+                self._finish_initial_publication(generation, error)
+            return
+        with self._lock:
+            if self._publication_in_flight == (generation, revision):
+                self._publication_in_flight = None
+            retry_current = (
+                not self._closed
+                and generation == self._document_generation
+                and revision != self._presentation_revision
+            )
+        if initial and not retry_current:
+            completed = self._finish_initial_publication(
+                generation,
+                None,
+                expected_revision=revision,
+            )
+            if completed is False:
+                self._schedule_publish()
+        if retry_current:
+            self._schedule_publish()
+
+    def _finish_initial_publication(
+        self,
+        generation: int,
+        error: Exception | None,
+        *,
+        expected_revision: int | None = None,
+    ) -> bool | None:
+        with self._lock:
+            if (
+                self._closed
+                or generation != self._document_generation
+                or not self._initial_publication_requested
+                or self._initial_publication_complete
+                or self._initial_publication_failed
+            ):
+                return None
+            if (
+                error is None
+                and expected_revision is not None
+                and expected_revision != self._presentation_revision
+            ):
+                return False
+            if error is None:
+                self._initial_publication_complete = True
+            else:
+                self._initial_publication_failed = True
+            callback = self._initial_publication_callback
+            self._initial_publication_callback = None
+        if callback is not None:
+            try:
+                callback(error)
+            except Exception as callback_error:
+                _log_failure(
+                    "appearance.initial_publication_callback_failed",
+                    callback_error,
+                )
+        return True
 
     def _record_startup_failure(self, message: str) -> None:
         with self._lock:

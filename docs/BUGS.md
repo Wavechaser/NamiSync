@@ -554,14 +554,32 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- SEVERE - FIXED (2026-08-17). Presentation-readiness admission gap. The
+  desktop marked ordinary bridge commands available after native load, and
+  kept them open across reload, even when the current packaged receiver had
+  not acknowledged initialization or its first appearance message could not
+  be posted. Fixed with one startup-only
+  `shell_ready` row, a five-second deadline measured from native load, and a
+  locked three-party gate requiring native readiness, shell acknowledgement,
+  and successful initial publication before normal admission. Timeout,
+  publication failure, close, reload, and late callbacks are generation-bound,
+  so only the current document can open authority.
+- MODERATE - FIXED (2026-08-17). Appearance observation ordering race.
+  Independent callback-thread reads let an older Windows snapshot queue after
+  a newer one and receive the newest publication revision; the initial read
+  also preceded subscription. Fixed by subscribing before the mandatory read
+  and coalescing generations into one UI-owned current-state drain. Each UI
+  turn handles one generation and defers newer work, so sustained events yield;
+  dispatch/read failures remain recoverable and close invalidates queued work.
 - SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. A loaded-time
   appearance or guard refusal attempted window destruction while the exposed
-  dispatcher was still accepting; if public destruction threw, the real GUI
-  loop could remain alive with trusted command authority. Fixed by rejecting
-  dispatch and waking the registry before presentation teardown, making the
-  refusal transition idempotent, and posting one owner-bound `WM_CLOSE` after
-  a failed public destroy. Both close paths may still fail, but authority then
-  remains rejected and manual close enters the startup-refused finalizer.
+  dispatcher was still accepting; if public destruction threw or returned
+  without closing, the real GUI loop could remain alive with trusted command
+  authority. Fixed by rejecting dispatch and waking the registry before
+  presentation teardown, making the refusal transition idempotent, checking
+  the closed event, and posting one owner-bound `WM_CLOSE` after a failed or
+  ineffective public destroy. Both close paths may still fail, but authority
+  then remains rejected and manual close enters the startup-refused finalizer.
 - MODERATE - FIXED (2026-08-17). Selected-state boundary contrast. Selected
   and current task cards used the subtle neutral boundary that belongs to
   quiet surfaces, leaving their actionable edge below the 3:1 non-text

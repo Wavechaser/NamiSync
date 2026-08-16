@@ -1,6 +1,8 @@
 import {
   BridgeCommandError,
   dispatchInteractive,
+  markBridgeOperational,
+  whenBridgeApiReady,
 } from "./bridge.js";
 import { renderText } from "./render.js";
 
@@ -14,6 +16,8 @@ function validNever() {
 }
 
 async function run() {
+  await whenBridgeApiReady();
+  markBridgeOperational();
   try {
     await dispatchInteractive(
       REPORT_COMMAND,

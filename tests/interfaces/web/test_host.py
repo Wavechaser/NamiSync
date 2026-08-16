@@ -40,7 +40,11 @@ class _Hook:
 class _Window:
     def __init__(self) -> None:
         self.real_url = "http://127.0.0.1:41700/assets/index.html"
-        self.events = SimpleNamespace(closing=_Hook(), loaded=_Hook())
+        self.events = SimpleNamespace(
+            before_load=_Hook(),
+            closing=_Hook(),
+            loaded=_Hook(),
+        )
         self.destroy_count = 0
         self.destroyed = Event()
         self.exposed_functions: tuple[object, ...] = ()
@@ -152,6 +156,228 @@ def _primary(
     return DesktopInstanceAdmission(lease, False, None)
 
 
+def _startup_gate() -> host._DesktopStartupGate:
+    return host._DesktopStartupGate(lambda _seconds, _callback: lambda: None)
+
+
+def test_startup_gate_opens_once_after_all_three_readiness_signals() -> None:
+    scheduled: list[tuple[float, object]] = []
+    cancellations: list[str] = []
+    publications: list[object] = []
+    opens: list[str] = []
+    refusals: list[Exception] = []
+
+    def schedule(seconds: float, callback: object):
+        scheduled.append((seconds, callback))
+        return lambda: cancellations.append("cancel")
+
+    gate = host._DesktopStartupGate(schedule)
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=lambda: opens.append("open") or True,
+        refuse_desktop=refusals.append,
+    )
+
+    gate.acknowledge_shell(0)
+    assert scheduled == []
+    assert publications == []
+    assert not gate.is_open()
+
+    gate.native_loaded()
+    gate.native_loaded()
+    gate.acknowledge_shell(0)
+
+    assert len(scheduled) == 1
+    assert scheduled[0][0] == 5.0
+    assert len(publications) == 1
+    assert opens == []
+    publications[0](None)
+
+    assert gate.is_open()
+    assert opens == ["open"]
+    assert cancellations == ["cancel"]
+    assert refusals == []
+
+    publications[0](RuntimeError("late publication failure"))
+    scheduled[0][1]()
+    assert gate.is_open()
+    assert opens == ["open"]
+    assert refusals == []
+
+
+def test_startup_gate_timeout_is_terminal_before_late_shell_ack() -> None:
+    scheduled: list[tuple[float, object]] = []
+    cancellations: list[str] = []
+    publications: list[object] = []
+    opens: list[str] = []
+    refusals: list[Exception] = []
+
+    def schedule(seconds: float, callback: object):
+        scheduled.append((seconds, callback))
+        return lambda: cancellations.append("cancel")
+
+    gate = host._DesktopStartupGate(schedule)
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=lambda: opens.append("open") or True,
+        refuse_desktop=refusals.append,
+    )
+    gate.native_loaded()
+
+    scheduled[0][1]()
+    gate.acknowledge_shell(0)
+
+    assert not gate.is_open()
+    assert publications == []
+    assert opens == []
+    assert cancellations == ["cancel"]
+    assert len(refusals) == 1
+    assert isinstance(refusals[0], host.DesktopStartupError)
+    assert "startup deadline" in str(refusals[0])
+
+
+def test_startup_gate_cancel_suppresses_late_ack_and_publication() -> None:
+    scheduled: list[tuple[float, object]] = []
+    cancellations: list[str] = []
+    publications: list[object] = []
+    opens: list[str] = []
+
+    def schedule(seconds: float, callback: object):
+        scheduled.append((seconds, callback))
+        return lambda: cancellations.append("cancel")
+
+    gate = host._DesktopStartupGate(schedule)
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=lambda: opens.append("open") or True,
+        refuse_desktop=lambda _error: None,
+    )
+    gate.native_loaded()
+    gate.cancel()
+    gate.acknowledge_shell(0)
+    gate.appearance_published(None)
+
+    assert not gate.is_open()
+    assert publications == []
+    assert opens == []
+    assert cancellations == ["cancel"]
+
+
+def test_cancel_after_open_callback_closes_admission_during_timer_cleanup() -> None:
+    cancel_entered = Event()
+    release_cancel = Event()
+    publications: list[object] = []
+    opens: list[str] = []
+
+    def schedule(_seconds: float, _callback: object):
+        def cancel() -> None:
+            cancel_entered.set()
+            assert release_cancel.wait(1.0)
+
+        return cancel
+
+    gate = host._DesktopStartupGate(schedule)
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=lambda: opens.append("open") or True,
+        refuse_desktop=lambda _error: None,
+    )
+    gate.acknowledge_shell(0)
+    gate.native_loaded()
+
+    publisher = Thread(target=lambda: publications[0](None))
+    publisher.start()
+    assert cancel_entered.wait(1.0)
+    gate.cancel()
+    release_cancel.set()
+    publisher.join(1.0)
+
+    assert not publisher.is_alive()
+    assert not gate.is_open()
+    assert opens == ["open"]
+
+
+def test_startup_gate_keeps_commands_closed_when_open_callback_declines() -> None:
+    publications: list[object] = []
+    gate = _startup_gate()
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=lambda: False,
+        refuse_desktop=lambda _error: pytest.fail("open refusal was reported"),
+    )
+    gate.acknowledge_shell(0)
+    gate.native_loaded()
+
+    publications[0](None)
+
+    assert not gate.is_open()
+    gate.acknowledge_shell(0)
+    assert len(publications) == 1
+
+
+def test_reload_starts_a_closed_generation_and_ignores_stale_callbacks() -> None:
+    scheduled: list[tuple[float, object]] = []
+    publications: list[object] = []
+    publication_generations: list[int] = []
+    opens: list[str] = []
+    refusals: list[Exception] = []
+
+    def schedule(seconds: float, callback: object):
+        scheduled.append((seconds, callback))
+        return lambda: None
+
+    gate = host._DesktopStartupGate(schedule)
+
+    def request_publication(generation: int, callback: object) -> None:
+        publication_generations.append(generation)
+        publications.append(callback)
+
+    gate.bind(
+        request_publication=request_publication,
+        open_desktop=lambda: opens.append("open") or True,
+        refuse_desktop=refusals.append,
+    )
+    gate.acknowledge_shell(0)
+    gate.native_loaded()
+    first_publication = publications[0]
+    first_deadline = scheduled[0][1]
+    first_publication(None)
+    assert gate.is_open()
+
+    gate.begin_generation()
+
+    assert not gate.is_open()
+    assert len(scheduled) == 1
+    gate.acknowledge_shell(0)
+    gate.native_loaded()
+    assert len(publications) == 1
+    assert len(scheduled) == 2
+    gate.acknowledge_shell(1)
+    assert len(publications) == 2
+
+    first_publication(RuntimeError("stale document publication"))
+    first_deadline()
+    assert not gate.is_open()
+    assert refusals == []
+
+    publications[1](None)
+
+    assert gate.is_open()
+    assert opens == ["open", "open"]
+    assert refusals == []
+    assert publication_generations == [0, 1]
+
+
 def _patch_primary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -251,15 +477,16 @@ def _patch_primary(
     monkeypatch.setattr(
         host,
         "_production_commands",
-        lambda **dependencies: order.append(
-            ("production_commands", dependencies, commands)
-        )
-        or commands,
+        lambda **dependencies: (
+            dependencies["startup_gate"].acknowledge_shell(0),
+            order.append(("production_commands", dependencies, commands)),
+            commands,
+        )[-1],
     )
     monkeypatch.setattr(
         host,
         "_bridge_dispatcher",
-        lambda actual_document, actual_commands: order.append(
+        lambda actual_document, actual_commands, _startup_gate: order.append(
             (
                 "bridge_dispatcher",
                 actual_document,
@@ -292,6 +519,9 @@ def _patch_primary(
     )
 
     class Appearance:
+        def request_initial_publication(self, _generation, callback) -> None:
+            callback(None)
+
         def close(self) -> None:
             order.append("appearance.close")
 
@@ -509,6 +739,7 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
         picker=picker,
         slots=Slots(),
         registry=host._task_registry(_Service([])),
+        startup_gate=_startup_gate(),
     )
     first: list[object] = []
     worker = Thread(
@@ -578,10 +809,16 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         picker=lambda: None,
         slots=slots,
         registry=host._task_registry(_Service([])),
+        startup_gate=_startup_gate(),
     )
-    dispatcher = host._bridge_dispatcher(document, commands)
+    dispatcher = host._bridge_dispatcher(
+        document,
+        commands,
+        _startup_gate(),
+    )
 
     assert tuple(commands) == (
+        "shell_ready",
         "pick_folder",
         "start_plan",
         "next_events",
@@ -589,6 +826,7 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "close_task",
     )
     assert tuple(dispatcher._commands) == (
+        "shell_ready",
         "pick_folder",
         "start_plan",
         "next_events",
@@ -1004,6 +1242,9 @@ def test_appearance_cleanup_failure_is_nonfatal(
     )
 
     class Appearance:
+        def request_initial_publication(self, _generation, callback) -> None:
+            callback(None)
+
         def close(self) -> None:
             order.append("appearance.close")
             raise RuntimeError("injected unsubscribe failure")
@@ -1041,6 +1282,9 @@ def test_unconfirmed_window_material_refuses_startup_before_open_state(
         startup_failure = RuntimeError(
             "NamiSync could not establish a readable window material"
         )
+
+        def request_initial_publication(self, _generation, _callback) -> None:
+            pytest.fail("refused appearance was requested for publication")
 
         def close(self) -> None:
             order.append("appearance.close")
@@ -1396,7 +1640,11 @@ def test_loaded_refusal_closes_authority_before_destroy_fallback_and_unblocks_lo
         def dispatch(self, _body: str) -> str:
             return "bridge_unavailable" if self.closed else "accepted"
 
-    def make_dispatcher(_document: object, _commands: object) -> Dispatcher:
+    def make_dispatcher(
+        _document: object,
+        _commands: object,
+        _startup_gate: object,
+    ) -> Dispatcher:
         dispatcher = Dispatcher()
         dispatcher_holder["value"] = dispatcher
         return dispatcher
@@ -1477,6 +1725,42 @@ def test_destroy_once_uses_one_native_fallback_and_does_not_claim_success(
     assert logged == [
         "startup.window_destroy_failed",
         "startup.native_window_close_failed",
+    ]
+
+
+def test_destroy_once_falls_back_when_public_destroy_silently_does_not_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    order: list[str] = []
+    closed = Event()
+    state = host._StartupState()
+    window = SimpleNamespace(
+        events=SimpleNamespace(closed=closed),
+        destroy=lambda: order.append("destroy"),
+    )
+    logged: list[tuple[str, str]] = []
+
+    def native_close(_window: object) -> None:
+        order.append("native_close")
+        closed.set()
+
+    monkeypatch.setattr(host, "_post_native_window_close", native_close)
+    monkeypatch.setattr(
+        host,
+        "_log_cleanup_failure",
+        lambda event, error, **_options: logged.append(
+            (event, str(error))
+        ),
+    )
+
+    assert state.destroy_once(window) is True
+    assert state.destroy_once(window) is False
+    assert order == ["destroy", "native_close"]
+    assert logged == [
+        (
+            "startup.window_destroy_failed",
+            "public window destroy returned before closure",
+        )
     ]
 
 
@@ -1640,6 +1924,112 @@ def _wait_until(predicate, *, timeout: float = 2.0) -> None:
     raise AssertionError("condition did not become true before timeout")
 
 
+def test_reload_readiness_refusal_records_before_normal_service_close() -> None:
+    order: list[str] = []
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+    assert controller._mark_loaded() is True
+
+    claimed = controller._begin_readiness_refusal(
+        lambda: order.append("failure.recorded")
+    )
+    controller._wait_for_attempt()
+
+    assert claimed is True
+    assert order == [
+        "failure.recorded",
+        "reject",
+        "wake",
+        "wait",
+        "unsubscribe",
+        "service.close",
+        "destroy",
+    ]
+    assert service.close_count == 1
+    assert window.destroy_count == 1
+
+
+def test_reload_readiness_refusal_does_not_override_close_in_flight() -> None:
+    order: list[str] = []
+    entered = Event()
+    release = Event()
+    window = _ControllerWindow(order)
+    service = _ControllerService(
+        order,
+        [_shutdown_view(complete=True)],
+        entered=entered,
+        release=release,
+    )
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: pytest.fail("healthy close prompted for retry"),
+    )
+    window.controller = controller
+    assert controller._mark_loaded() is True
+    assert controller._on_closing() is False
+    assert entered.wait(1.0)
+
+    claimed = controller._begin_readiness_refusal(
+        lambda: order.append("failure.recorded")
+    )
+
+    assert claimed is None
+    assert "failure.recorded" not in order
+    assert service.close_count == 1
+    assert window.destroy_count == 0
+    release.set()
+    assert window.destroyed.wait(1.0)
+    assert service.close_count == 1
+    assert window.destroy_count == 1
+
+
+def test_reload_handshake_reopens_with_the_existing_close_controller() -> None:
+    order: list[str] = []
+    publications: list[object] = []
+    window = _ControllerWindow(order)
+    service = _ControllerService(order, [_shutdown_view(complete=True)])
+    controller = host._DesktopCloseController(
+        window,
+        service,
+        _close_hooks(order),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: False,
+    )
+    window.controller = controller
+    assert controller._mark_loaded() is True
+    gate = _startup_gate()
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=controller._mark_loaded,
+        refuse_desktop=pytest.fail,
+    )
+    gate.begin_generation()
+
+    gate.native_loaded()
+    gate.acknowledge_shell(1)
+    publications[0](None)
+
+    assert gate.is_open()
+    assert controller._is_open()
+    assert service.close_count == 0
+
+
 def test_close_callback_is_nonblocking_and_quiesces_in_exact_order() -> None:
     order: list[str] = []
     entered = Event()
@@ -1661,7 +2051,7 @@ def test_close_callback_is_nonblocking_and_quiesces_in_exact_order() -> None:
         retry_prompt=lambda: pytest.fail("healthy close prompted for retry"),
     )
     window.controller = controller
-    controller._mark_loaded()
+    assert controller._mark_loaded() is True
 
     started = monotonic()
     assert controller._on_closing() is False
@@ -2101,7 +2491,7 @@ def test_user_close_during_startup_waits_for_loaded_guard_success() -> None:
     assert service.close_count == 0
     assert window.destroy_count == 0
 
-    controller._mark_loaded()
+    assert controller._mark_loaded() is False
     assert window.destroyed.wait(1.0)
     assert service.close_count == 1
 
@@ -2248,7 +2638,9 @@ def test_close_status_binds_each_loaded_document_before_async_render() -> None:
         window_title="NamiSync Test",
     )
 
+    controller._bind_status_target()
     controller._mark_loaded()
+    controller._bind_status_target()
     controller._mark_loaded()
     window.dom.get_element = lambda _selector: pytest.fail(
         "the close worker must not query a destroyed document"
@@ -2288,6 +2680,7 @@ def test_close_status_write_failure_is_sanitized_and_does_not_change_truth(
         ),
         window_title="NamiSync Test",
     )
+    controller._bind_status_target()
     controller._mark_loaded()
     with controller._lock:
         controller._phase = host._ClosePhase.CLOSING
@@ -2326,6 +2719,7 @@ def test_missing_bound_close_status_does_not_block_loaded_state(
         window_title="NamiSync Test",
     )
 
+    controller._bind_status_target()
     controller._mark_loaded()
 
     with controller._lock:

@@ -1,4 +1,8 @@
-import { dispatchInteractive } from "./bridge.js";
+import {
+  dispatchInteractive,
+  markBridgeOperational,
+  whenBridgeApiReady,
+} from "./bridge.js";
 import { renderText } from "./render.js";
 
 const REPORT_COMMAND = "test_report";
@@ -17,6 +21,8 @@ function validTarget(value) {
 }
 
 async function run() {
+  await whenBridgeApiReady();
+  markBridgeOperational();
   const target = await dispatchInteractive(
     REPORT_COMMAND,
     Object.freeze({ phase: "off_origin_target" }),

@@ -208,6 +208,10 @@ Native appearance observes Windows light/dark/high-contrast state and live
 `UISettings` `Accent`, `AccentLight1`, and `AccentDark1` values. A fixed
 revisioned envelope reaches packaged `appearance.js` through UI-thread
 `PostWebMessageAsJson`; only its exact schema and fixed CSSOM sinks are valid.
+Observation subscribes before its mandatory initial read. Later native events
+advance one coalesced generation whose current state is read and applied on the
+window UI thread; a newer generation is deferred to another UI turn so stale
+callback-thread snapshots cannot become newest or starve the message pump.
 Opaque fallback requires sufficient structured backdrop/glass/form/controller
 landing evidence. A live reapply that confirms neither native path publishes
 `degraded`, which returns the page itself to its theme-correct opaque base;
@@ -257,9 +261,24 @@ unsubscribe on task close and close every observation before service shutdown.
 A loaded-time security, material, or presentation refusal closes dispatcher
 admission and wakes the task registry before appearance teardown or any window
 close request. Public destruction is attempted once; if that API throws, the
-host posts one `WM_CLOSE` to its retained native window handle so the normal
-startup-refused close path can release the GUI loop. A failure of both close
+host also checks the closed event and posts one `WM_CLOSE` to its retained
+native window handle after either a throw or a return without closure, so the
+normal startup-refused path can release the GUI loop. A failure of both close
 paths never reopens authority or replaces the original startup diagnosis.
+
+Native load alone does not open a document. The packaged module installs its
+appearance receiver and shell DOM, then sends the exact startup-only
+`shell_ready` command through the existing sole `dispatch` function. Ordinary
+commands remain unavailable until native security/material readiness, that
+acknowledgement, and a successful current initial appearance post have all
+converged for the current document generation. A fixed five-second product
+deadline starts at each native `loaded`;
+missing acknowledgement or failed publication enters the same fail-closed
+startup-refusal path. The visible `Ready` label waits until the receiver has
+actually applied that generation's first valid appearance envelope. A
+same-origin reload closes normal admission until the new packaged document
+completes the same handshake; stale timers, acknowledgements, and publication
+callbacks cannot settle a later generation.
 
 `NamiSyncService.close()` is bounded but not instantaneous: its derived
 allowance is twelve seconds, reached only when the audit writer is genuinely
