@@ -104,15 +104,17 @@ def installed_wheel(
     built_wheel: BuiltWheel,
 ) -> InstalledWheel:
     root = tmp_path_factory.mktemp("installed-wheel") / "venv"
-    venv.EnvBuilder(with_pip=True, clear=True).create(root)
+    venv.EnvBuilder(with_pip=False, clear=True).create(root)
     python = root / "Scripts" / "python.exe"
     environment = os.environ.copy()
     environment.pop("PYTHONPATH", None)
     completed = subprocess.run(
         [
-            str(python),
+            sys.executable,
             "-m",
             "pip",
+            "--python",
+            str(python),
             "install",
             "--disable-pip-version-check",
             "--no-deps",

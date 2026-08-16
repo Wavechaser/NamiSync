@@ -74,7 +74,9 @@ def test_installed_wheel_resolves_index_with_package_resources(
 ) -> None:
     script = """
 import importlib.resources
+import importlib.util
 import json
+import sys
 
 index = (
     importlib.resources.files("namisync.interfaces.web")
@@ -83,6 +85,9 @@ index = (
 )
 print(json.dumps({
     "exists": index.is_file(),
+    "index": str(index),
+    "pip_available": importlib.util.find_spec("pip") is not None,
+    "prefix": sys.prefix,
     "text": index.read_text(encoding="utf-8"),
 }))
 """
@@ -100,4 +105,9 @@ print(json.dumps({
 
     result = json.loads(completed.stdout)
     assert result["exists"] is True
+    assert Path(result["index"]).resolve().is_relative_to(
+        installed_wheel.root.resolve()
+    )
+    assert result["pip_available"] is False
+    assert Path(result["prefix"]).resolve() == installed_wheel.root.resolve()
     assert "<title>NamiSync</title>" in result["text"]
