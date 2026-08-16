@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 from xxhash import xxh3_128
 
+import _executor_fixtures as executor_fixtures
 import namisync.modules.executor.native as executor_module
 import namisync.modules.executor.pipeline as executor_pipeline
 import namisync.modules.executor.runtime as executor_runtime
@@ -64,6 +65,123 @@ from _executor_fixtures import (
     _run,
     _xset,
 )
+
+
+def _create_probe_for_cache_test(link: Path, target: Path) -> None:
+    if os.name == "nt":
+        link.mkdir()
+    else:
+        link.symlink_to(target, target_is_directory=True)
+
+
+def test_directory_reparse_capability_success_is_cached_per_volume_pair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "target"
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    target.mkdir()
+    first.mkdir()
+    second.mkdir()
+    calls: list[tuple[Path, Path]] = []
+    monkeypatch.setattr(
+        executor_fixtures,
+        "_DIRECTORY_REPARSE_CAPABLE_VOLUMES",
+        set(),
+    )
+    monkeypatch.setattr(
+        executor_fixtures,
+        "_directory_reparse_volume_pair",
+        lambda _link_parent, _target: (1, 2),
+    )
+
+    def create(link: Path, redirected: Path) -> None:
+        calls.append((link, redirected))
+        _create_probe_for_cache_test(link, redirected)
+
+    monkeypatch.setattr(executor_fixtures, "_create_directory_reparse", create)
+
+    executor_fixtures._require_directory_reparse(first, target)
+    executor_fixtures._require_directory_reparse(second, target)
+
+    assert calls == [(first / "directory-reparse-probe", target)]
+
+
+def test_directory_reparse_capability_distinguishes_volume_pairs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "target"
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    target.mkdir()
+    first.mkdir()
+    second.mkdir()
+    calls: list[Path] = []
+    monkeypatch.setattr(
+        executor_fixtures,
+        "_DIRECTORY_REPARSE_CAPABLE_VOLUMES",
+        set(),
+    )
+    monkeypatch.setattr(
+        executor_fixtures,
+        "_directory_reparse_volume_pair",
+        lambda link_parent, _target: (hash(link_parent.name), 2),
+    )
+
+    def create(link: Path, redirected: Path) -> None:
+        calls.append(link)
+        _create_probe_for_cache_test(link, redirected)
+
+    monkeypatch.setattr(executor_fixtures, "_create_directory_reparse", create)
+
+    executor_fixtures._require_directory_reparse(first, target)
+    executor_fixtures._require_directory_reparse(second, target)
+
+    assert calls == [
+        first / "directory-reparse-probe",
+        second / "directory-reparse-probe",
+    ]
+
+
+def test_directory_reparse_capability_failure_is_not_cached(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "target"
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    target.mkdir()
+    first.mkdir()
+    second.mkdir()
+    calls: list[Path] = []
+    monkeypatch.setattr(
+        executor_fixtures,
+        "_DIRECTORY_REPARSE_CAPABLE_VOLUMES",
+        set(),
+    )
+    monkeypatch.setattr(
+        executor_fixtures,
+        "_directory_reparse_volume_pair",
+        lambda _link_parent, _target: (1, 2),
+    )
+
+    def fail(link: Path, _redirected: Path) -> None:
+        calls.append(link)
+        raise OSError("unavailable")
+
+    monkeypatch.setattr(executor_fixtures, "_create_directory_reparse", fail)
+
+    with pytest.raises(pytest.skip.Exception, match="unavailable"):
+        executor_fixtures._require_directory_reparse(first, target)
+    with pytest.raises(pytest.skip.Exception, match="unavailable"):
+        executor_fixtures._require_directory_reparse(second, target)
+
+    assert calls == [
+        first / "directory-reparse-probe",
+        second / "directory-reparse-probe",
+    ]
 
 
 def test_native_filesystem_rejects_lexical_root_before_resolving_children(

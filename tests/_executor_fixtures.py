@@ -41,6 +41,7 @@ from namisync.modules.executor import (
 
 RUN_ID = validated_run_id("1" * 32)
 _FileSystemT = TypeVar("_FileSystemT", bound=NativeFileSystem)
+_DIRECTORY_REPARSE_CAPABLE_VOLUMES: set[tuple[int, int]] = set()
 
 
 class FakeRecorder:
@@ -395,7 +396,17 @@ def _create_directory_reparse(link: Path, target: Path) -> None:
         raise OSError(completed.stderr.strip() or "junction creation failed")
 
 
+def _directory_reparse_volume_pair(
+    link_parent: Path,
+    target: Path,
+) -> tuple[int, int]:
+    return link_parent.stat().st_dev, target.stat().st_dev
+
+
 def _require_directory_reparse(tmp_path: Path, target: Path) -> None:
+    volume_pair = _directory_reparse_volume_pair(tmp_path, target)
+    if volume_pair in _DIRECTORY_REPARSE_CAPABLE_VOLUMES:
+        return
     probe = tmp_path / "directory-reparse-probe"
     try:
         _create_directory_reparse(probe, target)
@@ -405,6 +416,7 @@ def _require_directory_reparse(tmp_path: Path, target: Path) -> None:
         probe.rmdir()
     else:
         probe.unlink()
+    _DIRECTORY_REPARSE_CAPABLE_VOLUMES.add(volume_pair)
 
 
 def _nonbyte_mutation_operation(
