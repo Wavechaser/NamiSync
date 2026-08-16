@@ -119,7 +119,8 @@ def discover_test_modules(project_root: Path = PROJECT_ROOT) -> frozenset[str]:
     tests_root = project_root / "tests"
     return frozenset(
         path.relative_to(project_root).as_posix()
-        for path in tests_root.rglob("test_*.py")
+        for pattern in ("test_*.py", "*_test.py")
+        for path in tests_root.rglob(pattern)
         if path.is_file()
     )
 

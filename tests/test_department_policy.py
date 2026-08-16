@@ -128,6 +128,19 @@ def test_department_manifest_rejects_duplicate_ownership(tmp_path: Path) -> None
         )
 
 
+def test_department_manifest_owns_pytest_suffix_form_modules(
+    tmp_path: Path,
+) -> None:
+    _test_module(tmp_path, "tests/owned_test.py")
+
+    ownership = validate_department_manifest(
+        tmp_path,
+        {"owner": ("tests/owned_test.py",)},
+    )
+
+    assert ownership == {"tests/owned_test.py": "owner"}
+
+
 def test_department_manifest_rejects_missing_and_unowned_modules(
     tmp_path: Path,
 ) -> None:

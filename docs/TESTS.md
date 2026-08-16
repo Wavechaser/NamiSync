@@ -34,6 +34,8 @@ change.
 ```
 
 `--department` is the equivalent long spelling of `--dept`.
+When combined with explicit files or nodes, the department remains a filter;
+items owned by other departments are deselected.
 
 ### 3. Cross-department neighborhood
 
