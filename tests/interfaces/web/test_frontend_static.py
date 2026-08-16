@@ -72,7 +72,7 @@ def _attribute_sink_hits(source: str) -> tuple[str, ...]:
     )
     if len(calls) != len(fixed_names):
         return ("dynamic-attribute-name",)
-    allowed = {"aria-activedescendant"}
+    allowed = {"aria-activedescendant", "role"}
     return tuple(name for name in fixed_names if name not in allowed)
 
 
@@ -221,6 +221,20 @@ def test_modules_use_only_local_explicit_js_imports(
         for value in values
     )
     assert all("innerHTML" not in text for text in assets.values())
+
+
+def test_renderer_assets_stay_within_the_admitted_webview2_api_floor(
+    built_wheel: BuiltWheel,
+) -> None:
+    javascript = "\n".join(
+        source
+        for name, source in _wheel_assets(built_wheel).items()
+        if name.endswith(".js")
+    )
+
+    assert "Object.hasOwn(" not in javascript
+    assert "crypto.randomUUID" not in javascript
+    assert re.search(r"\.role\s*=", javascript) is None
 
 
 def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
@@ -385,7 +399,8 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
     ):
         assert forbidden not in tree
     assert "256" not in tree
-    assert 'root.role = "tree";' in tree
+    assert 'root.setAttribute("role", "tree");' in tree
+    assert 'element.setAttribute("role", "treeitem");' in tree
     assert tree.count("root.tabIndex = 0;") == 1
     assert (
         'root.setAttribute("aria-activedescendant", activeElement.id);'
@@ -490,6 +505,10 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
 
     assert "COMMAND_POLICY_CONTRACT.start_plan.timeout" in source
     assert "command_id: mintId()" in source
+    assert "crypto.randomUUID" not in source
+    assert "cryptography.getRandomValues(bytes);" in source
+    assert "new Uint8Array(16)" in source
+    assert 'byte.toString(16).padStart(2, "0")' in source
     assert source.count('"pick_folder"') == 2
     assert source.count('"start_plan"') == 2
     assert source.count("return await startPlanAttempt(payload);") == 2
@@ -696,6 +715,7 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'renderText(heading, "Tasks");' in rail
     assert 'renderText(empty, "No tasks are available.");' in rail
     assert 'ariaLabel = "Work area";' in panels
+    assert 'panel.setAttribute("role", "region");' in panels
     assert 'renderText(heading, "Work area");' in panels
     assert 'renderText(empty, "No task selected.");' in panels
     assert "Task details will appear here when a task is available." in panels

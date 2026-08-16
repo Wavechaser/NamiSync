@@ -153,7 +153,8 @@ tree = createTree(root, {
   toggle: (...value) => toggled.push(value),
   activate: (nodeId) => activated.push(nodeId),
 });
-assert.equal(root.role, "tree");
+assert.equal(root.getAttribute("role"), "tree");
+assert.equal(root.role, undefined);
 assert.equal(root.tabIndex, 0);
 assert.ok(root.classList.contains("nami-tree"));
 assert.equal(root.children.length, 2);
@@ -365,11 +366,17 @@ function dispatchKey(element, key) {
 function assertSpacer(element) {
   assert.ok(element.classList.contains("nami-tree__spacer"));
   assert.equal(element.ariaHidden, "true");
-  assert.notEqual(element.role, "treeitem");
+  assert.notEqual(element.getAttribute("role"), "treeitem");
 }
 
 function treeItems(element) {
-  return element.children.filter((child) => child.role === "treeitem");
+  const items = element.children.filter(
+    (child) => child.getAttribute("role") === "treeitem",
+  );
+  for (const item of items) {
+    assert.equal(item.role, undefined);
+  }
+  return items;
 }
 
 function fingerprint(element) {

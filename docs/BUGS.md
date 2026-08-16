@@ -554,6 +554,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-17). Renderer API floor mismatch. The packaged
+  shell used `Object.hasOwn`, reflected `role` properties, and
+  `crypto.randomUUID` even though the admitted WebView2 floor predates those
+  APIs. Icons, accessibility roles, and every command requiring an opaque id
+  could therefore fail on a supported runtime. Fixed with own-property calls,
+  explicit role attributes, and `getRandomValues`-backed 32-hex identities,
+  plus a shipped-asset floor guard and supplemental/real-browser evidence.
 - MINOR - FIXED (2026-08-14). Acceptance drift-guard omission. Ordinary
   suites exercised the real current-source custody shape but checked only
   positive size, plausible density, and component/union relations; the frozen

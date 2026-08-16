@@ -78,9 +78,13 @@ let nextId = 1;
 Object.defineProperty(globalThis, "crypto", {
   configurable: true,
   value: {
-    randomUUID() {
-      const value = (nextId++).toString(16).padStart(32, "0");
-      return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+    getRandomValues(bytes) {
+      assert.ok(bytes instanceof Uint8Array);
+      assert.equal(bytes.length, 16);
+      bytes.fill(0);
+      bytes[15] = nextId;
+      nextId += 1;
+      return bytes;
     },
   },
 });
@@ -253,12 +257,14 @@ async function nextRequest(index) {
     "schema_version",
   ]);
   assert.equal(pending.request.command, "next_events");
+  assert.match(pending.request.request_id, /^[0-9a-f]{32}$/);
   assert.deepEqual(Object.keys(pending.request.payload).sort(), [
     "drain_id",
     "replay_from",
     "session_id",
     "task_id",
   ]);
+  assert.match(pending.request.payload.drain_id, /^[0-9a-f]{32}$/);
   return pending;
 }
 
@@ -610,9 +616,11 @@ assert.ok(!callbackRefusals[0].message.includes("private"));
 
 // Failure while minting an attempt id is surfaced once from the queued arm,
 // does not become an unhandled rejection, and releases the task-map entry.
-const originalRandomUUID = globalThis.crypto.randomUUID;
+const originalGetRandomValues = globalThis.crypto.getRandomValues;
 const mintRefusals = [];
-globalThis.crypto.randomUUID = () => "invalid";
+globalThis.crypto.getRandomValues = () => {
+  throw new Error("simulated unavailable cryptography");
+};
 const stopSeven = bridge.startTaskDrain(
   task("7"),
   session("7"),
@@ -622,7 +630,11 @@ const stopSeven = bridge.startTaskDrain(
 await turns();
 assert.equal(mintRefusals.length, 1);
 assert.equal(mintRefusals[0].name, "BridgeTransportError");
-globalThis.crypto.randomUUID = originalRandomUUID;
+assert.equal(
+  mintRefusals[0].message,
+  "The desktop request id could not be created.",
+);
+globalThis.crypto.getRandomValues = originalGetRandomValues;
 const stopSevenReplacement = bridge.startTaskDrain(
   task("7"),
   session("7"),

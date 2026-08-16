@@ -185,7 +185,8 @@ def test_sh_g_14_tokens_and_components_own_size_color_and_fixed_masks() -> None:
     assert "insertAdjacentHTML" not in registry
     assert "DOMParser" not in registry
     assert "url(" not in registry
-    assert "Object.hasOwn" in registry
+    assert "Object.prototype.hasOwnProperty.call" in registry
+    assert "Object.hasOwn(" not in registry
 
 
 def test_sh_g_14_built_wheel_contains_exact_icon_foundation(

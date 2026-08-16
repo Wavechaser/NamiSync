@@ -333,6 +333,11 @@ missing. Host preparation never repeats the .NET registry read merely to choose
 its message. The start wrapper repeats
 preparation, passes `debug=False`, and uses one zero-argument `initialized`
 callback that verifies the selected renderer before invoking the host callback.
+Every shipped JavaScript primitive must also run at that admitted floor:
+own-property checks use the compatible prototype call, ARIA roles use explicit
+attributes, and opaque bridge identities use `crypto.getRandomValues` rather
+than newer convenience APIs. Static installed-wheel guards and the real
+WebView2 accessibility witness cover that implementation side of compatibility.
 Once the static asset server has selected its random loopback port, the host
 callback derives the exact origin from the complete `window.real_url` with
 `urlsplit` and registers an

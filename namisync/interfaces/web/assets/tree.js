@@ -19,7 +19,7 @@ export function createTree(root, callbacks = {}) {
   nextTreeId += 1;
 
   root.classList.add("nami-tree");
-  root.role = "tree";
+  root.setAttribute("role", "tree");
   root.tabIndex = 0;
 
   const topSpacer = createSpacer(document);
@@ -247,7 +247,7 @@ function createRow(document, treeId, row) {
   element.classList.add("nami-tree-row");
   element.id = `nami-tree-${treeId}-row-${row.visible_index}`;
   element.dataset.nodeId = row.node_id;
-  element.role = "treeitem";
+  element.setAttribute("role", "treeitem");
   element.ariaLevel = String(row.depth + 1);
   element.ariaPosInSet = String(row.position_in_set);
   element.ariaSetSize = String(row.set_size);

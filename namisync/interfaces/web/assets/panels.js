@@ -3,7 +3,7 @@ import { renderText } from "./render.js";
 export function createWorkPanel() {
   const panel = document.createElement("section");
   panel.classList.add("nami-card", "nami-work-panel");
-  panel.role = "region";
+  panel.setAttribute("role", "region");
   panel.ariaLabel = "Work area";
 
   const heading = document.createElement("h2");

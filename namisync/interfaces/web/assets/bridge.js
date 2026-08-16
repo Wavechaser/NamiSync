@@ -1384,7 +1384,20 @@ function isUncertainStartPlanFailure(error) {
 }
 
 function mintId() {
-  const value = globalThis.crypto?.randomUUID?.().replaceAll("-", "").toLowerCase();
+  let value = "";
+  try {
+    const cryptography = globalThis.crypto;
+    if (typeof cryptography?.getRandomValues !== "function") {
+      throw new TypeError("secure random values are unavailable");
+    }
+    const bytes = new Uint8Array(16);
+    cryptography.getRandomValues(bytes);
+    for (const byte of bytes) {
+      value += byte.toString(16).padStart(2, "0");
+    }
+  } catch {
+    throw new BridgeTransportError("The desktop request id could not be created.");
+  }
   if (!ID_PATTERN.test(value)) {
     throw new BridgeTransportError("The desktop request id could not be created.");
   }

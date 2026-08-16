@@ -17,9 +17,9 @@ export const ICON_SIZES = Object.freeze(Object.keys(SIZE_CLASSES));
 export function createIcon(document, glyph, size = "md") {
   if (
     typeof glyph !== "string" ||
-    !Object.hasOwn(GLYPH_CLASSES, glyph) ||
+    !Object.prototype.hasOwnProperty.call(GLYPH_CLASSES, glyph) ||
     typeof size !== "string" ||
-    !Object.hasOwn(SIZE_CLASSES, size)
+    !Object.prototype.hasOwnProperty.call(SIZE_CLASSES, size)
   ) {
     throw new TypeError("icon glyph and size must be registered");
   }

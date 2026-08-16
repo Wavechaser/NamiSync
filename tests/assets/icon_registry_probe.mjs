@@ -76,6 +76,21 @@ const invalidGlyphs = [
 ];
 const invalidSizes = ["", "medium", "MD", "../md", "24px", null, 1, {}];
 
+Object.defineProperty(Object.prototype, "inherited-glyph", {
+  configurable: true,
+  value: "nami-icon--warning",
+});
+try {
+  const document = fakeDocument();
+  assert.throws(
+    () => registry.createIcon(document, "inherited-glyph", "md"),
+    TypeError,
+  );
+  assert.equal(document.created.length, 0);
+} finally {
+  delete Object.prototype["inherited-glyph"];
+}
+
 for (const glyph of invalidGlyphs) {
   const document = fakeDocument();
   assert.throws(() => registry.createIcon(document, glyph, "md"), TypeError);
