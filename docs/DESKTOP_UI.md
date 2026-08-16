@@ -405,6 +405,17 @@ during initial parsing before the native hooks exist. DOM APIs such as
 filename into an attribute, URL, command, style, or bridge request.
 Hostile-name fixtures are required end-to-end.
 
+Filesystem-derived row labels use the narrower `renderFilesystemText` sink.
+It maps `DEFENSE.md`'s exact layout-control set and literal marker delimiters to
+injective uppercase `⟦U+XXXX⟧` markers, then delegates to the sole
+`textContent` writer. The label is a bidi isolate. This final presentation
+projection neither mutates nor caps filename display in Python/wire/search;
+callbacks separately receive raw opaque node ids. Marker spelling has no
+decoding or search meaning.
+Trusted shell copy continues through the generic inert-text sink. Ordinary
+markup-like text, Arabic, Hebrew, combining sequences, emoji/variation
+selectors, ZWNJ/ZWJ, and long labels remain exact.
+
 ## Interaction contract
 
 Slice 4 establishes only the presentation core and honest shell frame. It adds
@@ -416,8 +427,8 @@ do not create fake task or session data.
 
 The shared `tree.js` consumes only windows already decided by Python's pure
 `visible_sequence.py`. It renders at most 256 returned rows plus fixed virtual
-spacers, uses exact 28-CSS-pixel rows and the inert text helper, exposes full
-display text to accessibility even when the visual label elides, and ignores a
+spacers, uses exact 28-CSS-pixel rows and the filesystem-text helper, exposes
+the complete layout-safe label to accessibility even when the visual label elides, and ignores a
 stale response generation. The root is the single Tab stop, row focus uses
 `aria-activedescendant`, and server-derived level, sibling-set, parent, and
 first-child metadata support Up/Down/Home/End/Left/Right/Enter navigation even
@@ -457,7 +468,9 @@ tree is the operable widget. The completed clean-installed-wheel SH-G-7 run uses
 native keyboard events, platform accessibility inspection, native 200% WebView
 zoom, and forced-colors emulation against production assets. It verifies focus order and visibility,
 usable stacked reflow without horizontal overflow, system-color focus,
-hostile and long labels through `render.js`, exact 28-pixel rows, no more than
+exact layout-control markers with no surviving active controls, unchanged
+ordinary hostile/Unicode and long labels, raw callback ids through `tree.js`,
+exact 28-pixel rows, no more than
 256 rows plus two spacers, and stale-generation refusal. Python is the sole
 validation/window authority and emits the exact renderer view; JavaScript does
 not duplicate structural validation. It adds no bridge
@@ -565,8 +578,9 @@ Contrast and no-color-only signaling remain requirements in every theme.
 - Repeated task create/plan-only-close, terminal-close, and busy-cancel-close
   cycles release all process-local task artifacts and keep service, runtime,
   bridge, and adapter maps bounded while retained history remains readable.
-- Hostile filenames remain structured data and render as text, never HTML or
-  executable content.
+- Hostile filenames remain structured raw data. Filesystem labels render as
+  inert text with exact visible layout-control markers and bidi isolation,
+  never HTML or executable content; generic Unicode and identity stay exact.
 - Plan, inventory, settings, and history consume facade views only and remain
   semantically separate; UI cosmetics never change a plan's captured settings.
 - Busy, pausing, paused, canceled, refused, partial, degraded, mismatch, and compound

@@ -685,9 +685,9 @@ Implementation follows the vendor security guidance:
 [renderer selection](https://pywebview.flowrl.com/guide/web_engine),
 [WebView2 security](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security).
 
-**DR-M1-16 — Structural XSS defense, not sanitization.**
-NamiSync deliberately retains hostile filenames as escaped scan evidence
-(there's already a test corpus for this). A web UI means those filenames
+**DR-M1-16 — Structural XSS and review-layout defense, not sanitization.**
+NamiSync deliberately retains hostile valid-Unicode filenames as exact scan
+and workflow evidence (there is already a test corpus for this). A web UI means those filenames
 reach a DOM; `innerHTML`-based rendering turns a filename on the user's own
 disk into script execution in the shell. Sanitizing paths upstream is the
 wrong fix — it corrupts the truth layer, and an escaped-then-echoed path can
@@ -697,13 +697,18 @@ Plan rows retain operation identity, while every plan/inventory tree node uses
 a deterministic opaque id qualified by tree kind, scope identity, and canonical
 path key. Synthetic folder ids are never operation ids. JS never sends a path
 back over the bridge — only ids; the adapter resolves server-side and validates
-location ownership. View models carry paths in the **escaped display form** the
-scanner's own hostile-name handling already produces (never raw
-`rel_path`) — malformed surrogate code units are unrepresentable in UTF-8 and
-would mangle or fail on the message channel raw regardless. Sink side:
-`textContent`-only rendering, no `innerHTML` anywhere, and the scanner's
-existing hostile-name corpus reused as UI rendering fixtures — the web
-equivalent of the CLI's `_safe()`. The CSP is explicit and now normative in
+location ownership. Valid filename display remains raw through workflow views,
+the visible sequence, the wire, and literal case-folded search. Malformed
+surrogate code units are not valid path authority and remain escaped diagnostic
+evidence rather than entering this channel. Sink side: the sole `textContent`
+writer renders generic inert copy, while filesystem labels first map
+`DEFENSE.md`'s exact layout-control set and input U+27E6/U+27E7 delimiters to
+injective uppercase `⟦U+XXXX⟧` markers and apply bidi isolation. Marker spelling
+is not search or decoder syntax; the presentation projection neither truncates
+nor adds a filename cap. Callbacks retain opaque node ids, not paths or marker
+text. The hostile corpus covers ordinary Unicode byte preservation and the
+layout-control corpus covers exact DOM/accessibility markers. The CSP is
+explicit and now normative in
 `M1_BRIDGE.md` — the single directive string `M1_SHELL.md`'s SH-G-7 asserts
 byte-for-byte against the shipped `index.html`.
 
@@ -1222,8 +1227,11 @@ resumed-preflight refusal against the same unfinished run.
   integrity item is lost or swept into an operation-only accumulator
   (DR-M1-12).
 - A hostile filename completes the real page-JS → `dispatch` → pinned
-  pywebview return transport → production `textContent` round trip
-  byte-for-byte; NamiSync-owned code constructs no JavaScript and invokes
+  pywebview return transport → sole production `textContent` writer round
+  trip. Ordinary Unicode remains byte-exact; defended layout controls become
+  their exact injective visible markers only at the filesystem sink, with raw
+  filename display retained in Python/wire/search and raw opaque ids retained
+  by callbacks. NamiSync-owned code constructs no JavaScript and invokes
   neither `evaluate_js`, `run_js`, nor `Window.state` for application data
   (DR-M1-15/18).
 - Native WebView2 hooks cancel external top-level navigation, every frame
@@ -1244,9 +1252,10 @@ resumed-preflight refusal against the same unfinished run.
   execution's filesystem status `COMPLETED` and reports the exception as an
   incomplete verify `PhaseResult`, never as execution `FAILED`
   (DR-M1-12).
-- A hostile filename never reaches JS as anything but its escaped display
-  form, and no bridge command can be constructed from a raw path (DR-M1-16) —
-  reuse the scanner's existing hostile-name corpus as the fixture set.
+- A hostile filename reaches JS only as validated raw display data, becomes
+  layout-safe marker text only at the filesystem DOM sink, and can never form a
+  bridge command from a raw path (DR-M1-16). Reuse both the ordinary hostile-
+  name corpus and the exact layout-control/delimiter corpus.
 - The CLI's 13 end-to-end tests pass unchanged after the Stage 5 retarget,
   proving equivalent-request/equivalent-result-classification across
   interfaces before a second interface exists to test it against
@@ -1425,12 +1434,15 @@ ledger query and silently drop every candidate whose copy-ledger write was
   subscribe and assert an already-terminal result is returned, not
   `SessionNotFound`. *Not satisfied by* only covering a session that ends
   naturally before teardown, where blocked-`next()`-needs-close never runs.
-- **XV-19 — Bridge: ids in, escaped text out, origin re-checked
+- **XV-19 — Bridge: ids in, inert layout-honest text out, origin re-checked
    independently.** Feed the scanner's hostile-name corpus through a real
   WebView2 round trip from page JavaScript through `dispatch`, the pinned
-  pywebview return transport, and the production `textContent` sink; read the
-  rendered text back and compare the exact escaped display value. A separate
-  source scan proves only that NamiSync-owned code constructs no JavaScript
+  pywebview return transport, and the sole production `textContent` writer;
+  compare ordinary Unicode byte-for-byte. Feed every defended layout character
+  and marker delimiter through the installed filesystem sink; compare exact
+  markers in DOM and accessibility names and prove no active control remains.
+  Raw filename display stays exact in Python/wire/search and callbacks retain
+  raw opaque ids. A separate source scan proves only that NamiSync-owned code constructs no JavaScript
   and that packaged assets contain no forbidden DOM/script sinks. Assert that
   no command can be built from a raw path (ids only), and — with navigation
   hardening deliberately bypassed in-test — a dispatch from a non-packaged

@@ -283,6 +283,35 @@ The current containment obligations are still strict:
 - renderer failure, malformed requests, expired slots, saturation, and teardown
   may degrade only through bounded T1 outcomes.
 
+Filesystem-derived review labels have an additional layout-integrity wall at
+their final DOM sink. The sink replaces U+0000-U+001F, U+007F-U+009F,
+U+00AD, U+061C, U+200B, U+200E-U+200F, U+2028-U+202E,
+U+2060-U+206F, U+FEFF, and input U+27E6-U+27E7 with the visible uppercase
+four-hex marker `⟦U+XXXX⟧`. Escaping both marker delimiters makes the mapping
+injective: an input spelling such as `⟦U+202E⟧` cannot be mistaken for the
+marker produced from an input U+202E. The marker delimiters that the sink
+itself emits are syntax; none of the listed active layout controls survives in
+the rendered or accessibility label. Each label is also a CSS bidi isolate so
+ordinary strong-direction text cannot reorder adjacent UI.
+
+This is a presentation boundary, not sanitization or authority rewriting.
+Filename display stays raw valid Unicode in workflow nodes, visible sequences,
+bridge views, and literal case-folded search. Separately, callbacks receive the
+raw opaque node ids supplied by the authoritative view. Marker spelling is not
+decoder or query syntax, and the sink adds no filename byte/character cap or
+truncation. Generic trusted interface copy continues through the ordinary
+inert `textContent` sink; only filesystem-derived labels use the layout-control
+projection.
+
+The wall deliberately preserves ZWNJ/ZWJ, variation selectors, supplementary
+tag characters, and the legitimate direction of Arabic and Hebrew text. It
+does not claim universal spoof protection or defeat homoglyphs, ordinary
+confusables, Unicode normalization differences, or grapheme ambiguity. These
+remain outside this narrow transform and retain their Unicode rendering
+semantics; no freedom from their visual ambiguity is claimed. Expanding the
+escaped set, changing marker spelling, decoding markers in search, or using a
+filesystem display value in any non-text sink reopens this boundary.
+
 A browser timeout does not cancel an admitted Python handler. Receipts and
 server-owned idempotency therefore remain mandatory for every retryable or
 mutating command. The native host also does not presently supply an independent

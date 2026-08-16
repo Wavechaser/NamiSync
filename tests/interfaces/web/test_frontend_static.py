@@ -361,13 +361,40 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
     renderer = assets["render.js"]
     tree = assets["tree.js"]
 
+    text_assignments = {
+        name: len(re.findall(r"\.textContent\s*=(?!=)", source))
+        for name, source in assets.items()
+        if name.endswith(".js")
+    }
+    assert sum(text_assignments.values()) == 1
+    assert {
+        name: count for name, count in text_assignments.items() if count
+    } == {"render.js": 1}
     assert renderer.count(".textContent =") == 1
     assert "element.textContent = text;" in renderer
     assert 'import { renderText } from "./render.js";' in assets["app.js"]
     assert 'renderText(status, "Ready");' in assets["app.js"]
     assert re.search(r"\.textContent\s*=(?!=)", assets["app.js"]) is None
-    assert 'import { renderText } from "./render.js";' in tree
-    assert "renderText(label, row.display);" in tree
+    assert "export function renderFilesystemText(element, text)" in renderer
+    assert (
+        r"/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b"
+        r"\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff"
+        r"\u27e6-\u27e7]/gu;"
+    ) in renderer
+    assert "`⟦U+${character.codePointAt(0)" in renderer
+    assert "renderText(element, visibleText);" in renderer
+    assert (
+        'import { renderFilesystemText } from "./render.js";' in tree
+    )
+    assert "renderFilesystemText(label, row.display);" in tree
+    assert "renderText(" not in tree
+    assert len(re.findall(r"\bdisplay\b", tree)) == 3
+    assert [
+        line.strip() for line in tree.splitlines() if "row.display" in line
+    ] == [
+        "display: row.display,",
+        "renderFilesystemText(label, row.display);",
+    ]
     assert re.search(r"\.textContent\s*=(?!=)", tree) is None
 
 
@@ -413,6 +440,7 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
         "min-inline-size: 0;",
         "overflow: hidden;",
         "text-overflow: ellipsis;",
+        "unicode-bidi: isolate;",
         "white-space: nowrap;",
     ):
         assert required in label_rule.group(1)

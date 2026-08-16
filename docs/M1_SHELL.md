@@ -334,7 +334,9 @@ components and define no color of their own.
 At Slice 2 closure the exact shipped asset set is `index.html`, `app.css`,
 `app.js`, `bridge.js`, and `render.js`; later entries in the target layout do
 not ship until their owning slices. `render.js` owns the strict production
-`textContent` sink. The browserless probes and headed `transport_gate/` page
+`textContent` sink; Slice 4's filesystem-label wrapper maps the fixed defended
+layout controls to visible markers and delegates to that sole writer. The
+browserless probes and headed `transport_gate/` page
 remain under `tests/assets/` and are excluded from package data.
 GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, `appearance.js`,
 and the exact four SVGs plus source/license records under `assets/icons/`; its
@@ -829,8 +831,12 @@ carry the `headed` marker; all are collected by the release command.
   the requested five-row page without changing scroll position, and proves the
   visible region stays nonblank with a fully visible active descendant and no
   domain activation,
-  renders complete hostile and
-  long display strings through its production text path, measures every row at
+  renders every defended layout character and input marker delimiter as its
+  exact injective `⟦U+XXXX⟧` marker with no surviving active layout control in
+  either the DOM or Chromium accessibility name, preserves ordinary markup-
+  like text, Arabic, Hebrew, combining sequences, emoji/variation selectors,
+  ZWNJ/ZWJ, and long strings exactly, and returns raw opaque node ids through
+  toggle/activation callbacks. It measures every row at
   28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,
   and proves a stale generation cannot replace a newer window. The matching
   Python/wire and production-module regressions prove expansion appears only

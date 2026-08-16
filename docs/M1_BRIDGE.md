@@ -89,8 +89,10 @@ decision that serves none of them is a decision to cut.
    axes stay separable on screen; an incomplete refresh reads as incomplete
    rather than as a clean one; a count that cannot be computed honestly is not
    shown.
-4. **Hostile filesystem content is inert on screen.** A filename is display
-   text, never markup, never a command argument, never an executable string.
+4. **Hostile filesystem content is inert and layout-honest on screen.** A
+   filename remains raw display data through authority and search, becomes
+   visible-marker text for defended layout controls only at its final sink,
+   and is never markup, a command argument, or an executable string.
 5. **Nothing irreversible happens by accident, and nothing reversible is made
    annoying.** Friction is placed where an action cannot be undone, and
    deliberately withheld everywhere else.
@@ -1333,6 +1335,14 @@ the pure derived sequence is replaced rather than cached as a parameter-keyed
 family. Domain command rows and projection revisions remain with their first
 Slice 5/6 consumers.
 
+Display values remain exact valid Unicode in the workflow node, derived
+sequence, `{offset,total,rows}` wire view, and literal search operation. The
+renderer alone maps `DEFENSE.md`'s fixed active layout controls and input marker
+delimiters to visible `⟦U+XXXX⟧` text. That spelling is not decoded by search:
+an actual U+202E query matches actual U+202E data, while the typed characters
+`⟦U+202E⟧` match only that literal spelling. This presentation projection adds
+no field cap or second wire shape.
+
 **Realignment completed after audit (2026-08-13).**
 `interfaces/web/visible_sequence.py` remains the single tree-agnostic pure
 implementation. The corrected seam uses
@@ -1610,8 +1620,8 @@ would not be.
 
 Four constraints: substring matching only (a user-supplied regex is a
 denial-of-service surface for no benefit), matching against the **casefolded
-display form** rather than the canonical key (the user types what is on
-screen), no trimming or Unicode normalization, and an exact 65,536-UTF-8-byte
+raw display form** rather than the canonical key, no marker decoding or other
+query syntax, no trimming or Unicode normalization, and an exact 65,536-UTF-8-byte
 query ceiling. The pure presentation seam accepts 65,536 UTF-8 bytes
 and refuses 65,537 before walking the node array. The existing 65,536-byte
 complete inbound-envelope cap remains the external authority, so JSON overhead
@@ -1956,7 +1966,9 @@ actionable failure and no MSHTML fallback; hardened pywebview settings with
 `NewWindowRequested` cancellation plus an independent per-call origin
 recheck; no NamiSync-owned `evaluate_js`, `run_js`, `Window.state`, or
 JavaScript construction as an application-data channel; opaque ids inbound
-and escaped display text outbound; `textContent` only and no `innerHTML`;
+and validated raw display text outbound; final filesystem labels project the
+fixed defended layout controls to visible injective markers through the sole
+`textContent` writer; no `innerHTML`;
 NamiSync uses the packaged asset server only for static assets and authorizes
 no domain API through it. Pinned
 pywebview 6.2.1 internally constructs JavaScript for exposed-function returns,
@@ -2256,9 +2268,13 @@ replacement that returned after its generation became stale.
 
 At Slice 2 closure the exact packaged frontend set is `index.html`, `app.css`,
 `app.js`, `bridge.js`, and `render.js`. The last owns the strict production
-`renderText(element, text)` sink and writes only validated string data through
-`textContent`. Browserless transport/render probes and the headed transport
-page live under `tests/assets/`, not package data.
+`renderText(element, text)` sink and remains the only `textContent` writer.
+Slice 4 adds `renderFilesystemText(element, text)`: it rejects non-strings,
+maps the exact `DEFENSE.md` set to injective uppercase `⟦U+XXXX⟧` markers, and
+delegates the final write to `renderText`. It is used only for
+filesystem-derived `row.display`; generic interface copy is not rewritten.
+Browserless transport/render probes and the headed transport page live under
+`tests/assets/`, not package data.
 
 The headed gate composes its single `test_report` row only through the same
 dispatcher constructor used by production, under a unique test identity and an
@@ -2312,9 +2328,14 @@ is the one most likely to regress.
   hostile-name corpus through the production inert-text path in the
   constructor-only harness and reads `.textContent` back byte-for-byte; this
   proves the real return transport and shared sink without pretending the later
-  product surfaces exist. Slice 5 repeats the corpus against the actual plan
-  DOM and slice 6 repeats it against the actual inventory DOM. BR-G-32 remains
-  open until all three stages prove text, not markup, attributes, or script.
+  product surfaces exist. Slice 4 separately drives every defended layout
+  character plus marker delimiters through the installed production tree and
+  proves the exact visible markers in both DOM and Chromium accessibility
+  names, no surviving active layout control, unchanged ordinary Unicode/markup-
+  like and long labels, and raw opaque ids at callbacks. Slice 5 repeats both
+  corpora against the actual plan DOM and slice 6 repeats them against the
+  actual inventory DOM. BR-G-32 remains open until those product surfaces prove
+  text, not markup, attributes, or script.
 - **A broadened static scan** over packaged assets, because scanning only for
   `innerHTML`, `eval`, and `Function(` misses most markup sinks. It also
   rejects `outerHTML`, `insertAdjacentHTML`, `document.write`, `srcdoc`,
@@ -2343,8 +2364,10 @@ The split evidence has concrete homes:
 
 Thus Slice 2 closes BR-G-32's transport, picker, origin-refusal, and static-sink
 portion of XV-19 without claiming that transport alone proves a later DOM sink.
-It also closes SH-G-3. The production plan and inventory DOM clauses remain
-open for Slices 5 and 6, so BR-G-32 as a whole remains open.
+It also closes SH-G-3. Slice 4 closes the generic filesystem-label sink and
+installed-tree portion of XV-19 through SH-G-7/BR-G-34. The production plan and
+inventory DOM clauses remain open for Slices 5 and 6, so BR-G-32 as a whole
+remains open.
 
 ### DR-BR-26 — The node tree is a pure function
 
@@ -2353,7 +2376,8 @@ tested directly in pytest with no bridge involved. It is the largest new
 component and must not be entangled with transport, or it becomes untestable
 exactly where risk concentrates. Coverage includes a hostile-named directory
 move, since grouping does segment arithmetic on canonical keys while
-rendering escaped display paths and the two must stay consistent.
+retaining raw display paths for the final presentation sink and the two must
+stay consistent.
 
 Because node identity now arrives in Stage 5.5 (DR-BR-11), that stage carries
 its own hostile-name case: **inventory** node ids minted from hostile paths,
@@ -3349,8 +3373,11 @@ because its local tests are easier.
   complete hostile-name corpus crosses page JavaScript, the real pinned
   pywebview return transport, and the production inert-text path in the headed
   harness byte-for-byte, while the broadened DR-BR-25 packaged-asset sink scan
-  is empty. Those clauses close Slice 2's transport, picker, origin-refusal, and
-  static-sink portion. Slice 5 must repeat the corpus in the production plan DOM
+  is empty. Slice 4 adds the final filesystem-label layout projection and exact
+  installed DOM/accessibility marker corpus without changing raw transport or
+  opaque callback ids. Those clauses close Slice 2's transport, picker,
+  origin-refusal, and static-sink portion plus Slice 4's generic tree sink.
+  Slice 5 must repeat the corpora in the production plan DOM
   and Slice 6 in the production inventory DOM; BR-G-32 is not wholly closed
   until the latter lands. *Not satisfied by* a direct Python call that bypasses
   dispatch, a benign-name subset, a test-only reimplementation of the sink,
@@ -3417,7 +3444,10 @@ because its local tests are easier.
   20,000-container/100,000-leaf retained-representation witness, and
   deterministic linear field-access guard now pass. These are structural
   evidence, not latency acceptance; broader BR-G-42 product-view measurements
-  remain with Slices 5-7. The production renderer regressions additionally
+  remain with Slices 5-7. Display strings remain byte-exact in the Python
+  sequence/wire/search seam; visible `⟦U+XXXX⟧` layout markers are a final
+  renderer projection and marker spelling has no query syntax. The production
+  renderer regressions additionally
   cover coalesced leading/trailing spacer paging, exact row-boundary math,
   external-projection priority, keyboard-versus-newer-scroll ordering,
   covered-window cancellation, callback failure, stale-payload refusal before
@@ -3710,7 +3740,7 @@ split transport/static files and two later surface files are created by slices
 | `XV-16` shared hash factory and production composition | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_runtime.py tests/test_executor_native.py tests/test_executor_pipeline.py tests/test_executor_settlement.py tests/test_inventory_runtime.py tests/test_db_repositories.py tests/test_package.py tests/modules/test_verifier_engine.py` | Payload/runtime edits must not fork verifier construction, diverge copy from verify encoding, or import a second hash implementation / B, C |
 | `XV-17` history-v4 window contract | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | Reset-only v4, append-only reliable events, atomic window/terminal visibility, incomplete restart views, and 1..256-row summary/detail bounds remain exact / B, C, Stage 6 slice 7 |
 | `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
-| `XV-19` ids-in, inert text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_commands.py tests/interfaces/web/test_transport.py tests/interfaces/web/test_slots.py tests/interfaces/web/test_transport_headed.py tests/interfaces/web/test_frontend_static.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → production `textContent` round trip and NamiSync-owned sink scan become executable across slices 2, 5, and 6; the split transport/static files plus both later surface files are required because one layer alone cannot prove the full chain / slices 2, 5, 6 |
+| `XV-19` ids-in, inert layout-honest text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_commands.py tests/interfaces/web/test_transport.py tests/interfaces/web/test_slots.py tests/interfaces/web/test_transport_headed.py tests/interfaces/web/test_frontend_static.py tests/interfaces/web/test_visible_sequence.py tests/interfaces/web/test_shell_headed.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → sole `textContent` writer, raw Python/wire/search preservation, final filesystem layout-control markers, installed DOM/accessibility evidence, and NamiSync-owned sink scan become executable across slices 2, 4, 5, and 6; the split transport/static/visible/shell files plus both later surface files are required because one layer alone cannot prove the full chain / slices 2, 4, 5, 6 |
 | `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
 | M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | The initial Stage 5.5 lanes left this file byte-for-byte unchanged; the integrated adversarial closure adds only the permanent irreversible-update admission regression described by BR-G-17. Every prior explicit sync, history, inventory, and integrity command remains behaviorally unchanged. Slice 1 may later replace only the no-subcommand/entry-point expectations required by the launcher decision / B, C, D, slice 1 |
 | Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |

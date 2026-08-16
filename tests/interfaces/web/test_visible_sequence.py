@@ -339,6 +339,33 @@ def test_br_g_34_search_casefolds_without_trimming_or_normalization() -> None:
         _parameters(search="bad\ud800")
 
 
+def test_br_g_34_filesystem_layout_controls_stay_raw_until_rendering() -> None:
+    control_display = "report-\u202eabc.txt-\u200b"
+    marker_display = "literal-⟦U+202E⟧.txt"
+    nodes = (
+        _Node("root", "All items", 0, 0, None, 3, True),
+        _Node("control", control_display, 1, 1, 0, 2, False),
+        _Node("marker", marker_display, 2, 1, 0, 3, False),
+    )
+
+    sequence = derive_visible_sequence(nodes, _parameters())
+    view = to_visible_window_view(
+        window_visible_sequence(sequence, offset=0, limit=3)
+    )
+
+    assert sequence.nodes is nodes
+    assert sequence.nodes[1].display == control_display
+    assert sequence.nodes[2].display == marker_display
+    assert view["rows"][1]["display"] == control_display
+    assert view["rows"][2]["display"] == marker_display
+    assert _ids(
+        derive_visible_sequence(nodes, _parameters(search="\u202e"))
+    ) == ("root", "control")
+    assert _ids(
+        derive_visible_sequence(nodes, _parameters(search="⟦U+202E⟧"))
+    ) == ("root", "marker")
+
+
 def test_br_g_34_filter_retention_precedes_collapse_and_counting() -> None:
     counts = {"street": 2, "literal": 3}
     sequence = derive_visible_sequence(

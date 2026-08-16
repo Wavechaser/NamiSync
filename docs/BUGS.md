@@ -696,6 +696,19 @@ defect, and move implementation-level test choreography out of the log.
   asserted role strings and focusable landmarks instead of widget behavior.
   Fixed with server-derived structure, an exact Python-owned wire view, and one
   operable recycled focus model.
+- SEVERE - FIXED (2026-08-17). Review-text layout-control injection.
+  Filesystem display text rendered inertly with `textContent` but could still
+  carry bidirectional, isolation, line, and invisible controls that reorder or
+  hide the operation a reviewer believed they were approving. Cause: the XSS
+  defense treated non-executable text as presentation-safe and its headed test
+  required every hostile label to remain byte-exact in the DOM. Fixed at the
+  filesystem-only render sink by mapping the exact defended set and literal
+  marker delimiters to injective `⟦U+XXXX⟧` markers, isolating each label, and
+  retaining raw filename display in workflow, wire, and search while callbacks
+  receive raw opaque node ids. Installed DOM and accessibility evidence proves
+  exact markers, no surviving active controls, exact ordinary Unicode/long
+  text, and raw ids;
+  `DEFENSE.md` owns the narrower confusable-text residual.
 - MODERATE - FIXED (2026-08-17). Projected-parent accessibility drift.
   Empty inventory roots and folders retained only by their own filter match
   exposed `aria-expanded=true` and a disclosure even though the active tree

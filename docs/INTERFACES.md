@@ -437,6 +437,16 @@ the NamiSync-owned shape and strict shared text sink; Slice 3 implements the
 bounded/coalesced event drain, while Slices 5 and 6 add the production plan and
 inventory DOM renderers.
 
+The interface keeps filename display as exact valid Unicode through workflow
+views, visible-sequence derivation, wire encoding, and literal case-folded
+search. Only the final filesystem-label renderer maps `DEFENSE.md`'s fixed
+layout-control set and input marker delimiters to injective `⟦U+XXXX⟧` text,
+then delegates to the generic `textContent` sink. It imposes no extra field
+cap. Tree callbacks carry the unchanged opaque node id, never a decoded marker
+or display path. CSS bidi isolation contains ordinary directional text without
+rewriting Arabic, Hebrew, combining sequences, emoji/variation selectors,
+ZWNJ/ZWJ, or long labels.
+
 The sole presentation-only native-to-page path is the system-appearance
 publication defined in `M1_BRIDGE.md`, posted through WebView2 after native
 origin/security attachment. Its packaged receiver validates the complete schema and may update

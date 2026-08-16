@@ -17,8 +17,38 @@ from typing import Any, Callable
 from unittest.mock import patch
 
 
-_HOSTILE = "wave \U0001f30a e\u0301 <img onerror=alert(1)> & \u6d77"
+_LAYOUT_CODE_POINTS = (
+    *range(0x0000, 0x0020),
+    *range(0x007F, 0x00A0),
+    0x00AD,
+    0x061C,
+    0x200B,
+    0x200E,
+    0x200F,
+    *range(0x2028, 0x202F),
+    *range(0x2060, 0x2070),
+    0xFEFF,
+    0x27E6,
+    0x27E7,
+)
+_ACTIVE_LAYOUT_CODE_POINTS = frozenset(_LAYOUT_CODE_POINTS) - {
+    0x27E6,
+    0x27E7,
+}
+_LAYOUT_SOURCE = (
+    "layout-" + "".join(chr(value) for value in _LAYOUT_CODE_POINTS) + "-end"
+)
+_LAYOUT_RENDERED = (
+    "layout-"
+    + "".join(f"⟦U+{value:04X}⟧" for value in _LAYOUT_CODE_POINTS)
+    + "-end"
+)
+_HOSTILE = (
+    "wave \U0001f30a\ufe0f e\u0301 <img onerror=alert(1)> "
+    "العربية עברית A\u200cB\u200dC \U000e0020 & \u6d77"
+)
 _LONG = ("\u6ce2" * 600) + " end"
+_RAW_NODE_ID = "node-\u202e-⟦U+202E⟧"
 _COMPLETE_TEXT = "Shell gate complete"
 _ASSETS = (
     "app.css",
@@ -363,9 +393,18 @@ _FINAL_PROBE = r"""
   const treeRoot = document.createElement("div");
   treeRoot.ariaLabel = "Presentation tree evidence";
   work.append(treeRoot);
-  const controller = treeModule.createTree(treeRoot);
+  const interactions = {toggles: [], activations: []};
+  const controller = treeModule.createTree(treeRoot, {
+    toggle: (...value) => interactions.toggles.push(value),
+    activate: (nodeId) => interactions.activations.push(nodeId),
+  });
+  const layoutSource = __LAYOUT_SOURCE__;
+  const layoutRendered = __LAYOUT_RENDERED__;
   const hostile = __HOSTILE__;
   const longValue = __LONG__;
+  const rawNodeId = __RAW_NODE_ID__;
+  const activeLayoutControlPattern =
+    /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u;
   const staleOne = controller.beginWindowRequest();
   const currentOne = controller.beginWindowRequest();
   let staleReads = 0;
@@ -381,8 +420,8 @@ _FINAL_PROBE = r"""
     total: 10,
     rows: [
       {
-        node_id: "node-hostile",
-        display: hostile,
+        node_id: rawNodeId,
+        display: layoutSource,
         depth: 1,
         is_container: true,
         visible_index: 5,
@@ -393,32 +432,64 @@ _FINAL_PROBE = r"""
         expanded: true,
       },
       {
-        node_id: "node-long",
-        display: longValue,
-        depth: 1,
+        node_id: "node-hostile",
+        display: hostile,
+        depth: 2,
         is_container: false,
         visible_index: 6,
         parent_visible_index: 5,
         first_child_visible_index: null,
         position_in_set: 1,
-        set_size: 1,
+        set_size: 2,
+        expanded: null,
+      },
+      {
+        node_id: "node-long",
+        display: longValue,
+        depth: 2,
+        is_container: false,
+        visible_index: 7,
+        parent_visible_index: 5,
+        first_child_visible_index: null,
+        position_in_set: 2,
+        set_size: 2,
         expanded: null,
       },
     ],
   });
   const labels = [...treeRoot.querySelectorAll(".nami-tree-row__label")];
+  const firstRow = treeRoot.querySelector(".nami-tree-row");
+  firstRow?.querySelector(".nami-tree-row__disclosure")?.click();
+  firstRow?.querySelector(".nami-tree-row__label")?.click();
+  focused.focus();
   const textEvidence = {
-    hostile_exact: labels[0]?.textContent === hostile,
-    hostile_bytes: new TextEncoder().encode(labels[0]?.textContent ?? "").length,
-    hostile_sha256: await sha256(labels[0]?.textContent ?? ""),
-    long_exact: labels[1]?.textContent === longValue,
-    long_bytes: new TextEncoder().encode(labels[1]?.textContent ?? "").length,
-    long_sha256: await sha256(labels[1]?.textContent ?? ""),
+    layout_exact: labels[0]?.textContent === layoutRendered,
+    layout_controls_absent: labels.every((label) =>
+      !activeLayoutControlPattern.test(label.textContent ?? "")),
+    layout_bytes: new TextEncoder().encode(labels[0]?.textContent ?? "").length,
+    layout_sha256: await sha256(labels[0]?.textContent ?? ""),
+    hostile_exact: labels[1]?.textContent === hostile,
+    hostile_bytes: new TextEncoder().encode(labels[1]?.textContent ?? "").length,
+    hostile_sha256: await sha256(labels[1]?.textContent ?? ""),
+    long_exact: labels[2]?.textContent === longValue,
+    long_bytes: new TextEncoder().encode(labels[2]?.textContent ?? "").length,
+    long_sha256: await sha256(labels[2]?.textContent ?? ""),
+    callback_ids: {
+      toggles: interactions.toggles,
+      activations: interactions.activations,
+      dataset_node_id: firstRow?.dataset.nodeId ?? null,
+    },
   };
   const currentTwo = controller.beginWindowRequest();
   const rows = Array.from({length: 256}, (_, index) => ({
-    node_id: `node-${index}`,
-    display: index === 1 ? hostile : index === 255 ? longValue : `Row ${index}`,
+    node_id: index === 1 ? rawNodeId : `node-${index}`,
+    display: index === 1
+      ? layoutSource
+      : index === 2
+        ? hostile
+        : index === 255
+          ? longValue
+          : `Row ${index}`,
     depth: index === 0 ? 0 : 1,
     is_container: index === 0,
     visible_index: index,
@@ -626,7 +697,8 @@ def _accessibility_evidence(value: object) -> dict[str, object]:
     trees = [node for node in nodes if field(node, "role") == "tree"]
     items = [node for node in nodes if field(node, "role") == "treeitem"]
     tree_names = {field(node, "name") for node in trees}
-    item_names = {field(node, "name") for node in items}
+    item_name_values = tuple(field(node, "name") for node in items)
+    item_names = set(item_name_values)
     keyboard = next(
         (
             node
@@ -655,6 +727,15 @@ def _accessibility_evidence(value: object) -> dict[str, object]:
         "treeitem_count": len(items),
         "keyboard_tree_named": "Keyboard tree evidence" in tree_names,
         "presentation_tree_named": "Presentation tree evidence" in tree_names,
+        "layout_label_exact": _LAYOUT_RENDERED in item_names,
+        "layout_controls_absent": bool(items) and all(
+            type(name) is str
+            and all(
+                ord(character) not in _ACTIVE_LAYOUT_CODE_POINTS
+                for character in name
+            )
+            for name in item_name_values
+        ),
         "hostile_label_exact": _HOSTILE in item_names,
         "long_label_exact": _LONG in item_names,
         "active_descendant_exposed": type(related) is list and bool(related),
@@ -890,7 +971,12 @@ def _begin_probe(
 
     def after_media(_value: object) -> None:
         expression = (
-            _FINAL_PROBE.replace("__HOSTILE__", json.dumps(_HOSTILE))
+            _FINAL_PROBE.replace(
+                "__LAYOUT_SOURCE__", json.dumps(_LAYOUT_SOURCE)
+            )
+            .replace("__LAYOUT_RENDERED__", json.dumps(_LAYOUT_RENDERED))
+            .replace("__RAW_NODE_ID__", json.dumps(_RAW_NODE_ID))
+            .replace("__HOSTILE__", json.dumps(_HOSTILE))
             .replace("__LONG__", json.dumps(_LONG))
             .replace("__COMPLETE_TEXT__", json.dumps(_COMPLETE_TEXT))
         )

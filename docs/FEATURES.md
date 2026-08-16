@@ -334,6 +334,12 @@ unrealized unless an entry says otherwise.
   remain authoritative over scroll state from an older window. A valid narrow
   page cannot self-retry for an unchanged viewport; a later viewport change is
   the only owner of another passive request. The production
+  filesystem-label sink replaces the fixed layout-control set and literal
+  marker delimiters with injective `⟦U+XXXX⟧` markers and isolates the label;
+  raw filename display remains exact in workflow, wire, and search and receives
+  no presentation-specific cap, while callbacks receive raw opaque node ids.
+  Ordinary Unicode and long labels are unchanged.
+  The production
   shell exposes labelled task navigation and work regions
   with honest empty guidance; it fabricates no task, session, or product row
   and adds no presentation command. The exact bridge surface remains solely in
@@ -363,7 +369,8 @@ unrealized unless an entry says otherwise.
 - **Tree Search**. Plan and Inventory search is a literal case-folded display
   substring operation on the backend. The pure helper accepts at most 65,536
   UTF-8 bytes before traversal, while each external adapter separately bounds
-  its complete request. The first real request owner applies a 150 ms trailing
+  its complete request. Search consumes raw display text: visible marker
+  spelling is neither decoded nor special query syntax. The first real request owner applies a 150 ms trailing
   debounce and invalidates stale success/error generations on every input,
   collapse, or filter intent. A folder remains visible for its own or a
   descendant match, rollups remain unfiltered, chips report filtered counts,

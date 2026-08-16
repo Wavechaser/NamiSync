@@ -1,4 +1,4 @@
-import { renderText } from "./render.js";
+import { renderFilesystemText } from "./render.js";
 
 export const ROW_H = 28;
 
@@ -541,7 +541,7 @@ function createRow(document, treeId, row, onDisclosureClick) {
   disclosure.addEventListener("click", onDisclosureClick);
   const label = document.createElement("span");
   label.classList.add("nami-tree-row__label");
-  renderText(label, row.display);
+  renderFilesystemText(label, row.display);
   element.append(disclosure, label);
   return element;
 }

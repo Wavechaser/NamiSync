@@ -118,6 +118,8 @@ def test_accessibility_evidence_preserves_incomplete_normalized_facts() -> None:
         "treeitem_count": 0,
         "keyboard_tree_named": False,
         "presentation_tree_named": False,
+        "layout_label_exact": False,
+        "layout_controls_absent": False,
         "hostile_label_exact": False,
         "long_label_exact": False,
         "active_descendant_exposed": False,
@@ -266,6 +268,12 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     assert tree["stale_results"] == [False, False]
     assert tree["stale_unchanged"] is True
     assert tree["text"] == {
+        "layout_exact": True,
+        "layout_controls_absent": True,
+        "layout_bytes": len(shell_child._LAYOUT_RENDERED.encode("utf-8")),
+        "layout_sha256": hashlib.sha256(
+            shell_child._LAYOUT_RENDERED.encode("utf-8")
+        ).hexdigest(),
         "hostile_exact": True,
         "hostile_bytes": len(shell_child._HOSTILE.encode("utf-8")),
         "hostile_sha256": hashlib.sha256(
@@ -276,6 +284,11 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "long_sha256": hashlib.sha256(
             shell_child._LONG.encode("utf-8")
         ).hexdigest(),
+        "callback_ids": {
+            "toggles": [[shell_child._RAW_NODE_ID, False]],
+            "activations": [shell_child._RAW_NODE_ID],
+            "dataset_node_id": shell_child._RAW_NODE_ID,
+        },
     }
     assert final["complete_text"] == shell_child._COMPLETE_TEXT
     assert page["accessibility"] == {
@@ -283,6 +296,8 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "treeitem_count": 259,
         "keyboard_tree_named": True,
         "presentation_tree_named": True,
+        "layout_label_exact": True,
+        "layout_controls_absent": True,
         "hostile_label_exact": True,
         "long_label_exact": True,
         "active_descendant_exposed": True,
@@ -527,18 +542,30 @@ def _assert_report_schema(result: object) -> None:
         "text",
     }
     assert set(final["tree"]["text"]) == {
+        "layout_exact",
+        "layout_controls_absent",
+        "layout_bytes",
+        "layout_sha256",
         "hostile_exact",
         "hostile_bytes",
         "hostile_sha256",
         "long_exact",
         "long_bytes",
         "long_sha256",
+        "callback_ids",
+    }
+    assert set(final["tree"]["text"]["callback_ids"]) == {
+        "toggles",
+        "activations",
+        "dataset_node_id",
     }
     assert set(result["page"]["accessibility"]) == {
         "tree_count",
         "treeitem_count",
         "keyboard_tree_named",
         "presentation_tree_named",
+        "layout_label_exact",
+        "layout_controls_absent",
         "hostile_label_exact",
         "long_label_exact",
         "active_descendant_exposed",

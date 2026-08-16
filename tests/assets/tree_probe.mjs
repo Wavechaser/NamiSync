@@ -227,12 +227,35 @@ const unreadableWindow = new Proxy({}, {
 assert.equal(tree.commitWindow(firstGeneration, unreadableWindow), false);
 assert.equal(staleReads, 0);
 
-const hostileDisplay =
-  "wave \u{1f30a} e\u0301 <img onerror=alert(1)> & \u6d77";
+const layoutCodePoints = [
+  ...Array.from({length: 0x20}, (_, index) => index),
+  ...Array.from({length: 0x21}, (_, index) => 0x7f + index),
+  0x00ad,
+  0x061c,
+  0x200b,
+  0x200e,
+  0x200f,
+  ...Array.from({length: 0x07}, (_, index) => 0x2028 + index),
+  ...Array.from({length: 0x10}, (_, index) => 0x2060 + index),
+  0xfeff,
+  0x27e6,
+  0x27e7,
+];
+const layoutDisplay =
+  `layout-${layoutCodePoints.map((codePoint) =>
+    String.fromCodePoint(codePoint)).join("")}-end`;
+const layoutRendered = `layout-${layoutCodePoints.map(
+  (codePoint) => `⟦U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}⟧`,
+).join("")}-end`;
+const activeLayoutControlPattern =
+  /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u;
+const preservedDisplay =
+  "wave \u{1f30a}\ufe0f e\u0301 <img onerror=alert(1)> العربية עברית A\u200cB\u200dC \u{e0020} & \u6d77";
 const longDisplay = `${"\u6ce2".repeat(600)} end`;
+const rawNodeId = "node-\u202e-⟦U+202E⟧";
 const accessedFields = new Map();
 const trackedContainer = new Proxy(
-  row(5, "node-container", hostileDisplay, {
+  row(5, rawNodeId, layoutDisplay, {
     container: true,
     expanded: false,
     depth: 1,
@@ -254,13 +277,17 @@ const firstWindow = Object.freeze({
   total: 10,
   rows: Object.freeze([
     trackedContainer,
-    row(6, "node-leaf", longDisplay, {
+    row(6, "node-preserved", preservedDisplay, {
       depth: 2,
       parent: 5,
     }),
     row(7, "projected-empty", "Projected empty", {
       container: true,
       expanded: null,
+      depth: 1,
+      parent: 0,
+    }),
+    row(8, "node-long", longDisplay, {
       depth: 1,
       parent: 0,
     }),
@@ -275,13 +302,13 @@ assert.deepEqual(
     "position_in_set", "set_size", "visible_index",
   ],
 );
-assert.equal(root.children.length, 5);
+assert.equal(root.children.length, 6);
 assert.equal(topSpacer.style.blockSize, `${5 * ROW_H}px`);
-assert.equal(bottomSpacer.style.blockSize, `${2 * ROW_H}px`);
+assert.equal(bottomSpacer.style.blockSize, `${1 * ROW_H}px`);
 
 const firstRows = treeItems(root);
-assert.equal(firstRows.length, 3);
-assert.equal(firstRows[0].dataset.nodeId, "node-container");
+assert.equal(firstRows.length, 4);
+assert.equal(firstRows[0].dataset.nodeId, rawNodeId);
 assert.equal(firstRows[0].id, "nami-tree-1-row-5");
 assert.equal(firstRows[0].ariaLevel, "2");
 assert.equal(firstRows[0].ariaPosInSet, "1");
@@ -290,14 +317,24 @@ assert.equal(firstRows[0].ariaExpanded, "false");
 assert.equal(firstRows[0].dataset.active, "true");
 assert.equal(root.getAttribute("aria-activedescendant"), firstRows[0].id);
 assert.equal(root.ariaActiveDescendant, undefined);
-assert.equal(firstRows[0].children[1].textContent, hostileDisplay);
+assert.equal(firstRows[0].children[1].textContent, layoutRendered);
+assert.equal(
+  activeLayoutControlPattern.test(firstRows[0].children[1].textContent),
+  false,
+);
 assert.equal(firstRows[1].ariaExpanded, undefined);
-assert.equal(firstRows[1].children[1].textContent, longDisplay);
+assert.equal(firstRows[1].children[1].textContent, preservedDisplay);
 assert.equal(firstRows[2].ariaExpanded, undefined);
 assert.ok(
   firstRows[2].children[0].classList.contains(
     "nami-tree-row__disclosure--leaf",
   ),
+);
+assert.equal(firstRows[3].children[1].textContent, longDisplay);
+assert.equal(
+  firstRows.some((row) =>
+    activeLayoutControlPattern.test(row.children[1].textContent)),
+  false,
 );
 
 // Disclosure owns its pointer event. A synchronous replacement from toggle
@@ -388,14 +425,14 @@ assert.equal(throwingEvent.cancelBubble, true);
 assert.deepEqual(throwingActivations, []);
 
 dispatchKey(root, "ArrowRight");
-assert.deepEqual(toggled, [["node-container", true]]);
+assert.deepEqual(toggled, [[rawNodeId, true]]);
 dispatchKey(root, "Enter");
-assert.deepEqual(activated, ["node-container"]);
+assert.deepEqual(activated, [rawNodeId]);
 dispatchKey(root, "ArrowDown");
 dispatchKey(root, "ArrowDown");
 assert.equal(root.getAttribute("aria-activedescendant"), firstRows[2].id);
 dispatchKey(root, "ArrowRight");
-assert.deepEqual(toggled, [["node-container", true]]);
+assert.deepEqual(toggled, [[rawNodeId, true]]);
 dispatchKey(root, "Home");
 assert.deepEqual(requested, [0]);
 
@@ -1023,7 +1060,17 @@ assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-0");
 
 const maximumGeneration = tree.beginWindowRequest();
 const maximumRows = Array.from({length: 256}, (_, index) =>
-  row(index, `node-${index}`, index === 255 ? longDisplay : `Row ${index}`, {
+  row(
+    index,
+    index === 1 ? rawNodeId : `node-${index}`,
+    index === 1
+      ? layoutDisplay
+      : index === 2
+        ? preservedDisplay
+        : index === 255
+          ? longDisplay
+          : `Row ${index}`,
+    {
     container: index === 0,
     expanded: index === 0,
     firstChild: index === 0 ? 1 : null,
@@ -1031,7 +1078,8 @@ const maximumRows = Array.from({length: 256}, (_, index) =>
     parent: index === 0 ? null : 0,
     position: index === 0 ? 1 : index,
     setSize: index === 0 ? 1 : 255,
-  }));
+    },
+  ));
 assert.equal(tree.commitWindow(maximumGeneration, {
   offset: 0,
   total: 256,
@@ -1039,6 +1087,8 @@ assert.equal(tree.commitWindow(maximumGeneration, {
 }), true);
 assert.equal(treeItems(root).length, 256);
 assert.equal(root.children.length, 258);
+assert.equal(treeItems(root)[1].children[1].textContent, layoutRendered);
+assert.equal(treeItems(root)[2].children[1].textContent, preservedDisplay);
 assert.equal(treeItems(root).at(-1).children[1].textContent, longDisplay);
 
 const staleGeneration = tree.beginWindowRequest();
