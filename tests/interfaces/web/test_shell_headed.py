@@ -15,6 +15,10 @@ from uuid import uuid4
 import pytest
 
 import _shell_gate_child as shell_child
+from _tree_window_fixture import (
+    TREE_WINDOW_FIXTURE_SCHEMA,
+    TreeWindowFixture,
+)
 from conftest import HeadedInstalledWheel
 from namisync.version import VERSION
 from _headed_native import (
@@ -39,23 +43,33 @@ _WHEEL_PREFIX = "namisync/interfaces/web/assets/"
 class _ShellGate:
     installed: HeadedInstalledWheel
     root: Path
+    fixture: TreeWindowFixture
     result_value: dict[str, object] | None = None
 
     def result(self) -> dict[str, object]:
         if self.result_value is None:
-            self.result_value = _run_shell_scenario(self.installed, self.root)
+            self.result_value = _run_shell_scenario(
+                self.installed,
+                self.root,
+                self.fixture,
+            )
         return self.result_value
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def shell_gate_evidence(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path_factory: pytest.TempPathFactory,
+    tree_window_fixture: TreeWindowFixture,
 ) -> _ShellGate:
     root = require_absolute_local_test_root(
         tmp_path_factory.mktemp("shell-gate")
     )
-    return _ShellGate(headed_installed_wheel, root)
+    return _ShellGate(
+        headed_installed_wheel,
+        root,
+        tree_window_fixture,
+    )
 
 
 def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> None:
@@ -86,6 +100,11 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert '"Accessibility.getFullAXTree"' in source
     assert "ZoomFactor = 2.0" in source
     assert 'await import("/tree.js")' in source
+    assert 'parser.add_argument("--tree-fixture", required=True' in source
+    assert "resolved.read_bytes()" in source
+    assert 'content.decode("utf-8", errors="strict")' in source
+    assert "const fixtureText = __TREE_FIXTURE_TEXT__;" in source
+    assert "await sha256(fixtureText)" in source
     assert "fingerprint === JSON.stringify(treeFingerprint(treeRoot))" in source
     assert source.index("controller.commitWindow(currentTwo") < source.index(
         "const secondStaleResult = controller.commitWindow(currentOne"
@@ -98,6 +117,8 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "scenario_deadline(75.0)" in launch
     assert launch.count("require_absolute_local_test_root(") >= 2
     assert "start_headed_process(" in launch
+    assert '"--tree-fixture"' in launch
+    assert "fixture.path.resolve()" in launch
     assert "cwd=installed.root" in launch
     assert "terminate_process_tree(process, deadline=deadline)" in launch
 
@@ -112,6 +133,23 @@ def test_shell_gate_report_refuses_private_error_text(tmp_path: Path) -> None:
     assert "sentinel" not in json.dumps(result).casefold()
 
 
+def test_shell_gate_child_hashes_exact_fixture_bytes(
+    tree_window_fixture: TreeWindowFixture,
+) -> None:
+    text, manifest, evidence = shell_child._load_tree_fixture(
+        tree_window_fixture.path.resolve()
+    )
+
+    assert text == tree_window_fixture.text
+    assert manifest == json.loads(tree_window_fixture.text)
+    assert evidence == {
+        "size": tree_window_fixture.size,
+        "sha256": tree_window_fixture.sha256,
+    }
+    with pytest.raises(ValueError, match="must be absolute"):
+        shell_child._load_tree_fixture(Path("relative-fixture.json"))
+
+
 def test_accessibility_evidence_preserves_incomplete_normalized_facts() -> None:
     assert shell_child._accessibility_evidence({"nodes": []}) == {
         "tree_count": 0,
@@ -120,8 +158,11 @@ def test_accessibility_evidence_preserves_incomplete_normalized_facts() -> None:
         "presentation_tree_named": False,
         "layout_label_exact": False,
         "layout_controls_absent": False,
-        "hostile_label_exact": False,
+        "ordinary_label_exact": False,
         "long_label_exact": False,
+        "supplemental_layout_label_exact": False,
+        "supplemental_hostile_label_exact": False,
+        "supplemental_long_label_exact": False,
         "active_descendant_exposed": False,
     }
 
@@ -131,6 +172,20 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     shell_gate_evidence: _ShellGate,
 ) -> None:
     result = shell_gate_evidence.result()
+    fixture = shell_gate_evidence.fixture
+    manifest = json.loads(fixture.text)
+    views = manifest["views"]
+    node_ids = manifest["node_ids"]
+    keyboard_root_id = views["pointer_collapsed"]["rows"][0]["node_id"]
+    projection_id = node_ids["projection"]
+    layout_source = next(
+        row["display"]
+        for row in views["layout_control"]["rows"]
+        if row["node_id"] == node_ids["layout_control"]
+    )
+    layout_rendered = shell_child._visible_filesystem_text(layout_source)
+    ordinary_source = views["next"]["rows"][0]["display"]
+    long_source = views["next"]["rows"][1]["display"]
     page = result["page"]
     initial = page["initial"]
     final = page["final"]
@@ -192,12 +247,13 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "tab_index": 0,
         "client_height": 28,
         "row_h": 28,
-        "active_node": "keyboard-root",
+        "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
+        "active_node": keyboard_root_id,
     }
     assert page["first_focus"] == {
         "label": "Keyboard tree evidence",
         "tag": "DIV",
-        "active_node": "keyboard-root",
+        "active_node": keyboard_root_id,
         "scroll_top": 0,
         "client_height": 28,
         "fully_visible": True,
@@ -205,25 +261,25 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     assert page["second_focus"] == {
         "label": "Keyboard tree evidence",
         "tag": "DIV",
-        "active_node": "keyboard-child",
+        "active_node": projection_id,
         "scroll_top": 28,
         "client_height": 28,
         "fully_visible": True,
     }
     assert page["disclosure_click"] == {
-        "toggles": [["keyboard-child", True]],
+        "toggles": [[projection_id, True]],
         "activations": [],
         "focus_is_tree": True,
-        "active_node": "keyboard-child",
+        "active_node": projection_id,
     }
     assert page["label_click"] == {
-        "toggles": [["keyboard-child", True]],
-        "activations": ["keyboard-child"],
+        "toggles": [[projection_id, True]],
+        "activations": [projection_id],
         "focus_is_tree": True,
-        "active_node": "keyboard-child",
+        "active_node": projection_id,
     }
     assert page["scroll_tree"] == {
-        "active_node": "scroll-7",
+        "active_node": views["maximum"]["rows"][7]["node_id"],
         "activations": [],
         "commits": [{"accepted": True, "generation": 2, "offset": 4}],
         "fully_visible_active": True,
@@ -232,9 +288,10 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
             "accepted": True,
             "client_height": 112,
             "generation": 1,
+            "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
             "row_count": 5,
             "row_h": 28,
-            "total": 300,
+            "total": views["maximum"]["total"],
         },
         "nonblank_viewport": True,
         "rendered_indices": [4, 5, 6, 7, 8],
@@ -263,43 +320,88 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     assert tree["every_row_28"] is True
     assert tree["first_level"] == "1"
     assert tree["first_expanded"] == "true"
-    assert tree["leaf_expanded"] is False
+    assert tree["known_leaf_expanded"] is False
     assert tree["stale_reads"] == 0
     assert tree["stale_results"] == [False, False]
     assert tree["stale_unchanged"] is True
     assert tree["text"] == {
         "layout_exact": True,
         "layout_controls_absent": True,
-        "layout_bytes": len(shell_child._LAYOUT_RENDERED.encode("utf-8")),
+        "layout_bytes": len(layout_rendered.encode("utf-8")),
         "layout_sha256": hashlib.sha256(
-            shell_child._LAYOUT_RENDERED.encode("utf-8")
+            layout_rendered.encode("utf-8")
         ).hexdigest(),
-        "hostile_exact": True,
-        "hostile_bytes": len(shell_child._HOSTILE.encode("utf-8")),
-        "hostile_sha256": hashlib.sha256(
-            shell_child._HOSTILE.encode("utf-8")
+        "ordinary_exact": True,
+        "ordinary_bytes": len(ordinary_source.encode("utf-8")),
+        "ordinary_sha256": hashlib.sha256(
+            ordinary_source.encode("utf-8")
         ).hexdigest(),
         "long_exact": True,
-        "long_bytes": len(shell_child._LONG.encode("utf-8")),
+        "long_bytes": len(long_source.encode("utf-8")),
         "long_sha256": hashlib.sha256(
-            shell_child._LONG.encode("utf-8")
+            long_source.encode("utf-8")
         ).hexdigest(),
+        "tri_state": ["true", "false", None],
         "callback_ids": {
-            "toggles": [[shell_child._RAW_NODE_ID, False]],
-            "activations": [shell_child._RAW_NODE_ID],
-            "dataset_node_id": shell_child._RAW_NODE_ID,
+            "toggles": [[projection_id, True]],
+            "activations": [projection_id],
+            "dataset_node_id": projection_id,
         },
+        "supplemental": {
+            "layout_exact": True,
+            "layout_controls_absent": True,
+            "hostile_exact": True,
+            "long_exact": True,
+        },
+    }
+    assert tree["view_coverage"] == {
+        "head": {
+            "accepted": True,
+            "offset": views["head"]["offset"],
+            "total": views["head"]["total"],
+            "row_count": len(views["head"]["rows"]),
+            "first_node_id": views["head"]["rows"][0]["node_id"],
+            "last_node_id": views["head"]["rows"][-1]["node_id"],
+        },
+        "tail": {
+            "accepted": True,
+            "offset": views["tail"]["offset"],
+            "total": views["tail"]["total"],
+            "row_count": len(views["tail"]["rows"]),
+            "first_node_id": views["tail"]["rows"][0]["node_id"],
+            "last_node_id": views["tail"]["rows"][-1]["node_id"],
+        },
+        "empty": {
+            "accepted": True,
+            "offset": 0,
+            "total": 0,
+            "row_count": 0,
+            "first_node_id": None,
+            "last_node_id": None,
+        },
+    }
+    assert final["fixture"] == {
+        "schema": TREE_WINDOW_FIXTURE_SCHEMA,
+        "size": fixture.size,
+        "sha256": fixture.sha256,
+    }
+    assert result["tree_fixture"] == {
+        "size": fixture.size,
+        "sha256": fixture.sha256,
     }
     assert final["complete_text"] == shell_child._COMPLETE_TEXT
     assert page["accessibility"] == {
-        "tree_count": 2,
-        "treeitem_count": 259,
+        "tree_count": 3,
+        "treeitem_count": 262,
         "keyboard_tree_named": True,
         "presentation_tree_named": True,
         "layout_label_exact": True,
         "layout_controls_absent": True,
-        "hostile_label_exact": True,
+        "ordinary_label_exact": True,
         "long_label_exact": True,
+        "supplemental_layout_label_exact": True,
+        "supplemental_hostile_label_exact": True,
+        "supplemental_long_label_exact": True,
         "active_descendant_exposed": True,
     }
     assert page["native"] == {
@@ -315,6 +417,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
 def _run_shell_scenario(
     installed: HeadedInstalledWheel,
     root: Path,
+    fixture: TreeWindowFixture,
 ) -> dict[str, object]:
     deadline = scenario_deadline(75.0)
     root = require_absolute_local_test_root(root)
@@ -335,6 +438,8 @@ def _run_shell_scenario(
             title,
             "--output",
             output,
+            "--tree-fixture",
+            fixture.path.resolve(),
         ),
         cwd=installed.root,
         environment=clean_child_environment(),
@@ -398,6 +503,7 @@ def _assert_report_schema(result: object) -> None:
         "startup_errors",
         "runtime",
         "installed_assets",
+        "tree_fixture",
         "page",
         "exit_code",
     }
@@ -408,6 +514,8 @@ def _assert_report_schema(result: object) -> None:
     assert type(result["startup_errors"]) is list
     assert type(result["runtime"]) is dict
     assert type(result["installed_assets"]) is dict
+    assert type(result["tree_fixture"]) is dict
+    assert set(result["tree_fixture"]) == {"size", "sha256"}
     assert type(result["page"]) is dict
     assert set(result["runtime"]) == {
         "executable",
@@ -466,6 +574,7 @@ def _assert_report_schema(result: object) -> None:
         "tab_index",
         "client_height",
         "row_h",
+        "fixture_schema",
         "active_node",
     }
     for focus_name in ("first_focus", "second_focus"):
@@ -501,6 +610,7 @@ def _assert_report_schema(result: object) -> None:
         "accepted",
         "client_height",
         "generation",
+        "fixture_schema",
         "row_count",
         "row_h",
         "total",
@@ -511,6 +621,7 @@ def _assert_report_schema(result: object) -> None:
         "zoom",
         "forced",
         "tree",
+        "fixture",
         "complete_text",
     }
     assert set(final["zoom"]) == {
@@ -526,6 +637,7 @@ def _assert_report_schema(result: object) -> None:
         "outline_style",
         "outline_width",
     }
+    assert set(final["fixture"]) == {"schema", "size", "sha256"}
     assert set(final["tree"]) == {
         "row_h",
         "role",
@@ -535,29 +647,54 @@ def _assert_report_schema(result: object) -> None:
         "every_row_28",
         "first_level",
         "first_expanded",
-        "leaf_expanded",
+        "known_leaf_expanded",
         "stale_reads",
         "stale_results",
         "stale_unchanged",
         "text",
+        "view_coverage",
     }
+    assert set(final["tree"]["view_coverage"]) == {
+        "head",
+        "tail",
+        "empty",
+    }
+    assert all(
+        set(evidence) == {
+            "accepted",
+            "offset",
+            "total",
+            "row_count",
+            "first_node_id",
+            "last_node_id",
+        }
+        for evidence in final["tree"]["view_coverage"].values()
+    )
     assert set(final["tree"]["text"]) == {
         "layout_exact",
         "layout_controls_absent",
         "layout_bytes",
         "layout_sha256",
-        "hostile_exact",
-        "hostile_bytes",
-        "hostile_sha256",
+        "ordinary_exact",
+        "ordinary_bytes",
+        "ordinary_sha256",
         "long_exact",
         "long_bytes",
         "long_sha256",
+        "tri_state",
         "callback_ids",
+        "supplemental",
     }
     assert set(final["tree"]["text"]["callback_ids"]) == {
         "toggles",
         "activations",
         "dataset_node_id",
+    }
+    assert set(final["tree"]["text"]["supplemental"]) == {
+        "layout_exact",
+        "layout_controls_absent",
+        "hostile_exact",
+        "long_exact",
     }
     assert set(result["page"]["accessibility"]) == {
         "tree_count",
@@ -566,8 +703,11 @@ def _assert_report_schema(result: object) -> None:
         "presentation_tree_named",
         "layout_label_exact",
         "layout_controls_absent",
-        "hostile_label_exact",
+        "ordinary_label_exact",
         "long_label_exact",
+        "supplemental_layout_label_exact",
+        "supplemental_hostile_label_exact",
+        "supplemental_long_label_exact",
         "active_descendant_exposed",
     }
     assert set(result["page"]["native"]) == {"ui_thread", "window_style"}

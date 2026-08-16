@@ -48,8 +48,19 @@ _HOSTILE = (
     "العربية עברית A\u200cB\u200dC \U000e0020 & \u6d77"
 )
 _LONG = ("\u6ce2" * 600) + " end"
-_RAW_NODE_ID = "node-\u202e-⟦U+202E⟧"
 _COMPLETE_TEXT = "Shell gate complete"
+_TREE_FIXTURE_SCHEMA = "namisync-tree-window-fixture-v1"
+_TREE_FIXTURE_VIEWS = {
+    "head",
+    "next",
+    "tail",
+    "empty",
+    "maximum",
+    "pointer_expanded",
+    "pointer_collapsed",
+    "projected_empty",
+    "layout_control",
+}
 _ASSETS = (
     "app.css",
     "app.js",
@@ -123,6 +134,12 @@ _KEYBOARD_TREE_PROBE = r"""
   if (!(work instanceof HTMLElement)) {
     throw new Error("production work panel is unavailable");
   }
+  const fixtureText = __TREE_FIXTURE_TEXT__;
+  const fixture = JSON.parse(fixtureText);
+  if (fixture.schema !== "namisync-tree-window-fixture-v1") {
+    throw new Error("tree fixture schema is unavailable");
+  }
+  globalThis.__namiTreeFixtureEvidence = {fixture, fixtureText};
   const {ROW_H, createTree} = await import("/tree.js");
   const root = document.createElement("div");
   root.ariaLabel = "Keyboard tree evidence";
@@ -136,54 +153,14 @@ _KEYBOARD_TREE_PROBE = r"""
     activate: (nodeId) => interactions.activations.push(nodeId),
   });
   const generation = controller.beginWindowRequest();
-  controller.commitWindow(generation, {
-    offset: 0,
-    total: 3,
-    rows: [
-      {
-        node_id: "keyboard-root",
-        display: "Keyboard root",
-        depth: 0,
-        is_container: true,
-        visible_index: 0,
-        parent_visible_index: null,
-        first_child_visible_index: 1,
-        position_in_set: 1,
-        set_size: 1,
-        expanded: true,
-      },
-      {
-        node_id: "keyboard-child",
-        display: "Keyboard child",
-        depth: 1,
-        is_container: true,
-        visible_index: 1,
-        parent_visible_index: 0,
-        first_child_visible_index: null,
-        position_in_set: 1,
-        set_size: 2,
-        expanded: false,
-      },
-      {
-        node_id: "keyboard-sibling",
-        display: "Keyboard sibling",
-        depth: 1,
-        is_container: false,
-        visible_index: 2,
-        parent_visible_index: 0,
-        first_child_visible_index: null,
-        position_in_set: 2,
-        set_size: 2,
-        expanded: null,
-      },
-    ],
-  });
+  controller.commitWindow(generation, fixture.views.pointer_collapsed);
   const activeDescendant = root.getAttribute("aria-activedescendant");
   return {
     row_count: root.querySelectorAll(".nami-tree-row").length,
     tab_index: root.tabIndex,
     client_height: root.clientHeight,
     row_h: ROW_H,
+    fixture_schema: fixture.schema,
     active_node: document.getElementById(activeDescendant)
       ?.dataset.nodeId ?? null,
   };
@@ -215,9 +192,10 @@ _ACTIVE_PROBE = r"""
 _POINTER_TARGET_PROBE = r"""
 (() => {
   const state = globalThis.__namiShellTreeEvidence;
-  const row = state?.root?.querySelector(
-    '[data-node-id="keyboard-child"]',
-  );
+  const descendant = state?.root?.getAttribute("aria-activedescendant");
+  const row = descendant === null || descendant === undefined
+    ? null
+    : document.getElementById(descendant);
   const disclosure = row?.querySelector(".nami-tree-row__disclosure");
   const label = row?.querySelector(".nami-tree-row__label");
   if (!(disclosure instanceof HTMLElement) || !(label instanceof HTMLElement)) {
@@ -260,7 +238,12 @@ _SCROLL_TREE_SETUP = r"""
   root.style.boxSizing = "content-box";
   root.style.blockSize = `${4 * ROW_H}px`;
   work.append(root);
-  const total = 300;
+  const fixture = globalThis.__namiTreeFixtureEvidence?.fixture;
+  if (fixture?.schema !== "namisync-tree-window-fixture-v1") {
+    throw new Error("scroll tree fixture is unavailable");
+  }
+  const maximum = fixture.views.maximum;
+  const total = maximum.total;
   const state = {
     activations: [],
     commits: [],
@@ -297,6 +280,7 @@ _SCROLL_TREE_SETUP = r"""
     accepted,
     client_height: root.clientHeight,
     generation,
+    fixture_schema: fixture.schema,
     row_count: root.querySelectorAll(".nami-tree-row").length,
     row_h: ROW_H,
     total,
@@ -307,21 +291,11 @@ _SCROLL_TREE_SETUP = r"""
   return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
 
   function rows(offset) {
-    return Array.from({length: 5}, (_, relativeIndex) => {
-      const visibleIndex = offset + relativeIndex;
-      return {
-        node_id: `scroll-${visibleIndex}`,
-        display: `Scroll ${visibleIndex}`,
-        depth: 0,
-        is_container: false,
-        visible_index: visibleIndex,
-        parent_visible_index: null,
-        first_child_visible_index: null,
-        position_in_set: visibleIndex + 1,
-        set_size: total,
-        expanded: null,
-      };
-    });
+    const result = maximum.rows.slice(offset, offset + 5);
+    if (result.length !== 5) {
+      throw new Error("scroll fixture window is unavailable");
+    }
+    return result;
   }
 })()
 """
@@ -390,6 +364,15 @@ _FINAL_PROBE = r"""
   const focusStyle = getComputedStyle(focused);
   const treeModule = await import("/tree.js");
   const renderModule = await import("/render.js");
+  const fixtureState = globalThis.__namiTreeFixtureEvidence;
+  if (fixtureState?.fixture?.schema !==
+      "namisync-tree-window-fixture-v1" ||
+      typeof fixtureState.fixtureText !== "string") {
+    throw new Error("tree fixture evidence disappeared");
+  }
+  const {fixture, fixtureText} = fixtureState;
+  const views = fixture.views;
+  const nodeIds = fixture.node_ids;
   const treeRoot = document.createElement("div");
   treeRoot.ariaLabel = "Presentation tree evidence";
   work.append(treeRoot);
@@ -398,11 +381,10 @@ _FINAL_PROBE = r"""
     toggle: (...value) => interactions.toggles.push(value),
     activate: (nodeId) => interactions.activations.push(nodeId),
   });
-  const layoutSource = __LAYOUT_SOURCE__;
-  const layoutRendered = __LAYOUT_RENDERED__;
-  const hostile = __HOSTILE__;
-  const longValue = __LONG__;
-  const rawNodeId = __RAW_NODE_ID__;
+  const supplementalLayoutSource = __LAYOUT_SOURCE__;
+  const supplementalLayoutRendered = __LAYOUT_RENDERED__;
+  const supplementalHostile = __HOSTILE__;
+  const supplementalLong = __LONG__;
   const activeLayoutControlPattern =
     /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u;
   const staleOne = controller.beginWindowRequest();
@@ -415,91 +397,108 @@ _FINAL_PROBE = r"""
     },
   });
   const firstStaleResult = controller.commitWindow(staleOne, unreadable);
-  controller.commitWindow(currentOne, {
-    offset: 5,
-    total: 10,
+  controller.commitWindow(currentOne, views.layout_control);
+  const layoutRow = rowForNode(treeRoot, nodeIds.layout_control);
+  const layoutSource = views.layout_control.rows.find(
+    (row) => row.node_id === nodeIds.layout_control)?.display ?? "";
+  const layoutRendered = visibleFilesystemText(layoutSource);
+  const layoutLabel = layoutRow?.querySelector(".nami-tree-row__label")
+    ?.textContent ?? "";
+
+  const pointerGeneration = controller.beginWindowRequest();
+  controller.commitWindow(pointerGeneration, views.pointer_collapsed);
+  const projectionRow = rowForNode(treeRoot, nodeIds.projection);
+  projectionRow?.querySelector(".nami-tree-row__disclosure")?.click();
+  projectionRow?.querySelector(".nami-tree-row__label")?.click();
+
+  const triState = [];
+  for (const name of [
+    "pointer_expanded",
+    "pointer_collapsed",
+    "projected_empty",
+  ]) {
+    const generation = controller.beginWindowRequest();
+    controller.commitWindow(generation, views[name]);
+    triState.push(
+      rowForNode(treeRoot, nodeIds.projection)
+        ?.getAttribute("aria-expanded") ?? null,
+    );
+  }
+
+  const textGeneration = controller.beginWindowRequest();
+  controller.commitWindow(textGeneration, views.next);
+  const ordinarySource = views.next.rows.find(
+    (row) => row.node_id === nodeIds.ordinary_unicode)?.display ?? "";
+  const longSource = views.next.rows.find(
+    (row) => row.node_id === nodeIds.long_unicode)?.display ?? "";
+  const ordinaryLabel = rowForNode(treeRoot, nodeIds.ordinary_unicode)
+    ?.querySelector(".nami-tree-row__label")?.textContent ?? "";
+  const longLabel = rowForNode(treeRoot, nodeIds.long_unicode)
+    ?.querySelector(".nami-tree-row__label")?.textContent ?? "";
+
+  // The exhaustive sink vector is renderer-local because Windows filenames
+  // cannot carry every defended character, including NUL.
+  const sinkRoot = document.createElement("div");
+  sinkRoot.ariaLabel = "Renderer sink coverage evidence";
+  work.append(sinkRoot);
+  const sinkController = treeModule.createTree(sinkRoot);
+  const sinkGeneration = sinkController.beginWindowRequest();
+  sinkController.commitWindow(sinkGeneration, {
+    offset: 0,
+    total: 3,
     rows: [
-      {
-        node_id: rawNodeId,
-        display: layoutSource,
-        depth: 1,
-        is_container: true,
-        visible_index: 5,
-        parent_visible_index: 0,
-        first_child_visible_index: 6,
-        position_in_set: 1,
-        set_size: 1,
-        expanded: true,
-      },
-      {
-        node_id: "node-hostile",
-        display: hostile,
-        depth: 2,
-        is_container: false,
-        visible_index: 6,
-        parent_visible_index: 5,
-        first_child_visible_index: null,
-        position_in_set: 1,
-        set_size: 2,
-        expanded: null,
-      },
-      {
-        node_id: "node-long",
-        display: longValue,
-        depth: 2,
-        is_container: false,
-        visible_index: 7,
-        parent_visible_index: 5,
-        first_child_visible_index: null,
-        position_in_set: 2,
-        set_size: 2,
-        expanded: null,
-      },
+      sinkRow(0, "sink-layout", supplementalLayoutSource),
+      sinkRow(1, "sink-hostile", supplementalHostile),
+      sinkRow(2, "sink-long", supplementalLong),
     ],
   });
-  const labels = [...treeRoot.querySelectorAll(".nami-tree-row__label")];
-  const firstRow = treeRoot.querySelector(".nami-tree-row");
-  firstRow?.querySelector(".nami-tree-row__disclosure")?.click();
-  firstRow?.querySelector(".nami-tree-row__label")?.click();
+  const sinkLabels = [...sinkRoot.querySelectorAll(".nami-tree-row__label")];
   focused.focus();
   const textEvidence = {
-    layout_exact: labels[0]?.textContent === layoutRendered,
-    layout_controls_absent: labels.every((label) =>
-      !activeLayoutControlPattern.test(label.textContent ?? "")),
-    layout_bytes: new TextEncoder().encode(labels[0]?.textContent ?? "").length,
-    layout_sha256: await sha256(labels[0]?.textContent ?? ""),
-    hostile_exact: labels[1]?.textContent === hostile,
-    hostile_bytes: new TextEncoder().encode(labels[1]?.textContent ?? "").length,
-    hostile_sha256: await sha256(labels[1]?.textContent ?? ""),
-    long_exact: labels[2]?.textContent === longValue,
-    long_bytes: new TextEncoder().encode(labels[2]?.textContent ?? "").length,
-    long_sha256: await sha256(labels[2]?.textContent ?? ""),
+    layout_exact: layoutLabel === layoutRendered,
+    layout_controls_absent:
+      !activeLayoutControlPattern.test(layoutLabel),
+    layout_bytes: new TextEncoder().encode(layoutLabel).length,
+    layout_sha256: await sha256(layoutLabel),
+    ordinary_exact: ordinaryLabel === ordinarySource,
+    ordinary_bytes: new TextEncoder().encode(ordinaryLabel).length,
+    ordinary_sha256: await sha256(ordinaryLabel),
+    long_exact: longLabel === longSource,
+    long_bytes: new TextEncoder().encode(longLabel).length,
+    long_sha256: await sha256(longLabel),
+    tri_state: triState,
     callback_ids: {
       toggles: interactions.toggles,
       activations: interactions.activations,
-      dataset_node_id: firstRow?.dataset.nodeId ?? null,
+      dataset_node_id: projectionRow?.dataset.nodeId ?? null,
+    },
+    supplemental: {
+      layout_exact:
+        sinkLabels[0]?.textContent === supplementalLayoutRendered,
+      layout_controls_absent: sinkLabels.every((label) =>
+        !activeLayoutControlPattern.test(label.textContent ?? "")),
+      hostile_exact: sinkLabels[1]?.textContent === supplementalHostile,
+      long_exact: sinkLabels[2]?.textContent === supplementalLong,
     },
   };
+  const viewCoverage = {};
+  for (const name of ["head", "tail", "empty"]) {
+    const generation = controller.beginWindowRequest();
+    const accepted = controller.commitWindow(generation, views[name]);
+    const mountedRows = [
+      ...treeRoot.querySelectorAll(".nami-tree-row"),
+    ];
+    viewCoverage[name] = {
+      accepted,
+      offset: views[name].offset,
+      total: views[name].total,
+      row_count: mountedRows.length,
+      first_node_id: mountedRows[0]?.dataset.nodeId ?? null,
+      last_node_id: mountedRows.at(-1)?.dataset.nodeId ?? null,
+    };
+  }
   const currentTwo = controller.beginWindowRequest();
-  const rows = Array.from({length: 256}, (_, index) => ({
-    node_id: index === 1 ? rawNodeId : `node-${index}`,
-    display: index === 1
-      ? layoutSource
-      : index === 2
-        ? hostile
-        : index === 255
-          ? longValue
-          : `Row ${index}`,
-    depth: index === 0 ? 0 : 1,
-    is_container: index === 0,
-    visible_index: index,
-    parent_visible_index: index === 0 ? null : 0,
-    first_child_visible_index: index === 0 ? 1 : null,
-    position_in_set: index === 0 ? 1 : index,
-    set_size: index === 0 ? 1 : 255,
-    expanded: index === 0 ? true : null,
-  }));
-  controller.commitWindow(currentTwo, {offset: 0, total: 256, rows});
+  controller.commitWindow(currentTwo, views.maximum);
   const fingerprint = JSON.stringify(treeFingerprint(treeRoot));
   const secondStaleResult = controller.commitWindow(currentOne, unreadable);
   const stale_unchanged =
@@ -538,11 +537,18 @@ _FINAL_PROBE = r"""
         (row) => Math.abs(row.getBoundingClientRect().height - 28) < 0.01),
       first_level: renderedRows[0]?.getAttribute("aria-level"),
       first_expanded: renderedRows[0]?.getAttribute("aria-expanded"),
-      leaf_expanded: renderedRows[1]?.hasAttribute("aria-expanded"),
+      known_leaf_expanded: rowForNode(treeRoot, nodeIds.layout_control)
+        ?.hasAttribute("aria-expanded") ?? null,
       stale_reads: staleReads,
       stale_results: [firstStaleResult, secondStaleResult],
       stale_unchanged,
       text: textEvidence,
+      view_coverage: viewCoverage,
+    },
+    fixture: {
+      schema: fixture.schema,
+      size: new TextEncoder().encode(fixtureText).length,
+      sha256: await sha256(fixtureText),
     },
     complete_text: status.textContent,
   };
@@ -564,6 +570,35 @@ _FINAL_PROBE = r"""
       text: child.textContent,
       block_size: child.style.blockSize,
     }));
+  }
+
+  function rowForNode(root, nodeId) {
+    return [...root.querySelectorAll(".nami-tree-row")].find(
+      (row) => row.dataset.nodeId === nodeId,
+    );
+  }
+
+  function visibleFilesystemText(value) {
+    return value.replace(
+      /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff\u27e6-\u27e7]/gu,
+      (character) =>
+        `⟦U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}⟧`,
+    );
+  }
+
+  function sinkRow(index, nodeId, display) {
+    return {
+      node_id: nodeId,
+      display,
+      depth: 0,
+      is_container: false,
+      visible_index: index,
+      parent_visible_index: null,
+      first_child_visible_index: null,
+      position_in_set: index + 1,
+      set_size: 3,
+      expanded: null,
+    };
   }
 })()
 """
@@ -626,7 +661,48 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--tree-fixture", required=True, type=Path)
     return parser.parse_args()
+
+
+def _load_tree_fixture(
+    path: Path,
+) -> tuple[str, dict[str, object], dict[str, object]]:
+    if not path.is_absolute():
+        raise ValueError("tree fixture path must be absolute")
+    resolved = path.resolve(strict=True)
+    content = resolved.read_bytes()
+    text = content.decode("utf-8", errors="strict")
+    manifest = json.loads(text)
+    if type(manifest) is not dict or set(manifest) != {
+        "schema",
+        "node_ids",
+        "views",
+    }:
+        raise TypeError("tree fixture envelope is invalid")
+    if manifest["schema"] != _TREE_FIXTURE_SCHEMA:
+        raise ValueError("tree fixture schema is unsupported")
+    if type(manifest["node_ids"]) is not dict or set(
+        manifest["node_ids"]
+    ) != {
+        "projection",
+        "layout_control",
+        "ordinary_unicode",
+        "long_unicode",
+    }:
+        raise TypeError("tree fixture node IDs are invalid")
+    if type(manifest["views"]) is not dict or set(manifest["views"]) != (
+        _TREE_FIXTURE_VIEWS
+    ):
+        raise TypeError("tree fixture views are invalid")
+    return (
+        text,
+        manifest,
+        {
+            "size": len(content),
+            "sha256": hashlib.sha256(content).hexdigest(),
+        },
+    )
 
 
 def _runtime_identity() -> dict[str, object]:
@@ -683,7 +759,36 @@ def _runtime_value(task: object) -> dict[str, object]:
     return value
 
 
-def _accessibility_evidence(value: object) -> dict[str, object]:
+def _fixture_display(
+    manifest: dict[str, object] | None,
+    view_name: str,
+    node_name: str,
+) -> str | None:
+    if manifest is None:
+        return None
+    views = manifest["views"]
+    node_ids = manifest["node_ids"]
+    rows = views[view_name]["rows"]
+    return next(
+        row["display"]
+        for row in rows
+        if row["node_id"] == node_ids[node_name]
+    )
+
+
+def _visible_filesystem_text(value: str) -> str:
+    return "".join(
+        f"⟦U+{ord(character):04X}⟧"
+        if ord(character) in _LAYOUT_CODE_POINTS
+        else character
+        for character in value
+    )
+
+
+def _accessibility_evidence(
+    value: object,
+    manifest: dict[str, object] | None = None,
+) -> dict[str, object]:
     if type(value) is not dict or type(value.get("nodes")) is not list:
         raise TypeError("accessibility tree result is invalid")
     nodes = value["nodes"]
@@ -722,12 +827,30 @@ def _accessibility_evidence(value: object) -> dict[str, object]:
         if type(active_value) is dict
         else None
     )
+    layout_source = _fixture_display(
+        manifest,
+        "layout_control",
+        "layout_control",
+    )
+    layout_rendered = (
+        _visible_filesystem_text(layout_source)
+        if layout_source is not None
+        else None
+    )
+    ordinary = _fixture_display(
+        manifest,
+        "next",
+        "ordinary_unicode",
+    )
+    long_value = _fixture_display(manifest, "next", "long_unicode")
     evidence = {
         "tree_count": len(trees),
         "treeitem_count": len(items),
         "keyboard_tree_named": "Keyboard tree evidence" in tree_names,
         "presentation_tree_named": "Presentation tree evidence" in tree_names,
-        "layout_label_exact": _LAYOUT_RENDERED in item_names,
+        "layout_label_exact": (
+            layout_rendered is not None and layout_rendered in item_names
+        ),
         "layout_controls_absent": bool(items) and all(
             type(name) is str
             and all(
@@ -736,8 +859,15 @@ def _accessibility_evidence(value: object) -> dict[str, object]:
             )
             for name in item_name_values
         ),
-        "hostile_label_exact": _HOSTILE in item_names,
-        "long_label_exact": _LONG in item_names,
+        "ordinary_label_exact": (
+            ordinary is not None and ordinary in item_names
+        ),
+        "long_label_exact": (
+            long_value is not None and long_value in item_names
+        ),
+        "supplemental_layout_label_exact": _LAYOUT_RENDERED in item_names,
+        "supplemental_hostile_label_exact": _HOSTILE in item_names,
+        "supplemental_long_label_exact": _LONG in item_names,
         "active_descendant_exposed": type(related) is list and bool(related),
     }
     return evidence
@@ -747,6 +877,8 @@ def _begin_probe(
     window: object,
     recorder: _Recorder,
     retained: list[object],
+    fixture_text: str,
+    fixture_manifest: dict[str, object],
 ) -> None:
     from System import Action
 
@@ -903,7 +1035,11 @@ def _begin_probe(
 
     def after_initial(value: object) -> None:
         page["initial"] = value
-        evaluate(_KEYBOARD_TREE_PROBE, after_keyboard_tree)
+        expression = _KEYBOARD_TREE_PROBE.replace(
+            "__TREE_FIXTURE_TEXT__",
+            json.dumps(fixture_text),
+        )
+        evaluate(expression, after_keyboard_tree)
 
     def after_keyboard_tree(value: object) -> None:
         page["keyboard_tree"] = value
@@ -975,7 +1111,6 @@ def _begin_probe(
                 "__LAYOUT_SOURCE__", json.dumps(_LAYOUT_SOURCE)
             )
             .replace("__LAYOUT_RENDERED__", json.dumps(_LAYOUT_RENDERED))
-            .replace("__RAW_NODE_ID__", json.dumps(_RAW_NODE_ID))
             .replace("__HOSTILE__", json.dumps(_HOSTILE))
             .replace("__LONG__", json.dumps(_LONG))
             .replace("__COMPLETE_TEXT__", json.dumps(_COMPLETE_TEXT))
@@ -995,7 +1130,10 @@ def _begin_probe(
         )
 
     def after_accessibility(value: object) -> None:
-        page["accessibility"] = _accessibility_evidence(value)
+        page["accessibility"] = _accessibility_evidence(
+            value,
+            fixture_manifest,
+        )
         page["native"] = {
             "ui_thread": not bool(native.InvokeRequired),
             "window_style": _window_style(native),
@@ -1010,6 +1148,8 @@ def _configure_probe(
     recorder: _Recorder,
     retained: list[object],
     original: Callable[..., object],
+    fixture_text: str,
+    fixture_manifest: dict[str, object],
 ) -> object:
     controller = original(window)
 
@@ -1020,7 +1160,13 @@ def _configure_probe(
 
         def begin() -> None:
             try:
-                _begin_probe(window, recorder, retained)
+                _begin_probe(
+                    window,
+                    recorder,
+                    retained,
+                    fixture_text,
+                    fixture_manifest,
+                )
             except BaseException as error:
                 recorder.failure("page_probe", error)
 
@@ -1038,6 +1184,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
+    fixture_text, fixture_manifest, fixture_evidence = _load_tree_fixture(
+        arguments.tree_fixture
+    )
+    recorder.set("tree_fixture", fixture_evidence)
     recorder.set("runtime", _runtime_identity())
     recorder.set("installed_assets", _installed_assets())
     retained: list[object] = []
@@ -1052,6 +1202,8 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     recorder,
                     retained,
                     original,
+                    fixture_text,
+                    fixture_manifest,
                 ),
             )
         )

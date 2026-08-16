@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 
 import pytest
 
+import _tree_window_fixture as tree_fixture_module
+from _tree_window_fixture import (
+    LAYOUT_CONTROL_DISPLAY,
+    LONG_UNICODE_DISPLAY,
+    ORDINARY_UNICODE_DISPLAY,
+    TREE_WINDOW_FIXTURE_SCHEMA,
+    TreeWindowFixture,
+)
 from namisync.core.pathing import normalize_relative_path
 from namisync.interfaces.web import visible_sequence as visible_module
 from namisync.interfaces.web.visible_sequence import (
@@ -150,6 +160,179 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
         offset=0,
         limit=1,
     ).rows[0].expanded is None
+
+
+def test_br_g_34_cross_layer_fixture_runs_the_exact_production_chain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_build = tree_fixture_module.build_node_tree
+    original_derive = tree_fixture_module.derive_visible_sequence
+    original_window = tree_fixture_module.window_visible_sequence
+    original_view = tree_fixture_module.to_visible_window_view
+    calls: list[str] = []
+    built_tree: list[NodeTree] = []
+
+    def observed_build(*args, **kwargs):
+        calls.append("build")
+        tree = original_build(*args, **kwargs)
+        built_tree.append(tree)
+        return tree
+
+    def observed_derive(nodes, parameters):
+        calls.append("derive")
+        assert len(built_tree) == 1
+        assert nodes is built_tree[0].nodes
+        sequence = original_derive(nodes, parameters)
+        assert sequence.nodes is built_tree[0].nodes
+        return sequence
+
+    def observed_window(sequence, *, offset, limit):
+        calls.append("window")
+        assert sequence.nodes is built_tree[0].nodes
+        window = original_window(sequence, offset=offset, limit=limit)
+        assert all(
+            row.node is built_tree[0].nodes[row.node.position]
+            for row in window.rows
+        )
+        return window
+
+    def observed_view(window):
+        calls.append("view")
+        assert all(
+            row.node is built_tree[0].nodes[row.node.position]
+            for row in window.rows
+        )
+        return original_view(window)
+
+    monkeypatch.setattr(tree_fixture_module, "build_node_tree", observed_build)
+    monkeypatch.setattr(
+        tree_fixture_module,
+        "derive_visible_sequence",
+        observed_derive,
+    )
+    monkeypatch.setattr(
+        tree_fixture_module,
+        "window_visible_sequence",
+        observed_window,
+    )
+    monkeypatch.setattr(
+        tree_fixture_module,
+        "to_visible_window_view",
+        observed_view,
+    )
+
+    manifest = tree_fixture_module.build_tree_window_manifest()
+
+    assert set(manifest) == {"schema", "node_ids", "views"}
+    assert calls == [
+        "build",
+        *("derive" for _ in range(5)),
+        *(value for _ in range(9) for value in ("window", "view")),
+    ]
+
+
+def test_br_g_34_cross_layer_fixture_is_canonical_and_non_vacuous(
+    tree_window_fixture: TreeWindowFixture,
+) -> None:
+    payload = tree_window_fixture.path.read_bytes()
+    manifest = json.loads(payload.decode("utf-8"))
+    views = manifest["views"]
+    node_ids = manifest["node_ids"]
+
+    assert tree_window_fixture.path.is_absolute()
+    assert payload == tree_window_fixture.text.encode("utf-8")
+    assert tree_window_fixture.size == len(payload)
+    assert tree_window_fixture.sha256 == hashlib.sha256(payload).hexdigest()
+    assert manifest["schema"] == TREE_WINDOW_FIXTURE_SCHEMA
+    assert set(node_ids) == {
+        "projection",
+        "layout_control",
+        "ordinary_unicode",
+        "long_unicode",
+    }
+    assert len(set(node_ids.values())) == len(node_ids)
+    assert all(
+        re.fullmatch(r"node-[0-9a-f]{32}", node_id)
+        for node_id in node_ids.values()
+    )
+    assert set(views) == {
+        "head",
+        "next",
+        "tail",
+        "empty",
+        "maximum",
+        "pointer_expanded",
+        "pointer_collapsed",
+        "projected_empty",
+        "layout_control",
+    }
+    assert views["maximum"]["total"] > 256
+    assert len(views["maximum"]["rows"]) == 256
+    assert views["tail"]["rows"][-1]["visible_index"] == (
+        views["tail"]["total"] - 1
+    )
+    assert views["empty"] == {"offset": 0, "total": 0, "rows": []}
+    assert [
+        next(
+            row["expanded"]
+            for row in views[name]["rows"]
+            if row["node_id"] == node_ids["projection"]
+        )
+        for name in (
+            "pointer_expanded",
+            "pointer_collapsed",
+            "projected_empty",
+        )
+    ] == [True, False, None]
+
+    layout_row = views["layout_control"]["rows"][1]
+    ordinary_row, long_row = views["next"]["rows"][:2]
+    assert (layout_row["node_id"], layout_row["display"]) == (
+        node_ids["layout_control"],
+        LAYOUT_CONTROL_DISPLAY,
+    )
+    assert (ordinary_row["node_id"], ordinary_row["display"]) == (
+        node_ids["ordinary_unicode"],
+        ORDINARY_UNICODE_DISPLAY,
+    )
+    assert (long_row["node_id"], long_row["display"]) == (
+        node_ids["long_unicode"],
+        LONG_UNICODE_DISPLAY,
+    )
+    assert LAYOUT_CONTROL_DISPLAY.encode("utf-8") in payload
+    assert ORDINARY_UNICODE_DISPLAY.encode("utf-8") in payload
+    assert LONG_UNICODE_DISPLAY.encode("utf-8") in payload
+    assert all(
+        field not in payload
+        for field in (
+            b'"rel_path"',
+            b'"rel_path_key"',
+            b'"member_ids"',
+            b'"subtree_end"',
+        )
+    )
+
+    source = Path(tree_fixture_module.__file__).read_text(encoding="utf-8")
+    parsed = ast.parse(source)
+    calls = {
+        node.func.id
+        for node in ast.walk(parsed)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    assert {
+        "build_node_tree",
+        "derive_visible_sequence",
+        "window_visible_sequence",
+        "to_visible_window_view",
+    } <= calls
+    assert not any(
+        isinstance(node, ast.Dict)
+        and any(
+            isinstance(key, ast.Constant) and key.value == "rows"
+            for key in node.keys
+        )
+        for node in ast.walk(parsed)
+    )
 
 
 def test_br_g_2_stage_6_visible_core_imports_no_project_or_path_helper() -> None:

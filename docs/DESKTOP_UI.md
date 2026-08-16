@@ -472,8 +472,18 @@ exact layout-control markers with no surviving active controls, unchanged
 ordinary hostile/Unicode and long labels, raw callback ids through `tree.js`,
 exact 28-pixel rows, no more than
 256 rows plus two spacers, and stale-generation refusal. Python is the sole
-validation/window authority and emits the exact renderer view; JavaScript does
-not duplicate structural validation. It adds no bridge
+validation/window authority and emits the exact renderer view. One canonical
+temporary JSON manifest is produced through the real workflow tree,
+visible-sequence, window, and wire-view functions; the direct Node probe and
+installed WebView2 child consume those same bytes, and Python, child, and page
+SHA-256 values match. Its cases cover the named head, next, tail, empty,
+exact-256, and layout-control views plus expansion tri-state and ordinary-
+Unicode and long-label values carried by those views.
+The real workflow fixture uses representative admitted layout controls; the
+exhaustive fixed-set sink probe is renderer-local because C0 characters are not
+valid Windows filename input. JavaScript does not duplicate structural
+validation. The manifest remains test-only and absent from the wheel. This
+evidence adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.

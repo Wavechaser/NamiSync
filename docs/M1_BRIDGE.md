@@ -1361,8 +1361,19 @@ activation, while a projected end node remains inert.
 The focused structural/security regressions and real clean-wheel shell evidence pass,
 closing BR-G-34 and SH-G-7. The 120,000-node fixture is a complete retained-
 representation witness plus a deterministic field-access scaling guard, not a
-latency acceptance measurement. Plan and inventory command rows and projection
-ownership remain unimplemented until Slices 5 and 6.
+latency acceptance measurement. Positive renderer evidence is bound to one
+canonical temporary JSON manifest produced through the production
+`build_node_tree` -> `derive_visible_sequence` ->
+`window_visible_sequence` -> `to_visible_window_view` chain. Direct Node and
+the installed WebView2 child consume those exact bytes, and Python, child, and
+page report the same SHA-256. Its cases cover named head, next, tail, empty,
+exact-256, and layout-control windows, all three expansion states on one real
+node, and ordinary-Unicode and long display values admitted by the real
+`NodeTree` path contract. The exhaustive fixed-set sink probe remains
+renderer-local because C0 characters are not valid Windows filename input; it
+proves the presentation transform, not workflow authority. The manifest is
+test-only and absent from package data. Plan and inventory command rows and
+projection ownership remain unimplemented until Slices 5 and 6.
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
@@ -3432,8 +3443,18 @@ because its local tests are easier.
   exact deepest-to-root id chain and performs work proportional to chain depth,
   not tree size. Plan and inventory cases must start from real
   `build_node_tree` output and retain object identity; hand-built generic arrays
-  alone do not close the gate. The bounded window carries server-derived
-  parent/child/sibling accessibility metadata. Boolean expansion exists only
+  alone do not close the gate. The positive renderer witness uses the same
+  canonical temporary JSON bytes generated through `build_node_tree` ->
+  `derive_visible_sequence` -> `window_visible_sequence` ->
+  `to_visible_window_view` in both the direct Node probe and installed WebView2
+  child. Python, child, and page SHA-256 values must agree. Its cases cover
+  named head, next, tail, empty, exact-256, and layout-control windows,
+  expansion tri-state, and ordinary-Unicode and long-label values;
+  independently authored positive row dictionaries are insufficient evidence.
+  The separate renderer-local control corpus tests the fixed sink set without
+  pretending invalid Windows filename characters traversed `NodeTree`. The
+  bounded window carries server-derived parent/child/sibling accessibility
+  metadata. Boolean expansion exists only
   for a projected parent with a retained immediate child; leaves and filtered-
   empty containers carry `null`. A static assertion proves the
   implementation calls no path helper and reconstructs no parent or descendant
@@ -3457,7 +3478,10 @@ because its local tests are easier.
   mouse-wheel gesture through a four-row viewport, accepts a five-row page
   spanning both viewport edges, and proves the viewport remains nonblank
   while the activation recorder remains empty. Those are functional regressions, not latency
-  measurements.
+  measurements. The shared manifest binds current Python projection output to
+  the installed generic renderer; it neither exercises a Slice 5/6 plan or
+  inventory bridge command nor closes their product-DOM or BR-G-42 latency
+  gates.
 - **BR-G-35 — Plan presentation preserves operation truth while compressing
   moves.** This is also the first consumer that proves a filtered move ghost
   removes its synthetic-only ancestor chain, an ordinary real operation keeps

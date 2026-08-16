@@ -839,11 +839,20 @@ carry the `headed` marker; all are collected by the release command.
   toggle/activation callbacks. It measures every row at
   28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,
   and proves a stale generation cannot replace a newer window. The matching
-  Python/wire and production-module regressions prove expansion appears only
-  for active-projection parents that retain a child. *Not satisfied
+  Python/wire and production-module regressions use one canonical temporary
+  JSON manifest generated through the production workflow-tree,
+  visible-sequence, window, and wire-view chain. Direct Node and the installed
+  WebView2 child consume those exact bytes; Python, child, and page SHA-256
+  values match. The cases cover named head, next, tail, empty, exact-256, and
+  layout-control views plus expansion tri-state and ordinary-Unicode and long-
+  label values. The exhaustive fixed-set sink case remains renderer-local
+  because C0 characters are not valid Windows filename input; it proves the final
+  transform without fabricating workflow provenance. The manifest and helper
+  remain test-only and absent from package data. *Not satisfied
   by* scanning a hand-maintained file list, asserting only the meta element's
   presence, testing the component gallery instead of the production shell, or
-  measuring a copied/test-only tree implementation.
+  measuring a copied/test-only tree implementation or independently authored
+  positive renderer rows.
 - **SH-G-8 — CLOSED (2026-08-14): attach-before-start event delivery and
   transport custody are bounded.** The ordinary four-task fixture covers 60
   logical seconds, 6,000 `Progress` emissions, 600 reliable items, and four
@@ -1055,6 +1064,8 @@ headed BR-G-32 transport evidence),
 `tests/interfaces/web/test_frontend_static.py` (SH-G-7),
 `tests/interfaces/web/test_visible_sequence.py` (BR-G-34 and BR-G-2's Stage 6
 structure clause),
+`tests/interfaces/web/_tree_window_fixture.py` (test-only production-chain
+window manifest shared by Node and installed WebView2 evidence),
 `tests/interfaces/web/test_shell_headed.py` (installed-wheel headed SH-G-7),
 `tests/interfaces/web/test_drain.py` (SH-G-8 deterministic, linger, and
 overflow fixtures), `tests/interfaces/web/test_bridge_event_benchmark.py`

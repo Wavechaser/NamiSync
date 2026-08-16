@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import {createHash} from "node:crypto";
 import {readFile} from "node:fs/promises";
 
 
@@ -161,8 +162,25 @@ globalThis.Element = TestElement;
 
 const treePath = process.argv[2];
 const renderPath = process.argv[3];
+const fixturePath = process.argv[4];
+const expectedFixtureSha256 = process.argv[5];
 assert.ok(treePath, "tree module path is required");
 assert.ok(renderPath, "render module path is required");
+assert.ok(fixturePath, "tree fixture path is required");
+assert.match(
+  expectedFixtureSha256 ?? "",
+  /^[0-9a-f]{64}$/u,
+  "tree fixture SHA-256 is required",
+);
+
+const fixtureBytes = await readFile(fixturePath);
+const fixtureSha256 = createHash("sha256").update(fixtureBytes).digest("hex");
+assert.equal(fixtureSha256, expectedFixtureSha256);
+const fixtureText = new TextDecoder("utf-8", {fatal: true}).decode(fixtureBytes);
+const fixture = JSON.parse(fixtureText);
+assertTreeFixture(fixture);
+const fixtureViews = fixture.views;
+const fixtureNodeIds = fixture.node_ids;
 
 const renderSource = await readFile(renderPath, "utf8");
 const renderUrl = dataModuleUrl(renderSource);
@@ -249,20 +267,16 @@ const layoutRendered = `layout-${layoutCodePoints.map(
 ).join("")}-end`;
 const activeLayoutControlPattern =
   /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u;
-const preservedDisplay =
+const supplementalDisplay =
   "wave \u{1f30a}\ufe0f e\u0301 <img onerror=alert(1)> العربية עברית A\u200cB\u200dC \u{e0020} & \u6d77";
-const longDisplay = `${"\u6ce2".repeat(600)} end`;
-const rawNodeId = "node-\u202e-⟦U+202E⟧";
+const supplementalLongDisplay = `${"\u6ce2".repeat(600)} end`;
+
+const layoutFixtureRow = fixtureViews.layout_control.rows[1];
+assert.equal(layoutFixtureRow.node_id, fixtureNodeIds.layout_control);
+const layoutFixtureRendered = visibleFilesystemText(layoutFixtureRow.display);
 const accessedFields = new Map();
 const trackedContainer = new Proxy(
-  row(5, rawNodeId, layoutDisplay, {
-    container: true,
-    expanded: false,
-    depth: 1,
-    parent: 0,
-    position: 1,
-    setSize: 1,
-  }),
+  fixtureViews.head.rows[1],
   {
     get(target, property, receiver) {
       if (typeof property === "string") {
@@ -273,24 +287,11 @@ const trackedContainer = new Proxy(
   },
 );
 const firstWindow = Object.freeze({
-  offset: 5,
-  total: 10,
+  ...fixtureViews.head,
   rows: Object.freeze([
+    fixtureViews.head.rows[0],
     trackedContainer,
-    row(6, "node-preserved", preservedDisplay, {
-      depth: 2,
-      parent: 5,
-    }),
-    row(7, "projected-empty", "Projected empty", {
-      container: true,
-      expanded: null,
-      depth: 1,
-      parent: 0,
-    }),
-    row(8, "node-long", longDisplay, {
-      depth: 1,
-      parent: 0,
-    }),
+    ...fixtureViews.head.rows.slice(2),
   ]),
 });
 assert.equal(tree.commitWindow(secondGeneration, firstWindow), true);
@@ -303,39 +304,67 @@ assert.deepEqual(
   ],
 );
 assert.equal(root.children.length, 6);
-assert.equal(topSpacer.style.blockSize, `${5 * ROW_H}px`);
-assert.equal(bottomSpacer.style.blockSize, `${1 * ROW_H}px`);
+assert.equal(topSpacer.style.blockSize, "0px");
+assert.equal(
+  bottomSpacer.style.blockSize,
+  `${(fixtureViews.head.total - fixtureViews.head.rows.length) * ROW_H}px`,
+);
 
-const firstRows = treeItems(root);
+let firstRows = treeItems(root);
 assert.equal(firstRows.length, 4);
-assert.equal(firstRows[0].dataset.nodeId, rawNodeId);
-assert.equal(firstRows[0].id, "nami-tree-1-row-5");
-assert.equal(firstRows[0].ariaLevel, "2");
+assert.equal(firstRows[0].dataset.nodeId, fixtureViews.head.rows[0].node_id);
+assert.equal(firstRows[0].id, "nami-tree-1-row-0");
+assert.equal(firstRows[0].ariaLevel, "1");
 assert.equal(firstRows[0].ariaPosInSet, "1");
 assert.equal(firstRows[0].ariaSetSize, "1");
-assert.equal(firstRows[0].ariaExpanded, "false");
+assert.equal(firstRows[0].ariaExpanded, "true");
 assert.equal(firstRows[0].dataset.active, "true");
 assert.equal(root.getAttribute("aria-activedescendant"), firstRows[0].id);
 assert.equal(root.ariaActiveDescendant, undefined);
-assert.equal(firstRows[0].children[1].textContent, layoutRendered);
+for (const [index, element] of firstRows.entries()) {
+  const sourceRow = fixtureViews.head.rows[index];
+  assert.equal(element.ariaLevel, String(sourceRow.depth + 1));
+  assert.equal(element.ariaPosInSet, String(sourceRow.position_in_set));
+  assert.equal(element.ariaSetSize, String(sourceRow.set_size));
+}
+assert.equal(firstRows[1].dataset.nodeId, fixtureNodeIds.projection);
+assert.equal(firstRows[1].ariaExpanded, "true");
+assert.equal(firstRows[2].ariaExpanded, undefined);
+assert.equal(firstRows[3].dataset.nodeId, fixtureNodeIds.layout_control);
+assert.equal(firstRows[3].children[1].textContent, layoutFixtureRendered);
 assert.equal(
-  activeLayoutControlPattern.test(firstRows[0].children[1].textContent),
+  activeLayoutControlPattern.test(firstRows[3].children[1].textContent),
   false,
 );
-assert.equal(firstRows[1].ariaExpanded, undefined);
-assert.equal(firstRows[1].children[1].textContent, preservedDisplay);
-assert.equal(firstRows[2].ariaExpanded, undefined);
 assert.ok(
-  firstRows[2].children[0].classList.contains(
+  firstRows[3].children[0].classList.contains(
     "nami-tree-row__disclosure--leaf",
   ),
 );
-assert.equal(firstRows[3].children[1].textContent, longDisplay);
+
+const nextGeneration = tree.beginWindowRequest();
+assert.equal(tree.commitWindow(nextGeneration, fixtureViews.next), true);
+const nextRows = treeItems(root);
+assert.equal(nextRows[0].dataset.nodeId, fixtureNodeIds.ordinary_unicode);
 assert.equal(
-  firstRows.some((row) =>
-    activeLayoutControlPattern.test(row.children[1].textContent)),
-  false,
+  nextRows[0].children[1].textContent,
+  fixtureViews.next.rows[0].display,
 );
+assert.equal(nextRows[1].dataset.nodeId, fixtureNodeIds.long_unicode);
+assert.equal(
+  nextRows[1].children[1].textContent,
+  fixtureViews.next.rows[1].display,
+);
+const restoredHeadGeneration = tree.beginWindowRequest();
+assert.equal(
+  tree.commitWindow(
+    restoredHeadGeneration,
+    fixtureViews.head,
+    fixtureViews.head.rows[0].node_id,
+  ),
+  true,
+);
+firstRows = treeItems(root);
 
 // Disclosure owns its pointer event. A synchronous replacement from toggle
 // must not bubble into the detached row and activate it a second time.
@@ -348,53 +377,109 @@ pointerTree = createTree(pointerRoot, {
   toggle: (...value) => {
     pointerToggles.push(value);
     const generation = pointerTree.beginWindowRequest();
-    pointerTree.commitWindow(generation, {
-      offset: 0,
-      total: 2,
-      rows: [
-        row(0, "pointer-container", "Pointer container", {
-          container: true,
-          expanded: true,
-          firstChild: 1,
-        }),
-        row(1, "pointer-leaf", "Pointer leaf", {depth: 1, parent: 0}),
-      ],
-    });
+    pointerTree.commitWindow(generation, fixtureViews.pointer_expanded);
   },
   activate: (nodeId) => pointerActivations.push(nodeId),
 });
 const pointerGeneration = pointerTree.beginWindowRequest();
-assert.equal(pointerTree.commitWindow(pointerGeneration, {
-  offset: 0,
-  total: 1,
-  rows: [
-    row(0, "pointer-container", "Pointer container", {
-      container: true,
-      expanded: false,
-    }),
-  ],
-}), true);
+assert.equal(
+  pointerTree.commitWindow(
+    pointerGeneration,
+    fixtureViews.pointer_collapsed,
+  ),
+  true,
+);
 const pointerRows = treeItems(pointerRoot);
-dispatchClick(pointerRows[0].children[0]);
-assert.deepEqual(pointerToggles, [["pointer-container", true]]);
+const pointerContainer = pointerRows.find(
+  (element) => element.dataset.nodeId === fixtureNodeIds.projection,
+);
+assert.ok(pointerContainer);
+dispatchClick(pointerContainer.children[0]);
+assert.deepEqual(pointerToggles, [[fixtureNodeIds.projection, true]]);
 assert.deepEqual(pointerActivations, []);
 assert.equal(pointerDocument.activeElement, pointerRoot);
 assert.equal(
   pointerRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-2-row-0",
+  pointerContainer.id,
 );
-dispatchClick(treeItems(pointerRoot)[0].children[1]);
-assert.deepEqual(pointerToggles, [["pointer-container", true]]);
-assert.deepEqual(pointerActivations, ["pointer-container"]);
-dispatchClick(treeItems(pointerRoot)[1].children[0]);
-assert.deepEqual(pointerToggles, [["pointer-container", true]]);
-assert.deepEqual(pointerActivations, ["pointer-container"]);
-dispatchClick(treeItems(pointerRoot)[1]);
-assert.deepEqual(pointerActivations, ["pointer-container", "pointer-leaf"]);
+const expandedPointerRows = treeItems(pointerRoot);
+const expandedContainer = expandedPointerRows.find(
+  (element) => element.dataset.nodeId === fixtureNodeIds.projection,
+);
+const pointerLeaf = expandedPointerRows.find(
+  (element) => element.dataset.nodeId === fixtureViews.pointer_expanded.rows[2].node_id,
+);
+assert.ok(expandedContainer);
+assert.ok(pointerLeaf);
+dispatchClick(expandedContainer.children[1]);
+assert.deepEqual(pointerToggles, [[fixtureNodeIds.projection, true]]);
+assert.deepEqual(pointerActivations, [fixtureNodeIds.projection]);
+dispatchClick(pointerLeaf.children[0]);
+assert.deepEqual(pointerToggles, [[fixtureNodeIds.projection, true]]);
+assert.deepEqual(pointerActivations, [fixtureNodeIds.projection]);
+dispatchClick(pointerLeaf);
+assert.deepEqual(pointerActivations, [
+  fixtureNodeIds.projection,
+  pointerLeaf.dataset.nodeId,
+]);
 assert.equal(
   pointerRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-2-row-1",
+  pointerLeaf.id,
 );
+
+const triStateRoot = new TestDocument().createElement("div");
+const triStateTree = createTree(triStateRoot);
+const observedExpandedStates = [];
+for (const name of [
+  "pointer_expanded",
+  "pointer_collapsed",
+  "projected_empty",
+]) {
+  const generation = triStateTree.beginWindowRequest();
+  assert.equal(triStateTree.commitWindow(generation, fixtureViews[name]), true);
+  const projection = treeItems(triStateRoot).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.projection,
+  );
+  assert.ok(projection);
+  observedExpandedStates.push(projection.ariaExpanded ?? null);
+}
+assert.deepEqual(observedExpandedStates, ["true", "false", null]);
+
+const keyTreeRoot = new TestDocument().createElement("div");
+const keyToggles = [];
+let keyTree;
+keyTree = createTree(keyTreeRoot, {
+  toggle: (nodeId, expanded) => {
+    keyToggles.push([nodeId, expanded]);
+    const generation = keyTree.beginWindowRequest();
+    keyTree.commitWindow(
+      generation,
+      expanded
+        ? fixtureViews.pointer_expanded
+        : fixtureViews.pointer_collapsed,
+    );
+  },
+});
+const keyGeneration = keyTree.beginWindowRequest();
+keyTree.commitWindow(keyGeneration, fixtureViews.pointer_collapsed);
+dispatchKey(keyTreeRoot, "ArrowDown");
+dispatchKey(keyTreeRoot, "ArrowRight");
+assert.deepEqual(keyToggles, [[fixtureNodeIds.projection, true]]);
+dispatchKey(keyTreeRoot, "ArrowRight");
+assert.equal(
+  keyTreeRoot.getAttribute("aria-activedescendant"),
+  treeItems(keyTreeRoot)[2].id,
+);
+dispatchKey(keyTreeRoot, "ArrowLeft");
+assert.equal(
+  keyTreeRoot.getAttribute("aria-activedescendant"),
+  treeItems(keyTreeRoot)[1].id,
+);
+dispatchKey(keyTreeRoot, "ArrowLeft");
+assert.deepEqual(keyToggles, [
+  [fixtureNodeIds.projection, true],
+  [fixtureNodeIds.projection, false],
+]);
 
 const thrown = new Error("toggle sentinel");
 const throwingRoot = new TestDocument().createElement("div");
@@ -409,7 +494,7 @@ const throwingGeneration = throwingTree.beginWindowRequest();
 throwingTree.commitWindow(throwingGeneration, {
   offset: 0,
   total: 1,
-  rows: [row(0, "throwing-container", "Throwing container", {
+  rows: [localRow(0, "throwing-container", "Throwing container", {
     container: true,
   })],
 });
@@ -425,41 +510,46 @@ assert.equal(throwingEvent.cancelBubble, true);
 assert.deepEqual(throwingActivations, []);
 
 dispatchKey(root, "ArrowRight");
-assert.deepEqual(toggled, [[rawNodeId, true]]);
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  firstRows[1].id,
+);
 dispatchKey(root, "Enter");
-assert.deepEqual(activated, [rawNodeId]);
+assert.deepEqual(activated, [fixtureNodeIds.projection]);
 dispatchKey(root, "ArrowDown");
 dispatchKey(root, "ArrowDown");
-assert.equal(root.getAttribute("aria-activedescendant"), firstRows[2].id);
-dispatchKey(root, "ArrowRight");
-assert.deepEqual(toggled, [[rawNodeId, true]]);
-dispatchKey(root, "Home");
-assert.deepEqual(requested, [0]);
-
-const homeGeneration = requestedGeneration;
-assert.equal(typeof homeGeneration, "number");
-assert.equal(tree.commitWindow(homeGeneration, {
-  offset: 0,
-  total: 10,
-  rows: [
-    row(0, "root", "Root", {
-      container: true,
-      expanded: true,
-      firstChild: 1,
-    }),
-    row(1, "child", "Child", {depth: 1, parent: 0}),
-    row(2, "sibling", "Sibling"),
-  ],
-}), true);
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-0");
-dispatchKey(root, "ArrowRight");
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-1");
-dispatchKey(root, "ArrowLeft");
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-0");
-dispatchKey(root, "ArrowDown");
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-1");
+assert.equal(root.getAttribute("aria-activedescendant"), firstRows[3].id);
+dispatchKey(root, "Enter");
+assert.deepEqual(activated, [
+  fixtureNodeIds.projection,
+  fixtureNodeIds.layout_control,
+]);
+assert.deepEqual(toggled, []);
 dispatchKey(root, "End");
-assert.deepEqual(requested, [0, 9]);
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1]);
+assert.equal(
+  tree.commitWindow(requestedGeneration, fixtureViews.tail),
+  true,
+);
+assert.equal(
+  topSpacer.style.blockSize,
+  `${fixtureViews.tail.offset * ROW_H}px`,
+);
+assert.equal(bottomSpacer.style.blockSize, "0px");
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  treeItems(root).at(-1).id,
+);
+dispatchKey(root, "Home");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1, 0]);
+assert.equal(
+  tree.commitWindow(requestedGeneration, fixtureViews.head),
+  true,
+);
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  treeItems(root)[0].id,
+);
 
 // Active-descendant navigation scrolls only the tree viewport and only when
 // the complete fixed-height row falls outside it.
@@ -467,16 +557,7 @@ const viewportRoot = new TestDocument().createElement("div");
 viewportRoot.clientHeight = 2 * ROW_H;
 const viewportTree = createTree(viewportRoot);
 const viewportGeneration = viewportTree.beginWindowRequest();
-viewportTree.commitWindow(viewportGeneration, {
-  offset: 0,
-  total: 4,
-  rows: [
-    row(0, "viewport-0", "Viewport 0"),
-    row(1, "viewport-1", "Viewport 1"),
-    row(2, "viewport-2", "Viewport 2"),
-    row(3, "viewport-3", "Viewport 3"),
-  ],
-});
+viewportTree.commitWindow(viewportGeneration, fixtureWindow(0, 4));
 assert.equal(viewportRoot.scrollTop, 0);
 dispatchKey(viewportRoot, "ArrowDown");
 assert.equal(viewportRoot.scrollTop, 0);
@@ -489,7 +570,7 @@ dispatchKey(viewportRoot, "Home");
 assert.equal(viewportRoot.scrollTop, 0);
 assert.equal(
   viewportRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-4-row-0",
+  treeItems(viewportRoot)[0].id,
 );
 
 const pagedRoot = new TestDocument().createElement("div");
@@ -504,31 +585,28 @@ pagedTree = createTree(pagedRoot, {
   },
 });
 const pagedInitial = pagedTree.beginWindowRequest();
-pagedTree.commitWindow(pagedInitial, {
-  offset: 0,
-  total: 6,
-  rows: [row(0, "paged-0", "Paged 0"), row(1, "paged-1", "Paged 1")],
-});
+pagedTree.commitWindow(pagedInitial, fixtureWindow(0, 2));
 dispatchKey(pagedRoot, "End");
-assert.deepEqual(pagedRequests, [5]);
+assert.deepEqual(pagedRequests, [fixtureViews.maximum.total - 1]);
 assert.equal(pagedRoot.scrollTop, 0);
-assert.equal(pagedTree.commitWindow(pagedGeneration, {
-  offset: 4,
-  total: 6,
-  rows: [row(4, "paged-4", "Paged 4"), row(5, "paged-5", "Paged 5")],
-}), true);
+assert.equal(
+  pagedTree.commitWindow(pagedGeneration, fixtureViews.tail),
+  true,
+);
 assert.equal(
   pagedRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-5-row-5",
+  treeItems(pagedRoot).at(-1).id,
 );
-assert.equal(pagedRoot.scrollTop, 4 * ROW_H);
+assert.equal(
+  pagedRoot.scrollTop,
+  (fixtureViews.tail.total * ROW_H) - pagedRoot.clientHeight,
+);
 dispatchKey(pagedRoot, "Home");
-assert.deepEqual(pagedRequests, [5, 0]);
-assert.equal(pagedTree.commitWindow(pagedGeneration, {
-  offset: 0,
-  total: 6,
-  rows: [row(0, "paged-0", "Paged 0"), row(1, "paged-1", "Paged 1")],
-}), true);
+assert.deepEqual(pagedRequests, [fixtureViews.maximum.total - 1, 0]);
+assert.equal(
+  pagedTree.commitWindow(pagedGeneration, fixtureWindow(0, 2)),
+  true,
+);
 assert.equal(pagedRoot.scrollTop, 0);
 
 // Scroll paging is last-state-wins and owns its request generations. The
@@ -545,11 +623,10 @@ scrollTree = createTree(scrollRoot, {
   },
 });
 const scrollInitial = scrollTree.beginWindowRequest();
-assert.equal(scrollTree.commitWindow(scrollInitial, {
-  offset: 0,
-  total: 300,
-  rows: rows(0, 4, "scroll"),
-}), true);
+assert.equal(
+  scrollTree.commitWindow(scrollInitial, fixtureWindow(0, 4)),
+  true,
+);
 scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests, []);
 
@@ -584,7 +661,7 @@ scrollRoot.dispatch("scroll");
 scrollDocument.defaultView.flushAnimationFrame();
 assert.equal(
   scrollRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-6-row-0",
+  treeItems(scrollRoot)[0].id,
 );
 assert.deepEqual(scrollRequests, [
   {index: 11, generation: 2},
@@ -598,19 +675,18 @@ scrollRoot.dispatch("scroll");
 scrollDocument.defaultView.flushAnimationFrame();
 const trailingRequest = scrollRequests.at(-1);
 assert.deepEqual(trailingRequest, {index: 7, generation: 5});
-assert.equal(scrollTree.commitWindow(trailingRequest.generation, {
-  offset: 4,
-  total: 300,
-  rows: rows(4, 4, "scroll"),
-}), true);
+assert.equal(
+  scrollTree.commitWindow(trailingRequest.generation, fixtureWindow(4, 4)),
+  true,
+);
 assert.equal(scrollRoot.scrollTop, 4 * ROW_H);
 assert.deepEqual(
   treeItems(scrollRoot).map((element) => element.dataset.nodeId),
-  ["scroll-4", "scroll-5", "scroll-6", "scroll-7"],
+  fixtureViews.maximum.rows.slice(4, 8).map((rowValue) => rowValue.node_id),
 );
 assert.equal(
   scrollRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-6-row-7",
+  treeItems(scrollRoot).at(-1).id,
 );
 scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests.at(-1), trailingRequest);
@@ -620,11 +696,10 @@ scrollRoot.dispatch("scroll");
 scrollDocument.defaultView.flushAnimationFrame();
 const leadingRequest = scrollRequests.at(-1);
 assert.deepEqual(leadingRequest, {index: 0, generation: 6});
-assert.equal(scrollTree.commitWindow(leadingRequest.generation, {
-  offset: 0,
-  total: 300,
-  rows: rows(0, 4, "scroll"),
-}), true);
+assert.equal(
+  scrollTree.commitWindow(leadingRequest.generation, fixtureWindow(0, 4)),
+  true,
+);
 scrollDocument.defaultView.flushAnimationFrame();
 
 // An external projection request cannot be superseded from its stale DOM.
@@ -633,11 +708,10 @@ scrollRoot.scrollTop = 20 * ROW_H;
 scrollRoot.dispatch("scroll");
 scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests.at(-1), leadingRequest);
-assert.equal(scrollTree.commitWindow(externalGeneration, {
-  offset: 20,
-  total: 300,
-  rows: rows(20, 4, "external"),
-}), true);
+assert.equal(
+  scrollTree.commitWindow(externalGeneration, fixtureWindow(20, 4)),
+  true,
+);
 scrollDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(scrollRequests.at(-1), leadingRequest);
 
@@ -647,22 +721,23 @@ scrollRoot.scrollTop = 24 * ROW_H;
 scrollRoot.dispatch("scroll");
 dispatchKey(scrollRoot, "End");
 const endRequest = scrollRequests.at(-1);
-assert.deepEqual(endRequest, {index: 299, generation: 8});
+assert.deepEqual(endRequest, {
+  index: fixtureViews.maximum.total - 1,
+  generation: 8,
+});
 scrollDocument.defaultView.flushAnimationFrame();
-assert.equal(scrollTree.commitWindow(endRequest.generation, {
-  offset: 296,
-  total: 300,
-  rows: rows(296, 4, "end"),
-}), true);
-assert.equal(scrollRoot.scrollTop, 296 * ROW_H);
+assert.equal(
+  scrollTree.commitWindow(endRequest.generation, fixtureViews.tail),
+  true,
+);
+assert.equal(scrollRoot.scrollTop, fixtureViews.tail.offset * ROW_H);
 scrollDocument.defaultView.flushAnimationFrame();
 
 const resetGeneration = scrollTree.beginWindowRequest();
-assert.equal(scrollTree.commitWindow(resetGeneration, {
-  offset: 20,
-  total: 300,
-  rows: rows(20, 4, "newer"),
-}), true);
+assert.equal(
+  scrollTree.commitWindow(resetGeneration, fixtureWindow(20, 4)),
+  true,
+);
 scrollDocument.defaultView.flushAnimationFrame();
 dispatchKey(scrollRoot, "End");
 const supersededKeyboard = scrollRequests.at(-1);
@@ -677,15 +752,14 @@ assert.equal(
   false,
 );
 assert.equal(staleReads, 0);
-assert.equal(scrollTree.commitWindow(newerScroll.generation, {
-  offset: 21,
-  total: 300,
-  rows: rows(21, 4, "newer-scroll"),
-}), true);
+assert.equal(
+  scrollTree.commitWindow(newerScroll.generation, fixtureWindow(21, 4)),
+  true,
+);
 assert.equal(scrollRoot.scrollTop, 21 * ROW_H);
 assert.equal(
   scrollRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-6-row-24",
+  treeItems(scrollRoot).at(-1).id,
 );
 
 // A wheel movement wholly inside the current window updates only the
@@ -700,11 +774,7 @@ const coveredTree = createTree(coveredRoot, {
   activate: (...value) => coveredActivations.push(value),
 });
 const coveredGeneration = coveredTree.beginWindowRequest();
-coveredTree.commitWindow(coveredGeneration, {
-  offset: 0,
-  total: 8,
-  rows: rows(0, 8, "covered"),
-});
+coveredTree.commitWindow(coveredGeneration, fixtureWindow(0, 8));
 coveredDocument.defaultView.flushAnimationFrame();
 coveredRoot.scrollTop = 4 * ROW_H;
 coveredRoot.dispatch("scroll");
@@ -714,7 +784,7 @@ assert.deepEqual(coveredActivations, []);
 assert.equal(coveredRoot.scrollTop, 4 * ROW_H);
 assert.equal(
   coveredRoot.getAttribute("aria-activedescendant"),
-  "nami-tree-7-row-4",
+  treeItems(coveredRoot)[4].id,
 );
 
 // Exact and fractional viewport boundaries select only an intersected spacer.
@@ -728,11 +798,7 @@ const boundaryTree = createTree(boundaryRoot, {
   },
 });
 const boundaryInitial = boundaryTree.beginWindowRequest();
-boundaryTree.commitWindow(boundaryInitial, {
-  offset: 0,
-  total: 300,
-  rows: rows(0, 4, "boundary"),
-});
+boundaryTree.commitWindow(boundaryInitial, fixtureWindow(0, 4));
 boundaryDocument.defaultView.flushAnimationFrame();
 boundaryRoot.dispatch("scroll");
 boundaryDocument.defaultView.flushAnimationFrame();
@@ -747,11 +813,7 @@ boundaryDocument.defaultView.flushAnimationFrame();
 assert.equal(boundaryTree.commitWindow(2, unreadableWindow), false);
 const boundaryReset = boundaryTree.beginWindowRequest();
 boundaryRoot.scrollTop = 4 * ROW_H;
-boundaryTree.commitWindow(boundaryReset, {
-  offset: 4,
-  total: 300,
-  rows: rows(4, 4, "boundary"),
-});
+boundaryTree.commitWindow(boundaryReset, fixtureWindow(4, 4));
 boundaryDocument.defaultView.flushAnimationFrame();
 boundaryRoot.dispatch("scroll");
 boundaryDocument.defaultView.flushAnimationFrame();
@@ -779,11 +841,10 @@ const throwingRequestTree = createTree(throwingRequestRoot, {
   },
 });
 const throwingRequestInitial = throwingRequestTree.beginWindowRequest();
-throwingRequestTree.commitWindow(throwingRequestInitial, {
-  offset: 0,
-  total: 300,
-  rows: rows(0, 4, "throw-request"),
-});
+throwingRequestTree.commitWindow(
+  throwingRequestInitial,
+  fixtureWindow(0, 4),
+);
 throwingRequestDocument.defaultView.flushAnimationFrame();
 throwingRequestRoot.scrollTop = 4 * ROW_H;
 throwingRequestRoot.dispatch("scroll");
@@ -812,11 +873,7 @@ const atomicRoot = atomicDocument.createElement("div");
 atomicRoot.clientHeight = 2 * ROW_H;
 const atomicTree = createTree(atomicRoot);
 const atomicInitial = atomicTree.beginWindowRequest();
-atomicTree.commitWindow(atomicInitial, {
-  offset: 0,
-  total: 3,
-  rows: rows(0, 2, "atomic"),
-});
+atomicTree.commitWindow(atomicInitial, fixtureWindow(0, 2));
 atomicDocument.defaultView.flushAnimationFrame();
 atomicRoot.scrollTop = ROW_H;
 const atomicGeneration = atomicTree.beginWindowRequest();
@@ -825,7 +882,7 @@ const atomicActiveDescendant = atomicRoot.getAttribute("aria-activedescendant");
 const atomicActiveFlags = treeItems(atomicRoot).map(
   (element) => element.dataset.active ?? null,
 );
-const malformedRow = new Proxy(row(1, "malformed", "Malformed"), {
+const malformedRow = new Proxy(fixtureViews.maximum.rows[1], {
   get(target, property, receiver) {
     if (property === "set_size") {
       throw callbackError;
@@ -836,7 +893,7 @@ const malformedRow = new Proxy(row(1, "malformed", "Malformed"), {
 assert.throws(
   () => atomicTree.commitWindow(atomicGeneration, {
     offset: 1,
-    total: 3,
+    total: fixtureViews.maximum.total,
     rows: [malformedRow],
   }),
   (error) => error === callbackError,
@@ -851,11 +908,10 @@ assert.deepEqual(
   treeItems(atomicRoot).map((element) => element.dataset.active ?? null),
   atomicActiveFlags,
 );
-assert.equal(atomicTree.commitWindow(atomicGeneration, {
-  offset: 1,
-  total: 3,
-  rows: rows(1, 2, "atomic-retry"),
-}), true);
+assert.equal(
+  atomicTree.commitWindow(atomicGeneration, fixtureWindow(1, 2)),
+  true,
+);
 
 // Enter is newer than an in-flight passive page and invalidates that response.
 const intentDocument = new TestDocument();
@@ -870,11 +926,7 @@ const intentTree = createTree(intentRoot, {
   activate: (nodeId) => intentActivations.push(nodeId),
 });
 const intentInitial = intentTree.beginWindowRequest();
-intentTree.commitWindow(intentInitial, {
-  offset: 0,
-  total: 300,
-  rows: rows(0, 4, "intent"),
-});
+intentTree.commitWindow(intentInitial, fixtureWindow(0, 4));
 intentDocument.defaultView.flushAnimationFrame();
 intentRoot.scrollTop = ROW_H;
 intentRoot.dispatch("scroll");
@@ -882,7 +934,7 @@ intentDocument.defaultView.flushAnimationFrame();
 const passiveIntentRequest = intentRequests.at(-1);
 assert.equal(passiveIntentRequest.index, 4);
 dispatchKey(intentRoot, "Enter");
-assert.deepEqual(intentActivations, ["intent-1"]);
+assert.deepEqual(intentActivations, [fixtureNodeIds.projection]);
 assert.equal(
   intentTree.commitWindow(passiveIntentRequest.generation, unreadableWindow),
   false,
@@ -900,11 +952,7 @@ const programTree = createTree(programRoot, {
   },
 });
 const programInitial = programTree.beginWindowRequest();
-programTree.commitWindow(programInitial, {
-  offset: 0,
-  total: 300,
-  rows: rows(0, 8, "program"),
-});
+programTree.commitWindow(programInitial, fixtureWindow(0, 8));
 programDocument.defaultView.flushAnimationFrame();
 for (let index = 0; index < 4; index += 1) {
   dispatchKey(programRoot, "ArrowDown");
@@ -915,22 +963,17 @@ const programKeyboard = programRequests.at(-1);
 programRoot.dispatch("scroll");
 programDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(programRequests, [programKeyboard]);
-assert.equal(programTree.commitWindow(programKeyboard.generation, {
-  offset: 296,
-  total: 300,
-  rows: rows(296, 4, "program-end"),
-}), true);
+assert.equal(
+  programTree.commitWindow(programKeyboard.generation, fixtureViews.tail),
+  true,
+);
 
 const shortDocument = new TestDocument();
 const shortRoot = shortDocument.createElement("div");
 shortRoot.clientHeight = ROW_H - 1;
 const shortTree = createTree(shortRoot);
 const shortGeneration = shortTree.beginWindowRequest();
-shortTree.commitWindow(shortGeneration, {
-  offset: 0,
-  total: 1,
-  rows: rows(0, 1, "short"),
-});
+shortTree.commitWindow(shortGeneration, fixtureWindow(0, 1));
 shortDocument.defaultView.flushAnimationFrame();
 assert.equal(shortRoot.getAttribute("aria-activedescendant"), null);
 
@@ -947,11 +990,7 @@ const narrowTree = createTree(narrowRoot, {
   },
 });
 const narrowInitial = narrowTree.beginWindowRequest();
-narrowTree.commitWindow(narrowInitial, {
-  offset: 0,
-  total: 20,
-  rows: rows(0, 4, "narrow"),
-});
+narrowTree.commitWindow(narrowInitial, fixtureWindow(0, 4));
 narrowDocument.defaultView.flushAnimationFrame();
 narrowRoot.scrollTop = 4 * ROW_H;
 narrowRoot.dispatch("scroll");
@@ -959,11 +998,7 @@ narrowDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(narrowRequests, [{index: 7, generation: 2}]);
 narrowRoot.dispatch("scroll");
 assert.equal(narrowDocument.defaultView.animationFrames.length, 1);
-assert.equal(narrowTree.commitWindow(2, {
-  offset: 7,
-  total: 20,
-  rows: rows(7, 1, "narrow-response"),
-}), true);
+assert.equal(narrowTree.commitWindow(2, fixtureWindow(7, 1)), true);
 assert.equal(narrowRoot.scrollTop, 4 * ROW_H);
 narrowDocument.defaultView.flushAnimationFrame();
 assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
@@ -983,11 +1018,7 @@ const changedTree = createTree(changedRoot, {
   },
 });
 const changedInitial = changedTree.beginWindowRequest();
-changedTree.commitWindow(changedInitial, {
-  offset: 0,
-  total: 20,
-  rows: rows(0, 4, "changed"),
-});
+changedTree.commitWindow(changedInitial, fixtureWindow(0, 4));
 changedDocument.defaultView.flushAnimationFrame();
 changedRoot.scrollTop = 4 * ROW_H;
 changedRoot.dispatch("scroll");
@@ -995,21 +1026,13 @@ changedDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(changedRequests, [{index: 7, generation: 2}]);
 changedRoot.scrollTop = 8 * ROW_H;
 changedRoot.dispatch("scroll");
-assert.equal(changedTree.commitWindow(2, {
-  offset: 7,
-  total: 20,
-  rows: rows(7, 1, "changed-narrow"),
-}), true);
+assert.equal(changedTree.commitWindow(2, fixtureWindow(7, 1)), true);
 changedDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(changedRequests, [
   {index: 7, generation: 2},
   {index: 11, generation: 3},
 ]);
-assert.equal(changedTree.commitWindow(3, {
-  offset: 8,
-  total: 20,
-  rows: rows(8, 4, "changed-final"),
-}), true);
+assert.equal(changedTree.commitWindow(3, fixtureWindow(8, 4)), true);
 assert.equal(changedDocument.defaultView.animationFrames.length, 0);
 assert.equal(changedRoot.scrollTop, 8 * ROW_H);
 
@@ -1017,11 +1040,7 @@ const unmeasuredRoot = new TestDocument().createElement("div");
 unmeasuredRoot.scrollTop = 17;
 const unmeasuredTree = createTree(unmeasuredRoot);
 const unmeasuredGeneration = unmeasuredTree.beginWindowRequest();
-unmeasuredTree.commitWindow(unmeasuredGeneration, {
-  offset: 5,
-  total: 6,
-  rows: [row(5, "unmeasured", "Unmeasured")],
-});
+unmeasuredTree.commitWindow(unmeasuredGeneration, fixtureWindow(5, 1));
 assert.equal(unmeasuredRoot.scrollTop, 17);
 unmeasuredRoot.clientHeight = ROW_H;
 unmeasuredRoot.focus();
@@ -1029,67 +1048,77 @@ assert.equal(unmeasuredRoot.scrollTop, 5 * ROW_H);
 
 // Arbitrary recycling cannot leave a stale active index or descendant.
 const recycledGeneration = tree.beginWindowRequest();
-assert.equal(tree.commitWindow(recycledGeneration, {
-  offset: 7,
-  total: 10,
-  rows: [row(7, "seven", "Seven"), row(8, "eight", "Eight")],
-}, "missing-preferred"), true);
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-7");
+assert.equal(
+  tree.commitWindow(
+    recycledGeneration,
+    fixtureViews.tail,
+    "missing-preferred",
+  ),
+  true,
+);
+const recycledActive = root.getAttribute("aria-activedescendant");
+assert.ok(treeItems(root).some((element) => element.id === recycledActive));
 dispatchKey(root, "ArrowRight");
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-7");
+assert.equal(root.getAttribute("aria-activedescendant"), recycledActive);
 
 const emptyGeneration = tree.beginWindowRequest();
-assert.equal(tree.commitWindow(emptyGeneration, {
-  offset: 10,
-  total: 10,
-  rows: [],
-}), true);
+assert.equal(tree.commitWindow(emptyGeneration, fixtureViews.empty), true);
 assert.equal(root.getAttribute("aria-activedescendant"), null);
 assert.equal(treeItems(root).length, 0);
 root.focus();
 assert.equal(root.getAttribute("aria-activedescendant"), null);
-dispatchKey(root, "Home");
-assert.deepEqual(requested, [0, 9, 0]);
-const repopulatedGeneration = requestedGeneration;
-assert.equal(tree.commitWindow(repopulatedGeneration, {
-  offset: 0,
-  total: 10,
-  rows: [row(0, "new-root", "New root")],
+dispatchUnconsumedKey(root, "Home");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1, 0]);
+const repopulatedGeneration = tree.beginWindowRequest();
+assert.equal(
+  tree.commitWindow(repopulatedGeneration, fixtureViews.head),
+  true,
+);
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  treeItems(root)[0].id,
+);
+
+const offWindowEmptyGeneration = tree.beginWindowRequest();
+assert.equal(tree.commitWindow(offWindowEmptyGeneration, {
+  offset: fixtureViews.maximum.total,
+  total: fixtureViews.maximum.total,
+  rows: [],
 }), true);
-assert.equal(root.getAttribute("aria-activedescendant"), "nami-tree-1-row-0");
+assert.equal(root.getAttribute("aria-activedescendant"), null);
+root.focus();
+dispatchKey(root, "Home");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1, 0, 0]);
+assert.equal(
+  tree.commitWindow(requestedGeneration, fixtureViews.head),
+  true,
+);
 
 const maximumGeneration = tree.beginWindowRequest();
-const maximumRows = Array.from({length: 256}, (_, index) =>
-  row(
-    index,
-    index === 1 ? rawNodeId : `node-${index}`,
-    index === 1
-      ? layoutDisplay
-      : index === 2
-        ? preservedDisplay
-        : index === 255
-          ? longDisplay
-          : `Row ${index}`,
-    {
-    container: index === 0,
-    expanded: index === 0,
-    firstChild: index === 0 ? 1 : null,
-    depth: index === 0 ? 0 : 1,
-    parent: index === 0 ? null : 0,
-    position: index === 0 ? 1 : index,
-    setSize: index === 0 ? 1 : 255,
-    },
-  ));
-assert.equal(tree.commitWindow(maximumGeneration, {
-  offset: 0,
-  total: 256,
-  rows: maximumRows,
-}), true);
+assert.equal(
+  tree.commitWindow(maximumGeneration, fixtureViews.maximum),
+  true,
+);
 assert.equal(treeItems(root).length, 256);
 assert.equal(root.children.length, 258);
-assert.equal(treeItems(root)[1].children[1].textContent, layoutRendered);
-assert.equal(treeItems(root)[2].children[1].textContent, preservedDisplay);
-assert.equal(treeItems(root).at(-1).children[1].textContent, longDisplay);
+assert.equal(
+  treeItems(root).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.layout_control,
+  ).children[1].textContent,
+  layoutFixtureRendered,
+);
+assert.equal(
+  treeItems(root).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.ordinary_unicode,
+  ).children[1].textContent,
+  fixtureViews.next.rows[0].display,
+);
+assert.equal(
+  treeItems(root).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.long_unicode,
+  ).children[1].textContent,
+  fixtureViews.next.rows[1].display,
+);
 
 const staleGeneration = tree.beginWindowRequest();
 const committedFingerprint = fingerprint(root);
@@ -1098,7 +1127,37 @@ assert.equal(staleReads, 0);
 assert.deepEqual(fingerprint(root), committedFingerprint);
 assert.equal(staleGeneration, maximumGeneration + 1);
 
-function row(index, nodeId, display, options = {}) {
+// This exhaustive vector remains deliberately renderer-local because a real
+// Windows filename cannot carry every defended code point (notably NUL).
+const sinkRoot = document.createElement("div");
+const sinkTree = createTree(sinkRoot);
+const sinkGeneration = sinkTree.beginWindowRequest();
+assert.equal(sinkTree.commitWindow(sinkGeneration, {
+  offset: 0,
+  total: 3,
+  rows: [
+    localRow(0, "sink-layout", layoutDisplay),
+    localRow(1, "sink-supplemental", supplementalDisplay),
+    localRow(2, "sink-long", supplementalLongDisplay),
+  ],
+}), true);
+const sinkRows = treeItems(sinkRoot);
+assert.equal(sinkRows[0].children[1].textContent, layoutRendered);
+assert.equal(sinkRows[1].children[1].textContent, supplementalDisplay);
+assert.equal(sinkRows[2].children[1].textContent, supplementalLongDisplay);
+assert.equal(
+  sinkRows.some((rowElement) =>
+    activeLayoutControlPattern.test(rowElement.children[1].textContent)),
+  false,
+);
+
+process.stdout.write(`${JSON.stringify({
+  fixture_schema: fixture.schema,
+  fixture_sha256: fixtureSha256,
+  fixture_size: fixtureBytes.length,
+})}\n`);
+
+function localRow(index, nodeId, display, options = {}) {
   const container = options.container ?? false;
   return Object.freeze({
     node_id: nodeId,
@@ -1116,11 +1175,77 @@ function row(index, nodeId, display, options = {}) {
   });
 }
 
-function rows(offset, count, prefix) {
-  return Array.from({length: count}, (_, relativeIndex) => {
-    const index = offset + relativeIndex;
-    return row(index, `${prefix}-${index}`, `${prefix} ${index}`);
-  });
+function fixtureWindow(offset, count) {
+  const rows = fixtureViews.maximum.rows.slice(offset, offset + count);
+  assert.equal(rows.length, count);
+  return {
+    offset,
+    total: fixtureViews.maximum.total,
+    rows,
+  };
+}
+
+function visibleFilesystemText(value) {
+  return value.replace(
+    /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff\u27e6-\u27e7]/gu,
+    (character) =>
+      `⟦U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}⟧`,
+  );
+}
+
+function assertTreeFixture(value) {
+  assert.deepEqual(Object.keys(value).sort(), ["node_ids", "schema", "views"]);
+  assert.equal(value.schema, "namisync-tree-window-fixture-v1");
+  assert.deepEqual(Object.keys(value.node_ids).sort(), [
+    "layout_control",
+    "long_unicode",
+    "ordinary_unicode",
+    "projection",
+  ]);
+  assert.equal(new Set(Object.values(value.node_ids)).size, 4);
+  for (const nodeId of Object.values(value.node_ids)) {
+    assert.match(nodeId, /^node-[0-9a-f]{32}$/u);
+  }
+  assert.deepEqual(Object.keys(value.views).sort(), [
+    "empty",
+    "head",
+    "layout_control",
+    "maximum",
+    "next",
+    "pointer_collapsed",
+    "pointer_expanded",
+    "projected_empty",
+    "tail",
+  ]);
+  const rowKeys = [
+    "depth",
+    "display",
+    "expanded",
+    "first_child_visible_index",
+    "is_container",
+    "node_id",
+    "parent_visible_index",
+    "position_in_set",
+    "set_size",
+    "visible_index",
+  ];
+  for (const windowValue of Object.values(value.views)) {
+    assert.deepEqual(Object.keys(windowValue).sort(), ["offset", "rows", "total"]);
+    assert.ok(windowValue.rows.length <= 256);
+    for (const [relativeIndex, rowValue] of windowValue.rows.entries()) {
+      assert.deepEqual(Object.keys(rowValue).sort(), rowKeys);
+      assert.equal(rowValue.visible_index, windowValue.offset + relativeIndex);
+      assert.match(rowValue.node_id, /^node-[0-9a-f]{32}$/u);
+    }
+  }
+  assert.equal(value.views.empty.total, 0);
+  assert.deepEqual(value.views.empty.rows, []);
+  assert.equal(value.views.maximum.rows.length, 256);
+  assert.ok(value.views.maximum.total > 256);
+  assert.equal(
+    value.views.tail.rows.at(-1).visible_index,
+    value.views.tail.total - 1,
+  );
 }
 
 function dispatchKey(element, key) {
@@ -1136,6 +1261,21 @@ function dispatchKey(element, key) {
     },
   });
   assert.equal(prevented, true);
+}
+
+function dispatchUnconsumedKey(element, key) {
+  let prevented = false;
+  element.dispatch("keydown", {
+    key,
+    defaultPrevented: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, false);
 }
 
 function clickEvent() {

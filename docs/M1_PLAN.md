@@ -1116,7 +1116,12 @@ pinned Fluent token transcription, live UISettings accent publication,
 structured readable fallback evidence, and window-owned appearance lifetime
 through retryable shutdown. The pure presentation core consumes workflow-owned
 nodes directly and follows `M1_BRIDGE.md`'s bounded renderer/query/anchor
-contract while supplying an operable platform accessibility tree. The rail and
+contract while supplying an operable platform accessibility tree. Its positive
+renderer evidence now comes from one canonical temporary JSON manifest built
+through the production workflow-tree, visible-sequence, window, and wire-view
+functions; direct Node and installed WebView2 consume the same bytes and agree
+with Python on SHA-256. This binds the generic Slice 4 seam without claiming a
+Slice 5/6 bridge command, product DOM, or latency result. The rail and
 resting task cards expose Mica; selected cards are opaque. Slice 5 remains the first real plan surface; the remaining product
 UI, release, and beta claims stay open. The installed real-WebView2
 browser-behavior witness migration is complete. The existing four-task event

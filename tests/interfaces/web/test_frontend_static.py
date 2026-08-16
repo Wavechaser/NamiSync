@@ -13,6 +13,11 @@ import pytest
 
 from conftest import BuiltWheel
 
+from _tree_window_fixture import (
+    TREE_WINDOW_FIXTURE_SCHEMA,
+    TreeWindowFixture,
+)
+
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
@@ -484,14 +489,22 @@ def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
 
 
 @pytest.mark.supplemental_node
-def test_supplemental_node_tree_probe_uses_production_modules() -> None:
+def test_supplemental_node_tree_probe_uses_production_modules(
+    tree_window_fixture: TreeWindowFixture,
+) -> None:
     node = _node_executable()
     if node is None:
         pytest.skip("Node.js is unavailable for the supplemental tree probe")
     probe = PROJECT_ROOT / "tests" / "assets" / "tree_probe.mjs"
+    probe_source = probe.read_text(encoding="utf-8")
     asset_root = (
         PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
     )
+    assert probe_source.count("localRow(") == 5
+    assert "Array.from({length: 256}" not in probe_source
+    assert "fixtureViews.maximum" in probe_source
+    assert "fixtureViews.empty" in probe_source
+    assert "fixtureViews.tail" in probe_source
 
     completed = subprocess.run(
         [
@@ -499,6 +512,8 @@ def test_supplemental_node_tree_probe_uses_production_modules() -> None:
             str(probe),
             str(asset_root / "tree.js"),
             str(asset_root / "render.js"),
+            str(tree_window_fixture.path.resolve()),
+            tree_window_fixture.sha256,
         ],
         capture_output=True,
         check=False,
@@ -507,6 +522,12 @@ def test_supplemental_node_tree_probe_uses_production_modules() -> None:
     )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+    assert json.loads(completed.stdout) == {
+        "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
+        "fixture_sha256": tree_window_fixture.sha256,
+        "fixture_size": tree_window_fixture.size,
+    }
 
 
 @pytest.mark.supplemental_node
