@@ -129,17 +129,24 @@ class _GalleryEvidence:
     root: Path
     scenario: Path
     results: dict[str, dict[str, object]]
+    failures: dict[str, BaseException]
 
     def result(self, mode: str) -> dict[str, object]:
         if mode not in _MODES:
             raise ValueError("unknown component gallery mode")
+        if mode in self.failures:
+            raise self.failures[mode]
         if mode not in self.results:
-            self.results[mode] = _run_gallery_mode(
-                self.installed,
-                mode=mode,
-                root=require_absolute_local_test_root(self.root / mode),
-                scenario=self.scenario,
-            )
+            try:
+                self.results[mode] = _run_gallery_mode(
+                    self.installed,
+                    mode=mode,
+                    root=require_absolute_local_test_root(self.root / mode),
+                    scenario=self.scenario,
+                )
+            except BaseException as error:
+                self.failures[mode] = error
+                raise
         return self.results[mode]
 
 
@@ -152,7 +159,7 @@ def component_gallery_evidence(
         tmp_path_factory.mktemp("component-gallery")
     )
     scenario = require_absolute_local_test_root(_SCENARIO)
-    return _GalleryEvidence(headed_installed_wheel, root, scenario, {})
+    return _GalleryEvidence(headed_installed_wheel, root, scenario, {}, {})
 
 
 def test_component_gallery_evidence_runs_only_requested_mode_once(
@@ -168,6 +175,7 @@ def test_component_gallery_evidence_runs_only_requested_mode_once(
     scenario = tmp_path / "gallery.js"
     calls: list[tuple[str, Path, Path]] = []
     result = {"mode": "dark"}
+    failure = RuntimeError("gallery failed after creating its root")
 
     def run(
         observed_installed: HeadedInstalledWheel,
@@ -178,16 +186,29 @@ def test_component_gallery_evidence_runs_only_requested_mode_once(
     ) -> dict[str, object]:
         assert observed_installed is installed
         calls.append((mode, root, scenario))
+        if mode == "forced":
+            root.mkdir()
+            raise failure
         return result
 
     monkeypatch.setitem(globals(), "_run_gallery_mode", run)
-    evidence = _GalleryEvidence(installed, tmp_path, scenario, {})
+    evidence = _GalleryEvidence(installed, tmp_path, scenario, {}, {})
 
     assert calls == []
     assert evidence.result("dark") is result
     assert evidence.result("dark") is result
     assert calls == [("dark", tmp_path / "dark", scenario)]
     assert "light" not in evidence.results
+    with pytest.raises(RuntimeError) as first:
+        evidence.result("forced")
+    with pytest.raises(RuntimeError) as second:
+        evidence.result("forced")
+    assert first.value is failure
+    assert second.value is failure
+    assert calls == [
+        ("dark", tmp_path / "dark", scenario),
+        ("forced", tmp_path / "forced", scenario),
+    ]
 
 
 def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() -> None:

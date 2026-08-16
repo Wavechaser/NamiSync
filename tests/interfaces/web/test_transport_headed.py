@@ -78,27 +78,41 @@ class _HeadedTransportEvidence:
     installed_assets: Path
     transport_value: _TransportEvidence | None = None
     off_origin_value: _OffOriginEvidence | None = None
+    transport_error: BaseException | None = None
+    off_origin_error: BaseException | None = None
 
     @property
     def installed_root(self) -> Path:
         return self.installed.root.resolve()
 
     def transport(self) -> _TransportEvidence:
+        if self.transport_error is not None:
+            raise self.transport_error
         if self.transport_value is None:
-            self.transport_value = _run_transport_scenario(
-                self.installed,
-                root=require_absolute_local_test_root(self.root / "transport"),
-                installed_assets=self.installed_assets,
-            )
+            try:
+                self.transport_value = _run_transport_scenario(
+                    self.installed,
+                    root=require_absolute_local_test_root(self.root / "transport"),
+                    installed_assets=self.installed_assets,
+                )
+            except BaseException as error:
+                self.transport_error = error
+                raise
         return self.transport_value
 
     def off_origin(self) -> _OffOriginEvidence:
+        if self.off_origin_error is not None:
+            raise self.off_origin_error
         if self.off_origin_value is None:
-            self.off_origin_value = _run_off_origin_scenario(
-                self.installed,
-                root=require_absolute_local_test_root(self.root / "off-origin"),
-                installed_assets=self.installed_assets,
-            )
+            try:
+                self.off_origin_value = _run_off_origin_scenario(
+                    self.installed,
+                    root=require_absolute_local_test_root(self.root / "off-origin"),
+                    installed_assets=self.installed_assets,
+                )
+            except BaseException as error:
+                self.off_origin_error = error
+                raise
         return self.off_origin_value
 
 
@@ -131,6 +145,10 @@ def test_headed_transport_evidence_runs_each_requested_scenario_once(
     installed_assets = tmp_path / "assets"
     transport = object()
     off_origin = object()
+    transport_failure = RuntimeError("transport failed after creating its root")
+    off_origin_failure = RuntimeError(
+        "off-origin failed after creating its root"
+    )
     calls: list[tuple[str, Path, Path]] = []
 
     def run_transport(
@@ -141,6 +159,9 @@ def test_headed_transport_evidence_runs_each_requested_scenario_once(
     ) -> _TransportEvidence:
         assert observed_installed is installed
         calls.append(("transport", root, installed_assets))
+        if root.parent.name == "transport-failure":
+            root.mkdir(parents=True)
+            raise transport_failure
         return transport  # type: ignore[return-value]
 
     def run_off_origin(
@@ -151,6 +172,9 @@ def test_headed_transport_evidence_runs_each_requested_scenario_once(
     ) -> _OffOriginEvidence:
         assert observed_installed is installed
         calls.append(("off-origin", root, installed_assets))
+        if root.parent.name == "off-origin-failure":
+            root.mkdir(parents=True)
+            raise off_origin_failure
         return off_origin  # type: ignore[return-value]
 
     monkeypatch.setitem(globals(), "_run_transport_scenario", run_transport)
@@ -167,6 +191,44 @@ def test_headed_transport_evidence_runs_each_requested_scenario_once(
         ("transport", tmp_path / "transport", installed_assets),
         ("off-origin", tmp_path / "off-origin", installed_assets),
     ]
+
+    failing_transport = _HeadedTransportEvidence(
+        installed,
+        tmp_path / "transport-failure",
+        installed_assets,
+    )
+    with pytest.raises(RuntimeError) as first_transport:
+        failing_transport.transport()
+    with pytest.raises(RuntimeError) as second_transport:
+        failing_transport.transport()
+    assert first_transport.value is transport_failure
+    assert second_transport.value is transport_failure
+
+    failing_off_origin = _HeadedTransportEvidence(
+        installed,
+        tmp_path / "off-origin-failure",
+        installed_assets,
+    )
+    with pytest.raises(RuntimeError) as first_off_origin:
+        failing_off_origin.off_origin()
+    with pytest.raises(RuntimeError) as second_off_origin:
+        failing_off_origin.off_origin()
+    assert first_off_origin.value is off_origin_failure
+    assert second_off_origin.value is off_origin_failure
+    assert calls.count(
+        (
+            "transport",
+            tmp_path / "transport-failure" / "transport",
+            installed_assets,
+        )
+    ) == 1
+    assert calls.count(
+        (
+            "off-origin",
+            tmp_path / "off-origin-failure" / "off-origin",
+            installed_assets,
+        )
+    ) == 1
 
 
 def test_transport_gate_assets_keep_test_implementation_outside_package() -> None:
