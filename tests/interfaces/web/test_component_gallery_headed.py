@@ -281,7 +281,8 @@ def test_component_gallery_child_preserves_production_host_and_bridge() -> None:
     assert "combined = MappingProxyType(" in child
     assert '"test_report": _test_report_spec(' in child
     assert "arguments.mode," in child
-    assert "original_dispatcher(document, combined)" in child
+    assert "startup_gate: object," in child
+    assert "original_dispatcher(document, combined, startup_gate)" in child
     assert "original_configure(" in child
     assert "host.run_desktop(" in child
     assert "register" not in child.casefold()
@@ -879,6 +880,7 @@ def _run_gallery_mode(
         "next_events",
         "pick_folder",
         "release_terminal_session",
+        "shell_ready",
         "start_plan",
     ]
     assert result["combined_mapping_type"] == "mappingproxy"

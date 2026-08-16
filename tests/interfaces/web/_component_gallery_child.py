@@ -765,7 +765,11 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     retained_delegates: list[object] = []
     pseudo_scheduler: dict[str, object] = {}
 
-    def dispatcher(document: object, commands: object) -> object:
+    def dispatcher(
+        document: object,
+        commands: object,
+        startup_gate: object,
+    ) -> object:
         production = dict(commands)
         if "test_report" in production:
             raise RuntimeError("production unexpectedly owns the gallery command")
@@ -789,7 +793,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         recorder.set("production_command_names", sorted(production))
         recorder.set("combined_command_names", sorted(combined))
         recorder.set("combined_mapping_type", type(combined).__name__)
-        value = original_dispatcher(document, combined)
+        value = original_dispatcher(document, combined, startup_gate)
         recorder.set(
             "dispatcher_type",
             f"{type(value).__module__}.{type(value).__qualname__}",
