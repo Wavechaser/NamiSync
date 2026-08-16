@@ -1278,6 +1278,44 @@ serialization firmly bounded by one shared number.
 Fixed row height is a design constraint, not an aesthetic preference:
 variable heights require measurement passes that make window math fragile.
 
+The generic renderer owns the generation of a window request, not its data.
+Its callback is exactly `requestIndex(index, generation)`: the Slice 5/6 owner
+fetches a window containing `index` and commits it with that supplied
+`generation`; it does not call `beginWindowRequest` a second time. Parameter
+changes and other external projection work do start a new generation through
+`beginWindowRequest`, and that authority is never superseded by interpreting
+scroll state from the now-stale DOM.
+
+User scrolling is a bounded presentation operation. A passive scroll listener
+coalesces a burst into one animation-frame reconciliation. For a viewport
+`[top, top + height)`, intersecting row indexes are
+`floor(top / 28)` through `ceil((top + height) / 28) - 1`, clipped to the
+visible-sequence extent. If that range intersects a spacer, the renderer
+requests the missing leading or trailing index once. If the current window
+already covers it, no request is sent. When the current rows contain a fully
+visible row, the active descendant moves there presentation-only, chosen from
+`ceil(top / 28)` through `floor((top + height) / 28) - 1`; otherwise the
+renderer clears it until a covering commit. Neither path invokes domain
+activation.
+
+A scroll-owned commit preserves `scrollTop` and rejects stale generations
+before reading their payload. A later real user scroll invalidates an older
+keyboard request or a scroll request for a different missing index; a repeated
+request for the same missing index is suppressed. A scroll frame queued before
+a keyboard request cannot overtake that request, and a programmatic active-row
+reveal is not a newer user intent. Returning to an already covered window
+invalidates an unneeded scroll request so its late response cannot replace the
+correct rows.
+Any valid scroll response is terminal for the `scrollTop` and `clientHeight`
+snapshot that requested it: an unchanged viewport does not autonomously ask
+for another page merely because the response was narrower than that viewport.
+A later viewport change may issue one new last-state-wins request. This keeps a
+valid narrow collaborator response from creating an unbounded endpoint
+ping-pong without imposing an undocumented page-width requirement on the
+owner.
+This is the last-request-wins behavior for viewport paging; it does not create
+selection, projection, or bridge authority in JavaScript.
+
 Search responsiveness is interaction-owned, not an excuse for a tiny semantic
 query limit. The first Slice 5/6 request owner uses a fixed 150 ms trailing
 debounce and advances its window generation on every search, collapse, or
@@ -3379,7 +3417,17 @@ because its local tests are easier.
   20,000-container/100,000-leaf retained-representation witness, and
   deterministic linear field-access guard now pass. These are structural
   evidence, not latency acceptance; broader BR-G-42 product-view measurements
-  remain with Slices 5-7.
+  remain with Slices 5-7. The production renderer regressions additionally
+  cover coalesced leading/trailing spacer paging, exact row-boundary math,
+  external-projection priority, keyboard-versus-newer-scroll ordering,
+  covered-window cancellation, callback failure, stale-payload refusal before
+  access, preserved scroll position, a one-row valid response that cannot
+  self-retry for an unchanged viewport, changed-viewport convergence, and a
+  fully visible presentation-only active descendant. The installed-wheel SH-G-7 witness sends a native CDP
+  mouse-wheel gesture through a four-row viewport, accepts a five-row page
+  spanning both viewport edges, and proves the viewport remains nonblank
+  while the activation recorder remains empty. Those are functional regressions, not latency
+  measurements.
 - **BR-G-35 — Plan presentation preserves operation truth while compressing
   moves.** This is also the first consumer that proves a filtered move ghost
   removes its synthetic-only ancestor chain, an ordinary real operation keeps

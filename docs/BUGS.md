@@ -710,6 +710,16 @@ defect, and move implementation-level test choreography out of the log.
   fixed-row reveal math and a disclosure listener that stops propagation,
   focuses the tree, and requests one toggle without activation. A projected
   end node remains inert, and callback failure cannot leak into row activation.
+- MODERATE - FIXED (2026-08-17). Virtual-window request omission. The tree
+  exposed full-height spacers but did not convert user scrolling into a missing-
+  window request, leaving a blank viewport and an offscreen active descendant.
+  Cause: paging existed only for keyboard navigation. Fixed with one passive-
+  scroll/animation-frame owner that maps the final viewport to a missing global
+  index, owns the request generation, preserves external projection priority
+  and scroll position, rejects stale commits before reading them, and moves only
+  presentation focus to a fully visible row. The request binds its viewport
+  snapshot, so a valid narrow response cannot start an automatic edge-to-edge
+  retry loop while that viewport remains unchanged.
 - MINOR - FIXED (2026-08-13). Presentation-state acceptance drift.
   The entire task rail inherited an opaque generic card, neutral hover/pressed
   and primary rest/pressed states collapsed visually, and dialog exit motion was

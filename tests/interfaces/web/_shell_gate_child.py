@@ -218,6 +218,126 @@ _INTERACTION_PROBE = r"""
 })()
 """
 
+_SCROLL_TREE_SETUP = r"""
+(async () => {
+  const work = document.querySelector(".nami-work-panel");
+  if (!(work instanceof HTMLElement)) {
+    throw new Error("production work panel is unavailable");
+  }
+  const {ROW_H, createTree} = await import("/tree.js");
+  const root = document.createElement("div");
+  root.ariaLabel = "Scroll paging evidence";
+  root.style.boxSizing = "content-box";
+  root.style.blockSize = `${4 * ROW_H}px`;
+  work.append(root);
+  const total = 300;
+  const state = {
+    activations: [],
+    commits: [],
+    currentOffset: 0,
+    previousFocus: document.activeElement,
+    requests: [],
+    root,
+  };
+  let controller;
+  controller = createTree(root, {
+    activate: (nodeId) => state.activations.push(nodeId),
+    requestIndex: (index, generation) => {
+      state.requests.push({index, generation});
+      const offset = Math.min(Math.floor(index / 4) * 4, total - 5);
+      const accepted = controller.commitWindow(generation, {
+        offset,
+        total,
+        rows: rows(offset),
+      });
+      if (accepted) {
+        state.currentOffset = offset;
+      }
+      state.commits.push({accepted, generation, offset});
+    },
+  });
+  const generation = controller.beginWindowRequest();
+  const accepted = controller.commitWindow(generation, {
+    offset: 0,
+    total,
+    rows: rows(0),
+  });
+  root.focus();
+  state.initial = {
+    accepted,
+    client_height: root.clientHeight,
+    generation,
+    row_count: root.querySelectorAll(".nami-tree-row").length,
+    row_h: ROW_H,
+    total,
+  };
+  globalThis.__namiScrollTreeEvidence = state;
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  const rect = root.getBoundingClientRect();
+  return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+
+  function rows(offset) {
+    return Array.from({length: 5}, (_, relativeIndex) => {
+      const visibleIndex = offset + relativeIndex;
+      return {
+        node_id: `scroll-${visibleIndex}`,
+        display: `Scroll ${visibleIndex}`,
+        depth: 0,
+        is_container: false,
+        visible_index: visibleIndex,
+        parent_visible_index: null,
+        first_child_visible_index: null,
+        position_in_set: visibleIndex + 1,
+        set_size: total,
+        expanded: null,
+      };
+    });
+  }
+})()
+"""
+
+_SCROLL_TREE_EVIDENCE = r"""
+(async () => {
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const state = globalThis.__namiScrollTreeEvidence;
+  if (state === undefined) {
+    throw new Error("scroll paging evidence is unavailable");
+  }
+  const root = state.root;
+  const rootRect = root.getBoundingClientRect();
+  const viewportTop = rootRect.top + root.clientTop;
+  const viewportBottom = viewportTop + root.clientHeight;
+  const rendered = [...root.querySelectorAll(".nami-tree-row")];
+  const rects = rendered.map((row) => row.getBoundingClientRect());
+  const descendant = root.getAttribute("aria-activedescendant");
+  const active = descendant === null ? null : document.getElementById(descendant);
+  const activeRect = active?.getBoundingClientRect();
+  const result = {
+    active_node: active?.dataset.nodeId ?? null,
+    activations: state.activations,
+    commits: state.commits,
+    fully_visible_active: activeRect !== undefined &&
+      activeRect.top >= viewportTop - 0.01 &&
+      activeRect.bottom <= viewportBottom + 0.01,
+    focus_is_tree: document.activeElement === root,
+    initial: state.initial,
+    nonblank_viewport: rects.length > 0 &&
+      Math.min(...rects.map((rect) => rect.top)) <= viewportTop + 0.01 &&
+      Math.max(...rects.map((rect) => rect.bottom)) >= viewportBottom - 0.01,
+    rendered_indices: rendered.map((row) =>
+      Number(row.id.slice(row.id.lastIndexOf("-") + 1))),
+    requests: state.requests,
+    row_count: rendered.length,
+    scroll_top: root.scrollTop,
+  };
+  state.previousFocus?.focus();
+  root.remove();
+  delete globalThis.__namiScrollTreeEvidence;
+  return result;
+})()
+"""
+
 _FINAL_PROBE = r"""
 (async () => {
   await new Promise((resolve) =>
@@ -677,6 +797,29 @@ def _begin_probe(
             lambda _value: mouse("mouseReleased", 0, callback),
         )
 
+    def wheel(
+        point: object,
+        delta_y: float,
+        callback: Callable[[object], None],
+    ) -> None:
+        if type(point) is not dict:
+            raise TypeError("wheel target is invalid")
+        x = point.get("x")
+        y = point.get("y")
+        if type(x) not in {int, float} or type(y) not in {int, float}:
+            raise TypeError("wheel coordinates are invalid")
+        protocol(
+            "Input.dispatchMouseEvent",
+            {
+                "type": "mouseWheel",
+                "x": x,
+                "y": y,
+                "deltaX": 0,
+                "deltaY": delta_y,
+            },
+            callback,
+        )
+
     def after_initial(value: object) -> None:
         page["initial"] = value
         evaluate(_KEYBOARD_TREE_PROBE, after_keyboard_tree)
@@ -721,6 +864,16 @@ def _begin_probe(
 
     def after_label_evidence(value: object) -> None:
         page["label_click"] = value
+        evaluate(_SCROLL_TREE_SETUP, after_scroll_setup)
+
+    def after_scroll_setup(value: object) -> None:
+        wheel(value, 112, after_scroll_wheel)
+
+    def after_scroll_wheel(_value: object) -> None:
+        evaluate(_SCROLL_TREE_EVIDENCE, after_scroll_evidence)
+
+    def after_scroll_evidence(value: object) -> None:
+        page["scroll_tree"] = value
         native.browser.webview.ZoomFactor = 2.0
         page["controller_zoom"] = float(native.browser.webview.ZoomFactor)
         protocol(

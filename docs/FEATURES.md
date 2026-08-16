@@ -325,7 +325,15 @@ unrealized unless an entry says otherwise.
   containers expose no disclosure. The installed `tree.js` renders only those decided
   windows as an operable single-tab-stop fixed-height tree with two spacers, an
   exact 28-pixel row, inert full labels, visible active-descendant navigation,
-  pointer-owned disclosure toggles that never activate a row, and stale-generation refusal. The production
+  pointer-owned disclosure toggles that never activate a row, and stale-generation refusal. Passive
+  scroll paging coalesces each burst to its final viewport, requests a missing
+  leading or trailing global index through the tree-owned generation, preserves
+  scroll position across the replacement, and keeps presentation focus on a
+  fully visible row when one is available, otherwise clearing it until the
+  covering commit; neither path invokes domain activation. External projection changes
+  remain authoritative over scroll state from an older window. A valid narrow
+  page cannot self-retry for an unchanged viewport; a later viewport change is
+  the only owner of another passive request. The production
   shell exposes labelled task navigation and work regions
   with honest empty guidance; it fabricates no task, session, or product row
   and adds no presentation command. The exact bridge surface remains solely in

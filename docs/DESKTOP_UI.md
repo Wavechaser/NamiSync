@@ -427,7 +427,16 @@ collapsed projected parents emit `true` and `false`, while leaves and
 structural containers with no retained child emit no expansion state. It never
 lets an active descendant remain outside the tree viewport: keyboard movement
 and a completed off-window target use the fixed 28-pixel global index to reveal
-the entire row without scrolling an outer surface. Clicking a disclosure
+the entire row without scrolling an outer surface. User scroll bursts collapse
+to one final animation-frame reconciliation. Crossing a virtual spacer requests
+the missing leading or trailing global index with the tree-owned generation;
+the returned page preserves `scrollTop` and cannot snap the viewport. Scrolling
+within a covered window sends no request and moves only presentation focus to a
+fully visible rendered row when one is available; otherwise it clears the
+active descendant until a covering commit. Neither outcome invokes domain
+activation. An external projection request takes priority over scroll state
+from the old DOM, and stale page responses are refused before their payload is
+read. Clicking a disclosure
 focuses that row and requests exactly one expand/collapse change without
 activating it; clicking the label activates as usual. It never filters a viewport, reconstructs ancestry,
 searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
@@ -435,6 +444,11 @@ of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree
 contract live in `M1_BRIDGE.md`; the installed shell/tree witness is SH-G-7 in
 `M1_SHELL.md`.
+
+A valid scroll page is terminal for the viewport snapshot that requested it.
+If it is narrower than the viewport, the renderer waits for a later viewport
+change rather than automatically alternating requests between missing edges;
+the owning view is not subject to an implicit minimum page width.
 
 The Slice 4 frame has two labelled structural regions beneath the header: task
 navigation stating that no tasks are available and a work region stating that

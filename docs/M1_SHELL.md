@@ -323,6 +323,8 @@ tests/assets/
 `visible_sequence.py` owns tree-agnostic flatten/window/search/filter/anchor
 presentation. `tree.js` virtualizes and renders windows already decided by the
 server; it never reconstructs hierarchy or filters an already-windowed page.
+It coalesces passive scroll events to one animation-frame check and requests a
+missing spacer index through the generation it supplies to the owning view.
 `plan.js` and `inventory.js` keep the two vertical renderers disjoint;
 `panels.js` owns only their shared panel frame. `tokens.css` holds the Fluent
 design tokens defined in `DESKTOP_UI.md`, `components.css` the Fluent control set built on
@@ -823,6 +825,10 @@ carry the `headed` marker; all are collected by the release command.
   same scenario imports the installed `tree.js`, keeps a natively moved active
   descendant fully visible in a one-row viewport, uses CDP pointer hit testing
   to prove disclosure toggle without activation and ordinary label activation,
+  sends a native CDP mouse-wheel gesture through a four-row viewport, accepts
+  the requested five-row page without changing scroll position, and proves the
+  visible region stays nonblank with a fully visible active descendant and no
+  domain activation,
   renders complete hostile and
   long display strings through its production text path, measures every row at
   28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,

@@ -80,6 +80,8 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "original(window)" in source
     assert '"Input.dispatchKeyEvent"' in source
     assert '"Input.dispatchMouseEvent"' in source
+    assert '"type": "mouseWheel"' in source
+    assert "wheel(value, 112, after_scroll_wheel)" in source
     assert '"Emulation.setEmulatedMedia"' in source
     assert '"Accessibility.getFullAXTree"' in source
     assert "ZoomFactor = 2.0" in source
@@ -217,6 +219,26 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "activations": ["keyboard-child"],
         "focus_is_tree": True,
         "active_node": "keyboard-child",
+    }
+    assert page["scroll_tree"] == {
+        "active_node": "scroll-7",
+        "activations": [],
+        "commits": [{"accepted": True, "generation": 2, "offset": 4}],
+        "fully_visible_active": True,
+        "focus_is_tree": True,
+        "initial": {
+            "accepted": True,
+            "client_height": 112,
+            "generation": 1,
+            "row_count": 5,
+            "row_h": 28,
+            "total": 300,
+        },
+        "nonblank_viewport": True,
+        "rendered_indices": [4, 5, 6, 7, 8],
+        "requests": [{"generation": 2, "index": 7}],
+        "row_count": 5,
+        "scroll_top": 112,
     }
     assert page["controller_zoom"] == 2.0
     assert final["focused_before_tree"] == "Keyboard tree evidence"
@@ -389,6 +411,7 @@ def _assert_report_schema(result: object) -> None:
         "second_focus",
         "disclosure_click",
         "label_click",
+        "scroll_tree",
         "controller_zoom",
         "final",
         "accessibility",
@@ -446,6 +469,27 @@ def _assert_report_schema(result: object) -> None:
             "focus_is_tree",
             "active_node",
         }
+    assert set(result["page"]["scroll_tree"]) == {
+        "active_node",
+        "activations",
+        "commits",
+        "fully_visible_active",
+        "focus_is_tree",
+        "initial",
+        "nonblank_viewport",
+        "rendered_indices",
+        "requests",
+        "row_count",
+        "scroll_top",
+    }
+    assert set(result["page"]["scroll_tree"]["initial"]) == {
+        "accepted",
+        "client_height",
+        "generation",
+        "row_count",
+        "row_h",
+        "total",
+    }
     final = result["page"]["final"]
     assert set(final) == {
         "focused_before_tree",

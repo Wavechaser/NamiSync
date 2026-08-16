@@ -15,6 +15,9 @@ export function createTree(root, callbacks = {}) {
   const requestIndex = optionalCallback(callbacks, "requestIndex");
   const toggle = optionalCallback(callbacks, "toggle");
   const activate = optionalCallback(callbacks, "activate");
+  const requestFrame = document.defaultView.requestAnimationFrame.bind(
+    document.defaultView,
+  );
   const treeId = nextTreeId;
   nextTreeId += 1;
 
@@ -28,14 +31,20 @@ export function createTree(root, callbacks = {}) {
 
   let currentGeneration = 0;
   let currentTotal = 0;
+  let currentOffset = 0;
+  let currentEnd = 0;
   let renderedByIndex = new Map();
   let activeElement = null;
   let activeNodeId = null;
   let activeVisibleIndex = null;
-  let pendingVisibleIndex = null;
+  let pendingRequest = null;
+  let settledScrollViewport = null;
+  let expectedProgrammaticScroll = null;
+  let scrollFramePending = false;
   let initializedActive = false;
 
   root.addEventListener("keydown", onKeyDown);
+  root.addEventListener("scroll", onScroll, {passive: true});
   root.addEventListener("focus", () => {
     if (activeElement !== null) {
       revealActiveRow();
@@ -44,14 +53,25 @@ export function createTree(root, callbacks = {}) {
     if (!initializedActive) {
       const first = firstRenderedEntry();
       if (first !== null) {
-        setActive(first);
+        acceptRenderedIntent(first);
       }
     }
   });
 
   function beginWindowRequest(pendingIndex = null) {
+    return beginRequest(pendingIndex, "external");
+  }
+
+  function beginRequest(pendingIndex, kind) {
     currentGeneration += 1;
-    pendingVisibleIndex = pendingIndex;
+    settledScrollViewport = null;
+    pendingRequest = Object.freeze({
+      clientHeight: kind === "scroll" ? root.clientHeight : null,
+      generation: currentGeneration,
+      index: pendingIndex,
+      kind,
+      scrollTop: kind === "scroll" ? root.scrollTop : null,
+    });
     return currentGeneration;
   }
 
@@ -59,20 +79,30 @@ export function createTree(root, callbacks = {}) {
     if (generation !== currentGeneration) {
       return false;
     }
-    const entries = window.rows.map((row) => {
+    const offset = window.offset;
+    const total = window.total;
+    const sourceRows = window.rows;
+    const admittedRequest = pendingRequest?.generation === generation
+      ? pendingRequest
+      : null;
+    const requestKind = admittedRequest?.kind ?? null;
+    const requestedIndex = admittedRequest?.index ?? null;
+    const preservedScrollTop = root.scrollTop;
+    const entries = sourceRows.map((sourceRow) => {
+      const row = snapshotRow(sourceRow);
       let entry;
       const element = createRow(document, treeId, row, (event) => {
         event.stopPropagation();
         if (row.expanded === null) {
           return;
         }
-        setActive(entry);
+        acceptRenderedIntent(entry);
         root.focus();
         toggle(row.node_id, !row.expanded);
       });
       entry = Object.freeze({element, row});
       element.addEventListener("click", () => {
-        setActive(entry);
+        acceptRenderedIntent(entry);
         root.focus();
         activate(row.node_id);
       });
@@ -82,9 +112,9 @@ export function createTree(root, callbacks = {}) {
       entries.map((entry) => [entry.row.visible_index, entry]),
     );
 
-    const leadingRows = Math.min(window.offset, window.total);
+    const leadingRows = Math.min(offset, total);
     const trailingRows = Math.max(
-      window.total - leadingRows - entries.length,
+      total - leadingRows - entries.length,
       0,
     );
     topSpacer.style.blockSize = `${leadingRows * ROW_H}px`;
@@ -94,35 +124,63 @@ export function createTree(root, callbacks = {}) {
       ...entries.map((entry) => entry.element),
       bottomSpacer,
     );
-    currentTotal = window.total;
+    currentTotal = total;
+    currentOffset = leadingRows;
+    currentEnd = leadingRows + entries.length;
     renderedByIndex = nextByIndex;
+    if (requestKind === "scroll") {
+      setProgrammaticScrollTop(preservedScrollTop, false);
+    }
+    if (pendingRequest?.generation === generation) {
+      clearPendingRequest();
+    }
 
     let target = null;
-    if (preferredNodeId !== null) {
+    if (requestKind === "scroll") {
+      target = visibleEntry(requestedIndex);
+    } else if (preferredNodeId !== null) {
       target = entries.find(
         (entry) => entry.row.node_id === preferredNodeId,
       ) ?? null;
     }
-    if (target === null && pendingVisibleIndex !== null) {
-      target = renderedByIndex.get(pendingVisibleIndex) ?? null;
+    if (
+      target === null && requestKind !== "scroll" &&
+      requestedIndex !== null
+    ) {
+      target = renderedByIndex.get(requestedIndex) ?? null;
     }
-    if (target === null && activeNodeId !== null) {
+    if (
+      target === null && requestKind !== "scroll" && activeNodeId !== null
+    ) {
       target = entries.find(
         (entry) => entry.row.node_id === activeNodeId,
       ) ?? null;
     }
-    if (target === null && entries.length > 0) {
+    if (
+      target === null && requestKind !== "scroll" && entries.length > 0
+    ) {
       target = nearestEntry(entries, activeVisibleIndex);
     }
     if (target === null) {
-      clearActive();
+      clearActive(requestKind === "scroll");
     } else {
-      setActive(target);
+      setActive(target, requestKind !== "scroll");
+    }
+    const scrollViewportUnchanged = requestKind === "scroll" &&
+      root.scrollTop === admittedRequest.scrollTop &&
+      root.clientHeight === admittedRequest.clientHeight;
+    if (scrollViewportUnchanged) {
+      settledScrollViewport = Object.freeze({
+        clientHeight: root.clientHeight,
+        scrollTop: root.scrollTop,
+      });
+    } else {
+      scheduleViewportCheck();
     }
     return true;
   }
 
-  function setActive(entry) {
+  function setActive(entry, reveal = true) {
     if (activeElement !== null) {
       delete activeElement.dataset.active;
     }
@@ -130,10 +188,11 @@ export function createTree(root, callbacks = {}) {
     activeElement.dataset.active = "true";
     activeNodeId = entry.row.node_id;
     activeVisibleIndex = entry.row.visible_index;
-    pendingVisibleIndex = null;
     initializedActive = true;
     root.setAttribute("aria-activedescendant", activeElement.id);
-    revealActiveRow();
+    if (reveal) {
+      revealActiveRow();
+    }
   }
 
   function revealActiveRow() {
@@ -145,21 +204,22 @@ export function createTree(root, callbacks = {}) {
     const viewportTop = root.scrollTop;
     const viewportBottom = viewportTop + root.clientHeight;
     if (rowTop < viewportTop) {
-      root.scrollTop = rowTop;
+      setProgrammaticScrollTop(rowTop);
     } else if (rowBottom > viewportBottom) {
-      root.scrollTop = Math.max(rowBottom - root.clientHeight, 0);
+      setProgrammaticScrollTop(
+        Math.max(rowBottom - root.clientHeight, 0),
+      );
     }
   }
 
-  function clearActive() {
+  function clearActive(suppressFocusInitialization = false) {
     if (activeElement !== null) {
       delete activeElement.dataset.active;
     }
     activeElement = null;
     activeNodeId = null;
     activeVisibleIndex = null;
-    pendingVisibleIndex = null;
-    initializedActive = false;
+    initializedActive = suppressFocusInitialization;
     root.removeAttribute("aria-activedescendant");
   }
 
@@ -169,10 +229,180 @@ export function createTree(root, callbacks = {}) {
     }
     const rendered = renderedByIndex.get(visibleIndex);
     if (rendered !== undefined) {
-      setActive(rendered);
+      acceptRenderedIntent(rendered);
       return;
     }
-    requestIndex(visibleIndex);
+    requestWindow(visibleIndex, "keyboard");
+  }
+
+  function requestWindow(visibleIndex, kind) {
+    if (
+      kind === "scroll" && pendingRequest?.kind === "scroll" &&
+      pendingRequest.index === visibleIndex
+    ) {
+      return;
+    }
+    const generation = beginRequest(visibleIndex, kind);
+    try {
+      requestIndex(visibleIndex, generation);
+    } catch (error) {
+      if (pendingRequest?.generation === generation) {
+        clearPendingRequest();
+      }
+      throw error;
+    }
+  }
+
+  function onScroll() {
+    if (
+      expectedProgrammaticScroll !== null &&
+      root.scrollTop === expectedProgrammaticScroll.scrollTop
+    ) {
+      const reconcile = expectedProgrammaticScroll.reconcile;
+      expectedProgrammaticScroll = null;
+      if (!reconcile) {
+        return;
+      }
+    } else {
+      expectedProgrammaticScroll = null;
+      if (pendingRequest?.kind === "keyboard") {
+        invalidatePendingRequest();
+      }
+    }
+    scheduleViewportCheck();
+  }
+
+  function scheduleViewportCheck() {
+    if (scrollFramePending) {
+      return;
+    }
+    scrollFramePending = true;
+    requestFrame(() => {
+      scrollFramePending = false;
+      reconcileViewport();
+    });
+  }
+
+  function reconcileViewport() {
+    if (root.clientHeight <= 0 || currentTotal <= 0) {
+      return;
+    }
+    if (
+      settledScrollViewport !== null &&
+      root.scrollTop === settledScrollViewport.scrollTop &&
+      root.clientHeight === settledScrollViewport.clientHeight
+    ) {
+      return;
+    }
+    settledScrollViewport = null;
+    if (pendingRequest?.kind === "external") {
+      reconcileVisibleActive();
+      return;
+    }
+    if (pendingRequest?.kind === "keyboard") {
+      return;
+    }
+
+    const viewportTop = Math.max(root.scrollTop, 0);
+    const viewportBottom = viewportTop + root.clientHeight;
+    const firstIndex = Math.min(
+      Math.floor(viewportTop / ROW_H),
+      currentTotal - 1,
+    );
+    const lastIndex = Math.min(
+      Math.max(Math.ceil(viewportBottom / ROW_H) - 1, firstIndex),
+      currentTotal - 1,
+    );
+    const covered = firstIndex >= currentOffset && lastIndex < currentEnd;
+    if (covered) {
+      reconcileVisibleActive();
+      if (pendingRequest?.kind === "scroll") {
+        invalidatePendingRequest();
+      }
+      return;
+    }
+
+    reconcileVisibleActive();
+    const requestTarget = firstIndex < currentOffset ? firstIndex : lastIndex;
+    requestWindow(requestTarget, "scroll");
+  }
+
+  function reconcileVisibleActive(preferredIndex = null) {
+    const target = visibleEntry(preferredIndex);
+    if (target !== null) {
+      if (target.element !== activeElement) {
+        setActive(target, false);
+      }
+    } else {
+      clearActive(true);
+    }
+  }
+
+  function visibleEntry(preferredIndex = null) {
+    if (root.clientHeight < ROW_H) {
+      return null;
+    }
+    const viewportTop = Math.max(root.scrollTop, 0);
+    const viewportBottom = viewportTop + root.clientHeight;
+    const firstFullIndex = Math.ceil(viewportTop / ROW_H);
+    const lastFullIndex = Math.floor(viewportBottom / ROW_H) - 1;
+    const nearestIndex = preferredIndex ?? activeVisibleIndex ?? firstFullIndex;
+    let active = null;
+    let nearest = null;
+    for (const entry of renderedByIndex.values()) {
+      const index = entry.row.visible_index;
+      if (index < firstFullIndex || index > lastFullIndex) {
+        continue;
+      }
+      if (index === preferredIndex) {
+        return entry;
+      }
+      if (entry.row.node_id === activeNodeId) {
+        active = entry;
+      }
+      if (
+        nearest === null ||
+        Math.abs(index - nearestIndex) <
+          Math.abs(nearest.row.visible_index - nearestIndex)
+      ) {
+        nearest = entry;
+      }
+    }
+    return active ?? nearest;
+  }
+
+  function invalidatePendingRequest() {
+    currentGeneration += 1;
+    clearPendingRequest();
+  }
+
+  function acceptRenderedIntent(entry) {
+    invalidateInternalRequest();
+    setActive(entry);
+  }
+
+  function invalidateInternalRequest() {
+    if (
+      pendingRequest?.kind === "keyboard" ||
+      pendingRequest?.kind === "scroll"
+    ) {
+      invalidatePendingRequest();
+    }
+  }
+
+  function setProgrammaticScrollTop(value, reconcile = true) {
+    const previous = root.scrollTop;
+    root.scrollTop = value;
+    if (root.scrollTop !== previous) {
+      expectedProgrammaticScroll = Object.freeze({
+        reconcile,
+        scrollTop: root.scrollTop,
+      });
+    }
+  }
+
+  function clearPendingRequest() {
+    pendingRequest = null;
   }
 
   function onKeyDown(event) {
@@ -213,6 +443,7 @@ export function createTree(root, callbacks = {}) {
       case "ArrowRight":
         event.preventDefault();
         if (active !== undefined && active.row.expanded === false) {
+          invalidateInternalRequest();
           toggle(active.row.node_id, true);
         } else if (
           active !== undefined && active.row.expanded === true &&
@@ -224,6 +455,7 @@ export function createTree(root, callbacks = {}) {
       case "ArrowLeft":
         event.preventDefault();
         if (active !== undefined && active.row.expanded === true) {
+          invalidateInternalRequest();
           toggle(active.row.node_id, false);
         } else if (
           active !== undefined && active.row.parent_visible_index !== null
@@ -234,6 +466,7 @@ export function createTree(root, callbacks = {}) {
       case "Enter":
         event.preventDefault();
         if (active !== undefined) {
+          invalidateInternalRequest();
           activate(active.row.node_id);
         }
         break;
@@ -269,6 +502,20 @@ function createSpacer(document) {
   spacer.classList.add("nami-tree__spacer");
   spacer.ariaHidden = "true";
   return spacer;
+}
+
+function snapshotRow(row) {
+  return Object.freeze({
+    node_id: row.node_id,
+    display: row.display,
+    depth: row.depth,
+    visible_index: row.visible_index,
+    parent_visible_index: row.parent_visible_index,
+    first_child_visible_index: row.first_child_visible_index,
+    position_in_set: row.position_in_set,
+    set_size: row.set_size,
+    expanded: row.expanded,
+  });
 }
 
 function createRow(document, treeId, row, onDisclosureClick) {

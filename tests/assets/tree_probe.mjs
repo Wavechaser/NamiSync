@@ -54,6 +54,7 @@ class TestElement {
     this.parentElement = null;
     this.scrollTop = 0;
     this.clientHeight = 0;
+    this.clampScrollOnReplace = false;
   }
 
   addEventListener(name, listener) {
@@ -92,6 +93,9 @@ class TestElement {
       child.parentElement = this;
     }
     this.children = [...children];
+    if (this.clampScrollOnReplace) {
+      this.scrollTop = 0;
+    }
   }
 
   setAttribute(name, value) {
@@ -121,10 +125,30 @@ class TestElement {
   }
 }
 
+class TestWindow {
+  constructor() {
+    this.animationFrames = [];
+  }
+
+  requestAnimationFrame(callback) {
+    this.animationFrames.push(callback);
+    return this.animationFrames.length;
+  }
+
+  flushAnimationFrame() {
+    const callbacks = this.animationFrames;
+    this.animationFrames = [];
+    for (const callback of callbacks) {
+      callback(0);
+    }
+  }
+}
+
 class TestDocument {
   constructor() {
     this.activeElement = null;
     this.created = 0;
+    this.defaultView = new TestWindow();
   }
 
   createElement(tagName) {
@@ -167,9 +191,9 @@ root.ariaLabel = "Plan";
 let requestedGeneration = null;
 let tree;
 tree = createTree(root, {
-  requestIndex: (index) => {
+  requestIndex: (index, generation) => {
     requested.push(index);
-    requestedGeneration = tree.beginWindowRequest(index);
+    requestedGeneration = generation;
   },
   toggle: (...value) => toggled.push(value),
   activate: (nodeId) => activated.push(nodeId),
@@ -246,7 +270,8 @@ assert.equal(tree.commitWindow(secondGeneration, firstWindow), true);
 assert.deepEqual(
   [...accessedFields.keys()].sort(),
   [
-    "depth", "display", "expanded", "node_id",
+    "depth", "display", "expanded", "first_child_visible_index", "node_id",
+    "parent_visible_index",
     "position_in_set", "set_size", "visible_index",
   ],
 );
@@ -436,9 +461,9 @@ const pagedRequests = [];
 let pagedGeneration = null;
 let pagedTree;
 pagedTree = createTree(pagedRoot, {
-  requestIndex: (index) => {
+  requestIndex: (index, generation) => {
     pagedRequests.push(index);
-    pagedGeneration = pagedTree.beginWindowRequest(index);
+    pagedGeneration = generation;
   },
 });
 const pagedInitial = pagedTree.beginWindowRequest();
@@ -468,6 +493,488 @@ assert.equal(pagedTree.commitWindow(pagedGeneration, {
   rows: [row(0, "paged-0", "Paged 0"), row(1, "paged-1", "Paged 1")],
 }), true);
 assert.equal(pagedRoot.scrollTop, 0);
+
+// Scroll paging is last-state-wins and owns its request generations. The
+// viewport can temporarily contain only a spacer, but it must not retain an
+// offscreen active descendant or snap back when refocused during that gap.
+const scrollDocument = new TestDocument();
+const scrollRoot = scrollDocument.createElement("div");
+scrollRoot.clientHeight = 4 * ROW_H;
+const scrollRequests = [];
+let scrollTree;
+scrollTree = createTree(scrollRoot, {
+  requestIndex: (index, generation) => {
+    scrollRequests.push({index, generation});
+  },
+});
+const scrollInitial = scrollTree.beginWindowRequest();
+assert.equal(scrollTree.commitWindow(scrollInitial, {
+  offset: 0,
+  total: 300,
+  rows: rows(0, 4, "scroll"),
+}), true);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, []);
+
+scrollRoot.scrollTop = 4 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollRoot.scrollTop = 8 * ROW_H;
+scrollRoot.dispatch("scroll");
+assert.equal(scrollDocument.defaultView.animationFrames.length, 1);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [{index: 11, generation: 2}]);
+assert.equal(scrollRoot.getAttribute("aria-activedescendant"), null);
+scrollRoot.focus();
+assert.equal(scrollRoot.scrollTop, 8 * ROW_H);
+assert.equal(scrollRoot.getAttribute("aria-activedescendant"), null);
+
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [{index: 11, generation: 2}]);
+
+scrollRoot.scrollTop = 12 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [
+  {index: 11, generation: 2},
+  {index: 15, generation: 3},
+]);
+assert.equal(scrollTree.commitWindow(2, unreadableWindow), false);
+assert.equal(staleReads, 0);
+
+scrollRoot.scrollTop = 0;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.equal(
+  scrollRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-6-row-0",
+);
+assert.deepEqual(scrollRequests, [
+  {index: 11, generation: 2},
+  {index: 15, generation: 3},
+]);
+assert.equal(scrollTree.commitWindow(3, unreadableWindow), false);
+assert.equal(staleReads, 0);
+
+scrollRoot.scrollTop = 4 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+const trailingRequest = scrollRequests.at(-1);
+assert.deepEqual(trailingRequest, {index: 7, generation: 5});
+assert.equal(scrollTree.commitWindow(trailingRequest.generation, {
+  offset: 4,
+  total: 300,
+  rows: rows(4, 4, "scroll"),
+}), true);
+assert.equal(scrollRoot.scrollTop, 4 * ROW_H);
+assert.deepEqual(
+  treeItems(scrollRoot).map((element) => element.dataset.nodeId),
+  ["scroll-4", "scroll-5", "scroll-6", "scroll-7"],
+);
+assert.equal(
+  scrollRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-6-row-7",
+);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests.at(-1), trailingRequest);
+
+scrollRoot.scrollTop = 0;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+const leadingRequest = scrollRequests.at(-1);
+assert.deepEqual(leadingRequest, {index: 0, generation: 6});
+assert.equal(scrollTree.commitWindow(leadingRequest.generation, {
+  offset: 0,
+  total: 300,
+  rows: rows(0, 4, "scroll"),
+}), true);
+scrollDocument.defaultView.flushAnimationFrame();
+
+// An external projection request cannot be superseded from its stale DOM.
+const externalGeneration = scrollTree.beginWindowRequest();
+scrollRoot.scrollTop = 20 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests.at(-1), leadingRequest);
+assert.equal(scrollTree.commitWindow(externalGeneration, {
+  offset: 20,
+  total: 300,
+  rows: rows(20, 4, "external"),
+}), true);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests.at(-1), leadingRequest);
+
+// A scroll frame queued before a keyboard request is stale and cannot cancel
+// it. A scroll observed after a keyboard request is newer user intent.
+scrollRoot.scrollTop = 24 * ROW_H;
+scrollRoot.dispatch("scroll");
+dispatchKey(scrollRoot, "End");
+const endRequest = scrollRequests.at(-1);
+assert.deepEqual(endRequest, {index: 299, generation: 8});
+scrollDocument.defaultView.flushAnimationFrame();
+assert.equal(scrollTree.commitWindow(endRequest.generation, {
+  offset: 296,
+  total: 300,
+  rows: rows(296, 4, "end"),
+}), true);
+assert.equal(scrollRoot.scrollTop, 296 * ROW_H);
+scrollDocument.defaultView.flushAnimationFrame();
+
+const resetGeneration = scrollTree.beginWindowRequest();
+assert.equal(scrollTree.commitWindow(resetGeneration, {
+  offset: 20,
+  total: 300,
+  rows: rows(20, 4, "newer"),
+}), true);
+scrollDocument.defaultView.flushAnimationFrame();
+dispatchKey(scrollRoot, "End");
+const supersededKeyboard = scrollRequests.at(-1);
+scrollRoot.scrollTop = 21 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+const newerScroll = scrollRequests.at(-1);
+assert.equal(newerScroll.index, 24);
+assert.ok(newerScroll.generation > supersededKeyboard.generation);
+assert.equal(
+  scrollTree.commitWindow(supersededKeyboard.generation, unreadableWindow),
+  false,
+);
+assert.equal(staleReads, 0);
+assert.equal(scrollTree.commitWindow(newerScroll.generation, {
+  offset: 21,
+  total: 300,
+  rows: rows(21, 4, "newer-scroll"),
+}), true);
+assert.equal(scrollRoot.scrollTop, 21 * ROW_H);
+assert.equal(
+  scrollRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-6-row-24",
+);
+
+// A wheel movement wholly inside the current window updates only the
+// presentation focus; it neither requests a page nor activates a node.
+const coveredDocument = new TestDocument();
+const coveredRoot = coveredDocument.createElement("div");
+coveredRoot.clientHeight = 4 * ROW_H;
+const coveredRequests = [];
+const coveredActivations = [];
+const coveredTree = createTree(coveredRoot, {
+  requestIndex: (...value) => coveredRequests.push(value),
+  activate: (...value) => coveredActivations.push(value),
+});
+const coveredGeneration = coveredTree.beginWindowRequest();
+coveredTree.commitWindow(coveredGeneration, {
+  offset: 0,
+  total: 8,
+  rows: rows(0, 8, "covered"),
+});
+coveredDocument.defaultView.flushAnimationFrame();
+coveredRoot.scrollTop = 4 * ROW_H;
+coveredRoot.dispatch("scroll");
+coveredDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(coveredRequests, []);
+assert.deepEqual(coveredActivations, []);
+assert.equal(coveredRoot.scrollTop, 4 * ROW_H);
+assert.equal(
+  coveredRoot.getAttribute("aria-activedescendant"),
+  "nami-tree-7-row-4",
+);
+
+// Exact and fractional viewport boundaries select only an intersected spacer.
+const boundaryDocument = new TestDocument();
+const boundaryRoot = boundaryDocument.createElement("div");
+boundaryRoot.clientHeight = 4 * ROW_H;
+const boundaryRequests = [];
+const boundaryTree = createTree(boundaryRoot, {
+  requestIndex: (index, generation) => {
+    boundaryRequests.push({index, generation});
+  },
+});
+const boundaryInitial = boundaryTree.beginWindowRequest();
+boundaryTree.commitWindow(boundaryInitial, {
+  offset: 0,
+  total: 300,
+  rows: rows(0, 4, "boundary"),
+});
+boundaryDocument.defaultView.flushAnimationFrame();
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(boundaryRequests, []);
+boundaryRoot.scrollTop = 0.25;
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(boundaryRequests, [{index: 4, generation: 2}]);
+boundaryRoot.scrollTop = 0;
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.equal(boundaryTree.commitWindow(2, unreadableWindow), false);
+const boundaryReset = boundaryTree.beginWindowRequest();
+boundaryRoot.scrollTop = 4 * ROW_H;
+boundaryTree.commitWindow(boundaryReset, {
+  offset: 4,
+  total: 300,
+  rows: rows(4, 4, "boundary"),
+});
+boundaryDocument.defaultView.flushAnimationFrame();
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.equal(boundaryRequests.length, 1);
+boundaryRoot.scrollTop = (4 * ROW_H) - 0.25;
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(boundaryRequests.at(-1), {index: 3, generation: 5});
+
+// A throwing request callback leaves the old DOM and scroll position intact,
+// keeps prior generations stale, and permits a later scroll retry.
+const callbackError = new Error("request sentinel");
+const throwingRequestDocument = new TestDocument();
+const throwingRequestRoot = throwingRequestDocument.createElement("div");
+throwingRequestRoot.clientHeight = 4 * ROW_H;
+const throwingRequests = [];
+let throwRequest = true;
+const throwingRequestTree = createTree(throwingRequestRoot, {
+  requestIndex: (index, generation) => {
+    throwingRequests.push({index, generation});
+    if (throwRequest) {
+      throwRequest = false;
+      throw callbackError;
+    }
+  },
+});
+const throwingRequestInitial = throwingRequestTree.beginWindowRequest();
+throwingRequestTree.commitWindow(throwingRequestInitial, {
+  offset: 0,
+  total: 300,
+  rows: rows(0, 4, "throw-request"),
+});
+throwingRequestDocument.defaultView.flushAnimationFrame();
+throwingRequestRoot.scrollTop = 4 * ROW_H;
+throwingRequestRoot.dispatch("scroll");
+const throwingFingerprint = fingerprint(throwingRequestRoot);
+assert.throws(
+  () => throwingRequestDocument.defaultView.flushAnimationFrame(),
+  (error) => error === callbackError,
+);
+assert.equal(throwingRequestRoot.scrollTop, 4 * ROW_H);
+assert.deepEqual(fingerprint(throwingRequestRoot), throwingFingerprint);
+assert.equal(
+  throwingRequestTree.commitWindow(throwingRequestInitial, unreadableWindow),
+  false,
+);
+throwingRequestRoot.dispatch("scroll");
+throwingRequestDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(throwingRequests, [
+  {index: 7, generation: 2},
+  {index: 7, generation: 3},
+]);
+
+// A malformed current response is read completely before mounted geometry or
+// active state changes, and the same generation remains retryable.
+const atomicDocument = new TestDocument();
+const atomicRoot = atomicDocument.createElement("div");
+atomicRoot.clientHeight = 2 * ROW_H;
+const atomicTree = createTree(atomicRoot);
+const atomicInitial = atomicTree.beginWindowRequest();
+atomicTree.commitWindow(atomicInitial, {
+  offset: 0,
+  total: 3,
+  rows: rows(0, 2, "atomic"),
+});
+atomicDocument.defaultView.flushAnimationFrame();
+atomicRoot.scrollTop = ROW_H;
+const atomicGeneration = atomicTree.beginWindowRequest();
+const atomicFingerprint = fingerprint(atomicRoot);
+const atomicActiveDescendant = atomicRoot.getAttribute("aria-activedescendant");
+const atomicActiveFlags = treeItems(atomicRoot).map(
+  (element) => element.dataset.active ?? null,
+);
+const malformedRow = new Proxy(row(1, "malformed", "Malformed"), {
+  get(target, property, receiver) {
+    if (property === "set_size") {
+      throw callbackError;
+    }
+    return Reflect.get(target, property, receiver);
+  },
+});
+assert.throws(
+  () => atomicTree.commitWindow(atomicGeneration, {
+    offset: 1,
+    total: 3,
+    rows: [malformedRow],
+  }),
+  (error) => error === callbackError,
+);
+assert.equal(atomicRoot.scrollTop, ROW_H);
+assert.deepEqual(fingerprint(atomicRoot), atomicFingerprint);
+assert.equal(
+  atomicRoot.getAttribute("aria-activedescendant"),
+  atomicActiveDescendant,
+);
+assert.deepEqual(
+  treeItems(atomicRoot).map((element) => element.dataset.active ?? null),
+  atomicActiveFlags,
+);
+assert.equal(atomicTree.commitWindow(atomicGeneration, {
+  offset: 1,
+  total: 3,
+  rows: rows(1, 2, "atomic-retry"),
+}), true);
+
+// Enter is newer than an in-flight passive page and invalidates that response.
+const intentDocument = new TestDocument();
+const intentRoot = intentDocument.createElement("div");
+intentRoot.clientHeight = 4 * ROW_H;
+const intentRequests = [];
+const intentActivations = [];
+const intentTree = createTree(intentRoot, {
+  requestIndex: (index, generation) => {
+    intentRequests.push({index, generation});
+  },
+  activate: (nodeId) => intentActivations.push(nodeId),
+});
+const intentInitial = intentTree.beginWindowRequest();
+intentTree.commitWindow(intentInitial, {
+  offset: 0,
+  total: 300,
+  rows: rows(0, 4, "intent"),
+});
+intentDocument.defaultView.flushAnimationFrame();
+intentRoot.scrollTop = ROW_H;
+intentRoot.dispatch("scroll");
+intentDocument.defaultView.flushAnimationFrame();
+const passiveIntentRequest = intentRequests.at(-1);
+assert.equal(passiveIntentRequest.index, 4);
+dispatchKey(intentRoot, "Enter");
+assert.deepEqual(intentActivations, ["intent-1"]);
+assert.equal(
+  intentTree.commitWindow(passiveIntentRequest.generation, unreadableWindow),
+  false,
+);
+
+// A delayed event from a rendered-key programmatic reveal cannot masquerade
+// as a newer user scroll and cancel a subsequent off-window key request.
+const programDocument = new TestDocument();
+const programRoot = programDocument.createElement("div");
+programRoot.clientHeight = 4 * ROW_H;
+const programRequests = [];
+const programTree = createTree(programRoot, {
+  requestIndex: (index, generation) => {
+    programRequests.push({index, generation});
+  },
+});
+const programInitial = programTree.beginWindowRequest();
+programTree.commitWindow(programInitial, {
+  offset: 0,
+  total: 300,
+  rows: rows(0, 8, "program"),
+});
+programDocument.defaultView.flushAnimationFrame();
+for (let index = 0; index < 4; index += 1) {
+  dispatchKey(programRoot, "ArrowDown");
+}
+assert.equal(programRoot.scrollTop, ROW_H);
+dispatchKey(programRoot, "End");
+const programKeyboard = programRequests.at(-1);
+programRoot.dispatch("scroll");
+programDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(programRequests, [programKeyboard]);
+assert.equal(programTree.commitWindow(programKeyboard.generation, {
+  offset: 296,
+  total: 300,
+  rows: rows(296, 4, "program-end"),
+}), true);
+
+const shortDocument = new TestDocument();
+const shortRoot = shortDocument.createElement("div");
+shortRoot.clientHeight = ROW_H - 1;
+const shortTree = createTree(shortRoot);
+const shortGeneration = shortTree.beginWindowRequest();
+shortTree.commitWindow(shortGeneration, {
+  offset: 0,
+  total: 1,
+  rows: rows(0, 1, "short"),
+});
+shortDocument.defaultView.flushAnimationFrame();
+assert.equal(shortRoot.getAttribute("aria-activedescendant"), null);
+
+// A valid narrow response is terminal for the viewport snapshot that asked
+// for it. It cannot alternate missing endpoints without a newer scroll.
+const narrowDocument = new TestDocument();
+const narrowRoot = narrowDocument.createElement("div");
+narrowRoot.clientHeight = 4 * ROW_H;
+narrowRoot.clampScrollOnReplace = true;
+const narrowRequests = [];
+const narrowTree = createTree(narrowRoot, {
+  requestIndex: (index, generation) => {
+    narrowRequests.push({index, generation});
+  },
+});
+const narrowInitial = narrowTree.beginWindowRequest();
+narrowTree.commitWindow(narrowInitial, {
+  offset: 0,
+  total: 20,
+  rows: rows(0, 4, "narrow"),
+});
+narrowDocument.defaultView.flushAnimationFrame();
+narrowRoot.scrollTop = 4 * ROW_H;
+narrowRoot.dispatch("scroll");
+narrowDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(narrowRequests, [{index: 7, generation: 2}]);
+narrowRoot.dispatch("scroll");
+assert.equal(narrowDocument.defaultView.animationFrames.length, 1);
+assert.equal(narrowTree.commitWindow(2, {
+  offset: 7,
+  total: 20,
+  rows: rows(7, 1, "narrow-response"),
+}), true);
+assert.equal(narrowRoot.scrollTop, 4 * ROW_H);
+narrowDocument.defaultView.flushAnimationFrame();
+assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
+narrowRoot.dispatch("scroll");
+assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
+assert.deepEqual(narrowRequests, [{index: 7, generation: 2}]);
+
+// A changed viewport observed while that narrow response is in flight still
+// receives one new last-state-wins request and can converge normally.
+const changedDocument = new TestDocument();
+const changedRoot = changedDocument.createElement("div");
+changedRoot.clientHeight = 4 * ROW_H;
+const changedRequests = [];
+const changedTree = createTree(changedRoot, {
+  requestIndex: (index, generation) => {
+    changedRequests.push({index, generation});
+  },
+});
+const changedInitial = changedTree.beginWindowRequest();
+changedTree.commitWindow(changedInitial, {
+  offset: 0,
+  total: 20,
+  rows: rows(0, 4, "changed"),
+});
+changedDocument.defaultView.flushAnimationFrame();
+changedRoot.scrollTop = 4 * ROW_H;
+changedRoot.dispatch("scroll");
+changedDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(changedRequests, [{index: 7, generation: 2}]);
+changedRoot.scrollTop = 8 * ROW_H;
+changedRoot.dispatch("scroll");
+assert.equal(changedTree.commitWindow(2, {
+  offset: 7,
+  total: 20,
+  rows: rows(7, 1, "changed-narrow"),
+}), true);
+changedDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(changedRequests, [
+  {index: 7, generation: 2},
+  {index: 11, generation: 3},
+]);
+assert.equal(changedTree.commitWindow(3, {
+  offset: 8,
+  total: 20,
+  rows: rows(8, 4, "changed-final"),
+}), true);
+assert.equal(changedDocument.defaultView.animationFrames.length, 0);
+assert.equal(changedRoot.scrollTop, 8 * ROW_H);
 
 const unmeasuredRoot = new TestDocument().createElement("div");
 unmeasuredRoot.scrollTop = 17;
@@ -556,6 +1063,13 @@ function row(index, nodeId, display, options = {}) {
     expanded: container
       ? (options.expanded === undefined ? false : options.expanded)
       : null,
+  });
+}
+
+function rows(offset, count, prefix) {
+  return Array.from({length: count}, (_, relativeIndex) => {
+    const index = offset + relativeIndex;
+    return row(index, `${prefix}-${index}`, `${prefix} ${index}`);
   });
 }
 
