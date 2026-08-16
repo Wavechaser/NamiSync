@@ -823,7 +823,9 @@ carry the `headed` marker; all are collected by the release command.
   same scenario imports the installed `tree.js`, renders complete hostile and
   long display strings through its production text path, measures every row at
   28 CSS pixels, proves the DOM never exceeds 256 data rows plus fixed spacers,
-  and proves a stale generation cannot replace a newer window. *Not satisfied
+  and proves a stale generation cannot replace a newer window. The matching
+  Python/wire and production-module regressions prove expansion appears only
+  for active-projection parents that retain a child. *Not satisfied
   by* scanning a hand-maintained file list, asserting only the meta element's
   presence, testing the component gallery instead of the production shell, or
   measuring a copied/test-only tree implementation.

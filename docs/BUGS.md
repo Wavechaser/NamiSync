@@ -688,6 +688,13 @@ defect, and move implementation-level test choreography out of the log.
   asserted role strings and focusable landmarks instead of widget behavior.
   Fixed with server-derived structure, an exact Python-owned wire view, and one
   operable recycled focus model.
+- MODERATE - FIXED (2026-08-17). Projected-parent accessibility drift.
+  Empty inventory roots and folders retained only by their own filter match
+  exposed `aria-expanded=true` and a disclosure even though the active tree
+  contained no child row. Cause: expansion was derived from the workflow
+  container bit rather than the filtered projection. Fixed with immutable
+  retained-child metadata: only projected parents emit Boolean expansion;
+  leaves and containers with no retained child emit `null` and no disclosure.
 - MINOR - FIXED (2026-08-13). Presentation-state acceptance drift.
   The entire task rail inherited an opaque generic card, neutral hover/pressed
   and primary rest/pressed states collapsed visually, and dialog exit motion was

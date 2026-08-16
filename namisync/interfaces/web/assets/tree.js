@@ -183,10 +183,10 @@ export function createTree(root, callbacks = {}) {
         break;
       case "ArrowRight":
         event.preventDefault();
-        if (active !== undefined && active.row.is_container && !active.row.expanded) {
+        if (active !== undefined && active.row.expanded === false) {
           toggle(active.row.node_id, true);
         } else if (
-          active !== undefined && active.row.is_container &&
+          active !== undefined && active.row.expanded === true &&
           active.row.first_child_visible_index !== null
         ) {
           navigateTo(active.row.first_child_visible_index);
@@ -194,7 +194,7 @@ export function createTree(root, callbacks = {}) {
         break;
       case "ArrowLeft":
         event.preventDefault();
-        if (active !== undefined && active.row.is_container && active.row.expanded) {
+        if (active !== undefined && active.row.expanded === true) {
           toggle(active.row.node_id, false);
         } else if (
           active !== undefined && active.row.parent_visible_index !== null
@@ -252,14 +252,14 @@ function createRow(document, treeId, row) {
   element.ariaPosInSet = String(row.position_in_set);
   element.ariaSetSize = String(row.set_size);
   element.style.setProperty("--nami-tree-depth", String(row.depth));
-  if (row.is_container) {
+  if (row.expanded !== null) {
     element.ariaExpanded = String(row.expanded);
   }
 
   const disclosure = document.createElement("span");
   disclosure.classList.add("nami-tree-row__disclosure");
   disclosure.ariaHidden = "true";
-  if (!row.is_container) {
+  if (row.expanded === null) {
     disclosure.classList.add("nami-tree-row__disclosure--leaf");
   }
   const label = document.createElement("span");

@@ -82,6 +82,7 @@ class VisibleSequence(Generic[_VisibleNodeT]):
     visible_index_by_node_id: Mapping[str, int]
     parent_visible_indexes: tuple[int | None, ...]
     first_child_visible_indexes: tuple[int | None, ...]
+    has_retained_children: tuple[bool, ...]
     positions_in_set: tuple[int, ...]
     set_sizes: tuple[int, ...]
     collapsed_node_ids: frozenset[str]
@@ -152,6 +153,28 @@ class VisibleSequence(Generic[_VisibleNodeT]):
             visible_lookup,
             *metadata,
         )
+        retained_child_flags = tuple(self.has_retained_children)
+        if len(retained_child_flags) != len(positions):
+            raise ValueError(
+                "retained-child metadata must match visible positions"
+            )
+        for visible_index, has_retained_children in enumerate(
+            retained_child_flags
+        ):
+            if type(has_retained_children) is not bool:
+                raise TypeError("retained-child metadata must contain bools")
+            node = nodes[positions[visible_index]]
+            if has_retained_children and not node.is_container:
+                raise ValueError(
+                    "only containers may have retained children"
+                )
+            if (
+                metadata[1][visible_index] is not None
+                and not has_retained_children
+            ):
+                raise ValueError(
+                    "visible child metadata requires a retained child"
+                )
         for node_id in collapsed:
             try:
                 node = nodes[source_lookup[node_id]]
@@ -179,6 +202,11 @@ class VisibleSequence(Generic[_VisibleNodeT]):
         )
         object.__setattr__(self, "parent_visible_indexes", metadata[0])
         object.__setattr__(self, "first_child_visible_indexes", metadata[1])
+        object.__setattr__(
+            self,
+            "has_retained_children",
+            retained_child_flags,
+        )
         object.__setattr__(self, "positions_in_set", metadata[2])
         object.__setattr__(self, "set_sizes", metadata[3])
         object.__setattr__(self, "collapsed_node_ids", collapsed)
@@ -217,11 +245,17 @@ class VisibleWindowRow(Generic[_VisibleNodeT]):
         _require_exact_nonnegative_int(self.set_size, "set_size")
         if self.position_in_set == 0 or self.position_in_set > self.set_size:
             raise ValueError("position_in_set must be within its sibling set")
-        if self.node.is_container:
+        if self.expanded is not None:
             if type(self.expanded) is not bool:
-                raise TypeError("container expanded state must be a bool")
-        elif self.expanded is not None:
-            raise ValueError("leaf expanded state must be None")
+                raise TypeError("expanded state must be a bool or None")
+            if not self.node.is_container:
+                raise ValueError("leaf expanded state must be None")
+        if (self.first_child_visible_index is not None) != (
+            self.expanded is True
+        ):
+            raise ValueError(
+                "expanded state and visible-child metadata are inconsistent"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +348,13 @@ def derive_visible_sequence(
             assert parent is not None
             retained[parent] = True
 
+    has_retained_children = [False] * len(original_nodes)
+    for position in range(1, len(original_nodes)):
+        if retained[position]:
+            parent = original_nodes[position].parent_index
+            assert parent is not None
+            has_retained_children[parent] = True
+
     visible_positions: list[int] = []
     hidden_until = 0
     for position, node in enumerate(original_nodes):
@@ -348,6 +389,9 @@ def derive_visible_sequence(
         visible_index_by_node_id=visible_lookup,
         parent_visible_indexes=metadata[0],
         first_child_visible_indexes=metadata[1],
+        has_retained_children=tuple(
+            has_retained_children[position] for position in positions
+        ),
         positions_in_set=metadata[2],
         set_sizes=metadata[3],
         collapsed_node_ids=parameters.collapsed_node_ids,
@@ -390,7 +434,7 @@ def window_visible_sequence(
                 set_size=sequence.set_sizes[visible_index],
                 expanded=(
                     node.node_id not in sequence.collapsed_node_ids
-                    if node.is_container
+                    if sequence.has_retained_children[visible_index]
                     else None
                 ),
             )

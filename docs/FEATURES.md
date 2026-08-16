@@ -320,7 +320,9 @@ unrealized unless an entry says otherwise.
   case-folded display search, caller-decided filter counts, collapse, exact
   1..256 windows, server-derived accessibility metadata, and indexed
   visible-ancestor anchoring without domain policy, a duplicate tree, or
-  retained projections. The installed `tree.js` renders only those decided
+  retained projections. Expansion is Boolean only for an active-projection
+  parent with a retained child; leaves, empty roots, and filtered-empty
+  containers expose no disclosure. The installed `tree.js` renders only those decided
   windows as an operable single-tab-stop fixed-height tree with two spacers, an
   exact 28-pixel row, inert full labels, and stale-generation refusal. The production
   shell exposes labelled task navigation and work regions

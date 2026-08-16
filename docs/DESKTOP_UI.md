@@ -416,7 +416,11 @@ display text to accessibility even when the visual label elides, and ignores a
 stale response generation. The root is the single Tab stop, row focus uses
 `aria-activedescendant`, and server-derived level, sibling-set, parent, and
 first-child metadata support Up/Down/Home/End/Left/Right/Enter navigation even
-across a window boundary. It never filters a viewport, reconstructs ancestry,
+across a window boundary. `aria-expanded` and the disclosure appear only when
+the active filtered projection retains an immediate child: expanded and
+collapsed projected parents emit `true` and `false`, while leaves and
+structural containers with no retained child emit no expansion state. It never
+filters a viewport, reconstructs ancestry,
 searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree

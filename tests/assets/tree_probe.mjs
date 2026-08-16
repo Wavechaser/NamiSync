@@ -213,22 +213,28 @@ const firstWindow = Object.freeze({
       depth: 2,
       parent: 5,
     }),
+    row(7, "projected-empty", "Projected empty", {
+      container: true,
+      expanded: null,
+      depth: 1,
+      parent: 0,
+    }),
   ]),
 });
 assert.equal(tree.commitWindow(secondGeneration, firstWindow), true);
 assert.deepEqual(
   [...accessedFields.keys()].sort(),
   [
-    "depth", "display", "expanded", "is_container", "node_id",
+    "depth", "display", "expanded", "node_id",
     "position_in_set", "set_size", "visible_index",
   ],
 );
-assert.equal(root.children.length, 4);
+assert.equal(root.children.length, 5);
 assert.equal(topSpacer.style.blockSize, `${5 * ROW_H}px`);
-assert.equal(bottomSpacer.style.blockSize, `${3 * ROW_H}px`);
+assert.equal(bottomSpacer.style.blockSize, `${2 * ROW_H}px`);
 
 const firstRows = treeItems(root);
-assert.equal(firstRows.length, 2);
+assert.equal(firstRows.length, 3);
 assert.equal(firstRows[0].dataset.nodeId, "node-container");
 assert.equal(firstRows[0].id, "nami-tree-1-row-5");
 assert.equal(firstRows[0].ariaLevel, "2");
@@ -241,11 +247,22 @@ assert.equal(root.ariaActiveDescendant, undefined);
 assert.equal(firstRows[0].children[1].textContent, hostileDisplay);
 assert.equal(firstRows[1].ariaExpanded, undefined);
 assert.equal(firstRows[1].children[1].textContent, longDisplay);
+assert.equal(firstRows[2].ariaExpanded, undefined);
+assert.ok(
+  firstRows[2].children[0].classList.contains(
+    "nami-tree-row__disclosure--leaf",
+  ),
+);
 
 dispatchKey(root, "ArrowRight");
 assert.deepEqual(toggled, [["node-container", true]]);
 dispatchKey(root, "Enter");
 assert.deepEqual(activated, ["node-container"]);
+dispatchKey(root, "ArrowDown");
+dispatchKey(root, "ArrowDown");
+assert.equal(root.getAttribute("aria-activedescendant"), firstRows[2].id);
+dispatchKey(root, "ArrowRight");
+assert.deepEqual(toggled, [["node-container", true]]);
 dispatchKey(root, "Home");
 assert.deepEqual(requested, [0]);
 
@@ -344,7 +361,9 @@ function row(index, nodeId, display, options = {}) {
     first_child_visible_index: options.firstChild ?? null,
     position_in_set: options.position ?? 1,
     set_size: options.setSize ?? 1,
-    expanded: container ? (options.expanded ?? false) : null,
+    expanded: container
+      ? (options.expanded === undefined ? false : options.expanded)
+      : null,
   });
 }
 

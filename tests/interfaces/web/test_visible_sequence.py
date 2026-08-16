@@ -6,7 +6,6 @@ import ast
 import json
 from dataclasses import dataclass, replace
 from pathlib import Path
-from time import perf_counter
 from types import MappingProxyType
 
 import pytest
@@ -41,6 +40,18 @@ class _Node:
     parent_index: int | None
     subtree_end: int
     is_container: bool
+
+
+class _ObservedNode:
+    __slots__ = ("_node", "_reads")
+
+    def __init__(self, node: _Node, reads: list[int]) -> None:
+        self._node = node
+        self._reads = reads
+
+    def __getattr__(self, name: str):
+        self._reads[0] += 1
+        return getattr(self._node, name)
 
 
 def _nodes() -> tuple[_Node, ...]:
@@ -133,6 +144,12 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
     assert sequence.nodes is tree.nodes
     assert _ids(sequence) == (tree.root_node_id,)
     assert tree.nodes[0].display == "All items"
+    assert sequence.has_retained_children == (False,)
+    assert window_visible_sequence(
+        sequence,
+        offset=0,
+        limit=1,
+    ).rows[0].expanded is None
 
 
 def test_br_g_2_stage_6_visible_core_imports_no_project_or_path_helper() -> None:
@@ -384,11 +401,20 @@ def test_br_g_34_active_tree_metadata_is_global_and_filter_aware() -> None:
 
     assert expanded.parent_visible_indexes == (None, 0, 1, 1, 0, 4)
     assert expanded.first_child_visible_indexes == (1, 2, None, None, 5, None)
+    assert expanded.has_retained_children == (
+        True,
+        True,
+        False,
+        False,
+        True,
+        False,
+    )
     assert expanded.positions_in_set == (1, 1, 1, 2, 2, 1)
     assert expanded.set_sizes == (1, 2, 2, 2, 2, 1)
 
     assert collapsed.parent_visible_indexes == (None, 0, 0, 2)
     assert collapsed.first_child_visible_indexes == (1, None, 3, None)
+    assert collapsed.has_retained_children == (True, True, True, False)
     assert collapsed.positions_in_set == (1, 1, 2, 1)
     assert collapsed.set_sizes == (1, 2, 2, 1)
     collapsed_rows = window_visible_sequence(collapsed, offset=0, limit=4).rows
@@ -401,8 +427,45 @@ def test_br_g_34_active_tree_metadata_is_global_and_filter_aware() -> None:
 
     assert _ids(filtered) == ("root", "alpha", "street")
     assert filtered.parent_visible_indexes == (None, 0, 1)
+    assert filtered.has_retained_children == (True, True, False)
     assert filtered.positions_in_set == (1, 1, 1)
     assert filtered.set_sizes == (1, 1, 1)
+
+
+def test_br_g_34_projected_empty_container_is_an_accessibility_end_node() -> None:
+    sequence = derive_visible_sequence(
+        _nodes(),
+        _parameters(search="alpha"),
+    )
+
+    assert _ids(sequence) == ("root", "alpha")
+    assert sequence.has_retained_children == (True, False)
+    rows = window_visible_sequence(sequence, offset=0, limit=2).rows
+    assert tuple(row.expanded for row in rows) == (True, None)
+    assert rows[1].node.is_container is True
+    assert rows[1].first_child_visible_index is None
+
+
+def test_br_g_34_retained_child_metadata_rejects_invalid_shapes() -> None:
+    sequence = derive_visible_sequence(_nodes(), _parameters())
+
+    with pytest.raises(ValueError, match="match visible positions"):
+        replace(sequence, has_retained_children=(True,))
+    with pytest.raises(TypeError, match="contain bools"):
+        replace(
+            sequence,
+            has_retained_children=(True, True, 0, False, True, False),
+        )
+    with pytest.raises(ValueError, match="only containers"):
+        replace(
+            sequence,
+            has_retained_children=(True, True, True, False, True, False),
+        )
+    with pytest.raises(ValueError, match="requires a retained child"):
+        replace(
+            sequence,
+            has_retained_children=(False,) * len(sequence.visible_positions),
+        )
 
 
 def test_br_g_34_inputs_indexes_and_results_are_immutable_snapshots() -> None:
@@ -422,6 +485,7 @@ def test_br_g_34_inputs_indexes_and_results_are_immutable_snapshots() -> None:
     assert _ids(sequence) == before
     assert type(sequence.source_position_by_node_id) is MappingProxyType
     assert type(sequence.visible_index_by_node_id) is MappingProxyType
+    assert type(sequence.has_retained_children) is tuple
     with pytest.raises(TypeError):
         sequence.source_position_by_node_id["new"] = 9  # type: ignore[index]
     with pytest.raises(TypeError):
@@ -580,40 +644,93 @@ def test_br_g_34_anchor_reads_only_the_supplied_chain() -> None:
     assert observed.reads == 3
 
 
-def test_br_g_34_120k_projection_remains_linear_and_windows_256_rows(
-    record_property,
-) -> None:
+def test_br_g_34_120k_projection_populates_every_retained_family() -> None:
     node_count = 120_000
-    nodes = (
-        _Node("root", "All Nodes", 0, 0, None, node_count, True),
-        *(
+    folder_count = 19_999
+    file_count = 100_000
+    built = [_Node("root", "All Nodes", 0, 0, None, node_count, True)]
+    for folder_index in range(folder_count):
+        folder_position = len(built)
+        child_count = 6 if folder_index < 5 else 5
+        built.append(
             _Node(
-                f"node-{position}",
-                f"Node {position}",
-                position,
+                f"folder-{folder_index}",
+                f"Folder {folder_index}",
+                folder_position,
                 1,
                 0,
-                position + 1,
-                False,
+                folder_position + child_count + 1,
+                True,
             )
-            for position in range(1, node_count)
-        ),
-    )
+        )
+        for child_index in range(child_count):
+            position = len(built)
+            built.append(
+                _Node(
+                    f"file-{folder_index}-{child_index}",
+                    f"File {folder_index}-{child_index}",
+                    position,
+                    2,
+                    folder_position,
+                    position + 1,
+                    False,
+                )
+            )
+    nodes = tuple(built)
 
-    started = perf_counter()
-    sequence = derive_visible_sequence(nodes, _parameters(search="node"))
+    sequence = derive_visible_sequence(nodes, _parameters())
     window = window_visible_sequence(sequence, offset=60_000, limit=256)
-    elapsed = perf_counter() - started
-    record_property("derive_and_window_seconds", f"{elapsed:.6f}")
 
+    assert len(nodes) == node_count
+    assert sum(node.is_container for node in nodes) == folder_count + 1
+    assert sum(not node.is_container for node in nodes) == file_count
     assert sequence.nodes is nodes
     assert len(sequence.visible_positions) == node_count
     assert len(sequence.source_position_by_node_id) == node_count
+    assert len(sequence.visible_index_by_node_id) == node_count
+    assert len(sequence.parent_visible_indexes) == node_count
+    assert len(sequence.first_child_visible_indexes) == node_count
+    assert len(sequence.has_retained_children) == node_count
+    assert len(sequence.positions_in_set) == node_count
+    assert len(sequence.set_sizes) == node_count
+    assert sum(sequence.has_retained_children) == folder_count + 1
+    assert sequence.collapsed_node_ids == frozenset()
+    assert sequence.filtered_item_count is None
     assert len(window.rows) == 256
     assert window.rows[0].node is nodes[60_000]
     assert window.rows[-1].node is nodes[60_255]
-    assert window.rows[0].position_in_set == 60_000
-    assert window.rows[0].set_size == node_count - 1
+
+
+def test_br_g_34_node_field_accesses_have_a_linear_scaling_guard() -> None:
+    def observed_reads(node_count: int) -> int:
+        plain = (
+            _Node("root", "All Nodes", 0, 0, None, node_count, True),
+            *(
+                _Node(
+                    f"node-{position}",
+                    f"Node {position}",
+                    position,
+                    1,
+                    0,
+                    position + 1,
+                    False,
+                )
+                for position in range(1, node_count)
+            ),
+        )
+        reads = [0]
+        observed = tuple(_ObservedNode(node, reads) for node in plain)
+
+        sequence = derive_visible_sequence(observed, _parameters())
+
+        assert len(sequence.visible_positions) == node_count
+        return reads[0]
+
+    smaller = observed_reads(512)
+    larger = observed_reads(1_024)
+
+    assert larger > smaller
+    assert larger <= (2 * smaller) + 64
 
 
 def test_br_g_34_module_retains_no_active_sequence_or_cache_family() -> None:

@@ -1242,6 +1242,14 @@ synthesized ancestor chain with it, since those nodes exist only to host it
 (DR-BR-13). Where a ghost was *not* emitted because the old location still held
 real operations, that folder is visible on its own merits and is unaffected.
 
+Expansion describes the active projection rather than the workflow container
+bit. A visible container whose projection retains an immediate child emits
+`expanded=true` or `expanded=false` according to collapse state. A leaf, empty
+root, or directly matching container whose descendants were all filtered emits
+`expanded=null`, no `aria-expanded`, and no disclosure. The pure sequence keeps
+one immutable visible-position-aligned retained-child tuple; this adds no wire
+key and no second hierarchy.
+
 **Rollups on a folder row describe the folder, not the filtered view.** A
 number whose meaning changes with filter state is a bug factory, and selection
 already commits to unfiltered semantics (DR-BR-17): a folder checkbox covers
@@ -1298,8 +1306,10 @@ deepest-visible ancestor anchoring proportional to chain depth. It retains no pr
 filter vocabulary, or active-view cache. The installed frontend consumes only
 the generic `{offset,total,rows}` window through a fixed-height renderer with
 two spacers, stale-generation refusal, and a single-tab-stop operable tree.
-The focused scale/security regressions and real clean-wheel shell evidence pass,
-closing BR-G-34 and SH-G-7. Plan and inventory command rows and projection
+The focused structural/security regressions and real clean-wheel shell evidence pass,
+closing BR-G-34 and SH-G-7. The 120,000-node fixture is a complete retained-
+representation witness plus a deterministic field-access scaling guard, not a
+latency acceptance measurement. Plan and inventory command rows and projection
 ownership remain unimplemented until Slices 5 and 6.
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
@@ -3354,14 +3364,18 @@ because its local tests are easier.
   not tree size. Plan and inventory cases must start from real
   `build_node_tree` output and retain object identity; hand-built generic arrays
   alone do not close the gate. The bounded window carries server-derived
-  parent/child/sibling accessibility metadata. A static assertion proves the
+  parent/child/sibling accessibility metadata. Boolean expansion exists only
+  for a projected parent with a retained immediate child; leaves and filtered-
+  empty containers carry `null`. A static assertion proves the
   implementation calls no path helper and reconstructs no parent or descendant
   relationship from display text. *Not
   satisfied by* filtering an already-windowed page, searching the canonical
   key, accepting an arbitrary callable as filter policy, or separate plan and
-  inventory flatteners fed the same fixtures. The realignment regressions and
-  Slice 4's 120,000-node scale evidence now pass; broader BR-G-42 product-view
-  measurements remain with Slices 5-7.
+  inventory flatteners fed the same fixtures. The realignment regressions, full
+  20,000-container/100,000-leaf retained-representation witness, and
+  deterministic linear field-access guard now pass. These are structural
+  evidence, not latency acceptance; broader BR-G-42 product-view measurements
+  remain with Slices 5-7.
 - **BR-G-35 — Plan presentation preserves operation truth while compressing
   moves.** This is also the first consumer that proves a filtered move ghost
   removes its synthetic-only ancestor chain, an ordinary real operation keeps
