@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from _headed_evidence import EvidencePaths, EvidenceReader
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 
 
@@ -104,6 +105,10 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "PrivateUsage" in parent
     assert "_QueueMemorySampler" not in child
     assert "append_producer_timings" in child
+    assert "publisher.publish_final(recorder.snapshot())" in child
+    assert "publisher.publish_failure(recorder.snapshot())" in child
+    assert ".replace(" not in child
+    assert "latest_evidence" not in parent
     assert "start_headed_process" not in parent
     assert '"--admission-gate"' in parent
     assert 'kind: "ready"' in browser
@@ -559,6 +564,44 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
     assert not failed_report.exists()
 
 
+def test_bridge_event_benchmark_publishes_pre_host_setup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    child = _child_module()
+    evidence_root = (tmp_path / "evidence").resolve()
+    evidence_root.mkdir()
+    paths = EvidencePaths(evidence_root)
+    arguments = SimpleNamespace(
+        admission_gate="unused",
+        admission_timeout_ms=1,
+        evidence_dir=evidence_root,
+        output=tmp_path / "child-evidence.json",
+    )
+    monkeypatch.setattr(child, "_arguments", lambda: arguments)
+    monkeypatch.setattr(child, "_wait_for_named_gate", lambda *_args, **_kwargs: True)
+
+    def fail_version(_name: str) -> str:
+        raise RuntimeError("pre-host setup fault")
+
+    monkeypatch.setattr(child.importlib.metadata, "version", fail_version)
+
+    with pytest.raises(RuntimeError, match="pre-host setup fault"):
+        child.main()
+
+    reader = EvidenceReader(paths)
+    failure = reader.read_failure()
+    assert failure is not None
+    assert failure["child_failure"] == {
+        "type": "RuntimeError",
+        "message": "pre-host setup fault",
+    }
+    assert failure["exit_code"] == 1
+    assert failure["complete"] is False
+    assert reader.read_final() is None
+    reader.assert_consistent(require_final=False)
+
+
 def test_bridge_event_benchmark_streams_and_authenticates_live_evidence(
     tmp_path: Path,
 ) -> None:
@@ -578,10 +621,10 @@ def test_bridge_event_benchmark_streams_and_authenticates_live_evidence(
         )
         recorder.write_producer(task_index, {"task_index": task_index})
     recorder.set("complete", True)
-    recorder.write()
+    manifest = recorder.snapshot()
 
-    manifest = json.loads(output.read_text(encoding="utf-8"))
     assert "samples" not in manifest
+    assert not output.exists()
     assert not any(name.startswith("producer_task_") for name in manifest)
     attached = benchmark._attach_streamed_evidence(manifest, output)
     assert attached["samples"] == [first, second]
@@ -1196,6 +1239,17 @@ def test_bridge_event_benchmark_summary_enforces_event_contract(
         job_memory=job_memory,
     )
     assert refused["passed"] is False
+
+    boolean_exit = copy.deepcopy(evidence)
+    boolean_exit["exit_code"] = False
+    refused = benchmark._summarize(
+        boolean_exit,
+        benchmark_root=ROOT,
+        commit="a" * 40,
+        status=(),
+        job_memory=job_memory,
+    )
+    assert refused["event_passed"] is False
 
 
 def test_bridge_event_benchmark_reports_runtime_diagnostic_refusal_separately(

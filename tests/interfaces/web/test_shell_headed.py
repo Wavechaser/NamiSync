@@ -6,7 +6,6 @@ import ast
 import hashlib
 import inspect
 import json
-import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +14,7 @@ from uuid import uuid4
 import pytest
 
 import _shell_gate_child as shell_child
+from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from _tree_window_fixture import (
     TREE_WINDOW_FIXTURE_SCHEMA,
     TreeWindowFixture,
@@ -24,12 +24,12 @@ from namisync.version import VERSION
 from _headed_native import (
     clean_child_environment,
     close_window,
-    read_text,
     require_absolute_local_test_root,
     scenario_deadline,
     start_headed_process,
     terminate_process_tree,
     wait_for_accessible_text,
+    wait_for_initial_evidence,
     wait_for_process,
     wait_for_window,
 )
@@ -117,6 +117,9 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
         "const secondStaleResult = controller.commitWindow(currentOne"
     )
     assert "CallDevToolsProtocolMethodAsync" in source
+    assert "EvidencePublisher(" in source
+    assert 'parser.add_argument("--evidence-dir"' in source
+    assert 'parser.add_argument("--output"' not in source
     assert "evaluate_js" not in source
     assert "ExecuteScriptAsync" not in source
     assert "SetForegroundWindow" not in source
@@ -124,6 +127,9 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "scenario_deadline(75.0)" in launch
     assert launch.count("require_absolute_local_test_root(") >= 2
     assert "start_headed_process(" in launch
+    assert "EvidenceReader(" in launch
+    assert "wait_for_initial_evidence(" in launch
+    assert "read_text(" not in launch
     assert '"--tree-fixture"' in launch
     assert "fixture.path.resolve()" in launch
     assert "cwd=installed.root" in launch
@@ -131,13 +137,43 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
 
 
 def test_shell_gate_report_refuses_private_error_text(tmp_path: Path) -> None:
-    recorder = shell_child._Recorder(tmp_path / "result.json")
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = shell_child._Recorder(paths)
     recorder.failure("private-path", RuntimeError("C:\\private\\sentinel"))
-    result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    result = EvidenceReader(paths).read_failure()
 
-    assert result["failure"] == {"stage": "child", "type": "RuntimeError"}
+    assert result == {
+        "failure": {"stage": "child", "type": "RuntimeError"}
+    }
+    assert _sanitized_failure_record(result) == result["failure"]
     assert "private" not in json.dumps(result).casefold()
     assert "sentinel" not in json.dumps(result).casefold()
+
+
+def test_shell_gate_retains_a_sanitized_post_ready_failure(
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = shell_child._Recorder(paths)
+    recorder.complete({})
+
+    recorder.failure("page_probe", RuntimeError("C:\\private\\late"))
+    recorder.failure("child", ValueError("discarded second failure"))
+    recorder.finish(0, host_returned=True)
+
+    reader = EvidenceReader(paths)
+    assert reader.read_ready() is not None
+    final = reader.read_final()
+    assert final == {
+        "host_returned": True,
+        "exit_code": 0,
+        "post_ready_failure": {
+            "stage": "page_probe",
+            "type": "RuntimeError",
+        },
+    }
+    assert "private" not in json.dumps(final).casefold()
+    reader.assert_consistent(require_final=True)
 
 
 def test_shell_gate_child_hashes_exact_fixture_bytes(
@@ -440,6 +476,20 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     }
 
 
+def _sanitized_failure_record(value: object) -> dict[str, str]:
+    if type(value) is not dict or set(value) != {"failure"}:
+        raise AssertionError("shell failure evidence is invalid")
+    failure = value["failure"]
+    if (
+        type(failure) is not dict
+        or set(failure) != {"stage", "type"}
+        or failure.get("stage") not in shell_child._FAILURE_STAGES
+        or failure.get("type") not in shell_child._FAILURE_TYPES
+    ):
+        raise AssertionError("shell failure evidence is invalid")
+    return failure
+
+
 def _run_shell_scenario(
     installed: HeadedInstalledWheel,
     root: Path,
@@ -449,7 +499,10 @@ def _run_shell_scenario(
     root = require_absolute_local_test_root(root)
     root.mkdir(parents=True, exist_ok=True)
     data_root = require_absolute_local_test_root(root / "data")
-    output = require_absolute_local_test_root(root / "result.json")
+    evidence_root = require_absolute_local_test_root(root / "evidence")
+    evidence_root.mkdir()
+    evidence_paths = EvidencePaths(evidence_root)
+    evidence_reader = EvidenceReader(evidence_paths)
     token = uuid4().hex
     title = f"NamiSync Shell {token}"
     process = start_headed_process(
@@ -462,8 +515,8 @@ def _run_shell_scenario(
             rf"Local\NamiSync.Shell.{token}",
             "--title",
             title,
-            "--output",
-            output,
+            "--evidence-dir",
+            evidence_root,
             "--tree-fixture",
             fixture.path.resolve(),
         ),
@@ -473,35 +526,38 @@ def _run_shell_scenario(
     )
     try:
         window = wait_for_window(process, title, deadline=deadline)
-        while not output.exists():
-            deadline.remaining()
-            if process.poll() is not None:
-                completed = wait_for_process(process, deadline=deadline)
-                raise AssertionError(
-                    "shell child exited before reporting; "
-                    f"returncode={completed.returncode}"
-                )
-            time.sleep(0.025)
-        interim = json.loads(read_text(output, deadline=deadline))
-        if interim.get("phase") == "failure":
-            raise AssertionError(f"shell gate failed: {interim.get('failure')!r}")
-        assert interim.get("phase") == "complete", interim
-        wait_for_accessible_text(
-            window,
-            shell_child._COMPLETE_TEXT,
-            python=installed.python,
+        milestone, initial = wait_for_initial_evidence(
+            evidence_reader,
+            process,
             deadline=deadline,
         )
+        if milestone == "ready":
+            wait_for_accessible_text(
+                window,
+                shell_child._COMPLETE_TEXT,
+                python=installed.python,
+                deadline=deadline,
+            )
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert completed.stdout == ""
-        assert completed.stderr == ""
+        final = evidence_reader.read_final()
+        evidence_reader.assert_consistent(require_final=milestone == "ready")
     finally:
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
 
-    result = json.loads(read_text(output, deadline=deadline))
+    if final is not None:
+        require_host_final(final, exit_code=completed.returncode)
+    if milestone == "failure":
+        failure = _sanitized_failure_record(initial)
+        raise AssertionError(f"shell gate failed: {failure!r}")
+    assert final is not None
+    assert final["host_returned"] is True
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    result = dict(initial)
+    result["exit_code"] = final["exit_code"]
     _assert_report_schema(result)
     assert result["phase"] == "complete"
     assert result["exit_code"] == 0

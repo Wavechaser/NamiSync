@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 from uuid import uuid4
 
+from _headed_evidence import EvidenceReader
+
 
 _WM_CLOSE = 0x0010
 _BM_CLICK = 0x00F5
@@ -524,6 +526,35 @@ def dismiss_ok_dialog(handle: int) -> None:
 
 def wait_for_path(path: Path, *, deadline: ScenarioDeadline) -> None:
     while not path.exists():
+        remaining = deadline.remaining()
+        time.sleep(min(0.025, remaining))
+
+
+def wait_for_initial_evidence(
+    reader: EvidenceReader,
+    process: HeadedProcess,
+    *,
+    deadline: ScenarioDeadline,
+) -> tuple[str, dict[str, object]]:
+    """Wait for one immutable ready/failure record or a premature exit."""
+
+    while True:
+        milestone = reader.available_initial()
+        if milestone is not None:
+            payload = (
+                reader.read_ready()
+                if milestone == "ready"
+                else reader.read_failure()
+            )
+            if payload is None:
+                raise AssertionError("headed evidence disappeared after publication")
+            return milestone, payload
+        if process.poll() is not None:
+            completed = wait_for_process(process, deadline=deadline)
+            raise AssertionError(
+                "headed child exited before publishing ready or failure evidence\n"
+                f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+            )
         remaining = deadline.remaining()
         time.sleep(min(0.025, remaining))
 

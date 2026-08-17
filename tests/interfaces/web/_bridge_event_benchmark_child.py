@@ -11,6 +11,7 @@ import sqlite3
 import sys
 import threading
 from contextlib import ExitStack
+from copy import deepcopy
 from ctypes import wintypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,7 @@ from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
 
+from _headed_evidence import EvidencePaths, EvidencePublisher
 from _startup_test_support import headed_command_extension
 
 
@@ -138,17 +140,14 @@ class _Recorder:
                 },
             }
 
-    def write(self) -> None:
+    def snapshot(self) -> dict[str, object]:
         with self._lock:
             self._data["sample_stream"] = {
                 "batch_count": self._sample_batch_count,
                 "sample_count": self._sample_count,
                 "sha256": self._sample_digest.hexdigest(),
             }
-            encoded = json.dumps(self._data, indent=2, sort_keys=True)
-            temporary = self._output.with_suffix(self._output.suffix + ".tmp")
-            temporary.write_text(encoded, encoding="utf-8")
-            temporary.replace(self._output)
+            return deepcopy(self._data)
 
 
 class _FixtureClock:
@@ -295,6 +294,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     return parser.parse_args()
 
 
@@ -476,12 +476,36 @@ def _benchmark_specs(
 
 def main() -> int:
     arguments = _arguments()
+    recorder = _Recorder(arguments.output)
+    publisher = EvidencePublisher(EvidencePaths(arguments.evidence_dir))
+    try:
+        return _run_benchmark(arguments, recorder, publisher)
+    except BaseException as error:
+        recorder.set(
+            "child_failure",
+            {"type": type(error).__name__, "message": str(error)},
+        )
+        recorder.set("exit_code", 1)
+        publisher.publish_failure(recorder.snapshot())
+        raise
+
+
+def _run_benchmark(
+    arguments: argparse.Namespace,
+    recorder: _Recorder,
+    publisher: EvidencePublisher,
+) -> int:
     if not _wait_for_named_gate(
         arguments.admission_gate,
         timeout_ms=max(1, arguments.admission_timeout_ms),
     ):
+        recorder.set(
+            "child_failure",
+            {"type": "AdmissionTimeout", "message": "admission gate timed out"},
+        )
+        recorder.set("exit_code", 65)
+        publisher.publish_failure(recorder.snapshot())
         return 65
-    recorder = _Recorder(arguments.output)
     recorder.set(
         "runtime",
         {
@@ -493,7 +517,6 @@ def main() -> int:
             },
         },
     )
-    recorder.write()
 
     from namisync.dispatcher import Dispatcher, PreparedSession, WorkflowRegistration
     from namisync.interfaces import service as service_module
@@ -561,41 +584,36 @@ def main() -> int:
     def observe_composition(production: object, combined: object) -> None:
         recorder.set("production_command_names", sorted(production))
         recorder.set("combined_command_names", sorted(combined))
-        recorder.write()
 
     def log_renderer(browser_version: str) -> None:
         import pythonnet
 
         recorder.set("clr_runtime", str(pythonnet.get_runtime_info()))
         recorder.set("webview2", browser_version)
-        recorder.write()
         original_log_renderer(browser_version)
 
-    exit_code = 1
-    try:
-        with ExitStack() as stack:
-            stack.enter_context(patch.object(host, "_create_service", create_service))
-            stack.enter_context(patch.object(host, "_task_registry", task_registry))
-            stack.enter_context(
-                headed_command_extension(
-                    host,
-                    extension,
-                    observe_composition=observe_composition,
-                )
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(host, "_create_service", create_service))
+        stack.enter_context(patch.object(host, "_task_registry", task_registry))
+        stack.enter_context(
+            headed_command_extension(
+                host,
+                extension,
+                observe_composition=observe_composition,
             )
-            stack.enter_context(
-                patch.object(host, "_log_startup_renderer", log_renderer)
-            )
-            exit_code = host.run_desktop(
-                AppPaths.from_root(arguments.data_dir),
-                DesktopInstanceIdentity(arguments.mutex, arguments.title),
-                startup_error=recorder.startup_error,
-                index_path=arguments.index,
-            )
-    finally:
-        recorder.set("exit_code", exit_code)
-        recorder.set("complete", True)
-        recorder.write()
+        )
+        stack.enter_context(
+            patch.object(host, "_log_startup_renderer", log_renderer)
+        )
+        exit_code = host.run_desktop(
+            AppPaths.from_root(arguments.data_dir),
+            DesktopInstanceIdentity(arguments.mutex, arguments.title),
+            startup_error=recorder.startup_error,
+            index_path=arguments.index,
+        )
+    recorder.set("exit_code", exit_code)
+    recorder.set("complete", True)
+    publisher.publish_final(recorder.snapshot())
     return exit_code
 
 

@@ -12,6 +12,7 @@ from ctypes import wintypes
 from pathlib import Path
 from unittest.mock import patch
 
+from _headed_evidence import EvidencePaths, EvidencePublisher
 from _headed_native import _user32
 
 
@@ -576,13 +577,16 @@ def _run_production_identity_probe(argv: list[str]) -> int:
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--test-mutex", required=True)
     parser.add_argument("--test-title", required=True)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--ready", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     parser.add_argument("--release", required=True, type=Path)
     parser.add_argument("--hold-timeout", required=True, type=float)
     arguments = parser.parse_args(argv)
+    publisher = EvidencePublisher(EvidencePaths(arguments.evidence_dir))
+    initial_published = False
+    final_published = False
 
     def probe_run_desktop(paths, identity, *, startup_error) -> int:
+        nonlocal initial_published, final_published
         del startup_error
         native = _BoundaryMappedNative(arguments.test_mutex)
         admission = host.acquire_desktop_instance(
@@ -601,20 +605,37 @@ def _run_production_identity_probe(argv: list[str]) -> int:
             "restore_calls": native.restored,
             "foreground_boundary_calls": native.foregrounded,
         }
-        arguments.output.write_text(json.dumps(result), encoding="utf-8")
         if admission.is_primary:
-            arguments.ready.touch()
+            publisher.publish_ready(result)
+            initial_published = True
             deadline = time.monotonic() + arguments.hold_timeout
             while not arguments.release.exists():
                 if time.monotonic() >= deadline:
+                    if admission.lease is not None:
+                        admission.lease.close()
+                    publisher.publish_final({"released": False})
                     return 66
                 time.sleep(0.025)
         if admission.lease is not None:
             admission.lease.close()
+        if admission.is_primary:
+            publisher.publish_final({"released": True})
+        else:
+            publisher.publish_final(result)
+        final_published = True
         return 0
 
-    with patch.object(host, "run_desktop", probe_run_desktop):
-        return launcher.gui_main(["--data-dir", str(arguments.data_dir)])
+    try:
+        with patch.object(host, "run_desktop", probe_run_desktop):
+            return launcher.gui_main(["--data-dir", str(arguments.data_dir)])
+    except BaseException as error:
+        if not final_published:
+            failure = {"failure": {"type": type(error).__name__}}
+            if initial_published:
+                publisher.publish_final({"released": False, **failure})
+            else:
+                publisher.publish_failure(failure)
+        raise
 
 
 def _run_gui_argument_probe(argv: list[str]) -> int:
@@ -626,8 +647,9 @@ def _run_gui_argument_probe(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--value", required=True)
     parser.add_argument("--test-mutex", required=True)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     arguments = parser.parse_args(argv)
+    publisher = EvidencePublisher(EvidencePaths(arguments.evidence_dir))
 
     def guarded_run_desktop(paths, identity, *, startup_error) -> int:
         del startup_error
@@ -641,13 +663,20 @@ def _run_gui_argument_probe(argv: list[str]) -> int:
             "mutex_names": native.mutex_names,
             "find_titles": native.found,
         }
-        arguments.output.write_text(json.dumps(result), encoding="utf-8")
         if admission.lease is not None:
             admission.lease.close()
+        publisher.publish_failure(result)
         return 67
 
-    with patch.object(host, "run_desktop", guarded_run_desktop):
-        return launcher.gui_main(["--data-dir", arguments.value])
+    try:
+        with patch.object(host, "run_desktop", guarded_run_desktop):
+            return launcher.gui_main(["--data-dir", arguments.value])
+    except BaseException as error:
+        if not any(arguments.evidence_dir.iterdir()):
+            publisher.publish_failure(
+                {"failure": {"type": type(error).__name__}}
+            )
+        raise
 
 
 def _run_activation_failure_probe(argv: list[str]) -> int:
@@ -661,26 +690,30 @@ def _run_activation_failure_probe(argv: list[str]) -> int:
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     arguments = parser.parse_args(argv)
+    publisher = EvidencePublisher(EvidencePaths(arguments.evidence_dir))
     native = _ForcedForegroundFailureNative()
-    result = run_desktop(
-        AppPaths.from_root(arguments.data_dir),
-        DesktopInstanceIdentity(arguments.mutex, arguments.title),
-        startup_error=_report_startup_error,
-        instance_native=native,
-    )
-    arguments.output.write_text(
-        json.dumps(
-            {
-                "exit_code": result,
-                "mutex_names": native.mutex_names,
-                "find_titles": native.find_titles,
-                "restore_calls": native.restore_calls,
-                "foreground_calls": native.foreground_calls,
-            }
-        ),
-        encoding="utf-8",
+    try:
+        result = run_desktop(
+            AppPaths.from_root(arguments.data_dir),
+            DesktopInstanceIdentity(arguments.mutex, arguments.title),
+            startup_error=_report_startup_error,
+            instance_native=native,
+        )
+    except BaseException as error:
+        publisher.publish_failure(
+            {"failure": {"type": type(error).__name__}}
+        )
+        raise
+    publisher.publish_final(
+        {
+            "exit_code": result,
+            "mutex_names": native.mutex_names,
+            "find_titles": native.find_titles,
+            "restore_calls": native.restore_calls,
+            "foreground_calls": native.foreground_calls,
+        }
     )
     return result
 

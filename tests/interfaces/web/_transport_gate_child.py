@@ -8,9 +8,9 @@ import json
 import re
 import sys
 import threading
-import time
 from collections.abc import Mapping
 from contextlib import ExitStack
+from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -19,23 +19,22 @@ from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
 
+from _headed_evidence import EvidencePaths, EvidencePublisher
 from _startup_test_support import headed_command_extension
 
 
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _SLOT_ID = re.compile(r"slot-[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
-# Ordinary Python readers deny delete sharing on Windows while the parent reads
-# a live evidence snapshot, so publication must tolerate that brief interval.
-_SNAPSHOT_REPLACE_ATTEMPTS = 101
-_SNAPSHOT_REPLACE_DELAY_SECONDS = 0.01
-_WINDOWS_SHARING_WINERRORS = frozenset({5, 32})
 
 
 class _Recorder:
-    def __init__(self, output: Path, mode: str) -> None:
-        self._output = output
+    def __init__(self, publisher: EvidencePublisher, mode: str) -> None:
+        self._publisher = publisher
         self._lock = threading.Lock()
+        self._initial: str | None = None
+        self._initial_payload: dict[str, Any] | None = None
+        self._final = False
         self._data: dict[str, Any] = {
             "schema_version": 1,
             "mode": mode,
@@ -50,34 +49,41 @@ class _Recorder:
         with self._lock:
             self._data.setdefault(name, []).append(value)
 
-    def snapshot(self) -> dict[str, Any]:
-        with self._lock:
-            return dict(self._data)
-
     def startup_error(self, message: str) -> None:
         self.append("startup_errors", message)
+        self.publish_failure_if_pending()
 
-    def write(self) -> None:
+    def publish_ready(self) -> None:
         with self._lock:
-            encoded = json.dumps(self._data, indent=2, sort_keys=True)
-            temporary = self._output.with_suffix(self._output.suffix + ".tmp")
-            temporary.write_text(encoded, encoding="utf-8")
-            _replace_snapshot(temporary, self._output)
+            if self._initial is not None:
+                raise RuntimeError("transport evidence was already published")
+            payload = deepcopy(self._data)
+            self._publisher.publish_ready(payload)
+            self._initial = "ready"
+            self._initial_payload = payload
 
+    def publish_failure_if_pending(self) -> bool:
+        with self._lock:
+            if self._initial is not None:
+                return False
+            payload = deepcopy(self._data)
+            self._publisher.publish_failure(payload)
+            self._initial = "failure"
+            self._initial_payload = payload
+            return True
 
-def _replace_snapshot(temporary: Path, output: Path) -> None:
-    for attempt in range(_SNAPSHOT_REPLACE_ATTEMPTS):
-        try:
-            temporary.replace(output)
-            return
-        except PermissionError as error:
-            if (
-                getattr(error, "winerror", None)
-                not in _WINDOWS_SHARING_WINERRORS
-                or attempt + 1 == _SNAPSHOT_REPLACE_ATTEMPTS
-            ):
-                raise
-            time.sleep(_SNAPSHOT_REPLACE_DELAY_SECONDS)
+    def publish_final(self) -> None:
+        with self._lock:
+            if self._final:
+                raise RuntimeError("transport final evidence was already published")
+            baseline = self._initial_payload or {}
+            payload = {
+                name: deepcopy(value)
+                for name, value in self._data.items()
+                if name not in baseline or value != baseline[name]
+            }
+            self._publisher.publish_final(payload)
+            self._final = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,7 +336,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--index", required=True, type=Path)
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence", required=True, type=Path)
     parser.add_argument("--scenario", required=True, type=Path)
     return parser.parse_args()
 
@@ -506,11 +512,11 @@ def _test_spec(
             return browser_gate.status()
         if value.phase == "browser_failure":
             recorder.set("browser_failure", dict(value.value))
-            recorder.write()
+            recorder.publish_failure_if_pending()
             return {"accepted": True}
         if value.phase == "complete":
             recorder.set("report", dict(value.value))
-            recorder.write()
+            recorder.publish_ready()
             return {"accepted": True}
         if value.phase == "off_origin_target":
             if off_origin_url is None:
@@ -524,10 +530,8 @@ def _test_spec(
                 "drain_settled": value.value["drain_settled"],
             }
             recorder.set("drain_probe_report", evidence)
-            recorder.write()
             return evidence
         recorder.append("off_origin_handler_calls", dict(value.value))
-        recorder.write()
         return {"accepted": True}
 
     return CommandSpec(
@@ -777,7 +781,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             recorder.append("raw_dispatch_bodies", command_json)
             if '"phase":"off_origin_attempt"' in command_json:
                 recorder.set("off_origin_response", response)
-                recorder.write()
+                recorder.publish_ready()
         if request is not None and request.get("command") == "next_events":
             role = None if browser_gate is None else browser_gate.role_for_task(task_id)
             kind = "success"
@@ -839,7 +843,6 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             if is_concurrency_probe:
                 drain_probe.entered.set()
                 recorder.set("drain_entered", True)
-                recorder.write()
             try:
                 result = original_drain(
                     task_id,
@@ -865,7 +868,6 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 if is_concurrency_probe:
                     drain_probe.exited.set()
                     recorder.set("drain_exited", True)
-                    recorder.write()
 
         def release_terminal_session(task_id: str, session_id: str) -> object:
             if browser_gate is not None and browser_gate.is_controlled_session(
@@ -1110,13 +1112,16 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 },
             )
     recorder.set("exit_code", exit_code)
-    recorder.write()
+    recorder.publish_final()
     return exit_code
 
 
 def main() -> int:
     arguments = _parse_arguments()
-    recorder = _Recorder(arguments.output, arguments.mode)
+    recorder = _Recorder(
+        EvidencePublisher(EvidencePaths(arguments.evidence.resolve())),
+        arguments.mode,
+    )
     try:
         return _run(arguments, recorder)
     except BaseException as error:
@@ -1124,7 +1129,9 @@ def main() -> int:
             "child_failure",
             {"type": type(error).__name__, "message": str(error)},
         )
-        recorder.write()
+        if not recorder.publish_failure_if_pending():
+            recorder.set("exit_code", 1)
+            recorder.publish_final()
         raise
 
 

@@ -8,7 +8,6 @@ import inspect
 import json
 import re
 import sys
-import time
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,18 +16,19 @@ from uuid import uuid4
 import pytest
 
 import _materials_gate_child as materials_gate_child
+from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from conftest import HeadedInstalledWheel
 from namisync.version import VERSION
 from _headed_native import (
     clean_child_environment,
     close_window,
     read_bytes,
-    read_text,
     require_absolute_local_test_root,
     scenario_deadline,
     start_headed_process,
     terminate_process_tree,
     wait_for_accessible_text,
+    wait_for_initial_evidence,
     wait_for_process,
     wait_for_window,
 )
@@ -106,6 +106,9 @@ def test_materials_gate_child_is_test_owned_and_preserves_production_stack() -> 
     assert '"Emulation.setEmulatedMedia"' in source
     assert '{"name": "forced-colors", "value": "active"}' in source
     assert "Page.captureScreenshot" in source
+    assert "EvidencePublisher(" in source
+    assert 'parser.add_argument("--evidence-dir"' in source
+    assert 'parser.add_argument("--output"' not in source
     assert "evaluate_js" not in source
     assert "set_foreground" not in source.casefold()
     assert "SetForegroundWindow" not in source
@@ -125,6 +128,9 @@ def test_materials_gate_child_is_test_owned_and_preserves_production_stack() -> 
     assert "_run_materials_scenario(" not in fixture_source
     assert "scenario_deadline(75.0)" in launch_source
     assert "start_headed_process(" in launch_source
+    assert "EvidenceReader(" in launch_source
+    assert "wait_for_initial_evidence(" in launch_source
+    assert "read_text(" not in launch_source
     assert "cwd=installed.root" in launch_source
     assert "uuid4().hex" in launch_source
     assert "close_window(window)" in launch_source
@@ -175,16 +181,22 @@ def test_materials_gate_faults_are_exact_and_delegate_other_native_calls() -> No
     assert "selected = actual" in source
 
 
-def test_materials_gate_report_and_page_probe_are_bounded_and_sanitized() -> None:
-    recorder = materials_gate_child._Recorder(Path("ignored.json"), "capable")
-    recorder._write_locked = lambda: None
+def test_materials_gate_report_and_page_probe_are_bounded_and_sanitized(
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = materials_gate_child._Recorder(paths, "capable")
     recorder.failure("private-path", RuntimeError("C:\\private\\secret"))
+    failure = EvidenceReader(paths).read_failure()
 
-    assert recorder._data["failure"] == {
-        "stage": "child",
-        "type": "RuntimeError",
+    assert failure == {
+        "failure": {
+            "stage": "child",
+            "type": "RuntimeError",
+        }
     }
-    assert "private" not in json.dumps(recorder._data).casefold()
+    assert _sanitized_failure_record(failure) == failure["failure"]
+    assert "private" not in json.dumps(failure).casefold()
     assert "for (let attempt = 0; attempt < 100; attempt += 1)" in (
         materials_gate_child._PAGE_PROBE
     )
@@ -209,6 +221,32 @@ def test_materials_gate_report_and_page_probe_are_bounded_and_sanitized() -> Non
     assert "native_window.BeginInvoke(action)" in observer_source
     assert 'observations["native_window"] = native_window' in observer_source
     assert "recorder.write()" not in observer_source
+
+
+def test_materials_gate_retains_a_sanitized_post_ready_failure(
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = materials_gate_child._Recorder(paths, "capable")
+    assert recorder.complete() is True
+
+    recorder.failure("page_probe", RuntimeError("C:\\private\\late"))
+    recorder.failure("child", ValueError("discarded second failure"))
+    recorder.finish(0, host_returned=True)
+
+    reader = EvidenceReader(paths)
+    assert reader.read_ready() is not None
+    final = reader.read_final()
+    assert final == {
+        "host_returned": True,
+        "exit_code": 0,
+        "post_ready_failure": {
+            "stage": "page_probe",
+            "type": "RuntimeError",
+        },
+    }
+    assert "private" not in json.dumps(final).casefold()
+    reader.assert_consistent(require_final=True)
 
 
 def test_materials_gate_page_report_rejects_malformed_protocol_values() -> None:
@@ -506,6 +544,20 @@ def _require_material_build() -> None:
         pytest.skip("Windows build predates documented Mica support")
 
 
+def _sanitized_failure_record(value: object) -> dict[str, str]:
+    if type(value) is not dict or set(value) != {"failure"}:
+        raise AssertionError("materials failure evidence is invalid")
+    failure = value["failure"]
+    if (
+        type(failure) is not dict
+        or set(failure) != {"stage", "type"}
+        or failure.get("stage") not in materials_gate_child._FAILURE_STAGES
+        or failure.get("type") not in materials_gate_child._FAILURE_TYPES
+    ):
+        raise AssertionError("materials failure evidence is invalid")
+    return failure
+
+
 def _run_materials_scenario(
     installed: HeadedInstalledWheel,
     *,
@@ -515,7 +567,10 @@ def _run_materials_scenario(
     deadline = scenario_deadline(75.0)
     root.mkdir(parents=True)
     data_root = require_absolute_local_test_root(root / "data")
-    output = require_absolute_local_test_root(root / "result.json")
+    evidence_root = require_absolute_local_test_root(root / "evidence")
+    evidence_root.mkdir()
+    evidence_paths = EvidencePaths(evidence_root)
+    evidence_reader = EvidenceReader(evidence_paths)
     screenshot = require_absolute_local_test_root(root / f"{scenario}.png")
     token = uuid4().hex
     title = f"NamiSync Materials {scenario} {token}"
@@ -531,8 +586,8 @@ def _run_materials_scenario(
             rf"Local\NamiSync.Materials.{scenario}.{token}",
             "--title",
             title,
-            "--output",
-            output,
+            "--evidence-dir",
+            evidence_root,
             "--screenshot",
             screenshot,
         ),
@@ -542,37 +597,38 @@ def _run_materials_scenario(
     )
     try:
         window = wait_for_window(process, title, deadline=deadline)
-        while not output.exists():
-            deadline.remaining()
-            if process.poll() is not None:
-                completed = wait_for_process(process, deadline=deadline)
-                raise AssertionError(
-                    "materials child exited before completing its report; "
-                    f"returncode={completed.returncode}"
-                )
-            time.sleep(0.025)
-        interim = json.loads(read_text(output, deadline=deadline))
-        if interim.get("phase") == "failure":
-            raise AssertionError(
-                f"materials gate failed: {interim.get('failure')!r}"
-            )
-        assert interim.get("phase") == "complete", interim
-        wait_for_accessible_text(
-            window,
-            f"Materials {scenario} complete",
-            python=installed.python,
+        milestone, initial = wait_for_initial_evidence(
+            evidence_reader,
+            process,
             deadline=deadline,
         )
+        if milestone == "ready":
+            wait_for_accessible_text(
+                window,
+                f"Materials {scenario} complete",
+                python=installed.python,
+                deadline=deadline,
+            )
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert completed.stdout == ""
-        assert completed.stderr == ""
+        final = evidence_reader.read_final()
+        evidence_reader.assert_consistent(require_final=milestone == "ready")
     finally:
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
 
-    result = json.loads(read_text(output, deadline=deadline))
+    if final is not None:
+        require_host_final(final, exit_code=completed.returncode)
+    if milestone == "failure":
+        failure = _sanitized_failure_record(initial)
+        raise AssertionError(f"materials gate failed: {failure!r}")
+    assert final is not None
+    assert final["host_returned"] is True
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    result = dict(initial)
+    result["exit_code"] = final["exit_code"]
     _assert_fixed_report_schema(result)
     assert result["phase"] == "complete"
     assert result["exit_code"] == 0

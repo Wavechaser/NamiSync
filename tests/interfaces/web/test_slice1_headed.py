@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 
 from conftest import HeadedInstalledWheel
+from _headed_evidence import EvidencePaths, EvidenceReader
 from _headed_native import (
     HeadedProcess,
     ScenarioDeadline,
@@ -30,7 +31,7 @@ from _headed_native import (
     wait_for_accessible_text,
     wait_for_dialog_text,
     wait_for_exit_or_dialog,
-    wait_for_path,
+    wait_for_initial_evidence,
     wait_for_process,
     wait_for_window,
     window_handles,
@@ -256,7 +257,7 @@ def test_sh_g_2_relative_data_root_is_refused_before_creation(
     relative = Path("relative-gui-data")
     assert not relative.is_absolute()
     token = uuid4().hex
-    output = tmp_path / "unexpected-host-entry.json"
+    evidence = _new_evidence_paths(tmp_path / "gui-argument-evidence")
     existing_dialogs = window_handles("NamiSync - Startup Error")
     process = start_headed_process(
         [
@@ -267,8 +268,8 @@ def test_sh_g_2_relative_data_root_is_refused_before_creation(
             str(relative),
             "--test-mutex",
             rf"Local\NamiSync.Test.{token}",
-            "--output",
-            str(output),
+            "--evidence-dir",
+            str(evidence.root),
         ],
         cwd=tmp_path,
         environment=clean_child_environment(),
@@ -291,7 +292,11 @@ def test_sh_g_2_relative_data_root_is_refused_before_creation(
     assert completed.returncode == 2, completed.stdout + completed.stderr
     assert completed.stdout == completed.stderr == ""
     assert not (tmp_path / relative).exists()
-    assert not output.exists()
+    reader = EvidenceReader(evidence)
+    assert reader.available_initial() is None
+    assert reader.read_final() is None
+    reader.assert_consistent(require_final=False)
+    assert list(evidence.root.iterdir()) == []
 
 
 def test_sh_g_5_database_contract_refusal_is_visible_and_read_only(
@@ -499,7 +504,7 @@ def test_br_g_31_foreground_refusal_is_visible_and_nonerror(
         mutex=mutex,
     )
     second_process: HeadedProcess | None = None
-    output = tmp_path / "activation-failure.json"
+    evidence = _new_evidence_paths(tmp_path / "activation-failure-evidence")
     try:
         first_handle = wait_for_window(first_process, title, deadline=deadline)
         wait_for_accessible_text(
@@ -520,8 +525,8 @@ def test_br_g_31_foreground_refusal_is_visible_and_nonerror(
                 mutex,
                 "--title",
                 title,
-                "--output",
-                output,
+                "--evidence-dir",
+                evidence.root,
             ),
             cwd=headed_installed_wheel.root,
             environment=clean_child_environment(),
@@ -540,13 +545,20 @@ def test_br_g_31_foreground_refusal_is_visible_and_nonerror(
         dismiss_ok_dialog(dialog)
         completed = wait_for_process(second_process, deadline=deadline)
         assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert json.loads(read_text(output, deadline=deadline)) == {
+        reader = EvidenceReader(evidence)
+        result = reader.read_final()
+        assert result is not None
+        assert type(result.get("exit_code")) is int
+        assert type(result.get("restore_calls")) is int
+        assert type(result.get("foreground_calls")) is int
+        assert result == {
             "exit_code": 0,
             "mutex_names": [mutex],
             "find_titles": [title],
             "restore_calls": 1,
             "foreground_calls": 1,
         }
+        reader.assert_consistent(require_final=True, allow_final_only=True)
         assert first_process.poll() is None
         close_window(first_handle)
         completed = wait_for_process(first_process, deadline=deadline)
@@ -576,59 +588,81 @@ def test_sh_g_10_installed_launcher_fixed_identity_and_isolated_collision(
     test_title = f"NamiSync Test {token}"
     first_root = require_absolute_local_test_root(tmp_path / "first")
     second_root = require_absolute_local_test_root(tmp_path / "second")
-    first_output = tmp_path / "first.json"
-    second_output = tmp_path / "second.json"
-    ready = tmp_path / "primary.ready"
+    first_evidence = _new_evidence_paths(tmp_path / "first-evidence")
+    second_evidence = _new_evidence_paths(tmp_path / "second-evidence")
     release = tmp_path / "primary.release"
     first_process = _start_production_identity_probe(
         headed_installed_wheel,
         data_root=first_root,
         test_mutex=test_mutex,
         test_title=test_title,
-        output=first_output,
-        ready=ready,
+        evidence=first_evidence,
         release=release,
         deadline=deadline,
     )
     second_process: HeadedProcess | None = None
+    first_reader = EvidenceReader(first_evidence)
+    second_reader = EvidenceReader(second_evidence)
     try:
-        wait_for_path(ready, deadline=deadline)
-        second_process = _start_production_identity_probe(
-            headed_installed_wheel,
-            data_root=second_root,
-            test_mutex=test_mutex,
-            test_title=test_title,
-            output=second_output,
-            ready=ready,
-            release=release,
+        milestone, first_result = wait_for_initial_evidence(
+            first_reader,
+            first_process,
             deadline=deadline,
         )
-        completed = wait_for_process(second_process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert first_process.poll() is None
-        first_result = json.loads(read_text(first_output, deadline=deadline))
-        second_result = json.loads(read_text(second_output, deadline=deadline))
-        for result in (first_result, second_result):
-            assert result["launcher_mutex"] == r"Local\NamiSync.Desktop"
-            assert result["launcher_title"] == "NamiSync"
-            assert result["mutex_names"] == [r"Local\NamiSync.Desktop"]
-        assert first_result["primary"] is True
-        assert first_result["find_titles"] == []
-        assert second_result == {
-            "launcher_mutex": r"Local\NamiSync.Desktop",
-            "launcher_title": "NamiSync",
-            "data_root": str(second_root),
-            "primary": False,
-            "activated": True,
-            "activation_error": None,
-            "mutex_names": [r"Local\NamiSync.Desktop"],
-            "find_titles": ["NamiSync"],
-            "restore_calls": 1,
-            "foreground_boundary_calls": 1,
-        }
-        release.touch()
-        completed = wait_for_process(first_process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
+        assert milestone == "ready", first_result
+        with first_evidence.ready.open("rb") as held_ready:
+            second_process = _start_production_identity_probe(
+                headed_installed_wheel,
+                data_root=second_root,
+                test_mutex=test_mutex,
+                test_title=test_title,
+                evidence=second_evidence,
+                release=release,
+                deadline=deadline,
+            )
+            completed = wait_for_process(second_process, deadline=deadline)
+            assert completed.returncode == 0, completed.stdout + completed.stderr
+            assert first_process.poll() is None
+            second_result = second_reader.read_final()
+            assert second_result is not None
+            for result in (first_result, second_result):
+                assert result["launcher_mutex"] == r"Local\NamiSync.Desktop"
+                assert result["launcher_title"] == "NamiSync"
+                assert result["mutex_names"] == [r"Local\NamiSync.Desktop"]
+                assert type(result.get("primary")) is bool
+                assert type(result.get("activated")) is bool
+                assert result.get("activation_error") is None or type(
+                    result.get("activation_error")
+                ) is str
+                assert type(result.get("restore_calls")) is int
+                assert type(result.get("foreground_boundary_calls")) is int
+            assert first_result["primary"] is True
+            assert first_result["find_titles"] == []
+            assert second_result == {
+                "launcher_mutex": r"Local\NamiSync.Desktop",
+                "launcher_title": "NamiSync",
+                "data_root": str(second_root),
+                "primary": False,
+                "activated": True,
+                "activation_error": None,
+                "mutex_names": [r"Local\NamiSync.Desktop"],
+                "find_titles": ["NamiSync"],
+                "restore_calls": 1,
+                "foreground_boundary_calls": 1,
+            }
+            second_reader.assert_consistent(
+                require_final=True,
+                allow_final_only=True,
+            )
+            release.touch()
+            completed = wait_for_process(first_process, deadline=deadline)
+            assert completed.returncode == 0, completed.stdout + completed.stderr
+            released = first_reader.read_final()
+            assert released is not None
+            assert set(released) == {"released"}
+            assert released["released"] is True
+            assert held_ready.read(1)
+        first_reader.assert_consistent(require_final=True)
     finally:
         for process in (first_process, second_process):
             if process is not None and process.poll() is None:
@@ -698,8 +732,7 @@ def _start_production_identity_probe(
     data_root: Path,
     test_mutex: str,
     test_title: str,
-    output: Path,
-    ready: Path,
+    evidence: EvidencePaths,
     release: Path,
     deadline: ScenarioDeadline,
 ) -> HeadedProcess:
@@ -714,10 +747,8 @@ def _start_production_identity_probe(
             test_mutex,
             "--test-title",
             test_title,
-            "--output",
-            output,
-            "--ready",
-            ready,
+            "--evidence-dir",
+            evidence.root,
             "--release",
             release,
             "--hold-timeout",
@@ -727,3 +758,8 @@ def _start_production_identity_probe(
         environment=clean_child_environment(),
         deadline=deadline,
     )
+
+
+def _new_evidence_paths(root: Path) -> EvidencePaths:
+    root.mkdir()
+    return EvidencePaths(root.resolve())

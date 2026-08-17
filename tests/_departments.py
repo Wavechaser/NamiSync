@@ -74,6 +74,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/interfaces/web/test_document_channel.py",
         "tests/interfaces/web/test_drain.py",
         "tests/interfaces/web/test_frontend_static.py",
+        "tests/interfaces/web/test_headed_evidence.py",
         "tests/interfaces/web/test_headed_native.py",
         "tests/interfaces/web/test_host.py",
         "tests/interfaces/web/test_icons.py",

@@ -80,6 +80,21 @@ negative or renderer-only fault seams explicit so a helper cannot manufacture
 their readiness evidence. Headed command additions use the shared immutable,
 collision-refusing composition wrapper rather than rebuilding production rows.
 
+Headed subprocesses publish lifecycle evidence through the tests-only immutable
+milestone protocol. A child may publish one `ready.json` or `failure.json`, then
+one `final.json`; each is canonical JSON written completely to a private
+same-directory temporary and renamed without replacement. Parents poll names,
+read each published milestone once, cache it, and reject contradictions, late
+milestone names after an observed final, noncanonical records, or orphan
+protocol temporaries. Final-only evidence requires an explicit reader opt-in
+and is reserved for completion or expected-refusal witnesses that have no
+interactive ready phase. The
+1 MiB record ceiling is a tests-only anti-runaway ingress bound, not a product
+request or acceptance limit. Benchmark timing markers and sample/timing JSONL
+remain separate write-once or append-only measurement artifacts, while the
+tree-window fixture remains a one-shot parent-created input; neither is a live
+child-to-parent snapshot and neither belongs in the milestone state machine.
+
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed
 ```

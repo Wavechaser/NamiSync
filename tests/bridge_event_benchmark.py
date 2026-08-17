@@ -50,6 +50,7 @@ from _headed_native import (  # noqa: E402
     wait_for_process,
     wait_for_window,
 )
+from _headed_evidence import EvidencePaths, EvidenceReader  # noqa: E402
 
 
 _CHILD = WEB_TEST_ROOT / "_bridge_event_benchmark_child.py"
@@ -272,16 +273,6 @@ def _stage_page(root: Path, python: Path, archived_source: Path) -> Path:
     return page / "index.html"
 
 
-def _read_evidence(path: Path) -> dict[str, object]:
-    if not path.exists():
-        return {}
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    return value if type(value) is dict else {}
-
-
 def _read_sample_stream(
     path: Path,
     metadata: object,
@@ -382,6 +373,18 @@ def _attach_streamed_evidence(
         value["reliable_emission_offsets_seconds"] = reliable
         attached[f"producer_task_{task_index}"] = value
     return attached
+
+
+def _read_terminal_evidence(
+    reader: EvidenceReader,
+) -> tuple[dict[str, object], bool]:
+    final = reader.read_final()
+    if final is not None:
+        reader.assert_consistent(require_final=True, allow_final_only=True)
+        return final, True
+    failure = reader.read_failure()
+    reader.assert_consistent(require_final=False)
+    return ({} if failure is None else failure), False
 
 
 def _read_producer_timing_stream(
@@ -1976,6 +1979,7 @@ def _summarize(
         and aggregate_reliable_rate is not None
         and aggregate_reliable_rate >= 10.0
         and evidence.get("startup_errors") == []
+        and type(evidence.get("exit_code")) is int
         and evidence.get("exit_code") == 0
         and evidence.get("production_command_names") == production_names
         and evidence.get("combined_command_names") == combined_names
@@ -2082,6 +2086,9 @@ def main() -> int:
             )
             data_dir = root / "data"
             evidence_path = root / "child-evidence.json"
+            evidence_root = root / "child-evidence"
+            evidence_root.mkdir()
+            evidence_reader = EvidenceReader(EvidencePaths(evidence_root))
             begin_marker = data_dir / "benchmark.begin"
             ready_marker = data_dir / "benchmark.ready"
             report_marker = data_dir / "benchmark.report"
@@ -2104,12 +2111,15 @@ def main() -> int:
                     title,
                     "--output",
                     str(evidence_path),
+                    "--evidence-dir",
+                    str(evidence_root),
                 ],
                 cwd=root,
                 environment=_clean_python_environment(),
                 deadline=deadline,
             )
             sampler = _JobPrivateMemorySampler(process)
+            terminal_evidence_read = False
             try:
                 window = wait_for_window(process, title, deadline=deadline)
                 sampler.wait_until_ready(ready_marker, deadline)
@@ -2129,10 +2139,13 @@ def main() -> int:
                     )
                 close_window(window)
                 completed = wait_for_process(process, deadline=deadline)
-                evidence = _read_evidence(evidence_path)
+                terminal_evidence_read = True
+                evidence, final_published = _read_terminal_evidence(
+                    evidence_reader
+                )
                 if completed.returncode != 0:
                     raise RuntimeError(completed.stdout + completed.stderr)
-                if evidence.get("complete") is not True:
+                if not final_published or evidence.get("complete") is not True:
                     raise RuntimeError("benchmark child did not publish final evidence")
                 evidence = _attach_streamed_evidence(
                     evidence,
@@ -2141,21 +2154,26 @@ def main() -> int:
             finally:
                 try:
                     job_memory = sampler.result()
-                    latest_evidence = _read_evidence(evidence_path)
-                    if latest_evidence:
-                        evidence = (
-                            _attach_streamed_evidence(
-                                latest_evidence,
-                                evidence_path,
-                            )
-                            if latest_evidence.get("complete") is True
-                            else latest_evidence
-                        )
                 finally:
-                    if process.poll() is None:
-                        terminate_process_tree(process, deadline=deadline)
-                    else:
-                        process.close_job()
+                    try:
+                        if process.poll() is None:
+                            terminate_process_tree(process, deadline=deadline)
+                        else:
+                            process.close_job()
+                    finally:
+                        if not terminal_evidence_read:
+                            terminal_evidence_read = True
+                            evidence, final_published = _read_terminal_evidence(
+                                evidence_reader
+                            )
+                            if (
+                                final_published
+                                and evidence.get("complete") is True
+                            ):
+                                evidence = _attach_streamed_evidence(
+                                    evidence,
+                                    evidence_path,
+                                )
             result = _summarize(
                 evidence,
                 benchmark_root=root,

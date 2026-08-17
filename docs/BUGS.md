@@ -554,6 +554,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-08-17). Headed-evidence replacement contention. Headed
+  children repeatedly replaced one live JSON snapshot while parents polled and
+  opened it, so Windows delete sharing could reject an otherwise correct final
+  publication and force every new witness to copy a retry loop. Fixed with one
+  tests-only immutable milestone protocol: closed same-directory temporaries
+  publish `ready` or `failure`, then `final`, without replacing an observed
+  file. Parents read each canonical bounded record once; held-file evidence
+  proves final publication is independent of the open ready handle. Streaming
+  benchmark samples remain append-only measurement artifacts, not milestones.
 - MODERATE - FIXED (2026-08-17). Raw-readiness supersession race. On initial
   injection the bridge listener could resolve raw API readiness before the app
   listener rejected its old startup epoch, allowing that stale attempt and its

@@ -13,10 +13,16 @@ import time
 import webbrowser
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack
+from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 
+from _headed_evidence import (
+    EvidencePaths,
+    EvidenceProtocolError,
+    EvidencePublisher,
+)
 from _startup_test_support import headed_command_extension
 
 
@@ -87,9 +93,11 @@ _PACKAGED_POPUP_SCRIPT = r"""
 
 
 class _Recorder:
-    def __init__(self, output: Path, mode: str) -> None:
-        self.output = output
+    def __init__(self, evidence_root: Path, mode: str) -> None:
+        self.publisher = EvidencePublisher(EvidencePaths(evidence_root))
         self.lock = threading.Lock()
+        self.initial: Literal["ready", "failure"] | None = None
+        self.final_published = False
         self.data: dict[str, Any] = {
             "schema_version": 1,
             "mode": mode,
@@ -122,12 +130,42 @@ class _Recorder:
     def startup_error(self, message: str) -> None:
         self.append("startup_errors", message)
 
-    def write(self) -> None:
+    def publish_ready(self) -> None:
         with self.lock:
-            encoded = json.dumps(self.data, indent=2, sort_keys=True)
-        temporary = self.output.with_suffix(self.output.suffix + ".tmp")
-        temporary.write_text(encoded, encoding="utf-8")
-        temporary.replace(self.output)
+            if self.initial is not None or self.final_published:
+                raise EvidenceProtocolError(
+                    "native gate ready evidence was already settled"
+                )
+            payload = deepcopy(self.data)
+            self.publisher.publish_ready(payload)
+            self.initial = "ready"
+
+    def publish_final(self, payload: dict[str, object] | None = None) -> None:
+        with self.lock:
+            if self.final_published:
+                raise EvidenceProtocolError(
+                    "native gate final evidence was already published"
+                )
+            if payload is None:
+                payload = deepcopy(self.data)
+            self.publisher.publish_final(payload)
+            self.final_published = True
+
+    def publish_failure(self, error: BaseException) -> None:
+        with self.lock:
+            if self.initial == "failure" or self.final_published:
+                return
+            self.data["child_failure"] = {
+                "type": type(error).__name__,
+                "message": str(error),
+            }
+            payload = deepcopy(self.data)
+            if self.initial == "ready":
+                self.publisher.publish_final(payload)
+                self.final_published = True
+            else:
+                self.publisher.publish_failure(payload)
+                self.initial = "failure"
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -146,7 +184,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--index", required=True, type=Path)
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     return parser.parse_args()
 
 
@@ -727,7 +765,16 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
 
             if phase == "complete":
                 recorder.set("page", dict(payload))
-                recorder.write()
+                module = runtime.get("webview")
+                recorder.set(
+                    "renderer",
+                    None if module is None else module.renderer,
+                )
+                recorder.set(
+                    "system_browser_calls",
+                    recorder.get("system_browser_calls", []),
+                )
+                recorder.publish_ready()
             return result
 
         return {"native_probe": test_spec(native_probe)}
@@ -810,11 +857,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             index_path=arguments.index,
         )
 
-    module = runtime.get("webview")
-    recorder.set("renderer", None if module is None else module.renderer)
-    recorder.set("exit_code", exit_code)
-    recorder.set("system_browser_calls", recorder.get("system_browser_calls", []))
-    recorder.write()
+    recorder.publish_final({"host_returned": True, "exit_code": exit_code})
     return exit_code
 
 
@@ -925,7 +968,7 @@ def _run_attachment_failure(
         "window_closed",
         bool(window is not None and window.events.closed.is_set()),
     )
-    recorder.write()
+    recorder.publish_final()
     return exit_code
 
 
@@ -1007,6 +1050,16 @@ def _run_packaged_popup(
         def packaged_probe(payload: Mapping[str, object]) -> object:
             recorder.event("dispatch", phase="packaged_popup")
             recorder.set("packaged_page", dict(payload))
+            module = runtime.get("webview")
+            recorder.set(
+                "renderer",
+                None if module is None else module.renderer,
+            )
+            recorder.set(
+                "system_browser_calls",
+                recorder.get("system_browser_calls", []),
+            )
+            recorder.publish_ready()
             return {"token": "packaged-popup-ok"}
 
         spec = CommandSpec(
@@ -1064,11 +1117,7 @@ def _run_packaged_popup(
             startup_error=recorder.startup_error,
         )
 
-    module = runtime.get("webview")
-    recorder.set("renderer", None if module is None else module.renderer)
-    recorder.set("exit_code", exit_code)
-    recorder.set("system_browser_calls", recorder.get("system_browser_calls", []))
-    recorder.write()
+    recorder.publish_final({"host_returned": True, "exit_code": exit_code})
     return exit_code
 
 
@@ -1185,13 +1234,13 @@ def _run_runtime_refusal(
             }
         ),
     )
-    recorder.write()
+    recorder.publish_final()
     return exit_code
 
 
 def main() -> int:
     arguments = _parse_arguments()
-    recorder = _Recorder(arguments.output, arguments.mode)
+    recorder = _Recorder(arguments.evidence_dir, arguments.mode)
     try:
         if arguments.mode == "live":
             return _run_live(arguments, recorder)
@@ -1201,11 +1250,7 @@ def main() -> int:
             return _run_attachment_failure(arguments, recorder)
         return _run_runtime_refusal(arguments, recorder)
     except BaseException as error:
-        recorder.set(
-            "child_failure",
-            {"type": type(error).__name__, "message": str(error)},
-        )
-        recorder.write()
+        recorder.publish_failure(error)
         raise
 
 

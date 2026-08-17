@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Barrier, Event, Thread
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -13,15 +13,21 @@ import pytest
 
 import _native_gate_child as native_gate_child
 from conftest import HeadedInstalledWheel
+from _headed_evidence import (
+    EvidencePaths,
+    EvidenceProtocolError,
+    EvidenceReader,
+    require_host_final,
+)
 from _headed_native import (
     clean_child_environment,
     close_window,
-    read_text,
     require_absolute_local_test_root,
     scenario_deadline,
     start_headed_process,
     terminate_process_tree,
     wait_for_accessible_text,
+    wait_for_initial_evidence,
     wait_for_process,
     wait_for_window,
 )
@@ -74,13 +80,13 @@ def native_live_gate_evidence(
         headed_installed_wheel,
         data_root=live_root,
         index=index,
-        output=root / "live.json",
+        evidence=_new_evidence_paths(root / "live-evidence"),
     )
     packaged_popup = _run_packaged_popup_probe(
         headed_installed_wheel,
         data_root=require_absolute_local_test_root(root / "packaged-popup"),
         index=index,
-        output=root / "packaged-popup.json",
+        evidence=_new_evidence_paths(root / "packaged-popup-evidence"),
     )
     return _NativeLiveEvidence(
         installed_root=headed_installed_wheel.root.resolve(),
@@ -108,7 +114,7 @@ def native_failure_gate_evidence(
         mode="attachment-failure",
         data_root=require_absolute_local_test_root(root / "attachment-failure"),
         index=attachment_index,
-        output=root / "attachment-failure.json",
+        evidence=_new_evidence_paths(root / "attachment-failure-evidence"),
         expected_returncode=1,
     )
     runtime_index = _stage_live_page(
@@ -120,7 +126,7 @@ def native_failure_gate_evidence(
         mode="runtime-refusal",
         data_root=require_absolute_local_test_root(root / "runtime-refusal"),
         index=runtime_index,
-        output=root / "runtime-refusal.json",
+        evidence=_new_evidence_paths(root / "runtime-refusal-evidence"),
         expected_returncode=1,
     )
     return _NativeFailureEvidence(
@@ -168,6 +174,94 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert "await bridge.dispatchInteractive(" in packaged_probe
     assert child.count("headed_command_extension(") == 2
     assert "MappingProxyType" not in child
+
+
+def test_native_recorder_classifies_failure_after_visible_ready_as_final(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = native_gate_child._Recorder(paths.root, "live")
+    recorder.set("witness", "ready-state")
+    ready_visible = Barrier(2)
+    release_ready = Event()
+    failure_started = Event()
+    failure_finished = Event()
+    errors: list[BaseException] = []
+    original_publish_ready = recorder.publisher.publish_ready
+
+    def held_publish_ready(payload: dict[str, object]) -> None:
+        original_publish_ready(payload)
+        ready_visible.wait(timeout=5.0)
+        if not release_ready.wait(5.0):
+            raise TimeoutError("ready publication was not released")
+
+    monkeypatch.setattr(
+        recorder.publisher,
+        "publish_ready",
+        held_publish_ready,
+    )
+
+    def capture(action) -> None:
+        try:
+            action()
+        except BaseException as error:
+            errors.append(error)
+
+    ready_thread = Thread(target=lambda: capture(recorder.publish_ready))
+    ready_thread.start()
+    ready_visible.wait(timeout=5.0)
+    assert paths.ready.is_file()
+
+    def publish_failure() -> None:
+        failure_started.set()
+        try:
+            recorder.publish_failure(RuntimeError("concurrent fault"))
+        finally:
+            failure_finished.set()
+
+    failure_thread = Thread(target=lambda: capture(publish_failure))
+    failure_thread.start()
+    assert failure_started.wait(5.0)
+    try:
+        assert not failure_finished.wait(0.1)
+    finally:
+        release_ready.set()
+    ready_thread.join(5.0)
+    failure_thread.join(5.0)
+    assert not ready_thread.is_alive()
+    assert not failure_thread.is_alive()
+    assert errors == []
+    assert recorder.initial == "ready"
+    assert recorder.final_published is True
+    with pytest.raises(EvidenceProtocolError, match="ready evidence"):
+        recorder.publish_ready()
+    with pytest.raises(EvidenceProtocolError, match="final evidence"):
+        recorder.publish_final({"unexpected": True})
+
+    reader = EvidenceReader(paths)
+    assert reader.read_ready() == {
+        "schema_version": 1,
+        "mode": "live",
+        "events": [],
+        "startup_errors": [],
+        "witness": "ready-state",
+    }
+    assert reader.read_failure() is None
+    final = reader.read_final()
+    assert final is not None
+    assert final["child_failure"] == {
+        "type": "RuntimeError",
+        "message": "concurrent fault",
+    }
+    reader.assert_consistent(require_final=True)
+
+
+def test_native_final_only_exit_code_refuses_boolean_coercion() -> None:
+    with pytest.raises(AssertionError, match="exit code"):
+        _require_probe_exit_code({"exit_code": False}, expected=0)
+
+    _require_probe_exit_code({"exit_code": 0}, expected=0)
 
 
 @pytest.mark.headed
@@ -560,7 +654,7 @@ def _run_live_probe(
     *,
     data_root: Path,
     index: Path,
-    output: Path,
+    evidence: EvidencePaths,
 ) -> dict[str, object]:
     deadline = scenario_deadline(60.0)
     process = _start_probe(
@@ -568,11 +662,18 @@ def _run_live_probe(
         mode="live",
         data_root=data_root,
         index=index,
-        output=output,
+        evidence=evidence,
         deadline=deadline,
     )
+    reader = EvidenceReader(evidence)
     title = str(process.args[process.args.index("--title") + 1])
     try:
+        milestone, ready = wait_for_initial_evidence(
+            reader,
+            process,
+            deadline=deadline,
+        )
+        assert milestone == "ready", ready
         handle = wait_for_window(process, title, deadline=deadline)
         wait_for_accessible_text(
             handle,
@@ -586,7 +687,13 @@ def _run_live_probe(
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    return json.loads(read_text(output, deadline=deadline))
+    final = reader.read_final()
+    assert final is not None
+    assert require_host_final(final, exit_code=completed.returncode) is True
+    reader.assert_consistent(require_final=True)
+    result = dict(ready)
+    result["exit_code"] = final["exit_code"]
+    return result
 
 
 def _stage_live_page(
@@ -620,7 +727,7 @@ def _run_noninteractive_probe(
     mode: str,
     data_root: Path,
     index: Path,
-    output: Path,
+    evidence: EvidencePaths,
     expected_returncode: int,
 ) -> dict[str, object]:
     deadline = scenario_deadline(60.0)
@@ -629,7 +736,7 @@ def _run_noninteractive_probe(
         mode=mode,
         data_root=data_root,
         index=index,
-        output=output,
+        evidence=evidence,
         deadline=deadline,
     )
     try:
@@ -640,7 +747,14 @@ def _run_noninteractive_probe(
     assert completed.returncode == expected_returncode, (
         completed.stdout + completed.stderr
     )
-    return json.loads(read_text(output, deadline=deadline))
+    reader = EvidenceReader(evidence)
+    final = reader.read_final()
+    if final is None:
+        failure = reader.read_failure()
+        raise AssertionError(f"headed probe published failure evidence: {failure}")
+    _require_probe_exit_code(final, expected=completed.returncode)
+    reader.assert_consistent(require_final=True, allow_final_only=True)
+    return final
 
 
 def _run_packaged_popup_probe(
@@ -648,7 +762,7 @@ def _run_packaged_popup_probe(
     *,
     data_root: Path,
     index: Path,
-    output: Path,
+    evidence: EvidencePaths,
 ) -> dict[str, object]:
     deadline = scenario_deadline(60.0)
     process = _start_probe(
@@ -656,11 +770,18 @@ def _run_packaged_popup_probe(
         mode="packaged-popup",
         data_root=data_root,
         index=index,
-        output=output,
+        evidence=evidence,
         deadline=deadline,
     )
+    reader = EvidenceReader(evidence)
     title = str(process.args[process.args.index("--title") + 1])
     try:
+        milestone, ready = wait_for_initial_evidence(
+            reader,
+            process,
+            deadline=deadline,
+        )
+        assert milestone == "ready", ready
         handle = wait_for_window(process, title, deadline=deadline)
         wait_for_accessible_text(
             handle,
@@ -674,7 +795,13 @@ def _run_packaged_popup_probe(
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    return json.loads(read_text(output, deadline=deadline))
+    final = reader.read_final()
+    assert final is not None
+    assert require_host_final(final, exit_code=completed.returncode) is True
+    reader.assert_consistent(require_final=True)
+    result = dict(ready)
+    result["exit_code"] = final["exit_code"]
+    return result
 
 
 def _start_probe(
@@ -683,7 +810,7 @@ def _start_probe(
     mode: str,
     data_root: Path,
     index: Path,
-    output: Path,
+    evidence: EvidencePaths,
     deadline,
 ):
     token = uuid4().hex
@@ -701,13 +828,30 @@ def _start_probe(
             rf"Local\NamiSync.Test.NativeGate.{token}",
             "--title",
             f"NamiSync Native Gate {token}",
-            "--output",
-            output,
+            "--evidence-dir",
+            evidence.root,
         ),
         cwd=installed.root,
         environment=clean_child_environment(),
         deadline=deadline,
     )
+
+
+def _new_evidence_paths(root: Path) -> EvidencePaths:
+    root.mkdir()
+    return EvidencePaths(root.resolve())
+
+
+def _require_probe_exit_code(
+    payload: dict[str, object],
+    *,
+    expected: int,
+) -> None:
+    if (
+        type(payload.get("exit_code")) is not int
+        or payload["exit_code"] != expected
+    ):
+        raise AssertionError("headed probe published an invalid exit code")
 
 
 def _only_event(

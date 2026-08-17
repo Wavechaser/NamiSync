@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Callable
 from unittest.mock import patch
 
+from _headed_evidence import EvidencePaths, EvidencePublisher
+
 
 _SCENARIOS = (
     "capable",
@@ -31,6 +33,16 @@ _FAILURE_STAGES = frozenset(
         "screenshot_capture",
         "screenshot_analysis",
         "child",
+    }
+)
+_FAILURE_TYPES = frozenset(
+    {
+        "AssertionError",
+        "AttributeError",
+        "RuntimeError",
+        "TypeError",
+        "ValueError",
+        "Error",
     }
 )
 _PAGE_PROBE = r"""
@@ -167,10 +179,11 @@ _PAGE_PROBE = r"""
 
 
 class _Recorder:
-    def __init__(self, output: Path, scenario: str) -> None:
-        self._output = output
+    def __init__(self, evidence_paths: EvidencePaths, scenario: str) -> None:
+        self._publisher = EvidencePublisher(evidence_paths)
         self._lock = threading.Lock()
-        self._failed = False
+        self._initial: str | None = None
+        self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
             "schema_version": 1,
             "scenario": scenario,
@@ -195,49 +208,56 @@ class _Recorder:
         if stage not in _FAILURE_STAGES:
             stage = "child"
         with self._lock:
-            if self._failed or self._data["phase"] == "complete":
-                return
-            self._failed = True
-            self._data["failure"] = {
+            failure = {
                 "stage": stage,
                 "type": _sanitized_error_type(error),
             }
+            if self._initial == "failure":
+                return
+            if self._initial == "ready":
+                if self._post_ready_failure is None:
+                    self._post_ready_failure = failure
+                return
+            self._data["failure"] = failure
             self._data["phase"] = "failure"
-            self._write_locked()
+            self._publisher.publish_failure({"failure": failure})
+            self._initial = "failure"
 
     @property
     def failed(self) -> bool:
         with self._lock:
-            return self._failed
+            return self._initial == "failure"
+
+    @property
+    def settled(self) -> bool:
+        with self._lock:
+            return self._initial is not None
 
     def complete(self) -> bool:
         with self._lock:
-            if self._failed:
+            if self._initial is not None:
                 return False
             self._data["phase"] = "complete"
-            self._write_locked()
+            self._publisher.publish_ready(dict(self._data))
+            self._initial = "ready"
             return True
 
-    def write(self) -> None:
+    def finish(self, exit_code: int, *, host_returned: bool) -> None:
         with self._lock:
-            self._write_locked()
-
-    def _write_locked(self) -> None:
-        encoded = json.dumps(self._data, indent=2, sort_keys=True)
-        temporary = self._output.with_suffix(self._output.suffix + ".tmp")
-        temporary.write_text(encoded, encoding="utf-8")
-        temporary.replace(self._output)
+            payload: dict[str, object] = {
+                "host_returned": host_returned,
+                "exit_code": exit_code,
+            }
+            if self._post_ready_failure is not None:
+                payload["post_ready_failure"] = dict(
+                    self._post_ready_failure
+                )
+            self._publisher.publish_final(payload)
 
 
 def _sanitized_error_type(error: BaseException) -> str:
     name = type(error).__name__
-    if name in {
-        "AssertionError",
-        "AttributeError",
-        "RuntimeError",
-        "TypeError",
-        "ValueError",
-    }:
+    if name in _FAILURE_TYPES:
         return name
     return "Error"
 
@@ -248,7 +268,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     parser.add_argument("--screenshot", required=True, type=Path)
     return parser.parse_args()
 
@@ -845,18 +865,26 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )
 
     del _retained
-    recorder.set("exit_code", exit_code)
-    recorder.write()
+    if not recorder.settled:
+        recorder.failure(
+            "child",
+            RuntimeError("host returned before materials evidence completed"),
+        )
+    recorder.finish(exit_code, host_returned=True)
     return exit_code
 
 
 def main() -> int:
     arguments = _parse_arguments()
-    recorder = _Recorder(arguments.output, arguments.scenario)
+    recorder = _Recorder(
+        EvidencePaths(arguments.evidence_dir.resolve()),
+        arguments.scenario,
+    )
     try:
         return _run(arguments, recorder)
     except BaseException as error:
         recorder.failure("child", error)
+        recorder.finish(1, host_returned=False)
         raise
 
 

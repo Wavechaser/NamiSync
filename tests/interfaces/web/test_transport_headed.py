@@ -7,7 +7,6 @@ import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from threading import Event, Thread
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -17,6 +16,7 @@ import _headed_host_child as headed_host_child
 import _transport_gate_child as transport_gate_child
 from conftest import HeadedInstalledWheel
 from namisync.version import NICKNAME, VERSION
+from _headed_evidence import EvidencePaths, EvidencePublisher, EvidenceReader
 from _startup_test_support import headed_command_extension
 from _headed_native import (
     clean_child_environment,
@@ -29,7 +29,7 @@ from _headed_native import (
     start_headed_process,
     terminate_process_tree,
     wait_for_accessible_text,
-    wait_for_path,
+    wait_for_initial_evidence,
     wait_for_process,
     wait_for_window,
 )
@@ -54,6 +54,22 @@ _BRIDGE_UNAVAILABLE = {
         ),
     },
 }
+_TRANSPORT_FINAL_KEYS = frozenset(
+    {
+        "browser_gate_server",
+        "child_failure",
+        "controlled_service_cleanup",
+        "drain_exit",
+        "drain_exited",
+        "exit_code",
+        "final_document_url",
+        "next_event_responses",
+        "raw_dispatch_bodies",
+    }
+)
+_OFF_ORIGIN_FINAL_KEYS = frozenset(
+    {"child_failure", "exit_code", "final_document_url"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,83 +255,62 @@ def test_headed_transport_evidence_runs_each_requested_scenario_once(
     ) == 1
 
 
-def test_transport_recorder_retries_snapshot_replace_while_reader_is_open(
-    monkeypatch: pytest.MonkeyPatch,
+def test_transport_recorder_freezes_ready_and_publishes_only_shutdown_delta(
     tmp_path: Path,
 ) -> None:
-    output = tmp_path / "result.json"
-    recorder = transport_gate_child._Recorder(output, "transport")
-    recorder.write()
-    recorder.set("phase", "complete")
-    original_replace = Path.replace
-    first_attempt_finished = Event()
-    attempts: list[Path] = []
-    errors: list[BaseException] = []
-
-    def observed_replace(temporary: Path, target: Path) -> Path:
-        try:
-            return original_replace(temporary, target)
-        finally:
-            attempts.append(target)
-            if len(attempts) == 1:
-                first_attempt_finished.set()
-
-    def write_snapshot() -> None:
-        try:
-            recorder.write()
-        except BaseException as error:
-            errors.append(error)
-
-    monkeypatch.setattr(Path, "replace", observed_replace)
-    writer = Thread(target=write_snapshot, name="transport-snapshot-writer")
-    with output.open("rb") as reader:
-        assert reader.read(1) == b"{"
-        writer.start()
-        assert first_attempt_finished.wait(1.0)
-        assert writer.is_alive()
-    writer.join(2.0)
-
-    assert not writer.is_alive()
-    assert errors == []
-    assert len(attempts) >= 2
-    assert all(target == output for target in attempts)
-    assert json.loads(output.read_text(encoding="utf-8"))["phase"] == "complete"
-
-
-@pytest.mark.parametrize(
-    ("winerror", "expected_attempts"),
-    ((5, 3), (87, 1)),
-)
-def test_transport_recorder_snapshot_replace_failures_remain_bounded(
-    winerror: int,
-    expected_attempts: int,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    attempts: list[Path] = []
-    refusal = PermissionError("injected snapshot replacement refusal")
-    refusal.winerror = winerror  # type: ignore[attr-defined]
-
-    def refuse_replace(temporary: Path, target: Path) -> Path:
-        del temporary
-        attempts.append(target)
-        raise refusal
-
-    monkeypatch.setattr(transport_gate_child, "_SNAPSHOT_REPLACE_ATTEMPTS", 3)
-    monkeypatch.setattr(
-        transport_gate_child,
-        "_SNAPSHOT_REPLACE_DELAY_SECONDS",
-        0.0,
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = transport_gate_child._Recorder(
+        EvidencePublisher(paths),
+        "transport",
     )
-    monkeypatch.setattr(Path, "replace", refuse_replace)
-    output = tmp_path / "result.json"
-    recorder = transport_gate_child._Recorder(output, "transport")
+    recorder.set("events", [{"phase": "ready"}])
+    recorder.publish_ready()
+    recorder.append("events", {"phase": "shutdown"})
+    recorder.set("exit_code", 0)
+    recorder.publish_final()
 
-    with pytest.raises(PermissionError) as raised:
-        recorder.write()
+    reader = EvidenceReader(paths)
+    assert reader.read_ready() == {
+        "events": [{"phase": "ready"}],
+        "mode": "transport",
+        "schema_version": 1,
+        "startup_errors": [],
+    }
+    assert reader.read_final() == {
+        "events": [{"phase": "ready"}, {"phase": "shutdown"}],
+        "exit_code": 0,
+    }
+    reader.assert_consistent(require_final=True)
 
-    assert raised.value is refusal
-    assert attempts == [output] * expected_attempts
+
+def test_transport_recorder_publishes_startup_error_as_failure(
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = transport_gate_child._Recorder(
+        EvidencePublisher(paths),
+        "off-origin",
+    )
+
+    recorder.startup_error("startup refused")
+
+    reader = EvidenceReader(paths)
+    assert reader.available_initial() == "failure"
+    assert reader.read_failure() == {
+        "mode": "off-origin",
+        "schema_version": 1,
+        "startup_errors": ["startup refused"],
+    }
+    reader.assert_consistent(require_final=False)
+
+
+def test_transport_final_merge_rejects_a_boolean_exit_code() -> None:
+    with pytest.raises(AssertionError):
+        _merge_final_evidence(
+            {"phase": "ready"},
+            {"exit_code": False},
+            allowed_keys=frozenset({"exit_code"}),
+        )
 
 
 def test_transport_gate_assets_keep_test_implementation_outside_package() -> None:
@@ -1330,7 +1325,10 @@ def _run_transport_scenario(
         ),
         encoding="utf-8",
     )
-    output = require_absolute_local_test_root(root / "result.json")
+    evidence_root = require_absolute_local_test_root(root / "evidence")
+    evidence_root.mkdir()
+    evidence_paths = EvidencePaths(evidence_root)
+    evidence_reader = EvidenceReader(evidence_paths)
     data_root = require_absolute_local_test_root(root / "data")
     title = f"NamiSync Transport Test {token}"
     process = start_headed_process(
@@ -1347,8 +1345,8 @@ def _run_transport_scenario(
             rf"Local\NamiSync.Transport.Test.{token}",
             "--title",
             title,
-            "--output",
-            output,
+            "--evidence",
+            evidence_root,
             "--scenario",
             scenario,
         ),
@@ -1377,11 +1375,20 @@ def _run_transport_scenario(
                 deadline=deadline,
             )
         )
-        wait_for_path(output, deadline=deadline)
-        interim = json.loads(read_text(output, deadline=deadline))
-        if "browser_failure" in interim:
+        milestone, interim = wait_for_initial_evidence(
+            evidence_reader,
+            process,
+            deadline=deadline,
+        )
+        if milestone == "failure":
+            evidence_reader.assert_consistent(require_final=False)
+            browser_failure = interim.get("browser_failure")
+            if browser_failure is not None:
+                raise AssertionError(
+                    f"transport browser gate failed: {browser_failure!r}"
+                )
             raise AssertionError(
-                f"transport browser gate failed: {interim['browser_failure']!r}"
+                f"transport headed harness failed: {interim!r}"
             )
         wait_for_accessible_text(
             window,
@@ -1389,7 +1396,6 @@ def _run_transport_scenario(
             python=installed.python,
             deadline=deadline,
         )
-        interim = json.loads(read_text(output, deadline=deadline))
         assert interim["report"]["observed"] == corpus
         calls = interim["service_start_plan_calls"]
         assert len(calls) == 5
@@ -1410,13 +1416,20 @@ def _run_transport_scenario(
         }
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert completed.stdout == ""
-        assert completed.stderr == ""
     finally:
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
-    result = json.loads(read_text(output, deadline=deadline))
+    final = evidence_reader.read_final()
+    assert final is not None
+    evidence_reader.assert_consistent(require_final=True)
+    result = _merge_final_evidence(
+        interim,
+        final,
+        allowed_keys=_TRANSPORT_FINAL_KEYS,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
     assert result["exit_code"] == 0
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
@@ -1453,7 +1466,10 @@ def _run_off_origin_scenario(
     _combine_page(page, installed_assets)
     scenario = require_absolute_local_test_root(root / "scenario.json")
     scenario.write_text("{}", encoding="utf-8")
-    output = require_absolute_local_test_root(root / "result.json")
+    evidence_root = require_absolute_local_test_root(root / "evidence")
+    evidence_root.mkdir()
+    evidence_paths = EvidencePaths(evidence_root)
+    evidence_reader = EvidenceReader(evidence_paths)
     data_root = require_absolute_local_test_root(root / "data")
     token = uuid4().hex
     title = f"NamiSync Origin Test {token}"
@@ -1471,8 +1487,8 @@ def _run_off_origin_scenario(
             rf"Local\NamiSync.Origin.Test.{token}",
             "--title",
             title,
-            "--output",
-            output,
+            "--evidence",
+            evidence_root,
             "--scenario",
             scenario,
         ),
@@ -1482,14 +1498,22 @@ def _run_off_origin_scenario(
     )
     try:
         window = wait_for_window(process, title, deadline=deadline)
+        milestone, interim = wait_for_initial_evidence(
+            evidence_reader,
+            process,
+            deadline=deadline,
+        )
+        if milestone == "failure":
+            evidence_reader.assert_consistent(require_final=False)
+            raise AssertionError(
+                f"off-origin headed harness failed: {interim!r}"
+            )
         wait_for_accessible_text(
             window,
             "Off-origin dispatch refused",
             python=installed.python,
             deadline=deadline,
         )
-        wait_for_path(output, deadline=deadline)
-        interim = json.loads(read_text(output, deadline=deadline))
         assert interim["off_origin_response"] == _BRIDGE_UNAVAILABLE
         assert interim["off_origin_handler_calls"] == []
         assert any(
@@ -1499,13 +1523,20 @@ def _run_off_origin_scenario(
         )
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert completed.stdout == ""
-        assert completed.stderr == ""
     finally:
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
-    result = json.loads(read_text(output, deadline=deadline))
+    final = evidence_reader.read_final()
+    assert final is not None
+    evidence_reader.assert_consistent(require_final=True)
+    result = _merge_final_evidence(
+        interim,
+        final,
+        allowed_keys=_OFF_ORIGIN_FINAL_KEYS,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
     assert result["exit_code"] == 0
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
@@ -1514,6 +1545,23 @@ def _run_off_origin_scenario(
         "pythonnet": "3.1.0",
     }
     return _OffOriginEvidence(root=root, result=result)
+
+
+def _merge_final_evidence(
+    ready: dict[str, object],
+    final: dict[str, object],
+    *,
+    allowed_keys: frozenset[str],
+) -> dict[str, object]:
+    unexpected = set(final) - allowed_keys
+    assert unexpected == set(), (
+        f"headed final evidence changed unexpected fields: {sorted(unexpected)!r}"
+    )
+    assert "exit_code" in final
+    assert type(final["exit_code"]) is int
+    merged = dict(ready)
+    merged.update(final)
+    return merged
 
 
 def _combine_page(page: Path, installed_assets: Path) -> None:

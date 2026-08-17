@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
+from _headed_evidence import EvidencePaths, EvidencePublisher
 from _startup_test_support import headed_command_extension
 
 
@@ -122,6 +123,16 @@ _FAILURE_TYPES = frozenset(
         "TypeError",
     }
 )
+_EVIDENCE_FAILURE_STAGES = _FAILURE_STAGES | {"child"}
+_EVIDENCE_FAILURE_TYPES = _FAILURE_TYPES | {
+    "AssertionError",
+    "AttributeError",
+    "DesktopStartupError",
+    "NativeWindowUnavailable",
+    "RuntimeError",
+    "ScriptExecutionError",
+    "ValueError",
+}
 _SYSTEM_COLOR_NAMES = frozenset(
     {
         "Canvas",
@@ -160,9 +171,11 @@ _REPORT_PART_NAMES = (
 
 
 class _Recorder:
-    def __init__(self, output: Path, mode: str) -> None:
-        self._output = output
+    def __init__(self, evidence_paths: EvidencePaths, mode: str) -> None:
+        self._publisher = EvidencePublisher(evidence_paths)
         self._lock = threading.Lock()
+        self._initial: str | None = None
+        self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
             "schema_version": 1,
             "mode": mode,
@@ -178,14 +191,96 @@ class _Recorder:
             self._data.setdefault(name, []).append(value)
 
     def startup_error(self, message: str) -> None:
-        self.append("startup_errors", message)
+        del message
+        self.append("startup_errors", {"type": "DesktopStartupError"})
 
     def write(self) -> None:
         with self._lock:
-            encoded = json.dumps(self._data, indent=2, sort_keys=True)
-        temporary = self._output.with_suffix(self._output.suffix + ".tmp")
-        temporary.write_text(encoded, encoding="utf-8")
-        temporary.replace(self._output)
+            failure = self._failure_locked()
+            if self._initial == "failure":
+                return
+            if self._initial == "ready":
+                if failure is not None and self._post_ready_failure is None:
+                    self._post_ready_failure = failure
+                return
+            if failure is not None:
+                self._publisher.publish_failure({"failure": failure})
+                self._initial = "failure"
+                return
+            report = self._data.get("report")
+            if type(report) is dict and report.get("phase") == "complete":
+                self._publisher.publish_ready(dict(self._data))
+                self._initial = "ready"
+
+    def failure(self, stage: str, error: BaseException) -> None:
+        with self._lock:
+            failure = {
+                "stage": stage if stage in _EVIDENCE_FAILURE_STAGES else "child",
+                "type": _sanitized_error_type(error),
+            }
+            if self._initial == "failure":
+                return
+            if self._initial == "ready":
+                if self._post_ready_failure is None:
+                    self._post_ready_failure = failure
+                return
+            self._data["child_failure"] = failure
+            self._publisher.publish_failure({"failure": failure})
+            self._initial = "failure"
+
+    @property
+    def settled(self) -> bool:
+        with self._lock:
+            return self._initial is not None
+
+    def finish(self, exit_code: int, *, host_returned: bool) -> None:
+        with self._lock:
+            payload: dict[str, object] = {
+                "host_returned": host_returned,
+                "exit_code": exit_code,
+            }
+            if self._post_ready_failure is not None:
+                payload["post_ready_failure"] = dict(
+                    self._post_ready_failure
+                )
+            self._publisher.publish_final(payload)
+
+    def _failure_locked(self) -> dict[str, str] | None:
+        report = self._data.get("report")
+        if type(report) is dict and report.get("phase") == "failure":
+            failure = report.get("failure")
+            if type(failure) is dict:
+                stage = failure.get("stage")
+                return {
+                    "stage": (
+                        stage
+                        if type(stage) is str
+                        and stage in _EVIDENCE_FAILURE_STAGES
+                        else "report"
+                    ),
+                    "type": _sanitized_type_name(failure.get("type")),
+                }
+        if "pseudo_state_failed" in self._data:
+            return {"stage": "pseudo_states", "type": "Error"}
+        if "media_emulation_failed" in self._data:
+            return {"stage": "page_setup", "type": "Error"}
+        native_failure = self._data.get("native_script_failure")
+        if type(native_failure) is dict:
+            return {
+                "stage": "page_setup",
+                "type": _sanitized_type_name(native_failure.get("type")),
+            }
+        return None
+
+
+def _sanitized_error_type(error: BaseException) -> str:
+    return _sanitized_type_name(type(error).__name__)
+
+
+def _sanitized_type_name(value: object) -> str:
+    if type(value) is str and value in _EVIDENCE_FAILURE_TYPES:
+        return value
+    return "Error"
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -194,7 +289,7 @@ def _parse_arguments() -> argparse.Namespace:
     parser.add_argument("--data-dir", required=True, type=Path)
     parser.add_argument("--mutex", required=True)
     parser.add_argument("--title", required=True)
-    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
     parser.add_argument("--scenario", required=True, type=Path)
     return parser.parse_args()
 
@@ -897,22 +992,26 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             startup_error=recorder.startup_error,
         )
 
-    recorder.set("exit_code", exit_code)
-    recorder.write()
+    if not recorder.settled:
+        recorder.failure(
+            "child",
+            RuntimeError("host returned before gallery evidence completed"),
+        )
+    recorder.finish(exit_code, host_returned=True)
     return exit_code
 
 
 def main() -> int:
     arguments = _parse_arguments()
-    recorder = _Recorder(arguments.output, arguments.mode)
+    recorder = _Recorder(
+        EvidencePaths(arguments.evidence_dir.resolve()),
+        arguments.mode,
+    )
     try:
         return _run(arguments, recorder)
     except BaseException as error:
-        recorder.set(
-            "child_failure",
-            {"type": type(error).__name__, "message": str(error)},
-        )
-        recorder.write()
+        recorder.failure("child", error)
+        recorder.finish(1, host_returned=False)
         raise
 
 

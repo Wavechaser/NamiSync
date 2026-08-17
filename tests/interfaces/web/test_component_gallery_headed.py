@@ -20,6 +20,7 @@ from uuid import uuid4
 import pytest
 
 import _component_gallery_child as component_gallery_child
+from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from conftest import HeadedInstalledWheel
 from namisync.interfaces.web.commands import CommandPayloadError
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
@@ -27,13 +28,12 @@ from namisync.version import VERSION
 from _headed_native import (
     clean_child_environment,
     close_window,
-    read_text,
     require_absolute_local_test_root,
     scenario_deadline,
     start_headed_process,
     terminate_process_tree,
     wait_for_accessible_text,
-    wait_for_path,
+    wait_for_initial_evidence,
     wait_for_process,
     wait_for_window,
 )
@@ -284,8 +284,62 @@ def test_component_gallery_child_preserves_production_host_and_bridge() -> None:
     assert "arguments.mode," in child
     assert "original_configure(" in child
     assert "host.run_desktop(" in child
+    assert "EvidencePublisher(" in child
+    assert 'parser.add_argument("--evidence-dir"' in child
+    assert 'parser.add_argument("--output"' not in child
     assert "register" not in child.casefold()
     assert "extra_commands" not in child
+
+
+def test_component_gallery_failure_evidence_is_sanitized(tmp_path: Path) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = component_gallery_child._Recorder(paths, "light")
+
+    recorder.failure("private-stage", RuntimeError("C:\\private\\sentinel"))
+
+    failure = EvidenceReader(paths).read_failure()
+    assert failure == {
+        "failure": {
+            "stage": "child",
+            "type": "RuntimeError",
+        }
+    }
+    assert _sanitized_failure_record(failure) == failure["failure"]
+    encoded = json.dumps(failure).casefold()
+    assert "private" not in encoded
+    assert "sentinel" not in encoded
+
+
+def test_component_gallery_write_retains_a_post_ready_failure(
+    tmp_path: Path,
+) -> None:
+    paths = EvidencePaths(tmp_path.resolve())
+    recorder = component_gallery_child._Recorder(paths, "light")
+    recorder.set("report", {"phase": "complete"})
+    recorder.write()
+
+    recorder.set(
+        "native_script_failure",
+        {"stage": "C:\\private\\late", "type": "ScriptExecutionError"},
+    )
+    recorder.write()
+    recorder.set("pseudo_state_failed", "discarded second failure")
+    recorder.write()
+    recorder.finish(0, host_returned=True)
+
+    reader = EvidenceReader(paths)
+    assert reader.read_ready() is not None
+    final = reader.read_final()
+    assert final == {
+        "host_returned": True,
+        "exit_code": 0,
+        "post_ready_failure": {
+            "stage": "page_setup",
+            "type": "ScriptExecutionError",
+        },
+    }
+    assert "private" not in json.dumps(final).casefold()
+    reader.assert_consistent(require_final=True)
 
 
 def test_component_gallery_media_modes_are_exact_and_scenario_bounded() -> None:
@@ -308,6 +362,7 @@ def test_component_gallery_media_modes_are_exact_and_scenario_bounded() -> None:
         "prefers-reduced-motion"
     ] == "reduce"
     assert "--data-dir" in source
+    assert "--evidence-dir" in source
     assert "--scenario" in source
 
 
@@ -443,10 +498,10 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     assert tuple(name for name, _value in part_values) == (
         component_gallery_child._REPORT_PART_NAMES
     )
-    recorder = component_gallery_child._Recorder(
-        tmp_path / "report.json",
-        "light",
-    )
+    report_root = tmp_path / "report"
+    report_root.mkdir()
+    report_paths = EvidencePaths(report_root.resolve())
+    recorder = component_gallery_child._Recorder(report_paths, "light")
     spec = component_gallery_child._test_report_spec(
         recorder,
         lambda _targets: None,
@@ -476,11 +531,17 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         },
         context=_OPEN_CONTEXT,
     ) == {"accepted": True}
-    recorded = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    recorded = EvidenceReader(report_paths).read_ready()
+    assert recorded is not None
     assert recorded["report"] == report
 
+    incomplete_root = tmp_path / "incomplete"
+    incomplete_root.mkdir()
     incomplete = component_gallery_child._test_report_spec(
-        component_gallery_child._Recorder(tmp_path / "incomplete.json", "light"),
+        component_gallery_child._Recorder(
+            EvidencePaths(incomplete_root.resolve()),
+            "light",
+        ),
         lambda _targets: None,
         "light",
     )
@@ -608,11 +669,16 @@ def test_component_gallery_enables_dom_before_css_pseudo_state_agent(
             callback()
 
     core = Core()
+    evidence_root = tmp_path / "evidence"
+    evidence_root.mkdir()
     component_gallery_child._schedule_pseudo_states(
         Native(),
         core,
         [],
-        component_gallery_child._Recorder(tmp_path / "result.json", "light"),
+        component_gallery_child._Recorder(
+            EvidencePaths(evidence_root.resolve()),
+            "light",
+        ),
         [],
     )
 
@@ -816,6 +882,22 @@ def test_sh_g_14_component_gallery_uses_closed_local_icon_registry(
         )
 
 
+def _sanitized_failure_record(value: object) -> dict[str, str]:
+    if type(value) is not dict or set(value) != {"failure"}:
+        raise AssertionError("component gallery failure evidence is invalid")
+    failure = value["failure"]
+    if (
+        type(failure) is not dict
+        or set(failure) != {"stage", "type"}
+        or failure.get("stage")
+        not in component_gallery_child._EVIDENCE_FAILURE_STAGES
+        or failure.get("type")
+        not in component_gallery_child._EVIDENCE_FAILURE_TYPES
+    ):
+        raise AssertionError("component gallery failure evidence is invalid")
+    return failure
+
+
 def _run_gallery_mode(
     installed: HeadedInstalledWheel,
     *,
@@ -825,7 +907,10 @@ def _run_gallery_mode(
 ) -> dict[str, object]:
     deadline = scenario_deadline(75.0)
     root.mkdir(parents=True)
-    output = require_absolute_local_test_root(root / "result.json")
+    evidence_root = require_absolute_local_test_root(root / "evidence")
+    evidence_root.mkdir()
+    evidence_paths = EvidencePaths(evidence_root)
+    evidence_reader = EvidenceReader(evidence_paths)
     data_root = require_absolute_local_test_root(root / "data")
     token = uuid4().hex
     title = f"NamiSync Gallery {mode} {token}"
@@ -841,8 +926,8 @@ def _run_gallery_mode(
             rf"Local\NamiSync.Gallery.{mode}.{token}",
             "--title",
             title,
-            "--output",
-            output,
+            "--evidence-dir",
+            evidence_root,
             "--scenario",
             scenario,
         ),
@@ -852,31 +937,38 @@ def _run_gallery_mode(
     )
     try:
         window = wait_for_window(process, title, deadline=deadline)
-        wait_for_path(output, deadline=deadline)
-        interim = json.loads(read_text(output, deadline=deadline))
-        phase = interim.get("report", {}).get("phase")
-        if phase != "complete":
-            failure = interim.get("report", {}).get("failure")
-            failure = failure or interim.get("pseudo_state_failed")
-            failure = failure or interim.get("media_emulation_failed")
-            failure = failure or interim.get("native_script_failure")
-            raise AssertionError(f"component gallery failed: {failure!r}")
-        assert interim["report"]["mode"] == mode
-        wait_for_accessible_text(
-            window,
-            f"Gallery {mode} complete",
-            python=installed.python,
+        milestone, initial = wait_for_initial_evidence(
+            evidence_reader,
+            process,
             deadline=deadline,
         )
+        if milestone == "ready":
+            assert initial["report"]["mode"] == mode
+            wait_for_accessible_text(
+                window,
+                f"Gallery {mode} complete",
+                python=installed.python,
+                deadline=deadline,
+            )
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)
-        assert completed.returncode == 0, completed.stdout + completed.stderr
-        assert completed.stdout == ""
-        assert completed.stderr == ""
+        final = evidence_reader.read_final()
+        evidence_reader.assert_consistent(require_final=milestone == "ready")
     finally:
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
-    result = json.loads(read_text(output, deadline=deadline))
+    if final is not None:
+        require_host_final(final, exit_code=completed.returncode)
+    if milestone == "failure":
+        failure = _sanitized_failure_record(initial)
+        raise AssertionError(f"component gallery failed: {failure!r}")
+    assert final is not None
+    assert final["host_returned"] is True
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == ""
+    assert completed.stderr == ""
+    result = dict(initial)
+    result["exit_code"] = final["exit_code"]
     assert result["exit_code"] == 0
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
