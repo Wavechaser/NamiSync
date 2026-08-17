@@ -715,6 +715,7 @@ def run_desktop(
     dispatcher = None
     close_controller: _DesktopCloseController | None = None
     appearance_controller = None
+    document_channel = None
     startup_gate: DesktopReadinessGate | None = None
     logging_configured = False
     failure: Exception | None = None
@@ -820,7 +821,7 @@ def run_desktop(
             state.destroy_once(window)
 
         def initialize_security() -> None:
-            nonlocal appearance_controller
+            nonlocal appearance_controller, document_channel
             try:
                 real_url = window.real_url
                 _bind_document_origin(document, real_url)
@@ -833,43 +834,79 @@ def run_desktop(
             except Exception as error:
                 state.refuse(error)
                 raise
+            window.events.before_load += startup_gate.begin_generation
+
+            def bind_document_channel() -> None:
+                nonlocal document_channel
+                document_channel = None
+                try:
+                    channel = _document_channel(window)
+                except Exception as error:
+                    _log_presentation_failure(
+                        "readiness.document_channel_bind_failed",
+                        error,
+                    )
+                    startup_gate.refuse(
+                        DesktopStartupError(
+                            "NamiSync could not bind its document channel"
+                        )
+                    )
+                    return
+                document_channel = channel
+
+            window.events.before_load += bind_document_channel
             try:
-                window.events.before_load += startup_gate.begin_generation
                 appearance_controller = _configure_window_appearance(window)
-                startup_gate.bind(
-                    request_publication=(
-                        appearance_controller.request_initial_publication
-                    ),
-                    open_desktop=close_controller._mark_loaded,
-                    refuse_desktop=refuse_startup,
-                )
-                window.events.loaded += loaded_watchdog
             except Exception as error:
                 _log_presentation_failure(
                     "appearance.configuration_failed",
                     error,
                 )
-                state.refuse(error)
-                raise
+
+                def request_surface_settlement(
+                    callback: Callable[[Exception | None], None],
+                ) -> None:
+                    callback(None)
+            else:
+                request_surface_settlement = (
+                    appearance_controller.request_initial_surface_settlement
+                )
+
+            def request_challenge_post(
+                generation: int,
+                challenge: str,
+                callback: Callable[[Exception | None], None],
+            ) -> None:
+                channel = document_channel
+                if channel is None:
+                    raise RuntimeError("desktop document channel is unavailable")
+                channel.post(
+                    {
+                        "kind": "namisync.readiness.v1",
+                        "challenge": challenge,
+                    },
+                    still_current=lambda: startup_gate.recognizes_echo(
+                        generation,
+                        challenge,
+                    ),
+                    completion=callback,
+                )
+
+            startup_gate.bind(
+                request_surface_settlement=request_surface_settlement,
+                request_challenge_post=request_challenge_post,
+                open_desktop=close_controller._mark_loaded,
+                refuse_desktop=refuse_startup,
+            )
+            window.events.loaded += loaded_watchdog
 
         def loaded_watchdog() -> None:
             close_controller._bind_status_target()
             attachment_error = document.attachment_error
-            appearance_failure = (
-                getattr(appearance_controller, "startup_failure", None)
-                if appearance_controller is not None
-                else None
-            )
-            if (
-                document.is_attached
-                and attachment_error is None
-                and appearance_failure is None
-            ):
+            if document.is_attached and attachment_error is None:
                 startup_gate.native_loaded()
                 return
-            if appearance_failure is not None:
-                error = appearance_failure
-            elif attachment_error is None:
+            if attachment_error is None:
                 error = DesktopStartupError(
                     "WebView2 security guards did not attach before page load"
                 )
@@ -1007,6 +1044,7 @@ def _production_commands(
         slots=slots,
         registry=registry,
         shell_ready=startup_gate.acknowledge_shell,
+        readiness_echo=startup_gate.acknowledge_echo,
     )
 
 
@@ -1017,7 +1055,7 @@ def _bridge_dispatcher(
 ):
     from .bridge import AdmissionGranted, AdmissionRefused, BridgeDispatcher
     from .commands import CommandSpec
-    from .readiness import ReadinessContext
+    from .readiness import CommandPhase, ReadinessContext
 
     command_specs = dict(commands)
 
@@ -1026,6 +1064,12 @@ def _bridge_dispatcher(
         if type(spec) is not CommandSpec:
             return AdmissionRefused()
         context = startup_gate.command_context()
+        if (
+            name == "readiness_echo"
+            and type(context) is ReadinessContext
+            and context.phase is CommandPhase.OPEN
+        ):
+            context = ReadinessContext(CommandPhase.BOOTSTRAP, context.generation)
         if (
             type(context) is not ReadinessContext
             or context.phase is not spec.phase
@@ -1047,6 +1091,12 @@ def _expose_bridge_api(window: object, dispatcher: object) -> None:
         return dispatcher.dispatch(command_json)
 
     window.expose(dispatch)
+
+
+def _document_channel(window: object):
+    from .document_channel import DocumentChannel
+
+    return DocumentChannel(window.native)
 
 
 def _desktop_close_hooks(

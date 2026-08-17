@@ -5,12 +5,13 @@ const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
 const COMMAND_POLICY_JSON = `{
-  "shell_ready": {"timeout": "startup-5-seconds", "retry": "none"},
-  "pick_folder": {"timeout": "interactive", "retry": "none"},
-  "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once"},
-  "next_events": {"timeout": "drain-30-seconds", "retry": "none"},
-  "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded"},
-  "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded"}
+  "shell_ready": {"timeout": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
+  "readiness_echo": {"timeout": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
+  "pick_folder": {"timeout": "interactive", "retry": "none", "phase": "open"},
+  "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
+  "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"},
+  "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"}
 }`;
 export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
   JSON.parse(COMMAND_POLICY_JSON),
@@ -23,6 +24,8 @@ const TIMEOUT_MS_BY_POLICY = Object.freeze({
 });
 const SHELL_READY_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.shell_ready.timeout];
+const READINESS_ECHO_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.readiness_echo.timeout];
 const START_PLAN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
 const DRAIN_TIMEOUT_MS =
@@ -425,6 +428,21 @@ export function acknowledgeShellReady() {
   );
 }
 
+export function echoReadiness(challenge) {
+  if (typeof challenge !== "string" || !ID_PATTERN.test(challenge)) {
+    throw new TypeError(
+      "readiness challenge must be 32 lowercase hex characters",
+    );
+  }
+  return dispatchAttemptWithReadiness(
+    "readiness_echo",
+    Object.freeze({ challenge }),
+    validateReadinessEchoResult,
+    READINESS_ECHO_TIMEOUT_MS,
+    whenBridgeApiReady,
+  );
+}
+
 export async function closeTask(taskId, sessionId) {
   const task = taskDrains.get(taskId);
   if (
@@ -821,6 +839,11 @@ function pauseTaskForBridge(task) {
 
 function validateShellReadyResult(value) {
   return isExactObject(value, ["acknowledged"]) && value.acknowledged === true;
+}
+
+function validateReadinessEchoResult(value) {
+  return isExactObject(value, ["acknowledged"])
+    && typeof value.acknowledged === "boolean";
 }
 
 function presentTerminalUpdate(task, update) {

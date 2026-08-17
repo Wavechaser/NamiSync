@@ -69,6 +69,7 @@ _ASSETS = (
     "index.html",
     "panels.js",
     "rail.js",
+    "readiness.js",
     "render.js",
     "tokens.css",
     "tree.js",

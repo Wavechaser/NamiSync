@@ -68,6 +68,7 @@ from namisync.workflows.views import (
 
 
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
+_READINESS_CHALLENGE = re.compile(r"[0-9a-f]{32}")
 _SLOT_ID = re.compile(r"slot-[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 
@@ -171,6 +172,7 @@ class CommandTimeout(StrEnum):
 class CommandRetry(StrEnum):
     NONE = "none"
     SAME_COMMAND_ONCE = "same-command-once"
+    SAME_PAYLOAD_ONCE = "same-payload-once"
     SAME_PAYLOAD_BOUNDED = "same-payload-bounded"
 
 
@@ -263,6 +265,11 @@ class _BootstrapCommandInvocation:
 
 
 @dataclass(frozen=True, slots=True)
+class _ReadinessEchoPayload:
+    challenge: str
+
+
+@dataclass(frozen=True, slots=True)
 class _PickFolderPayload:
     purpose: str
 
@@ -301,6 +308,7 @@ def production_command_specs(
     slots: FolderSlotAuthority,
     registry: TaskAuthority,
     shell_ready: Callable[[int], None],
+    readiness_echo: Callable[[int, str], bool],
 ) -> Mapping[str, CommandSpec]:
     """Bind the exact production rows to process-local dependencies."""
 
@@ -308,6 +316,8 @@ def production_command_specs(
         raise TypeError("picker must be callable")
     if not callable(shell_ready):
         raise TypeError("shell readiness callback must be callable")
+    if not callable(readiness_echo):
+        raise TypeError("readiness echo callback must be callable")
 
     def acknowledge_shell(invocation: object) -> object:
         if (
@@ -317,6 +327,20 @@ def production_command_specs(
             raise TypeError("shell_ready received an unvalidated payload")
         shell_ready(invocation.generation)
         return {"acknowledged": True}
+
+    def acknowledge_readiness_echo(invocation: object) -> object:
+        if (
+            type(invocation) is not _BootstrapCommandInvocation
+            or type(invocation.payload) is not _ReadinessEchoPayload
+        ):
+            raise TypeError("readiness_echo received an unvalidated payload")
+        acknowledged = readiness_echo(
+            invocation.generation,
+            invocation.payload.challenge,
+        )
+        if type(acknowledged) is not bool:
+            raise TypeError("readiness echo callback returned invalid data")
+        return {"acknowledged": acknowledged}
 
     def pick_folder(payload: object) -> object:
         if not isinstance(payload, _PickFolderPayload):
@@ -454,6 +478,16 @@ def production_command_specs(
                 retry=CommandRetry.NONE,
                 phase=CommandPhase.BOOTSTRAP,
             ),
+            "readiness_echo": CommandSpec(
+                validate_payload=_validate_readiness_echo,
+                handler=acknowledge_readiness_echo,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.STARTUP_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+                phase=CommandPhase.BOOTSTRAP,
+            ),
             "pick_folder": CommandSpec(
                 validate_payload=_validate_pick_folder,
                 handler=pick_folder,
@@ -506,6 +540,18 @@ def production_command_specs(
 def _validate_empty_payload(value: object) -> None:
     if not isinstance(value, dict) or value:
         raise CommandPayloadError("shell_ready payload is invalid")
+
+
+def _validate_readiness_echo(value: object) -> _ReadinessEchoPayload:
+    if not isinstance(value, dict) or set(value) != {"challenge"}:
+        raise CommandPayloadError("readiness_echo payload is invalid")
+    challenge = value["challenge"]
+    if (
+        type(challenge) is not str
+        or _READINESS_CHALLENGE.fullmatch(challenge) is None
+    ):
+        raise CommandPayloadError("readiness_echo payload is invalid")
+    return _ReadinessEchoPayload(challenge)
 
 
 def _validate_pick_folder(value: object) -> _PickFolderPayload:

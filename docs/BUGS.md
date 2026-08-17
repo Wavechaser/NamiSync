@@ -562,16 +562,17 @@ defect, and move implementation-level test choreography out of the log.
   and never mark the JavaScript bridge operational. Fixed by rechecking epoch
   ownership after every raced readiness wait; a bridge-first pending-readiness
   probe proves the superseded attempt sends no acknowledgement.
-- SEVERE - FIXED (2026-08-17). Presentation-readiness admission gap. The
+- SEVERE - FIXED (2026-08-17). Document-readiness admission gap. The
   desktop marked ordinary bridge commands available after native load, and
   kept them open across reload, even when the current packaged receiver had
   not acknowledged initialization or its first appearance message could not
-  be posted. Fixed with one startup-only
-  `shell_ready` row, a five-second deadline measured from native load, and a
-  locked three-party gate requiring native readiness, shell acknowledgement,
-  and successful initial publication before normal admission. Timeout,
-  publication failure, close, reload, and late callbacks are generation-bound,
-  so only the current document can open authority.
+  be posted. Fixed with a five-second current-generation gate joining native
+  load, `shell_ready`, safe base-surface settlement, and a neutral host
+  challenge/page `readiness_echo` roundtrip before normal admission. The nonce
+  is unlogged liveness evidence, not authorization. Appearance publication is
+  degradable and orthogonal; only unconfirmed rollback after native surface
+  mutation refuses. Timeout, reload, close, and queued callbacks cannot settle
+  a later document.
 - MODERATE - FIXED (2026-08-17). Appearance observation ordering race.
   Independent callback-thread reads let an older Windows snapshot queue after
   a newer one and receive the newest publication revision; the initial read

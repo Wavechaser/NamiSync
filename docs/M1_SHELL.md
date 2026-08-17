@@ -443,10 +443,12 @@ third-party notices, signing, or a WebView2 bootstrapper.
                                 -> attach native guards
        loaded      -> verify attached/no attachment_error
                    -> start fixed five-second readiness deadline
-       packaged JS -> install receiver and shell DOM
+       packaged JS -> install readiness receiver, appearance receiver, shell DOM
                    -> dispatch startup-only shell_ready {}
-       host        -> post current initial appearance envelope
-                   -> open ordinary commands only after post succeeds
+       host        -> settle safe initial native surface
+                   -> post current-generation neutral challenge
+       packaged JS -> dispatch readiness_echo {challenge}
+                   -> open ordinary commands only after post/echo converge
    ```
 
    Dispatch remains closed while document authority is pending or failed.
@@ -983,12 +985,14 @@ carry the `headed` marker; all are collected by the release command.
   revisioned appearance receiver. Observation subscribes before its mandatory
   first read and coalesces native notifications into bounded UI-thread turns;
   only a current-state read receives the latest revision, and close invalidates
-  queued turns. Native load, packaged `shell_ready` acknowledgement, and a
-  successful current initial appearance post must all converge within the
-  fixed five-second loaded-time deadline before ordinary bridge commands open
-  for each document generation; the page reports `Ready` only after applying
-  that envelope. Reload closes ordinary admission until the new generation
-  repeats the handshake.
+  queued turns. Native load, packaged `shell_ready` acknowledgement, safe base
+  surface settlement, and a neutral current-generation host challenge/page
+  echo must converge within the fixed five-second loaded-time deadline before
+  ordinary bridge commands open. The nonce proves liveness rather than
+  authority and is neither logged nor persisted. Appearance publication is
+  independently degradable after surface safety settles; the page reports
+  `Ready` only after the readiness echo is acknowledged. Reload closes ordinary
+  admission until the new generation repeats the bilateral handshake.
   Material application changes neither the security guards nor the construction
   order. *Not satisfied by* a documentation lookup, a mock window, or a test that
   never exercises the fallback.

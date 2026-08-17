@@ -152,6 +152,7 @@ def _commands(*, picker=lambda: None):
             slots=slots,
             registry=service,
             shell_ready=lambda _generation: None,
+            readiness_echo=lambda _generation, _challenge: False,
         ),
         slots,
         service,
@@ -163,6 +164,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
 
     assert tuple(commands) == (
         "shell_ready",
+        "readiness_echo",
         "pick_folder",
         "start_plan",
         "next_events",
@@ -188,7 +190,22 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     assert all(
         spec.phase is CommandPhase.OPEN
         for name, spec in commands.items()
-        if name != "shell_ready"
+        if name not in {"shell_ready", "readiness_echo"}
+    )
+    assert (
+        commands["readiness_echo"].access,
+        commands["readiness_echo"].command_id,
+        commands["readiness_echo"].revision,
+        commands["readiness_echo"].timeout,
+        commands["readiness_echo"].retry,
+        commands["readiness_echo"].phase,
+    ) == (
+        CommandAccess.READ_ONLY,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.STARTUP_5_SECONDS,
+        CommandRetry.SAME_PAYLOAD_ONCE,
+        CommandPhase.BOOTSTRAP,
     )
     assert (
         commands["pick_folder"].access,
@@ -276,6 +293,7 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         "slots",
         "registry",
         "shell_ready",
+        "readiness_echo",
     )
     assert all(
         parameter.kind is inspect.Parameter.KEYWORD_ONLY
@@ -285,7 +303,13 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
     assert "register" not in source
     assert "test_report" not in source
 
-    assert signature.parameters["shell_ready"].default is inspect.Parameter.empty
+    assert (
+        signature.parameters["shell_ready"].default is inspect.Parameter.empty
+    )
+    assert (
+        signature.parameters["readiness_echo"].default
+        is inspect.Parameter.empty
+    )
 
 
 def test_shell_ready_requires_its_exact_context_and_empty_payload() -> None:
@@ -295,6 +319,7 @@ def test_shell_ready_requires_its_exact_context_and_empty_payload() -> None:
         slots=_Slots(),
         registry=_Service(),
         shell_ready=lambda generation: acknowledgements.append(str(generation)),
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     assert _invoke(
@@ -315,6 +340,69 @@ def test_shell_ready_requires_its_exact_context_and_empty_payload() -> None:
                 context=BOOTSTRAP_CONTEXT,
             )
     assert acknowledgements == ["7"]
+
+
+def test_readiness_echo_requires_exact_context_and_challenge() -> None:
+    echoes: list[tuple[int, str]] = []
+
+    def echo(generation: int, challenge: str) -> bool:
+        echoes.append((generation, challenge))
+        return len(echoes) > 1
+
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=echo,
+    )
+    challenge = "a3" * 16
+
+    assert _invoke(
+        commands["readiness_echo"],
+        {"challenge": challenge},
+        context=BOOTSTRAP_CONTEXT,
+    ) == {"acknowledged": False}
+    assert _invoke(
+        commands["readiness_echo"],
+        {"challenge": challenge},
+        context=BOOTSTRAP_CONTEXT,
+    ) == {"acknowledged": True}
+    assert echoes == [(7, challenge), (7, challenge)]
+
+    with pytest.raises(CommandAdmissionError, match="readiness context"):
+        _invoke(commands["readiness_echo"], {"challenge": challenge})
+    for payload in (
+        {},
+        {"challenge": "A" * 32},
+        {"challenge": "a" * 31},
+        {"challenge": challenge, "unexpected": True},
+        {"challenge": 7},
+    ):
+        with pytest.raises(CommandPayloadError):
+            _invoke(
+                commands["readiness_echo"],
+                payload,
+                context=BOOTSTRAP_CONTEXT,
+            )
+    assert echoes == [(7, challenge), (7, challenge)]
+
+
+def test_readiness_echo_refuses_non_boolean_callback_result() -> None:
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: 1,  # type: ignore[return-value]
+    )
+
+    with pytest.raises(TypeError, match="returned invalid data"):
+        _invoke(
+            commands["readiness_echo"],
+            {"challenge": "b" * 32},
+            context=BOOTSTRAP_CONTEXT,
+        )
 
 
 def test_br_g_32_folder_picker_returns_only_opaque_presentation_data() -> None:
@@ -403,6 +491,7 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
         slots=slots,
         registry=_Service(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(RuntimeError, match="slot authority"):
@@ -510,6 +599,7 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
         slots=slots,
         registry=registry,
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
     payload = {
         "command_id": COMMAND_ID,
@@ -600,6 +690,7 @@ def test_terminal_session_release_refuses_mismatched_registry_result(
         slots=_Slots(),
         registry=InvalidRegistry(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(RuntimeError, match="invalid release data"):
@@ -629,6 +720,7 @@ def test_task_close_refuses_invalid_or_mismatched_registry_result(
         slots=_Slots(),
         registry=InvalidRegistry(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(RuntimeError, match="invalid close data"):
@@ -702,6 +794,7 @@ def test_br_g_33_next_events_refuses_invalid_or_mismatched_registry_result(
         slots=_Slots(),
         registry=InvalidRegistry(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(RuntimeError, match="invalid drain data"):
@@ -737,6 +830,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
         slots=_Slots(),
         registry=RefusingService(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(adapter_error) as captured:
@@ -763,6 +857,7 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
         slots=_Slots(),
         registry=BrokenService(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(ValueError, match="incidental implementation defect"):
@@ -801,6 +896,7 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
         slots=_Slots(),
         registry=InvalidService(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
 
     with pytest.raises(RuntimeError, match="invalid data"):

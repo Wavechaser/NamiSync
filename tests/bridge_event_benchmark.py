@@ -263,7 +263,7 @@ def _stage_page(root: Path, python: Path, archived_source: Path) -> Path:
     installed_assets = (
         site_packages / "namisync" / "interfaces" / "web" / "assets"
     )
-    for name in ("appearance.js", "bridge.js", "render.js"):
+    for name in ("appearance.js", "bridge.js", "readiness.js", "render.js"):
         shutil.copy2(installed_assets / name, page / name)
     return page / "index.html"
 
@@ -1918,6 +1918,7 @@ def _summarize(
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",

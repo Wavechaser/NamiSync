@@ -900,6 +900,7 @@ def _run_gallery_mode(
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",

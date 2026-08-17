@@ -210,7 +210,7 @@ fixed set only when their real controls make a glyph necessary.
 Native appearance observes Windows light/dark/high-contrast state and live
 `UISettings` `Accent`, `AccentLight1`, and `AccentDark1` values. A fixed
 revisioned envelope reaches packaged `appearance.js` through UI-thread
-`PostWebMessageAsJson`; only its exact schema and fixed CSSOM sinks are valid.
+`document_channel.py`; only its exact schema and fixed CSSOM sinks are valid.
 Observation subscribes before its mandatory initial read. Later native events
 advance one coalesced generation whose current state is read and applied on the
 window UI thread; a newer generation is deferred to another UI turn so stale
@@ -223,7 +223,9 @@ contrast-theme transition.
 Opaque fallback requires sufficient structured backdrop/glass/form/controller
 landing evidence. A live reapply that confirms neither native path publishes
 `degraded`, which returns the page itself to its theme-correct opaque base;
-startup still refuses an initially unconfirmed material. Appearance remains
+initial configuration, observation, or publication failure degrades over the
+opaque window baseline. Startup refuses only when native enhancement may have
+changed that surface and an opaque rollback cannot be confirmed. Appearance remains
 subscribed through incomplete or exceptional close attempts and closes once
 only after complete service close, before destruction. Shared dialogs likewise
 retain their ordinary lifecycle:
@@ -275,24 +277,27 @@ failure of both close paths never reopens authority or replaces the original
 startup diagnosis.
 
 Native load alone does not open a document. The packaged module installs its
-appearance receiver and shell DOM, then sends the exact startup-only
-`shell_ready` command through the existing sole `dispatch` function. Startup
-rechecks document-epoch ownership after each readiness wait, so a raw
-API notification cannot advance a superseded attempt into an acknowledgement.
-Ordinary commands remain unavailable until native security/material readiness,
-that acknowledgement, and a successful current initial appearance post have all
-converged for the current document generation. A fixed five-second product
-deadline starts at each native `loaded`. Before the first open generation,
-missing acknowledgement or failed publication enters the direct, fail-closed
-startup-refusal path. After an earlier generation opened, a reload refusal that
+neutral readiness receiver before the appearance receiver and shell DOM, then
+sends `shell_ready` through the existing sole `dispatch` function. After safe
+base-surface settlement, the host posts a current-generation nonce; the page
+echoes it through `readiness_echo` and shows `Ready` only after a truthful
+acknowledgement. Startup rechecks document-epoch ownership after each wait, so
+a raw API notification cannot advance a superseded attempt. Ordinary commands
+remain unavailable until native security/load, shell acknowledgement, safe
+surface settlement, and the neutral post/echo roundtrip converge. The nonce is
+liveness evidence only, never authorization, and is neither logged nor
+persisted. A fixed five-second product deadline starts at each native `loaded`.
+Before the first open generation, missing acknowledgement, unsafe surface, or
+failed neutral publication enters the direct fail-closed startup-refusal path.
+Appearance publication continues independently and may degrade. After an
+earlier generation opened, a reload refusal that
 wins while the host remains open records the diagnosis and uses the ordinary
 bounded service-close state machine, preserving active-work teardown. A close
 already in flight retains ownership and the later refusal cannot replace it.
-The visible `Ready` label waits until
-the receiver has actually applied that generation's first valid appearance
-envelope. A same-origin reload closes normal admission until the new packaged
-document completes the same handshake; stale timers, acknowledgements, and
-publication callbacks cannot settle a later generation.
+The visible `Ready` label waits for the bilateral readiness acknowledgement. A
+same-origin reload closes normal admission until the new packaged document
+completes the same handshake; stale timers, acknowledgements, and queued posts
+cannot settle a later generation.
 
 `NamiSyncService.close()` is bounded but not instantaneous: its derived
 allowance is twelve seconds, reached only when the audit writer is genuinely

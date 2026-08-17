@@ -183,14 +183,11 @@ class Service:
 
 
 class Appearance:
-    startup_failure = None
-
     def __init__(self):
-        self.publication_generations = []
+        self.surface_settlements = 0
 
-    def request_initial_publication(self, generation, callback):
-        assert generation == 1
-        self.publication_generations.append(generation)
+    def request_initial_surface_settlement(self, callback):
+        self.surface_settlements += 1
         callback(None)
 
     def close(self):
@@ -199,6 +196,21 @@ class Appearance:
 
 webview = Webview()
 appearance = Appearance()
+
+
+class DocumentChannel:
+    def post(self, payload, *, still_current, completion):
+        assert still_current() is True
+        completion(None)
+        response = webview.window.exposed[0](json.dumps({
+            "schema_version": 1,
+            "request_id": "a2" * 16,
+            "command": "readiness_echo",
+            "payload": {"challenge": payload["challenge"]},
+        }, separators=(",", ":")))
+        assert response["result"] == {"acknowledged": True}
+
+
 lease = host.DesktopInstanceLease(object(), LeaseNative())
 host.acquire_desktop_instance = lambda _identity, native=None: (
     host.DesktopInstanceAdmission(lease, False, None)
@@ -246,12 +258,13 @@ host._create_service = lambda _paths: Service()
 host._configure_window_security = configure_security
 host._opaque_window_background = lambda: "#F3F3F3"
 host._configure_window_appearance = lambda _window: appearance
+host._document_channel = lambda _window: DocumentChannel()
 host._start_webview = start_webview
 startup_errors = []
 launcher._report_startup_error = startup_errors.append
 
 assert launcher.gui_main(["--data-dir", sys.argv[1]]) == 0
-assert appearance.publication_generations == [1]
+assert appearance.surface_settlements == 1
 assert startup_errors == []
     """
     environment = os.environ.copy()

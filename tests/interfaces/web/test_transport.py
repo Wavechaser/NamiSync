@@ -601,6 +601,7 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
             slots=Slots(),
             registry=Registry(),
             shell_ready=lambda _generation: None,
+            readiness_echo=lambda _generation, _challenge: False,
         ),
     )
 
@@ -657,6 +658,7 @@ def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
         slots=SimpleNamespace(),
         registry=SimpleNamespace(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
     dispatcher = _bridge_dispatcher(
         document=_Document(),
@@ -711,6 +713,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
         slots=SimpleNamespace(),
         registry=Registry(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
     dispatcher = _bridge_dispatcher(
         document=_Document(),
@@ -782,6 +785,7 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
             slots=SimpleNamespace(),
             registry=Registry(),
             shell_ready=lambda _generation: None,
+            readiness_echo=lambda _generation, _challenge: False,
         ),
     )
 
@@ -820,6 +824,7 @@ def test_terminal_session_release_crosses_dispatch_as_exact_echo() -> None:
             slots=SimpleNamespace(),
             registry=Registry(),
             shell_ready=lambda _generation: None,
+            readiness_echo=lambda _generation, _challenge: False,
         ),
     )
 
@@ -851,6 +856,7 @@ def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None
             slots=SimpleNamespace(),
             registry=Registry(),
             shell_ready=lambda _generation: None,
+            readiness_echo=lambda _generation, _challenge: False,
         ),
     )
 
@@ -1182,6 +1188,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         slots=slots,
         registry=Registry(),
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
     dispatcher = _bridge_dispatcher(
         document=_Document(),

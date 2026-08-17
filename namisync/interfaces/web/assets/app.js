@@ -1,9 +1,11 @@
 import {
   acknowledgeShellReady,
   BridgeTransportError,
+  echoReadiness,
   markBridgeOperational,
   whenBridgeApiReady,
 } from "./bridge.js";
+import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
@@ -15,7 +17,8 @@ if (!(app instanceof HTMLElement) || !(status instanceof HTMLElement)) {
   throw new TypeError("NamiSync shell elements are unavailable");
 }
 
-const appearance = installAppearanceReceiver(
+const readiness = installReadinessReceiver(window.chrome.webview);
+installAppearanceReceiver(
   window.chrome.webview,
   document.documentElement,
 );
@@ -27,7 +30,7 @@ class StartupSupersededError extends Error {}
 let startupEpoch = 0;
 let rejectSupersededStartup = null;
 
-async function finishStartup(epoch, appearanceBaseline) {
+async function finishStartup(epoch, readinessBaseline) {
   const superseded = new Promise((resolve, reject) => {
     void resolve;
     if (epoch !== startupEpoch) {
@@ -51,7 +54,25 @@ async function finishStartup(epoch, appearanceBaseline) {
       throw error;
     }
   }
-  await awaitCurrent(appearance.whenAppliedAfter(appearanceBaseline));
+  const challenge = await awaitCurrent(
+    readiness.whenReceivedAfter(readinessBaseline),
+  );
+  let acknowledged = false;
+  for (let attempt = 0; attempt < 2 && !acknowledged; attempt += 1) {
+    try {
+      const result = await awaitCurrent(echoReadiness(challenge));
+      acknowledged = result.acknowledged;
+    } catch (error) {
+      if (!(error instanceof BridgeTransportError) || attempt > 0) {
+        throw error;
+      }
+    }
+  }
+  if (!acknowledged) {
+    throw new BridgeTransportError(
+      "The desktop readiness echo could not be confirmed.",
+    );
+  }
   markBridgeOperational();
   if (status.textContent === "Starting...") {
     renderText(status, "Ready");
@@ -60,21 +81,32 @@ async function finishStartup(epoch, appearanceBaseline) {
 
 let startupAttempt = null;
 let startupRerunRequested = false;
+let startupRerunReadinessBaseline = null;
 
-function ensureStartup({ rerun = false } = {}) {
+function ensureStartup({
+  rerun = false,
+  readinessBaseline = readiness.revision(),
+} = {}) {
   if (startupAttempt !== null) {
-    startupRerunRequested ||= rerun;
+    if (rerun) {
+      startupRerunRequested = true;
+      startupRerunReadinessBaseline = readinessBaseline;
+    }
     return startupAttempt;
   }
-  const attempt = finishStartup(startupEpoch, appearance.revision());
+  const attempt = finishStartup(startupEpoch, readinessBaseline);
   startupAttempt = attempt;
   void attempt.finally(() => {
     if (startupAttempt === attempt) {
       startupAttempt = null;
       rejectSupersededStartup = null;
       if (startupRerunRequested) {
+        const rerunReadinessBaseline = startupRerunReadinessBaseline;
         startupRerunRequested = false;
-        void ensureStartup();
+        startupRerunReadinessBaseline = null;
+        void ensureStartup({
+          readinessBaseline: rerunReadinessBaseline,
+        });
       }
     }
   }).catch(() => {

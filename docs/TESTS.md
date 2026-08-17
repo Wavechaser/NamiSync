@@ -69,6 +69,11 @@ considering a non-headed phase complete.
 Headed acceptance requires an interactive supported Windows desktop and the
 real WebView2 host. Run the interface-owned headed gate when desktop behavior,
 packaging, or headed harnesses change.
+Readiness changes require focused coverage of the order-independent gate,
+queued document-currentness check, exact bootstrap command policy, browser
+supersession/retry behavior, and both degradable and unsafe native-surface
+outcomes. Every headed page that performs startup must complete the neutral
+challenge/echo protocol; an appearance envelope is not a substitute witness.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed

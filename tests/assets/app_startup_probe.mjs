@@ -33,25 +33,41 @@ globalThis.window = {
   },
 };
 
-const acknowledgements = [];
+const shellAcknowledgements = [];
+const echoAttempts = [];
 let operationalMarks = 0;
 let rawApiReady = false;
 let resolveRawApiReadiness;
 const rawApiReadiness = new Promise((resolve) => {
   resolveRawApiReadiness = resolve;
 });
-let appearanceRevision = 0;
-let appearanceWaiters = [];
-function applyAppearance() {
-  appearanceRevision += 1;
-  const ready = appearanceWaiters.filter(
-    (waiter) => appearanceRevision > waiter.baseline,
-  );
-  appearanceWaiters = appearanceWaiters.filter(
-    (waiter) => appearanceRevision <= waiter.baseline,
-  );
-  for (const waiter of ready) waiter.resolve();
+let readinessRevision = 0;
+let latestChallenge = null;
+let readinessWaiters = [];
+
+function pendingAttempt(entries, value = undefined) {
+  let resolve;
+  let reject;
+  const promise = new Promise((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  entries.push({ promise, resolve, reject, value });
+  return promise;
 }
+
+function emitChallenge(challenge) {
+  readinessRevision += 1;
+  latestChallenge = challenge;
+  const ready = readinessWaiters.filter(
+    (waiter) => readinessRevision > waiter.baseline,
+  );
+  readinessWaiters = readinessWaiters.filter(
+    (waiter) => readinessRevision <= waiter.baseline,
+  );
+  for (const waiter of ready) waiter.resolve(challenge);
+}
+
 globalThis.startupHarness = {
   whenBridgeApiReady() {
     return rawApiReady ? Promise.resolve() : rawApiReadiness;
@@ -60,22 +76,18 @@ globalThis.startupHarness = {
     rawApiReady = true;
     resolveRawApiReadiness();
   },
-  acknowledge() {
-    let resolve;
-    let reject;
-    const promise = new Promise((onResolve, onReject) => {
-      resolve = onResolve;
-      reject = onReject;
-    });
-    acknowledgements.push({ promise, resolve, reject });
-    return promise;
+  acknowledgeShell() {
+    return pendingAttempt(shellAcknowledgements);
   },
-  appearance: Object.freeze({
-    revision: () => appearanceRevision,
-    whenAppliedAfter(baseline) {
-      if (appearanceRevision > baseline) return Promise.resolve();
+  echo(challenge) {
+    return pendingAttempt(echoAttempts, challenge);
+  },
+  readiness: Object.freeze({
+    revision: () => readinessRevision,
+    whenReceivedAfter(baseline) {
+      if (readinessRevision > baseline) return Promise.resolve(latestChallenge);
       return new Promise((resolve) => {
-        appearanceWaiters.push({ baseline, resolve });
+        readinessWaiters.push({ baseline, resolve });
       });
     },
   }),
@@ -89,14 +101,18 @@ const bridgeStub = moduleUrl(`
   export class BridgeTransportError extends Error {}
   globalThis.startupHarness.BridgeTransportError = BridgeTransportError;
   export const whenBridgeApiReady = () => globalThis.startupHarness.whenBridgeApiReady();
-  export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledge();
+  export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledgeShell();
+  export const echoReadiness = (challenge) => globalThis.startupHarness.echo(challenge);
   export const markBridgeOperational = () => { globalThis.startupHarness.markOperational(); };
 `);
 globalThis.startupHarness.markOperational = () => {
   operationalMarks += 1;
 };
+const readinessStub = moduleUrl(`
+  export const installReadinessReceiver = () => globalThis.startupHarness.readiness;
+`);
 const appearanceStub = moduleUrl(`
-  export const installAppearanceReceiver = () => globalThis.startupHarness.appearance;
+  export const installAppearanceReceiver = () => Object.freeze({});
 `);
 const railStub = moduleUrl("export const createTaskRail = () => ({});");
 const panelsStub = moduleUrl("export const createWorkPanel = () => ({});");
@@ -107,9 +123,10 @@ const renderStub = moduleUrl(`
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, BridgeTransportError, markBridgeOperational, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, BridgeTransportError, echoReadiness, markBridgeOperational, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
+  .replace("./readiness.js", readinessStub)
   .replace("./appearance.js", appearanceStub)
   .replace("./panels.js", panelsStub)
   .replace("./rail.js", railStub)
@@ -121,65 +138,106 @@ window.addEventListener("pywebviewready", () => {
 await import(moduleUrl(source));
 for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
 assert.equal(
-  acknowledgements.length,
+  shellAcknowledgements.length,
   0,
   "startup waits while the raw bridge API is absent",
 );
 
+const challengeBeforeDeferredRerun = "0".repeat(32);
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
+emitChallenge(challengeBeforeDeferredRerun);
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(
-  acknowledgements.length,
+  shellAcknowledgements.length,
   1,
   "raw readiness resolving before the app listener cannot acknowledge the superseded attempt",
 );
+shellAcknowledgements[0].resolve({ acknowledged: true });
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.deepEqual(
+  echoAttempts.map((attempt) => attempt.value),
+  [challengeBeforeDeferredRerun],
+  "a challenge delivered before the deferred rerun must remain visible to it",
+);
+echoAttempts[0].resolve({ acknowledged: true });
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.equal(status.textContent, "Ready");
+assert.equal(operationalMarks, 1);
+
+shellAcknowledgements.length = 0;
+echoAttempts.length = 0;
+operationalMarks = 0;
+
+for (const callback of listeners.get("pywebviewready") ?? []) callback();
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.equal(shellAcknowledgements.length, 1);
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(
-  acknowledgements.length,
+  shellAcknowledgements.length,
   2,
-  "reinjection while an acknowledgement is pending starts a fresh attempt",
+  "reinjection while a shell acknowledgement is pending starts a fresh attempt",
 );
 assert.equal(status.textContent, "Starting...");
 assert.equal(operationalMarks, 0);
 
-acknowledgements[1].resolve({ acknowledged: true });
+shellAcknowledgements[1].resolve({ acknowledged: true });
 for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+assert.equal(echoAttempts.length, 0);
 assert.equal(
   status.textContent,
   "Starting...",
-  "an acknowledgement without appearance convergence cannot report Ready",
+  "a shell acknowledgement without a native challenge cannot report Ready",
 );
-applyAppearance();
+
+const firstChallenge = "a".repeat(32);
+emitChallenge(firstChallenge);
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.deepEqual(echoAttempts.map((attempt) => attempt.value), [firstChallenge]);
+echoAttempts[0].resolve({ acknowledged: false });
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.deepEqual(
+  echoAttempts.map((attempt) => attempt.value),
+  [firstChallenge, firstChallenge],
+  "a false result retries the identical challenge exactly once",
+);
+echoAttempts[1].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 1);
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
-for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Starting...");
-assert.equal(acknowledgements.length, 3);
-acknowledgements[2].reject(
+assert.equal(shellAcknowledgements.length, 3);
+shellAcknowledgements[2].reject(
+  new globalThis.startupHarness.BridgeTransportError("lost response"),
+);
+const secondChallenge = "b".repeat(32);
+emitChallenge(secondChallenge);
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+assert.equal(echoAttempts.length, 3);
+echoAttempts[2].reject(
   new globalThis.startupHarness.BridgeTransportError("lost response"),
 );
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-assert.equal(
-  status.textContent,
-  "Starting...",
-  "an old appearance cannot settle a new uncertain generation",
+assert.deepEqual(
+  echoAttempts.slice(2).map((attempt) => attempt.value),
+  [secondChallenge, secondChallenge],
+  "transport uncertainty retries the identical challenge exactly once",
 );
-assert.equal(operationalMarks, 1);
-applyAppearance();
+echoAttempts[3].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 2);
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
-for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Starting...");
-assert.equal(acknowledgements.length, 4);
-acknowledgements[3].reject(new Error("definitive refusal"));
+assert.equal(shellAcknowledgements.length, 4);
+shellAcknowledgements[3].reject(new Error("definitive refusal"));
+emitChallenge("c".repeat(32));
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(
   status.textContent,
@@ -187,5 +245,6 @@ assert.equal(
   "a definitive non-transport failure cannot report Ready",
 );
 assert.equal(operationalMarks, 2);
+assert.equal(echoAttempts.length, 4);
 
 process.stdout.write("ok");

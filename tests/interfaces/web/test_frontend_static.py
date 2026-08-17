@@ -207,6 +207,7 @@ def test_modules_use_only_local_explicit_js_imports(
     assert imports == {
         "app.js": [
             "./bridge.js",
+            "./readiness.js",
             "./appearance.js",
             "./panels.js",
             "./rail.js",
@@ -217,6 +218,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "icons.js": [],
         "panels.js": ["./render.js"],
         "rail.js": ["./render.js"],
+        "readiness.js": [],
         "render.js": [],
         "tree.js": ["./render.js"],
     }
@@ -333,6 +335,33 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
         "resolvedAfterNewRevision": True,
         "listenerRemoved": True,
     }
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_readiness_receiver_buffers_exact_envelopes() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental readiness probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "readiness_probe.mjs"),
+            str(
+                PROJECT_ROOT
+                / "namisync"
+                / "interfaces"
+                / "web"
+                / "assets"
+                / "readiness.js"
+            ),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
 
 
 @pytest.mark.supplemental_node
@@ -663,11 +692,13 @@ def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None
         slots=object(),  # type: ignore[arg-type]
         registry=object(),  # type: ignore[arg-type]
         shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
     )
     native_policy = {
         name: {
             "timeout": spec.timeout.value,
             "retry": spec.retry.value,
+            "phase": spec.phase.value,
         }
         for name, spec in commands.items()
     }
@@ -809,8 +840,12 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
 
     assert "acknowledgeShellReady," in app
     assert "BridgeTransportError," in app
+    assert "echoReadiness," in app
     assert "markBridgeOperational," in app
     assert "whenBridgeApiReady," in app
+    assert app.index("installReadinessReceiver(") < app.index(
+        "installAppearanceReceiver("
+    )
     assert app.index("installAppearanceReceiver(") < app.index(
         "app.append(createTaskRail(), createWorkPanel());"
     )
@@ -819,16 +854,27 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
         "acknowledgeShellReady()"
     )
     assert startup.index("acknowledgeShellReady()") < startup.index(
-        "appearance.whenAppliedAfter(appearanceBaseline)"
+        "readiness.whenReceivedAfter(readinessBaseline)"
     )
     assert startup.index(
-        "appearance.whenAppliedAfter(appearanceBaseline)"
-    ) < startup.index("markBridgeOperational()")
+        "readiness.whenReceivedAfter(readinessBaseline)"
+    ) < startup.index("echoReadiness(challenge)")
+    assert startup.index("echoReadiness(challenge)") < startup.index(
+        "markBridgeOperational()"
+    )
+    assert "for (let attempt = 0; attempt < 2 && !acknowledged;" in startup
+    assert startup.count("echoReadiness(challenge)") == 1
+    assert "error instanceof BridgeTransportError" in startup
+    assert "attempt > 0" in startup
+    assert "if (!acknowledged)" in startup
+    assert "appearance.whenAppliedAfter" not in startup
     assert startup.index("markBridgeOperational()") < startup.index(
         'renderText(status, "Ready");'
     )
     assert 'window.addEventListener("pywebviewready"' in app
-    assert "startupRerunRequested ||= rerun;" in app
+    assert "startupRerunReadinessBaseline = readinessBaseline;" in app
+    assert "readinessBaseline: rerunReadinessBaseline" in app
+    assert "readinessBaseline = readiness.revision()," in app
     assert "rejectSupersededStartup?.(new StartupSupersededError());" in app
     assert "error instanceof BridgeTransportError" in app
     assert 'status.textContent === "Ready"' in app

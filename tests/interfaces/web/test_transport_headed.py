@@ -36,7 +36,12 @@ from _headed_native import (
 
 _CHILD = Path(__file__).with_name("_transport_gate_child.py")
 _TEST_ASSETS = Path(__file__).parents[2] / "assets" / "transport_gate"
-_PRODUCTION_ASSETS = ("appearance.js", "bridge.js", "render.js")
+_PRODUCTION_ASSETS = (
+    "appearance.js",
+    "bridge.js",
+    "readiness.js",
+    "render.js",
+)
 _BRIDGE_UNAVAILABLE = {
     "schema_version": 1,
     "request_id": None,
@@ -354,9 +359,14 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
 
     for name in ("transport.js", "off_origin_start.js"):
         startup = (_TEST_ASSETS / name).read_text(encoding="utf-8")
+        assert "installReadinessReceiver(" in startup
         assert "installAppearanceReceiver(" in startup
         assert "await acknowledgeShellReady();" in startup
-        assert "await appearance.whenAppliedAfter(appearanceBaseline);" in startup
+        assert "await readiness.whenReceivedAfter(readinessBaseline);" in startup
+        assert "await echoReadiness(challenge)" in startup
+        assert startup.index("installReadinessReceiver(") < startup.index(
+            "installAppearanceReceiver("
+        )
         assert startup.index("installAppearanceReceiver(") < startup.index(
             "await whenBridgeApiReady();"
         )
@@ -364,10 +374,10 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
             "await acknowledgeShellReady();"
         )
         assert startup.index("await acknowledgeShellReady();") < startup.index(
-            "await appearance.whenAppliedAfter(appearanceBaseline);"
+            "await readiness.whenReceivedAfter(readinessBaseline);"
         )
         assert startup.index(
-            "await appearance.whenAppliedAfter(appearanceBaseline);"
+            "await readiness.whenReceivedAfter(readinessBaseline);"
         ) < startup.index("markBridgeOperational();")
 
 
@@ -1012,6 +1022,7 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",
@@ -1020,6 +1031,7 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",
@@ -1100,6 +1112,7 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",

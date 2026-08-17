@@ -421,20 +421,26 @@ It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
 Each pywebview injection starts a host-owned closed document generation. The
-fixed `shell_ready` row is the only bootstrap-phase command; composition
-captures that generation with admission and rejects a stale acknowledgement.
-Normal rows become available only after native load, packaged receiver/DOM
-acknowledgement, and successful current appearance publication. Reinjection
-repeats the acknowledgement through the same function, while terminal gate
-states expose no readiness context at all. Frontend code distinguishes raw
-pywebview API injection from operational readiness: only `shell_ready` may use
-the former, while normal calls, retries, and retained task drains remain paused
-until the receiver applies the new generation's appearance envelope.
+fixed `shell_ready` and `readiness_echo` rows are the only bootstrap-phase
+commands; composition captures that generation with admission and rejects a
+stale invocation context. Normal rows become available only after native load,
+packaged receiver/DOM acknowledgement, safe initial window-surface settlement,
+and a neutral host challenge successfully posted to and echoed by that current
+document. The 32-lowercase-hex challenge is a current-generation liveness nonce,
+not authorization; it is never logged or persisted and does not replace native
+exact-origin trust. Reinjection repeats the bilateral exchange through the same
+sole `dispatch` function, while terminal gate states expose no readiness
+context. After open, composition permits only `readiness_echo` replay in a
+bootstrap context so a delivery-uncertain page can learn the truthful open
+result; `shell_ready` remains unavailable. Normal calls, retries, and retained
+task drains remain paused until the echo is acknowledged.
 `interfaces/web/readiness.py` owns this exact current-document state machine,
 its deadline and terminal states, and its immutable `ReadinessContext` values.
-The host binds native, shell, appearance-publication, open, and refusal
-callbacks to that owner. Each immutable command row declares only a
-`BOOTSTRAP` or `OPEN` phase. Host composition owns `admit(name)`: it joins the
+The host binds native, shell, safe-surface, neutral-post, open, and refusal
+callbacks to that owner. Appearance observation and publication are a separate
+degradable axis after surface safety settles. Each immutable command row
+declares only a `BOOTSTRAP` or `OPEN` phase. Host composition owns
+`admit(name)`: it joins the
 row from the final command mapping to the current exact context and returns the
 bridge's generic `AdmissionGranted(context)` or `AdmissionRefused` carrier.
 The bridge exact-checks that carrier, otherwise fails as `bridge_unavailable`,
@@ -442,6 +448,9 @@ and forwards a granted context opaquely. `CommandSpec.invoke` independently
 exact-checks the context and phase before payload validation. Exact-document
 trust and the bridge's 64-handler reservation remain transport-owned; service
 session admission remains a separate domain-blind dispatcher concern.
+`interfaces/web/document_channel.py` alone canonicalizes, bounds, schedules,
+currentness-checks, and posts production WebView2 messages. Appearance and
+readiness share that sink without sharing domain state.
 NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` to carry application data. Pinned pywebview does
 construct JavaScript internally for its exposed-function return transport;
@@ -582,10 +591,14 @@ startup diagnosis. Every failure caught after logging configuration
 records one typed `startup.failed` traceback before that finalizer; diagnostic
 failure cannot replace the native report or process exit status.
 Native `loaded` starts a fixed five-second document-readiness deadline rather
-than opening commands. The packaged module installs its receiver and shell,
-acknowledges the current generation through `dispatch`, and waits for the first
-valid appearance envelope before showing `Ready`. A true reload or same-page
-pywebview reinjection repeats that handshake. Initial refusal uses the
+than opening commands. The packaged module installs the neutral readiness
+receiver before the appearance receiver and shell, acknowledges the current
+generation through `dispatch`, waits for the host challenge, and echoes the
+identical nonce. It marks the bridge operational and shows `Ready` only after a
+truthful `{"acknowledged":true}`. False or transport uncertainty permits
+exactly one identical-payload retry. Appearance continues to apply
+independently and may truthfully degrade. A true reload or same-page pywebview
+reinjection repeats the bilateral handshake. Initial refusal uses the
 startup-only teardown. After a previously open generation, a readiness refusal
 that wins while the host remains open records the diagnosis before entering the
 ordinary bounded service-close state machine, so active work is never bypassed

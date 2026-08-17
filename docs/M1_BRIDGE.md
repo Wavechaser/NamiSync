@@ -1926,10 +1926,14 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   the in-flight return-callback table. The renderer can trigger this
   repeatedly. `pywebviewready` is therefore repeatable: frontend
   initialization is idempotent and listener registration is not duplicated.
+  A current-source contract test pins pywebview 6.2.1's
+  `inject_pywebview`: it signals `before_load` before starting the API-injection
+  worker that can fire `_pywebviewready`, so host generation renewal precedes
+  every production frontend restart.
   Every firing invalidates operational readiness and pauses each nonterminal
-  drain; only `shell_ready` uses raw API-injection readiness. Normal calls,
-  automatic retries, and exactly one re-arm per retained drain resume after the
-  current appearance envelope is applied. A lost mutation response retries
+  drain; only `shell_ready` and `readiness_echo` use bootstrap readiness.
+  Normal calls, automatic retries, and exactly one re-arm per retained drain
+  resume after the current host challenge is truthfully echoed. A lost mutation response retries
   with the original gesture `command_id`; a lost drain uses the sequence
   recovery above.
 - **Subscription registry** — `SessionObserver.observe` raises when a session
@@ -2118,29 +2122,38 @@ validator. The bridge names no readiness phase or appearance state. Handler
 reservation and service/session admission remain separate mechanisms with
 their existing lifetimes.
 
-**The presentation-ready startup row is exact.** GUI Break 1 adds one
-foundation-only row outside Slice 2's two domain rows:
+**The bilateral document-readiness rows are exact.** GUI Break 1 and its
+hardening own two foundation-only rows outside Slice 2's two domain rows:
 
 | Command | Exact payload | Exact success `result` | Identity / revision | Availability, deadline, and retry |
 | --- | --- | --- | --- | --- |
-| `shell_ready` | `{}` | `{"acknowledged":true}` | no `command_id`; no revision | startup only; 5,000 ms; no retry |
+| `shell_ready` | `{}` | `{"acknowledged":true}` | no `command_id`; no revision | `BOOTSTRAP` before `OPEN`; no post-open replay; 5,000 ms; no retry |
+| `readiness_echo` | `{"challenge":"<32-lowercase-hex>"}` | `{"acknowledged":true}` for the current challenge after open, otherwise `{"acknowledged":false}` | no `command_id`; no revision | bootstrap plus exact post-open replay; 5,000 ms; after false or transport uncertainty, one retry with the identical payload |
 
-The packaged module installs the fixed appearance receiver and shell DOM before
-sending this command through the existing sole `dispatch` function. It checks
-startup-epoch ownership after every readiness wait, so a bridge-first raw API
-notification cannot let a superseded initial attempt send an acknowledgement.
-The host
-does not admit any `OPEN` row until native load/security/material readiness,
-the current document's acknowledgement, and successful initial appearance
-publication all converge for one document generation. The product deadline
-starts at each native `loaded`; it is a fixed fail-closed startup policy, not
-empirical acceptance evidence. A same-origin reload begins a new closed
-generation before pywebview reinjects the bridge. Duplicate acknowledgement
-already admitted for that generation remains idempotent as a native last
-defense. Once open, `shell_ready`
-is unavailable; once refusal or close wins, every row is unavailable. Timers,
-acknowledgements, and publication callbacks carry generation ownership and
-cannot settle a later document.
+The packaged module installs the fixed neutral readiness receiver before the
+appearance receiver and shell DOM, then sends `shell_ready` through the existing
+sole `dispatch` function. Native load and shell acknowledgement request
+asynchronous initial surface-safety settlement. Only a confirmed safe surface
+mints a cryptographic 32-lowercase-hex nonce and posts the exact host message
+`{"challenge":"<nonce>","kind":"namisync.readiness.v1"}`. The current page
+echoes that nonce with `readiness_echo`; only successful post completion and a
+matching echo admit `OPEN` rows. The nonce proves current-generation bilateral
+channel liveness only. It is not authorization, is never logged or persisted,
+and cannot replace exact-origin trust, handler reservation, or task/session
+admission.
+
+Startup checks epoch ownership after every wait. The challenge receiver buffers
+monotonic arrivals, including one arriving before the current waiter, and false
+or uncertain echo delivery receives at most one identical-payload retry. A
+same-origin reload begins a new closed generation before appearance or queued
+posts can run; the UI-queued host post rechecks generation currency immediately
+before WebView2 delivery. Once open, `shell_ready` is unavailable, while an
+exact `readiness_echo` replay may obtain the truthful open result. Refusal or
+close makes every row unavailable. The fixed five-second deadline starts at
+each native `loaded`; it is product policy, not empirical acceptance evidence.
+Appearance publication and enhancement quality are independent after a safe
+base surface settles. Only an unconfirmed opaque rollback after native surface
+mutation refuses startup.
 
 **The Slice 2 production allowlist has exactly two rows.** Payload and result
 schemas in this table are exact; Slice 2 adds no dormant or placeholder command
@@ -2179,8 +2192,8 @@ source/target/deletion intent. A different wire or resolved intent under the
 same command id remains a conflict.
 
 The immutable production command mapping is exactly `shell_ready`,
-`pick_folder`, `start_plan`, `next_events`, `release_terminal_session`, and
-`close_task`.
+`readiness_echo`, `pick_folder`, `start_plan`, `next_events`,
+`release_terminal_session`, and `close_task`.
 `test_report` is a test-owned constructor-only
 harness row: the harness builds a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
@@ -2189,6 +2202,11 @@ retry class. Later plan, inventory, settings, and history commands
 are not reserved or allowlisted until their owning slices
 land each row with its schema, receipt/revision rule, deadline, retry policy,
 and gate.
+
+The existing Python/JavaScript command-policy mirror mechanically compares
+each production row's availability phase as well as its timeout and retry
+class. A browser/server phase drift therefore fails the owning static test
+instead of silently changing admission.
 
 `release_terminal_session` accepts exactly `{task_id, session_id}` and returns
 those exact echoed ids. It is a mutating lifecycle acknowledgment with no
@@ -3404,7 +3422,8 @@ because its local tests are easier.
   proves every public view type round-trips through the production JSON codec
   and the one exposed `dispatch(command_json)`; the two Slice 2 rows are exactly
   `pick_folder` and `start_plan`, and the current allowlist adds the
-  foundation-only startup row `shell_ready`, Slice 3's `next_events`, plus
+  foundation-only readiness rows `shell_ready` and `readiness_echo`, Slice 3's
+  `next_events`, plus
   lifecycle-only `release_terminal_session` and `close_task`, while
   `test_report` is possible only through test-owned
   constructor composition. Host composition, rather than transport, joins the

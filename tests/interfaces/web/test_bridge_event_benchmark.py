@@ -77,13 +77,19 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "WorkflowRegistration" in child
     assert "TaskRegistry" not in browser
     assert 'from "./bridge.js"' in browser
+    assert 'from "./readiness.js"' in browser
     assert 'from "./appearance.js"' in browser
     assert 'from "./render.js"' in browser
     assert "startup_gate: object," in child
     assert "startup_gate=startup_gate," in child
+    assert "installReadinessReceiver(" in browser
     assert "installAppearanceReceiver(" in browser
     assert "await acknowledgeShellReady();" in browser
-    assert "await appearance.whenAppliedAfter(appearanceBaseline);" in browser
+    assert "await readiness.whenReceivedAfter(readinessBaseline);" in browser
+    assert "await echoReadiness(challenge)" in browser
+    assert browser.index("installReadinessReceiver(") < browser.index(
+        "installAppearanceReceiver("
+    )
     assert browser.index("installAppearanceReceiver(") < browser.index(
         "await whenBridgeApiReady();"
     )
@@ -91,10 +97,10 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
         "await acknowledgeShellReady();"
     )
     assert browser.index("await acknowledgeShellReady();") < browser.index(
-        "await appearance.whenAppliedAfter(appearanceBaseline);"
+        "await readiness.whenReceivedAfter(readinessBaseline);"
     )
     assert browser.index(
-        "await appearance.whenAppliedAfter(appearanceBaseline);"
+        "await readiness.whenReceivedAfter(readinessBaseline);"
     ) < browser.index("markBridgeOperational();")
     assert 'id="host-status"' in (ASSETS / "index.html").read_text(
         encoding="utf-8"
@@ -1069,6 +1075,7 @@ def _passing_evidence(benchmark):
             "close_task",
             "next_events",
             "pick_folder",
+            "readiness_echo",
             "release_terminal_session",
             "shell_ready",
             "start_plan",
@@ -1079,6 +1086,7 @@ def _passing_evidence(benchmark):
             "close_task",
             "next_events",
             "pick_folder",
+            "readiness_echo",
             "release_terminal_session",
             "shell_ready",
             "start_plan",

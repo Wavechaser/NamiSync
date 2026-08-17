@@ -564,13 +564,25 @@ is stored separately from semantic settings and never persists authority.
 Windows host security, bridge transport, presentation tokens, and lifecycle
 policy remain adapter concerns. `interfaces/web/readiness.py` is the named owner
 of the current-document readiness state machine and its exact phase contexts.
-Normal desktop command availability depends on successful current-document
-presentation liveness. Host composition owns the `admit(name)` join between
-the final immutable command mapping and that readiness context. The bridge
+Normal desktop command availability depends on current-generation bilateral
+document liveness: native security/load and shell acknowledgement first join
+with a confirmed readable base surface, then a neutral host-to-page challenge
+must be posted and echoed by that same page. The random challenge is a
+short-lived liveness nonce, not authorization; it is neither logged nor
+persisted and never replaces exact-origin trust, bounded handler reservation,
+or dispatcher session admission. Appearance publication and enhancement
+quality are orthogonal after base-surface safety settles; only an unconfirmed
+rollback after native surface mutation may refuse startup.
+
+Host composition owns the `admit(name)` join between the final immutable
+command mapping and readiness context, making the durable dependency edge
+normal command availability <- bilateral document liveness. The bridge
 separately owns exact-document trust and bounded handler reservation; it
 consumes only an exact generic admission verdict and forwards a granted opaque
-context without interpreting readiness. Their exact limits, evidence, and
-delivery status belong to `M1_BRIDGE.md`, `M1_SHELL.md`, `INTERFACES.md`, and
+context without interpreting readiness. `interfaces/web/document_channel.py`
+is the sole production WebView2 host-to-page message sink and rechecks document
+currency inside its queued UI callback. Exact limits, evidence, and delivery
+status belong to `M1_BRIDGE.md`, `M1_SHELL.md`, `INTERFACES.md`, and
 `DESKTOP_UI.md`, not this document.
 
 See also `COMMANDLINE.md`.

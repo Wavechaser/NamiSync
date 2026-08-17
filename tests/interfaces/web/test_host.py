@@ -247,6 +247,7 @@ def _patch_primary(
         unsubscribe_all=lambda: order.append("registry.unsubscribe_all"),
     )
     commands = SimpleNamespace()
+    gate_holder: dict[str, DesktopReadinessGate] = {}
     dispatcher = SimpleNamespace(
         begin_close=lambda: order.append("reject_dispatch"),
         wait_for_handlers=lambda: order.append("wait_handlers"),
@@ -276,6 +277,8 @@ def _patch_primary(
         host,
         "_production_commands",
         lambda **dependencies: (
+            gate_holder.setdefault("gate", dependencies["startup_gate"]),
+            setattr(webview, "startup_gate", dependencies["startup_gate"]),
             dependencies["startup_gate"].acknowledge_shell(0),
             order.append(("production_commands", dependencies, commands)),
             commands,
@@ -317,7 +320,7 @@ def _patch_primary(
     )
 
     class Appearance:
-        def request_initial_publication(self, _generation, callback) -> None:
+        def request_initial_surface_settlement(self, callback) -> None:
             callback(None)
 
         def close(self) -> None:
@@ -329,6 +332,19 @@ def _patch_primary(
         lambda window: order.append(("configure_appearance", window))
         or Appearance(),
     )
+
+    class DocumentChannel:
+        def post(self, payload, *, still_current, completion) -> None:
+            if not still_current():
+                completion(RuntimeError("stale document"))
+                return
+            completion(None)
+            gate = gate_holder["gate"]
+            context = gate.command_context()
+            if type(context) is ReadinessContext:
+                gate.acknowledge_echo(context.generation, payload["challenge"])
+
+    monkeypatch.setattr(host, "_document_channel", lambda _window: DocumentChannel())
     monkeypatch.setattr(
         host,
         "_bind_document_origin",
@@ -626,6 +642,7 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
 
     assert tuple(commands) == (
         "shell_ready",
+        "readiness_echo",
         "pick_folder",
         "start_plan",
         "next_events",
@@ -634,6 +651,7 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
     )
     assert tuple(dispatcher._commands) == (
         "shell_ready",
+        "readiness_echo",
         "pick_folder",
         "start_plan",
         "next_events",
@@ -659,9 +677,11 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
 def test_host_admission_uses_the_final_composed_command_mapping() -> None:
     gate = _startup_gate()
     publications: list[object] = []
+    posts: list[tuple[int, str, object]] = []
     gate.bind(
-        request_publication=lambda _generation, callback: publications.append(
-            callback
+        request_surface_settlement=publications.append,
+        request_challenge_post=lambda generation, challenge, callback: posts.append(
+            (generation, challenge, callback)
         ),
         open_desktop=lambda: True,
         refuse_desktop=lambda error: pytest.fail(str(error)),
@@ -669,6 +689,8 @@ def test_host_admission_uses_the_final_composed_command_mapping() -> None:
     gate.acknowledge_shell(0)
     gate.native_loaded()
     publications[0](None)
+    posts[0][2](None)
+    assert gate.acknowledge_echo(posts[0][0], posts[0][1])
 
     commands = {
         "headed_probe": CommandSpec(
@@ -701,6 +723,71 @@ def test_host_admission_uses_the_final_composed_command_mapping() -> None:
 
     assert response["ok"] is True
     assert response["result"] == {"seen": "ready"}
+
+
+def test_open_composition_admits_only_exact_readiness_echo_replay() -> None:
+    gate = _startup_gate()
+    surfaces: list[object] = []
+    posts: list[tuple[int, str, object]] = []
+    gate.bind(
+        request_surface_settlement=surfaces.append,
+        request_challenge_post=lambda generation, challenge, callback: posts.append(
+            (generation, challenge, callback)
+        ),
+        open_desktop=lambda: True,
+        refuse_desktop=lambda error: pytest.fail(str(error)),
+    )
+    gate.native_loaded()
+    gate.acknowledge_shell(0)
+    surfaces[0](None)
+    posts[0][2](None)
+    assert gate.acknowledge_echo(posts[0][0], posts[0][1])
+    commands = host._production_commands(
+        picker=lambda: None,
+        slots=host._folder_slots(),
+        registry=host._task_registry(_Service([])),
+        startup_gate=gate,
+    )
+    dispatcher = host._bridge_dispatcher(
+        SimpleNamespace(require_trusted=lambda: None),
+        commands,
+        gate,
+    )
+
+    replay = dispatcher.dispatch(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "request_id": "a2" * 16,
+                "command": "readiness_echo",
+                "payload": {"challenge": posts[0][1]},
+            }
+        )
+    )
+    stale = dispatcher.dispatch(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "request_id": "a3" * 16,
+                "command": "readiness_echo",
+                "payload": {"challenge": "f" * 32},
+            }
+        )
+    )
+    shell = dispatcher.dispatch(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "request_id": "a4" * 16,
+                "command": "shell_ready",
+                "payload": {},
+            }
+        )
+    )
+
+    assert replay["result"] == {"acknowledged": True}
+    assert stale["result"] == {"acknowledged": False}
+    assert shell["error"]["code"] == "bridge_unavailable"
 
 
 def test_host_accepts_only_a_construction_injected_local_index(
@@ -1059,14 +1146,22 @@ def test_initialized_refusal_aborts_without_destroy(
     assert reports == ["origin was unavailable"]
 
 
-def test_appearance_configuration_failure_refuses_startup_after_security(
+def test_appearance_configuration_failure_keeps_opaque_safe_baseline(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        webview.window.events.before_load.emit()
+        webview.startup_gate.acknowledge_shell(1)
+        webview.window.events.loaded.emit()
+
     paths, order, _webview, document, reports = _patch_primary(
         monkeypatch,
         tmp_path,
+        start=start,
     )
     monkeypatch.setattr(
         host,
@@ -1078,11 +1173,95 @@ def test_appearance_configuration_failure_refuses_startup_after_security(
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
 
-    assert result == 1
-    assert reports == ["injected material failure"]
+    assert result == 0
+    assert reports == []
     assert document.is_attached
     assert "service.close" in order
     assert "appearance.configuration_failed" in caplog.text
+
+
+def test_reload_channel_rebind_failure_revokes_the_previous_channel(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    posts: list[dict[str, object]] = []
+    channel_constructions = 0
+
+    class Channel:
+        def __init__(self, webview: object) -> None:
+            self._webview = webview
+
+        def post(self, payload, *, still_current, completion) -> None:
+            assert still_current()
+            posts.append(payload)
+            completion(None)
+            gate = self._webview.startup_gate
+            context = gate.command_context()
+            assert type(context) is ReadinessContext
+            gate.acknowledge_echo(context.generation, payload["challenge"])
+
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        webview.window.events.before_load.emit()
+        webview.startup_gate.acknowledge_shell(1)
+        webview.window.events.loaded.emit()
+        assert webview.startup_gate.is_open()
+        webview.window.events.before_load.emit()
+        assert webview.window.destroyed.wait(1.0)
+
+    paths, _order, webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=start,
+    )
+
+    def channel_factory(_window: object) -> object:
+        nonlocal channel_constructions
+        channel_constructions += 1
+        if channel_constructions == 2:
+            raise RuntimeError("injected channel rebind failure")
+        return Channel(webview)
+
+    monkeypatch.setattr(host, "_document_channel", channel_factory)
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["NamiSync could not bind its document channel"]
+    assert channel_constructions == 2
+    assert len(posts) == 1
+    assert "readiness.document_channel_bind_failed" in caplog.text
+
+
+def test_initial_channel_bind_failure_uses_startup_refusal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        webview.window.events.before_load.emit()
+        assert webview.window.destroyed.wait(1.0)
+
+    paths, order, webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=start,
+    )
+    monkeypatch.setattr(
+        host,
+        "_document_channel",
+        lambda _window: (_ for _ in ()).throw(RuntimeError("injected bind failure")),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    assert reports == ["NamiSync could not bind its document channel"]
+    assert webview.window.destroy_count == 1
+    assert order.index("reject_dispatch") < order.index("appearance.close")
 
 
 def test_appearance_cleanup_failure_is_nonfatal(
@@ -1096,7 +1275,7 @@ def test_appearance_cleanup_failure_is_nonfatal(
     )
 
     class Appearance:
-        def request_initial_publication(self, _generation, callback) -> None:
+        def request_initial_surface_settlement(self, callback) -> None:
             callback(None)
 
         def close(self) -> None:
@@ -1117,13 +1296,15 @@ def test_appearance_cleanup_failure_is_nonfatal(
     assert "appearance.cleanup_failed" in caplog.text
 
 
-def test_unconfirmed_window_material_refuses_startup_before_open_state(
+def test_unsafe_window_surface_refuses_startup_before_open_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def start(webview, *, on_initialized, storage_path) -> None:
         del storage_path
         on_initialized()
+        webview.window.events.before_load.emit()
+        webview.startup_gate.acknowledge_shell(1)
         webview.window.events.loaded.emit()
 
     paths, order, webview, _document, reports = _patch_primary(
@@ -1133,12 +1314,12 @@ def test_unconfirmed_window_material_refuses_startup_before_open_state(
     )
 
     class Appearance:
-        startup_failure = RuntimeError(
-            "NamiSync could not establish a readable window material"
-        )
-
-        def request_initial_publication(self, _generation, _callback) -> None:
-            pytest.fail("refused appearance was requested for publication")
+        def request_initial_surface_settlement(self, callback) -> None:
+            callback(
+                RuntimeError(
+                    "NamiSync could not establish a readable window material"
+                )
+            )
 
         def close(self) -> None:
             order.append("appearance.close")
@@ -1853,6 +2034,7 @@ def test_reload_readiness_refusal_does_not_override_close_in_flight() -> None:
 def test_reload_handshake_reopens_with_the_existing_close_controller() -> None:
     order: list[str] = []
     publications: list[object] = []
+    posts: list[tuple[int, str, object]] = []
     window = _ControllerWindow(order)
     service = _ControllerService(order, [_shutdown_view(complete=True)])
     controller = host._DesktopCloseController(
@@ -1867,8 +2049,9 @@ def test_reload_handshake_reopens_with_the_existing_close_controller() -> None:
     assert controller._mark_loaded() is True
     gate = _startup_gate()
     gate.bind(
-        request_publication=lambda _generation, callback: publications.append(
-            callback
+        request_surface_settlement=publications.append,
+        request_challenge_post=lambda generation, challenge, callback: posts.append(
+            (generation, challenge, callback)
         ),
         open_desktop=controller._mark_loaded,
         refuse_desktop=pytest.fail,
@@ -1878,6 +2061,8 @@ def test_reload_handshake_reopens_with_the_existing_close_controller() -> None:
     gate.native_loaded()
     gate.acknowledge_shell(1)
     publications[0](None)
+    posts[0][2](None)
+    assert gate.acknowledge_echo(posts[0][0], posts[0][1])
 
     assert gate.is_open()
     assert controller._is_open()
@@ -2432,6 +2617,8 @@ def test_normal_user_close_does_not_close_the_service_twice(
     def close_during_loop(webview, *, on_initialized, storage_path) -> None:
         del storage_path
         on_initialized()
+        webview.window.events.before_load.emit()
+        webview.startup_gate.acknowledge_shell(1)
         webview.window.events.loaded.emit()
         assert webview.window.events.closing.emit() == [False]
         assert webview.window.destroyed.wait(1.0)

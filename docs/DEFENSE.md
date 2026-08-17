@@ -262,6 +262,11 @@ that a human clicked a genuine control or saw an accurate plan. Any JavaScript
 executing in the allowed packaged origin can invoke every allowlisted command.
 Opaque ids, commitments, revisions, and request ids prevent confusion and stale
 execution; they are not authentication secrets or proof of user gesture.
+The desktop readiness challenge has the same non-authority status. It is an
+ephemeral, unlogged current-generation liveness nonce proving only that the
+trusted host-to-page message path and page-to-host dispatch path both completed.
+It never substitutes for committed-origin trust, command validation, handler
+admission, or backend task/session authority.
 
 Consequently, arbitrary same-origin script execution is a trusted-base
 compromise and is outside M1. If a hostile renderer ever becomes in scope,
@@ -276,12 +281,22 @@ The current containment obligations are still strict:
   script, URL, class, style, command, or path authority;
 - the complete inbound command envelope is bounded and exactly validated before
   domain dispatch;
+- ordinary command availability remains composition-gated on the current
+  document's bilateral readiness exchange, independently of bridge trust and
+  handler reservation;
 - commands are allowlisted and future mutations remain subject to backend plan,
   commitment, revision, and receipt rules;
 - navigation, frames, popups, downloads, and runtime fallback fail closed under
   their owning bridge contract; and
 - renderer failure, malformed requests, expired slots, saturation, and teardown
   may degrade only through bounded T1 outcomes.
+
+Appearance enhancement and publication are T1-degradable after the window's
+opaque base surface is known safe. Configuration, observation, read, or
+host-to-page appearance-publication failure does not create command authority
+and does not by itself refuse startup. If enhancement may have made the native
+surface transparent and an opaque rollback cannot be confirmed, readable UI
+cannot be claimed; that surface-safety failure is a hard startup refusal.
 
 Filesystem-derived review labels have an additional layout-integrity wall at
 their final DOM sink. The sink replaces U+0000-U+001F, U+007F-U+009F,

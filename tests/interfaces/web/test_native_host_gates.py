@@ -132,10 +132,14 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert "script-src 'self'" in html
     assert "unsafe-inline" not in html
     assert '<script type="module" src="probe.js"></script>' in html
+    assert 'from "./readiness.js"' in script
     assert 'from "./appearance.js"' in script
-    assert "await becomePresentationReady();" in script
+    assert "await completeReadinessHandshake();" in script
     assert 'dispatchCommand("shell_ready", {})' in script
-    assert "await appearance.whenAppliedAfter(baseline);" in script
+    assert 'dispatchCommand("readiness_echo", { challenge })' in script
+    assert script.index("installReadinessReceiver(") < script.index(
+        "installAppearanceReceiver("
+    )
     assert "window.pywebview.api.dispatch" in script
     assert "window.location.assign(NAVIGATION_TARGET)" in script
     assert "window.open(POPUP_TARGET)" in script
@@ -286,6 +290,7 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",
@@ -582,7 +587,7 @@ def _stage_live_page(
 ) -> Path:
     page = require_absolute_local_test_root(root / "live-page")
     shutil.copytree(_INDEX.parent, page)
-    installed_asset = (
+    installed_assets = (
         installed.root
         / "Lib"
         / "site-packages"
@@ -590,12 +595,13 @@ def _stage_live_page(
         / "interfaces"
         / "web"
         / "assets"
-        / "appearance.js"
     ).resolve(strict=True)
-    assert installed_asset.is_relative_to(installed.root.resolve())
-    destination = page / "appearance.js"
-    shutil.copy2(installed_asset, destination)
-    assert destination.read_bytes() == installed_asset.read_bytes()
+    assert installed_assets.is_relative_to(installed.root.resolve())
+    for name in ("appearance.js", "readiness.js"):
+        installed_asset = (installed_assets / name).resolve(strict=True)
+        destination = page / name
+        shutil.copy2(installed_asset, destination)
+        assert destination.read_bytes() == installed_asset.read_bytes()
     return require_absolute_local_test_root(page / "index.html")
 
 
@@ -810,6 +816,7 @@ def _assert_packaged_popup_evidence(
         "close_task",
         "next_events",
         "pick_folder",
+        "readiness_echo",
         "release_terminal_session",
         "shell_ready",
         "start_plan",

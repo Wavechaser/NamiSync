@@ -140,10 +140,7 @@ def _window() -> SimpleNamespace:
 
 def _request_initial(controller: object) -> list[Exception | None]:
     results: list[Exception | None] = []
-    controller.request_initial_publication(
-        controller._document_generation,
-        results.append,
-    )
+    controller.request_initial_surface_settlement(results.append)
     return results
 
 
@@ -676,7 +673,7 @@ def test_opaque_fallback_attempts_every_rollback_after_operation_exception(
     ]
 
 
-def test_apply_does_not_claim_opaque_when_reset_cannot_be_confirmed(
+def test_apply_reports_unsafe_surface_when_reset_cannot_be_confirmed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     native = appearance._WindowsAppearanceNative()
@@ -690,7 +687,8 @@ def test_apply_does_not_claim_opaque_when_reset_cannot_be_confirmed(
         ),
     )
 
-    assert native.apply(object(), _system()) is None
+    with pytest.raises(appearance.UnsafeSurfaceError, match="opaque rollback"):
+        native.apply(object(), _system())
     assert calls == [
         ("controller", True),
         (
@@ -706,6 +704,23 @@ def test_apply_does_not_claim_opaque_when_reset_cannot_be_confirmed(
         ),
         ("controller", False),
     ]
+
+
+def test_apply_reports_unsafe_surface_when_rollback_itself_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = appearance._WindowsAppearanceNative()
+    _patch_native_calls(monkeypatch, native, transparent_succeeds=False)
+
+    def fail_rollback(_window: object, _system: SystemAppearance) -> bool:
+        raise RuntimeError("injected rollback failure")
+
+    monkeypatch.setattr(native, "force_opaque", fail_rollback)
+
+    with pytest.raises(appearance.UnsafeSurfaceError, match="complete") as raised:
+        native.apply(object(), _system())
+
+    assert isinstance(raised.value.__cause__, RuntimeError)
 
 
 def test_sh_g_12_security_registration_remains_first_and_cleanup_unsubscribes() -> None:
@@ -746,36 +761,34 @@ def test_partial_event_attachment_rolls_back_before_load_handler() -> None:
     assert window.events.before_load.handlers == []
 
 
-def test_initial_observation_failure_marks_startup_refused() -> None:
+def test_initial_subscription_failure_degrades_over_safe_opaque_baseline() -> None:
     window = _window()
     native = _FakeNative(_system())
     native.subscribe_error = RuntimeError("injected observation refusal")
     controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
 
     window.events.before_load.emit()
 
-    assert controller.startup_failure is not None
-    assert str(controller.startup_failure) == (
-        "Windows appearance observation could not start"
-    )
+    assert results == [None]
+    assert controller.surface_safety_failure is None
     assert native.preference_handlers == []
     controller.close()
 
 
-def test_initial_read_follows_subscription_and_rolls_it_back_on_failure() -> None:
+def test_initial_read_failure_rolls_back_observation_and_settles_safe() -> None:
     window = _window()
     native = _FakeNative(_system())
     native.read_error = RuntimeError("injected initial read refusal")
     controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
 
     window.events.before_load.emit()
 
     assert native.calls[:3] == ["subscribe", "read", "unsubscribe"]
     assert native.preference_handlers == []
-    assert controller.startup_failure is not None
-    assert str(controller.startup_failure) == (
-        "Windows appearance state could not be read"
-    )
+    assert results == [None]
+    assert controller.surface_safety_failure is None
     controller.close()
 
 
@@ -833,7 +846,7 @@ def test_deferred_initial_generation_finishes_before_loaded_publication() -> Non
     assert window.appearance_messages.messages == []
     window.events.loaded.emit()
 
-    assert controller.startup_failure is None
+    assert controller.surface_safety_failure is None
     assert results == [None]
     assert [message["accent"] for message in window.appearance_messages.messages] == [
         "#222222"
@@ -867,7 +880,7 @@ def test_loaded_before_deferred_initial_generation_waits_for_final_state() -> No
     assert window.appearance_messages.messages == []
     deferred[0]()
 
-    assert controller.startup_failure is None
+    assert controller.surface_safety_failure is None
     assert results == [None]
     assert [message["accent"] for message in window.appearance_messages.messages] == [
         "#222222"
@@ -875,7 +888,104 @@ def test_loaded_before_deferred_initial_generation_waits_for_final_state() -> No
     controller.close()
 
 
-def test_reload_requires_a_new_initial_publication_for_the_new_receiver() -> None:
+def test_failed_deferred_refresh_settles_from_last_confirmed_safe_surface() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    original_read = native.read
+    emitted = False
+
+    def read() -> SystemAppearance:
+        nonlocal emitted
+        snapshot = original_read()
+        if not emitted:
+            emitted = True
+            native.system = _system(dark=True, accent="#222222")
+            native.emit_preference_change()
+        return snapshot
+
+    native.read = read
+    def refuse_defer(_window: object, _callback: object) -> None:
+        raise RuntimeError("injected deferred dispatch refusal")
+
+    native.defer = refuse_defer
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+
+    assert results == [None]
+    assert controller.surface_safety_failure is None
+    controller.close()
+
+
+def test_deferred_initial_refresh_latches_unconfirmed_surface_failure() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_read = native.read
+    emitted = False
+
+    def read() -> SystemAppearance:
+        nonlocal emitted
+        snapshot = original_read()
+        if not emitted:
+            emitted = True
+            native.system = _system(dark=True, accent="#222222")
+            native.emit_preference_change()
+        return snapshot
+
+    native.read = read
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+    window.events.before_load.emit()
+    assert len(deferred) == 1
+    assert results == []
+    unsafe = appearance.UnsafeSurfaceError("injected deferred rollback refusal")
+    native.apply_error = unsafe
+
+    deferred[0]()
+
+    assert results == [unsafe]
+    assert controller.surface_safety_failure is unsafe
+    controller.close()
+
+
+def test_reload_before_surface_settlement_completes_all_generation_waiters() -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_read = native.read
+    reads = 0
+
+    def read() -> SystemAppearance:
+        nonlocal reads
+        snapshot = original_read()
+        reads += 1
+        if reads == 1:
+            native.system = _system(dark=True, accent="#222222")
+            native.emit_preference_change()
+        return snapshot
+
+    native.read = read
+    controller = configure_window_appearance(window, native=native)
+    first = _request_initial(controller)
+    window.events.before_load.emit()
+    assert len(deferred) == 1
+
+    window.events.before_load.emit()
+    second = _request_initial(controller)
+    assert first == []
+    assert second == []
+    deferred[0]()
+
+    assert first == [None]
+    assert second == [None]
+    controller.close()
+
+
+def test_reload_automatically_publishes_to_the_new_receiver() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#123456"))
     controller = configure_window_appearance(window, native=native)
@@ -888,10 +998,7 @@ def test_reload_requires_a_new_initial_publication_for_the_new_receiver() -> Non
 
     window.events.before_load.emit()
     window.events.loaded.emit()
-    assert len(window.appearance_messages.messages) == 1
-    second = _request_initial(controller)
 
-    assert second == [None]
     assert [
         (message["revision"], message["accent"])
         for message in window.appearance_messages.messages
@@ -902,46 +1009,49 @@ def test_reload_requires_a_new_initial_publication_for_the_new_receiver() -> Non
 def test_reload_invalidates_a_queued_prior_generation_publication() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#123456"))
+    queued: list[object] = []
+    queue_posts = False
+    immediate_invoke = native.invoke
+
+    def invoke(native_window: object, callback: object) -> None:
+        if queue_posts:
+            queued.append(callback)
+        else:
+            immediate_invoke(native_window, callback)
+
+    native.invoke = invoke
     controller = configure_window_appearance(window, native=native)
     window.events.before_load.emit()
     _request_initial(controller)
     window.events.loaded.emit()
     assert len(window.appearance_messages.messages) == 1
-    queued: list[object] = []
-    native.invoke = lambda _window, callback: queued.append(callback)
+    queue_posts = True
 
     window.events.before_load.emit()
     window.events.loaded.emit()
-    second = _request_initial(controller)
     assert len(queued) == 1
     window.events.before_load.emit()
     window.events.loaded.emit()
-    third = _request_initial(controller)
     assert len(queued) == 2
 
     queued[0]()
-    assert second == []
-    assert third == []
     queued[1]()
 
-    assert second == []
-    assert third == [None]
     assert len(window.appearance_messages.messages) == 2
     controller.close()
 
 
-def test_stale_publication_request_cannot_claim_the_new_generation() -> None:
+def test_initial_surface_settlement_is_a_stable_controller_fact() -> None:
     window = _window()
     native = _FakeNative(_system())
     controller = configure_window_appearance(window, native=native)
     window.events.before_load.emit()
     window.events.loaded.emit()
+    first = _request_initial(controller)
+    second = _request_initial(controller)
 
-    with pytest.raises(RuntimeError, match="generation is stale"):
-        controller.request_initial_publication(0, pytest.fail)
-    current = _request_initial(controller)
-
-    assert current == [None]
+    assert first == [None]
+    assert second == [None]
     assert len(window.appearance_messages.messages) == 1
     controller.close()
 
@@ -989,7 +1099,7 @@ def test_document_publication_uses_the_native_ui_dispatcher_without_dom_eval() -
     controller.close()
 
 
-def test_initial_publication_reports_document_post_failure_once() -> None:
+def test_document_post_failure_degrades_without_changing_surface_settlement() -> None:
     window = _window()
     native = _FakeNative(_system())
     attempts = 0
@@ -1007,9 +1117,9 @@ def test_initial_publication_reports_document_post_failure_once() -> None:
     window.events.loaded.emit()
     native.emit_preference_change()
 
-    assert attempts == 1
-    assert len(results) == 1
-    assert isinstance(results[0], RuntimeError)
+    assert attempts == 2
+    assert results == [None]
+    assert controller.surface_safety_failure is None
     assert window.appearance_messages.messages == []
     controller.close()
 
@@ -1317,10 +1427,10 @@ def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     assert len(queued) == 2
     queued[1]()
     assert len(queued) == 2
-    assert results == []
+    assert results == [None]
     queued[0]()
     assert len(queued) == 3
-    assert results == []
+    assert results == [None]
     queued[2]()
 
     assert [value["revision"] for value in window.appearance_messages.messages] == [2]
@@ -1329,55 +1439,25 @@ def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     controller.close()
 
 
-def test_initial_publication_cannot_complete_across_a_newer_observation() -> None:
+def test_surface_settlement_callback_runs_outside_the_controller_lock() -> None:
     window = _window()
-    native = _FakeNative(_system(accent="#111111"))
+    native = _FakeNative(_system())
     controller = configure_window_appearance(window, native=native)
-    window.events.before_load.emit()
-    results: list[tuple[Exception | None, int]] = []
-    controller.request_initial_publication(
-        controller._document_generation,
-        lambda error: results.append(
-            (error, window.appearance_messages.messages[-1]["revision"])
-        ),
-    )
-    original_finish = controller._finish_initial_publication
-    old_finish_entered = Event()
-    release_old_finish = Event()
+    completed = Event()
 
-    def finish(
-        generation: int,
-        error: Exception | None,
-        *,
-        expected_revision: int | None = None,
-    ) -> bool | None:
-        if error is None and expected_revision == 1:
-            old_finish_entered.set()
-            assert release_old_finish.wait(1.0)
-        return original_finish(
-            generation,
-            error,
-            expected_revision=expected_revision,
-        )
+    def settled(error: Exception | None) -> None:
+        assert error is None
+        assert controller.surface_safety_failure is None
+        controller.close()
+        completed.set()
 
-    controller._finish_initial_publication = finish
-    loaded = Thread(target=window.events.loaded.emit)
-    loaded.start()
-    assert old_finish_entered.wait(1.0)
-    assert results == []
+    controller.request_initial_surface_settlement(settled)
+    worker = Thread(target=window.events.before_load.emit, daemon=True)
+    worker.start()
+    worker.join(1.0)
 
-    native.system = _system(dark=True, accent="#222222")
-    native.emit_preference_change()
-    release_old_finish.set()
-    loaded.join(1.0)
-
-    assert not loaded.is_alive()
-    assert [message["revision"] for message in window.appearance_messages.messages] == [
-        1,
-        2,
-    ]
-    assert results == [(None, 2)]
-    controller.close()
+    assert not worker.is_alive()
+    assert completed.is_set()
 
 
 def test_close_invalidates_queued_publication_without_waiting() -> None:
@@ -1447,15 +1527,73 @@ def test_preference_read_failure_restores_opaque_presentation() -> None:
 def test_unconfirmed_initial_fallback_refuses_a_readable_material_claim() -> None:
     window = _window()
     native = _FakeNative(_system())
-    native.apply_error = RuntimeError("injected DWM failure")
-    native.force_opaque_result = False
+    native.apply_error = appearance.UnsafeSurfaceError(
+        "injected unconfirmed rollback"
+    )
     controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
 
     window.events.before_load.emit()
     window.events.loaded.emit()
 
     assert window.appearance_messages.messages == []
-    assert controller.startup_failure is not None
+    assert len(results) == 1
+    assert isinstance(results[0], appearance.UnsafeSurfaceError)
+    assert controller.surface_safety_failure is results[0]
+    controller.close()
+
+
+def test_indeterminate_initial_material_failure_requires_confirmed_rollback() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    native.apply_error = RuntimeError("injected appearance logic failure")
+    native.force_opaque_result = False
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    assert len(results) == 1
+    assert isinstance(results[0], appearance.UnsafeSurfaceError)
+    assert controller.surface_safety_failure is results[0]
+    assert window.appearance_messages.messages == []
+    controller.close()
+
+
+def test_unavailable_initial_enhancement_keeps_safe_opaque_baseline() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    native.apply_result = None
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    assert results == [None]
+    assert controller.surface_safety_failure is None
+    assert window.appearance_messages.messages == []
+    controller.close()
+
+
+def test_unsafe_initial_surface_result_is_never_erased_by_later_success() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    unsafe = appearance.UnsafeSurfaceError("injected unconfirmed rollback")
+    native.apply_error = unsafe
+    controller = configure_window_appearance(window, native=native)
+    results = _request_initial(controller)
+
+    window.events.before_load.emit()
+    native.apply_error = None
+    native.system = _system(dark=True, accent="#ABCDEF")
+    native.emit_preference_change()
+    repeated = _request_initial(controller)
+
+    assert results == [unsafe]
+    assert repeated == [unsafe]
+    assert controller.surface_safety_failure is unsafe
     controller.close()
 
 
@@ -1946,7 +2084,7 @@ def test_system_snapshot_rejects_non_inert_accent_values() -> None:
         _system(accent="red; background: url(https://example.invalid)")
 
 
-def test_documented_accent_read_and_no_application_javascript_channel() -> None:
+def test_documented_accent_read_and_no_direct_document_sink() -> None:
     source = inspect.getsource(appearance)
 
     assert "UISettings" in source
@@ -1957,4 +2095,4 @@ def test_documented_accent_read_and_no_application_javascript_channel() -> None:
     assert "winreg.SetValue" not in source
     assert "evaluate_js" not in source
     assert "run_js" not in source
-    assert "PostWebMessageAsJson" in source
+    assert "PostWebMessageAsJson" not in source

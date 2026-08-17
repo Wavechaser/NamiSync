@@ -1,3 +1,4 @@
+import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
 
 (function () {
@@ -17,6 +18,7 @@ import { installAppearanceReceiver } from "./appearance.js";
     observations: {},
   };
   window.__namiNativeHostGate = state;
+  const readiness = installReadinessReceiver(window.chrome.webview);
   const appearance = installAppearanceReceiver(
     window.chrome.webview,
     document.documentElement,
@@ -49,13 +51,30 @@ import { installAppearanceReceiver } from "./appearance.js";
     return dispatchCommand("native_probe", payload);
   }
 
-  async function becomePresentationReady() {
-    const baseline = appearance.revision();
+  async function completeReadinessHandshake() {
+    const readinessBaseline = readiness.revision();
+    const appearanceBaseline = appearance.revision();
     const response = await dispatchCommand("shell_ready", {});
     if (response === null || typeof response !== "object" || response.ok !== true) {
       throw new Error("Native host gate shell acknowledgement was refused");
     }
-    await appearance.whenAppliedAfter(baseline);
+    const challenge = await readiness.whenReceivedAfter(readinessBaseline);
+    let acknowledged = false;
+    for (let attempt = 0; attempt < 2 && !acknowledged; attempt += 1) {
+      try {
+        const echo = await dispatchCommand("readiness_echo", { challenge });
+        acknowledged = echo !== null
+          && typeof echo === "object"
+          && echo.ok === true
+          && echo.result?.acknowledged === true;
+      } catch (error) {
+        if (attempt > 0) throw error;
+      }
+    }
+    if (!acknowledged) {
+      throw new Error("Native host gate readiness echo was refused");
+    }
+    await appearance.whenAppliedAfter(appearanceBaseline);
     const revisions = state.observations.presentationRevisions || [];
     revisions.push(appearance.revision());
     state.observations.presentationRevisions = revisions;
@@ -132,7 +151,7 @@ import { installAppearanceReceiver } from "./appearance.js";
     }
     state.running = true;
     try {
-      await becomePresentationReady();
+      await completeReadinessHandshake();
       if (state.stage === 0) {
         await onFirstReady();
       } else if (state.stage === 1) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
@@ -72,6 +73,39 @@ def test_native_host_dependencies_are_declared_directly() -> None:
     assert [item for item in dependencies if item.startswith("bottle")] == [
         "bottle>=0.13.4"
     ]
+
+
+def test_pinned_pywebview_starts_each_host_generation_before_js_ready() -> None:
+    """A production reinjection must renew host readiness before JS restarts."""
+
+    source = inspect.getsource(webview.util.inject_pywebview)
+    function = ast.parse(source).body[0]
+    assert isinstance(function, ast.FunctionDef)
+    statements = [ast.unparse(statement) for statement in function.body]
+
+    before_load = statements.index("window.events.before_load.set()")
+    thread_start = statements.index("thread.start()")
+    assert before_load < thread_start
+
+    thread_assignment = next(
+        statement
+        for statement in function.body
+        if isinstance(statement, ast.Assign)
+        and ast.unparse(statement.targets[0]) == "thread"
+    )
+    assert ast.unparse(thread_assignment.value) == "Thread(target=generate_js_object)"
+    generator = next(
+        statement
+        for statement in function.body
+        if isinstance(statement, ast.FunctionDef)
+        and statement.name == "generate_js_object"
+    )
+    generator_expressions = {
+        ast.unparse(node)
+        for node in ast.walk(generator)
+        if isinstance(node, ast.Expr)
+    }
+    assert "window.events._pywebviewready.set()" in generator_expressions
 
 
 @pytest.mark.parametrize("environment", [{}, {"PYTHONNET_RUNTIME": "netfx"}])
