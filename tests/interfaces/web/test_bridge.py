@@ -10,6 +10,7 @@ import pytest
 
 import namisync.interfaces.web.pywebview_runtime as pywebview_runtime
 from namisync.interfaces.web.bridge import (
+    AdmissionGranted,
     BRIDGE_SCHEMA_VERSION,
     BridgeDispatcher,
     BridgeOriginError,
@@ -28,9 +29,15 @@ from namisync.interfaces.web.commands import (
     CommandTimeout,
     FieldRequirement,
 )
+from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 
 
 _REQUEST_ID = "1a" * 16
+_OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
+
+
+def _admit_open(_name: str) -> object:
+    return AdmissionGranted(_OPEN_CONTEXT)
 
 
 def _test_spec(handler) -> CommandSpec:
@@ -49,6 +56,7 @@ def _dispatcher(document, handlers) -> BridgeDispatcher:
     return BridgeDispatcher(
         document=document,
         commands={name: _test_spec(handler) for name, handler in handlers.items()},
+        admit=_admit_open,
     )
 
 
@@ -170,7 +178,11 @@ def _trusted_document(
 
 def test_pending_document_binds_one_exact_origin_and_keeps_dispatch_closed() -> None:
     document = NativeDocumentState()
-    bridge = BridgeDispatcher(document=document, commands={})
+    bridge = BridgeDispatcher(
+        document=document,
+        commands={},
+        admit=_admit_open,
+    )
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
@@ -1046,7 +1058,11 @@ def test_bridge_public_surface_is_dispatch_and_typed_lifecycle_only() -> None:
 
 def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> None:
     document = _trusted_document()
-    bridge = BridgeDispatcher(document=document, commands={})
+    bridge = BridgeDispatcher(
+        document=document,
+        commands={},
+        admit=_admit_open,
+    )
     command = json.dumps(
         {
             "schema_version": BRIDGE_SCHEMA_VERSION,
@@ -1062,11 +1078,13 @@ def test_empty_handler_surface_is_valid_but_invalid_entries_are_rejected() -> No
             BridgeDispatcher(
                 document=document,
                 commands={invalid_name: _test_spec(lambda payload: payload)},
+                admit=_admit_open,
             )
     with pytest.raises(TypeError, match="exact CommandSpec"):
         BridgeDispatcher(
             document=document,
             commands={"ping": lambda payload: payload},
+            admit=_admit_open,
         )
 
 

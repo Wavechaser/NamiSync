@@ -428,8 +428,9 @@ third-party notices, signing, or a WebView2 bootstrapper.
        refused -> native reporter, run finalizer, exit nonzero
    create pending NativeDocumentState
    create startup gate and immutable production command mapping
+   compose admit(name) over the final mapping and current readiness context
    create BridgeDispatcher(document=pending_state, commands=mapping,
-                           availability=startup_gate.command_availability)
+                           admit=composition_admit)
    create_window(local index path, js_api=None)
    expose only dispatch(command_json) through the function table
    start_edge_chromium(http_server=True, private_mode=True,

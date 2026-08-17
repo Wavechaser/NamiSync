@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
@@ -11,7 +12,14 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.web.host as host
-from namisync.interfaces.web.commands import PickerUnavailableError
+from namisync.interfaces.web.commands import (
+    CommandAccess,
+    CommandRetry,
+    CommandSpec,
+    CommandTimeout,
+    FieldRequirement,
+    PickerUnavailableError,
+)
 from namisync.interfaces.web.host import (
     DesktopInstanceAdmission,
     DesktopInstanceIdentity,
@@ -19,7 +27,14 @@ from namisync.interfaces.web.host import (
     run_desktop,
 )
 from namisync.interfaces.web.paths import AppPaths
-from namisync.interfaces.web.readiness import DesktopReadinessGate
+from namisync.interfaces.web.readiness import (
+    CommandPhase,
+    DesktopReadinessGate,
+    ReadinessContext,
+)
+
+
+_OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 
 
 class _Hook:
@@ -527,14 +542,20 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
     first: list[object] = []
     worker = Thread(
         target=lambda: first.append(
-            commands["pick_folder"].invoke({"purpose": "source"})
+            commands["pick_folder"].invoke(
+                {"purpose": "source"},
+                context=_OPEN_CONTEXT,
+            )
         )
     )
     worker.start()
     assert entered.wait(1.0)
 
     with pytest.raises(PickerUnavailableError):
-        commands["pick_folder"].invoke({"purpose": "source"})
+        commands["pick_folder"].invoke(
+            {"purpose": "source"},
+            context=_OPEN_CONTEXT,
+        )
     assert maximum_active == 1
 
     release.set()
@@ -542,7 +563,10 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
     assert not worker.is_alive()
     assert first == [{"id": "slot-" + "1" * 32, "display": "Selected"}]
 
-    assert commands["pick_folder"].invoke({"purpose": "source"}) == {
+    assert commands["pick_folder"].invoke(
+        {"purpose": "source"},
+        context=_OPEN_CONTEXT,
+    ) == {
         "id": "slot-" + "1" * 32,
         "display": "Selected",
     }
@@ -630,6 +654,53 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
     assert tuple(window._functions) == ("dispatch",)
     assert window._functions["dispatch"]("{}") == dispatcher.dispatch("{}")
     assert set(window._functions) == {"dispatch"}
+
+
+def test_host_admission_uses_the_final_composed_command_mapping() -> None:
+    gate = _startup_gate()
+    publications: list[object] = []
+    gate.bind(
+        request_publication=lambda _generation, callback: publications.append(
+            callback
+        ),
+        open_desktop=lambda: True,
+        refuse_desktop=lambda error: pytest.fail(str(error)),
+    )
+    gate.acknowledge_shell(0)
+    gate.native_loaded()
+    publications[0](None)
+
+    commands = {
+        "headed_probe": CommandSpec(
+            validate_payload=lambda payload: payload,
+            handler=lambda payload: {"seen": payload["value"]},
+            access=CommandAccess.READ_ONLY,
+            command_id=FieldRequirement.FORBIDDEN,
+            revision=FieldRequirement.FORBIDDEN,
+            timeout=CommandTimeout.INTERACTIVE,
+            retry=CommandRetry.NONE,
+        )
+    }
+    dispatcher = host._bridge_dispatcher(
+        SimpleNamespace(require_trusted=lambda: None),
+        commands,
+        gate,
+    )
+    commands.clear()
+
+    response = dispatcher.dispatch(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "request_id": "a1" * 16,
+                "command": "headed_probe",
+                "payload": {"value": "ready"},
+            }
+        )
+    )
+
+    assert response["ok"] is True
+    assert response["result"] == {"seen": "ready"}
 
 
 def test_host_accepts_only_a_construction_injected_local_index(

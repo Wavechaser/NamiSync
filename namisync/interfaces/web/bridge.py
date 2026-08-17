@@ -97,6 +97,18 @@ class WebView2Unavailable(RuntimeError):
     """The required Edge Chromium renderer could not be started."""
 
 
+@dataclass(frozen=True, slots=True)
+class AdmissionGranted:
+    """Opaque composition approval consumed by the transport."""
+
+    context: object
+
+
+@dataclass(frozen=True, slots=True)
+class AdmissionRefused:
+    """Composition refused this command for the current document."""
+
+
 class _AttachmentError(RuntimeError):
     """A sanitized native-guard attachment failure."""
 
@@ -484,13 +496,9 @@ class BridgeDispatcher:
         *,
         document: NativeDocumentState,
         commands: Mapping[str, CommandSpec],
-        availability: Callable[[], object] | None = None,
+        admit: Callable[[str], object],
     ) -> None:
-        from .commands import (
-            CommandAvailability,
-            CommandAvailabilitySnapshot,
-            CommandSpec,
-        )
+        from .commands import CommandSpec
 
         snapshot = dict(commands)
         if any(
@@ -504,31 +512,19 @@ class BridgeDispatcher:
             )
         if any(type(spec) is not CommandSpec for spec in snapshot.values()):
             raise TypeError("every bridge command must be an exact CommandSpec")
-        if availability is None:
-            if any(
-                spec.availability is CommandAvailability.STARTUP
-                for spec in snapshot.values()
-            ):
-                raise TypeError(
-                    "startup commands require an availability predicate"
-                )
-            availability = lambda: CommandAvailabilitySnapshot(
-                CommandAvailability.OPEN,
-                0,
-            )
-        if not callable(availability):
-            raise TypeError("bridge availability predicate must be callable")
+        if not callable(admit):
+            raise TypeError("bridge command admission must be callable")
         self._document = document
         self._commands = snapshot
-        self._availability = availability
-        self._admission = Condition(Lock())
+        self._admit_command = admit
+        self._handler_condition = Condition(Lock())
         self._accepting = True
         self._admitted = 0
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Return one exact response envelope; never export a Python failure."""
 
-        refusal = self._admit()
+        refusal = self._reserve_handler()
         if refusal is not None:
             return self._failure(None, None, refusal)
         try:
@@ -584,18 +580,14 @@ class BridgeDispatcher:
             spec = self._commands.get(name)
             if spec is None:
                 return self._failure(request_id, None, "unknown_command")
-            from .commands import (
-                CommandAvailability,
-                CommandAvailabilitySnapshot,
-            )
 
             try:
-                availability = self._availability()
+                admission = self._admit_command(name)
             except BaseException:
                 return self._failure(request_id, name, "bridge_unavailable")
-            if type(availability) is not CommandAvailabilitySnapshot:
+            if type(admission) is AdmissionRefused:
                 return self._failure(request_id, name, "bridge_unavailable")
-            if spec.availability is not availability.availability:
+            if type(admission) is not AdmissionGranted:
                 return self._failure(request_id, name, "bridge_unavailable")
 
             payload = raw["payload"]
@@ -607,6 +599,7 @@ class BridgeDispatcher:
                 return self._failure(request_id, name, "invalid_payload")
 
             from .commands import (
+                CommandAdmissionError,
                 CommandConflictError,
                 CommandPayloadError,
                 PickerUnavailableError,
@@ -622,12 +615,10 @@ class BridgeDispatcher:
             try:
                 result = spec.invoke(
                     payload,
-                    generation=(
-                        availability.generation
-                        if spec.availability is CommandAvailability.STARTUP
-                        else None
-                    ),
+                    context=admission.context,
                 )
+            except CommandAdmissionError:
+                return self._failure(request_id, name, "bridge_unavailable")
             except CommandPayloadError:
                 return self._failure(request_id, name, "invalid_payload")
             except SlotUnavailableError:
@@ -659,7 +650,7 @@ class BridgeDispatcher:
         except BaseException:
             return self._failure(None, None, "internal_error")
         finally:
-            self._release()
+            self._release_handler()
 
     def _failure(
         self,
@@ -686,8 +677,8 @@ class BridgeDispatcher:
             },
         }
 
-    def _admit(self) -> str | None:
-        with self._admission:
+    def _reserve_handler(self) -> str | None:
+        with self._handler_condition:
             if not self._accepting:
                 return "bridge_unavailable"
             if self._admitted >= _MAX_ADMITTED_HANDLERS:
@@ -695,16 +686,16 @@ class BridgeDispatcher:
             self._admitted += 1
             return None
 
-    def _release(self) -> None:
-        with self._admission:
+    def _release_handler(self) -> None:
+        with self._handler_condition:
             self._admitted -= 1
             if self._admitted == 0:
-                self._admission.notify_all()
+                self._handler_condition.notify_all()
 
     def begin_close(self) -> None:
         """Reject every later dispatch while admitted handlers settle."""
 
-        with self._admission:
+        with self._handler_condition:
             self._accepting = False
 
     def wait_for_handlers(
@@ -718,14 +709,14 @@ class BridgeDispatcher:
         if timeout <= 0:
             raise ValueError("bridge handler wait timeout must be positive")
         deadline = monotonic() + timeout
-        with self._admission:
+        with self._handler_condition:
             while self._admitted:
                 remaining = deadline - monotonic()
                 if remaining <= 0:
                     raise TimeoutError(
                         "bridge handlers did not quiesce before the deadline"
                     )
-                self._admission.wait(remaining)
+                self._handler_condition.wait(remaining)
 
 
 def to_primitive_view(value: object) -> object:

@@ -421,20 +421,27 @@ It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
 Each pywebview injection starts a host-owned closed document generation. The
-fixed `shell_ready` row is the only startup-available command; the dispatcher
+fixed `shell_ready` row is the only bootstrap-phase command; composition
 captures that generation with admission and rejects a stale acknowledgement.
 Normal rows become available only after native load, packaged receiver/DOM
 acknowledgement, and successful current appearance publication. Reinjection
 repeats the acknowledgement through the same function, while terminal gate
-states expose no command availability at all. Frontend code distinguishes raw
+states expose no readiness context at all. Frontend code distinguishes raw
 pywebview API injection from operational readiness: only `shell_ready` may use
 the former, while normal calls, retries, and retained task drains remain paused
 until the receiver applies the new generation's appearance envelope.
 `interfaces/web/readiness.py` owns this exact current-document state machine,
-its deadline and terminal states, and its immutable availability snapshots.
+its deadline and terminal states, and its immutable `ReadinessContext` values.
 The host binds native, shell, appearance-publication, open, and refusal
-callbacks to that owner; command rows retain only their declared availability,
-and the bridge consumes the resulting snapshot without owning gate lifetime.
+callbacks to that owner. Each immutable command row declares only a
+`BOOTSTRAP` or `OPEN` phase. Host composition owns `admit(name)`: it joins the
+row from the final command mapping to the current exact context and returns the
+bridge's generic `AdmissionGranted(context)` or `AdmissionRefused` carrier.
+The bridge exact-checks that carrier, otherwise fails as `bridge_unavailable`,
+and forwards a granted context opaquely. `CommandSpec.invoke` independently
+exact-checks the context and phase before payload validation. Exact-document
+trust and the bridge's 64-handler reservation remain transport-owned; service
+session admission remains a separate domain-blind dispatcher concern.
 NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` to carry application data. Pinned pywebview does
 construct JavaScript internally for its exposed-function return transport;

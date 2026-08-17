@@ -563,10 +563,15 @@ is stored separately from semantic settings and never persists authority.
 
 Windows host security, bridge transport, presentation tokens, and lifecycle
 policy remain adapter concerns. `interfaces/web/readiness.py` is the named owner
-of the current-document readiness state machine and its exact availability
-views for commands; the host composes that owner into the transport. Their
-exact limits, evidence, and delivery status belong to `M1_BRIDGE.md`,
-`M1_SHELL.md`, `INTERFACES.md`, and `DESKTOP_UI.md`, not this document.
+of the current-document readiness state machine and its exact phase contexts.
+Normal desktop command availability depends on successful current-document
+presentation liveness. Host composition owns the `admit(name)` join between
+the final immutable command mapping and that readiness context. The bridge
+separately owns exact-document trust and bounded handler reservation; it
+consumes only an exact generic admission verdict and forwards a granted opaque
+context without interpreting readiness. Their exact limits, evidence, and
+delivery status belong to `M1_BRIDGE.md`, `M1_SHELL.md`, `INTERFACES.md`, and
+`DESKTOP_UI.md`, not this document.
 
 See also `COMMANDLINE.md`.
 

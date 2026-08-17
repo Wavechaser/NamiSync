@@ -16,12 +16,15 @@ from types import SimpleNamespace
 
 import pytest
 
+from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
+
 
 ROOT = Path(__file__).parents[2]
 PARENT = ROOT / "bridge_event_benchmark.py"
 CHILD = Path(__file__).with_name("_bridge_event_benchmark_child.py")
 RETAINED = Path(__file__).with_name("_bridge_retained_memory.py")
 ASSETS = ROOT / "assets" / "bridge_event_benchmark"
+_OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 
 
 def _benchmark_module():
@@ -523,9 +526,18 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
     with pytest.raises(ValueError, match="benchmark report payload is invalid"):
         spec.validate_payload({"kind": "samples", "value": [sample] * 101})
 
-    assert spec.invoke({"kind": "ready", "value": None}) == {"accepted": True}
-    assert spec.invoke({"kind": "complete", "value": {}}) == {"accepted": True}
-    assert spec.invoke({"kind": "presented", "value": None}) == {
+    assert spec.invoke(
+        {"kind": "ready", "value": None},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert spec.invoke(
+        {"kind": "complete", "value": {}},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert spec.invoke(
+        {"kind": "presented", "value": None},
+        context=_OPEN_CONTEXT,
+    ) == {
         "accepted": True
     }
 
@@ -548,7 +560,8 @@ def test_bridge_event_benchmark_uses_immutable_handshake_markers(
         tmp_path / "failed.presented",
     )["benchmark_report"]
     assert failed_spec.invoke(
-        {"kind": "complete", "value": {"failure": "BridgeTransportError"}}
+        {"kind": "complete", "value": {"failure": "BridgeTransportError"}},
+        context=_OPEN_CONTEXT,
     ) == {"accepted": True}
     assert failed_marker.is_file()
     assert not failed_report.exists()

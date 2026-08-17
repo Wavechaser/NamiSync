@@ -1,4 +1,4 @@
-"""Desktop document-readiness state and command-availability views."""
+"""Desktop document-readiness state and exact command contexts."""
 
 from __future__ import annotations
 
@@ -16,19 +16,19 @@ class DesktopStartupError(RuntimeError):
     """The primary desktop host could not safely open its product window."""
 
 
-class CommandAvailability(StrEnum):
-    STARTUP = "startup"
+class CommandPhase(StrEnum):
+    BOOTSTRAP = "bootstrap"
     OPEN = "open"
 
 
 @dataclass(frozen=True, slots=True)
-class CommandAvailabilitySnapshot:
-    availability: CommandAvailability
+class ReadinessContext:
+    phase: CommandPhase
     generation: int
 
     def __post_init__(self) -> None:
-        if type(self.availability) is not CommandAvailability:
-            raise TypeError("command availability must be exact")
+        if type(self.phase) is not CommandPhase:
+            raise TypeError("command phase must be exact")
         if type(self.generation) is not int or self.generation < 0:
             raise ValueError("command generation must be a nonnegative integer")
 
@@ -72,16 +72,16 @@ class DesktopReadinessGate:
         with self._lock:
             return self._state is _ReadinessState.OPEN
 
-    def command_availability(self) -> object:
+    def command_context(self) -> object:
         with self._lock:
             if self._state is _ReadinessState.STARTING:
-                availability = CommandAvailability.STARTUP
+                phase = CommandPhase.BOOTSTRAP
             elif self._state is _ReadinessState.OPEN:
-                availability = CommandAvailability.OPEN
+                phase = CommandPhase.OPEN
             else:
                 return None
-            return CommandAvailabilitySnapshot(
-                availability,
+            return ReadinessContext(
+                phase,
                 self._generation,
             )
 

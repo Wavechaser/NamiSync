@@ -14,11 +14,14 @@ import pytest
 
 import namisync.interfaces.web.bridge as bridge_module
 from namisync.interfaces.service import NamiSyncService
-from namisync.interfaces.web.bridge import BRIDGE_SCHEMA_VERSION, BridgeDispatcher
+from namisync.interfaces.web.bridge import (
+    AdmissionGranted,
+    AdmissionRefused,
+    BRIDGE_SCHEMA_VERSION,
+    BridgeDispatcher,
+)
 from namisync.interfaces.web.commands import (
     CommandAccess,
-    CommandAvailability,
-    CommandAvailabilitySnapshot,
     CommandConflictError,
     CommandPayloadError,
     CommandRetry,
@@ -29,6 +32,7 @@ from namisync.interfaces.web.commands import (
     PlanningRefusedError,
 )
 from namisync.interfaces.web.commands import production_command_specs
+from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.interfaces.web.drain import (
     TaskCloseView,
     TaskDrainView,
@@ -54,6 +58,7 @@ from _frontend_test_support import _node_executable
 
 
 REQUEST_ID = "a1" * 16
+OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 ERRORS = {
     "invalid_request": "The desktop request is invalid.",
     "unsupported_version": (
@@ -121,7 +126,7 @@ def _spec(
     handler,
     validator=lambda payload: payload,
     *,
-    availability: CommandAvailability = CommandAvailability.OPEN,
+    phase: CommandPhase = CommandPhase.OPEN,
 ) -> CommandSpec:
     return CommandSpec(
         validate_payload=validator,
@@ -131,12 +136,25 @@ def _spec(
         revision=FieldRequirement.FORBIDDEN,
         timeout=CommandTimeout.INTERACTIVE,
         retry=CommandRetry.NONE,
-        availability=availability,
+        phase=phase,
     )
 
 
-def _open_availability() -> CommandAvailabilitySnapshot:
-    return CommandAvailabilitySnapshot(CommandAvailability.OPEN, 0)
+def _admit_open(_name: str) -> object:
+    return AdmissionGranted(OPEN_CONTEXT)
+
+
+def _bridge_dispatcher(
+    *,
+    document: object,
+    commands: object,
+    admit=_admit_open,
+) -> BridgeDispatcher:
+    return BridgeDispatcher(
+        document=document,
+        commands=commands,
+        admit=admit,
+    )
 
 
 def _request(
@@ -181,7 +199,7 @@ def test_br_g_32_python_and_browser_error_vocabularies_are_exact() -> None:
 
 
 def test_br_g_32_success_envelope_is_exact_and_encodes_before_return() -> None:
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda payload: {"seen": payload["value"]})},
     )
@@ -200,26 +218,27 @@ def test_startup_command_is_the_only_dispatch_admitted_before_open() -> None:
     opened = False
     generation = 3
     calls: list[str] = []
-    dispatcher = BridgeDispatcher(
-        document=_Document(),
-        commands={
-            "shell_ready": _spec(
-                lambda invocation: calls.append(
-                    f"shell:{invocation.generation}"
-                )
-                or {"acknowledged": True},
-                availability=CommandAvailability.STARTUP,
-            ),
-            "probe": _spec(lambda _payload: calls.append("probe") or "open"),
-        },
-        availability=lambda: CommandAvailabilitySnapshot(
-            (
-                CommandAvailability.OPEN
-                if opened
-                else CommandAvailability.STARTUP
-            ),
-            generation,
+    commands = {
+        "shell_ready": _spec(
+            lambda invocation: calls.append(
+                f"shell:{invocation.generation}"
+            )
+            or {"acknowledged": True},
+            phase=CommandPhase.BOOTSTRAP,
         ),
+        "probe": _spec(lambda _payload: calls.append("probe") or "open"),
+    }
+
+    def admit(name: str) -> object:
+        phase = CommandPhase.OPEN if opened else CommandPhase.BOOTSTRAP
+        if commands[name].phase is not phase:
+            return AdmissionRefused()
+        return AdmissionGranted(ReadinessContext(phase, generation))
+
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands=commands,
+        admit=admit,
     )
 
     assert dispatcher.dispatch(_request(command="probe")) == _failure(
@@ -246,38 +265,47 @@ def test_startup_command_is_the_only_dispatch_admitted_before_open() -> None:
     assert calls == ["shell:3", "probe"]
 
 
-def test_startup_mapping_requires_an_availability_predicate() -> None:
-    with pytest.raises(TypeError, match="availability predicate"):
+def test_dispatcher_requires_a_command_admission_callback() -> None:
+    with pytest.raises(TypeError, match="missing 1 required keyword-only argument"):
         BridgeDispatcher(
             document=_Document(),
             commands={
                 "shell_ready": _spec(
                     lambda payload: payload,
-                    availability=CommandAvailability.STARTUP,
+                    phase=CommandPhase.BOOTSTRAP,
                 )
             },
         )
+    with pytest.raises(TypeError, match="command admission must be callable"):
+        BridgeDispatcher(
+            document=_Document(),
+            commands={},
+            admit=None,  # type: ignore[arg-type]
+        )
 
 
-@pytest.mark.parametrize("readiness", [None, 1, "yes"])
-def test_invalid_or_failed_availability_predicate_fails_closed(
+@pytest.mark.parametrize(
+    "readiness",
+    [None, 1, "yes", AdmissionGranted(object())],
+)
+def test_invalid_or_failed_admission_callback_fails_closed(
     readiness: object,
 ) -> None:
-    def availability() -> object:
+    def admit(_name: str) -> object:
         if readiness is None:
             raise RuntimeError("injected readiness failure")
         return readiness
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={
             "shell_ready": _spec(
                 lambda payload: payload,
-                availability=CommandAvailability.STARTUP,
+                phase=CommandPhase.BOOTSTRAP,
             ),
             "probe": _spec(lambda payload: payload),
         },
-        availability=availability,
+        admit=admit,
     )
 
     for command in ("shell_ready", "probe"):
@@ -288,9 +316,60 @@ def test_invalid_or_failed_availability_predicate_fails_closed(
         )
 
 
+def test_unknown_command_does_not_consult_composition_admission() -> None:
+    admission_calls: list[str] = []
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda payload: payload)},
+        admit=lambda name: admission_calls.append(name)
+        or AdmissionGranted(OPEN_CONTEXT),
+    )
+
+    assert dispatcher.dispatch(_request(command="not_allowed")) == _failure(
+        REQUEST_ID,
+        "unknown_command",
+        ERRORS["unknown_command"],
+    )
+    assert admission_calls == []
+
+
+def test_refused_admission_precedes_payload_and_validator_inspection() -> None:
+    validated: list[object] = []
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda payload: payload, validated.append)},
+        admit=lambda _name: AdmissionRefused(),
+    )
+
+    assert dispatcher.dispatch(_request(payload=[])) == _failure(
+        REQUEST_ID,
+        "bridge_unavailable",
+        ERRORS["bridge_unavailable"],
+    )
+    assert validated == []
+
+
+def test_mismatched_admitted_context_precedes_command_validation() -> None:
+    validated: list[object] = []
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda payload: payload, validated.append)},
+        admit=lambda _name: AdmissionGranted(
+            ReadinessContext(CommandPhase.BOOTSTRAP, 4)
+        ),
+    )
+
+    assert dispatcher.dispatch(_request()) == _failure(
+        REQUEST_ID,
+        "bridge_unavailable",
+        ERRORS["bridge_unavailable"],
+    )
+    assert validated == []
+
+
 def test_br_g_32_dispatcher_snapshots_command_specs_at_construction() -> None:
     commands = {"probe": _spec(lambda payload: payload)}
-    dispatcher = BridgeDispatcher(document=_Document(), commands=commands)
+    dispatcher = _bridge_dispatcher(document=_Document(), commands=commands)
     commands.clear()
 
     assert dispatcher.dispatch(_request()) == {
@@ -317,7 +396,7 @@ def test_br_g_32_dispatcher_snapshots_before_validating_adversarial_mapping() ->
         def keys(self):
             return ("probe",)
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=ShiftingMapping(),
     )
@@ -405,7 +484,7 @@ def test_br_g_32_strict_prehandler_refusal_matrix_returns_exact_envelopes(
     message: str,
 ) -> None:
     handled: list[object] = []
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(handled.append)},
     )
@@ -421,7 +500,7 @@ def test_br_g_32_payload_validator_refuses_before_handler_effects() -> None:
         del payload
         raise CommandPayloadError("private payload detail")
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(handled.append, refuse)},
     )
@@ -445,7 +524,7 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
     payload: object,
 ) -> None:
     handled: list[object] = []
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(handled.append)},
     )
@@ -515,7 +594,7 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
             del args
             raise AssertionError("invalid start_plan reached task authority")
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=production_command_specs(
             picker=lambda: None,
@@ -523,7 +602,6 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
             registry=Registry(),
             shell_ready=lambda _generation: None,
         ),
-        availability=_open_availability,
     )
 
     assert dispatcher.dispatch(
@@ -580,10 +658,9 @@ def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
         registry=SimpleNamespace(),
         shell_ready=lambda _generation: None,
     )
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=commands,
-        availability=_open_availability,
     )
 
     assert dispatcher.dispatch(_request(command="test_report")) == _failure(
@@ -635,10 +712,9 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
         registry=Registry(),
         shell_ready=lambda _generation: None,
     )
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=commands,
-        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -699,7 +775,7 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
             assert (received_task, received_session) == (task_id, session_id)
             return TaskCloseView(received_task, received_session)
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=production_command_specs(
             picker=lambda: None,
@@ -707,7 +783,6 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
             registry=Registry(),
             shell_ready=lambda _generation: None,
         ),
-        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -738,7 +813,7 @@ def test_terminal_session_release_crosses_dispatch_as_exact_echo() -> None:
             assert (received_task, received_session) == (task_id, session_id)
             return TaskSessionReleaseView(received_task, received_session)
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=production_command_specs(
             picker=lambda: None,
@@ -746,7 +821,6 @@ def test_terminal_session_release_crosses_dispatch_as_exact_echo() -> None:
             registry=Registry(),
             shell_ready=lambda _generation: None,
         ),
-        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -770,7 +844,7 @@ def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None
             del args, kwargs
             raise TaskUnavailableError("private task detail")
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=production_command_specs(
             picker=lambda: None,
@@ -778,7 +852,6 @@ def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None
             registry=Registry(),
             shell_ready=lambda _generation: None,
         ),
-        availability=_open_availability,
     )
 
     response = dispatcher.dispatch(
@@ -805,7 +878,7 @@ def test_br_g_32_utf8_limit_is_inclusive_and_oversize_is_predecode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     handled: list[object] = []
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(handled.append)},
     )
@@ -858,11 +931,11 @@ def test_br_g_32_handler_and_codec_failures_are_sanitized_and_logs_are_private(
         assert payload == {"sentinel": body_secret}
         raise RuntimeError(exception_secret)
 
-    handler_dispatcher = BridgeDispatcher(
+    handler_dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(fail_handler)},
     )
-    codec_dispatcher = BridgeDispatcher(
+    codec_dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda payload: Path(exception_secret))},
     )
@@ -893,7 +966,7 @@ def test_br_g_32_handler_and_codec_failures_are_sanitized_and_logs_are_private(
 def test_br_g_32_every_approved_public_view_crosses_real_dispatch_exactly(
     witness: PublicViewWitness,
 ) -> None:
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda _payload: witness.value)},
     )
@@ -924,7 +997,7 @@ def test_br_g_32_invalid_public_view_returns_are_sanitized_by_dispatch(
     _label: str,
     invalid_return: object,
 ) -> None:
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda _payload: invalid_return)},
     )
@@ -946,7 +1019,7 @@ def test_br_g_32_base_exceptions_cannot_cross_handler_or_codec_boundary() -> Non
         def items(self):
             raise SystemExit("private codec termination detail")
 
-    handler_dispatcher = BridgeDispatcher(
+    handler_dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={
             "probe": _spec(
@@ -956,7 +1029,7 @@ def test_br_g_32_base_exceptions_cannot_cross_handler_or_codec_boundary() -> Non
             )
         },
     )
-    codec_dispatcher = BridgeDispatcher(
+    codec_dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda payload: ExitMapping())},
     )
@@ -975,7 +1048,7 @@ def test_br_g_32_picker_failure_uses_its_fixed_public_error() -> None:
         del payload
         raise PickerUnavailableError("private native picker text")
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(fail_picker)},
     )
@@ -1009,7 +1082,7 @@ def test_br_g_32_typed_command_refusals_use_only_fixed_public_errors(
         del payload
         raise error
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(refuse)},
     )
@@ -1026,7 +1099,7 @@ def test_br_g_32_incidental_value_error_remains_internal_error() -> None:
         del payload
         raise ValueError("private incidental defect")
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(fail)},
     )
@@ -1110,10 +1183,9 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         registry=Registry(),
         shell_ready=lambda _generation: None,
     )
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands=commands,
-        availability=_open_availability,
     )
     command_id = "c4" * 16
 
@@ -1193,7 +1265,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
 
 def test_br_g_32_origin_and_close_refusals_do_not_inspect_untrusted_body() -> None:
     off_origin_body = _UntouchableBody()
-    off_origin = BridgeDispatcher(
+    off_origin = _bridge_dispatcher(
         document=_Document(trusted=False),
         commands={"probe": _spec(lambda payload: payload)},
     )
@@ -1206,7 +1278,7 @@ def test_br_g_32_origin_and_close_refusals_do_not_inspect_untrusted_body() -> No
     assert off_origin_body.touched == []
 
     closing_body = _UntouchableBody()
-    closing = BridgeDispatcher(
+    closing = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda payload: payload)},
     )
@@ -1230,7 +1302,7 @@ def test_br_g_32_admitted_call_finishes_while_close_refuses_new_body() -> None:
         assert release.wait(1.0)
         return payload
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(admitted_handler)},
     )
@@ -1281,7 +1353,7 @@ def test_bridge_admission_ceiling_fails_fast_and_releases_capacity() -> None:
         assert release.wait(3.0)
         return payload
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(blocking_handler)},
     )
@@ -1321,7 +1393,7 @@ def test_bridge_handler_wait_times_out_then_a_later_retry_quiesces() -> None:
         assert release.wait(3.0)
         return payload
 
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(never_finishes_without_release)},
     )
@@ -1351,7 +1423,7 @@ def test_raw_command_control_characters_are_rejected_without_log_injection(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     marker = "FORGED-BRIDGE-RECORD"
-    dispatcher = BridgeDispatcher(
+    dispatcher = _bridge_dispatcher(
         document=_Document(),
         commands={"probe": _spec(lambda payload: payload)},
     )

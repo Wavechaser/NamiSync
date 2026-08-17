@@ -2106,6 +2106,18 @@ path, exception text, traceback, Python type, or implementation detail; a
 handler exception never crosses pywebview as its native traceback-bearing error
 value.
 
+Command readiness is composition-owned. After reserving one of the bridge's 64
+handler positions, rechecking exact document trust, bounding and decoding the
+envelope, and resolving an allowlisted command name, the bridge calls mandatory
+`admit(name)`. Host composition joins that row's declared `BOOTSTRAP` or `OPEN`
+phase to the current exact `ReadinessContext`. Refusal, callback failure, or a
+malformed verdict returns `bridge_unavailable` before payload validation. A
+grant carries an opaque context that the bridge forwards unchanged;
+`CommandSpec.invoke` exact-checks its context and phase before its payload
+validator. The bridge names no readiness phase or appearance state. Handler
+reservation and service/session admission remain separate mechanisms with
+their existing lifetimes.
+
 **The presentation-ready startup row is exact.** GUI Break 1 adds one
 foundation-only row outside Slice 2's two domain rows:
 
@@ -3395,7 +3407,10 @@ because its local tests are easier.
   foundation-only startup row `shell_ready`, Slice 3's `next_events`, plus
   lifecycle-only `release_terminal_session` and `close_task`, while
   `test_report` is possible only through test-owned
-  constructor composition. Unknown versions, commands,
+  constructor composition. Host composition, rather than transport, joins the
+  final command mapping to current-document readiness through an exact opaque
+  admission verdict; the bridge retains only document trust, request bounds,
+  handler reservation, and serialization. Unknown versions, commands,
   fields, malformed opaque ids, and input above 65,536 UTF-8 bytes are refused
   before handler invocation. Errors expose no filesystem path or internals even
   though pywebview otherwise returns Python tracebacks. The native picker keeps

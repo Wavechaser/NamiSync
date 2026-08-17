@@ -1015,12 +1015,28 @@ def _bridge_dispatcher(
     commands: object,
     startup_gate: DesktopReadinessGate,
 ):
-    from .bridge import BridgeDispatcher
+    from .bridge import AdmissionGranted, AdmissionRefused, BridgeDispatcher
+    from .commands import CommandSpec
+    from .readiness import ReadinessContext
+
+    command_specs = dict(commands)
+
+    def admit(name: str) -> object:
+        spec = command_specs.get(name)
+        if type(spec) is not CommandSpec:
+            return AdmissionRefused()
+        context = startup_gate.command_context()
+        if (
+            type(context) is not ReadinessContext
+            or context.phase is not spec.phase
+        ):
+            return AdmissionRefused()
+        return AdmissionGranted(context)
 
     return BridgeDispatcher(
         document=document,
-        commands=commands,
-        availability=startup_gate.command_availability,
+        commands=command_specs,
+        admit=admit,
     )
 
 

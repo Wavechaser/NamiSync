@@ -7,10 +7,10 @@ from threading import Event, Thread
 import pytest
 
 from namisync.interfaces.web.readiness import (
-    CommandAvailability,
-    CommandAvailabilitySnapshot,
+    CommandPhase,
     DesktopReadinessGate,
     DesktopStartupError,
+    ReadinessContext,
 )
 
 
@@ -38,8 +38,8 @@ def test_readiness_gate_opens_once_after_all_three_readiness_signals() -> None:
         refuse_desktop=refusals.append,
     )
 
-    assert gate.command_availability() == CommandAvailabilitySnapshot(
-        CommandAvailability.STARTUP,
+    assert gate.command_context() == ReadinessContext(
+        CommandPhase.BOOTSTRAP,
         0,
     )
     gate.acknowledge_shell(0)
@@ -58,8 +58,8 @@ def test_readiness_gate_opens_once_after_all_three_readiness_signals() -> None:
     publications[0](None)
 
     assert gate.is_open()
-    assert gate.command_availability() == CommandAvailabilitySnapshot(
-        CommandAvailability.OPEN,
+    assert gate.command_context() == ReadinessContext(
+        CommandPhase.OPEN,
         0,
     )
     assert opens == ["open"]
@@ -98,7 +98,7 @@ def test_readiness_gate_timeout_is_terminal_before_late_shell_ack() -> None:
     gate.acknowledge_shell(0)
 
     assert not gate.is_open()
-    assert gate.command_availability() is None
+    assert gate.command_context() is None
     assert publications == []
     assert opens == []
     assert cancellations == ["cancel"]
@@ -131,7 +131,7 @@ def test_readiness_gate_cancel_suppresses_late_ack_and_publication() -> None:
     gate.appearance_published(None)
 
     assert not gate.is_open()
-    assert gate.command_availability() is None
+    assert gate.command_context() is None
     assert publications == []
     assert opens == []
     assert cancellations == ["cancel"]
@@ -170,7 +170,7 @@ def test_cancel_after_open_callback_closes_admission_during_timer_cleanup() -> N
 
     assert not publisher.is_alive()
     assert not gate.is_open()
-    assert gate.command_availability() is None
+    assert gate.command_context() is None
     assert opens == ["open"]
 
 
@@ -190,7 +190,7 @@ def test_readiness_gate_keeps_commands_closed_when_open_callback_declines() -> N
     publications[0](None)
 
     assert not gate.is_open()
-    assert gate.command_availability() is None
+    assert gate.command_context() is None
     gate.acknowledge_shell(0)
     assert len(publications) == 1
 
@@ -227,8 +227,8 @@ def test_reload_starts_a_closed_generation_and_ignores_stale_callbacks() -> None
     gate.begin_generation()
 
     assert not gate.is_open()
-    assert gate.command_availability() == CommandAvailabilitySnapshot(
-        CommandAvailability.STARTUP,
+    assert gate.command_context() == ReadinessContext(
+        CommandPhase.BOOTSTRAP,
         1,
     )
     assert len(scheduled) == 1

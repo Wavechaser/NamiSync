@@ -19,8 +19,8 @@ from namisync.interfaces.web.drain import (
     TaskStartView,
 )
 from namisync.interfaces.web.readiness import (
-    CommandAvailability,
-    CommandAvailabilitySnapshot,
+    CommandPhase,
+    ReadinessContext,
 )
 from namisync.interfaces.web.slots import SlotUnavailableError
 from namisync.interfaces.service import (
@@ -135,6 +135,10 @@ class CommandPayloadError(ValueError):
     """A command payload does not match its exact declared schema."""
 
 
+class CommandAdmissionError(RuntimeError):
+    """An admitted command lacks its exact composition-owned context."""
+
+
 class PickerUnavailableError(RuntimeError):
     """The native picker did not return its documented result shape."""
 
@@ -229,26 +233,31 @@ class CommandSpec:
     revision: FieldRequirement
     timeout: CommandTimeout
     retry: CommandRetry
-    availability: CommandAvailability = CommandAvailability.OPEN
+    phase: CommandPhase = CommandPhase.OPEN
 
     def invoke(
         self,
         payload: object,
         *,
-        generation: int | None = None,
+        context: object,
     ) -> object:
+        if (
+            type(context) is not ReadinessContext
+            or context.phase is not self.phase
+        ):
+            raise CommandAdmissionError(
+                "command requires its exact admitted readiness context"
+            )
         validated = self.validate_payload(payload)
-        if self.availability is CommandAvailability.STARTUP:
-            if type(generation) is not int or generation < 0:
-                raise TypeError("startup command requires its admitted generation")
-            return self.handler(_StartupCommandInvocation(validated, generation))
-        if generation is not None:
-            raise TypeError("open command cannot receive a startup generation")
+        if self.phase is CommandPhase.BOOTSTRAP:
+            return self.handler(
+                _BootstrapCommandInvocation(validated, context.generation)
+            )
         return self.handler(validated)
 
 
 @dataclass(frozen=True, slots=True)
-class _StartupCommandInvocation:
+class _BootstrapCommandInvocation:
     payload: object
     generation: int
 
@@ -302,7 +311,7 @@ def production_command_specs(
 
     def acknowledge_shell(invocation: object) -> object:
         if (
-            type(invocation) is not _StartupCommandInvocation
+            type(invocation) is not _BootstrapCommandInvocation
             or invocation.payload is not None
         ):
             raise TypeError("shell_ready received an unvalidated payload")
@@ -443,7 +452,7 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.STARTUP_5_SECONDS,
                 retry=CommandRetry.NONE,
-                availability=CommandAvailability.STARTUP,
+                phase=CommandPhase.BOOTSTRAP,
             ),
             "pick_folder": CommandSpec(
                 validate_payload=_validate_pick_folder,

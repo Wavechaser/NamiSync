@@ -25,7 +25,7 @@ from namisync.interfaces.web.bridge import BridgeProtocolError, to_primitive_vie
 from namisync.interfaces.web.commands import (
     ADAPTER_PUBLIC_VIEW_DATACLASSES,
     CommandAccess,
-    CommandAvailability,
+    CommandAdmissionError,
     CommandConflictError,
     CommandPayloadError,
     CommandRetry,
@@ -48,6 +48,7 @@ from namisync.interfaces.web.drain import (
     TaskStartView,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.workflows import PLAN_KIND
 from namisync.workflows.views import SessionEventView
 from tests.interfaces.web._public_view_witnesses import (
@@ -62,6 +63,12 @@ COMMAND_ID = "a3" * 16
 TASK_ID = "task-" + "3" * 32
 SESSION_ID = "5" * 32
 DRAIN_ID = "d6" * 16
+BOOTSTRAP_CONTEXT = ReadinessContext(CommandPhase.BOOTSTRAP, 7)
+OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 7)
+
+
+def _invoke(spec, payload: object, *, context: object = OPEN_CONTEXT) -> object:
+    return spec.invoke(payload, context=context)
 
 
 class _Slots:
@@ -169,17 +176,17 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         commands["shell_ready"].revision,
         commands["shell_ready"].timeout,
         commands["shell_ready"].retry,
-        commands["shell_ready"].availability,
+        commands["shell_ready"].phase,
     ) == (
         CommandAccess.READ_ONLY,
         FieldRequirement.FORBIDDEN,
         FieldRequirement.FORBIDDEN,
         CommandTimeout.STARTUP_5_SECONDS,
         CommandRetry.NONE,
-        CommandAvailability.STARTUP,
+        CommandPhase.BOOTSTRAP,
     )
     assert all(
-        spec.availability is CommandAvailability.OPEN
+        spec.phase is CommandPhase.OPEN
         for name, spec in commands.items()
         if name != "shell_ready"
     )
@@ -281,7 +288,7 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
     assert signature.parameters["shell_ready"].default is inspect.Parameter.empty
 
 
-def test_shell_ready_requires_an_exact_empty_payload_and_calls_once() -> None:
+def test_shell_ready_requires_its_exact_context_and_empty_payload() -> None:
     acknowledgements: list[str] = []
     commands = production_command_specs(
         picker=lambda: None,
@@ -290,15 +297,23 @@ def test_shell_ready_requires_an_exact_empty_payload_and_calls_once() -> None:
         shell_ready=lambda generation: acknowledgements.append(str(generation)),
     )
 
-    assert commands["shell_ready"].invoke({}, generation=7) == {
+    assert _invoke(
+        commands["shell_ready"],
+        {},
+        context=BOOTSTRAP_CONTEXT,
+    ) == {
         "acknowledged": True
     }
     assert acknowledgements == ["7"]
-    with pytest.raises(TypeError, match="admitted generation"):
-        commands["shell_ready"].invoke({})
+    with pytest.raises(CommandAdmissionError, match="readiness context"):
+        _invoke(commands["shell_ready"], {})
     for payload in ({"unexpected": True}, [], None):
         with pytest.raises(CommandPayloadError):
-            commands["shell_ready"].invoke(payload, generation=7)
+            _invoke(
+                commands["shell_ready"],
+                payload,
+                context=BOOTSTRAP_CONTEXT,
+            )
     assert acknowledgements == ["7"]
 
 
@@ -306,7 +321,7 @@ def test_br_g_32_folder_picker_returns_only_opaque_presentation_data() -> None:
     private_path = r"C:\Users\Someone\secret <folder>"
     commands, slots, _ = _commands(picker=lambda: (private_path,))
 
-    result = commands["pick_folder"].invoke({"purpose": "source"})
+    result = _invoke(commands["pick_folder"], {"purpose": "source"})
 
     assert result == {
         "id": SOURCE_ID,
@@ -319,7 +334,7 @@ def test_br_g_32_folder_picker_returns_only_opaque_presentation_data() -> None:
 def test_br_g_32_folder_picker_cancel_creates_no_slot() -> None:
     commands, slots, _ = _commands(picker=lambda: None)
 
-    assert commands["pick_folder"].invoke({"purpose": "target"}) is None
+    assert _invoke(commands["pick_folder"], {"purpose": "target"}) is None
     assert slots.stored == []
 
 
@@ -333,7 +348,7 @@ def test_br_g_32_folder_picker_refuses_invalid_native_results(
     commands, slots, _ = _commands(picker=lambda: selected)  # type: ignore[arg-type]
 
     with pytest.raises(PickerUnavailableError):
-        commands["pick_folder"].invoke({"purpose": "source"})
+        _invoke(commands["pick_folder"], {"purpose": "source"})
 
     assert slots.stored == []
 
@@ -347,7 +362,7 @@ def test_br_g_32_folder_picker_exception_is_typed_without_storing_a_slot() -> No
     commands, slots, _ = _commands(picker=refuse)
 
     with pytest.raises(PickerUnavailableError) as captured:
-        commands["pick_folder"].invoke({"purpose": "source"})
+        _invoke(commands["pick_folder"], {"purpose": "source"})
 
     assert private_detail not in str(captured.value)
     assert slots.stored == []
@@ -360,7 +375,7 @@ def test_br_g_32_folder_picker_system_exit_cannot_cross_the_command_boundary() -
     commands, slots, _ = _commands(picker=refuse)
 
     with pytest.raises(PickerUnavailableError) as captured:
-        commands["pick_folder"].invoke({"purpose": "source"})
+        _invoke(commands["pick_folder"], {"purpose": "source"})
 
     assert "private" not in str(captured.value)
     assert slots.stored == []
@@ -391,7 +406,7 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
     )
 
     with pytest.raises(RuntimeError, match="slot authority"):
-        commands["pick_folder"].invoke({"purpose": "source"})
+        _invoke(commands["pick_folder"], {"purpose": "source"})
 
 
 def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
@@ -403,7 +418,7 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
         "deletion_policy": None,
     }
 
-    result = commands["start_plan"].invoke(payload)
+    result = _invoke(commands["start_plan"], payload)
 
     assert result == TaskStartView(
         task_id=TASK_ID,
@@ -449,7 +464,7 @@ def test_br_g_32_start_plan_requires_command_id_and_forbids_revision(
     commands, slots, registry = _commands()
 
     with pytest.raises(CommandPayloadError):
-        commands["start_plan"].invoke(payload)
+        _invoke(commands["start_plan"], payload)
 
     assert slots.resolved == []
     assert registry.replays == []
@@ -503,7 +518,7 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
         "deletion_policy": None,
     }
 
-    lost_response = commands["start_plan"].invoke(payload)
+    lost_response = _invoke(commands["start_plan"], payload)
     if retirement == "expiry":
         clock.now = 1_801.0
     else:
@@ -513,18 +528,18 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
     with pytest.raises(SlotUnavailableError):
         slots.resolve_pair(source_id, target_id)
 
-    replay = commands["start_plan"].invoke(payload)
+    replay = _invoke(commands["start_plan"], payload)
 
     assert replay == lost_response
     assert service.calls == [(r"C:\source", r"D:\target", COMMAND_ID)]
     with pytest.raises(CommandConflictError):
-        commands["start_plan"].invoke({**payload, "deletion_policy": "trash"})
+        _invoke(commands["start_plan"], {**payload, "deletion_policy": "trash"})
 
 
 def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() -> None:
     commands, slots, registry = _commands()
 
-    result = commands["next_events"].invoke(
+    result = _invoke(commands["next_events"],
         {
             "task_id": TASK_ID,
             "session_id": SESSION_ID,
@@ -543,7 +558,7 @@ def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() 
 def test_task_close_delegates_exact_authority_and_echoes_identity() -> None:
     commands, slots, registry = _commands()
 
-    result = commands["close_task"].invoke(
+    result = _invoke(commands["close_task"],
         {"task_id": TASK_ID, "session_id": SESSION_ID}
     )
 
@@ -555,7 +570,7 @@ def test_task_close_delegates_exact_authority_and_echoes_identity() -> None:
 def test_terminal_session_release_delegates_and_echoes_exact_identity() -> None:
     commands, slots, registry = _commands()
 
-    result = commands["release_terminal_session"].invoke(
+    result = _invoke(commands["release_terminal_session"],
         {"task_id": TASK_ID, "session_id": SESSION_ID}
     )
 
@@ -588,7 +603,7 @@ def test_terminal_session_release_refuses_mismatched_registry_result(
     )
 
     with pytest.raises(RuntimeError, match="invalid release data"):
-        commands["release_terminal_session"].invoke(
+        _invoke(commands["release_terminal_session"],
             {"task_id": TASK_ID, "session_id": SESSION_ID}
         )
 
@@ -617,7 +632,7 @@ def test_task_close_refuses_invalid_or_mismatched_registry_result(
     )
 
     with pytest.raises(RuntimeError, match="invalid close data"):
-        commands["close_task"].invoke(
+        _invoke(commands["close_task"],
             {"task_id": TASK_ID, "session_id": SESSION_ID}
         )
 
@@ -660,7 +675,7 @@ def test_br_g_33_next_events_refuses_nonexact_payloads(payload: object) -> None:
     commands, _slots, registry = _commands()
 
     with pytest.raises(CommandPayloadError):
-        commands["next_events"].invoke(payload)
+        _invoke(commands["next_events"], payload)
 
     assert registry.calls == []
 
@@ -690,7 +705,7 @@ def test_br_g_33_next_events_refuses_invalid_or_mismatched_registry_result(
     )
 
     with pytest.raises(RuntimeError, match="invalid drain data"):
-        commands["next_events"].invoke(
+        _invoke(commands["next_events"],
             {
                 "task_id": TASK_ID,
                 "session_id": SESSION_ID,
@@ -725,7 +740,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
     )
 
     with pytest.raises(adapter_error) as captured:
-        commands["start_plan"].invoke(
+        _invoke(commands["start_plan"],
             {
                 "command_id": COMMAND_ID,
                 "source_id": SOURCE_ID,
@@ -751,7 +766,7 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
     )
 
     with pytest.raises(ValueError, match="incidental implementation defect"):
-        commands["start_plan"].invoke(
+        _invoke(commands["start_plan"],
             {
                 "command_id": COMMAND_ID,
                 "source_id": SOURCE_ID,
@@ -789,7 +804,7 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
     )
 
     with pytest.raises(RuntimeError, match="invalid data"):
-        commands["start_plan"].invoke(
+        _invoke(commands["start_plan"],
             {
                 "command_id": COMMAND_ID,
                 "source_id": SOURCE_ID,
@@ -878,7 +893,7 @@ def test_br_g_32_payload_validators_reject_unknown_fields_and_authority(
     commands, slots, service = _commands()
 
     with pytest.raises(CommandPayloadError):
-        commands[command].invoke(payload)
+        _invoke(commands[command], payload)
 
     assert slots.stored == []
     assert slots.resolved == []

@@ -22,6 +22,7 @@ import pytest
 import _component_gallery_child as component_gallery_child
 from conftest import HeadedInstalledWheel
 from namisync.interfaces.web.commands import CommandPayloadError
+from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.version import VERSION
 from _headed_native import (
     clean_child_environment,
@@ -43,6 +44,7 @@ _SCENARIO = Path(__file__).parents[2] / "assets" / "component_gallery" / "galler
 _MODES = ("light", "dark", "forced", "reduced")
 _ASSET_NAMES = ("index.html", "tokens.css", "components.css")
 _TEST_ONLY_MARKER = b"NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74"
+_OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 _STATUS_KEYS = {
     "complete",
     "success",
@@ -467,14 +469,15 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "payload": payload,
         }
         assert len(json.dumps(envelope).encode("utf-8")) <= 65_536
-        assert spec.invoke(payload) == {"accepted": True}
+        assert spec.invoke(payload, context=_OPEN_CONTEXT) == {"accepted": True}
     assert spec.invoke(
         {
             "phase": "complete",
             "mode": "light",
             "media": {"dark": False, "forced": False, "reduced": False},
             "part_count": len(part_values),
-        }
+        },
+        context=_OPEN_CONTEXT,
     ) == {"accepted": True}
     recorded = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert recorded["report"] == report
@@ -491,7 +494,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "mode": "light",
                 "media": {"dark": False, "forced": False, "reduced": False},
                 "part_count": len(part_values),
-            }
+            },
+            context=_OPEN_CONTEXT,
         )
     with pytest.raises(CommandPayloadError, match="report is invalid"):
         incomplete.invoke(
@@ -500,7 +504,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "sequence": 1,
                 "name": "operations",
                 "value": report["operations"],
-            }
+            },
+            context=_OPEN_CONTEXT,
         )
     with pytest.raises(CommandPayloadError, match="report is invalid"):
         incomplete.validate_payload(
