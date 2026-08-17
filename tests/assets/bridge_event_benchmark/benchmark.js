@@ -1,41 +1,15 @@
 import {
-  acknowledgeShellReady,
-  BridgeTransportError,
   dispatchInteractive,
-  echoReadiness,
-  markBridgeOperational,
   startTaskDrain,
-  whenBridgeApiReady,
 } from "./bridge.js";
-import { installReadinessReceiver } from "./readiness.js";
-import { installAppearanceReceiver } from "./appearance.js";
+import {
+  bootstrapTestBridge,
+  installTestBridgeReadiness,
+} from "./bootstrap_test_bridge.js";
 import { renderText } from "./render.js";
 
-const readiness = installReadinessReceiver(window.chrome.webview);
-installAppearanceReceiver(
-  window.chrome.webview,
-  document.documentElement,
-);
-const readinessBaseline = readiness.revision();
-await whenBridgeApiReady();
-try {
-  await acknowledgeShellReady();
-} catch (error) {
-  if (!(error instanceof BridgeTransportError)) {
-    throw error;
-  }
-}
-const challenge = await readiness.whenReceivedAfter(readinessBaseline);
-let readinessAcknowledged = false;
-for (let attempt = 0; attempt < 2 && !readinessAcknowledged; attempt += 1) {
-  try {
-    readinessAcknowledged = (await echoReadiness(challenge)).acknowledged;
-  } catch (error) {
-    if (!(error instanceof BridgeTransportError) || attempt > 0) throw error;
-  }
-}
-if (!readinessAcknowledged) throw new BridgeTransportError();
-markBridgeOperational();
+installTestBridgeReadiness();
+await bootstrapTestBridge();
 
 
 const status = document.querySelector("#status");

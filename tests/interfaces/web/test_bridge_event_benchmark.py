@@ -68,6 +68,9 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     child = CHILD.read_text(encoding="utf-8")
     retained = RETAINED.read_text(encoding="utf-8")
     browser = (ASSETS / "benchmark.js").read_text(encoding="utf-8")
+    bootstrap = (ROOT / "assets" / "bootstrap_test_bridge.js").read_text(
+        encoding="utf-8"
+    )
 
     compile(parent, str(PARENT), "exec")
     compile(child, str(CHILD), "exec")
@@ -77,31 +80,14 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "WorkflowRegistration" in child
     assert "TaskRegistry" not in browser
     assert 'from "./bridge.js"' in browser
-    assert 'from "./readiness.js"' in browser
-    assert 'from "./appearance.js"' in browser
+    assert 'from "./bootstrap_test_bridge.js"' in browser
     assert 'from "./render.js"' in browser
-    assert "startup_gate: object," in child
-    assert "startup_gate=startup_gate," in child
-    assert "installReadinessReceiver(" in browser
-    assert "installAppearanceReceiver(" in browser
-    assert "await acknowledgeShellReady();" in browser
-    assert "await readiness.whenReceivedAfter(readinessBaseline);" in browser
-    assert "await echoReadiness(challenge)" in browser
-    assert browser.index("installReadinessReceiver(") < browser.index(
-        "installAppearanceReceiver("
-    )
-    assert browser.index("installAppearanceReceiver(") < browser.index(
-        "await whenBridgeApiReady();"
-    )
-    assert browser.index("await whenBridgeApiReady();") < browser.index(
-        "await acknowledgeShellReady();"
-    )
-    assert browser.index("await acknowledgeShellReady();") < browser.index(
-        "await readiness.whenReceivedAfter(readinessBaseline);"
-    )
-    assert browser.index(
-        "await readiness.whenReceivedAfter(readinessBaseline);"
-    ) < browser.index("markBridgeOperational();")
+    assert "headed_command_extension(" in child
+    assert "installTestBridgeReadiness();" in browser
+    assert "await bootstrapTestBridge();" in browser
+    assert "installAppearanceReceiver(" not in browser
+    assert "appearance" not in bootstrap.casefold()
+    assert "attempt < 2" in bootstrap
     assert 'id="host-status"' in (ASSETS / "index.html").read_text(
         encoding="utf-8"
     )

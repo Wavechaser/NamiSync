@@ -17,6 +17,7 @@ import _headed_host_child as headed_host_child
 import _transport_gate_child as transport_gate_child
 from conftest import HeadedInstalledWheel
 from namisync.version import NICKNAME, VERSION
+from _startup_test_support import headed_command_extension
 from _headed_native import (
     clean_child_environment,
     close_window,
@@ -36,8 +37,8 @@ from _headed_native import (
 
 _CHILD = Path(__file__).with_name("_transport_gate_child.py")
 _TEST_ASSETS = Path(__file__).parents[2] / "assets" / "transport_gate"
+_BOOTSTRAP_DRIVER = _TEST_ASSETS.parent / "bootstrap_test_bridge.js"
 _PRODUCTION_ASSETS = (
-    "appearance.js",
     "bridge.js",
     "readiness.js",
     "render.js",
@@ -319,6 +320,7 @@ def test_transport_recorder_snapshot_replace_failures_remain_bounded(
 
 def test_transport_gate_assets_keep_test_implementation_outside_package() -> None:
     child = _CHILD.read_text(encoding="utf-8")
+    bootstrap = _BOOTSTRAP_DRIVER.read_text(encoding="utf-8")
     scripts = "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted(_TEST_ASSETS.glob("*.js"))
@@ -334,6 +336,7 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
     assert "dispatchInteractive" in scripts
     assert "startTaskDrain" in scripts
     assert 'import("./bridge.js")' in scripts
+    assert 'import("./bootstrap_test_bridge.js")' in scripts
     transport = (_TEST_ASSETS / "transport.js").read_text(encoding="utf-8")
     assert "function injectRendererOnlyReturnTableLoss()" in transport
     assert "function reincarnateBridge()" not in transport
@@ -359,36 +362,38 @@ def test_transport_gate_assets_keep_test_implementation_outside_package() -> Non
 
     for name in ("transport.js", "off_origin_start.js"):
         startup = (_TEST_ASSETS / name).read_text(encoding="utf-8")
-        assert "installReadinessReceiver(" in startup
-        assert "installAppearanceReceiver(" in startup
-        assert "await acknowledgeShellReady();" in startup
-        assert "await readiness.whenReceivedAfter(readinessBaseline);" in startup
-        assert "await echoReadiness(challenge)" in startup
-        assert startup.index("installReadinessReceiver(") < startup.index(
-            "installAppearanceReceiver("
-        )
-        assert startup.index("installAppearanceReceiver(") < startup.index(
-            "await whenBridgeApiReady();"
-        )
-        assert startup.index("await whenBridgeApiReady();") < startup.index(
-            "await acknowledgeShellReady();"
-        )
-        assert startup.index("await acknowledgeShellReady();") < startup.index(
-            "await readiness.whenReceivedAfter(readinessBaseline);"
-        )
-        assert startup.index(
-            "await readiness.whenReceivedAfter(readinessBaseline);"
-        ) < startup.index("markBridgeOperational();")
+        assert "installTestBridgeReadiness();" in startup
+        assert "await bootstrapTestBridge();" in startup
+        assert "installAppearanceReceiver(" not in startup
+    assert "pywebviewready" not in bootstrap
+    assert "appearance" not in bootstrap.casefold()
+    assert bootstrap.count("echoReadiness(challenge)") == 1
+    assert "attempt < 2" in bootstrap
+    assert bootstrap.index("installReadinessReceiver(") < bootstrap.index(
+        "await whenBridgeApiReady();"
+    )
+    assert bootstrap.index("await whenBridgeApiReady();") < bootstrap.index(
+        "await acknowledgeShellReady();"
+    )
+    assert bootstrap.index("await acknowledgeShellReady();") < bootstrap.index(
+        "await readiness.whenReceivedAfter(readinessBaseline);"
+    )
+    assert bootstrap.index(
+        "await readiness.whenReceivedAfter(readinessBaseline);"
+    ) < bootstrap.index("markBridgeOperational();")
 
 
-def test_transport_gate_composes_one_immutable_test_row_at_constructor() -> None:
+def test_transport_gate_uses_shared_immutable_command_composition() -> None:
     source = _CHILD.read_text(encoding="utf-8")
+    helper = inspect.getsource(headed_command_extension)
 
-    assert "production = dict(commands)" in source
-    assert "combined = MappingProxyType(" in source
+    assert "headed_command_extension(" in source
     assert '"test_report": _test_spec(' in source
-    assert "startup_gate: object," in source
-    assert "original_dispatcher(document, combined, startup_gate)" in source
+    assert "combined = MappingProxyType(" not in source
+    assert "original_commands(" in helper
+    assert "commands is not captured.get" in helper
+    assert "startup_gate is not captured.get" in helper
+    assert "MappingProxyType" in helper
     assert "register" not in source.casefold()
     assert "extra_commands" not in source
 
@@ -1516,6 +1521,7 @@ def _combine_page(page: Path, installed_assets: Path) -> None:
     for source in sorted(_TEST_ASSETS.iterdir()):
         if source.is_file():
             shutil.copy2(source, page / source.name)
+    shutil.copy2(_BOOTSTRAP_DRIVER, page / _BOOTSTRAP_DRIVER.name)
     for name in _PRODUCTION_ASSETS:
         shutil.copy2(installed_assets / name, page / name)
 

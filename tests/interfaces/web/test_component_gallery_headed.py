@@ -278,13 +278,10 @@ def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() ->
 def test_component_gallery_child_preserves_production_host_and_bridge() -> None:
     child = _CHILD.read_text(encoding="utf-8")
 
-    assert "production = dict(commands)" in child
-    assert 'if "test_report" in production:' in child
-    assert "combined = MappingProxyType(" in child
+    assert "from _startup_test_support import headed_command_extension" in child
+    assert "headed_command_extension(" in child
     assert '"test_report": _test_report_spec(' in child
     assert "arguments.mode," in child
-    assert "startup_gate: object," in child
-    assert "original_dispatcher(document, combined, startup_gate)" in child
     assert "original_configure(" in child
     assert "host.run_desktop(" in child
     assert "register" not in child.casefold()

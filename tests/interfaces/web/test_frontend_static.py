@@ -391,6 +391,36 @@ def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
     assert completed.stdout == "ok"
 
 
+@pytest.mark.supplemental_node
+def test_supplemental_node_shared_test_bootstrap_is_generation_bound() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental test bootstrap probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(
+                PROJECT_ROOT
+                / "tests"
+                / "assets"
+                / "bootstrap_test_bridge_probe.mjs"
+            ),
+            str(
+                PROJECT_ROOT
+                / "tests"
+                / "assets"
+                / "bootstrap_test_bridge.js"
+            ),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
 def test_br_g_32_production_inert_text_helper_owns_text_writes(
     built_wheel: BuiltWheel,
 ) -> None:

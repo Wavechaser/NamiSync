@@ -99,12 +99,17 @@ def test_sh_g_3_child_gui_path_emits_exact_startup_and_dependency_records(
 ) -> None:
     root = tmp_path / "child-app"
     script = """
-import json
 import logging
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+sys.path.insert(0, str(Path.cwd() / "tests" / "interfaces" / "web"))
+
+from _startup_test_support import (
+    StartupHandshakeDocumentChannel,
+    drive_startup_handshake,
+)
 from namisync.interfaces import launcher
 from namisync.interfaces.web import host
 from namisync.interfaces.web.paths import AppPaths
@@ -138,10 +143,10 @@ class Window:
                 else None
             )
         )
-        self.exposed = ()
+        self.exposed_functions = ()
 
     def expose(self, *functions):
-        self.exposed = functions
+        self.exposed_functions = functions
 
     def destroy(self):
         pass
@@ -198,19 +203,6 @@ webview = Webview()
 appearance = Appearance()
 
 
-class DocumentChannel:
-    def post(self, payload, *, still_current, completion):
-        assert still_current() is True
-        completion(None)
-        response = webview.window.exposed[0](json.dumps({
-            "schema_version": 1,
-            "request_id": "a2" * 16,
-            "command": "readiness_echo",
-            "payload": {"challenge": payload["challenge"]},
-        }, separators=(",", ":")))
-        assert response["result"] == {"acknowledged": True}
-
-
 lease = host.DesktopInstanceLease(object(), LeaseNative())
 host.acquire_desktop_instance = lambda _identity, native=None: (
     host.DesktopInstanceAdmission(lease, False, None)
@@ -232,20 +224,7 @@ def start_webview(webview_module, *, on_initialized, storage_path):
     assert webview_module is webview
     assert Path(storage_path) == Path(sys.argv[1]) / "webview2"
     on_initialized()
-    webview.window.events.before_load.emit()
-    webview.window.events.loaded.emit()
-    response = webview.window.exposed[0](json.dumps({
-        "schema_version": 1,
-        "request_id": "a1" * 16,
-        "command": "shell_ready",
-        "payload": {},
-    }, separators=(",", ":")))
-    assert response == {
-        "schema_version": 1,
-        "request_id": "a1" * 16,
-        "ok": True,
-        "result": {"acknowledged": True},
-    }
+    drive_startup_handshake(webview.window)
 
 
 host._load_webview = load_webview
@@ -258,7 +237,7 @@ host._create_service = lambda _paths: Service()
 host._configure_window_security = configure_security
 host._opaque_window_background = lambda: "#F3F3F3"
 host._configure_window_appearance = lambda _window: appearance
-host._document_channel = lambda _window: DocumentChannel()
+host._document_channel = StartupHandshakeDocumentChannel
 host._start_webview = start_webview
 startup_errors = []
 launcher._report_startup_error = startup_errors.append

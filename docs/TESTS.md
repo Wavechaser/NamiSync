@@ -74,6 +74,11 @@ queued document-currentness check, exact bootstrap command policy, browser
 supersession/retry behavior, and both degradable and unsafe native-surface
 outcomes. Every headed page that performs startup must complete the neutral
 challenge/echo protocol; an appearance envelope is not a substitute witness.
+Positive custom pages use the shared browser bootstrap driver, and positive
+host seams use the shared Python lifecycle driver and document channel. Keep
+negative or renderer-only fault seams explicit so a helper cannot manufacture
+their readiness evidence. Headed command additions use the shared immutable,
+collision-refusing composition wrapper rather than rebuilding production rows.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed

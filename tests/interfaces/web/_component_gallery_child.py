@@ -13,9 +13,10 @@ import sys
 import threading
 from contextlib import ExitStack
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
+
+from _startup_test_support import headed_command_extension
 
 
 _ASSET_NAMES = ("index.html", "tokens.css", "components.css")
@@ -761,44 +762,34 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     recorder.set("installed_assets", _installed_asset_evidence())
     recorder.set("media_parameters", json.loads(_media_parameters(arguments.mode)))
     original_configure = host._configure_window_security
-    original_dispatcher = host._bridge_dispatcher
     retained_delegates: list[object] = []
     pseudo_scheduler: dict[str, object] = {}
 
-    def dispatcher(
-        document: object,
-        commands: object,
-        startup_gate: object,
-    ) -> object:
-        production = dict(commands)
-        if "test_report" in production:
-            raise RuntimeError("production unexpectedly owns the gallery command")
-
+    def extension(_document: object, _registry: object) -> dict[str, object]:
         def schedule(targets: list[dict[str, object]]) -> None:
             callback = pseudo_scheduler.get("value")
             if not callable(callback):
                 raise RuntimeError("component gallery pseudo-state owner is pending")
             callback(targets)
 
-        combined = MappingProxyType(
-            {
-                **production,
-                "test_report": _test_report_spec(
-                    recorder,
-                    schedule,
-                    arguments.mode,
-                ),
-            }
-        )
+        return {
+            "test_report": _test_report_spec(
+                recorder,
+                schedule,
+                arguments.mode,
+            )
+        }
+
+    def observe_composition(production: object, combined: object) -> None:
         recorder.set("production_command_names", sorted(production))
         recorder.set("combined_command_names", sorted(combined))
         recorder.set("combined_mapping_type", type(combined).__name__)
-        value = original_dispatcher(document, combined, startup_gate)
+
+    def observe_dispatcher(value: object) -> None:
         recorder.set(
             "dispatcher_type",
             f"{type(value).__module__}.{type(value).__qualname__}",
         )
-        return value
 
     def configure(
         window: object,
@@ -889,7 +880,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         window.events.loaded += inject_after_load
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(host, "_bridge_dispatcher", dispatcher))
+        stack.enter_context(
+            headed_command_extension(
+                host,
+                extension,
+                observe_composition=observe_composition,
+                observe_dispatcher=observe_dispatcher,
+            )
+        )
         stack.enter_context(
             patch.object(host, "_configure_window_security", configure)
         )

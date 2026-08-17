@@ -19,6 +19,8 @@ from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
 
+from _startup_test_support import headed_command_extension
+
 
 _SYNCHRONIZE = 0x00100000
 _WAIT_OBJECT_0 = 0
@@ -535,7 +537,6 @@ def main() -> int:
     )
     original_create_service = host._create_service
     original_task_registry = host._task_registry
-    original_commands = host._production_commands
     original_log_renderer = host._log_startup_renderer
 
     def create_service(paths: AppPaths) -> NamiSyncService:
@@ -545,38 +546,22 @@ def main() -> int:
     def task_registry(service: object) -> object:
         return original_task_registry(service)
 
-    def commands(
-        *,
-        picker: object,
-        slots: object,
-        registry: object,
-        startup_gate: object,
-    ) -> object:
-        production = dict(
-            original_commands(
-                picker=picker,
-                slots=slots,
-                registry=registry,
-                startup_gate=startup_gate,
-            )
+    def extension(_document: object, registry: object) -> object:
+        return _benchmark_specs(
+            registry,
+            tuple(roots),
+            recorder,
+            begin_marker,
+            ready_marker,
+            report_marker,
+            failure_marker,
+            presented_marker,
         )
-        combined = {
-            **production,
-            **_benchmark_specs(
-                registry,
-                tuple(roots),
-                recorder,
-                begin_marker,
-                ready_marker,
-                report_marker,
-                failure_marker,
-                presented_marker,
-            ),
-        }
+
+    def observe_composition(production: object, combined: object) -> None:
         recorder.set("production_command_names", sorted(production))
         recorder.set("combined_command_names", sorted(combined))
         recorder.write()
-        return MappingProxyType(combined)
 
     def log_renderer(browser_version: str) -> None:
         import pythonnet
@@ -591,7 +576,13 @@ def main() -> int:
         with ExitStack() as stack:
             stack.enter_context(patch.object(host, "_create_service", create_service))
             stack.enter_context(patch.object(host, "_task_registry", task_registry))
-            stack.enter_context(patch.object(host, "_production_commands", commands))
+            stack.enter_context(
+                headed_command_extension(
+                    host,
+                    extension,
+                    observe_composition=observe_composition,
+                )
+            )
             stack.enter_context(
                 patch.object(host, "_log_startup_renderer", log_renderer)
             )

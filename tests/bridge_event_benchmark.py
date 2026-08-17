@@ -259,11 +259,15 @@ def _stage_page(root: Path, python: Path, archived_source: Path) -> Path:
     page = root / "page"
     archived_assets = archived_source / "tests" / "assets" / _ASSETS.name
     shutil.copytree(archived_assets, page)
+    shutil.copy2(
+        archived_source / "tests" / "assets" / "bootstrap_test_bridge.js",
+        page / "bootstrap_test_bridge.js",
+    )
     site_packages = python.parents[1] / "Lib" / "site-packages"
     installed_assets = (
         site_packages / "namisync" / "interfaces" / "web" / "assets"
     )
-    for name in ("appearance.js", "bridge.js", "readiness.js", "render.js"):
+    for name in ("bridge.js", "readiness.js", "render.js"):
         shutil.copy2(installed_assets / name, page / name)
     return page / "index.html"
 

@@ -14,9 +14,10 @@ import webbrowser
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
+
+from _startup_test_support import headed_command_extension
 
 
 _SETTINGS = (
@@ -526,7 +527,6 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_nami_frame = bridge._NativeNavigationGuard._on_frame_navigation_starting
     original_nami_popup = bridge._NativeNavigationGuard._on_new_window_requested
     original_nami_source = bridge._NativeNavigationGuard._on_source_changed
-    original_dispatcher = host._bridge_dispatcher
 
     def prepare(module: object) -> None:
         recorder.event("prepare.begin")
@@ -625,11 +625,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     document_holder: dict[str, object] = {}
     delayed_handler_started = threading.Event()
 
-    def probe_dispatcher(
-        document: object,
-        commands: object,
-        startup_gate: object,
-    ) -> object:
+    def extension(document: object, _registry: object) -> dict[str, object]:
         document_holder["value"] = document
 
         def native_probe(payload: Mapping[str, object]) -> object:
@@ -734,18 +730,15 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 recorder.write()
             return result
 
-        production = dict(commands)
-        if "native_probe" in production:
-            raise RuntimeError("production unexpectedly owns the native probe")
-        combined = MappingProxyType(
-            {**production, "native_probe": test_spec(native_probe)}
-        )
+        return {"native_probe": test_spec(native_probe)}
+
+    def observe_composition(production: object, combined: object) -> None:
         recorder.set("production_command_names", sorted(production))
         recorder.set("combined_command_names", sorted(combined))
         recorder.set("combined_mapping_type", type(combined).__name__)
-        dispatcher = original_dispatcher(document, combined, startup_gate)
+
+    def observe_dispatcher(dispatcher: object) -> None:
         dispatcher_holder["value"] = dispatcher
-        return dispatcher
 
     def browser_open(*values: object, **keywords: object) -> bool:
         recorder.append(
@@ -802,7 +795,12 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             )
         )
         stack.enter_context(
-            patch.object(host, "_bridge_dispatcher", probe_dispatcher)
+            headed_command_extension(
+                host,
+                extension,
+                observe_composition=observe_composition,
+                observe_dispatcher=observe_dispatcher,
+            )
         )
         stack.enter_context(patch.object(webbrowser, "open", browser_open))
         exit_code = host.run_desktop(
@@ -952,7 +950,6 @@ def _run_packaged_popup(
     recorder.set("runtime", _runtime_identity())
     original_nami_popup = bridge._NativeNavigationGuard._on_new_window_requested
     observed_configure = _install_native_observer(host, recorder, runtime)
-    original_dispatcher = host._bridge_dispatcher
     probe_injected = False
 
     def observe_nami_popup(
@@ -1006,12 +1003,7 @@ def _run_packaged_popup(
 
         window.events.before_load += execute_packaged_probe
 
-    def probe_dispatcher(
-        document: object,
-        commands: object,
-        startup_gate: object,
-    ) -> object:
-
+    def extension(_document: object, _registry: object) -> dict[str, object]:
         def packaged_probe(payload: Mapping[str, object]) -> object:
             recorder.event("dispatch", phase="packaged_popup")
             recorder.set("packaged_page", dict(payload))
@@ -1026,16 +1018,12 @@ def _run_packaged_popup(
             timeout=CommandTimeout.INTERACTIVE,
             retry=CommandRetry.NONE,
         )
-        production = dict(commands)
-        if "packaged_probe" in production:
-            raise RuntimeError("production unexpectedly owns the packaged probe")
-        combined = MappingProxyType(
-            {**production, "packaged_probe": spec}
-        )
+        return {"packaged_probe": spec}
+
+    def observe_composition(production: object, combined: object) -> None:
         recorder.set("production_command_names", sorted(production))
         recorder.set("combined_command_names", sorted(combined))
         recorder.set("combined_mapping_type", type(combined).__name__)
-        return original_dispatcher(document, combined, startup_gate)
 
     def browser_open(*values: object, **keywords: object) -> bool:
         recorder.append(
@@ -1056,7 +1044,11 @@ def _run_packaged_popup(
             patch.object(host, "_configure_window_security", configure)
         )
         stack.enter_context(
-            patch.object(host, "_bridge_dispatcher", probe_dispatcher)
+            headed_command_extension(
+                host,
+                extension,
+                observe_composition=observe_composition,
+            )
         )
         stack.enter_context(
             patch.object(

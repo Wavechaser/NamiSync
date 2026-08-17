@@ -31,51 +31,22 @@ globalThis.clearTimeout = (token) => {
   return nativeClearTimeout(token);
 };
 
-const [bridge, readinessModule, appearanceModule, renderModule] = await Promise.all([
+const [bridge, bootstrapModule, renderModule] = await Promise.all([
   import("./bridge.js"),
-  import("./readiness.js"),
-  import("./appearance.js"),
+  import("./bootstrap_test_bridge.js"),
   import("./render.js"),
 ]);
 const {
-  acknowledgeShellReady,
-  BridgeTransportError,
   closeTask,
   dispatchInteractive,
-  echoReadiness,
   markBridgeOperational,
   pickFolder,
   startPlan,
   startTaskDrain,
-  whenBridgeApiReady,
 } = bridge;
-const { installReadinessReceiver } = readinessModule;
-const { installAppearanceReceiver } = appearanceModule;
-const readiness = installReadinessReceiver(window.chrome.webview);
-installAppearanceReceiver(
-  window.chrome.webview,
-  document.documentElement,
-);
-const readinessBaseline = readiness.revision();
-await whenBridgeApiReady();
-try {
-  await acknowledgeShellReady();
-} catch (error) {
-  if (!(error instanceof BridgeTransportError)) {
-    throw error;
-  }
-}
-const challenge = await readiness.whenReceivedAfter(readinessBaseline);
-let readinessAcknowledged = false;
-for (let attempt = 0; attempt < 2 && !readinessAcknowledged; attempt += 1) {
-  try {
-    readinessAcknowledged = (await echoReadiness(challenge)).acknowledged;
-  } catch (error) {
-    if (!(error instanceof BridgeTransportError) || attempt > 0) throw error;
-  }
-}
-if (!readinessAcknowledged) throw new BridgeTransportError();
-markBridgeOperational();
+const { bootstrapTestBridge, installTestBridgeReadiness } = bootstrapModule;
+installTestBridgeReadiness();
+await bootstrapTestBridge();
 const { renderText } = renderModule;
 
 const REPORT_COMMAND = "test_report";

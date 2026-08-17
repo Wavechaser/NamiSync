@@ -7,9 +7,15 @@ import json
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
+
+from _startup_test_support import (
+    StartupHandshakeDocumentChannel,
+    drive_startup_handshake,
+    headed_command_extension,
+)
 
 import namisync.interfaces.web.host as host
 from namisync.interfaces.web.commands import (
@@ -176,6 +182,172 @@ def _startup_gate() -> DesktopReadinessGate:
     return DesktopReadinessGate(lambda _seconds, _callback: lambda: None)
 
 
+def test_shared_host_handshake_driver_owns_one_complete_generation() -> None:
+    gate = _startup_gate()
+    window = _Window()
+    window.startup_gate = gate
+    order: list[str] = []
+    opened: list[bool] = []
+    original_shell = gate.acknowledge_shell
+    original_echo = gate.acknowledge_echo
+    gate.acknowledge_shell = lambda generation: (
+        order.append("shell"),
+        original_shell(generation),
+    )[-1]
+    gate.acknowledge_echo = lambda generation, challenge: (
+        order.append("echo"),
+        original_echo(generation, challenge),
+    )[-1]
+    window.events.before_load += lambda: order.append("before_load")
+    window.events.before_load += gate.begin_generation
+    window.events.before_load += lambda: StartupHandshakeDocumentChannel(window)
+    window.events.loaded += lambda: order.append("loaded")
+    window.events.loaded += gate.native_loaded
+    gate.bind(
+        request_surface_settlement=lambda callback: callback(None),
+        request_challenge_post=lambda _generation, challenge, callback: (
+            order.append("challenge_post"),
+            window._startup_test_channel.post(
+                {"kind": "namisync.readiness.v1", "challenge": challenge},
+                still_current=lambda: True,
+                completion=callback,
+            ),
+        )[-1],
+        open_desktop=lambda: order.append("open") or opened.append(True) or True,
+        refuse_desktop=lambda error: pytest.fail(str(error)),
+    )
+
+    drive_startup_handshake(window)
+
+    channel = window._startup_test_channel
+    assert type(channel) is StartupHandshakeDocumentChannel
+    assert len(channel.posts) == 1
+    assert opened == [True]
+    assert order == [
+        "before_load",
+        "shell",
+        "loaded",
+        "challenge_post",
+        "echo",
+        "open",
+    ]
+    assert gate.is_open()
+
+
+def test_shared_host_handshake_channel_rejects_nonreadiness_and_extra_posts() -> None:
+    window = SimpleNamespace()
+    channel = StartupHandshakeDocumentChannel(window)
+
+    with pytest.raises(AssertionError, match="non-readiness"):
+        channel.post(
+            {"kind": "namisync.appearance.v1", "challenge": "a" * 32},
+            still_current=lambda: pytest.fail("unexpected currentness check"),
+            completion=lambda _error: pytest.fail("unexpected completion"),
+        )
+    channel.post(
+        {"kind": "namisync.readiness.v1", "challenge": "a" * 32},
+        still_current=lambda: True,
+        completion=lambda error: error is None,
+    )
+    with pytest.raises(AssertionError, match="more than one"):
+        channel.post(
+            {"kind": "namisync.readiness.v1", "challenge": "b" * 32},
+            still_current=lambda: True,
+            completion=lambda _error: pytest.fail("unexpected completion"),
+        )
+    assert channel.take()["challenge"] == "a" * 32
+
+
+def test_shared_headed_composition_preserves_specs_gate_and_immutability() -> None:
+    production_spec = object()
+    extension_spec = object()
+    production = {"production": production_spec}
+    picker = object()
+    slots = object()
+    registry = object()
+    gate = object()
+    document = object()
+    calls: list[tuple[object, ...]] = []
+    combined_holder: list[object] = []
+
+    def production_commands(**dependencies: object) -> object:
+        calls.append(("commands", dependencies))
+        return production
+
+    def bridge_dispatcher(
+        actual_document: object,
+        commands: object,
+        startup_gate: object,
+    ) -> object:
+        calls.append(("dispatcher", actual_document, commands, startup_gate))
+        combined_holder.append(commands)
+        return "dispatcher"
+
+    host_seam = SimpleNamespace(
+        _production_commands=production_commands,
+        _bridge_dispatcher=bridge_dispatcher,
+    )
+    with headed_command_extension(
+        host_seam,
+        lambda actual_document, actual_registry: (
+            calls.append(("extension", actual_document, actual_registry))
+            or {"test_probe": extension_spec}
+        ),
+    ):
+        observed = host_seam._production_commands(
+            picker=picker,
+            slots=slots,
+            registry=registry,
+            startup_gate=gate,
+        )
+        assert observed is production
+        assert host_seam._bridge_dispatcher(document, observed, gate) == "dispatcher"
+
+    combined = combined_holder[0]
+    assert type(combined) is MappingProxyType
+    assert combined["production"] is production_spec
+    assert combined["test_probe"] is extension_spec
+    with pytest.raises(TypeError):
+        combined["unexpected"] = object()
+    assert calls == [
+        (
+            "commands",
+            {
+                "picker": picker,
+                "slots": slots,
+                "registry": registry,
+                "startup_gate": gate,
+            },
+        ),
+        ("extension", document, registry),
+        ("dispatcher", document, combined, gate),
+    ]
+
+
+def test_shared_headed_composition_refuses_collision_before_dispatch() -> None:
+    production = {"test_probe": object()}
+    dispatched: list[bool] = []
+    gate = object()
+    host_seam = SimpleNamespace(
+        _production_commands=lambda **_dependencies: production,
+        _bridge_dispatcher=lambda *_args: dispatched.append(True),
+    )
+    with headed_command_extension(
+        host_seam,
+        lambda _document, _registry: {"test_probe": object()},
+    ):
+        observed = host_seam._production_commands(
+            picker=object(),
+            slots=object(),
+            registry=object(),
+            startup_gate=gate,
+        )
+        with pytest.raises(RuntimeError, match="collides with production"):
+            host_seam._bridge_dispatcher(object(), observed, gate)
+
+    assert dispatched == []
+
+
 def _patch_primary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -247,7 +419,6 @@ def _patch_primary(
         unsubscribe_all=lambda: order.append("registry.unsubscribe_all"),
     )
     commands = SimpleNamespace()
-    gate_holder: dict[str, DesktopReadinessGate] = {}
     dispatcher = SimpleNamespace(
         begin_close=lambda: order.append("reject_dispatch"),
         wait_for_handlers=lambda: order.append("wait_handlers"),
@@ -277,9 +448,8 @@ def _patch_primary(
         host,
         "_production_commands",
         lambda **dependencies: (
-            gate_holder.setdefault("gate", dependencies["startup_gate"]),
             setattr(webview, "startup_gate", dependencies["startup_gate"]),
-            dependencies["startup_gate"].acknowledge_shell(0),
+            setattr(webview.window, "startup_gate", dependencies["startup_gate"]),
             order.append(("production_commands", dependencies, commands)),
             commands,
         )[-1],
@@ -333,18 +503,7 @@ def _patch_primary(
         or Appearance(),
     )
 
-    class DocumentChannel:
-        def post(self, payload, *, still_current, completion) -> None:
-            if not still_current():
-                completion(RuntimeError("stale document"))
-                return
-            completion(None)
-            gate = gate_holder["gate"]
-            context = gate.command_context()
-            if type(context) is ReadinessContext:
-                gate.acknowledge_echo(context.generation, payload["challenge"])
-
-    monkeypatch.setattr(host, "_document_channel", lambda _window: DocumentChannel())
+    monkeypatch.setattr(host, "_document_channel", StartupHandshakeDocumentChannel)
     monkeypatch.setattr(
         host,
         "_bind_document_origin",
@@ -1154,9 +1313,7 @@ def test_appearance_configuration_failure_keeps_opaque_safe_baseline(
     def start(webview, *, on_initialized, storage_path) -> None:
         del storage_path
         on_initialized()
-        webview.window.events.before_load.emit()
-        webview.startup_gate.acknowledge_shell(1)
-        webview.window.events.loaded.emit()
+        drive_startup_handshake(webview.window)
 
     paths, order, _webview, document, reports = _patch_primary(
         monkeypatch,
@@ -1185,29 +1342,13 @@ def test_reload_channel_rebind_failure_revokes_the_previous_channel(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    posts: list[dict[str, object]] = []
     channel_constructions = 0
-
-    class Channel:
-        def __init__(self, webview: object) -> None:
-            self._webview = webview
-
-        def post(self, payload, *, still_current, completion) -> None:
-            assert still_current()
-            posts.append(payload)
-            completion(None)
-            gate = self._webview.startup_gate
-            context = gate.command_context()
-            assert type(context) is ReadinessContext
-            gate.acknowledge_echo(context.generation, payload["challenge"])
+    first_channel: StartupHandshakeDocumentChannel | None = None
 
     def start(webview, *, on_initialized, storage_path) -> None:
         del storage_path
         on_initialized()
-        webview.window.events.before_load.emit()
-        webview.startup_gate.acknowledge_shell(1)
-        webview.window.events.loaded.emit()
-        assert webview.startup_gate.is_open()
+        drive_startup_handshake(webview.window)
         webview.window.events.before_load.emit()
         assert webview.window.destroyed.wait(1.0)
 
@@ -1217,12 +1358,13 @@ def test_reload_channel_rebind_failure_revokes_the_previous_channel(
         start=start,
     )
 
-    def channel_factory(_window: object) -> object:
-        nonlocal channel_constructions
+    def channel_factory(window: object) -> object:
+        nonlocal channel_constructions, first_channel
         channel_constructions += 1
         if channel_constructions == 2:
             raise RuntimeError("injected channel rebind failure")
-        return Channel(webview)
+        first_channel = StartupHandshakeDocumentChannel(window)
+        return first_channel
 
     monkeypatch.setattr(host, "_document_channel", channel_factory)
 
@@ -1231,7 +1373,8 @@ def test_reload_channel_rebind_failure_revokes_the_previous_channel(
     assert result == 1
     assert reports == ["NamiSync could not bind its document channel"]
     assert channel_constructions == 2
-    assert len(posts) == 1
+    assert first_channel is not None
+    assert len(first_channel.posts) == 1
     assert "readiness.document_channel_bind_failed" in caplog.text
 
 
@@ -2617,9 +2760,7 @@ def test_normal_user_close_does_not_close_the_service_twice(
     def close_during_loop(webview, *, on_initialized, storage_path) -> None:
         del storage_path
         on_initialized()
-        webview.window.events.before_load.emit()
-        webview.startup_gate.acknowledge_shell(1)
-        webview.window.events.loaded.emit()
+        drive_startup_handshake(webview.window)
         assert webview.window.events.closing.emit() == [False]
         assert webview.window.destroyed.wait(1.0)
 

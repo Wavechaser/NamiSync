@@ -19,6 +19,8 @@ from types import MappingProxyType
 from typing import Any
 from unittest.mock import patch
 
+from _startup_test_support import headed_command_extension
+
 
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _SLOT_ID = re.compile(r"slot-[0-9a-f]{32}")
@@ -609,7 +611,6 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     scenario = _read_scenario(arguments.scenario)
     recorder.set("runtime", _runtime_identity())
     recorder.set("off_origin_handler_calls", [])
-    original_dispatcher = host._bridge_dispatcher
     original_expose_bridge = host._expose_bridge_api
     original_task_registry = host._task_registry
     original_dispatch = bridge.BridgeDispatcher.dispatch
@@ -635,33 +636,27 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     if arguments.mode == "off-origin":
         second_origin, off_origin_url = _serve_second_origin(arguments.index.parent)
 
-    def dispatcher(
-        document: object,
-        commands: object,
-        startup_gate: object,
-    ) -> object:
-        production = dict(commands)
+    def extension(_document: object, _registry: object) -> object:
+        return {
+            "test_report": _test_spec(
+                scenario,
+                recorder,
+                off_origin_url=off_origin_url,
+                drain_probe=drain_probe,
+                browser_gate=browser_gate,
+            )
+        }
+
+    def observe_composition(production: object, combined: object) -> None:
         recorder.set("production_command_names", sorted(production))
-        combined = MappingProxyType(
-            {
-                **production,
-                "test_report": _test_spec(
-                    scenario,
-                    recorder,
-                    off_origin_url=off_origin_url,
-                    drain_probe=drain_probe,
-                    browser_gate=browser_gate,
-                ),
-            }
-        )
-        value = original_dispatcher(document, combined, startup_gate)
+        recorder.set("combined_command_names", sorted(combined))
+        recorder.set("combined_mapping_type", type(combined).__name__)
+
+    def observe_dispatcher(value: object) -> None:
         recorder.set(
             "dispatcher_type",
             f"{type(value).__module__}.{type(value).__qualname__}",
         )
-        recorder.set("combined_command_names", sorted(combined))
-        recorder.set("combined_mapping_type", type(combined).__name__)
-        return value
 
     def observed_dispatch(dispatcher: object, command_json: str) -> object:
         request = None
@@ -1038,7 +1033,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         recorder.append("committed_sources", str(sender.Source))
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(host, "_bridge_dispatcher", dispatcher))
+        stack.enter_context(
+            headed_command_extension(
+                host,
+                extension,
+                observe_composition=observe_composition,
+                observe_dispatcher=observe_dispatcher,
+            )
+        )
         stack.enter_context(
             patch.object(host, "_expose_bridge_api", expose_bridge)
         )

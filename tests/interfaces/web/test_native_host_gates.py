@@ -29,6 +29,7 @@ from _headed_native import (
 
 _CHILD = Path(__file__).with_name("_native_gate_child.py")
 _INDEX = Path(__file__).parents[2] / "assets" / "native_host_gate" / "index.html"
+_BOOTSTRAP_DRIVER = _INDEX.parent.parent / "bootstrap_test_bridge.js"
 _SCRIPT = _INDEX.with_name("probe.js")
 _REQUIRED_SETTINGS = {
     "OPEN_EXTERNAL_LINKS_IN_BROWSER": False,
@@ -98,20 +99,27 @@ def native_failure_gate_evidence(
     root = require_absolute_local_test_root(
         tmp_path_factory.mktemp("native-host-failure-gates")
     )
-    index = require_absolute_local_test_root(_INDEX)
+    attachment_index = _stage_live_page(
+        headed_installed_wheel,
+        require_absolute_local_test_root(root / "attachment-page"),
+    )
     attachment_failure = _run_noninteractive_probe(
         headed_installed_wheel,
         mode="attachment-failure",
         data_root=require_absolute_local_test_root(root / "attachment-failure"),
-        index=index,
+        index=attachment_index,
         output=root / "attachment-failure.json",
         expected_returncode=1,
+    )
+    runtime_index = _stage_live_page(
+        headed_installed_wheel,
+        require_absolute_local_test_root(root / "runtime-page"),
     )
     runtime_refusal = _run_noninteractive_probe(
         headed_installed_wheel,
         mode="runtime-refusal",
         data_root=require_absolute_local_test_root(root / "runtime-refusal"),
-        index=index,
+        index=runtime_index,
         output=root / "runtime-refusal.json",
         expected_returncode=1,
     )
@@ -124,6 +132,7 @@ def native_failure_gate_evidence(
 def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     html = _INDEX.read_text(encoding="utf-8")
     script = _SCRIPT.read_text(encoding="utf-8")
+    bootstrap = _BOOTSTRAP_DRIVER.read_text(encoding="utf-8")
     child = _CHILD.read_text(encoding="utf-8")
     runtime = native_gate_child._runtime_identity()
     transport = native_gate_child._transport_evidence()
@@ -132,14 +141,16 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert "script-src 'self'" in html
     assert "unsafe-inline" not in html
     assert '<script type="module" src="probe.js"></script>' in html
-    assert 'from "./readiness.js"' in script
+    assert 'from "./bootstrap_test_bridge.js"' in script
     assert 'from "./appearance.js"' in script
     assert "await completeReadinessHandshake();" in script
-    assert 'dispatchCommand("shell_ready", {})' in script
-    assert 'dispatchCommand("readiness_echo", { challenge })' in script
-    assert script.index("installReadinessReceiver(") < script.index(
+    assert "await bootstrapTestBridge({ dispatchCommand });" in script
+    assert script.index("installTestBridgeReadiness();") < script.index(
         "installAppearanceReceiver("
     )
+    assert 'rawDispatch("shell_ready", {})' in bootstrap
+    assert 'rawDispatch("readiness_echo", { challenge })' in bootstrap
+    assert "pywebviewready" not in bootstrap
     assert "window.pywebview.api.dispatch" in script
     assert "window.location.assign(NAVIGATION_TARGET)" in script
     assert "window.open(POPUP_TARGET)" in script
@@ -155,11 +166,8 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert 'await import("./bridge.js")' in packaged_probe
     assert "await bridge.whenBridgeReady();" in packaged_probe
     assert "await bridge.dispatchInteractive(" in packaged_probe
-    assert child.count("startup_gate: object,") == 2
-    assert child.count(
-        "original_dispatcher(document, combined, startup_gate)"
-    ) == 2
-    assert child.count("combined = MappingProxyType(") == 2
+    assert child.count("headed_command_extension(") == 2
+    assert "MappingProxyType" not in child
 
 
 @pytest.mark.headed
@@ -587,6 +595,7 @@ def _stage_live_page(
 ) -> Path:
     page = require_absolute_local_test_root(root / "live-page")
     shutil.copytree(_INDEX.parent, page)
+    shutil.copy2(_BOOTSTRAP_DRIVER, page / _BOOTSTRAP_DRIVER.name)
     installed_assets = (
         installed.root
         / "Lib"
@@ -597,7 +606,7 @@ def _stage_live_page(
         / "assets"
     ).resolve(strict=True)
     assert installed_assets.is_relative_to(installed.root.resolve())
-    for name in ("appearance.js", "readiness.js"):
+    for name in ("appearance.js", "bridge.js", "readiness.js"):
         installed_asset = (installed_assets / name).resolve(strict=True)
         destination = page / name
         shutil.copy2(installed_asset, destination)

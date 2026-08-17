@@ -1,4 +1,7 @@
-import { installReadinessReceiver } from "./readiness.js";
+import {
+  bootstrapTestBridge,
+  installTestBridgeReadiness,
+} from "./bootstrap_test_bridge.js";
 import { installAppearanceReceiver } from "./appearance.js";
 
 (function () {
@@ -18,12 +21,11 @@ import { installAppearanceReceiver } from "./appearance.js";
     observations: {},
   };
   window.__namiNativeHostGate = state;
-  const readiness = installReadinessReceiver(window.chrome.webview);
+  installTestBridgeReadiness();
   const appearance = installAppearanceReceiver(
     window.chrome.webview,
     document.documentElement,
   );
-
   function delay(milliseconds) {
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
@@ -52,28 +54,8 @@ import { installAppearanceReceiver } from "./appearance.js";
   }
 
   async function completeReadinessHandshake() {
-    const readinessBaseline = readiness.revision();
     const appearanceBaseline = appearance.revision();
-    const response = await dispatchCommand("shell_ready", {});
-    if (response === null || typeof response !== "object" || response.ok !== true) {
-      throw new Error("Native host gate shell acknowledgement was refused");
-    }
-    const challenge = await readiness.whenReceivedAfter(readinessBaseline);
-    let acknowledged = false;
-    for (let attempt = 0; attempt < 2 && !acknowledged; attempt += 1) {
-      try {
-        const echo = await dispatchCommand("readiness_echo", { challenge });
-        acknowledged = echo !== null
-          && typeof echo === "object"
-          && echo.ok === true
-          && echo.result?.acknowledged === true;
-      } catch (error) {
-        if (attempt > 0) throw error;
-      }
-    }
-    if (!acknowledged) {
-      throw new Error("Native host gate readiness echo was refused");
-    }
+    await bootstrapTestBridge({ dispatchCommand });
     await appearance.whenAppliedAfter(appearanceBaseline);
     const revisions = state.observations.presentationRevisions || [];
     revisions.push(appearance.revision());
