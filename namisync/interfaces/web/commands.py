@@ -18,6 +18,10 @@ from namisync.interfaces.web.drain import (
     TaskSessionReleaseView,
     TaskStartView,
 )
+from namisync.interfaces.web.readiness import (
+    CommandAvailability,
+    CommandAvailabilitySnapshot,
+)
 from namisync.interfaces.web.slots import SlotUnavailableError
 from namisync.interfaces.service import (
     CommandIdConflictError,
@@ -146,23 +150,6 @@ class PlanningRefusedError(RuntimeError):
 class CommandAccess(StrEnum):
     READ_ONLY = "read-only"
     MUTATING = "mutating"
-
-
-class CommandAvailability(StrEnum):
-    STARTUP = "startup"
-    OPEN = "open"
-
-
-@dataclass(frozen=True, slots=True)
-class CommandAvailabilitySnapshot:
-    availability: CommandAvailability
-    generation: int
-
-    def __post_init__(self) -> None:
-        if type(self.availability) is not CommandAvailability:
-            raise TypeError("command availability must be exact")
-        if type(self.generation) is not int or self.generation < 0:
-            raise ValueError("command generation must be a nonnegative integer")
 
 
 class FieldRequirement(StrEnum):

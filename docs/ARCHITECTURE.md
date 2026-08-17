@@ -562,9 +562,11 @@ flattening, filtering, windowing, and accessible presentation. Cosmetic state
 is stored separately from semantic settings and never persists authority.
 
 Windows host security, bridge transport, presentation tokens, and lifecycle
-policy remain adapter concerns. Their exact limits, evidence, and delivery
-status belong to `M1_BRIDGE.md`, `M1_SHELL.md`, `INTERFACES.md`, and
-`DESKTOP_UI.md`, not this document.
+policy remain adapter concerns. `interfaces/web/readiness.py` is the named owner
+of the current-document readiness state machine and its exact availability
+views for commands; the host composes that owner into the transport. Their
+exact limits, evidence, and delivery status belong to `M1_BRIDGE.md`,
+`M1_SHELL.md`, `INTERFACES.md`, and `DESKTOP_UI.md`, not this document.
 
 See also `COMMANDLINE.md`.
 

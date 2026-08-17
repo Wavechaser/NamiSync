@@ -430,6 +430,11 @@ states expose no command availability at all. Frontend code distinguishes raw
 pywebview API injection from operational readiness: only `shell_ready` may use
 the former, while normal calls, retries, and retained task drains remain paused
 until the receiver applies the new generation's appearance envelope.
+`interfaces/web/readiness.py` owns this exact current-document state machine,
+its deadline and terminal states, and its immutable availability snapshots.
+The host binds native, shell, appearance-publication, open, and refusal
+callbacks to that owner; command rows retain only their declared availability,
+and the bridge consumes the resulting snapshot without owning gate lifetime.
 NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` to carry application data. Pinned pywebview does
 construct JavaScript internally for its exposed-function return transport;
