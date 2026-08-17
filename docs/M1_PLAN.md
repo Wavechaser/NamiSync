@@ -622,9 +622,12 @@ security-equivalent.** Four gaps this decision originally left open:
 1. **NamiSync-owned host-initiated JavaScript is unnecessary and forbidden for
    application data.** Interpolating serialized event data into `evaluate_js`
    would make a filename JavaScript source; pywebview's public
-   `evaluate_js` also has no structured argument channel. JavaScript initiates
-   every exchange through `dispatch(command_json)` and receives ordinary
-   structured return values. Live delivery uses one outstanding
+   `evaluate_js` also has no structured argument channel. Ordinary application
+   RPC starts in JavaScript through `dispatch(command_json)` and receives
+   structured return values. The bounded presentation-only host-to-page
+   readiness and appearance envelopes use the native WebView2 document channel;
+   they construct no JavaScript and do not create another command or event API.
+   Live delivery uses one outstanding
    `next_events`/event-drain request against a bounded Python queue. NamiSync
    code calls neither `evaluate_js`, `run_js`, nor `Window.state` for
    application data. Pinned pywebview 6.2.1 does internally construct

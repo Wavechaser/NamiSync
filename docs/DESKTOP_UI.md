@@ -132,6 +132,8 @@ modules. At Slice 2 closure the wheel contained exactly `index.html`, `app.css`,
 `icons.js`, `appearance.js`, four pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
 records under `assets/icons/`. The component-gallery scenario remains test-only
 and absent from the wheel.
+Post-realignment readiness hardening additionally packages `readiness.js` as
+the neutral host-challenge receiver; it adds no second application-data bridge.
 There is no npm, framework, bundler, transpiler, source map, inline script, or
 inline event handler. The first running shell and installed-wheel
 proof precede PyInstaller work. The frozen specification, dependency lock, CI,
@@ -268,10 +270,10 @@ cursor and command-receipt identity exposed across the wire. The desktop owns th
 presentation queue fed by that sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe on task close and close every observation before service shutdown.
 
-An initial loaded-time security, material, or presentation refusal closes
-dispatcher admission and wakes the task registry before appearance teardown or
-any window close request. Public destruction is attempted once; after a throw
-or a return without closure, the host posts one `WM_CLOSE` to its retained
+An initial loaded-time security, unsafe-surface, or document-readiness refusal
+closes dispatcher admission and wakes the task registry before appearance
+teardown or any window close request. Public destruction is attempted once;
+after a throw or a return without closure, the host posts one `WM_CLOSE` to its retained
 native window handle so the startup-refused path can release the GUI loop. A
 failure of both close paths never reopens authority or replaces the original
 startup diagnosis.

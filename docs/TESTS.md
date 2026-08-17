@@ -74,16 +74,21 @@ queued document-currentness check, exact bootstrap command policy, browser
 supersession/retry behavior, and both degradable and unsafe native-surface
 outcomes. Every headed page that performs startup must complete the neutral
 challenge/echo protocol; an appearance envelope is not a substitute witness.
-Positive custom pages use the shared browser bootstrap driver, and positive
-host seams use the shared Python lifecycle driver and document channel. Keep
-negative or renderer-only fault seams explicit so a helper cannot manufacture
-their readiness evidence. Headed command additions use the shared immutable,
-collision-refusing composition wrapper rather than rebuilding production rows.
+Positive custom pages use `bootstrapTestBridge()` from
+`tests/assets/bootstrap_test_bridge.js`; positive host seams use
+`drive_startup_handshake()` from
+`tests/interfaces/web/_startup_test_support.py` and its test document channel.
+Keep negative or renderer-only fault seams explicit so a helper cannot
+manufacture their readiness evidence. Headed command additions use that
+module's shared immutable, collision-refusing `headed_command_extension()`
+rather than rebuilding production rows.
 
 Headed subprocesses publish lifecycle evidence through the tests-only immutable
-milestone protocol. A child may publish one `ready.json` or `failure.json`, then
-one `final.json`; each is canonical JSON written completely to a private
-same-directory temporary and renamed without replacement. Parents poll names,
+milestone protocol owned by `tests/interfaces/web/_headed_evidence.py` and its
+`EvidencePublisher`/`EvidenceReader`. A child may publish one `ready.json` or
+`failure.json`, then one `final.json`; each is canonical JSON written completely
+to a private same-directory temporary and published without replacement.
+Parents poll names,
 read each published milestone once, cache it, and reject contradictions, late
 milestone names after an observed final, noncanonical records, or orphan
 protocol temporaries. Final-only evidence requires an explicit reader opt-in
@@ -94,6 +99,17 @@ request or acceptance limit. Benchmark timing markers and sample/timing JSONL
 remain separate write-once or append-only measurement artifacts, while the
 tree-window fixture remains a one-shot parent-created input; neither is a live
 child-to-parent snapshot and neither belongs in the milestone state machine.
+
+A green headed result proves only its declared NamiSync/page contract; it is not
+evidence that the surrounding Windows compositor remained healthy. A
+2026-08-17 checkpoint completed green while the same session contained a DWM
+restart, which the child/page evidence protocol could not see; `BUGS.md` owns
+the exact incident record and does not attribute causality to NamiSync. A shared
+current-session DWM sentinel should bracket future headed runs, detect a
+compositor restart independently of child/page success, and report event-log or
+GPU/TDR evidence without conflating temporal overlap with cause. Until it lands,
+compositor health is an explicit evidence limitation rather than an inferred
+pass.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed

@@ -2853,9 +2853,10 @@ require a later schema-version decision rather than an M1 fallback
 
    The standalone `tests/bridge_event_benchmark.py` harness builds and installs
    the archived-HEAD wheel, loads a test-owned benchmark page with the installed
-   production bridge/appearance/render assets in real WebView2, waits on a
-   test-only start handshake, runs the same aggregate rates for a real 60
-   seconds, and records latency, `Gap`, fixture, runtime, dirty-state, and
+   production bridge/readiness/render assets in real WebView2, completes the
+   shared test-owned neutral readiness bootstrap, runs the same aggregate rates
+   for a real 60 seconds, and records latency, `Gap`, fixture, runtime,
+   dirty-state, and
    whole-Job diagnostics that may inform, but cannot close, shell-owned SH-G-15.
    The browser streams bounded sample batches and the producers stream bounded
    timing batches to SHA-256-manifested sidecars; the measured child retains no

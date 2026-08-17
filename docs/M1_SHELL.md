@@ -282,6 +282,7 @@ The target layout grows only as its owning slice lands:
 namisync/interfaces/web/
     __init__.py
     bridge.py
+    document_channel.py
     pywebview_runtime.py
     logging_config.py
     paths.py
@@ -289,6 +290,7 @@ namisync/interfaces/web/
     appearance.py
     commands.py
     drain.py
+    readiness.py
     slots.py
     visible_sequence.py
     assets/
@@ -307,6 +309,7 @@ namisync/interfaces/web/
         app.js
         appearance.js
         bridge.js
+        readiness.js
         render.js
         tree.js
         rail.js
@@ -345,6 +348,9 @@ remain under `tests/assets/` and are excluded from package data.
 GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, `appearance.js`,
 and the exact four SVGs plus source/license records under `assets/icons/`; its
 component-gallery scenario remains test-only and absent from the wheel.
+Post-realignment readiness hardening adds `readiness.py`,
+`document_channel.py`, and packaged `readiness.js`; it does not add another
+bridge or application-data transport.
 
 The production host resolves its index from package resources. A
 Python-construction-only override accepts an absolute local index path for
@@ -481,22 +487,26 @@ third-party notices, signing, or a WebView2 bootstrapper.
 
    Native `loaded` is necessary but not sufficient for an open document. The
    packaged module must acknowledge receiver/DOM installation through the sole
-   dispatch entry, and the host must successfully post the current initial
-   appearance envelope. Missing acknowledgement or publication failure before
-   the five-second deadline and before the first open generation enters the
-   same terminal startup-refused path; close and late callbacks cannot reopen
-   it. The visible `Ready` label waits until the packaged receiver applies that
-   generation's first valid envelope. A same-origin reload closes ordinary
-   admission before reinjection and must repeat the handshake; stale timers,
-   acknowledgements, and publication callbacks cannot settle its new
-   generation. If that reload handshake refuses after an earlier generation
-   opened and the host remains open, it records the failure and uses the
-   ordinary bounded service-close path rather than bypassing active work with
-   the startup-only destroy. A close already in flight retains ownership and a
-   later readiness refusal cannot replace it.
-   Raw pywebview API injection is sufficient only for `shell_ready`; normal
-   calls, retries, and retained task drains stay paused until the current
-   envelope is applied.
+   dispatch entry, and the initial native surface must settle safe. The host
+   then posts a neutral current-generation challenge through the sole document
+   channel, and that page echoes it through `readiness_echo`. Missing
+   acknowledgement, unsafe surface settlement, or a failed or incomplete
+   post/echo before the five-second deadline and before the first open
+   generation enters the same terminal startup-refused path; close and late
+   callbacks cannot reopen it. Appearance configuration, observation, read, or
+   publication failure degrades over a confirmed opaque base and is not itself
+   a readiness refusal; only an unconfirmed opaque rollback after native
+   surface mutation is unsafe. The visible `Ready` label waits for the truthful
+   echo acknowledgement. A same-origin reload closes ordinary admission before
+   reinjection and must repeat the bilateral handshake; stale timers,
+   acknowledgements, and queued posts cannot settle its new generation. If that
+   reload handshake refuses after an earlier generation opened and the host
+   remains open, it records the failure and uses the ordinary bounded
+   service-close path rather than bypassing active work with the startup-only
+   destroy. A close already in flight retains ownership and a later readiness
+   refusal cannot replace it. Raw pywebview API injection is sufficient only
+   for the bootstrap rows `shell_ready` and `readiness_echo`; normal calls,
+   retries, and retained task drains stay paused until the echo is acknowledged.
 
    After `start_edge_chromium` returns, both initial in-loop refusal paths run
    the finalizer above. If both close requests fail, authority remains rejected

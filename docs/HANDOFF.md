@@ -1,74 +1,82 @@
 # Session Handoff
 
-Status (2026-08-17): GUI Break 1 and Slice 4 have completed the requested
-clean-room realignment and follow-up hardening. The implementation was split
-into 19 independently reviewable code/test checkpoints from `ce124e0` through
-`e287ab5`; this documentation closeout records their final verified state.
+Status (2026-08-17): the desktop readiness subsystem and headed acceptance
+harness consolidation are implemented in five independently reviewable commits
+from `8bf6ab0` through `d667917`. This handoff records their documentation
+closeout and final verification state.
 
 ## Delivered
 
-- Restored the native Fluent foundation: live UISettings accent roles,
-  theme-aware opaque fallback, truthful material landing, current-generation
-  appearance publication, exact observation lifetime, presentation-ready
-  document admission, and fail-closed initial versus post-open refusal paths.
-- Kept the task rail and unselected cards transparent over Mica, made
-  selected/current cards opaque with an accessible boundary, and paired their
-  forced-color `Highlight` background with `HighlightText` while preserving
-  disabled `GrayText`.
-- Realigned `visible_sequence.py` to workflow-owned arrays and the complete
-  65,536-byte ingress ceiling, retained raw Unicode/search authority, emitted
-  one exact bounded wire view, made anchor lookup proportional to ancestor
-  depth, and exposed expansion only for parents retained by the active
-  projection.
-- Made the generic virtual tree keyboard-, pointer-, scroll-, resize-, and
-  accessibility-operable without moving hierarchy, filtering, selection, or
-  bridge authority into JavaScript. Tree-owned generations reject stale pages;
-  controller disposal disconnects observation and invalidates pending work.
-- Neutralized the fixed filesystem layout-control set only at the final text
-  sink while preserving raw workflow, wire, search, and opaque callback
-  identities. Residual Unicode ambiguity remains documented rather than being
-  overstated as universal spoof prevention.
-- Bound positive renderer evidence to one canonical temporary manifest built
-  by `build_node_tree` -> `derive_visible_sequence` ->
-  `window_visible_sequence` -> `to_visible_window_view`; Python, direct Node,
-  and installed WebView2 consume the same bytes and agree on SHA-256. The
-  exhaustive fixed-set sink corpus remains explicitly renderer-local because
-  invalid Windows filename characters cannot claim workflow provenance.
-- Repaired every custom headed composition to preserve the production
-  `shell_ready`/appearance handshake and immutable command mapping. The native
-  picker witness uses an exact validated `BM_CLICK` target without synthetic
-  focus or keystroke input, and mutable headed result snapshots now tolerate
-  only bounded Windows sharing violations while retaining atomic replacement.
+- Moved the desktop document-readiness state machine, phase vocabulary, exact
+  contexts, and generation ownership into `interfaces/web/readiness.py`.
+- Inverted command readiness into host-owned `admit(name)`: composition joins
+  the final immutable command row with current readiness, while the bridge
+  consumes an exact generic verdict, forwards granted context opaquely, and
+  retains its independent document-trust and 64-handler guards.
+- Replaced appearance publication as the liveness token with a neutral,
+  current-generation host challenge/page `readiness_echo` roundtrip. Appearance
+  configuration, observation, and publication now degrade over a confirmed
+  opaque base; only an unconfirmed rollback after native surface mutation is a
+  hard startup refusal.
+- Added the sole bounded/current-document WebView2 message sink in
+  `document_channel.py`, the packaged neutral receiver in `readiness.js`, and a
+  mechanical Python/JavaScript mirror for every production command's phase,
+  timeout, and retry policy.
+- Consolidated positive custom pages behind `bootstrapTestBridge()`, positive
+  host seams behind `drive_startup_handshake()`, and headed command additions
+  behind one immutable collision-refusing extension helper. Negative and
+  renderer-only fault seams remain explicit.
+- Replaced parent polling of repeatedly replaced live JSON snapshots with a
+  tests-only immutable milestone protocol: one `ready` or `failure`, followed
+  by `final`, each canonical, bounded, and published without replacement.
+  Final-only completion/refusal witnesses opt in explicitly; benchmark streams
+  remain append-only measurement artifacts rather than milestones.
 
 ## Adversarial Review
 
-- Separate builder/reviewer passes found and corrected lifecycle leaks, stale
-  observation ordering, CSP-incompatible accent publication, false fallback
-  evidence, startup-authority races, stale document epochs, inaccessible tree
-  semantics, missing scroll/resize paging, request ping-pong, forced-color
-  mismatches, raw directional-control rendering, fixture laundering, and stale
-  headed wrappers.
-- The last code pass specifically caught the raw-readiness supersession race,
-  selected-card forced-color mismatch, and missing passive resize ownership.
-  Each received a reproducing regression and an independent clear verdict.
-- The final documentation truth audit reconciled initial versus post-open
-  refusal, active bridge API versus absent product callers, exact manifest
-  names, gate counts, measurement status, and remaining-slice ownership. No
-  actionable documentation finding remains.
+- Separate builder/reviewer passes checked generation supersession, queued
+  document currency, echo replay, phase drift, malformed verdicts, appearance
+  degradation versus unsafe rollback, exact JSON typing, bounded reads,
+  contradiction/final ordering, held-file behavior, and child-exit reporting.
+- The resulting architecture keeps readiness, dispatcher session admission,
+  and bridge handler admission at their distinct granularities; no grand shared
+  admission abstraction was introduced.
+- A later Windows-event review found that checkpoint 4's green result was not
+  compositor-health evidence. At 2026-08-17 18:29:25, Application Error record
+  63156 and WER report `854b76c5-b80c-4127-acc8-404d18814e0d` accompanied
+  the incident. Dwminit record 63157 reported restart 1; WER subcode `0x23`
+  names an unexpected heap exception. No contemporaneous GPU/TDR event was
+  found in the inspected logs. DWM restarts on 2025-07-23 and
+  2026-07-26 had different `MILERR_DISPLAYSTATEINVALID` signatures, and
+  checkpoint 5 had no later DWM event. This establishes a headed-evidence blind
+  spot and temporal correlation only; it does not establish NamiSync causality.
+  WER recorded `memory.hdmp` among the attached files and named the
+  ACL-protected archive
+  `C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_dwm.exe_df609f70188a5f8b3be1496f1c39c52b1ad9_1b1372ac_e7ec54db-cfb8-49f8-a2a2-6473171dfcdf`;
+  this session could not verify the archive contents. An administrator should
+  preserve and inspect any retained dump locally as sensitive desktop-process
+  memory before WER cleanup.
 
 ## Verification
 
-- Ordinary repository suite: `2,351 passed, 10 skipped, 27 deselected`.
-- Interfaces headed gate on the installed wheel and real WebView2 host:
-  `27 passed, 2,361 deselected`.
-- Complete unfiltered repository suite: `2,378 passed, 10 skipped`.
+- Each checkpoint passed its matching focused ordinary, direct bundled-Node,
+  and/or installed-wheel real-WebView2 tests before commit.
+- Final ordinary repository suite: `2,419 passed, 12 skipped, 27 deselected`.
+- Latest post-incident combined installed-wheel headed run:
+  `27 passed, 53 deselected`; the Application log contains no later DWM restart.
+- The complete unfiltered repository suite was deliberately not rerun after the
+  DWM incident; ordinary and post-incident headed evidence remain stated
+  separately rather than manufacturing another stress pass.
 - Import boundary lint: `11 kept, 0 broken`.
-- Every checkpoint also passed its focused Python, direct bundled-Node, and/or
-  installed-wheel headed witness before commit. The final diff check is clean
-  apart from expected line-ending notices.
+- Documentation truth/stale-text scan and `git diff --check`: clean; only the
+  expected working-copy CRLF notices were emitted.
 
 ## Remaining Work
 
+- Add a shared current-session DWM sentinel before treating a green headed run
+  as compositor-health evidence. It must bracket the complete run, detect a
+  restart independently of child/page success, report corroborating event-log
+  or GPU/TDR evidence, distinguish older events, and avoid inferring causality.
 - Slice 5–7 product plan, inventory, history, settings, and lifecycle surfaces;
   GUI Break 2 visual cohesion; and Slice 8 beta/release closure remain open.
 - BR-G-32's plan- and inventory-DOM clauses, full BR-G-41 lifecycle closure,
@@ -78,5 +86,5 @@ into 19 independently reviewable code/test checkpoints from `ce124e0` through
 - Slice 4's 120,000-node evidence is a retained-representation witness and
   deterministic scaling guard, not Tier 2 latency acceptance. Slice 5/6 must
   supply the named product-view measurements without retuning these contracts.
-- The temporary pre-Stage-6 root `M1_SHELL.md` is absent after verified
+- The temporary pre-Stage-6 root `M1_SHELL.md` remains absent after verified
   realignment; active delivery authority remains `docs/M1_SHELL.md`.

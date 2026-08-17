@@ -116,6 +116,15 @@ packaging remain future phases.
 - Secured the installed-wheel host lifecycle with bounded admission, drains,
   recovery, and shutdown; pinned app/database identity, activation, native
   picker/path confinement, receipt-safe plan replay, and sanitized logging.
+- Gave current-document readiness one named state-machine owner, moved the
+  command-phase join into host composition, and reduced the bridge to consuming
+  an opaque admission verdict. Ordinary commands now wait on a neutral
+  current-generation host challenge/page echo, while appearance publication
+  remains independently degradable after safe-surface settlement.
+- Made Python/JavaScript availability, timeout, and retry agreement mechanical;
+  consolidated positive headed startup and command composition behind shared
+  drivers; and replaced live result-snapshot replacement with bounded,
+  canonical, immutable `ready`/`failure`/`final` evidence milestones.
 - Added the authored Fluent palette and local icons, live Windows theme/accent,
   Mica and dark-mode handling, truthful opaque fallback, and motion/contrast
   guardrails.
@@ -137,6 +146,10 @@ packaging remain future phases.
 - Kept Slice 5–7 product surfaces, GUI Break 2, current-source BR-G-42 event
   timing and product-view rows, BR-G-45 terminal retention, Slice 8 release
   closure, and SH-G-15 whole-runtime containment open.
+- Recorded that a green headed checkpoint is not compositor-health evidence:
+  one checkpoint coincided with a DWM restart but had no session event sentinel
+  capable of detecting it. The event correlation does not establish NamiSync
+  causality; shared headed-session compositor monitoring remains open.
 
 #### Close transport custody and realign the bridge boundary (2026-08-13 – 2026-08-14)
 

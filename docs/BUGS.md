@@ -554,6 +554,19 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - OPEN (2026-08-17). Headed compositor-restart evidence blindness. A
+  headed checkpoint can report green while Windows DWM restarts during the same
+  session because the harness observes its child/page result but has no shared
+  compositor event sentinel. Checkpoint 4 coincided with the 18:29:25
+  Application Error record 63156 and WER report
+  `854b76c5-b80c-4127-acc8-404d18814e0d`; Dwminit record 63157 reports restart
+  1, while WER subcode `0x23` names an unexpected heap exception. No
+  contemporaneous GPU/TDR event was found in the inspected logs. Earlier
+  2025-07-23 and 2026-07-26 DWM restarts had different
+  `MILERR_DISPLAYSTATEINVALID` signatures, and checkpoint 5 had no later DWM
+  event. This proves an evidence blind spot, not NamiSync causality. A shared
+  headed-session compositor sentinel remains required before a green checkpoint
+  can make any compositor-health claim.
 - MINOR - FIXED (2026-08-17). Headed-evidence replacement contention. Headed
   children repeatedly replaced one live JSON snapshot while parents polled and
   opened it, so Windows delete sharing could reject an otherwise correct final
