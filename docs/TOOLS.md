@@ -14,9 +14,21 @@ account for. Compatible Tier 2 measurements may share one vertical-slice
 harness; structural count tests or serializer round trips do not promote a
 timing or memory target.
 
-The existing SH-G-8 files remain frozen in place. When BR-G-45 or SH-G-15
-becomes the second empirical Tier 3 consumer, shared `tools` support may extract
-only canonical artifact/schema/digest checks, process isolation, source/runtime
+The existing SH-G-8 transport-custody authority remains frozen in place as an
+accepted historical exception, not a template. Its fixed corpus and structural
+sizer form a deterministic calculation; identical fresh children strengthened
+provenance but supplied no statistical power. It and the Tier-1 live check guard
+only the named realistic corpus, not a complete-domain hard wall. Do not extend
+or recalibrate that v1 apparatus by default.
+
+BR-G-45 must first define and enforce its production aggregate-retention policy
+and derive analytical containment from the complete admitted domain. Only a
+separately identified native or renderer residual that production cannot bound
+analytically may become an empirical claim. SH-G-15's whole headed runtime is
+the anticipated empirical Tier 3 consumer because WebView2, CLR, allocator,
+topology, and version effects are irreducibly runtime-dependent. Shared `tools`
+support may be extracted for an actual empirical consumer, but only for
+canonical artifact/schema/digest checks, process isolation, source/runtime
 receipts, verdict exclusion, and frozen-contract validation. Corpus generation,
 root selection, measurement statistic, scaling axes, aggregate policy, and the
 component validator remain component-owned.

@@ -14,7 +14,9 @@ calibration-a/holdout-b corpora and production-path transport-custody runner
 have also landed. The committed calibration-a artifact now supplies the
 normative transport measurement, and the separate contract freezes the
 1,966,080-byte ceiling. Independent holdout-b passes, closing SH-G-8 and
-BR-G-42 event/transport custody only.
+BR-G-42 event/transport custody only. That accepted v1 authority covers its
+fixed realistic corpus and remains a historical, non-precedential soft memory
+guard rather than a complete admitted-domain hard wall.
 GUI Break 1 and Slice 4 completed the audited realignment recorded here and
 were hardened and reverified on 2026-08-17;
 Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
@@ -35,9 +37,10 @@ reaches below the facade where information would otherwise be lost: the
 execution continuation retains user-selection provenance, and selected
 inventory refresh gains an explicit recursive-subtree scan-and-record scope.
 The implemented seam remains authoritative, while §9 and BR-G-45 now identify
-the terminal-retention policy and evidence limits that must be fixed before
-their independent holdouts; those open gates are not silently resolved by the
-existing implementation.
+the production terminal-retention policy, analytical containment proof, and
+any separately classified irreducible empirical residual that must be fixed
+before closure; those open gates are not silently resolved by the existing
+implementation.
 
 **Standing.** `DEFENSE.md` owns the trusted-base decision, threat ceiling,
 tolerance policy, and model-reopen triggers; `FEATURES.md` owns behavior and
@@ -1780,9 +1783,11 @@ The full terminal result is not ordinary transport custody. One completion can
 simultaneously exist as a core `Terminal(OperationResult)`, its adapter event
 view, the terminal `SessionRecordView`, the serialized response, and a browser
 retry/presentation value. BR-G-45 owns that complete artifact set and the
-aggregate policy for completed tasks. Until its policy and ceilings pass an
-independent holdout, neither the 48-task count bound nor successful session
-release is evidence that retained result bytes are bounded acceptably.
+aggregate policy for completed tasks. Until production enforces that policy and
+its checked maxima prove an analytical bound for every enforceable term over the
+complete admitted domain, with separate authority for any irreducible residual,
+neither the 48-task count bound nor successful session release is evidence that
+retained result bytes are bounded acceptably.
 
 For a compound execute-then-verify run, the two phases are one session
 producing one result with ordered `PhaseResultView`s. The rail summarizes the
@@ -2667,17 +2672,19 @@ require a later schema-version decision rather than an M1 fallback
    | 256-row history detail window | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 Slice 7 reference acceptance required |
    | Incremental plan projection memory | 128 MiB maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required, escalating under repository Tier 3 triggers |
    | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six | Tier 0 reasoned target; Tier 2 Slice 6 reference acceptance required, escalating under repository Tier 3 triggers |
-   | Identity-deduplicated bridge transport custody under the event fixture | 1,966,080 bytes | Tier 3 accepted by frozen calibration/holdout authority; Tier 1 current-source drift guard active |
-   | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | Ceilings not yet derived | Tier 0 contract shape; Tier 3 required by BR-G-45 |
+   | Identity-deduplicated bridge transport custody under the event fixture | 1,966,080 bytes | Frozen historical protected authority; Tier 1 current-source drift guard active; not a valid-domain hard bound or precedent |
+   | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | Production policy and bound not yet derived | Analytical containment required first; empirical tier applies only to an irreducible residual |
 
    Tier 0 rows above are design targets, not measured closure evidence. A
    deterministic count, shape, serializer, or behavioral test does not promote
-   a timing or memory row. Compatible Tier 2 rows may share one reference
-   artifact in their owning vertical slice rather than building one harness per
-   number. The 2026-08-13 event artifact remains useful historical
-   characterization, but the later 150 ms linger changed current-source timing;
-   reliable/terminal and progress latency therefore still need Tier 2 evidence.
-   `AGENTS.md` owns escalation to Tier 3.
+   an unrelated timing or allocator-memory row; an exact structural-memory
+   calculation follows the deterministic authority rules in `AGENTS.md`.
+   Compatible Tier 2 rows may share one reference artifact in their owning
+   vertical slice rather than building one harness per number. The 2026-08-13
+   event artifact remains useful historical characterization, but the later
+   150 ms linger changed current-source timing; reliable/terminal and progress
+   latency therefore still need Tier 2 evidence. `AGENTS.md` owns escalation to
+   Tier 3.
 
    **BR-G-42 event-correctness/transport-custody definition (required by SH-G-8; REALIGNED; SH-G-8 SCOPE CLOSED, CURRENT-SOURCE LATENCY ACCEPTANCE OPEN).**
    Transport custody
@@ -2771,7 +2778,7 @@ require a later schema-version decision rather than an M1 fallback
    component maxima. The 128/64/64 measurement is one unchanged exact
    quiescent snapshot. Its terminal witness includes the queue slot while
    cutting and separately reporting result artifacts, so it is not BR-G-45
-   calibration. Each dataset
+   complete-retention evidence. Each dataset
    requires an isolated/safe-path parent launched with `-I -S`
    (`isolated=1`, `ignore_environment=1`, `no_site=1`, `safe_path=true`). After
    proving clean committed source authority, the parent manually compiles the
@@ -2839,6 +2846,16 @@ require a later schema-version decision rather than an M1 fallback
    not calibration, holdout, or replacement acceptance evidence. Together with
    the frozen-validator and holdout selection above, custody has 63 focused
    checks.
+
+   This accepted v1 authority is historical, exceptional, and non-precedential.
+   With its function, corpus, runtime, and representation fixed, the structural
+   `sys.getsizeof` graph has one deterministic value; byte-identical fresh
+   children added provenance but no statistical power. The committed
+   calibration, ceiling, holdout, validators, hashes, and line-ending pins stay
+   frozen rather than being retroactively rewritten. A later transport
+   representation must select authority from its consequence, production
+   enforceability, and deterministic or noisy character instead of inheriting
+   this apparatus.
 
    Root `.gitattributes` pins the runner, frozen validator, holdout witness, and
    ceiling JSON to LF, while pinning the calibration and holdout JSON artifacts
@@ -3694,27 +3711,32 @@ because its local tests are easier.
   rows, including current-source event timing and later feature surfaces,
   remain open on their owning slices.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
-  separately.** For one exact 100,000-subject completion, calibration and a
-  later independent holdout measure the complete per-completion artifact set:
+  separately.** First define a bounded production representation and enforce
+  per-completion plus aggregate completed-task budgets over the exact
+  100,000-subject admitted domain. The complete per-completion artifact set is:
   the core `Terminal(OperationResult.items)` retained by dispatcher custody,
   its adapter `SessionEventView`, the terminal `SessionRecordView` and
   `OperationResultView.items`, serialization/native return values, browser
-  retry/presentation copies, and the post-callback representation. The
-  identity ledger reports shared and distinct objects without either omitting
-  or double-charging them. Calibration fixes separate native, serialized, and
-  renderer-retained ceilings before holdout; it also records construction,
-  delivery, presentation, release, and settlement latency so a memory pass
-  cannot hide a frozen window.
+  retry/presentation copies, and the post-callback representation. Checked
+  production maxima for every retained representation, subject-scaled field,
+  node/depth family, and aggregate budget must derive the analytical containment
+  bound without either omission or double-charging. A separately identified
+  native or renderer copy that production cannot bound analytically is an
+  empirical residual and must receive its own tier and evidence. Construction,
+  delivery, presentation, release, and settlement latency remain separately
+  classified so a memory pass cannot hide a frozen window.
 
   A separate aggregate policy fixes the maximum completed-task bytes and exact
   representations retained before presentation, during callback or release
   retry, after successful `release_terminal_session`, and after explicit
   `close_task`. It preserves the reviewed plan, exact retry authority, and a
   truthful result when durable history is degraded. Repeated complete/release/
-  close cycles and the maximum permitted completed-task set must reach the
-  declared plateau; a task-count cap alone is not a byte policy. **Current
-  status: OPEN.** No realistic 100,000-subject calibration, frozen ceilings,
-  aggregate policy, or independent holdout has landed. *Not satisfied by*
+  close cycles and the maximum permitted completed-task set must remain within
+  the enforced budget and release retained state at the declared boundaries; a
+  task-count cap alone is not a byte policy. **Current
+  status: OPEN.** No bounded production representation, enforced aggregate
+  policy, complete-domain analytical proof, or separately justified empirical
+  residual acceptance has landed. *Not satisfied by*
   measuring only `SessionRecordView`, excluding the full terminal event,
   reusing one interned path/detail value, measuring an empty/summary result,
   clearing truth before its presentation/retry boundary, assuming degraded

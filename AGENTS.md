@@ -177,22 +177,45 @@ their contract, and update the matching tests and documentation when it does.
 
 ## Measurement Authority
 
-- Classify every empirical quantitative claim before building its evidence.
-  **Tier 0** is a reasoned target and never closes a gate. **Tier 1** is a
-  current-source live drift guard against an already accepted invariant and is
-  not acceptance evidence. **Tier 2** is named-reference acceptance for an independently
-  predeclared budget: exact fixture, profile, statistic, run count, committed
-  raw evidence, and a separate validator. **Tier 3** is protected authority.
-- Tier 3 is required when calibration derives a release ceiling, release-gating
+- Classify every quantitative claim before building its evidence. First decide
+  from the `DEFENSE.md` consequence whether the number is a hard invariant, a
+  release SLO, a soft drift guard, or a diagnostic. Evidence strength cannot
+  promote a diagnostic or soft guard into acceptance evidence. A guard may
+  still fail closed pending explicit adjudication under its owning consequence
+  and release policy.
+- Before selecting a tier, decide whether production can enforce the proposed
+  bound. An enforceable containment bound must first become production policy
+  derived entirely from enforced maxima over the complete admitted domain,
+  with every assumption checked. That analytical or source-derived bound may
+  close outside the empirical tiers; empirical characterization may guard its
+  implementation but cannot substitute for containment. Any irreducible term
+  sampled from an allocator, runtime, or environment remains a separately
+  classified empirical claim.
+- Then distinguish deterministic quantities from noisy ones. An exact
+  measurement function proven free of variable terms produces one deterministic
+  value from frozen source, corpus, runtime, dependencies, and representation.
+  Protected authority for that value uses an independently authored oracle or
+  expected result and a protected baseline or contract. Repeat runs are
+  required only when stability or nondeterminism is itself part of the claim;
+  byte-identical fresh children add provenance and drift confidence, not
+  statistical samples, and do not justify calibration, holdout, headroom, or a
+  sampled ceiling.
+- Evidence tiers describe how a quantitative claim is used. **Tier 0** is a
+  reasoned target and never closes a gate. **Tier 1** is a current-source live
+  drift guard against an already accepted contract or claim and is not
+  acceptance evidence. **Tier 2** is named-reference acceptance for an
+  independently predeclared budget: exact fixture and profile; expected result
+  plus evaluation count for a deterministic quantity, or statistic plus run
+  count for a noisy one; committed raw evidence; and a separate validator.
+  **Tier 3** is protected authority with the empirical and deterministic forms
+  below.
+- Empirical Tier 3 is required, after the consequence and enforceability
+  decisions above, when calibration derives a release ceiling, release-gating
   acceptance authority failed or was invalidated, an empirical number without
   an analytical bound closes a cross-slice user-operation gate, or an
   unversioned runtime-dependent result would otherwise become a release limit.
   Use the lowest sufficient tier for every other number; compatible Tier 2
-  measurements may share one vertical-slice harness. An analytical or source-
-  derived bound may close outside the empirical tiers only when it is derived
-  entirely from enforced production maxima over the complete admitted domain
-  and every assumption is a checked invariant. Any sampled allocator, runtime,
-  or environment term makes the claim empirical.
+  measurements may share one vertical-slice harness.
 - Empirical Tier 3 requires disjoint calibration and holdout data, derivation,
   rounding, headroom, and fresh-process count committed before holdout;
   verdict-free raw artifacts; exact source, instrument, fixture, runtime, and
@@ -201,9 +224,10 @@ their contract, and update the matching tests and documentation when it does.
   Calibration never validates its own limit, and a frozen limit is never
   retuned after holdout. Accepted contracts, validators, and artifacts are
   append/version-only rather than edited in place.
-- A deterministic semantic Tier 3 may instead use an independently authored
-  oracle, a protected committed baseline, and the declared number of identical
-  normalized runs. The executor settlement oracle is this form.
+- Deterministic protected Tier 3 uses the oracle/expected-result form above
+  rather than empirical calibration and holdout. The executor settlement
+  oracle additionally declares repeated identical normalized runs because
+  stability is part of that gate's claim.
 - Every measured quantity names its roots, scaling axes, aggregation/retention
   policy, tier, artifacts, and rerun/version trigger in the owning component
   authority. Before accepting a new or changed retained-memory representation,

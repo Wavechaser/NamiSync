@@ -1139,9 +1139,10 @@ measurement, and the separate contract freezes the 1,966,080-byte ceiling.
 Independent holdout-b passes under the frozen authorities, closing SH-G-8 and
 BR-G-42 event/transport custody only. Other BR-G-42 rows remain open on their
 owning slices.
-BR-G-45's terminal-artifact retention policy and
-SH-G-15's version-bound whole-runtime calibration/holdouts remain independently
-open; the 2026-08-13 whole-Job delta closes none of them.
+BR-G-45's production retention policy, complete-domain analytical bound for
+enforceable terms, and separate authority for any irreducible residual, plus
+SH-G-15's version-bound empirical whole-runtime calibration/holdouts, remain
+independently open; the 2026-08-13 whole-Job delta closes none of them.
 
 ---
 

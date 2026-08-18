@@ -23,6 +23,25 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
+
+- Separated reasoned targets, live drift guards, named-reference acceptance,
+  and protected release authority; pinned the stronger calibration/holdout and
+  deterministic-oracle requirements where they are actually needed.
+- Put consequence and production enforceability ahead of tier selection,
+  separated deterministic protected values from noisy empirical quantities,
+  and froze SH-G-8 v1 as a non-precedential exception rather than a BR-G-45
+  template.
+- Consolidated shell acceptance evidence in its owning gate, reduced the README
+  to product and status summaries, and made category-prefixed commits plus
+  task-level changelog grouping repository conventions.
+- Audited the bug ledger against cause-based categories and consequence-based
+  severity, then made that classification rule explicit for future entries.
+- Recast the architecture reference around durable contracts, layering,
+  coordination, and milestone direction; indexed each standardized contract
+  family to its authoritative core source while removing build/evidence
+  duplication and stale feature status.
+
 #### Establish the threat and tolerance model (2026-08-15)
 
 - Added one normative defense model for supported assumptions, trusted
@@ -35,21 +54,6 @@ claims explicit, independently reviewable, and regression-backed.
   defect, executor, preflight, interface, bridge, and project documentation
   without duplicating its policy tables, and archived the stale pre-M0 design
   review under `docs/obsolete/`.
-
-#### Ratify measurement and documentation authority (2026-08-14 – 2026-08-15)
-
-- Separated reasoned targets, live drift guards, named-reference acceptance,
-  and protected release authority; pinned the stronger calibration/holdout and
-  deterministic-oracle requirements where they are actually needed.
-- Consolidated shell acceptance evidence in its owning gate, reduced the README
-  to product and status summaries, and made category-prefixed commits plus
-  task-level changelog grouping repository conventions.
-- Audited the bug ledger against cause-based categories and consequence-based
-  severity, then made that classification rule explicit for future entries.
-- Recast the architecture reference around durable contracts, layering,
-  coordination, and milestone direction; indexed each standardized contract
-  family to its authoritative core source while removing build/evidence
-  duplication and stale feature status.
 
 #### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
 
