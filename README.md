@@ -53,7 +53,7 @@ local database files must be reset together before creating a fresh pair.
 ## Compatibility
 
 | Windows version / arch | NamiSync Core | Desktop shell (.NET FW) | Binary dependencies | Appearance | **Compatibility** |
-|---|:--:|:--:|:--:|:--:|:--:|---|
+|---|:--:|:--:|:--:|:--:|---|
 | **Windows 11 x64** | ✅ | ✅ | ✅ | ✅ | ✅ **actively serviced** |
 | **Windows 11 ARM64 (native)** | ✅ | ❌ | ❌ | — | ❌ shell & dependencies blocked |
 | **Windows 11 ARM64 (emulation)** | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ runs (emulated) |
