@@ -1,7 +1,7 @@
 # NamiSync
 
-NamiSync is a safety-first, one-way file mirroring application for Windows 11
-x64. It is for people maintaining a backup, archive, media collection, or
+NamiSync is a safety-first, one-way file mirroring application for Windows. 
+It is for people maintaining a backup, archive, media collection, or
 working-tree replica who want to see exactly what will happen before granting
 filesystem mutations. It is deliberately not a bidirectional conflict resolver
 or an unattended deletion engine.
@@ -50,6 +50,41 @@ as `incomplete`. The active database boundary is ledger v3 plus history v5;
 older, missing, transitional, or mismatched databases are refused and the two
 local database files must be reset together before creating a fresh pair.
 
+## Compatibility
+
+| Windows version / arch | NamiSync Core | Desktop shell (.NET FW) | Binary dependencies | Appearance | **Compatibility** |
+|---|:--:|:--:|:--:|:--:|:--:|---|
+| **Windows 11 x64** | ✅ | ✅ | ✅ | ✅ | ✅ **actively serviced** |
+| **Windows 11 ARM64 (native)** | ✅ | ❌ | ❌ | — | ❌ shell & dependencies blocked |
+| **Windows 11 ARM64 (emulation)** | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ runs (emulated) |
+| **Windows 10 (x86, < 1709)** | ❌ | ✅ | ⚠️ | ⚠️ | ❌ backend floor |
+| **Windows 10 (x86, ≥ 1709)** | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ runs with reduced appeareance |
+| **Windows 10 (x64, < 1709)** | ❌ | ✅ | ✅ | ⚠️ | ❌ backend floor |
+| **Windows 10 (x64, ≥ 1709)** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ runs with reduced appeareance |
+
+**Legend:** ✅ works · ⚠️ works reduced · ❌ blocked · — unreachable (blocked upstream in same row)
+
+- **Backcompatibility:** NamiSync is designed on and for Windows 11 x64, but
+  the engine is written to be version- and architecture-neutral and is therefore
+  compatible with Windows 10 and is ARM64 ready. However, database pairing currently
+  uses POSIX semantics with no fallback, therefore requiring Windows 10 to be newer
+  than **version 1709/build 16299**. 
+- **WebView2:** not natively included in Windows 10, and therefore requires one-time
+  Evergreen runtime install (x86/x64/ARM64 all exist); it is included in-box on
+  Windows 11. Runtime support on *very* old Win10 (< 1607) is unverified.
+- **Appearance:** Mica needs build ≥ **22621** (Windows 11 22H2). Windows 11 21H2 and
+  all Windows 10 fall back to an opaque window *by design* ([appearance.py:107](namisync/interfaces/web/appearance.py#L107)).
+  Proper downgrading is accounted for, NamiSync will run, just uglier.
+- **Shell / ARM block:** the `netfx` pin + `require_supported_pythonnet_runtime()`
+  refusal ([pywebview_runtime.py:44](namisync/interfaces/web/pywebview_runtime.py#L44))
+  anchor the shell to .NET Framework, which has no native ARM64 build. Native
+  ARM64 is therefore refused by dependencies.
+- **x64 emulation on WoA:** works with potentially reduced performance. XXH3 could
+  potentially see up to 50% performance loss, but actual loss should be negligible
+  given its speed. Non-native I/O may see 10-20% throughput loss depending on
+  exact situation. UI operations should be similar to native, but cold startups may
+  take longer due to emulator translations.
+
 ## Setup and dependencies
 
 NamiSync requires Windows 11 x64 and Python 3.13 or later. Runtime dependencies
@@ -78,7 +113,10 @@ Stage 6 host contract performs a read-only runtime preflight before window
 creation, then refuses pywebview's silent older-engine fallback with an install
 action and no fallback-time registry writes.
 
-## Command line
+## Commandline
+
+Refer to the [CLI documentation](docs/COMMANDLINE.md) for full command, review,
+and stopcodes. 
 
 Review and, only after typing the exact confirmation, execute a one-way sync:
 
@@ -130,28 +168,29 @@ never hides the other result axes in rendered output.
 
 ## Documentation
 
-- [Tests](docs/TESTS.md) — verification levels, department routing, markers,
-  and diagnostic commands.
-- [Defense model](docs/DEFENSE.md) — supported assumptions, threat ceiling,
-  hard walls, tolerance policy, measurement authority, and residual-risk
-  decisions.
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
-- [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
+- [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and [Threat Model](docs/DEFENSE.md) — 
+  present and future scope, known issues, and supported assumptions, tolerance policy, 
+  measurement authority.
+
+- [Commandline](docs/COMMANDLINE.md) — commands, review, output, and exits.
+- [Database](docs/DATABASE.md), [Recorder](docs/RECORDER.md), and
+  [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.
-- [M1 Bridge](docs/M1_BRIDGE.md) — sole Stage 6 bridge protocol and BR-G acceptance authority.
-- [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
-- [Command line](docs/COMMANDLINE.md) — commands, review, output, and exits.
 - [Executor](docs/EXECUTOR.md) — guarded filesystem mutation, pipeline, and recovery.
 - [Inventory](docs/INVENTORY.md), [Verifier](docs/VERIFIER.md), and
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
-- [Database](docs/DATABASE.md), [Recorder](docs/RECORDER.md), and
-  [History](docs/HISTORY.md) — local persistence and audit behavior.
-- [Features](docs/FEATURES.md), [Bugs](docs/BUGS.md), and
-  [Handoff](docs/HANDOFF.md) — present and future scope, known issues, and session context.
+- [Tests](docs/TESTS.md) — verification levels, department routing, markers,
+  and diagnostic commands.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
   executor/verifier harness, deterministic corpora, and the settlement oracle.
+
+- [Handoff](docs/HANDOFF.md) — immediate session contexts.
+- [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
+- [M1 Bridge](docs/M1_BRIDGE.md) — sole Stage 6 bridge protocol and BR-G acceptance authority.
+- [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
 
 ## Changelog
 
