@@ -280,15 +280,16 @@ discriminated values (6 event bodies, 10 `SessionState`, 6 `Outcome`, 8
 is a bug farm.
 **Resolution:** build the vocabulary — `SessionEventView`,
 `SessionRecordView`, `OperationResultView`, `IntegrityOutcomeView`,
-`InventoryRowView`, `ResultCategory` — primitives-only dataclasses in
-`workflows/views.py`, following the existing `PlanOperationView`/
+and `InventoryRowView` — primitives-only dataclasses in `workflows/views.py`,
+following the existing `PlanOperationView`/
 `RefusalView`/`HistoryRunView` pattern. Being primitives-only means the same
 structure serializes straight to JSON for the web bridge (DR-M1-15..18) — no
 second serialization layer. Retarget the CLI's four `hasattr` sites onto it
 as the proof before the GUI depends on it. `OperationResultView` preserves the
 ordered heterogeneous item list, each item's `item_type` and `phase`, and the
 generic phase summaries; interfaces never reconstruct domain lists by testing
-which fields happen to exist.
+which fields happen to exist. `interfaces/service.py` adds the primitive
+`ResultClassificationView` over the classified result axes.
 
 **DR-M1-08 — Does plan review survive app closure, as `ARCHITECTURE.md` §4.9
 promises ("the app may even close")?**
@@ -1018,7 +1019,8 @@ boundary.
 - `SessionObserver`: sink-based observation, resubscribe/`Gap` recovery,
   get-before-subscribe race fix, blocking reads, and explicit stream-close/join
   shutdown (DR-M1-19).
-- `ResultCategory` preserves filesystem, integrity, recording, and audit axes.
+- `ResultClassificationView` preserves filesystem, integrity, recording, and
+  audit axes.
   Headline precedence is **failed > partial > refused > mismatch > canceled >
   verification-incomplete > recording/audit degradation > all-noop >
   success**; non-headline axes remain visible.

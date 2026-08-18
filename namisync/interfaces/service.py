@@ -209,7 +209,7 @@ class InventoryDispositionView:
 
 
 @dataclass(frozen=True, slots=True)
-class ResultCategory:
+class ResultClassificationView:
     headline: str
     filesystem: str
     integrity: str
@@ -1838,10 +1838,10 @@ def _database_contract_view(
     )
 
 
-def classify_result(result: OperationResultView) -> ResultCategory:
+def classify_result(result: OperationResultView) -> ResultClassificationView:
     """Expose the workflow-owned headline with every independent result axis."""
 
-    return ResultCategory(
+    return ResultClassificationView(
         headline=result.headline,
         filesystem=result.filesystem,
         integrity=result.integrity,
@@ -1887,7 +1887,7 @@ __all__ = [
     "NamiSyncService",
     "PlanSession",
     "PreservationSettingsView",
-    "ResultCategory",
+    "ResultClassificationView",
     "ScanWarningView",
     "SemanticSettingsPatchView",
     "SemanticSettingsView",

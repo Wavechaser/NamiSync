@@ -43,7 +43,7 @@ from namisync.interfaces.service import (
     LocationResolutionView,
     NamiSyncService,
     PreservationSettingsView,
-    ResultCategory,
+    ResultClassificationView,
     SemanticSettingsView,
     SessionEventView,
     SessionObserver,
@@ -652,7 +652,7 @@ def test_interface_views_are_recursive_json_primitives_without_duck_typing() -> 
             missing_count=0,
             complete=True,
         ),
-        ResultCategory(
+        ResultClassificationView(
             headline="success",
             filesystem="completed",
             integrity="not-run",

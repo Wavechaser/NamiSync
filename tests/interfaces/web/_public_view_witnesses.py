@@ -19,7 +19,7 @@ from namisync.interfaces.service import (
     LocationSession,
     PlanSession,
     PreservationSettingsView,
-    ResultCategory,
+    ResultClassificationView,
     ScanWarningView,
     SelectionMutationView,
     SelectionOperationView,
@@ -525,10 +525,10 @@ PUBLIC_VIEW_WITNESSES: dict[
             {"row_id": "row-1", "disposition": "acknowledged"},
         ),
     ),
-    ResultCategory: (
+    ResultClassificationView: (
         PublicViewWitness(
-            "result-category",
-            ResultCategory(
+            "result-classification",
+            ResultClassificationView(
                 "success",
                 "success",
                 "verified",

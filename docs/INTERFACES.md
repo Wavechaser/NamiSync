@@ -265,9 +265,10 @@ snapshot once; an explicit deletion override changes only that plan, and
 review exposes the complete frozen snapshot while commit/execution never reread
 settings.
 
-`classify_result(OperationResultView)` returns a primitive `ResultCategory`
-containing the workflow-owned headline and the independent filesystem,
-integrity, recording, audit, disposition, and cancellation values. The CLI
+`classify_result(OperationResultView)` returns a primitive
+`ResultClassificationView` containing the workflow-owned headline and the
+independent filesystem, integrity, recording, audit, disposition, and
+cancellation values. The CLI
 uses only that headline for its numeric exit and continues rendering every
 secondary axis. It never rebuilds domain lists by attribute shape or parses a
 diagnostic string.
