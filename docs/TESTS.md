@@ -95,10 +95,11 @@ protocol temporaries. Final-only evidence requires an explicit reader opt-in
 and is reserved for completion or expected-refusal witnesses that have no
 interactive ready phase. The
 1 MiB record ceiling is a tests-only anti-runaway ingress bound, not a product
-request or acceptance limit. Benchmark timing markers and sample/timing JSONL
-remain separate write-once or append-only measurement artifacts, while the
-tree-window fixture remains a one-shot parent-created input; neither is a live
-child-to-parent snapshot and neither belongs in the milestone state machine.
+request or acceptance limit. Benchmark reports remain separate atomic
+per-invocation measurement artifacts; retained baseline sidecars are distinct
+input evidence. Neither is a live child-to-parent snapshot or part of the
+milestone state machine. The tree-window fixture likewise remains a one-shot
+parent-created input.
 
 A green headed result proves only its declared NamiSync/page contract; it is not
 evidence that the surrounding Windows compositor remained healthy. A

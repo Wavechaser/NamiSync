@@ -14,6 +14,13 @@ they cannot account for. Compatible Tier 2 measurements may share one vertical-
 slice harness; structural count tests or serializer round trips do not promote
 a timing or memory target.
 
+Executor throughput/pipeline timings and verifier throughput/read timings are
+Tier 0 diagnostics: they vary with the runtime, storage topology, cache state,
+and concurrent load, and no shipped NamiSync boundary accepts or rejects work
+from these numbers. Repetition, structured output, and drift checks make the
+observations more interpretable; they do not promote them into release evidence
+or a performance gate.
+
 The existing SH-G-8 transport-custody authority remains frozen in place as an
 accepted historical exception, not a template. Its fixed corpus and structural
 sizer form a deterministic calculation; identical fresh children strengthened
@@ -43,7 +50,7 @@ domain operations real:
 | `Recorder` | `db.recorder.SyncRunRecorder` | `LedgerlessRecorder` in memory |
 | `IntegrityRecorder` | `db.recorder.LedgerRecorder` | `CapturingIntegrityRecorder` |
 | `RunContext` | dispatcher fan-out | in-memory `Tape` |
-| Execution selection | reviewed workflow plan | real scan, plan, and safe-subset derivation |
+| Execution selection | reviewed workflow plan | real scan, plan, and safe-subset derivation once per reusable empty-target batch, or once per sample for mutable target pre-states |
 | Integrity selection | ledger inventory rows | fresh scan plus explicit evidence source |
 | Filesystem, copy backend, reader | native | native inner, optionally instrumented |
 
@@ -159,93 +166,254 @@ restarted.
 
 ## Workspace safety
 
-Executor targets and generated corpora are tool-owned workspaces. A claim uses
-two sibling files outside the measured tree:
+Executor targets and generated corpora are tool-owned workspaces. Their control
+and output evidence lives in sibling files outside the measured tree:
 
 - `<name>.rig-owned` is JSON bound to the resolved path, volume/device, and
   directory identity.
 - `<name>.rig-lease` carries a tools signature and is locked exclusively for
   the active operation.
+- `<name>.rig-outputs.json` binds the exact paths and filesystem identities
+  created by the last complete generator, materializer, or executor sample.
+
+The output manifest is one ordinary single-link, non-reparse JSON file with a
+bounded size, exact schema, duplicate-key rejection, sorted unique entries, and
+root path/device/inode binding. Its atomic replacement revalidates the prior
+occupant identity; malformed, oversized, hard-linked, replaced, or misbound
+manifests never authorize deletion.
 
 The tools refuse nonempty unowned directories, malformed or stale markers,
 replaced directories, concurrent claims, filesystem roots, the home or current
-directory, reparse-point substitution, unrecognized lease files, and anything
-in or containing this repository. An empty unowned directory may be claimed
-because it contains no user data. Mutating helpers require the live claim
-object; marker- or lease-shaped files alone are not authority.
+directory, any requested workspace alias or generic reparse point, unrecognized
+lease files, and anything in or containing this repository. CLI admission keeps
+the requested absolute workspace path until this check, so resolving a junction
+before `claim` cannot erase the evidence. An empty unowned directory may be
+claimed because it contains no user data. Mutating helpers require the live
+claim object; marker- or lease-shaped files alone are not authority.
 
-Markers remain after `generate` and after executor `--keep`, allowing the same
-workspace to be safely regenerated or reused. `clean` removes a claimed tree
-and its marker. Older unbound text markers are deliberately not adopted: inspect
-their directory manually rather than treating them as deletion authority.
+The root marker proves only the directory boundary; it does not claim every
+descendant later placed there. Automatic reset and teardown first inventory the
+whole root without following reparse points. Every current path must appear in
+the output manifest; files must retain their full recorded identity and stat,
+directories must retain identity, and hard-link count must not drift. Unknown,
+replaced, modified, hard-linked, unreadable, or reparse entries refuse cleanup
+before mutation. The immutable plan printed to the operator is passed to the
+mutation seam; the complete live tree is compared with that exact plan again
+immediately before the first unlink. Passing a plan is not authority: an exact
+plan must re-bind to the expected output-manifest path and identity, and every
+entry must still be vouched for by that manifest. A path arriving after
+inspection is therefore refused rather than adopted into a second deletion
+set. Missing expected entries are tolerated when a new plan is inspected so an
+interrupted cleanup can be retried. Files are revalidated and unlinked
+individually, then
+identity-matched directories are removed deepest-first with `rmdir`; there is
+no recursive catch-all in the automatic path.
+
+Before every reset, teardown, or `clean`, the console prints the resolved root,
+manifest or explicit authority, and file/directory/byte counts. `--force-all`
+also prints every sorted relative path and kind because no manifest vouches for
+that set. A second receipt states exactly what was removed and whether the root
+and marker remain. Reset completion is printed before generator or template
+population starts, so a later write failure cannot hide an already completed
+deletion. Failed executor batches call the live manifest validator before
+describing output as exact and print the exact recovery command; mere sibling
+file existence is never called authority. `--keep` prints both workspace and
+manifest paths. Every partial-cleanup error reports completed counts and paths,
+plus retained root, marker, or manifest state.
+
+Markers and output manifests remain after `generate` and executor `--keep`, so
+known outputs can be regenerated or cleaned exactly. `clean --dry-run` prints
+the same boundary without mutation. A marker-only, partial, or legacy nonempty
+workspace is preserved by ordinary `clean`; after inspecting it, the operator
+may use `clean TARGET --force-all`, which still requires the valid root-bound
+marker and lease, inventories and prints the whole deletion set, applies only
+that displayed plan, and refuses reparse content or late arrivals. A malformed
+or stale sibling output manifest is preserved rather than guessed or deleted;
+the completion receipt names it and says it must be inspected and removed
+explicitly before that workspace name is reused. Older unbound text markers are
+never adopted.
+
+The manifest intentionally records identity and stat rather than hashing every
+file again before deletion. Deliberate same-inode byte modification followed by
+complete metadata restoration is therefore outside this development guard.
+Each path is revalidated immediately before deletion and the root is inventoried
+again afterward, but pathname deletion still has a small concurrent-substitution
+window; use a quiescent dedicated rig root.
 
 Templates and executor targets may not overlap in either direction. Template
 walk errors fail the setup instead of producing a partial pre-state. JSON and
 sidecar artifacts must be outside every measured/materialized root and may not
-alias each other, a default sidecar, or ownership files. Existing output files
-with multiple hard links are refused because a distinct path is not a distinct
-artifact in that case.
+alias each other or reserved marker, lease, or output-manifest paths. Artifact
+aliases and generic reparse points are refused before resolution. Existing
+output files with multiple hard links are refused because a distinct path is
+not a distinct artifact in that case.
 
 ## Executor measurements
 
 ```powershell
-.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --verify-readback
-.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --template E:\PreState --repeat 5 --json runs.jsonl
+.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --repeat 5
+.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --prepare-each --repeat 5
+.\.venv\Scripts\python.exe -m tools executor E:\Corpus E:\RigWork --template E:\PreState --verify-readback
 ```
 
-Without `--template`, every iteration starts with an empty target. A template
-provides a repeatable target pre-state; setup time is reported separately from
-scan, plan, preflight, and execution time.
+Without `--template`, the default repeated benchmark prepares one static plan
+in memory. The target must be empty and the selected plan may contain only
+MKDIR and absent-target COPY operations. The harness first performs an exact
+owned-target reset, then scans, plans, and selects once. Every sample receives a
+fresh `ExecutionSet`, run ID, event tape, recorder, backend, and filesystem
+adapter. Unless `--no-preflight` is explicit, the first fresh set is preflighted
+immediately before execution; later samples reset the target and execute a new
+set without replanning or re-preflighting. Execution time still covers the
+complete public executor call, including copy publication, metadata, recording,
+and final directory finishing. Output-manifest validation/publication and reset
+receipts happen outside `execute_seconds`.
+
+Every repeated sample must publish the same operation-keyed digest and size
+evidence. After the last sample the harness rescans the source and requires the
+complete source snapshot to match preparation; any membership, identity, stat,
+or digest drift invalidates the batch. The plan is never serialized. Use
+`--prepare-each` to rescan, replan, and preflight every empty-target sample.
+Template workloads always prepare each sample because rematerialization changes
+target identities; update, delete, NOOP, and other target-dependent plans are
+therefore never fed through the static-plan path. Template setup time is
+reported separately from scan, plan, preflight, and execution time. Supplying
+`--prepare-each` with `--template` is refused because it would be a misleading
+no-op.
+
+The executor's published digest comparison detects same-stat content changes
+between samples. Content changed after preparation but before the first sample,
+with all scanned stat fields deliberately restored and then held stable, is not
+distinguishable without another full plan-time content read; use a quiescent
+source corpus.
 
 Pipeline diagnostics are enabled by default in the tools while remaining off by
 default in production. The harness samples each copy because
 `NativeCopyBackend.last_metrics` retains only the most recent one. Reports
 include reader blocking, writer starvation, payload high-water, reserved bytes,
 chosen chunk sizes, and copy-backend wall time. `--no-metrics` disables both the
-executor diagnostics and the per-copy timing wrapper.
+executor diagnostics and the per-copy timing wrapper. With diagnostics enabled,
+each accepted sample prints copy count and bytes, summed backend wall time,
+executor time outside the copy backends, summed reader-blocked and
+writer-starved time, maximum payload high-water, reserved bytes, and the
+distinct chunk sizes used. Detailed metrics therefore remain useful without a
+JSON report.
 
 Every selected operation must settle with a complete successful terminal
 result whose typed items agree with the reviewed operation paths and outcomes,
 non-degraded recording/audit, and complete invariant-valid published evidence.
 A NOOP's normal `SKIPPED` outcome is accepted. Plans with safety exclusions and
-any other failed, deferred, incomplete, or degraded sample are rejected and are
-not appended to JSON.
+any other failed, deferred, incomplete, degraded, or drifted sample invalidate
+the whole batch.
+
+All accepted raw samples are retained in order without report-time rounding.
+For repeated runs the console prints N, minimum, median, and maximum execution
+time plus the median of the per-sample throughput values. No percentile,
+outlier deletion, or implicit warm-up discard is applied.
 
 `--verify-readback` prints its own result even without `--json`. Zero candidates
 is valid for an all-NOOP/non-copy plan; otherwise every published candidate and
 byte must verify with non-degraded recording.
+
+### Benchmark reports
+
+Console output is the artifact-free default. `--json PATH` opt-in publishes one
+versioned JSON document for the complete valid invocation, not one JSONL row per
+sample. The envelope separately owns configuration, one-time batch preparation,
+post-batch validation, ordered raw samples, and the N/minimum/median/maximum
+summary; static-plan samples do not duplicate scan, plan, or preflight time. It
+also records the plan and policy fingerprints. The document is written to a
+private same-directory temporary, flushed, and atomically renamed only after
+every sample and drift check succeeds. Executor reports are published only
+after exact workspace cleanup succeeds, except that explicit `--keep` retains
+the validated manifest-owned workspace and records that choice before report
+publication. A failed later sample or required cleanup leaves no final or
+partial report.
+
+The destination is create-exclusive. An existing ordinary single-link file is
+preserved unless `--replace-report` is explicit, and its identity is revalidated
+immediately before atomic replacement. The exact published path is printed.
+There is no implicit append, rotation, time-based deletion, or report cleanup;
+the operator chooses the path and retention period.
+
+A quantitative claim must retain the report together with the source fixture
+(including generator specification and seed when applicable), source/target
+roots, empty-target/static-plan profile, operation mix, correspondence,
+deletion/preflight/diagnostic flags, runtime/dependency versions, OS, concurrent
+load, and storage/device topology. Relevant scaling axes are file count, size
+distribution and total bytes, directory shape, operation mix, source/target
+device topology, and repeat count; chunk or memory settings are axes only when
+varied. The report records rig configuration and raw samples, but it cannot
+discover every environmental receipt automatically.
 
 ## Verifier measurements
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools verifier E:\Corpus --mode baseline
 .\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines primed --repeat 5
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --seed-baselines
-.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines sidecar
+.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --seed-baselines --sidecar E:\RigEvidence\corpus.baseline.jsonl
+.\.venv\Scripts\python.exe -m tools verifier E:\Corpus --baselines sidecar --sidecar E:\RigEvidence\corpus.baseline.jsonl
 ```
 
-| `--baselines` | Setup | Required result | Detects pre-run drift |
-| --- | --- | --- | --- |
-| `primed` (default) | one in-process baseline pass | `VERIFIED` | no |
-| `sidecar` | prior `--seed-baselines` pass | `VERIFIED` | yes |
-| `synthetic` | deliberately wrong digest | `MISMATCHED` | no |
-| `none` | no prior evidence | `BASELINED` | no |
+For `--mode verify`, the evidence-source matrix is:
 
-Baseline and rebaseline modes require homogeneous `BASELINED` results.
+| `--baselines` | Setup | Required result | Batch fixture anchor |
+| --- | --- | --- | --- |
+| `primed` (default) | one in-process baseline pass | `VERIFIED` | priming evidence |
+| `sidecar` | prior `--seed-baselines` pass | `VERIFIED` | validated sidecar evidence |
+| `synthetic` | deliberately wrong digest | `MISMATCHED` | setup scan |
+| `none` | no prior evidence | `BASELINED` | first accepted sample |
+
+Baseline mode always runs bare despite the parser's default baseline-source
+value. Baseline and rebaseline modes require homogeneous `BASELINED` results;
+when rebaseline is given an evidence source, that source still anchors its
+fixture even though the new attestations are the measured output.
 Synthetic mismatch is an intentional successful measurement because comparison
 happens only after the full read-and-hash loop. Every other mixed, shortened,
 modified, erroneous, or degraded result invalidates the sample. Incomplete
 scans, unsupported entries, and canonical-path collisions are refused before
 measurement. Outcome IDs and final item/byte totals must exactly cover the
 selection. Priming requires exactly one applied attestation per scanned file.
+Every measured scan must have the same canonical keys and stat subjects as its
+setup evidence, or as the first sample when no setup evidence exists. Primed
+and synthetic in-process anchors require exact `FileStat` equality; a sidecar
+uses its declared portable or bound core matching predicate. This
+closes the gap between a priming/sidecar scan and the timed pass instead of
+allowing a shorter corpus to remain all-`VERIFIED`. For baseline, rebaseline,
+and no-baseline verification, every repeated sample must also produce identical
+operation-keyed content evidence, detecting same-stat content drift after the
+first sample when the real hasher is active. `--null-hasher` deliberately makes
+that content evidence constant for hash-cost isolation, so its source must stay
+quiescent; stat and membership drift still refuse. Any detected fixture drift
+invalidates the whole batch and suppresses its report.
+
+Reader instrumentation remains enabled by default. Each accepted sample prints
+open time, read time, and verifier time outside those calls; `--no-tap` removes
+that split. Repeated verifier batches print N, minimum, median, and maximum run
+time plus median sample throughput. Baseline preparation is labeled and timed
+separately as setup, not silently counted as a sample. Reports retain that setup
+receipt, and sidecar-backed reports include the explicit path, validation
+counts, and stored identity mode.
 
 ### Sidecars
 
-The default sidecar is `<corpus>.baseline.jsonl` beside the corpus. Writes use a
-same-directory temporary file and atomic replace. Loads require an explicit
-format and identity mode, exact row schemas without duplicate JSON members,
-XXH3-128 evidence, complete key coverage, and a fresh stat match through the
-same pure core predicate used by verifier classification.
+Baseline persistence is separate retained input evidence, not benchmark output.
+Both `--seed-baselines` and `--baselines sidecar` require an explicit `--sidecar
+PATH`; the CLI never infers `<corpus>.baseline.jsonl`. A seed write uses a
+same-directory temporary and create-exclusive atomic publication. Existing
+sidecars are preserved unless `--replace-sidecar` is explicit. Replacement
+captures the ordinary single-link destination identity before the potentially
+long priming pass and revalidates that same occupant immediately before atomic
+publication; a file swapped in during priming is preserved and refused.
+Workspace `clean` never guesses or removes a sidecar.
+
+Seeding is a distinct evidence-creation action. It runs exactly one untapped
+baseline pass and rejects incompatible repeat, mode, baseline-source, tap, and
+report settings instead of silently ignoring them. `--identity` and
+`--replace-sidecar` apply only to seeding.
+
+Loads require an explicit format and identity mode, exact row schemas without
+duplicate JSON members, XXH3-128 evidence, complete key coverage, and a fresh
+stat match through the same pure core predicate used by verifier classification.
 
 `portable` identity compares kind, size, and mtime and survives relocation.
 `bound` additionally requires volume serial and file index for every row; it
@@ -275,22 +443,35 @@ reader's ordinary `open(root, path)` capability.
 
 The verifier uses Windows unbuffered reads, so its numbers are cache-honest by
 construction. Executor reads use the buffer cache; repeated reads of the same
-source are warm and are not comparable to first-touch throughput.
+source are warm and are not comparable to first-touch throughput. A static-plan
+batch is specifically a buffered repeated-source/warm-profile observation; the
+preparation reuse does not make it a cold or first-touch benchmark.
 
 ## Corpus generation and cleanup
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools generate E:\Corpus "2000@4KiB,200@1MiB,4@256MiB" --seed 7
+.\.venv\Scripts\python.exe -m tools clean E:\Corpus --dry-run
 .\.venv\Scripts\python.exe -m tools clean E:\Corpus
+.\.venv\Scripts\python.exe -m tools clean E:\LegacyRigWork --force-all
 ```
 
 Generation accepts a new or empty directory, or a directory carrying a valid
-bound marker. Each run clears only that claimed root before writing, so the same
-seed and specification produce the same complete tree without stale files.
+bound marker plus an exact output manifest. Each successful run publishes the
+generated file and directory set into that manifest. Regeneration removes only
+the validated recorded set, so the same seed and specification produce the same
+complete tree; an unlisted descendant refuses replacement and is preserved.
 
-`--repeat` must be positive. Accepted iterations print one summary and, with
-`--json PATH`, append one JSON object. Unsafe configuration or an invalid sample
-returns exit code 2 with an actionable error.
+Ordinary `clean` requires an existing valid marker and either an empty root or
+an exact output manifest. It never creates or adopts a workspace merely because
+the command was given a path. Reports and verifier sidecars are operator-owned
+artifacts outside the root and are never guessed or removed by workspace
+cleanup.
+
+`--repeat` must be positive. Accepted iterations print their raw summary and a
+repeated batch prints its aggregate. `--json PATH` writes the one atomic batch
+report described above. Unsafe configuration or an invalid sample returns exit
+code 2 with an actionable error and publishes no report.
 
 ## Future integration boundary
 

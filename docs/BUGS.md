@@ -46,6 +46,34 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-08-18). Cross-sample fixture drift. Verifier repetitions
+  could aggregate different corpus memberships or stats, and priming or sidecar
+  validation did not bind the following measured scan; a shorter corpus could
+  therefore remain homogeneously `VERIFIED`. Cause: result coverage was checked
+  only against each run's self-declared selection. Fixed by setup-to-sample or
+  first-sample fixture binding, exact key/stat coverage, repeated baselining
+  content-evidence comparison, visible setup timing, and whole-batch report
+  refusal on drift.
+- SEVERE - FIXED (2026-08-18). Implicit artifact replacement authority.
+  Baseline seeding could silently replace an unrelated ordinary file at the
+  inferred sibling name, while report files appended partial or semantically
+  mixed invocations forever and could be confused with retained baseline
+  evidence. Cause: path-shape validation was treated as write authority and no
+  invocation owned publication as a transaction. Fixed by explicit sidecar
+  paths, create-exclusive report/sidecar publication, separately named replace
+  authority with pre-work destination binding and immediate identity/reparse
+  revalidation, one versioned atomic batch report, and no guessed cleanup or
+  retention policy.
+- SEVERE - FIXED (2026-08-18). Coarse descendant deletion authority. A valid
+  marker on an old rig directory allowed reset, executor teardown, generation,
+  or `clean` to recursively erase unrelated files later placed anywhere below
+  that root. Cause: root path/device/inode ownership was treated as provenance
+  for every current descendant. Fixed with a root-bound exact-output manifest,
+  full-set validation before mutation, per-file identity/stat and hard-link
+  checks, directory identity checks, generic reparse/alias refusal, exact
+  printed-plan application, individual unlink/rmdir cleanup, failure retention,
+  and truthful pre/post/partial deletion receipts. Marker-only or unknown
+  content now requires an inspected explicit `clean --force-all`.
 - SEVERE - FIXED (2026-08-06). Unbound destructive workspace authority. Corpus
   generation could overwrite matching files in any existing directory and
   retain stale files, while executor teardown trusted only the existence of a
@@ -61,8 +89,8 @@ defect, and move implementation-level test choreography out of the log.
   CLI documented external artifact placement without enforcing resolved
   containment and file-identity alias rules. Fixed by validating every used
   artifact before claiming or writing, refusing existing multi-link outputs,
-  reserving ownership/default-sidecar paths, and testing corpus-file
-  preservation, repeat bounds, template overlap, and path aliases.
+  reserving ownership paths and explicit report/sidecar collisions, and testing
+  corpus-file preservation, repeat bounds, template overlap, and path aliases.
 - MINOR - FIXED (2026-08-06). Invalid-sample acceptance. Partial
   scans and priming, failed execution, mixed verifier outcomes, degraded
   recording, and readback mismatches could still report throughput and exit 0;
@@ -574,8 +602,9 @@ defect, and move implementation-level test choreography out of the log.
   tests-only immutable milestone protocol: closed same-directory temporaries
   publish `ready` or `failure`, then `final`, without replacing an observed
   file. Parents read each canonical bounded record once; held-file evidence
-  proves final publication is independent of the open ready handle. Streaming
-  benchmark samples remain append-only measurement artifacts, not milestones.
+  proves final publication is independent of the open ready handle. Atomic
+  per-invocation benchmark reports remain separate measurement artifacts, not
+  milestones.
 - MODERATE - FIXED (2026-08-17). Raw-readiness supersession race. On initial
   injection the bridge listener could resolve raw API readiness before the app
   listener rejected its old startup epoch, allowing that stale attempt and its

@@ -35,6 +35,7 @@ from namisync.core.integrity import (
     PostCopySelection,
     RecordDisposition,
     VerifierContext,
+    matches_expected_stat,
 )
 from namisync.core.models import FileStat, IgnoreSet, Root, ScanWarningCode
 from namisync.core.pathing import normalize_relative_path
@@ -101,6 +102,7 @@ class VerifierRun:
     run_seconds: float
     expected_item_ids: frozenset[str]
     expected_bytes: int
+    fixture: tuple[tuple[str, FileStat], ...]
 
     @property
     def items(self) -> int:
@@ -270,7 +272,66 @@ def run_verifier(
         run_seconds=run_seconds,
         expected_item_ids=frozenset(item.item_id for item in selection.items),
         expected_bytes=sum(item.expected_stat.size for item in selection.items),
+        fixture=tuple(sorted(stats.items())),
     )
+
+
+def require_fixture(
+    run: VerifierRun,
+    expected: Mapping[str, FileStat],
+    *,
+    portable: bool,
+) -> None:
+    """Reject a measured scan that no longer represents the batch fixture."""
+
+    actual = dict(run.fixture)
+    if set(actual) != set(expected):
+        raise VerifierRigError(
+            "verifier corpus membership changed during the benchmark batch"
+        )
+    if portable:
+        stable = all(
+            matches_expected_stat(expected[key], actual[key]) for key in expected
+        )
+    else:
+        stable = actual == dict(expected)
+    if not stable:
+        raise VerifierRigError(
+            "verifier corpus file stats changed during the benchmark batch"
+        )
+
+
+def content_evidence(
+    run: VerifierRun,
+) -> dict[str, tuple[str, bytes, int]]:
+    """Return complete content evidence for one baselining sample."""
+
+    evidence = run.attestations()
+    fixture_keys = {key for key, _ in run.fixture}
+    if set(evidence) != fixture_keys:
+        raise VerifierRigError(
+            "verifier baseline evidence did not cover the measured fixture"
+        )
+    return {
+        key: (
+            attestation.content.algorithm,
+            attestation.content.digest,
+            attestation.content.size,
+        )
+        for key, attestation in evidence.items()
+    }
+
+
+def require_stable_content_evidence(
+    reference: Mapping[str, tuple[str, bytes, int]],
+    sample: VerifierRun,
+) -> None:
+    """Reject same-stat content drift between baselining samples."""
+
+    if content_evidence(sample) != dict(reference):
+        raise VerifierRigError(
+            "verifier corpus content changed during the benchmark batch"
+        )
 
 
 def prime_baselines(
@@ -417,6 +478,15 @@ def run_post_copy(
         ),
         expected_bytes=sum(
             candidate.expected_stat.size for candidate in selection.candidates
+        ),
+        fixture=tuple(
+            sorted(
+                (
+                    (candidate.display_path, candidate.expected_stat)
+                    for candidate in selection.candidates
+                ),
+                key=lambda item: item[0],
+            )
         ),
     )
 

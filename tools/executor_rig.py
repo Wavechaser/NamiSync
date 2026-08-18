@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+from pathlib import PureWindowsPath
 from time import perf_counter
 from typing import Sequence
 from uuid import uuid4
@@ -20,6 +21,8 @@ from namisync.core.execution import ExecutionSet, RunId, validated_run_id
 from namisync.core.models import IgnoreSet, Root, ScanResult
 from namisync.core.planning import (
     MappingSnapshot,
+    OpId,
+    OperationKind,
     Plan,
     Scope,
     SyncOptions,
@@ -91,35 +94,38 @@ class ExecutorRun:
 
 @dataclass(frozen=True, slots=True)
 class PreparedExecution:
-    """Everything the scan/plan phase produced for one pending execution."""
+    """Immutable scan/plan evidence reusable by fresh execution samples."""
 
-    execution_set: ExecutionSet
     plan: Plan
+    selection: frozenset[OpId]
     source_scan: ScanResult
     target_scan: ScanResult
+    ignores: IgnoreSet
     scan_seconds: float
     plan_seconds: float
 
 
-def build_execution_set(
+def prepare_execution(
     source: Path,
     target: Path,
     *,
     options: SyncOptions | None = None,
     ignores: IgnoreSet | None = None,
     tape: Tape | None = None,
-    run_id: RunId | None = None,
 ) -> PreparedExecution:
     """Scan both roots and derive a safe first-run/no-history selection."""
 
+    source = Path(source).resolve()
+    target = Path(target).resolve()
+    _require_disjoint_roots(source, target)
     tape = tape or Tape()
     context = tape.context()
     ignore_set = ignores or IgnoreSet()
     sync_options = options or SyncOptions()
 
     started = perf_counter()
-    source_scan = scan_root(Root(str(Path(source).resolve()), "source"), ignore_set, context)
-    target_scan = scan_root(Root(str(Path(target).resolve()), "target"), ignore_set, context)
+    source_scan = scan_root(Root(str(source), "source"), ignore_set, context)
+    target_scan = scan_root(Root(str(target), "target"), ignore_set, context)
     scan_seconds = perf_counter() - started
     _require_complete_scan("source", source_scan)
     _require_complete_scan("target", target_scan)
@@ -138,45 +144,70 @@ def build_execution_set(
             "the reviewed plan contains safety exclusions and is not a complete "
             f"benchmark sample: {reasons}"
         )
-    execution_set = ExecutionSet(
-        plan, selection.selection, run_id or validated_run_id(uuid4().hex)
-    )
     plan_seconds = perf_counter() - started
     return PreparedExecution(
-        execution_set, plan, source_scan, target_scan, scan_seconds, plan_seconds
+        plan,
+        selection.selection,
+        source_scan,
+        target_scan,
+        ignore_set,
+        scan_seconds,
+        plan_seconds,
     )
 
 
-def run_executor(
-    source: Path,
+def require_reusable_copy_plan(prepared: PreparedExecution) -> None:
+    """Refuse plan reuse unless it describes one empty-target copy workload."""
+
+    target_directories = tuple(
+        record for record in prepared.target_scan.directories if record.rel_path
+    )
+    if prepared.target_scan.files or target_directories:
+        raise ExecutorRigError(
+            "reusable execution requires an empty-target copy workload"
+        )
+    operations = tuple(
+        operation
+        for operation in prepared.plan.operations
+        if operation.op_id in prepared.selection
+    )
+    if any(
+        operation.kind not in {OperationKind.COPY, OperationKind.MKDIR}
+        or operation.target_expected is not None
+        or operation.prior_target_rel_path is not None
+        or operation.prior_target_expected is not None
+        for operation in operations
+    ):
+        raise ExecutorRigError(
+            "reusable execution requires an empty-target copy workload"
+        )
+
+
+def execute_prepared(
+    prepared: PreparedExecution,
     workspace: WorkspaceClaim,
     *,
-    options: SyncOptions | None = None,
-    ignores: IgnoreSet | None = None,
     policies: ExecutorPolicies | None = None,
     filesystem: object | None = None,
     collect_metrics: bool = True,
     preflight_gate: bool = True,
+    run_id: RunId | None = None,
 ) -> ExecutorRun:
-    """Execute one plan against real roots and return the measured run.
+    """Execute one fresh sample from immutable prepared plan evidence."""
 
-    A supplied ``policies`` keeps its own pacing and failure policy. Diagnostics
-    wrap its copy backend only when ``collect_metrics`` is true.
-    """
-
-    source = Path(source).resolve()
     target = workspace.validate()
-    if (
-        source == target
-        or source.is_relative_to(target)
-        or target.is_relative_to(source)
-    ):
-        raise ExecutorRigError("source and target workspaces must not overlap")
-    tape = Tape()
-    prepared = build_execution_set(
-        source, target, options=options, ignores=ignores, tape=tape
+    prepared_target = Path(prepared.plan.target_root.path).resolve()
+    if target != prepared_target:
+        raise ExecutorRigError(
+            "prepared plan target does not match the live workspace claim: "
+            f"{prepared_target}, {target}"
+        )
+    execution_set = ExecutionSet(
+        prepared.plan,
+        prepared.selection,
+        run_id or validated_run_id(uuid4().hex),
     )
-    execution_set = prepared.execution_set
+    tape = Tape()
 
     preflight_seconds = 0.0
     if preflight_gate:
@@ -227,6 +258,210 @@ def run_executor(
         preflight_seconds=preflight_seconds,
         execute_seconds=execute_seconds,
     )
+
+
+def run_executor(
+    source: Path,
+    workspace: WorkspaceClaim,
+    *,
+    options: SyncOptions | None = None,
+    ignores: IgnoreSet | None = None,
+    policies: ExecutorPolicies | None = None,
+    filesystem: object | None = None,
+    collect_metrics: bool = True,
+    preflight_gate: bool = True,
+) -> ExecutorRun:
+    """Execute one plan against real roots and return the measured run.
+
+    A supplied ``policies`` keeps its own pacing and failure policy. Diagnostics
+    wrap its copy backend only when ``collect_metrics`` is true.
+    """
+
+    source = Path(source).resolve()
+    target = workspace.validate()
+    prepared = prepare_execution(source, target, options=options, ignores=ignores)
+    return execute_prepared(
+        prepared,
+        workspace,
+        policies=policies,
+        filesystem=filesystem,
+        collect_metrics=collect_metrics,
+        preflight_gate=preflight_gate,
+    )
+
+
+def require_stable_copy_evidence(
+    reference: ExecutorRun,
+    sample: ExecutorRun,
+) -> None:
+    """Require every byte-producing operation to retain identical content."""
+
+    def evidence(run: ExecutorRun) -> dict[OpId, tuple[str, bytes, int]]:
+        return {
+            op_id: (
+                published.attestation.content.algorithm,
+                published.attestation.content.digest,
+                published.attestation.content.size,
+            )
+            for op_id, published in run.execution_set.published_evidence.items()
+        }
+
+    if evidence(reference) != evidence(sample):
+        raise ExecutorRigError(
+            "source corpus copy evidence changed between repeated executions"
+        )
+
+
+def require_source_unchanged(prepared: PreparedExecution) -> float:
+    """Rescan once after repeated samples and reject corpus membership drift."""
+
+    tape = Tape()
+    started = perf_counter()
+    current = scan_root(
+        prepared.source_scan.root,
+        prepared.ignores,
+        tape.context(),
+    )
+    scan_seconds = perf_counter() - started
+    _require_complete_scan("source", current)
+    if current != prepared.source_scan:
+        raise ExecutorRigError("source corpus changed during the repeated benchmark")
+    return scan_seconds
+
+
+def expected_output_paths(
+    run: ExecutorRun,
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Derive the complete successful target tree from scan and plan semantics."""
+
+    files = {_output_path(record.rel_path) for record in run.target_scan.files}
+    directories = {
+        _output_path(record.rel_path)
+        for record in run.target_scan.directories
+        if record.rel_path
+    }
+    for operation in run.plan.operations:
+        if operation.op_id not in run.execution_set.selection:
+            continue
+        target = _output_path(operation.target_rel_path)
+        kind = operation.kind
+        if kind is OperationKind.MKDIR:
+            _add_directory(target, directories)
+        elif kind is OperationKind.COPY:
+            files.add(target)
+            _add_parents(target, directories)
+        elif kind is OperationKind.UPDATE:
+            if run.plan.trash_on_update:
+                trash = _trash_path(run.execution_set.run_id, target)
+                _move_output_tree(files, directories, target, trash)
+                _add_parents(trash, directories)
+            else:
+                _remove_output_tree(files, directories, target)
+            files.add(target)
+            _add_parents(target, directories)
+        elif kind is OperationKind.MOVE:
+            if operation.prior_target_rel_path is None:
+                raise ExecutorRigError("MOVE output lacks its prior target path")
+            _move_output_tree(
+                files,
+                directories,
+                _output_path(operation.prior_target_rel_path),
+                target,
+            )
+            _add_parents(target, directories)
+        elif kind is OperationKind.MOVE_UPDATE:
+            if operation.prior_target_rel_path is None:
+                raise ExecutorRigError("MOVE_UPDATE output lacks its prior target path")
+            prior = _output_path(operation.prior_target_rel_path)
+            # MOVE_UPDATE always preserves the replaced prior path in this run's
+            # trash tree; unlike UPDATE, runtime does not consult trash_on_update.
+            trash = _trash_path(run.execution_set.run_id, prior)
+            _move_output_tree(files, directories, prior, trash)
+            _add_parents(trash, directories)
+            files.add(target)
+            _add_parents(target, directories)
+        elif kind is OperationKind.RECASE:
+            if operation.prior_target_rel_path is None:
+                raise ExecutorRigError("RECASE output lacks its prior target path")
+            _move_output_tree(
+                files,
+                directories,
+                _output_path(operation.prior_target_rel_path),
+                target,
+            )
+        elif kind is OperationKind.TRASH:
+            trash = _trash_path(run.execution_set.run_id, target)
+            _move_output_tree(files, directories, target, trash)
+            _add_parents(trash, directories)
+        elif kind is OperationKind.DELETE:
+            _remove_output_tree(files, directories, target)
+        elif kind is not OperationKind.NOOP:
+            raise ExecutorRigError(f"cannot derive outputs for {kind.value}")
+    return frozenset(files), frozenset(directories)
+
+
+def _output_path(relative: str) -> str:
+    return "/".join(PureWindowsPath(relative).parts)
+
+
+def _trash_path(run_id: RunId, relative: str) -> str:
+    return "/".join((".synctrash", str(run_id), *PureWindowsPath(relative).parts))
+
+
+def _add_directory(path: str, directories: set[str]) -> None:
+    directories.add(path)
+    _add_parents(path, directories)
+
+
+def _add_parents(path: str, directories: set[str]) -> None:
+    parts = PureWindowsPath(path).parts
+    for end in range(1, len(parts)):
+        directories.add("/".join(parts[:end]))
+
+
+def _remove_output_tree(
+    files: set[str],
+    directories: set[str],
+    root: str,
+) -> None:
+    root_parts = tuple(part.casefold() for part in PureWindowsPath(root).parts)
+    for paths in (files, directories):
+        paths.difference_update(
+            path
+            for path in paths
+            if tuple(part.casefold() for part in PureWindowsPath(path).parts)[
+                : len(root_parts)
+            ]
+            == root_parts
+        )
+
+
+def _move_output_tree(
+    files: set[str],
+    directories: set[str],
+    source: str,
+    destination: str,
+) -> None:
+    source_parts = PureWindowsPath(source).parts
+    source_folded = tuple(part.casefold() for part in source_parts)
+    destination_parts = PureWindowsPath(destination).parts
+    for paths in (files, directories):
+        moved: dict[str, str] = {}
+        for path in paths:
+            parts = PureWindowsPath(path).parts
+            if tuple(part.casefold() for part in parts[: len(source_parts)]) == source_folded:
+                moved[path] = "/".join((*destination_parts, *parts[len(source_parts) :]))
+        paths.difference_update(moved)
+        paths.update(moved.values())
+
+
+def _require_disjoint_roots(source: Path, target: Path) -> None:
+    if (
+        source == target
+        or source.is_relative_to(target)
+        or target.is_relative_to(source)
+    ):
+        raise ExecutorRigError("source and target workspaces must not overlap")
 
 
 def _require_complete_scan(label: str, result: ScanResult) -> None:

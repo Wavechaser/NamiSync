@@ -156,6 +156,18 @@ def test_tapped_readers_preserve_the_wrapped_reader_authority_capability(
     assert isinstance(verifier_rig._reader(True), AuthorityBoundTappedReader)
 
 
+def test_batch_fixture_requires_exact_membership_and_portable_stat_fidelity() -> None:
+    portable = _stat(identity=False)
+    run = SimpleNamespace(fixture=(("A.TXT", _stat(index=99)),))
+
+    verifier_rig.require_fixture(run, {"A.TXT": portable}, portable=True)
+
+    with pytest.raises(verifier_rig.VerifierRigError, match="membership changed"):
+        verifier_rig.require_fixture(run, {"B.TXT": portable}, portable=True)
+    with pytest.raises(verifier_rig.VerifierRigError, match="file stats changed"):
+        verifier_rig.require_fixture(run, {"A.TXT": _stat(index=1)}, portable=False)
+
+
 def test_sidecar_bound_round_trip_preserves_identity(tmp_path: Path) -> None:
     path = tmp_path / "baseline.jsonl"
     expected = {"A.TXT": _attestation()}
@@ -181,6 +193,27 @@ def test_sidecar_bound_write_rejects_missing_identity_without_replacing_file(
         )
 
     assert path.read_text(encoding="utf-8") == "existing"
+
+
+def test_sidecar_refuses_existing_destination_without_explicit_replace(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "baseline.jsonl"
+    path.write_text("existing", encoding="utf-8")
+
+    with pytest.raises(sidecar.SidecarError, match="--replace-sidecar"):
+        sidecar.write(path, {"A.TXT": _attestation()})
+
+    assert path.read_text(encoding="utf-8") == "existing"
+
+    details = path.stat()
+    assert sidecar.write(
+        path,
+        {"A.TXT": _attestation()},
+        replace=True,
+        expected_identity=(details.st_dev, details.st_ino),
+    ) == 1
+    assert sidecar.read(path)[0] == {"A.TXT": _attestation(identity=False)}
 
 
 @pytest.mark.parametrize(
@@ -297,8 +330,14 @@ def test_sidecar_normalizes_write_errors_and_keeps_existing_destination(
 
     monkeypatch.setattr(sidecar.os, "replace", fail_replace)
 
+    details = path.stat()
     with pytest.raises(sidecar.SidecarError, match="cannot write sidecar"):
-        sidecar.write(path, {"A.TXT": _attestation()})
+        sidecar.write(
+            path,
+            {"A.TXT": _attestation()},
+            replace=True,
+            expected_identity=(details.st_dev, details.st_ino),
+        )
 
     assert path.read_text(encoding="utf-8") == "existing"
     assert list(tmp_path.glob(".baseline.jsonl.*.tmp")) == []

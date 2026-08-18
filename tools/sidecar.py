@@ -23,6 +23,7 @@ from typing import Mapping
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.integrity import matches_expected_stat
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
+from namisync.core.root_authority import is_reparse_stat
 
 
 IdentityMode = str
@@ -97,6 +98,8 @@ def write(
     attestations: Mapping[str, Attestation],
     *,
     identity_mode: IdentityMode = PORTABLE,
+    replace: bool = False,
+    expected_identity: tuple[int, int] | None = None,
 ) -> int:
     """Write one row per canonical path key; return the row count.
 
@@ -116,6 +119,23 @@ def write(
                 f"cannot write bound sidecar {path}: {key!r} has no file identity"
             )
         encoded.append(json.dumps(_encode(key, attestation)))
+
+    if expected_identity is not None and not replace:
+        raise ValueError("expected sidecar identity requires replace=True")
+    current_identity = _sidecar_identity(path)
+    if current_identity is not None:
+        if not replace:
+            raise SidecarError(
+                f"refusing to replace existing sidecar without --replace-sidecar: {path}"
+            )
+        if expected_identity is None:
+            raise SidecarError(
+                f"sidecar appeared after publication was authorized: {path}"
+            )
+        if current_identity != expected_identity:
+            raise SidecarError(f"sidecar was replaced before publication: {path}")
+    elif expected_identity is not None:
+        raise SidecarError(f"sidecar disappeared before publication: {path}")
 
     temporary: Path | None = None
     descriptor: int | None = None
@@ -137,8 +157,22 @@ def write(
                 handle.write(row + "\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        current_identity = _sidecar_identity(path)
+        if expected_identity is None:
+            if current_identity is not None:
+                raise SidecarError(
+                    f"sidecar appeared before publication: {path}"
+                )
+            os.rename(temporary, path)
+        else:
+            if current_identity != expected_identity:
+                raise SidecarError(
+                    f"sidecar was replaced before publication: {path}"
+                )
+            os.replace(temporary, path)
         temporary = None
+    except SidecarError:
+        raise
     except OSError as error:
         raise SidecarError(f"cannot write sidecar {path}: {error}") from error
     finally:
@@ -153,6 +187,20 @@ def write(
             except OSError:
                 pass
     return len(encoded)
+
+
+def _sidecar_identity(path: Path) -> tuple[int, int] | None:
+    try:
+        details = os.lstat(path)
+    except FileNotFoundError:
+        return None
+    if is_reparse_stat(details) or not path.is_file():
+        raise SidecarError(f"existing sidecar must be an ordinary file: {path}")
+    if details.st_nlink != 1:
+        raise SidecarError(
+            f"existing sidecar must be a single-link file: {path}"
+        )
+    return details.st_dev, details.st_ino
 
 
 def read(path: Path) -> tuple[dict[str, Attestation], IdentityMode]:
