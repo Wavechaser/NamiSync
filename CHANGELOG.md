@@ -115,6 +115,19 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
+#### Add an editable GUI development launcher (2026-08-18)
+
+- Added `tools/gui.ps1` for a foreground editable-source development shell and
+  light, dark, forced-colors, and reduced-motion component galleries, with dark
+  as the gallery default and Enter-to-relaunch interaction.
+- Isolated development data, mutexes, titles, logs, and per-launch gallery
+  diagnostics from production; waited only for the exact spawned child and
+  refused secondary-launch ambiguity without process-name termination.
+- Reused the unchanged clean-wheel child compositions and test-owned gallery
+  scenario while classifying editable output as non-evidence, retaining
+  abnormal diagnostics/log tails, and cleaning only ownership-marked,
+  revalidated normal-run milestones without recursive deletion.
+
 #### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-18)
 
 - Secured the installed-wheel host lifecycle with bounded admission, drains,

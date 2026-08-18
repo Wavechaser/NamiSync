@@ -1,9 +1,80 @@
 # Development Tools
 
-`tools/` contains the development-only executor and verifier measurement
-harness plus its deterministic corpus generator. Run it with
-`python -m tools`. It is outside the shipped `namisync` package, but its safety
-and result-validation behavior is covered by pytest.
+`tools/` contains two distinct development-only surfaces. `python -m tools`
+owns the executor/verifier measurement harness and deterministic corpus
+generator. `tools/gui.ps1` is a standalone editable-source desktop convenience
+launcher. Neither is part of the shipped `namisync` package, and both are
+covered by pytest without turning their output into product acceptance.
+
+## Editable GUI launcher
+
+Use PowerShell 7 and the repository virtual environment for ordinary UI
+iteration. Windows PowerShell 5.1 is refused before the launcher runs:
+
+```powershell
+# Real development shell
+.\tools\gui.ps1
+
+# Component gallery; dark when -Mode is omitted
+.\tools\gui.ps1 gallery
+.\tools\gui.ps1 gallery -Mode light
+.\tools\gui.ps1 gallery -Mode dark
+.\tools\gui.ps1 gallery -Mode forced
+.\tools\gui.ps1 gallery -Mode reduced
+```
+
+Bare `gui.ps1` always selects the real shell. `gallery` defaults to `dark`, and
+explicit `gallery -Mode dark` selects the identical child, mode, data root,
+mutex, title, and scenario. `-Mode` without `gallery`, an unknown command, an
+unknown mode, and extra arguments are refused before launch.
+
+The launcher resolves the repository from its own path, uses only
+`.venv\Scripts\python.exe`, and verifies under isolated Python startup that
+`namisync` resolves inside this checkout. It never builds a wheel, creates or
+cleans an environment, falls back to a PATH interpreter, watches files, or
+implements hot reload. Source changes take effect on the next manual relaunch.
+
+The real shell enters the normal secured `run_desktop` composition through the
+existing test-owned headed child with a development-only identity:
+`Local\NamiSync.Development.Desktop` and `NamiSync [Development]`. Each gallery
+mode has its own corresponding development mutex/title and invokes the existing
+`_component_gallery_child.py` with the test-owned
+`tests/assets/component_gallery/gallery.js` scenario. Production launcher
+arguments, the production `Local\NamiSync.Desktop` mutex and `NamiSync` title,
+packaged assets, and both clean-wheel children remain unchanged.
+
+Data is persistent and isolated beneath
+`%LOCALAPPDATA%\NamiSync-Development`: `shell` for the real development host and
+`gallery\<mode>\data` for each gallery mode. A launcher-control mutex refuses a
+second wrapper, and a child mutex already held at the pre-launch check is
+refused rather than treated as a window this invocation opened. The script
+starts one GUI Python child at a time with an argument list, waits on that exact
+process object, and never enumerates, waits for, or terminates processes by
+image name.
+
+Before every launch the console prints the source, interpreter, data, and log
+paths plus the gallery scenario and diagnostic output when applicable. The
+window remains open until the operator closes it; the clean-wheel pytest parent,
+not the gallery child, is what normally closes a gallery after `ready`. After
+closure, Enter relaunches the same profile and Q quits.
+
+Gallery data remains stable, but each launch receives a fresh GUID-named
+diagnostic directory and a random ownership marker. After a normal ready/final
+lifecycle, cleanup requires that marker, the exact three-entry set, regular
+non-reparse files, and unchanged reviewed file stats. The console prints every
+planned path before mutation and each successful removal afterward; a partial
+failure prints the completed paths and whether the root and marker remain. Any
+unknown entry, replaced marker, changed file, or cleanup error retains the
+directory. A nonzero exit, published
+failure, missing ready/final diagnostic, malformed or mismatched final record,
+or post-ready failure also retains it and prints a bounded 80-line log tail.
+The clean-wheel parent remains the only complete evidence validator. The
+console labels an unchanged persistent log as old rather than attributing it to
+the failed launch; an unreadable log warns without bypassing the relaunch prompt.
+
+This is a dirty editable preview for interaction speed. Its manually driven
+milestones and logs are diagnostics, not clean-wheel, release, headed-gate, or
+compositor-health evidence. Use the commands in `TESTS.md` for acceptance.
 
 ## Measurement authority
 
@@ -40,7 +111,7 @@ receipts, verdict exclusion, and frozen-contract validation. Corpus generation,
 root selection, measurement statistic, scaling axes, aggregate policy, and the
 component validator remain component-owned.
 
-## Boundary
+## Measurement harness boundary
 
 The harness replaces the workflow and persistence edges while keeping the
 domain operations real:
@@ -473,15 +544,18 @@ repeated batch prints its aggregate. `--json PATH` writes the one atomic batch
 report described above. Unsafe configuration or an invalid sample returns exit
 code 2 with an actionable error and publishes no report.
 
-## Future integration boundary
+## Measurement integration boundary
 
-No logger or product-CLI integration is appropriate yet. `M1_SHELL.md` defines
-logging as a GUI-host facility under `interfaces/web`, consuming GUI paths and
-capturing pywebview. Importing it here would invert the tools boundary and could
-perturb measurements through rotation or concurrent log writers.
+No logger or product-CLI integration is appropriate for the measurement
+package. `M1_SHELL.md` defines logging as a GUI-host facility under
+`interfaces/web`, consuming GUI paths and capturing pywebview. Importing it into
+the Python harness would invert the measurement boundary and could perturb
+results through rotation or concurrent log writers. The standalone `gui.ps1`
+does not import that package into the harness; it starts the existing headed
+composition externally and uses that host's isolated development log.
 
 Keep `python -m tools` separate from `nami-sync`: the latter is a shipped product
-surface with lazy GUI imports and reviewed domain workflows, while these tools
-use fake persistence seams and destructive owned workspaces. If distribution is
-later required, prefer a separate development entry point after an explicit
-packaging and workspace-safety review.
+surface with lazy GUI imports and reviewed domain workflows, while the
+measurement commands use fake persistence seams and destructive owned
+workspaces. If distributing those commands is later required, prefer a separate
+development entry point after an explicit packaging and workspace-safety review.

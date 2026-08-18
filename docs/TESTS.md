@@ -101,6 +101,13 @@ input evidence. Neither is a live child-to-parent snapshot or part of the
 milestone state machine. The tree-window fixture likewise remains a one-shot
 parent-created input.
 
+`tools/gui.ps1 gallery` reuses the child and milestone format for an editable
+manual preview, but its GUID-named output is diagnostic only. It is not produced
+from the clean installed wheel, is not parent-validated as an acceptance run,
+and cannot satisfy a headed gate. A normal preview removes only its
+ownership-marked, exact ready/final diagnostic set after revalidation; abnormal,
+changed, or unknown output is retained for operator inspection.
+
 A green headed result proves only its declared NamiSync/page contract; it is not
 evidence that the surrounding Windows compositor remained healthy. A
 2026-08-17 checkpoint completed green while the same session contained a DWM
@@ -138,7 +145,7 @@ collected test without a department filter.
 | `workflows` | Cross-component sync and integrity coordination |
 | `dispatcher` | Admission, custody, control, and event fan-out |
 | `interfaces` | CLI, service, launcher, packaging, and desktop adapters |
-| `tools` | Repository diagnostics, audits, corpora, and test infrastructure |
+| `tools` | Repository diagnostics, audits, corpora, development launchers, and test infrastructure |
 
 When adding, moving, or deleting a collected test module, update
 `tests/_departments.py` in the same change. Shared test support belongs in a

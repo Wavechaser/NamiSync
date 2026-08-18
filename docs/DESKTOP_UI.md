@@ -104,6 +104,14 @@ before pywebview import. Pywebview starts with `private_mode=True` and the
 explicit `webview2` storage path; browser state never becomes plan, task, or
 filesystem authority.
 
+For editable-source UI iteration, `tools/gui.ps1` supplies a distinct
+development mutex/title and roots all state beneath
+`%LOCALAPPDATA%\NamiSync-Development`. Bare invocation opens the real shell;
+`gallery` opens the dark component gallery by default. This developer-only
+composition does not change the production launcher's arguments, environment
+contract, packaged assets, or desktop behavior. `TOOLS.md` owns its exact
+commands, relaunch loop, diagnostic lifecycle, and process-safety rules.
+
 Before window creation, the primary host constructs the service and consumes
 the shared database-pair facade. Fresh state initializes ledger then history;
 ready state continues; refused state runs the bounded finalizer and shows the
@@ -124,6 +132,12 @@ Native test and gallery compositions may supply an existing absolute physical
 local index file directly to `run_desktop`. The production launcher never
 exposes that construction-only seam through arguments, environment, page data,
 or bridge traffic, and the test page is never package data.
+
+The editable gallery launcher reuses the existing test-owned gallery child and
+scenario without changing them. That child remains in the real host loop after
+publishing `ready`; the clean-wheel pytest parent is what closes the acceptance
+window, while a direct editable launch waits for the operator. Its manually
+generated milestones are convenience diagnostics rather than headed evidence.
 
 Frontend assets are setuptools package data and use plain same-origin ES
 modules. At Slice 2 closure the wheel contained exactly `index.html`, `app.css`,
@@ -193,8 +207,10 @@ than inferring theme roles from swatch names. Forced colors use Windows system
 colors, and text plus icon/shape/state cues keep every status understandable
 without color. The gallery resolves production HTML/CSS from a clean installed
 wheel and records exact installed `tokens.css`/`components.css` bytes; its own
-page remains tests-only. Computed pairs must reach 4.5:1 for normal text and
-3:1 for large text and non-text UI indicators/boundaries.
+page remains tests-only. That clean-wheel statement applies to the pytest
+acceptance composition, not the editable `tools/gui.ps1` preview. Computed pairs
+must reach 4.5:1 for normal text and 3:1 for large text and non-text UI
+indicators/boundaries.
 
 The same break establishes only the icon infrastructure, not the later surface
 icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored
