@@ -1,8 +1,9 @@
 # Session Handoff
 
-Status (2026-08-18): the editable GUI development launcher is implemented,
-reviewed, documented, and committed in `bd21b38`. This handoff records the
-final repository-wide verification sweep.
+Status (2026-08-18): the editable GUI launcher now supports concurrent grouped
+gallery profiles while preserving its concrete per-mode mutexes. The real shell
+profile is unchanged. This handoff records the reviewed delivery and final
+repository-wide verification sweep.
 
 ## Delivered
 
@@ -11,6 +12,10 @@ final repository-wide verification sweep.
   component gallery, and `-Mode light|dark|forced|reduced` selects the explicit
   gallery environment. Implicit and explicit dark use the same child, data
   root, mutex, title, and test-owned scenario.
+- Added `-Mode fluent` for concurrent light/dark galleries and `-Mode all` for
+  concurrent light/dark/forced/reduced galleries. Grouped launch starts every
+  selected child before waiting and offers one relaunch/Q prompt after all
+  selected windows close.
 - Used only `.venv\Scripts\python.exe`, verified that isolated import resolution
   points into this checkout, removed inherited `PYTHON*` behavior controls, and
   restored controlled UTF-8 mode. The launcher does not build a wheel, create
@@ -18,11 +23,12 @@ final repository-wide verification sweep.
 - Gave shell and gallery profiles development-only titles, child mutexes,
   launcher-control mutexes, persistent data roots, and logs beneath
   `%LOCALAPPDATA%\NamiSync-Development`. Production launcher behavior and
-  identity are unchanged.
+  identity are unchanged. Gallery locks remain concrete per-mode: different
+  modes may coexist, but a second instance of the same mode is refused.
 - Started children with `ProcessStartInfo.ArgumentList`, inherited their live
-  console streams, and waited on only the returned process object. Existing
-  same-profile launcher or child ownership is refused at the pre-launch check;
-  there is no process-name enumeration or termination.
+  console streams, and waited on only the returned process objects. `fluent`
+  acquires the existing light/dark locks; `all` acquires all four locks in fixed
+  order. Neither adds a global gallery lock or touches the shell lock.
 - Printed source, interpreter, data, log, gallery scenario, diagnostic output,
   PID, exit, and status around each launch. Enter relaunches with a fresh
   diagnostic directory; Q or unavailable input exits. An abnormal launch shows
@@ -55,16 +61,23 @@ final repository-wide verification sweep.
 - A forced mid-cleanup mutation proves truthful partial receipts: the already
   removed path is reported, the changed file is preserved, root/marker state is
   printed, logical exit becomes nonzero, and the relaunch prompt remains.
+- Grouped-profile review required all per-mode launcher locks and child-mutex
+  prechecks before the first child starts. A busy later launcher lock releases
+  earlier acquisitions, and a later child start failure still waits for every
+  child that did start before reporting and prompting.
+- Tests prove all selected `start-*` events precede the first `wait-*` event,
+  individual mode locks remain distinct, grouped locks release in reverse
+  order, and `fluent` may not create a duplicate dark window while one exists.
 
 ## Verification
 
-- Focused launcher suite: `23 passed` in `8.73s`.
-- Tools department: `274 passed, 3 skipped, 2270 deselected` in `32.25s`.
+- Focused launcher suite: `29 passed` in `10.68s`.
+- Tools department: `280 passed, 3 skipped, 2270 deselected` in `32.72s`.
   The three skips require unavailable Windows symlink privileges; the launcher
   cleanup still has ownership, unknown-entry, and injected stat-drift coverage,
   while its source guard explicitly refuses reparse entries.
-- Ordinary repository suite: `2506 passed, 14 skipped, 27 deselected` in
-  `133.20s`.
+- Ordinary repository suite: `2512 passed, 14 skipped, 27 deselected` in
+  `133.52s`.
 - Import boundary lint: `11 kept, 0 broken` across 71 files and 253
   dependencies.
 - PowerShell parsing, `git diff --check`, and the clean-wheel child/scenario
@@ -80,8 +93,8 @@ final repository-wide verification sweep.
 - A directly launched same-profile child can still win the narrow interval
   between the wrapper's child-mutex precheck and child admission. Gallery mode
   reports missing/failure diagnostics; shell mode inherits the host's
-  secondary-activation-and-return behavior. Concurrent wrapper launches are
-  serialized by the separate launcher mutex.
+  secondary-activation-and-return behavior. Concurrent wrappers are serialized
+  only when their concrete mode sets overlap; unrelated modes remain concurrent.
 - Normal gallery diagnostics are removed only after exact validation. Abnormal
   or suspicious directories and persistent data/log roots are intentionally
   retained at the printed locations for operator inspection; there is no broad

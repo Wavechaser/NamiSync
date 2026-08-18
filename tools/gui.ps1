@@ -6,7 +6,7 @@ param(
     [ValidateSet("gallery")]
     [string] $Target,
 
-    [ValidateSet("light", "dark", "forced", "reduced")]
+    [ValidateSet("light", "dark", "forced", "reduced", "fluent", "all")]
     [string] $Mode = "dark"
 )
 
@@ -17,6 +17,19 @@ $script:EvidenceSchema = "namisync-headed-evidence-v1"
 $script:EvidenceLimit = 1MB
 $script:GalleryOwnerMarker = ".nami-gui-owner"
 $script:TailLines = 80
+
+function Resolve-NamiGalleryModes {
+    param(
+        [ValidateSet("light", "dark", "forced", "reduced", "fluent", "all")]
+        [string] $Mode
+    )
+
+    switch ($Mode.ToLowerInvariant()) {
+        "fluent" { return @("light", "dark") }
+        "all" { return @("light", "dark", "forced", "reduced") }
+        default { return @($Mode.ToLowerInvariant()) }
+    }
+}
 
 function New-NamiGuiPlan {
     param(
@@ -120,7 +133,8 @@ function Start-NamiGuiProcess {
         [Parameter(Mandatory)] [string] $FilePath,
         [Parameter(Mandatory)] [string[]] $Arguments,
         [Parameter(Mandatory)] [string] $WorkingDirectory,
-        [switch] $Announce
+        [switch] $Announce,
+        [switch] $NoWait
     )
 
     $start = [Diagnostics.ProcessStartInfo]::new()
@@ -142,18 +156,31 @@ function Start-NamiGuiProcess {
         if (-not $process.Start()) {
             throw "the editable GUI child process did not start"
         }
-        $processId = $process.Id
-        if ($Announce) {
-            Write-Host "Child PID: $processId"
-        }
-        $process.WaitForExit()
+    }
+    catch {
+        $process.Dispose()
+        throw
+    }
+    if ($Announce) {
+        Write-Host "Child PID: $($process.Id)"
+    }
+    if ($NoWait) { return $process }
+    return Wait-NamiGuiProcess $process
+}
+
+function Wait-NamiGuiProcess {
+    param([Parameter(Mandatory)] [Diagnostics.Process] $Process)
+
+    try {
+        $processId = $Process.Id
+        $Process.WaitForExit()
         return [pscustomobject]@{
             ProcessId = $processId
-            ExitCode = $process.ExitCode
+            ExitCode = $Process.ExitCode
         }
     }
     finally {
-        $process.Dispose()
+        $Process.Dispose()
     }
 }
 
@@ -567,36 +594,47 @@ function Invoke-NamiGui {
     }
     $kind = if ($SelectedTarget -eq "gallery") { "gallery" } else { "shell" }
     $normalizedMode = $SelectedMode.ToLowerInvariant()
-    $newPlan = {
-        $token = if ($kind -eq "gallery") {
-            $stamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
-            "$stamp-$([Guid]::NewGuid().ToString('N'))"
+    $galleryModes = if ($kind -eq "gallery") {
+        @(Resolve-NamiGalleryModes $normalizedMode)
+    }
+    else {
+        @()
+    }
+    $newPlans = {
+        $items = [Collections.Generic.List[object]]::new()
+        if ($kind -eq "shell") {
+            [void] $items.Add((New-NamiGuiPlan `
+                -RepositoryRoot $RepositoryRoot `
+                -LocalAppDataRoot $LocalAppDataRoot))
         }
         else {
-            $null
+            foreach ($mode in $galleryModes) {
+                $stamp = [DateTime]::UtcNow.ToString("yyyyMMddTHHmmssfffZ")
+                $token = "$stamp-$([Guid]::NewGuid().ToString('N'))"
+                [void] $items.Add((New-NamiGuiPlan `
+                    -RepositoryRoot $RepositoryRoot `
+                    -LocalAppDataRoot $LocalAppDataRoot `
+                    -Kind gallery -Mode $mode -OutputToken $token))
+            }
         }
-        $parameters = @{
-            RepositoryRoot = $RepositoryRoot
-            LocalAppDataRoot = $LocalAppDataRoot
-            Kind = $kind
-            Mode = $normalizedMode
-            OutputToken = $token
-        }
-        New-NamiGuiPlan @parameters
+        return $items.ToArray()
     }
-    $plan = & $newPlan
-    if (-not (Test-Path -LiteralPath $plan.Python -PathType Leaf)) {
+    $plans = @(& $newPlans)
+    $anchor = $plans[0]
+    if (-not (Test-Path -LiteralPath $anchor.Python -PathType Leaf)) {
         throw (
-            "project venv Python is missing at $($plan.Python); create the " +
+            "project venv Python is missing at $($anchor.Python); create the " +
             "venv and install .[dev] as editable"
         )
     }
-    foreach ($required in @($plan.Child, $plan.Scenario)) {
-        if (
-            $null -ne $required -and
-            -not (Test-Path -LiteralPath $required -PathType Leaf)
-        ) {
-            throw "required editable GUI path is missing: $required"
+    foreach ($plan in $plans) {
+        foreach ($required in @($plan.Child, $plan.Scenario)) {
+            if (
+                $null -ne $required -and
+                -not (Test-Path -LiteralPath $required -PathType Leaf)
+            ) {
+                throw "required editable GUI path is missing: $required"
+            }
         }
     }
 
@@ -607,8 +645,8 @@ function Invoke-NamiGui {
         "raise SystemExit(0 if source.is_relative_to(root) else 3)"
     )
     $probeRun = @{
-        FilePath = $plan.Python
-        Arguments = @("-I", "-c", $probe, $plan.Repository)
+        FilePath = $anchor.Python
+        Arguments = @("-I", "-c", $probe, $anchor.Repository)
         WorkingDirectory = [IO.Path]::GetTempPath()
     }
     if ((Start-NamiGuiProcess @probeRun).ExitCode -ne 0) {
@@ -618,86 +656,157 @@ function Invoke-NamiGui {
         )
     }
 
-    $launcherMutex = Enter-NamiLauncherMutex $plan.LauncherMutex
+    $launcherMutexes = [Collections.Generic.List[object]]::new()
     try {
-        while ($true) {
-            if (Test-NamiMutexExists $plan.Mutex) {
-                throw (
-                    "the $kind development window is already running; " +
-                    "close it before using this foreground launcher"
-                )
-            }
-            if ($kind -eq "gallery") {
-                New-NamiGalleryOutput $plan.Output $plan.OutputToken
-            }
-
-            Write-Host ""
-            Write-Host "Editable preview; not clean-wheel acceptance evidence"
-            Write-Host "Title: $($plan.Title)"
-            if ($kind -eq "gallery") { Write-Host "Gallery mode: $($plan.Mode)" }
-            Write-Host "Source: $($plan.Repository)"
-            Write-Host "Python: $($plan.Python)"
-            Write-Host "Data: $($plan.Data)"
-            Write-Host "Log: $($plan.Log)"
-            if ($kind -eq "gallery") {
-                Write-Host "Scenario: $($plan.Scenario)"
-                Write-Host "Diagnostic output: $($plan.Output)"
-            }
-
-            $logBefore = Get-NamiLogState $plan.Log
-            $launchError = $null
+        foreach ($plan in $plans) {
+            [void] $launcherMutexes.Add((
+                Enter-NamiLauncherMutex $plan.LauncherMutex
+            ))
+        }
+    }
+    catch {
+        $admissionError = $_
+        for ($index = $launcherMutexes.Count - 1; $index -ge 0; $index--) {
             try {
-                $run = Start-NamiGuiProcess `
-                    $plan.Python $plan.Arguments $plan.Repository -Announce
-                $childExit = $run.ExitCode
+                Exit-NamiLauncherMutex $launcherMutexes[$index]
             }
             catch {
-                $launchError = $_.Exception.Message
-                $childExit = 1
+                Write-Warning "A development launcher mutex did not release."
             }
-            if ($kind -eq "gallery") {
-                $status = Get-NamiGalleryStatus `
-                    -OutputRoot $plan.Output -ExitCode $childExit
-            }
-            else {
-                $status = [pscustomobject]@{
-                    Abnormal = $childExit -ne 0
-                    Summary = "development shell exited with code $childExit"
+        }
+        throw $admissionError
+    }
+    try {
+        while ($true) {
+            foreach ($plan in $plans) {
+                if (Test-NamiMutexExists $plan.Mutex) {
+                    $label = if ($kind -eq "gallery") {
+                        "$($plan.Mode) gallery"
+                    }
+                    else {
+                        "shell"
+                    }
+                    throw (
+                        "the $label development window is already running; " +
+                        "close it before using this foreground launcher"
+                    )
                 }
             }
-            if ($null -ne $launchError) {
-                $status = [pscustomobject]@{
-                    Abnormal = $true
-                    Summary = "child process failed to start: $launchError"
+            Write-Host ""
+            Write-Host "Editable preview; not clean-wheel acceptance evidence"
+            if ($kind -eq "gallery") {
+                Write-Host "Gallery profile: $normalizedMode"
+            }
+            Write-Host "Source: $($anchor.Repository)"
+            Write-Host "Python: $($anchor.Python)"
+            foreach ($plan in $plans) {
+                Write-Host ""
+                Write-Host "Title: $($plan.Title)"
+                if ($kind -eq "gallery") {
+                    Write-Host "Gallery mode: $($plan.Mode)"
+                }
+                Write-Host "Data: $($plan.Data)"
+                Write-Host "Log: $($plan.Log)"
+                if ($kind -eq "gallery") {
+                    Write-Host "Scenario: $($plan.Scenario)"
+                    Write-Host "Diagnostic output: $($plan.Output)"
+                }
+            }
+            foreach ($plan in $plans) {
+                if ($kind -eq "gallery") {
+                    New-NamiGalleryOutput $plan.Output $plan.OutputToken
                 }
             }
 
-            Write-Host "Exit: $childExit"
-            Write-Host "Status: $($status.Summary)"
-            $logicalExit = if ($status.Abnormal -and $childExit -eq 0) {
-                1
-            }
-            else {
-                $childExit
-            }
-            if ($status.Abnormal) {
-                Write-Warning "Development GUI launch was abnormal."
-                if ($kind -eq "gallery") {
-                    Write-Warning "Gallery diagnostics retained at $($plan.Output)"
+            $launches = [Collections.Generic.List[object]]::new()
+            foreach ($plan in $plans) {
+                $launch = [pscustomobject]@{
+                    Plan = $plan
+                    LogBefore = Get-NamiLogState $plan.Log
+                    Process = $null
+                    LaunchError = $null
+                    ChildExit = 1
                 }
-                Show-NamiLogTail $plan.Log $logBefore
-            }
-            elseif ($kind -eq "gallery") {
                 try {
-                    Remove-NamiGalleryOutput $plan.Output $plan.OutputToken
+                    $launch.Process = Start-NamiGuiProcess `
+                        $plan.Python $plan.Arguments $plan.Repository `
+                        -Announce -NoWait
                 }
                 catch {
-                    Write-Warning (
-                        "Gallery cleanup did not complete at $($plan.Output); " +
-                        "see the completed/remaining receipt: " +
-                        $_.Exception.Message
+                    $launch.LaunchError = (
+                        "child process failed to start: $($_.Exception.Message)"
                     )
-                    $logicalExit = 1
+                }
+                [void] $launches.Add($launch)
+            }
+            foreach ($launch in $launches) {
+                if ($null -ne $launch.Process) {
+                    try {
+                        $run = Wait-NamiGuiProcess $launch.Process
+                        $launch.ChildExit = $run.ExitCode
+                    }
+                    catch {
+                        $launch.LaunchError = (
+                            "child process wait failed: $($_.Exception.Message)"
+                        )
+                        $launch.ChildExit = 1
+                    }
+                }
+            }
+
+            $logicalExit = 0
+            foreach ($launch in $launches) {
+                $plan = $launch.Plan
+                $childExit = $launch.ChildExit
+                if ($kind -eq "gallery") {
+                    $status = Get-NamiGalleryStatus `
+                        -OutputRoot $plan.Output -ExitCode $childExit
+                }
+                else {
+                    $status = [pscustomobject]@{
+                        Abnormal = $childExit -ne 0
+                        Summary = "development shell exited with code $childExit"
+                    }
+                }
+                if ($null -ne $launch.LaunchError) {
+                    $status = [pscustomobject]@{
+                        Abnormal = $true
+                        Summary = $launch.LaunchError
+                    }
+                }
+                $label = if ($kind -eq "gallery") { $plan.Mode } else { "shell" }
+                Write-Host "Exit [$label]: $childExit"
+                Write-Host "Status [$label]: $($status.Summary)"
+                $windowExit = if ($status.Abnormal -and $childExit -eq 0) {
+                    1
+                }
+                else {
+                    $childExit
+                }
+                if ($status.Abnormal) {
+                    Write-Warning "Development GUI launch was abnormal [$label]."
+                    if ($kind -eq "gallery") {
+                        Write-Warning (
+                            "Gallery diagnostics retained at $($plan.Output)"
+                        )
+                    }
+                    Show-NamiLogTail $plan.Log $launch.LogBefore
+                }
+                elseif ($kind -eq "gallery") {
+                    try {
+                        Remove-NamiGalleryOutput $plan.Output $plan.OutputToken
+                    }
+                    catch {
+                        Write-Warning (
+                            "Gallery cleanup did not complete at " +
+                            "$($plan.Output); see the completed/remaining " +
+                            "receipt: $($_.Exception.Message)"
+                        )
+                        $windowExit = 1
+                    }
+                }
+                if ($logicalExit -eq 0 -and $windowExit -ne 0) {
+                    $logicalExit = $windowExit
                 }
             }
 
@@ -719,11 +828,23 @@ function Invoke-NamiGui {
             if ($choice -eq "quit") {
                 return $logicalExit
             }
-            $plan = & $newPlan
+            $plans = @(& $newPlans)
+            $anchor = $plans[0]
         }
     }
     finally {
-        Exit-NamiLauncherMutex $launcherMutex
+        $releaseError = $null
+        for ($index = $launcherMutexes.Count - 1; $index -ge 0; $index--) {
+            try {
+                Exit-NamiLauncherMutex $launcherMutexes[$index]
+            }
+            catch {
+                if ($null -eq $releaseError) { $releaseError = $_ }
+            }
+        }
+        if ($null -ne $releaseError) {
+            throw $releaseError
+        }
     }
 }
 

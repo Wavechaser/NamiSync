@@ -21,12 +21,17 @@ iteration. Windows PowerShell 5.1 is refused before the launcher runs:
 .\tools\gui.ps1 gallery -Mode dark
 .\tools\gui.ps1 gallery -Mode forced
 .\tools\gui.ps1 gallery -Mode reduced
+
+# Grouped gallery profiles
+.\tools\gui.ps1 gallery -Mode fluent  # light + dark
+.\tools\gui.ps1 gallery -Mode all     # all four modes
 ```
 
 Bare `gui.ps1` always selects the real shell. `gallery` defaults to `dark`, and
 explicit `gallery -Mode dark` selects the identical child, mode, data root,
 mutex, title, and scenario. `-Mode` without `gallery`, an unknown command, an
-unknown mode, and extra arguments are refused before launch.
+unknown mode, and extra arguments are refused before launch. `fluent` expands
+to light and dark; `all` expands to light, dark, forced, and reduced.
 
 The launcher resolves the repository from its own path, uses only
 `.venv\Scripts\python.exe`, and verifies under isolated Python startup that
@@ -46,17 +51,26 @@ packaged assets, and both clean-wheel children remain unchanged.
 Data is persistent and isolated beneath
 `%LOCALAPPDATA%\NamiSync-Development`: `shell` for the real development host and
 `gallery\<mode>\data` for each gallery mode. A launcher-control mutex refuses a
-second wrapper, and a child mutex already held at the pre-launch check is
-refused rather than treated as a window this invocation opened. The script
-starts one GUI Python child at a time with an argument list, waits on that exact
-process object, and never enumerates, waits for, or terminates processes by
-image name.
+second wrapper for the same concrete mode, and a child mutex already held at the
+pre-launch check is refused rather than treated as a window this invocation
+opened. There is no global gallery mutex: light, dark, forced, and reduced may
+run alongside one another, but a second instance of the same mode is refused.
+The real shell keeps its separate existing launcher/child mutexes.
+
+Grouped profiles acquire the same concrete per-mode launcher mutexes in fixed
+light/dark/forced/reduced order. `fluent` therefore reserves only light and
+dark and may coexist with forced or reduced; `all` reserves all four. Every
+selected child-mutex precheck completes before any grouped child starts. The
+launcher then starts every selected GUI process before waiting, waits on those
+exact process objects, and never enumerates, waits for, or terminates processes
+by image name.
 
 Before every launch the console prints the source, interpreter, data, and log
 paths plus the gallery scenario and diagnostic output when applicable. The
 window remains open until the operator closes it; the clean-wheel pytest parent,
 not the gallery child, is what normally closes a gallery after `ready`. After
-closure, Enter relaunches the same profile and Q quits.
+every window in the selected profile closes, Enter relaunches that same profile
+and Q quits.
 
 Gallery data remains stable, but each launch receives a fresh GUID-named
 diagnostic directory and a random ownership marker. After a normal ready/final
@@ -65,9 +79,9 @@ non-reparse files, and unchanged reviewed file stats. The console prints every
 planned path before mutation and each successful removal afterward; a partial
 failure prints the completed paths and whether the root and marker remain. Any
 unknown entry, replaced marker, changed file, or cleanup error retains the
-directory. A nonzero exit, published
-failure, missing ready/final diagnostic, malformed or mismatched final record,
-or post-ready failure also retains it and prints a bounded 80-line log tail.
+directory. A nonzero exit, published failure, missing ready/final diagnostic,
+malformed or mismatched final record, or post-ready failure also retains it and
+prints a bounded 80-line log tail.
 The clean-wheel parent remains the only complete evidence validator. The
 console labels an unchanged persistent log as old rather than attributing it to
 the failed launch; an unreadable log warns without bypassing the relaunch prompt.

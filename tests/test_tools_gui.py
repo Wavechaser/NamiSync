@@ -125,6 +125,15 @@ foreach ($name in @('light', 'dark', 'forced', 'reduced')) {{
     $modes[$name] = New-NamiGuiPlan -RepositoryRoot $repo `
         -LocalAppDataRoot $local -Kind gallery -Mode $name -OutputToken same
 }}
+$groups = [pscustomobject]@{{
+    fluent = @(Resolve-NamiGalleryModes fluent)
+    all = @(Resolve-NamiGalleryModes all)
+}}
+$modeValues = @(
+    (Get-Command {_ps_literal(GUI_SCRIPT)}).Parameters['Mode'].Attributes |
+        Where-Object {{ $_ -is [Management.Automation.ValidateSetAttribute] }} |
+        ForEach-Object {{ $_.ValidValues }}
+)
 [pscustomobject]@{{
     shell = $shell
     implicit_dark = $implicit
@@ -132,6 +141,8 @@ foreach ($name in @('light', 'dark', 'forced', 'reduced')) {{
     dark_equal = (($implicit | ConvertTo-Json -Depth 8 -Compress) -eq `
         ($explicit | ConvertTo-Json -Depth 8 -Compress))
     modes = $modes
+    groups = $groups
+    mode_values = $modeValues
 }} | ConvertTo-Json -Depth 8 -Compress
 """
     result = _run_powershell(tmp_path, body)
@@ -143,6 +154,9 @@ foreach ($name in @('light', 'dark', 'forced', 'reduced')) {{
     assert shell["Mutex"] != r"Local\NamiSync.Desktop"
     assert shell["Title"] == "NamiSync [Development]"
     assert shell["Title"] != "NamiSync"
+    assert shell["LauncherMutex"] == (
+        r"Local\NamiSync.Development.Launcher.Desktop"
+    )
     assert shell["Child"].endswith(
         r"tests\interfaces\web\_headed_host_child.py"
     )
@@ -165,7 +179,26 @@ foreach ($name in @('light', 'dark', 'forced', 'reduced')) {{
         assert plan["Mode"] == mode
         assert plan["Arguments"][plan["Arguments"].index("--mode") + 1] == mode
         assert plan["Mutex"].endswith(f".Gallery.{mode}")
+        assert plan["LauncherMutex"].endswith(f".Gallery.{mode}")
         assert f"gallery\\{mode}\\data" in plan["Data"]
+
+    assert len({plan["Mutex"] for plan in value["modes"].values()}) == 4
+    assert len(
+        {plan["LauncherMutex"] for plan in value["modes"].values()}
+    ) == 4
+
+    assert value["groups"] == {
+        "fluent": ["light", "dark"],
+        "all": ["light", "dark", "forced", "reduced"],
+    }
+    assert set(value["mode_values"]) == {
+        "light",
+        "dark",
+        "forced",
+        "reduced",
+        "fluent",
+        "all",
+    }
 
 
 def test_mode_without_gallery_refuses_before_creating_data(tmp_path: Path) -> None:
@@ -324,6 +357,47 @@ $run | ConvertTo-Json -Compress
 
     assert result["ProcessId"] > 0
     assert result["ExitCode"] == 7
+
+
+def test_process_runner_can_start_before_waiting(tmp_path: Path) -> None:
+    event_name = rf"Local\NamiSync.Test.GuiStart.{uuid.uuid4().hex}"
+    body = f"""
+$gate = [Threading.EventWaitHandle]::new(
+    $false,
+    [Threading.EventResetMode]::ManualReset,
+    {_ps_literal(event_name)}
+)
+$command = @'
+$gate = [Threading.EventWaitHandle]::OpenExisting('{event_name}')
+try {{
+    if (-not $gate.WaitOne(5000)) {{ exit 9 }}
+}}
+finally {{
+    $gate.Dispose()
+}}
+exit 0
+'@
+try {{
+    $child = Join-Path $PSHOME 'pwsh.exe'
+    $process = Start-NamiGuiProcess -FilePath $child `
+        -Arguments @('-NoLogo', '-NoProfile', '-NonInteractive', '-Command', $command) `
+        -WorkingDirectory {_ps_literal(tmp_path)} -NoWait
+    $runningBeforeRelease = -not $process.HasExited
+    [void] $gate.Set()
+    $run = Wait-NamiGuiProcess $process
+    [pscustomobject]@{{
+        running_before_release = $runningBeforeRelease
+        exit_code = $run.ExitCode
+    }} | ConvertTo-Json -Compress
+}}
+finally {{
+    $gate.Dispose()
+}}
+"""
+
+    value = _last_json(_run_powershell(tmp_path, body))
+
+    assert value == {"running_before_release": True, "exit_code": 0}
 
 
 def test_process_runner_sanitizes_python_environment(tmp_path: Path) -> None:
@@ -625,7 +699,13 @@ $script:answers = [Collections.Generic.Queue[string]]::new()
 $script:answers.Enqueue('')
 $script:answers.Enqueue('q')
 function Start-NamiGuiProcess {{
-    param($FilePath, [string[]] $Arguments, $WorkingDirectory, [switch] $Announce)
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
     if (-not $Announce) {{
         return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
     }}
@@ -636,6 +716,13 @@ function Start-NamiGuiProcess {{
     }})
     Write-Host 'MOCK-CHILD-START'
     return [pscustomobject]@{{ ProcessId = 11; ExitCode = 0 }}
+}}
+function Wait-NamiGuiProcess {{
+    param($Process)
+    return [pscustomobject]@{{
+        ProcessId = $Process.ProcessId
+        ExitCode = $Process.ExitCode
+    }}
 }}
 function Test-NamiMutexExists {{ return $false }}
 function Enter-NamiLauncherMutex {{ return [pscustomobject]@{{}} }}
@@ -682,6 +769,308 @@ $code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode dark `
     assert value["cleanup_calls"] == [str(path) for path in outputs]
 
 
+@pytest.mark.parametrize(
+    ("profile", "expected_modes"),
+    [
+        ("fluent", ["light", "dark"]),
+        ("all", ["light", "dark", "forced", "reduced"]),
+    ],
+)
+def test_grouped_gallery_starts_every_mode_before_waiting(
+    tmp_path: Path,
+    profile: str,
+    expected_modes: list[str],
+) -> None:
+    local = tmp_path / "local"
+    body = f"""
+$script:events = [Collections.Generic.List[string]]::new()
+$script:acquired = [Collections.Generic.List[string]]::new()
+$script:released = [Collections.Generic.List[string]]::new()
+$script:checked = [Collections.Generic.List[string]]::new()
+$script:cleaned = [Collections.Generic.List[string]]::new()
+function Start-NamiGuiProcess {{
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
+    if (-not $Announce) {{
+        return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
+    }}
+    $index = [Array]::IndexOf($Arguments, '--mode')
+    $mode = $Arguments[$index + 1]
+    [void] $script:events.Add("start-$mode")
+    return [pscustomobject]@{{
+        ProcessId = 20 + $script:events.Count
+        ExitCode = 0
+        Mode = $mode
+    }}
+}}
+function Wait-NamiGuiProcess {{
+    param($Process)
+    [void] $script:events.Add("wait-$($Process.Mode)")
+    return [pscustomobject]@{{
+        ProcessId = $Process.ProcessId
+        ExitCode = $Process.ExitCode
+    }}
+}}
+function Enter-NamiLauncherMutex {{
+    param($Name)
+    [void] $script:acquired.Add($Name)
+    return [pscustomobject]@{{ Name = $Name }}
+}}
+function Exit-NamiLauncherMutex {{
+    param($Mutex)
+    [void] $script:released.Add($Mutex.Name)
+}}
+function Test-NamiMutexExists {{
+    param($Name)
+    [void] $script:checked.Add($Name)
+    return $false
+}}
+function Get-NamiLogState {{
+    return [pscustomobject]@{{ Exists = $false; Length = 0L; Stamp = 0L }}
+}}
+function Get-NamiGalleryStatus {{
+    return [pscustomobject]@{{ Abnormal = $false; Summary = 'complete' }}
+}}
+function Remove-NamiGalleryOutput {{
+    param($OutputRoot, $OwnerToken)
+    [void] $script:cleaned.Add($OutputRoot)
+}}
+function Read-Host {{ return 'q' }}
+$code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode {profile} `
+    -ModeWasExplicit $true -RepositoryRoot {_ps_literal(PROJECT_ROOT)} `
+    -LocalAppDataRoot {_ps_literal(local)}
+[pscustomobject]@{{
+    code = $code
+    events = @($script:events)
+    acquired = @($script:acquired)
+    released = @($script:released)
+    checked = @($script:checked)
+    cleaned = @($script:cleaned)
+}} | ConvertTo-Json -Depth 5 -Compress
+"""
+
+    result = _run_powershell(tmp_path, body)
+    value = _last_json(result)
+
+    starts = [f"start-{mode}" for mode in expected_modes]
+    waits = [f"wait-{mode}" for mode in expected_modes]
+    assert value["code"] == 0
+    assert value["events"] == starts + waits
+    assert [name.rsplit(".", 1)[-1] for name in value["acquired"]] == (
+        expected_modes
+    )
+    assert value["released"] == list(reversed(value["acquired"]))
+    assert [name.rsplit(".", 1)[-1] for name in value["checked"]] == (
+        expected_modes
+    )
+    assert len(value["cleaned"]) == len(expected_modes)
+    assert all(Path(path).is_dir() for path in value["cleaned"])
+    assert f"Gallery profile: {profile}" in result.stdout
+    for mode in expected_modes:
+        assert f"Gallery mode: {mode}" in result.stdout
+
+
+def test_fluent_refuses_an_existing_dark_gallery_before_starting_light(
+    tmp_path: Path,
+) -> None:
+    local = tmp_path / "local"
+    body = f"""
+$script:childStarts = 0
+$script:released = [Collections.Generic.List[string]]::new()
+function Start-NamiGuiProcess {{
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
+    if ($Announce) {{ $script:childStarts += 1 }}
+    return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
+}}
+function Enter-NamiLauncherMutex {{
+    param($Name)
+    return [pscustomobject]@{{ Name = $Name }}
+}}
+function Exit-NamiLauncherMutex {{
+    param($Mutex)
+    [void] $script:released.Add($Mutex.Name)
+}}
+function Test-NamiMutexExists {{
+    param($Name)
+    return $Name.EndsWith('.dark', [StringComparison]::Ordinal)
+}}
+try {{
+    Invoke-NamiGui -SelectedTarget gallery -SelectedMode fluent `
+        -ModeWasExplicit $true -RepositoryRoot {_ps_literal(PROJECT_ROOT)} `
+        -LocalAppDataRoot {_ps_literal(local)}
+    exit 9
+}}
+catch {{
+    [pscustomobject]@{{
+        message = $_.Exception.Message
+        child_starts = $script:childStarts
+        released = @($script:released)
+    }} | ConvertTo-Json -Depth 4 -Compress
+}}
+"""
+
+    value = _last_json(_run_powershell(tmp_path, body))
+
+    assert value["child_starts"] == 0
+    assert "dark gallery development window is already running" in value["message"]
+    assert [name.rsplit(".", 1)[-1] for name in value["released"]] == [
+        "dark",
+        "light",
+    ]
+    assert not local.exists()
+
+
+def test_fluent_releases_light_lock_when_dark_launcher_lock_is_busy(
+    tmp_path: Path,
+) -> None:
+    local = tmp_path / "local"
+    body = f"""
+$script:childStarts = 0
+$script:acquired = [Collections.Generic.List[string]]::new()
+$script:released = [Collections.Generic.List[string]]::new()
+function Start-NamiGuiProcess {{
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
+    if ($Announce) {{ $script:childStarts += 1 }}
+    return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
+}}
+function Enter-NamiLauncherMutex {{
+    param($Name)
+    [void] $script:acquired.Add($Name)
+    if ($Name.EndsWith('.dark', [StringComparison]::Ordinal)) {{
+        throw 'dark launcher busy'
+    }}
+    return [pscustomobject]@{{ Name = $Name }}
+}}
+function Exit-NamiLauncherMutex {{
+    param($Mutex)
+    [void] $script:released.Add($Mutex.Name)
+}}
+try {{
+    Invoke-NamiGui -SelectedTarget gallery -SelectedMode fluent `
+        -ModeWasExplicit $true -RepositoryRoot {_ps_literal(PROJECT_ROOT)} `
+        -LocalAppDataRoot {_ps_literal(local)}
+    exit 9
+}}
+catch {{
+    [pscustomobject]@{{
+        message = $_.Exception.Message
+        child_starts = $script:childStarts
+        acquired = @($script:acquired)
+        released = @($script:released)
+    }} | ConvertTo-Json -Depth 4 -Compress
+}}
+"""
+
+    value = _last_json(_run_powershell(tmp_path, body))
+
+    assert value["child_starts"] == 0
+    assert value["message"] == "dark launcher busy"
+    assert [name.rsplit(".", 1)[-1] for name in value["acquired"]] == [
+        "light",
+        "dark",
+    ]
+    assert [name.rsplit(".", 1)[-1] for name in value["released"]] == [
+        "light",
+    ]
+    assert not local.exists()
+
+
+def test_fluent_waits_for_light_when_dark_process_fails_to_start(
+    tmp_path: Path,
+) -> None:
+    local = tmp_path / "local"
+    body = f"""
+$script:events = [Collections.Generic.List[string]]::new()
+$script:cleaned = [Collections.Generic.List[string]]::new()
+$script:tails = [Collections.Generic.List[string]]::new()
+function Start-NamiGuiProcess {{
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
+    if (-not $Announce) {{
+        return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
+    }}
+    $index = [Array]::IndexOf($Arguments, '--mode')
+    $mode = $Arguments[$index + 1]
+    [void] $script:events.Add("start-$mode")
+    if ($mode -eq 'dark') {{ throw 'dark start failed' }}
+    return [pscustomobject]@{{ ProcessId = 11; ExitCode = 0; Mode = $mode }}
+}}
+function Wait-NamiGuiProcess {{
+    param($Process)
+    [void] $script:events.Add("wait-$($Process.Mode)")
+    return [pscustomobject]@{{
+        ProcessId = $Process.ProcessId
+        ExitCode = $Process.ExitCode
+    }}
+}}
+function Enter-NamiLauncherMutex {{
+    param($Name)
+    return [pscustomobject]@{{ Name = $Name }}
+}}
+function Exit-NamiLauncherMutex {{ param($Mutex) }}
+function Test-NamiMutexExists {{ return $false }}
+function Get-NamiLogState {{
+    return [pscustomobject]@{{ Exists = $false; Length = 0L; Stamp = 0L }}
+}}
+function Get-NamiGalleryStatus {{
+    return [pscustomobject]@{{ Abnormal = $false; Summary = 'complete' }}
+}}
+function Remove-NamiGalleryOutput {{
+    param($OutputRoot, $OwnerToken)
+    [void] $script:cleaned.Add($OutputRoot)
+}}
+function Show-NamiLogTail {{
+    param($Path, $Before)
+    [void] $script:tails.Add($Path)
+}}
+function Read-Host {{ return 'q' }}
+$code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode fluent `
+    -ModeWasExplicit $true -RepositoryRoot {_ps_literal(PROJECT_ROOT)} `
+    -LocalAppDataRoot {_ps_literal(local)}
+[pscustomobject]@{{
+    code = $code
+    events = @($script:events)
+    cleaned = @($script:cleaned)
+    tails = @($script:tails)
+}} | ConvertTo-Json -Depth 4 -Compress
+"""
+
+    result = _run_powershell(tmp_path, body)
+    value = _last_json(result)
+
+    assert value["code"] == 1
+    assert value["events"] == ["start-light", "start-dark", "wait-light"]
+    assert len(value["cleaned"]) == 1
+    assert "gallery\\light\\output" in value["cleaned"][0]
+    assert len(value["tails"]) == 1
+    assert "gallery\\dark\\data\\logs" in value["tails"][0]
+    assert "child process failed to start: dark start failed" in result.stdout
+    dark_output = local / "NamiSync-Development" / "gallery" / "dark" / "output"
+    assert any(path.is_dir() for path in dark_output.iterdir())
+
+
 def test_abnormal_gallery_retains_output_and_shows_log_tail(
     tmp_path: Path,
 ) -> None:
@@ -691,13 +1080,26 @@ $script:childOutput = $null
 $script:tailCalls = 0
 $script:cleanupCalls = 0
 function Start-NamiGuiProcess {{
-    param($FilePath, [string[]] $Arguments, $WorkingDirectory, [switch] $Announce)
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
     if (-not $Announce) {{
         return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
     }}
     $index = [Array]::IndexOf($Arguments, '--evidence-dir')
     $script:childOutput = $Arguments[$index + 1]
     return [pscustomobject]@{{ ProcessId = 11; ExitCode = 0 }}
+}}
+function Wait-NamiGuiProcess {{
+    param($Process)
+    return [pscustomobject]@{{
+        ProcessId = $Process.ProcessId
+        ExitCode = $Process.ExitCode
+    }}
 }}
 function Test-NamiMutexExists {{ return $false }}
 function Enter-NamiLauncherMutex {{ return [pscustomobject]@{{}} }}
@@ -761,9 +1163,22 @@ def test_prompt_unavailable_is_treated_as_quit(tmp_path: Path) -> None:
     body = f"""
 $script:childCalls = 0
 function Start-NamiGuiProcess {{
-    param($FilePath, [string[]] $Arguments, $WorkingDirectory, [switch] $Announce)
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
     if ($Announce) {{ $script:childCalls += 1 }}
     return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
+}}
+function Wait-NamiGuiProcess {{
+    param($Process)
+    return [pscustomobject]@{{
+        ProcessId = $Process.ProcessId
+        ExitCode = $Process.ExitCode
+    }}
 }}
 function Test-NamiMutexExists {{ return $false }}
 function Enter-NamiLauncherMutex {{ return [pscustomobject]@{{}} }}
@@ -795,7 +1210,13 @@ def test_preexisting_child_mutex_refuses_before_starting_a_window(
     body = f"""
 $script:childCalls = 0
 function Start-NamiGuiProcess {{
-    param($FilePath, [string[]] $Arguments, $WorkingDirectory, [switch] $Announce)
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
     if ($Announce) {{ $script:childCalls += 1 }}
     return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
 }}
@@ -889,7 +1310,7 @@ def test_launcher_waits_only_for_its_process_and_has_no_broad_cleanup() -> None:
 
     assert "[Diagnostics.ProcessStartInfo]::new()" in source
     assert "$start.ArgumentList.Add($argument)" in source
-    assert "$process.WaitForExit()" in source
+    assert "$Process.WaitForExit()" in source
     for forbidden in (
         "Get-Process",
         "Stop-Process",

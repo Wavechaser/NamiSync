@@ -119,10 +119,13 @@ packaging remain future phases.
 
 - Added `tools/gui.ps1` for a foreground editable-source development shell and
   light, dark, forced-colors, and reduced-motion component galleries, with dark
-  as the gallery default and Enter-to-relaunch interaction.
+  as the gallery default and Enter-to-relaunch interaction. Added `fluent` for
+  concurrent light/dark launch and `all` for all four galleries.
 - Isolated development data, mutexes, titles, logs, and per-launch gallery
-  diagnostics from production; waited only for the exact spawned child and
-  refused secondary-launch ambiguity without process-name termination.
+  diagnostics from production; waited only for exact spawned child process
+  objects and refused secondary-launch ambiguity without process-name
+  termination. Grouped profiles reuse the concrete per-mode locks, start all
+  selected children before waiting, and do not introduce a global gallery mutex.
 - Reused the unchanged clean-wheel child compositions and test-owned gallery
   scenario while classifying editable output as non-evidence, retaining
   abnormal diagnostics/log tails, and cleaning only ownership-marked,
