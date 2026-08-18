@@ -638,15 +638,15 @@ names the fixture, reference profile, statistic, scaling axes, retention or
 aggregation policy, authority tier, and rerun trigger. A validator applies the
 predeclared bound.
 
-The tier definitions and required evidence are repository rules in `AGENTS.md`.
-Architecture adds one constraint: incompatible scaling axes are never merged
-because one tool can measure them. Transport custody, retained terminal
-results, projection caches, and whole-runtime containment have distinct owners
-and acceptance claims. Exact datasets, byte counts, run results, validator
-identities, and open/closed gate status belong to the owning module or delivery
-document.
+The tier definitions and required evidence are normative policy in
+`DEFENSE.md` §7. Architecture adds one constraint: incompatible scaling axes
+are never merged because one tool can measure them. Transport custody, retained
+terminal results, projection caches, and whole-runtime containment have
+distinct owners and acceptance claims. Exact datasets, byte counts, run
+results, validator identities, and open/closed gate status belong to the owning
+module or delivery document.
 
-Current authority ownership is:
+Current claim and evidence ownership is:
 
 | Claim | Owner |
 | --- | --- |
@@ -706,7 +706,8 @@ existing identity, evidence, custody, and settlement contracts.
 ## 7. Documentation ownership
 
 - `DEFENSE.md` owns supported assumptions, trusted boundaries, hard walls,
-  tolerance classes, and residual-risk dispositions.
+  tolerance classes, quantitative-evidence authority, and residual-risk
+  dispositions.
 - `ARCHITECTURE.md` owns durable structure, coordination, contracts, and
   milestone direction.
 - `FEATURES.md` owns implemented and planned product behavior.

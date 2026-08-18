@@ -48,7 +48,8 @@ reused by CLI, queue, or service entry points.
 - `tests/`: pytest tests mirroring package boundaries where practical.
 - Active focused documentation lives in `docs/`:
   - `DEFENSE.md` for supported assumptions, trusted boundaries, hard walls,
-    tolerance policy, and residual-risk dispositions.
+    tolerance policy, quantitative-evidence authority, and residual-risk
+    dispositions.
   - `BUGS.md` for substantive defects, verified fixes, and current status.
   - `FEATURES.md` for all planned and existing features.
   - `ARCHITECTURE.md` for project architectural decisions and design principles. 
@@ -177,64 +178,16 @@ their contract, and update the matching tests and documentation when it does.
 
 ## Measurement Authority
 
-- Classify every quantitative claim before building its evidence. First decide
-  from the `DEFENSE.md` consequence whether the number is a hard invariant, a
-  release SLO, a soft drift guard, or a diagnostic. Evidence strength cannot
-  promote a diagnostic or soft guard into acceptance evidence. A guard may
-  still fail closed pending explicit adjudication under its owning consequence
-  and release policy.
-- Before selecting a tier, decide whether production can enforce the proposed
-  bound. An enforceable containment bound must first become production policy
-  derived entirely from enforced maxima over the complete admitted domain,
-  with every assumption checked. That analytical or source-derived bound may
-  close outside the empirical tiers; empirical characterization may guard its
-  implementation but cannot substitute for containment. Any irreducible term
-  sampled from an allocator, runtime, or environment remains a separately
-  classified empirical claim.
-- Then distinguish deterministic quantities from noisy ones. An exact
-  measurement function proven free of variable terms produces one deterministic
-  value from frozen source, corpus, runtime, dependencies, and representation.
-  Protected authority for that value uses an independently authored oracle or
-  expected result and a protected baseline or contract. Repeat runs are
-  required only when stability or nondeterminism is itself part of the claim;
-  byte-identical fresh children add provenance and drift confidence, not
-  statistical samples, and do not justify calibration, holdout, headroom, or a
-  sampled ceiling.
-- Evidence tiers describe how a quantitative claim is used. **Tier 0** is a
-  reasoned target and never closes a gate. **Tier 1** is a current-source live
-  drift guard against an already accepted contract or claim and is not
-  acceptance evidence. **Tier 2** is named-reference acceptance for an
-  independently predeclared budget: exact fixture and profile; expected result
-  plus evaluation count for a deterministic quantity, or statistic plus run
-  count for a noisy one; committed raw evidence; and a separate validator.
-  **Tier 3** is protected authority with the empirical and deterministic forms
-  below.
-- Empirical Tier 3 is required, after the consequence and enforceability
-  decisions above, when calibration derives a release ceiling, release-gating
-  acceptance authority failed or was invalidated, an empirical number without
-  an analytical bound closes a cross-slice user-operation gate, or an
-  unversioned runtime-dependent result would otherwise become a release limit.
-  Use the lowest sufficient tier for every other number; compatible Tier 2
-  measurements may share one vertical-slice harness.
-- Empirical Tier 3 requires disjoint calibration and holdout data, derivation,
-  rounding, headroom, and fresh-process count committed before holdout;
-  verdict-free raw artifacts; exact source, instrument, fixture, runtime, and
-  dependency authority plus immutable validator/contract blob identity; and
-  fail-closed unknown-input handling.
-  Calibration never validates its own limit, and a frozen limit is never
-  retuned after holdout. Accepted contracts, validators, and artifacts are
-  append/version-only rather than edited in place.
-- Deterministic protected Tier 3 uses the oracle/expected-result form above
-  rather than empirical calibration and holdout. The executor settlement
-  oracle additionally declares repeated identical normalized runs because
-  stability is part of that gate's claim.
-- Every measured quantity names its roots, scaling axes, aggregation/retention
-  policy, tier, artifacts, and rerun/version trigger in the owning component
-  authority. Before accepting a new or changed retained-memory representation,
-  its corpus must classify every retained dataclass field and reachable mapping
-  family/key as populated at its declared envelope or intentionally absent/non-
-  retained. An unclassified representation change invalidates that acceptance
-  evidence.
+- Follow `docs/DEFENSE.md` §7 for quantitative-claim classification,
+  enforceability, evidence tiers, and protected-authority requirements. A
+  target, diagnostic, or drift guard does not become acceptance evidence merely
+  because it was measured rigorously.
+- Classify the consequence and production-enforceability of a claim before
+  selecting the lowest sufficient tier; keep observation separate from the
+  predeclared contract and validator.
+- Record exact fixtures, profiles, scaling axes, aggregation or retention,
+  artifacts, and rerun triggers in the owning component document.
+  `docs/TESTS.md` governs test scope and execution, not measurement authority.
 
 ## Commit Titles
 
@@ -270,10 +223,10 @@ their contract, and update the matching tests and documentation when it does.
   sessions under one task and put post-delivery work in the relevant hardening
   phase rather than appending it to the original feature task.
 - Keep `docs/DEFENSE.md` as the normative owner of supported assumptions,
-  trusted boundaries, hard walls, tolerance classes, residual-risk
-  dispositions, and model-reopen triggers. Other documents link to that policy
-  and own their mechanisms or behavior; they do not restate its tables or
-  accept a residual merely by describing it.
+  trusted boundaries, hard walls, tolerance classes, quantitative-evidence
+  authority, residual-risk dispositions, and model-reopen triggers. Other
+  documents link to that policy and own their mechanisms or behavior; they do
+  not restate its tables or accept a residual merely by describing it.
 - Keep `docs/ARCHITECTURE.md` limited to durable decisions, contracts,
   layering, coordination, invariants, type/protocol meaning, and milestone-level
   direction. Dated build status, acceptance results, exact measurement evidence,

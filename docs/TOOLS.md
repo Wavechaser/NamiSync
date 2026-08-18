@@ -7,12 +7,12 @@ and result-validation behavior is covered by pytest.
 
 ## Measurement authority
 
-`AGENTS.md` is the sole normative definition of the repository's measurement
-tiers and escalation rules. Development tools declare which tier they serve,
-keep observation separate from verdict, and refuse input shapes they cannot
-account for. Compatible Tier 2 measurements may share one vertical-slice
-harness; structural count tests or serializer round trips do not promote a
-timing or memory target.
+`DEFENSE.md` §7 is the sole normative definition of the repository's
+measurement tiers and escalation rules. Development tools declare which tier
+they serve, keep observation separate from verdict, and refuse input shapes
+they cannot account for. Compatible Tier 2 measurements may share one vertical-
+slice harness; structural count tests or serializer round trips do not promote
+a timing or memory target.
 
 The existing SH-G-8 transport-custody authority remains frozen in place as an
 accepted historical exception, not a template. Its fixed corpus and structural

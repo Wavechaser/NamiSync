@@ -133,7 +133,8 @@ never hides the other result axes in rendered output.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
 - [Defense model](docs/DEFENSE.md) — supported assumptions, threat ceiling,
-  hard walls, tolerance policy, and residual-risk decisions.
+  hard walls, tolerance policy, measurement authority, and residual-risk
+  decisions.
 - [Architecture](docs/ARCHITECTURE.md) — system layers, contracts, and milestone order.
 - [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
 - [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.

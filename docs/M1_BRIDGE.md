@@ -2684,13 +2684,13 @@ require a later schema-version decision rather than an M1 fallback
    Tier 0 rows above are design targets, not measured closure evidence. A
    deterministic count, shape, serializer, or behavioral test does not promote
    an unrelated timing or allocator-memory row; an exact structural-memory
-   calculation follows the deterministic authority rules in `AGENTS.md`.
+   calculation follows the deterministic authority rules in `DEFENSE.md` §7.
    Compatible Tier 2 rows may share one reference artifact in their owning
    vertical slice rather than building one harness per number. The 2026-08-13
    event artifact remains useful historical characterization, but the later
    150 ms linger changed current-source timing; reliable/terminal and progress
-   latency therefore still need Tier 2 evidence. `AGENTS.md` owns escalation to
-   Tier 3.
+   latency therefore still need Tier 2 evidence. `DEFENSE.md` §7 owns
+   escalation to Tier 3.
 
    **BR-G-42 event-correctness/transport-custody definition (required by SH-G-8; REALIGNED; SH-G-8 SCOPE CLOSED, CURRENT-SOURCE LATENCY ACCEPTANCE OPEN).**
    Transport custody

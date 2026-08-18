@@ -26,8 +26,8 @@ claims explicit, independently reviewable, and regression-backed.
 #### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
 
 - Separated reasoned targets, live drift guards, named-reference acceptance,
-  and protected release authority; pinned the stronger calibration/holdout and
-  deterministic-oracle requirements where they are actually needed.
+  and protected release authority; moved their governing policy from universal
+  agent instructions into the defense model, with concise routing left behind.
 - Put consequence and production enforceability ahead of tier selection,
   separated deterministic protected values from noisy empirical quantities,
   and froze SH-G-8 v1 as a non-precedential exception rather than a BR-G-45
