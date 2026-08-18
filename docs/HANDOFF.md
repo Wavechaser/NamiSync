@@ -1,100 +1,92 @@
 # Session Handoff
 
-Status (2026-08-18): the development benchmark rig is streamlined and its
-workspace/artifact lifecycle is hardened. The implementation, focused tests,
-and owning `TOOLS`/`TESTS`/`BUGS` documentation landed in `cef1aa2`; this
-handoff records the final documentation and repository-wide verification sweep.
+Status (2026-08-18): the editable GUI development launcher is implemented,
+reviewed, documented, and committed in `bd21b38`. This handoff records the
+final repository-wide verification sweep.
 
 ## Delivered
 
-- Split executor benchmarking into explicit preparation and execution seams.
-  The default empty-target COPY/MKDIR profile resets before each sample,
-  scans/plans once, optionally preflights the first fresh execution set, and
-  feeds the immutable in-memory plan to fresh run IDs, tapes, recorders,
-  backends, and filesystems for every measured copy-plus-finishing sample.
-  `--prepare-each` retains the guarded full-chain path; template and
-  target-dependent plans never reuse stale preparation.
-- Kept diagnostics enabled by default and made them useful without a report.
-  Executor samples print backend/outside-backend, blocking/starvation,
-  high-water/reserved-byte, and chunk-size details; verifier samples print
-  open/read/outside-read timing. Repeated commands print N/minimum/median/
-  maximum run time and median sample throughput. `--no-metrics`, `--no-tap`,
-  and `--no-preflight` remain explicit opt-outs.
-- Bound each executor/verifier batch to one fixture. Static executor repeats
-  require stable published digest/size evidence and a final source rescan;
-  verifier samples match primed/synthetic/sidecar setup evidence or the first
-  no-evidence sample, with repeated baselining content comparison when the real
-  hasher is active. Drift invalidates the whole batch.
-- Replaced marker-wide descendant deletion with a strict sibling output
-  manifest. Exact cleanup re-binds manifest path, identity, schema, and entries,
-  validates the complete live tree before mutation, revalidates each entry, and
-  uses individual unlink/deepest-first `rmdir`. `clean --force-all` prints every
-  path and applies only that displayed plan; unknown or late paths are preserved.
-- Made deletion receipts state the resolved root, authority, counts, bytes,
-  exact forced paths, completed partial paths, and retained root/marker/manifest
-  state. Generator/template reset completion is printed before repopulation;
-  failed executor receipts validate a manifest rather than trusting its name.
-- Made reports one create-exclusive, versioned, atomic invocation envelope with
-  separate configuration, batch preparation, samples, batch validation, and
-  summary. Existing reports require `--replace-report`. Baseline sidecars remain
-  distinct retained input evidence, require explicit paths, and bind
-  `--replace-sidecar` authority before the priming pass. Default console runs
-  create no report or sidecar artifact.
+- Added `tools/gui.ps1` as a PowerShell 7 foreground launcher. Bare invocation
+  starts the real editable development shell; `gallery` starts the dark
+  component gallery, and `-Mode light|dark|forced|reduced` selects the explicit
+  gallery environment. Implicit and explicit dark use the same child, data
+  root, mutex, title, and test-owned scenario.
+- Used only `.venv\Scripts\python.exe`, verified that isolated import resolution
+  points into this checkout, removed inherited `PYTHON*` behavior controls, and
+  restored controlled UTF-8 mode. The launcher does not build a wheel, create
+  or clean a venv, fall back to PATH, watch files, or implement hot reload.
+- Gave shell and gallery profiles development-only titles, child mutexes,
+  launcher-control mutexes, persistent data roots, and logs beneath
+  `%LOCALAPPDATA%\NamiSync-Development`. Production launcher behavior and
+  identity are unchanged.
+- Started children with `ProcessStartInfo.ArgumentList`, inherited their live
+  console streams, and waited on only the returned process object. Existing
+  same-profile launcher or child ownership is refused at the pre-launch check;
+  there is no process-name enumeration or termination.
+- Printed source, interpreter, data, log, gallery scenario, diagnostic output,
+  PID, exit, and status around each launch. Enter relaunches with a fresh
+  diagnostic directory; Q or unavailable input exits. An abnormal launch shows
+  a bounded log tail and labels an unchanged persistent log as old.
+- Reused the unchanged `_headed_host_child.py`,
+  `_component_gallery_child.py`, and gallery scenario. Editable gallery
+  milestones remain diagnostics, not clean-wheel acceptance evidence.
+- Bound normal gallery cleanup to a random marker, exact ready/final entry set,
+  regular non-reparse files, and unchanged reviewed stats. The launcher prints
+  the complete plan, each successful removal, and completed/root/marker state
+  after a partial failure. Any abnormal lifecycle, unknown entry, replacement,
+  stat drift, or cleanup error fails closed and retains the remaining output.
 
 ## Adversarial Review
 
-- Independent benchmark, cleanup, and documentation reviewers challenged the
-  builder checkpoint before commit. Their findings closed verifier
-  setup-to-sample drift, invisible default reader diagnostics, duplicate timing
-  attribution, missing plan/sidecar provenance, and a MOVE_UPDATE output-model
-  mismatch.
-- Cleanup review found that an early force implementation recomputed its plan
-  after printing it, canonicalized requested aliases before admission, and
-  allowed a caller-constructed non-forced plan to bypass manifest authority.
-  The final seam applies the printed immutable plan, checks every existing path
-  component for generic reparse attributes, and re-proves non-forced plan
-  provenance against the bound manifest.
-- Artifact review found sidecar replacement identity was captured after a long
-  priming pass and failure receipts could call a stale template manifest exact.
-  Destination identity is now captured before work and revalidated at publish;
-  failure receipts run live cleanup validation and give the recovery command.
-- Partial-state review covered per-entry errors, post-delete validation,
-  disappeared/replaced manifests, root/marker retirement, and
-  `KeyboardInterrupt`. Hostile manifest tests cover malformed/duplicate/
-  unsorted rows, wrong root binding, size bounds, hard links, generic reparses,
-  forged plans, and publication occupant swaps.
-- The retained executor settlement oracle and its baseline were neither changed
-  nor run. This task changed development benchmark composition and safety, not
-  production executor settlement policy.
+- Independent PowerShell, lifecycle, and documentation reviewers challenged
+  environment parity, secondary-activation ambiguity, output ownership,
+  coercive JSON, prompt failures, stale log attribution, argument quoting, and
+  fixed test mutex collisions.
+- The final child environment removes every inherited case-insensitive
+  `PYTHON*` key before setting `PYTHONUTF8=1`; the same process seam serves the
+  editable probe and GUI child.
+- Full ready-payload validation was removed from the convenience launcher. It
+  validates only the final host-return/exit/post-ready facts needed to decide
+  whether a launch was abnormal; the clean-wheel pytest parent remains the
+  complete evidence authority.
+- Runtime loop tests mock launcher mutex acquisition, while the real contention
+  regression uses a bounded GUID-scoped mutex. Tests therefore do not collide
+  with an operator's active development GUI.
+- A forced mid-cleanup mutation proves truthful partial receipts: the already
+  removed path is reported, the changed file is preserved, root/marker state is
+  printed, logical exit becomes nonzero, and the relaunch prompt remains.
 
 ## Verification
 
-- Focused executor/verifier/corpus/CLI checkpoint suite: `155 passed, 3 skipped`
-  before the final hostile-manifest and opt-out additions; every added regression
-  was then exercised directly and by the final department/full runs.
-- Final tools department: `251 passed, 3 skipped, 2270 deselected`. All three
-  skips require unavailable Windows symlink privileges; generic-reparse paths
-  retain non-symlink synthetic coverage.
-- Final ordinary repository suite: `2,483 passed, 14 skipped, 27 deselected` in
-  `122.00s`.
-- Import boundary lint: `11 kept, 0 broken` across 71 files and 253 dependencies.
-- `git diff --check` and the stale-text scan for old JSONL append, per-repeat
-  preparation, median-throughput, and recursive-clean wording are clean apart
-  from expected working-copy CRLF notices.
+- Focused launcher suite: `23 passed` in `8.73s`.
+- Tools department: `274 passed, 3 skipped, 2270 deselected` in `32.25s`.
+  The three skips require unavailable Windows symlink privileges; the launcher
+  cleanup still has ownership, unknown-entry, and injected stat-drift coverage,
+  while its source guard explicitly refuses reparse entries.
+- Ordinary repository suite: `2506 passed, 14 skipped, 27 deselected` in
+  `133.20s`.
+- Import boundary lint: `11 kept, 0 broken` across 71 files and 253
+  dependencies.
+- PowerShell parsing, `git diff --check`, and the clean-wheel child/scenario
+  diff check are clean. No production package, headed acceptance child,
+  gallery scenario, or clean-wheel test changed.
 
 ## Remaining Work
 
-- Static plan reuse is intentionally limited to owned empty-target COPY/MKDIR
-  workloads. Templates, updates, deletions, NOOPs, correspondence-backed moves,
-  and other target-dependent profiles continue to prepare every sample.
-- Executor reads are buffered repeated-source/warm-profile observations. A
-  same-size/same-mtime content change completed before the first sample and then
-  held stable is outside the stat-only preparation anchor; use a quiescent
-  source. `--null-hasher` likewise cannot detect same-stat content drift.
-- Reports are deliberate per-invocation files, not an append stream or stdout
-  protocol. Sidecar JSONL remains explicit retained verifier evidence. Workspace
-  cleanup never guesses either artifact; an unrecognized sibling output
-  manifest is preserved for manual inspection/removal before name reuse.
-- Throughput and pipeline/read timings remain Tier 0 diagnostics. No release
-  gate, production acceptance limit, settlement-oracle change, or README-level
-  product behavior follows from these measurements.
+- No automated headed smoke opened the new convenience launcher during this
+  closeout, because it intentionally waits for the operator to close the real
+  window. The existing headed acceptance paths remain unchanged; the next
+  ordinary UI-tinkering invocation is the direct manual smoke.
+- A directly launched same-profile child can still win the narrow interval
+  between the wrapper's child-mutex precheck and child admission. Gallery mode
+  reports missing/failure diagnostics; shell mode inherits the host's
+  secondary-activation-and-return behavior. Concurrent wrapper launches are
+  serialized by the separate launcher mutex.
+- Normal gallery diagnostics are removed only after exact validation. Abnormal
+  or suspicious directories and persistent data/log roots are intentionally
+  retained at the printed locations for operator inspection; there is no broad
+  automatic cleanup command.
+- The launcher deliberately depends on private test-owned child compositions
+  for development convenience. If those child arguments or final milestone
+  contract change, update `tools/gui.ps1`, its focused tests, and `TOOLS.md`
+  together. This does not make the launcher or its output release evidence.
