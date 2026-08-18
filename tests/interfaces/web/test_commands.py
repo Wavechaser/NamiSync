@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import inspect
 import json
-from dataclasses import FrozenInstanceError, dataclass, is_dataclass
+from collections.abc import Mapping
+from dataclasses import FrozenInstanceError, dataclass, fields, is_dataclass
 from datetime import datetime, timezone
-from enum import StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
+from typing import get_args, get_type_hints
 
 import pytest
 
@@ -34,6 +36,7 @@ from namisync.interfaces.web.commands import (
     PickerUnavailableError,
     PlanningRefusedError,
     PUBLIC_VIEW_DATACLASSES,
+    PUBLIC_VIEW_ENUMS,
     SERVICE_PUBLIC_VIEW_DATACLASSES,
     production_command_specs,
 )
@@ -1001,8 +1004,45 @@ class _State(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class _NestedEnumAnnotation:
+    states: list[_State | None]
+
+
+@dataclass(frozen=True, slots=True)
 class _UnapprovedLookalike:
     label: str
+
+
+def _annotation_enum_types(annotation: object) -> set[type[Enum]]:
+    if isinstance(annotation, type) and issubclass(annotation, Enum):
+        return {annotation}
+
+    enum_types: set[type[Enum]] = set()
+    for argument in get_args(annotation):
+        enum_types.update(_annotation_enum_types(argument))
+    return enum_types
+
+
+def _value_enum_types(value: object) -> set[type[Enum]]:
+    if isinstance(value, Enum):
+        return {type(value)}
+    if is_dataclass(value) and not isinstance(value, type):
+        enum_types: set[type[Enum]] = set()
+        for field in fields(value):
+            enum_types.update(_value_enum_types(getattr(value, field.name)))
+        return enum_types
+    if isinstance(value, Mapping):
+        enum_types = set()
+        for key, item in value.items():
+            enum_types.update(_value_enum_types(key))
+            enum_types.update(_value_enum_types(item))
+        return enum_types
+    if isinstance(value, (list, tuple)):
+        enum_types = set()
+        for item in value:
+            enum_types.update(_value_enum_types(item))
+        return enum_types
+    return set()
 
 
 def test_br_g_32_public_view_codec_manifest_is_recursive_and_json_native() -> None:
@@ -1065,6 +1105,29 @@ def test_br_g_32_public_view_witness_table_keys_are_exact_and_manual() -> None:
                 allow_nan=False,
             )
             assert json.loads(encoded) == witness.expected
+
+
+def test_br_g_32_public_view_enum_manifest_matches_resolved_annotations() -> None:
+    annotated_enum_types: set[type[Enum]] = set()
+    for view_type in PUBLIC_VIEW_DATACLASSES:
+        for annotation in get_type_hints(view_type).values():
+            annotated_enum_types.update(_annotation_enum_types(annotation))
+
+    assert annotated_enum_types == set(PUBLIC_VIEW_ENUMS)
+
+
+def test_br_g_32_public_view_enum_annotation_walker_is_recursive() -> None:
+    annotation = get_type_hints(_NestedEnumAnnotation)["states"]
+
+    assert _annotation_enum_types(annotation) == {_State}
+
+
+def test_br_g_32_public_view_enum_manifest_matches_manual_witnesses() -> None:
+    witnessed_enum_types: set[type[Enum]] = set()
+    for witness in iter_public_view_witnesses():
+        witnessed_enum_types.update(_value_enum_types(witness.value))
+
+    assert witnessed_enum_types == set(PUBLIC_VIEW_ENUMS)
 
 
 def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
