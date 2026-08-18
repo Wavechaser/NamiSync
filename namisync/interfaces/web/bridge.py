@@ -28,6 +28,9 @@ if TYPE_CHECKING:
 
 BRIDGE_SCHEMA_VERSION = 1
 _MAX_COMMAND_BYTES = 64 * 1024
+# Sized for one ordinary long poll per each of 48 retained tasks plus 16 shared
+# calls. Positions are neither partitioned nor reserved; saturation is
+# `bridge_busy`.
 _MAX_ADMITTED_HANDLERS = 64
 _HANDLER_WAIT_TIMEOUT_SECONDS = 35.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")

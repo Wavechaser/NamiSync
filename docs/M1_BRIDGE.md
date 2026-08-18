@@ -1875,6 +1875,12 @@ teardown ownership, not raw WebMessage thread creation. The same admission
 condition closes the race between admitted handler entry and teardown; no
 bridge-global lock spans a command handler.
 
+The ceiling is sized for one ordinary long poll on each of the 48 retained
+tasks plus 16 shared transient-command positions. Those positions are not
+partitioned or reserved: duplicate/superseding drains and other concurrent
+calls can consume them, so saturation still produces the bounded, retryable
+`bridge_busy` result rather than a per-command availability guarantee.
+
 The product window is constructed with `js_api=None` and receives one
 function-table entry named `dispatch`. Pywebview never walks the dispatcher
 instance, so private dotted receiver names cannot become an alternate command

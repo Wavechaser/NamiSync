@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.web.bridge as bridge_module
+import namisync.interfaces.web.drain as drain_module
 from namisync.interfaces.service import NamiSyncService
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
@@ -1341,6 +1342,13 @@ def test_br_g_32_admitted_call_finishes_while_close_refuses_new_body() -> None:
         }
     ]
     dispatcher.wait_for_handlers()
+
+
+def test_bridge_admission_ceiling_is_sized_for_shared_task_headroom() -> None:
+    assert (
+        bridge_module._MAX_ADMITTED_HANDLERS
+        == drain_module._TASK_CAPACITY + 16
+    )
 
 
 def test_bridge_admission_ceiling_fails_fast_and_releases_capacity() -> None:

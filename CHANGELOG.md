@@ -115,11 +115,14 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
-#### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-17)
+#### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-18)
 
 - Secured the installed-wheel host lifecycle with bounded admission, drains,
   recovery, and shutdown; pinned app/database identity, activation, native
   picker/path confinement, receipt-safe plan replay, and sanitized logging.
+- Removed the service/workflow `ResultCategory` collision, made enum codec
+  coverage follow public-view annotations and witnesses, and pinned the shared
+  64-handler sizing rationale against the 48-task capacity.
 - Gave current-document readiness one named state-machine owner, moved the
   command-phase join into host composition, and reduced the bridge to consuming
   an opaque admission verdict. Ordinary commands now wait on a neutral
