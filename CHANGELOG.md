@@ -183,14 +183,24 @@ packaging remain future phases.
 Stages 1–5.5 delivered the headless reviewed-sync, inventory/integrity, history,
 CLI, and reusable workflow product plus its development measurement tooling.
 
-#### Harden development measurement tooling (2026-08-06)
+#### Harden development measurement tooling (2026-08-06 – 2026-08-18)
 
-- Bound tool workspaces to directory identity under an exclusive lease, made
-  corpus regeneration deterministic, isolated reports, and made sidecar schema,
-  identity, and writes strict.
-- Kept diagnostics-on defaults with a complete opt-out, disclosed empty
-  correspondence, validated execution/readback coverage, and added focused
-  corpus, verifier, sidecar, and CLI tests.
+- Added a reusable empty-target executor profile that resets the target before
+  each sample, scans/plans once per batch, preflights the first fresh execution
+  set, and then measures full copy-plus-finishing work with fresh mutable state
+  per sample; mutable template/update workloads remain prepare-each.
+- Kept diagnostics on by default, made executor pipeline and verifier reader
+  splits useful on the console, bound repeated samples to one fixture, retained
+  unrounded raw samples, and separated setup, samples, validation, and summaries
+  in one atomic versioned report.
+- Replaced marker-wide descendant deletion with strict root-bound output
+  manifests, exact printed-plan application, whole-tree and per-entry
+  revalidation, generic reparse/alias refusal, truthful partial-state receipts,
+  and explicit inspected `--force-all` recovery.
+- Made benchmark reports and baseline sidecars create-exclusive and
+  destination-identity-bound, required explicit sidecar paths and replacement
+  authority, removed implicit append/cleanup behavior, and added adversarial
+  corpus, verifier, sidecar, artifact-race, cleanup, and CLI regressions.
 
 #### Add bounded durable history readback (2026-08-05 – 2026-08-06)
 

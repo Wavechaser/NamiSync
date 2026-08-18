@@ -1,90 +1,100 @@
 # Session Handoff
 
-Status (2026-08-17): the desktop readiness subsystem and headed acceptance
-harness consolidation are implemented in five independently reviewable commits
-from `8bf6ab0` through `d667917`. This handoff records their documentation
-closeout and final verification state.
+Status (2026-08-18): the development benchmark rig is streamlined and its
+workspace/artifact lifecycle is hardened. The implementation, focused tests,
+and owning `TOOLS`/`TESTS`/`BUGS` documentation landed in `cef1aa2`; this
+handoff records the final documentation and repository-wide verification sweep.
 
 ## Delivered
 
-- Moved the desktop document-readiness state machine, phase vocabulary, exact
-  contexts, and generation ownership into `interfaces/web/readiness.py`.
-- Inverted command readiness into host-owned `admit(name)`: composition joins
-  the final immutable command row with current readiness, while the bridge
-  consumes an exact generic verdict, forwards granted context opaquely, and
-  retains its independent document-trust and 64-handler guards.
-- Replaced appearance publication as the liveness token with a neutral,
-  current-generation host challenge/page `readiness_echo` roundtrip. Appearance
-  configuration, observation, and publication now degrade over a confirmed
-  opaque base; only an unconfirmed rollback after native surface mutation is a
-  hard startup refusal.
-- Added the sole bounded/current-document WebView2 message sink in
-  `document_channel.py`, the packaged neutral receiver in `readiness.js`, and a
-  mechanical Python/JavaScript mirror for every production command's phase,
-  timeout, and retry policy.
-- Consolidated positive custom pages behind `bootstrapTestBridge()`, positive
-  host seams behind `drive_startup_handshake()`, and headed command additions
-  behind one immutable collision-refusing extension helper. Negative and
-  renderer-only fault seams remain explicit.
-- Replaced parent polling of repeatedly replaced live JSON snapshots with a
-  tests-only immutable milestone protocol: one `ready` or `failure`, followed
-  by `final`, each canonical, bounded, and published without replacement.
-  Final-only completion/refusal witnesses opt in explicitly; benchmark streams
-  remain append-only measurement artifacts rather than milestones.
+- Split executor benchmarking into explicit preparation and execution seams.
+  The default empty-target COPY/MKDIR profile resets before each sample,
+  scans/plans once, optionally preflights the first fresh execution set, and
+  feeds the immutable in-memory plan to fresh run IDs, tapes, recorders,
+  backends, and filesystems for every measured copy-plus-finishing sample.
+  `--prepare-each` retains the guarded full-chain path; template and
+  target-dependent plans never reuse stale preparation.
+- Kept diagnostics enabled by default and made them useful without a report.
+  Executor samples print backend/outside-backend, blocking/starvation,
+  high-water/reserved-byte, and chunk-size details; verifier samples print
+  open/read/outside-read timing. Repeated commands print N/minimum/median/
+  maximum run time and median sample throughput. `--no-metrics`, `--no-tap`,
+  and `--no-preflight` remain explicit opt-outs.
+- Bound each executor/verifier batch to one fixture. Static executor repeats
+  require stable published digest/size evidence and a final source rescan;
+  verifier samples match primed/synthetic/sidecar setup evidence or the first
+  no-evidence sample, with repeated baselining content comparison when the real
+  hasher is active. Drift invalidates the whole batch.
+- Replaced marker-wide descendant deletion with a strict sibling output
+  manifest. Exact cleanup re-binds manifest path, identity, schema, and entries,
+  validates the complete live tree before mutation, revalidates each entry, and
+  uses individual unlink/deepest-first `rmdir`. `clean --force-all` prints every
+  path and applies only that displayed plan; unknown or late paths are preserved.
+- Made deletion receipts state the resolved root, authority, counts, bytes,
+  exact forced paths, completed partial paths, and retained root/marker/manifest
+  state. Generator/template reset completion is printed before repopulation;
+  failed executor receipts validate a manifest rather than trusting its name.
+- Made reports one create-exclusive, versioned, atomic invocation envelope with
+  separate configuration, batch preparation, samples, batch validation, and
+  summary. Existing reports require `--replace-report`. Baseline sidecars remain
+  distinct retained input evidence, require explicit paths, and bind
+  `--replace-sidecar` authority before the priming pass. Default console runs
+  create no report or sidecar artifact.
 
 ## Adversarial Review
 
-- Separate builder/reviewer passes checked generation supersession, queued
-  document currency, echo replay, phase drift, malformed verdicts, appearance
-  degradation versus unsafe rollback, exact JSON typing, bounded reads,
-  contradiction/final ordering, held-file behavior, and child-exit reporting.
-- The resulting architecture keeps readiness, dispatcher session admission,
-  and bridge handler admission at their distinct granularities; no grand shared
-  admission abstraction was introduced.
-- A later Windows-event review found that checkpoint 4's green result was not
-  compositor-health evidence. At 2026-08-17 18:29:25, Application Error record
-  63156 and WER report `854b76c5-b80c-4127-acc8-404d18814e0d` accompanied
-  the incident. Dwminit record 63157 reported restart 1; WER subcode `0x23`
-  names an unexpected heap exception. No contemporaneous GPU/TDR event was
-  found in the inspected logs. DWM restarts on 2025-07-23 and
-  2026-07-26 had different `MILERR_DISPLAYSTATEINVALID` signatures, and
-  checkpoint 5 had no later DWM event. This establishes a headed-evidence blind
-  spot and temporal correlation only; it does not establish NamiSync causality.
-  WER recorded `memory.hdmp` among the attached files and named the
-  ACL-protected archive
-  `C:\ProgramData\Microsoft\Windows\WER\ReportArchive\AppCrash_dwm.exe_df609f70188a5f8b3be1496f1c39c52b1ad9_1b1372ac_e7ec54db-cfb8-49f8-a2a2-6473171dfcdf`;
-  this session could not verify the archive contents. An administrator should
-  preserve and inspect any retained dump locally as sensitive desktop-process
-  memory before WER cleanup.
+- Independent benchmark, cleanup, and documentation reviewers challenged the
+  builder checkpoint before commit. Their findings closed verifier
+  setup-to-sample drift, invisible default reader diagnostics, duplicate timing
+  attribution, missing plan/sidecar provenance, and a MOVE_UPDATE output-model
+  mismatch.
+- Cleanup review found that an early force implementation recomputed its plan
+  after printing it, canonicalized requested aliases before admission, and
+  allowed a caller-constructed non-forced plan to bypass manifest authority.
+  The final seam applies the printed immutable plan, checks every existing path
+  component for generic reparse attributes, and re-proves non-forced plan
+  provenance against the bound manifest.
+- Artifact review found sidecar replacement identity was captured after a long
+  priming pass and failure receipts could call a stale template manifest exact.
+  Destination identity is now captured before work and revalidated at publish;
+  failure receipts run live cleanup validation and give the recovery command.
+- Partial-state review covered per-entry errors, post-delete validation,
+  disappeared/replaced manifests, root/marker retirement, and
+  `KeyboardInterrupt`. Hostile manifest tests cover malformed/duplicate/
+  unsorted rows, wrong root binding, size bounds, hard links, generic reparses,
+  forged plans, and publication occupant swaps.
+- The retained executor settlement oracle and its baseline were neither changed
+  nor run. This task changed development benchmark composition and safety, not
+  production executor settlement policy.
 
 ## Verification
 
-- Each checkpoint passed its matching focused ordinary, direct bundled-Node,
-  and/or installed-wheel real-WebView2 tests before commit.
-- Final ordinary repository suite: `2,419 passed, 12 skipped, 27 deselected`.
-- Latest post-incident combined installed-wheel headed run:
-  `27 passed, 53 deselected`; the Application log contains no later DWM restart.
-- The complete unfiltered repository suite was deliberately not rerun after the
-  DWM incident; ordinary and post-incident headed evidence remain stated
-  separately rather than manufacturing another stress pass.
-- Import boundary lint: `11 kept, 0 broken`.
-- Documentation truth/stale-text scan and `git diff --check`: clean; only the
-  expected working-copy CRLF notices were emitted.
+- Focused executor/verifier/corpus/CLI checkpoint suite: `155 passed, 3 skipped`
+  before the final hostile-manifest and opt-out additions; every added regression
+  was then exercised directly and by the final department/full runs.
+- Final tools department: `251 passed, 3 skipped, 2270 deselected`. All three
+  skips require unavailable Windows symlink privileges; generic-reparse paths
+  retain non-symlink synthetic coverage.
+- Final ordinary repository suite: `2,483 passed, 14 skipped, 27 deselected` in
+  `122.00s`.
+- Import boundary lint: `11 kept, 0 broken` across 71 files and 253 dependencies.
+- `git diff --check` and the stale-text scan for old JSONL append, per-repeat
+  preparation, median-throughput, and recursive-clean wording are clean apart
+  from expected working-copy CRLF notices.
 
 ## Remaining Work
 
-- Add a shared current-session DWM sentinel before treating a green headed run
-  as compositor-health evidence. It must bracket the complete run, detect a
-  restart independently of child/page success, report corroborating event-log
-  or GPU/TDR evidence, distinguish older events, and avoid inferring causality.
-- Slice 5–7 product plan, inventory, history, settings, and lifecycle surfaces;
-  GUI Break 2 visual cohesion; and Slice 8 beta/release closure remain open.
-- BR-G-32's plan- and inventory-DOM clauses, full BR-G-41 lifecycle closure,
-  BR-G-42 current-source event timing and later product-view rows, BR-G-45
-  terminal-artifact/completed-task retention, and SH-G-15 version-bound whole-
-  runtime containment remain open on their owning phases.
-- Slice 4's 120,000-node evidence is a retained-representation witness and
-  deterministic scaling guard, not Tier 2 latency acceptance. Slice 5/6 must
-  supply the named product-view measurements without retuning these contracts.
-- The temporary pre-Stage-6 root `M1_SHELL.md` remains absent after verified
-  realignment; active delivery authority remains `docs/M1_SHELL.md`.
+- Static plan reuse is intentionally limited to owned empty-target COPY/MKDIR
+  workloads. Templates, updates, deletions, NOOPs, correspondence-backed moves,
+  and other target-dependent profiles continue to prepare every sample.
+- Executor reads are buffered repeated-source/warm-profile observations. A
+  same-size/same-mtime content change completed before the first sample and then
+  held stable is outside the stat-only preparation anchor; use a quiescent
+  source. `--null-hasher` likewise cannot detect same-stat content drift.
+- Reports are deliberate per-invocation files, not an append stream or stdout
+  protocol. Sidecar JSONL remains explicit retained verifier evidence. Workspace
+  cleanup never guesses either artifact; an unrecognized sibling output
+  manifest is preserved for manual inspection/removal before name reuse.
+- Throughput and pipeline/read timings remain Tier 0 diagnostics. No release
+  gate, production acceptance limit, settlement-oracle change, or README-level
+  product behavior follows from these measurements.
