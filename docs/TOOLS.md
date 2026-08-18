@@ -75,13 +75,29 @@ and Q quits.
 Gallery data remains stable, but each launch receives a fresh GUID-named
 diagnostic directory and a random ownership marker. After a normal ready/final
 lifecycle, cleanup requires that marker, the exact three-entry set, regular
-non-reparse files, and unchanged reviewed file stats. The console prints every
-planned path before mutation and each successful removal afterward; a partial
-failure prints the completed paths and whether the root and marker remain. Any
-unknown entry, replaced marker, changed file, or cleanup error retains the
-directory. A nonzero exit, published failure, missing ready/final diagnostic,
-malformed or mismatched final record, or post-ready failure also retains it and
-prints a bounded 80-line log tail.
+non-reparse files, and unchanged reviewed file stats. Successful cleanup prints
+one receipt for the selected profile:
+
+```text
+Exit [dark]: exit code 0; generated diagnostics removed.
+Exit [fluent]: exit code 0 on 2/2; generated diagnostics removed.
+Exit [all]: exit code 0 on 4/4; generated diagnostics removed.
+```
+
+The cleanup plan, each exact file/marker/directory removal, and final removal
+confirmation are available through PowerShell's `-Verbose` stream. They are
+hidden during routine success because the resolved `%LOCALAPPDATA%` paths were
+already printed before launch. This changes presentation only: the ownership,
+entry-set, identity-revalidation, and nonrecursive-deletion checks remain
+mandatory.
+
+A partial cleanup stays explicit on the normal warning stream: it prints the
+gallery mode, exit/status reason, retained diagnostic directory, completed
+paths, and whether the root and marker remain. Any unknown entry, replaced
+marker, changed file, or cleanup error retains the remaining directory. A
+nonzero exit, published failure, missing ready/final diagnostic, malformed or
+mismatched final record, or post-ready failure likewise names the failed mode,
+retains its diagnostic directory, and prints a bounded 80-line log tail.
 The clean-wheel parent remains the only complete evidence validator. The
 console labels an unchanged persistent log as old rather than attributing it to
 the failed launch; an unreadable log warns without bypassing the relaunch prompt.

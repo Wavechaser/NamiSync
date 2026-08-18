@@ -409,11 +409,11 @@ function Remove-NamiGalleryOutput {
         }
     }
     $markerPath = Join-Path $OutputRoot $script:GalleryOwnerMarker
-    Write-Host "Generated gallery cleanup plan:"
-    Write-Host "  file: $(Join-Path $OutputRoot 'ready.json')"
-    Write-Host "  file: $(Join-Path $OutputRoot 'final.json')"
-    Write-Host "  ownership marker: $markerPath"
-    Write-Host "  empty directory: $OutputRoot"
+    Write-Verbose "Generated gallery cleanup plan:"
+    Write-Verbose "  file: $(Join-Path $OutputRoot 'ready.json')"
+    Write-Verbose "  file: $(Join-Path $OutputRoot 'final.json')"
+    Write-Verbose "  ownership marker: $markerPath"
+    Write-Verbose "  empty directory: $OutputRoot"
     $removed = [Collections.Generic.List[string]]::new()
     try {
         foreach ($name in @("ready.json", "final.json")) {
@@ -435,7 +435,7 @@ function Remove-NamiGalleryOutput {
                 throw "gallery diagnostic remained after delete: $path"
             }
             [void] $removed.Add($path)
-            Write-Host "Removed generated gallery diagnostic: $path"
+            Write-Verbose "Removed generated gallery diagnostic: $path"
         }
         Assert-NamiGalleryOutputOwnership $OutputRoot $OwnerToken
         $remaining = @(Get-ChildItem -LiteralPath $OutputRoot -Force)
@@ -447,10 +447,10 @@ function Remove-NamiGalleryOutput {
         }
         [IO.File]::Delete($markerPath)
         [void] $removed.Add($markerPath)
-        Write-Host "Removed gallery ownership marker: $markerPath"
+        Write-Verbose "Removed gallery ownership marker: $markerPath"
         [IO.Directory]::Delete($OutputRoot, $false)
         [void] $removed.Add($OutputRoot)
-        Write-Host "Removed empty gallery diagnostic root: $OutputRoot"
+        Write-Verbose "Removed empty gallery diagnostic root: $OutputRoot"
     }
     catch {
         Write-Warning "Gallery cleanup incomplete."
@@ -466,7 +466,7 @@ function Remove-NamiGalleryOutput {
         )
         throw
     }
-    Write-Host "Generated gallery diagnostics removed."
+    Write-Verbose "Generated gallery diagnostics removed."
 }
 
 function Get-NamiLogState {
@@ -755,6 +755,7 @@ function Invoke-NamiGui {
             }
 
             $logicalExit = 0
+            $cleanedGalleries = 0
             foreach ($launch in $launches) {
                 $plan = $launch.Plan
                 $childExit = $launch.ChildExit
@@ -775,8 +776,10 @@ function Invoke-NamiGui {
                     }
                 }
                 $label = if ($kind -eq "gallery") { $plan.Mode } else { "shell" }
-                Write-Host "Exit [$label]: $childExit"
-                Write-Host "Status [$label]: $($status.Summary)"
+                if ($kind -eq "shell" -or $status.Abnormal) {
+                    Write-Host "Exit [$label]: $childExit"
+                    Write-Host "Status [$label]: $($status.Summary)"
+                }
                 $windowExit = if ($status.Abnormal -and $childExit -eq 0) {
                     1
                 }
@@ -795,18 +798,37 @@ function Invoke-NamiGui {
                 elseif ($kind -eq "gallery") {
                     try {
                         Remove-NamiGalleryOutput $plan.Output $plan.OutputToken
+                        $cleanedGalleries += 1
                     }
                     catch {
                         Write-Warning (
-                            "Gallery cleanup did not complete at " +
-                            "$($plan.Output); see the completed/remaining " +
-                            "receipt: $($_.Exception.Message)"
+                            "Exit [$label]: exit code $childExit; gallery " +
+                            "cleanup failed: $($_.Exception.Message)"
+                        )
+                        Write-Warning (
+                            "Gallery diagnostics retained at $($plan.Output); " +
+                            "see the completed/remaining receipt above."
                         )
                         $windowExit = 1
                     }
                 }
                 if ($logicalExit -eq 0 -and $windowExit -ne 0) {
                     $logicalExit = $windowExit
+                }
+            }
+            if ($kind -eq "gallery" -and $logicalExit -eq 0) {
+                if ($plans.Count -eq 1) {
+                    Write-Host (
+                        "Exit [$normalizedMode]: exit code 0; generated " +
+                        "diagnostics removed."
+                    )
+                }
+                else {
+                    Write-Host (
+                        "Exit [$normalizedMode]: exit code 0 on " +
+                        "$cleanedGalleries/$($plans.Count); generated " +
+                        "diagnostics removed."
+                    )
                 }
             }
 

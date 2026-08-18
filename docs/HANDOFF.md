@@ -1,9 +1,10 @@
 # Session Handoff
 
-Status (2026-08-18): the editable GUI launcher now supports concurrent grouped
-gallery profiles while preserving its concrete per-mode mutexes. The real shell
-profile is unchanged. This handoff records the reviewed delivery and final
-repository-wide verification sweep.
+Status (2026-08-18): the editable GUI launcher supports concurrent grouped
+gallery profiles while preserving its concrete per-mode mutexes, and routine
+gallery closure now uses one concise profile receipt. The real shell profile
+and every diagnostic cleanup safety check remain unchanged. This handoff
+records the reviewed delivery and final repository-wide verification sweep.
 
 ## Delivered
 
@@ -30,17 +31,20 @@ repository-wide verification sweep.
   acquires the existing light/dark locks; `all` acquires all four locks in fixed
   order. Neither adds a global gallery lock or touches the shell lock.
 - Printed source, interpreter, data, log, gallery scenario, diagnostic output,
-  PID, exit, and status around each launch. Enter relaunches with a fresh
-  diagnostic directory; Q or unavailable input exits. An abnormal launch shows
-  a bounded log tail and labels an unchanged persistent log as old.
+  and PID around each launch. Normal closure prints one receipt for the selected
+  single or grouped profile; Enter relaunches with a fresh diagnostic directory,
+  while Q or unavailable input exits. An abnormal launch names its mode and
+  reason, retains the exact diagnostic directory, shows a bounded log tail, and
+  labels an unchanged persistent log as old.
 - Reused the unchanged `_headed_host_child.py`,
   `_component_gallery_child.py`, and gallery scenario. Editable gallery
   milestones remain diagnostics, not clean-wheel acceptance evidence.
 - Bound normal gallery cleanup to a random marker, exact ready/final entry set,
-  regular non-reparse files, and unchanged reviewed stats. The launcher prints
-  the complete plan, each successful removal, and completed/root/marker state
-  after a partial failure. Any abnormal lifecycle, unknown entry, replacement,
-  stat drift, or cleanup error fails closed and retains the remaining output.
+  regular non-reparse files, and unchanged reviewed stats. Routine success hides
+  the complete cleanup plan and each removal on PowerShell's `-Verbose` stream;
+  partial failure still prints completed paths and remaining root/marker state.
+  Any abnormal lifecycle, unknown entry, replacement, stat drift, or cleanup
+  error fails closed and retains the remaining output.
 
 ## Adversarial Review
 
@@ -61,6 +65,9 @@ repository-wide verification sweep.
 - A forced mid-cleanup mutation proves truthful partial receipts: the already
   removed path is reported, the changed file is preserved, root/marker state is
   printed, logical exit becomes nonzero, and the relaunch prompt remains.
+- Focused presentation regressions prove normal single and grouped launches emit
+  one profile receipt without per-mode exit/status chatter, while `-Verbose`
+  restores the successful cleanup plan and every exact removal line.
 - Grouped-profile review required all per-mode launcher locks and child-mutex
   prechecks before the first child starts. A busy later launcher lock releases
   earlier acquisitions, and a later child start failure still waits for every
@@ -71,13 +78,13 @@ repository-wide verification sweep.
 
 ## Verification
 
-- Focused launcher suite: `29 passed` in `10.68s`.
-- Tools department: `280 passed, 3 skipped, 2270 deselected` in `32.72s`.
+- Focused launcher suite: `31 passed` in `12.61s`.
+- Tools department: `282 passed, 3 skipped, 2270 deselected` in `35.91s`.
   The three skips require unavailable Windows symlink privileges; the launcher
   cleanup still has ownership, unknown-entry, and injected stat-drift coverage,
   while its source guard explicitly refuses reparse entries.
-- Ordinary repository suite: `2512 passed, 14 skipped, 27 deselected` in
-  `133.52s`.
+- Ordinary repository suite: `2514 passed, 14 skipped, 27 deselected` in
+  `133.70s`.
 - Import boundary lint: `11 kept, 0 broken` across 71 files and 253
   dependencies.
 - PowerShell parsing, `git diff --check`, and the clean-wheel child/scenario

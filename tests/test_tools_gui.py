@@ -497,6 +497,36 @@ $status | ConvertTo-Json -Compress
     }
     assert not output.exists()
     assert sibling.read_text(encoding="utf-8") == "keep"
+    assert "Generated gallery cleanup plan:" not in result.stdout
+    assert "Removed generated gallery diagnostic:" not in result.stdout
+    assert "Generated gallery diagnostics removed." not in result.stdout
+
+
+def test_gallery_cleanup_forensic_transcript_is_available_with_verbose(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "verbose"
+    output.mkdir()
+    token = "owned-token"
+    (output / ".nami-gui-owner").write_text(token, encoding="utf-8")
+    _ready(output)
+    _final(output)
+    body = f"""
+$VerbosePreference = 'Continue'
+Remove-NamiGalleryOutput {_ps_literal(output)} {_ps_literal(token)}
+"""
+
+    result = _run_powershell(tmp_path, body)
+
+    assert "Generated gallery cleanup plan:" in result.stdout
+    assert "file:" in result.stdout
+    assert "ownership marker:" in result.stdout
+    assert "empty directory:" in result.stdout
+    assert "Removed generated gallery diagnostic:" in result.stdout
+    assert "Removed gallery ownership marker:" in result.stdout
+    assert "Removed empty gallery diagnostic root:" in result.stdout
+    assert "Generated gallery diagnostics removed." in result.stdout
+    assert not output.exists()
 
 
 def test_gallery_cleanup_refuses_unknown_or_replaced_ownership(
@@ -766,6 +796,11 @@ $code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode dark `
     )
     assert result.stdout.count("MOCK-CHILD-START") == 2
     assert result.stdout.count("MOCK-CLEANUP") == 2
+    assert result.stdout.count(
+        "Exit [dark]: exit code 0; generated diagnostics removed."
+    ) == 2
+    assert "Exit [dark]: 0" not in result.stdout
+    assert "Status [dark]:" not in result.stdout
     assert value["cleanup_calls"] == [str(path) for path in outputs]
 
 
@@ -870,6 +905,14 @@ $code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode {profile} `
     )
     assert len(value["cleaned"]) == len(expected_modes)
     assert all(Path(path).is_dir() for path in value["cleaned"])
+    assert (
+        f"Exit [{profile}]: exit code 0 on "
+        f"{len(expected_modes)}/{len(expected_modes)}; "
+        "generated diagnostics removed."
+    ) in result.stdout
+    for mode in expected_modes:
+        assert f"Exit [{mode}]:" not in result.stdout
+        assert f"Status [{mode}]:" not in result.stdout
     assert f"Gallery profile: {profile}" in result.stdout
     for mode in expected_modes:
         assert f"Gallery mode: {mode}" in result.stdout
@@ -1136,7 +1179,74 @@ $code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode dark `
     assert value["cleanup_calls"] == 0
     assert Path(value["output"]).is_dir()
     assert "MOCK-LOG-TAIL" in result.stdout
+    assert "Exit [dark]: 0" in result.stdout
+    assert "Status [dark]: missing final" in result.stdout
     assert "Gallery diagnostics retained at" in result.stdout
+
+
+def test_gallery_cleanup_failure_keeps_forensic_console_receipts(
+    tmp_path: Path,
+) -> None:
+    local = tmp_path / "local"
+    body = f"""
+$script:childOutput = $null
+function Start-NamiGuiProcess {{
+    param(
+        $FilePath,
+        [string[]] $Arguments,
+        $WorkingDirectory,
+        [switch] $Announce,
+        [switch] $NoWait
+    )
+    if (-not $Announce) {{
+        return [pscustomobject]@{{ ProcessId = 10; ExitCode = 0 }}
+    }}
+    $index = [Array]::IndexOf($Arguments, '--evidence-dir')
+    $script:childOutput = $Arguments[$index + 1]
+    return [pscustomobject]@{{ ProcessId = 11; ExitCode = 0 }}
+}}
+function Wait-NamiGuiProcess {{
+    param($Process)
+    return [pscustomobject]@{{ ProcessId = 11; ExitCode = 0 }}
+}}
+function Test-NamiMutexExists {{ return $false }}
+function Enter-NamiLauncherMutex {{ return [pscustomobject]@{{}} }}
+function Exit-NamiLauncherMutex {{ param($Mutex) }}
+function Get-NamiLogState {{
+    return [pscustomobject]@{{ Exists = $false; Length = 0L; Stamp = 0L }}
+}}
+function Get-NamiGalleryStatus {{
+    return [pscustomobject]@{{ Abnormal = $false; Summary = 'complete' }}
+}}
+function Remove-NamiGalleryOutput {{
+    Write-Warning 'Gallery cleanup incomplete.'
+    Write-Warning 'Successfully removed: ready.json'
+    Write-Warning 'Remaining root: True; remaining marker: True'
+    throw 'simulated stat drift'
+}}
+function Read-Host {{ return 'q' }}
+$code = Invoke-NamiGui -SelectedTarget gallery -SelectedMode dark `
+    -ModeWasExplicit $false -RepositoryRoot {_ps_literal(PROJECT_ROOT)} `
+    -LocalAppDataRoot {_ps_literal(local)}
+[pscustomobject]@{{ code = $code; output = $script:childOutput }} |
+    ConvertTo-Json -Compress
+"""
+
+    result = _run_powershell(tmp_path, body)
+    value = _last_json(result)
+
+    assert value["code"] == 1
+    assert (
+        "Exit [dark]: exit code 0; gallery cleanup failed: "
+        "simulated stat drift"
+    ) in result.stdout
+    assert f"Gallery diagnostics retained at {value['output']}" in result.stdout
+    assert "Successfully removed: ready.json" in result.stdout
+    assert "Remaining root: True; remaining marker: True" in result.stdout
+    assert (
+        "Exit [dark]: exit code 0; generated diagnostics removed."
+        not in result.stdout
+    )
 
 
 def test_log_tail_is_display_only_and_does_not_contaminate_return_values(

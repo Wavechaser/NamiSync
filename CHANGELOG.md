@@ -130,6 +130,10 @@ packaging remain future phases.
   scenario while classifying editable output as non-evidence, retaining
   abnormal diagnostics/log tails, and cleaning only ownership-marked,
   revalidated normal-run milestones without recursive deletion.
+- Condensed normal closure to one single/grouped profile receipt and moved the
+  exact successful cleanup plan and removal transcript to `-Verbose`; abnormal
+  lifecycle, retained-output, log-tail, and partial-cleanup receipts remain
+  explicit on the normal console streams.
 
 #### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-18)
 
