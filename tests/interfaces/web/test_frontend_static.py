@@ -721,6 +721,7 @@ def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None
         picker=lambda: None,
         slots=object(),  # type: ignore[arg-type]
         registry=object(),  # type: ignore[arg-type]
+        cosmetics=object(),  # type: ignore[arg-type]
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )

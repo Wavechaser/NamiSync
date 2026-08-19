@@ -1562,12 +1562,12 @@ source-slot/target-slot/deletion-policy wire intent, and the resolved
 source/target/deletion intent. A different wire or resolved intent under the
 same command id remains a conflict.
 
-The thaw/refreeze checkpoint must make the production command mapping exactly `shell_ready`,
+The production command mapping is exactly `shell_ready`,
 `readiness_echo`, `pick_folder`, `start_plan`, `next_events`,
 `release_terminal_session`, `close_task`, `read_cosmetic_section`, and
 `replace_cosmetic_section`.
-`test_report` is a test-owned constructor-only
-harness row: the harness builds a new immutable mapping from those production rows plus its own
+`test_report` is a test-owned constructor-only harness row: the harness builds
+a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
 environment, page value, or bridge request can enable it, and it has no product
 retry class. Later plan, inventory, semantic-settings, and history commands
@@ -2810,9 +2810,11 @@ headings are organizational, not lane ownership.
   high contrast temporarily wins, and accent/reduced-motion values stay
   system-owned. No bridge oracle or compositor sentinel is required: exact
   native policy/static tests, fault-directed material tests, and the installed
-  transport/gallery witnesses jointly own this gate. **Status: pending the
-  pre-Slice-5 cosmetic thaw/refreeze checkpoint.** *Not satisfied by* changing
-  page CSS alone, seeding gallery DOM state after window creation, persisting a
+  transport/gallery witnesses jointly own this gate. The typed owner and exact
+  two-row bridge channel are active; **gate status remains pending the
+  pre-Slice-5 appearance consumer and visual-coherence checkpoint.** *Not
+  satisfied by* changing page CSS alone, seeding gallery DOM state after window
+  creation, persisting a
   permissive dictionary, retrying failed I/O on a timer, or proving only the
   happy-path file round trip.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**

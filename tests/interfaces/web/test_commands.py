@@ -15,6 +15,13 @@ from typing import get_args, get_type_hints
 import pytest
 
 from namisync.interfaces import service as service_module
+from namisync.interfaces.ui_state import (
+    AppearanceValue,
+    CosmeticDisposition,
+    CosmeticReplaceResult,
+    CosmeticSectionSnapshot,
+    ThemeMode,
+)
 from namisync.interfaces.service import (
     CommandIdConflictError,
     ExecutionAdmissionView,
@@ -146,6 +153,65 @@ class _Service:
         return TaskSessionReleaseView(task_id, session_id)
 
 
+class _Cosmetics:
+    def __init__(
+        self,
+        *,
+        read_result: object | None = None,
+        replace_result: object | None = None,
+    ) -> None:
+        self.calls: list[tuple[object, ...]] = []
+        self.read_result = (
+            CosmeticSectionSnapshot(
+                "appearance",
+                1,
+                0,
+                False,
+                AppearanceValue(),
+            )
+            if read_result is None
+            else read_result
+        )
+        self.replace_result = (
+            CosmeticReplaceResult(
+                "appearance",
+                1,
+                1,
+                True,
+                AppearanceValue(ThemeMode.DARK),
+                CosmeticDisposition.APPLIED,
+            )
+            if replace_result is None
+            else replace_result
+        )
+
+    def read_section(
+        self,
+        section: str,
+        value_version: int,
+    ) -> CosmeticSectionSnapshot:
+        self.calls.append(("read", section, value_version))
+        return self.read_result  # type: ignore[return-value]
+
+    def replace_section(
+        self,
+        section: str,
+        value_version: int,
+        expected_revision: int,
+        value: AppearanceValue,
+    ) -> CosmeticReplaceResult:
+        self.calls.append(
+            (
+                "replace",
+                section,
+                value_version,
+                expected_revision,
+                value,
+            )
+        )
+        return self.replace_result  # type: ignore[return-value]
+
+
 def _commands(*, picker=lambda: None):
     slots = _Slots()
     service = _Service()
@@ -154,6 +220,7 @@ def _commands(*, picker=lambda: None):
             picker=picker,
             slots=slots,
             registry=service,
+            cosmetics=_Cosmetics(),
             shell_ready=lambda _generation: None,
             readiness_echo=lambda _generation, _challenge: False,
         ),
@@ -173,6 +240,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "next_events",
         "release_terminal_session",
         "close_task",
+        "read_cosmetic_section",
+        "replace_cosmetic_section",
     )
     assert "test_report" not in commands
     assert (
@@ -275,6 +344,32 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandTimeout.MUTATION_30_SECONDS,
         CommandRetry.SAME_PAYLOAD_BOUNDED,
     )
+    assert (
+        commands["read_cosmetic_section"].access,
+        commands["read_cosmetic_section"].command_id,
+        commands["read_cosmetic_section"].revision,
+        commands["read_cosmetic_section"].timeout,
+        commands["read_cosmetic_section"].retry,
+    ) == (
+        CommandAccess.READ_ONLY,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.LOCAL_5_SECONDS,
+        CommandRetry.SAME_PAYLOAD_ONCE,
+    )
+    assert (
+        commands["replace_cosmetic_section"].access,
+        commands["replace_cosmetic_section"].command_id,
+        commands["replace_cosmetic_section"].revision,
+        commands["replace_cosmetic_section"].timeout,
+        commands["replace_cosmetic_section"].retry,
+    ) == (
+        CommandAccess.MUTATING,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.REQUIRED,
+        CommandTimeout.LOCAL_5_SECONDS,
+        CommandRetry.NONE,
+    )
 
     with pytest.raises(TypeError):
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
@@ -295,6 +390,7 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         "picker",
         "slots",
         "registry",
+        "cosmetics",
         "shell_ready",
         "readiness_echo",
     )
@@ -313,6 +409,402 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         signature.parameters["readiness_echo"].default
         is inspect.Parameter.empty
     )
+    assert signature.parameters["cosmetics"].default is inspect.Parameter.empty
+
+
+def test_br_g_46_cosmetic_rows_use_only_the_typed_cosmetic_authority() -> None:
+    cosmetics = _Cosmetics(
+        read_result=CosmeticSectionSnapshot(
+            "appearance",
+            1,
+            7,
+            True,
+            AppearanceValue(ThemeMode.LIGHT),
+        ),
+        replace_result=CosmeticReplaceResult(
+            "appearance",
+            1,
+            7,
+            True,
+            AppearanceValue(ThemeMode.LIGHT),
+            CosmeticDisposition.CONFLICT,
+        ),
+    )
+    slots = _Slots()
+    service = _Service()
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=slots,
+        registry=service,
+        cosmetics=cosmetics,
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    assert _invoke(
+        commands["read_cosmetic_section"],
+        {"section": "appearance", "value_version": 1},
+    ) == {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 7,
+        "dirty": True,
+        "value": {"theme": "light"},
+    }
+    assert _invoke(
+        commands["replace_cosmetic_section"],
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 6,
+            "value": {"theme": "dark"},
+        },
+    ) == {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 7,
+        "dirty": True,
+        "value": {"theme": "light"},
+        "disposition": "conflict",
+    }
+    assert cosmetics.calls == [
+        ("read", "appearance", 1),
+        (
+            "replace",
+            "appearance",
+            1,
+            6,
+            AppearanceValue(ThemeMode.DARK),
+        ),
+    ]
+    assert slots.stored == []
+    assert slots.resolved == []
+    assert service.calls == []
+    assert service.replays == []
+
+
+@pytest.mark.parametrize(
+    ("theme", "expected_revision"),
+    [
+        ("system", 0),
+        ("light", 1),
+        ("dark", 9_007_199_254_740_991),
+    ],
+)
+def test_br_g_46_replace_cosmetic_section_accepts_exact_v1_values(
+    theme: str,
+    expected_revision: int,
+) -> None:
+    cosmetics = _Cosmetics()
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        cosmetics=cosmetics,
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    _invoke(
+        commands["replace_cosmetic_section"],
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": expected_revision,
+            "value": {"theme": theme},
+        },
+    )
+
+    assert cosmetics.calls == [
+        (
+            "replace",
+            "appearance",
+            1,
+            expected_revision,
+            AppearanceValue(ThemeMode(theme)),
+        )
+    ]
+
+
+class _PayloadDict(dict[object, object]):
+    pass
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        [],
+        {},
+        {"section": "appearance"},
+        {"section": "appearance", "value_version": 1, "extra": None},
+        {"section": "other", "value_version": 1},
+        {"section": 1, "value_version": 1},
+        {"section": "appearance", "value_version": True},
+        {"section": "appearance", "value_version": 1.0},
+        {"section": "appearance", "value_version": 2},
+        _PayloadDict(section="appearance", value_version=1),
+    ],
+)
+def test_br_g_46_read_cosmetic_section_rejects_non_exact_payloads(
+    payload: object,
+) -> None:
+    commands, _, _ = _commands()
+
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["read_cosmetic_section"], payload)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        [],
+        {},
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {"theme": "system"},
+            "extra": None,
+        },
+        {
+            "section": "other",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {"theme": "system"},
+        },
+        {
+            "section": "appearance",
+            "value_version": True,
+            "expected_revision": 0,
+            "value": {"theme": "system"},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": True,
+            "value": {"theme": "system"},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": -1,
+            "value": {"theme": "system"},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 1.0,
+            "value": {"theme": "system"},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 9_007_199_254_740_992,
+            "value": {"theme": "system"},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": None,
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {"theme": "system", "extra": None},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {"theme": "SYSTEM"},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {"theme": 1},
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": _PayloadDict(theme="system"),
+        },
+        _PayloadDict(
+            section="appearance",
+            value_version=1,
+            expected_revision=0,
+            value={"theme": "system"},
+        ),
+    ],
+)
+def test_br_g_46_replace_cosmetic_section_rejects_non_exact_payloads(
+    payload: object,
+) -> None:
+    commands, _, _ = _commands()
+
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["replace_cosmetic_section"], payload)
+
+
+@pytest.mark.parametrize(
+    ("command", "result"),
+    [
+        (
+            "read_cosmetic_section",
+            CosmeticReplaceResult(
+                "appearance",
+                1,
+                0,
+                False,
+                AppearanceValue(),
+                CosmeticDisposition.NOOP,
+            ),
+        ),
+        (
+            "read_cosmetic_section",
+            CosmeticSectionSnapshot(
+                "appearance",
+                1,
+                True,  # type: ignore[arg-type]
+                False,
+                AppearanceValue(),
+            ),
+        ),
+        (
+            "read_cosmetic_section",
+            CosmeticSectionSnapshot(
+                "appearance",
+                1,
+                9_007_199_254_740_992,
+                False,
+                AppearanceValue(),
+            ),
+        ),
+        (
+            "read_cosmetic_section",
+            CosmeticSectionSnapshot(
+                "other",
+                1,
+                0,
+                False,
+                AppearanceValue(),
+            ),
+        ),
+        (
+            "read_cosmetic_section",
+            CosmeticSectionSnapshot(
+                "appearance",
+                1,
+                0,
+                0,  # type: ignore[arg-type]
+                AppearanceValue(),
+            ),
+        ),
+        (
+            "replace_cosmetic_section",
+            CosmeticSectionSnapshot(
+                "appearance",
+                1,
+                0,
+                False,
+                AppearanceValue(),
+            ),
+        ),
+        (
+            "replace_cosmetic_section",
+            CosmeticReplaceResult(
+                "appearance",
+                1,
+                0,
+                False,
+                AppearanceValue(),
+                "noop",  # type: ignore[arg-type]
+            ),
+        ),
+    ],
+)
+def test_br_g_46_cosmetic_rows_reject_invalid_authority_results(
+    command: str,
+    result: object,
+) -> None:
+    cosmetics = _Cosmetics(
+        read_result=result,
+        replace_result=result,
+    )
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        cosmetics=cosmetics,
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+    payload = (
+        {"section": "appearance", "value_version": 1}
+        if command == "read_cosmetic_section"
+        else {
+            "section": "appearance",
+            "value_version": 1,
+            "expected_revision": 0,
+            "value": {"theme": "system"},
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="invalid data"):
+        _invoke(commands[command], payload)
+
+
+@pytest.mark.parametrize(
+    ("command", "payload"),
+    [
+        (
+            "read_cosmetic_section",
+            {"section": "appearance", "value_version": 1},
+        ),
+        (
+            "replace_cosmetic_section",
+            {
+                "section": "appearance",
+                "value_version": 1,
+                "expected_revision": 0,
+                "value": {"theme": "system"},
+            },
+        ),
+    ],
+)
+def test_br_g_46_cosmetic_rows_are_open_phase_only(
+    command: str,
+    payload: object,
+) -> None:
+    cosmetics = _Cosmetics()
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        cosmetics=cosmetics,
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    with pytest.raises(CommandAdmissionError):
+        _invoke(commands[command], payload, context=BOOTSTRAP_CONTEXT)
+    assert cosmetics.calls == []
 
 
 def test_shell_ready_requires_its_exact_context_and_empty_payload() -> None:
@@ -321,6 +813,7 @@ def test_shell_ready_requires_its_exact_context_and_empty_payload() -> None:
         picker=lambda: None,
         slots=_Slots(),
         registry=_Service(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda generation: acknowledgements.append(str(generation)),
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -356,6 +849,7 @@ def test_readiness_echo_requires_exact_context_and_challenge() -> None:
         picker=lambda: None,
         slots=_Slots(),
         registry=_Service(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=echo,
     )
@@ -396,6 +890,7 @@ def test_readiness_echo_refuses_non_boolean_callback_result() -> None:
         picker=lambda: None,
         slots=_Slots(),
         registry=_Service(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: 1,  # type: ignore[return-value]
     )
@@ -493,6 +988,7 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
         picker=lambda: (r"C:\private",),
         slots=slots,
         registry=_Service(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -601,6 +1097,7 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
         picker=lambda: None,
         slots=slots,
         registry=registry,
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -692,6 +1189,7 @@ def test_terminal_session_release_refuses_mismatched_registry_result(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidRegistry(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -722,6 +1220,7 @@ def test_task_close_refuses_invalid_or_mismatched_registry_result(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidRegistry(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -796,6 +1295,7 @@ def test_br_g_33_next_events_refuses_invalid_or_mismatched_registry_result(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidRegistry(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -832,6 +1332,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
         picker=lambda: None,
         slots=_Slots(),
         registry=RefusingService(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -859,6 +1360,7 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
         picker=lambda: None,
         slots=_Slots(),
         registry=BrokenService(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
@@ -898,6 +1400,7 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
         picker=lambda: None,
         slots=_Slots(),
         registry=InvalidService(),
+        cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )

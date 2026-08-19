@@ -4,11 +4,11 @@ Status: M1 Stage 5.5's process-local `interfaces/service.py` facade, reviewed
 sync/history adapter, explicit inventory/baseline/verify/rebaseline commands,
 semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
-classification are implemented. M1 Stage 1's isolated cosmetic UI-state
-prototype, tested WebView2 security seam, classified launchers, coordinated
-database-pair facade, secured product-host composition, and hardened production
-transport are implemented; its typed cosmetic lifecycle and bridge replacement
-are ratified for the pending pre-Slice-5 checkpoint. `M1_BRIDGE.md` is the sole
+classification are implemented. M1 Stage 1's typed cosmetic UI-state owner,
+two-row bridge channel, tested WebView2 security seam, classified launchers,
+coordinated database-pair facade, secured product-host composition, and
+hardened production transport are implemented; the appearance override
+consumer remains in the pending pre-Slice-5 checkpoint. `M1_BRIDGE.md` is the sole
 normative bridge/BR-G authority. The installed real-WebView2 browser witnesses
 and fixed, non-sliding
 150 ms progress-only linger have landed. With an active long poll, the first
@@ -336,9 +336,9 @@ type. Close waits an in-flight write and flushes only a current dirty document
 generation that has never been attempted, never a failed or unsupported one.
 Cross-process semantic write coordination remains in the database settings
 store and is deliberately not implied for cosmetics.
-This typed owner lifecycle is active. Composition behind the two cosmetic
-bridge rows and the appearance consumer remains pending in the later
-cosmetic-channel checkpoints.
+This typed owner lifecycle and its exact read/replace bridge rows are active.
+The appearance consumer remains pending in the next cosmetic-channel
+checkpoint.
 
 `interfaces/web/bridge.py` owns the promoted security-sensitive host boundary;
 the product window composes it without changing the proven guard behavior. The

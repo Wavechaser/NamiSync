@@ -182,6 +182,17 @@ def _startup_gate() -> DesktopReadinessGate:
     return DesktopReadinessGate(lambda _seconds, _callback: lambda: None)
 
 
+def _unused_cosmetics() -> object:
+    return SimpleNamespace(
+        read_section=lambda *_args, **_kwargs: pytest.fail(
+            "unexpected cosmetic state read"
+        ),
+        replace_section=lambda *_args, **_kwargs: pytest.fail(
+            "unexpected cosmetic state replacement"
+        ),
+    )
+
+
 def test_shared_host_handshake_driver_owns_one_complete_generation() -> None:
     gate = _startup_gate()
     window = _Window()
@@ -265,6 +276,7 @@ def test_shared_headed_composition_preserves_specs_gate_and_immutability() -> No
     picker = object()
     slots = object()
     registry = object()
+    cosmetics = object()
     gate = object()
     document = object()
     calls: list[tuple[object, ...]] = []
@@ -298,6 +310,7 @@ def test_shared_headed_composition_preserves_specs_gate_and_immutability() -> No
             picker=picker,
             slots=slots,
             registry=registry,
+            cosmetics=cosmetics,
             startup_gate=gate,
         )
         assert observed is production
@@ -316,6 +329,7 @@ def test_shared_headed_composition_preserves_specs_gate_and_immutability() -> No
                 "picker": picker,
                 "slots": slots,
                 "registry": registry,
+                "cosmetics": cosmetics,
                 "startup_gate": gate,
             },
         ),
@@ -340,6 +354,7 @@ def test_shared_headed_composition_refuses_collision_before_dispatch() -> None:
             picker=object(),
             slots=object(),
             registry=object(),
+            cosmetics=object(),
             startup_gate=gate,
         )
         with pytest.raises(RuntimeError, match="collides with production"):
@@ -377,6 +392,17 @@ def _patch_primary(
         state=database_state,
         close_error=close_error,
     )
+
+    class Cosmetics:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+            order.append("cosmetics.close")
+
+    cosmetics = Cosmetics()
+    webview.cosmetics = cosmetics
     monkeypatch.setattr(
         host,
         "acquire_desktop_instance",
@@ -407,6 +433,12 @@ def _patch_primary(
         host,
         "_create_service",
         lambda actual: order.append(("create_service", actual)) or service,
+    )
+    monkeypatch.setattr(
+        host,
+        "_ui_state_owner",
+        lambda actual: order.append(("ui_state_owner", actual, cosmetics))
+        or cosmetics,
     )
     monkeypatch.setattr(
         host,
@@ -589,6 +621,7 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "path_lease.bind_databases",
         "validate_databases",
         "task_registry",
+        "ui_state_owner",
         "pending_document",
         "folder_slots",
         "native_picker",
@@ -609,6 +642,7 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "registry.unsubscribe_all",
         "service.close",
         "appearance.close",
+        "cosmetics.close",
         "shutdown_logging",
         "path_lease.close",
         "lease.close",
@@ -627,6 +661,9 @@ def test_host_prepares_before_create_and_starts_only_edge(
     assert commands_entry[1]["registry"] is next(
         item for item in order if item[0] == "task_registry"
     )[2]
+    owner_entry = next(item for item in order if item[0] == "ui_state_owner")
+    assert owner_entry[1] == paths.ui_state
+    assert commands_entry[1]["cosmetics"] is owner_entry[2]
     assert bridge_entry[2] is commands_entry[2]
     assert created[3] is None
     assert created[4] == "#F3F3F3"
@@ -712,6 +749,7 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
         picker=picker,
         slots=Slots(),
         registry=host._task_registry(_Service([])),
+        cosmetics=_unused_cosmetics(),
         startup_gate=_startup_gate(),
     )
     first: list[object] = []
@@ -791,6 +829,7 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         picker=lambda: None,
         slots=slots,
         registry=host._task_registry(_Service([])),
+        cosmetics=_unused_cosmetics(),
         startup_gate=_startup_gate(),
     )
     dispatcher = host._bridge_dispatcher(
@@ -807,6 +846,8 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "next_events",
         "release_terminal_session",
         "close_task",
+        "read_cosmetic_section",
+        "replace_cosmetic_section",
     )
     assert tuple(dispatcher._commands) == (
         "shell_ready",
@@ -816,6 +857,8 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "next_events",
         "release_terminal_session",
         "close_task",
+        "read_cosmetic_section",
+        "replace_cosmetic_section",
     )
     window = SimpleNamespace(
         _js_api=None,
@@ -905,6 +948,7 @@ def test_open_composition_admits_only_exact_readiness_echo_replay() -> None:
         picker=lambda: None,
         slots=host._folder_slots(),
         registry=host._task_registry(_Service([])),
+        cosmetics=_unused_cosmetics(),
         startup_gate=gate,
     )
     dispatcher = host._bridge_dispatcher(
@@ -1135,6 +1179,7 @@ def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
         unsubscribe_all=lambda: order.append("unsubscribe"),
     )
     service = _ControllerService(order, [_shutdown_view(complete=True)])
+    cosmetics = SimpleNamespace(close=lambda: order.append("cosmetics.close"))
 
     failure = host._finalize_primary(
         service,
@@ -1144,10 +1189,64 @@ def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
         logging_configured=False,
         log_path=None,
         lease=None,
+        cosmetics=cosmetics,
     )
 
     assert failure is None
-    assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
+    assert order == [
+        "reject",
+        "wake",
+        "wait",
+        "unsubscribe",
+        "service.close",
+        "cosmetics.close",
+    ]
+
+
+def test_startup_finalizer_keeps_cosmetics_open_until_handlers_quiesce() -> None:
+    handler_wait_entered = Event()
+    release_handler = Event()
+    cosmetics_closed = Event()
+    results: list[Exception | None] = []
+
+    def wait_for_handlers() -> None:
+        handler_wait_entered.set()
+        assert release_handler.wait(2.0)
+
+    dispatcher = SimpleNamespace(
+        begin_close=lambda: None,
+        wait_for_handlers=wait_for_handlers,
+    )
+    registry = SimpleNamespace(
+        begin_close=lambda: None,
+        unsubscribe_all=lambda: None,
+    )
+    service = _ControllerService([], [_shutdown_view(complete=True)])
+    cosmetics = SimpleNamespace(close=cosmetics_closed.set)
+    worker = Thread(
+        target=lambda: results.append(
+            host._finalize_primary(
+                service,
+                dispatcher=dispatcher,
+                registry=registry,
+                service_shutdown_complete=False,
+                logging_configured=False,
+                log_path=None,
+                lease=None,
+                cosmetics=cosmetics,
+            )
+        )
+    )
+
+    worker.start()
+    assert handler_wait_entered.wait(1.0)
+    assert not cosmetics_closed.is_set()
+    release_handler.set()
+    worker.join(2.0)
+
+    assert not worker.is_alive()
+    assert cosmetics_closed.is_set()
+    assert results == [None]
 
 
 def test_startup_finalizer_preserves_quiesce_error_without_unsafe_service_close(
@@ -1180,6 +1279,7 @@ def test_startup_finalizer_preserves_quiesce_error_without_unsafe_service_close(
     )
 
     path_lease = SimpleNamespace(close=lambda: order.append("path.close"))
+    cosmetics = SimpleNamespace(close=lambda: order.append("cosmetics.close"))
     native = _LeaseNative(order)
     instance_lease = DesktopInstanceLease("owned", native)
     monkeypatch.setattr(
@@ -1197,6 +1297,7 @@ def test_startup_finalizer_preserves_quiesce_error_without_unsafe_service_close(
         log_path=Path("NamiSync.log"),
         lease=instance_lease,
         path_lease=path_lease,
+        cosmetics=cosmetics,
     )
 
     assert failure is first
@@ -1252,6 +1353,9 @@ def test_startup_finalizer_retains_every_owner_until_complete_retry(
         "lease": instance_lease,
         "path_lease": path_lease,
         "close_presentation": lambda: order.append("presentation.close"),
+        "cosmetics": SimpleNamespace(
+            close=lambda: order.append("cosmetics.close")
+        ),
     }
 
     first_failure = host._finalize_primary(service, **options)
@@ -1274,6 +1378,7 @@ def test_startup_finalizer_retains_every_owner_until_complete_retry(
         "unsubscribe",
         "service.close",
         "presentation.close",
+        "cosmetics.close",
         "logging.close",
         "path.close",
         ("lease.close", "owned"),
@@ -1302,6 +1407,7 @@ def test_initialized_refusal_aborts_without_destroy(
 
     assert result == 1
     assert webview.window.destroy_count == 0
+    assert webview.cosmetics.closed
     assert reports == ["origin was unavailable"]
 
 
@@ -1705,7 +1811,7 @@ def test_startup_diagnostic_failure_cannot_replace_original_or_skip_teardown(
     )
 
 
-@pytest.mark.parametrize("cleanup", ("logging", "mutex"))
+@pytest.mark.parametrize("cleanup", ("cosmetics", "logging", "mutex"))
 def test_original_failure_survives_and_records_late_cleanup_failure(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1714,7 +1820,7 @@ def test_original_failure_survives_and_records_late_cleanup_failure(
     def fail_security(*_args) -> None:
         raise RuntimeError("original startup failure")
 
-    paths, order, _webview, _document, reports = _patch_primary(
+    paths, order, webview, _document, reports = _patch_primary(
         monkeypatch,
         tmp_path,
         configure_security=fail_security,
@@ -1732,21 +1838,25 @@ def test_original_failure_survives_and_records_late_cleanup_failure(
                 RuntimeError("logging shutdown failed")
             ),
         )
+    elif cleanup == "cosmetics":
+        webview.cosmetics.close = lambda: (_ for _ in ()).throw(
+            RuntimeError("cosmetic state shutdown failed")
+        )
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
 
     assert result == 1
     assert reports == ["original startup failure"]
-    event = (
-        "startup.logging_cleanup_failed"
-        if cleanup == "logging"
-        else "startup.mutex_cleanup_failed"
-    )
+    event = {
+        "cosmetics": "startup.cosmetic_cleanup_failed",
+        "logging": "startup.logging_cleanup_failed",
+        "mutex": "startup.mutex_cleanup_failed",
+    }[cleanup]
     assert (
         "cleanup_failure",
         event,
         "RuntimeError",
-        paths.log_file,
+        None if cleanup == "cosmetics" else paths.log_file,
     ) in order
 
 

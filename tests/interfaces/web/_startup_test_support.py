@@ -176,12 +176,14 @@ def headed_command_extension(
         picker: object,
         slots: object,
         registry: object,
+        cosmetics: object,
         startup_gate: object,
     ) -> Mapping[str, object]:
         production = original_commands(
             picker=picker,
             slots=slots,
             registry=registry,
+            cosmetics=cosmetics,
             startup_gate=startup_gate,
         )
         captured.update(

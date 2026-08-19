@@ -9,6 +9,15 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Protocol
 
+from namisync.interfaces.ui_state import (
+    APPEARANCE_VALUE_VERSION,
+    MAX_JAVASCRIPT_SAFE_INTEGER,
+    AppearanceValue,
+    CosmeticDisposition,
+    CosmeticReplaceResult,
+    CosmeticSectionSnapshot,
+    ThemeMode,
+)
 from namisync.interfaces.web.drain import (
     TaskCloseView,
     TaskDrainView,
@@ -164,6 +173,7 @@ class FieldRequirement(StrEnum):
 
 class CommandTimeout(StrEnum):
     STARTUP_5_SECONDS = "startup-5-seconds"
+    LOCAL_5_SECONDS = "local-5-seconds"
     INTERACTIVE = "interactive"
     MUTATION_30_SECONDS = "mutation-30-seconds"
     DRAIN_30_SECONDS = "drain-30-seconds"
@@ -217,6 +227,24 @@ class TaskAuthority(Protocol):
     ) -> TaskSessionReleaseView: ...
 
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView: ...
+
+
+class CosmeticStateAuthority(Protocol):
+    """Exact interface-owned state surface exposed through the bridge."""
+
+    def read_section(
+        self,
+        section: str,
+        value_version: int,
+    ) -> CosmeticSectionSnapshot: ...
+
+    def replace_section(
+        self,
+        section: str,
+        value_version: int,
+        expected_revision: int,
+        value: AppearanceValue,
+    ) -> CosmeticReplaceResult: ...
 
 
 PayloadValidator = Callable[[object], object]
@@ -302,11 +330,26 @@ class _ReleaseTerminalSessionPayload:
     session_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class _ReadCosmeticSectionPayload:
+    section: str
+    value_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class _ReplaceCosmeticSectionPayload:
+    section: str
+    value_version: int
+    expected_revision: int
+    theme: ThemeMode
+
+
 def production_command_specs(
     *,
     picker: FolderPicker,
     slots: FolderSlotAuthority,
     registry: TaskAuthority,
+    cosmetics: CosmeticStateAuthority,
     shell_ready: Callable[[int], None],
     readiness_echo: Callable[[int, str], bool],
 ) -> Mapping[str, CommandSpec]:
@@ -466,6 +509,27 @@ def production_command_specs(
             raise RuntimeError("task registry returned invalid release data")
         return result
 
+    def read_cosmetic_section(payload: object) -> object:
+        if type(payload) is not _ReadCosmeticSectionPayload:
+            raise TypeError(
+                "read_cosmetic_section received an unvalidated payload"
+            )
+        result = cosmetics.read_section(payload.section, payload.value_version)
+        return _cosmetic_snapshot_to_wire(result)
+
+    def replace_cosmetic_section(payload: object) -> object:
+        if type(payload) is not _ReplaceCosmeticSectionPayload:
+            raise TypeError(
+                "replace_cosmetic_section received an unvalidated payload"
+            )
+        result = cosmetics.replace_section(
+            payload.section,
+            payload.value_version,
+            payload.expected_revision,
+            AppearanceValue(payload.theme),
+        )
+        return _cosmetic_replace_result_to_wire(result)
+
     return MappingProxyType(
         {
             "shell_ready": CommandSpec(
@@ -532,6 +596,24 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
+            ),
+            "read_cosmetic_section": CommandSpec(
+                validate_payload=_validate_read_cosmetic_section,
+                handler=read_cosmetic_section,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "replace_cosmetic_section": CommandSpec(
+                validate_payload=_validate_replace_cosmetic_section,
+                handler=replace_cosmetic_section,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.NONE,
             ),
         }
     )
@@ -643,6 +725,115 @@ def _validate_release_terminal_session(
     if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
         raise CommandPayloadError("release_terminal_session payload is invalid")
     return _ReleaseTerminalSessionPayload(task_id, session_id)
+
+
+def _validate_read_cosmetic_section(
+    value: object,
+) -> _ReadCosmeticSectionPayload:
+    if type(value) is not dict or set(value) != {"section", "value_version"}:
+        raise CommandPayloadError("read_cosmetic_section payload is invalid")
+    section = value["section"]
+    value_version = value["value_version"]
+    if (
+        type(section) is not str
+        or section != "appearance"
+        or type(value_version) is not int
+        or value_version != APPEARANCE_VALUE_VERSION
+    ):
+        raise CommandPayloadError("read_cosmetic_section payload is invalid")
+    return _ReadCosmeticSectionPayload(section, value_version)
+
+
+def _validate_replace_cosmetic_section(
+    value: object,
+) -> _ReplaceCosmeticSectionPayload:
+    if type(value) is not dict or set(value) != {
+        "section",
+        "value_version",
+        "expected_revision",
+        "value",
+    }:
+        raise CommandPayloadError("replace_cosmetic_section payload is invalid")
+    section = value["section"]
+    value_version = value["value_version"]
+    expected_revision = value["expected_revision"]
+    appearance = value["value"]
+    if (
+        type(section) is not str
+        or section != "appearance"
+        or type(value_version) is not int
+        or value_version != APPEARANCE_VALUE_VERSION
+        or not _is_javascript_safe_integer(expected_revision)
+        or type(appearance) is not dict
+        or set(appearance) != {"theme"}
+    ):
+        raise CommandPayloadError("replace_cosmetic_section payload is invalid")
+    theme = appearance["theme"]
+    if type(theme) is not str:
+        raise CommandPayloadError("replace_cosmetic_section payload is invalid")
+    try:
+        theme_mode = ThemeMode(theme)
+    except ValueError as error:
+        raise CommandPayloadError(
+            "replace_cosmetic_section payload is invalid"
+        ) from error
+    return _ReplaceCosmeticSectionPayload(
+        section,
+        value_version,
+        expected_revision,
+        theme_mode,
+    )
+
+
+def _cosmetic_snapshot_to_wire(value: object) -> dict[str, object]:
+    if not _is_valid_cosmetic_snapshot(value, CosmeticSectionSnapshot):
+        raise RuntimeError("cosmetic state authority returned invalid data")
+    assert type(value) is CosmeticSectionSnapshot
+    return {
+        "section": value.section,
+        "value_version": value.value_version,
+        "revision": value.revision,
+        "dirty": value.dirty,
+        "value": {"theme": value.value.theme.value},
+    }
+
+
+def _cosmetic_replace_result_to_wire(value: object) -> dict[str, object]:
+    if (
+        not _is_valid_cosmetic_snapshot(value, CosmeticReplaceResult)
+        or type(value.disposition) is not CosmeticDisposition
+    ):
+        raise RuntimeError("cosmetic state authority returned invalid data")
+    assert type(value) is CosmeticReplaceResult
+    return {
+        "section": value.section,
+        "value_version": value.value_version,
+        "revision": value.revision,
+        "dirty": value.dirty,
+        "value": {"theme": value.value.theme.value},
+        "disposition": value.disposition.value,
+    }
+
+
+def _is_valid_cosmetic_snapshot(value: object, expected_type: type[object]) -> bool:
+    return (
+        type(value) is expected_type
+        and type(value.section) is str
+        and value.section == "appearance"
+        and type(value.value_version) is int
+        and value.value_version == APPEARANCE_VALUE_VERSION
+        and _is_javascript_safe_integer(value.revision)
+        and type(value.dirty) is bool
+        and type(value.value) is AppearanceValue
+        and type(value.value.theme) is ThemeMode
+    )
+
+
+def _is_javascript_safe_integer(value: object) -> bool:
+    return (
+        type(value) is int
+        and 0 <= value <= MAX_JAVASCRIPT_SAFE_INTEGER
+    )
 
 
 def _is_valid_task_start(value: object) -> bool:

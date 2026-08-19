@@ -8,6 +8,8 @@ const COMMAND_POLICY_JSON = `{
   "shell_ready": {"timeout": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
   "readiness_echo": {"timeout": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
   "pick_folder": {"timeout": "interactive", "retry": "none", "phase": "open"},
+  "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "replace_cosmetic_section": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
   "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"},
@@ -18,6 +20,7 @@ export const COMMAND_POLICY_CONTRACT = freezeCommandPolicies(
 );
 const TIMEOUT_MS_BY_POLICY = Object.freeze({
   "startup-5-seconds": 5000,
+  "local-5-seconds": 5000,
   "interactive": null,
   "mutation-30-seconds": 30000,
   "drain-30-seconds": 30000,
@@ -26,6 +29,10 @@ const SHELL_READY_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.shell_ready.timeout];
 const READINESS_ECHO_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.readiness_echo.timeout];
+const COSMETIC_READ_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.read_cosmetic_section.timeout];
+const COSMETIC_REPLACE_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.replace_cosmetic_section.timeout];
 const START_PLAN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
 const DRAIN_TIMEOUT_MS =
@@ -65,6 +72,10 @@ const TERMINAL_STATES = Object.freeze([
 ]);
 const RECORDING_STATES = Object.freeze(["ok", "degraded"]);
 const DISPOSITIONS = Object.freeze(["ran", "unrun"]);
+const THEMES = Object.freeze(["system", "light", "dark"]);
+const COSMETIC_DISPOSITIONS = Object.freeze(["applied", "noop", "conflict"]);
+const APPEARANCE_SECTION = "appearance";
+const APPEARANCE_VALUE_VERSION = 1;
 
 function freezeCommandPolicies(policies) {
   for (const policy of Object.values(policies)) {
@@ -418,6 +429,41 @@ export function startTaskDrain(
   };
 }
 
+export async function readCosmeticSection() {
+  const payload = Object.freeze({
+    section: APPEARANCE_SECTION,
+    value_version: APPEARANCE_VALUE_VERSION,
+  });
+  try {
+    return await readCosmeticSectionAttempt(payload);
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) {
+      throw error;
+    }
+  }
+  return readCosmeticSectionAttempt(payload);
+}
+
+export function replaceCosmeticSection(expectedRevision, theme) {
+  if (!isNonnegativeInteger(expectedRevision)) {
+    throw new TypeError("expectedRevision must be a nonnegative safe integer");
+  }
+  if (!isOneOf(theme, THEMES)) {
+    throw new TypeError("theme must be system, light, or dark");
+  }
+  return dispatchAttempt(
+    "replace_cosmetic_section",
+    Object.freeze({
+      section: APPEARANCE_SECTION,
+      value_version: APPEARANCE_VALUE_VERSION,
+      expected_revision: expectedRevision,
+      value: Object.freeze({ theme }),
+    }),
+    validateCosmeticReplacementResult,
+    COSMETIC_REPLACE_TIMEOUT_MS,
+  );
+}
+
 export function acknowledgeShellReady() {
   return dispatchAttemptWithReadiness(
     "shell_ready",
@@ -506,6 +552,15 @@ async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
     validateResult,
     timeoutMs,
     whenBridgeReady,
+  );
+}
+
+function readCosmeticSectionAttempt(payload) {
+  return dispatchAttempt(
+    "read_cosmetic_section",
+    payload,
+    validateCosmeticSectionResult,
+    COSMETIC_READ_TIMEOUT_MS,
   );
 }
 
@@ -827,6 +882,44 @@ function settleTaskDrain(task, active, result) {
     }
   }
   rearmTask(task, null);
+}
+
+function validateCosmeticSectionResult(value) {
+  return (
+    isExactObject(value, [
+      "section",
+      "value_version",
+      "revision",
+      "dirty",
+      "value",
+    ]) && validateCosmeticSectionFields(value)
+  );
+}
+
+function validateCosmeticReplacementResult(value) {
+  return (
+    isExactObject(value, [
+      "section",
+      "value_version",
+      "revision",
+      "dirty",
+      "value",
+      "disposition",
+    ]) &&
+    validateCosmeticSectionFields(value) &&
+    isOneOf(value.disposition, COSMETIC_DISPOSITIONS)
+  );
+}
+
+function validateCosmeticSectionFields(value) {
+  return (
+    value.section === APPEARANCE_SECTION &&
+    value.value_version === APPEARANCE_VALUE_VERSION &&
+    isNonnegativeInteger(value.revision) &&
+    typeof value.dirty === "boolean" &&
+    isExactObject(value.value, ["theme"]) &&
+    isOneOf(value.value.theme, THEMES)
+  );
 }
 
 function pauseTaskForBridge(task) {

@@ -713,6 +713,7 @@ def run_desktop(
     service = None
     registry = None
     dispatcher = None
+    cosmetics = None
     close_controller: _DesktopCloseController | None = None
     appearance_controller = None
     document_channel = None
@@ -764,6 +765,7 @@ def run_desktop(
                 f"NamiSync database pair refused ({reason}). {direction}"
             )
         registry = _task_registry(service)
+        cosmetics = _ui_state_owner(paths.ui_state)
         startup_gate = DesktopReadinessGate(startup_deadline_scheduler)
 
         document = _pending_document()
@@ -773,6 +775,7 @@ def run_desktop(
             picker=picker,
             slots=slots,
             registry=registry,
+            cosmetics=cosmetics,
             startup_gate=startup_gate,
         )
         dispatcher = _bridge_dispatcher(document, commands, startup_gate)
@@ -958,6 +961,7 @@ def run_desktop(
             lease=lease,
             path_lease=path_lease,
             close_presentation=close_appearance,
+            cosmetics=cosmetics,
         )
         if failure is None:
             failure = cleanup_failure
@@ -1030,11 +1034,18 @@ def _task_registry(service: object):
     return TaskRegistry(service)
 
 
+def _ui_state_owner(path: Path):
+    from namisync.interfaces.ui_state import UiStateOwner
+
+    return UiStateOwner(path)
+
+
 def _production_commands(
     *,
     picker: object,
     slots: object,
     registry: object,
+    cosmetics: object,
     startup_gate: DesktopReadinessGate,
 ):
     from .commands import production_command_specs
@@ -1043,6 +1054,7 @@ def _production_commands(
         picker=picker,
         slots=slots,
         registry=registry,
+        cosmetics=cosmetics,
         shell_ready=startup_gate.acknowledge_shell,
         readiness_echo=startup_gate.acknowledge_echo,
     )
@@ -1220,6 +1232,7 @@ def _finalize_primary(
     lease: DesktopInstanceLease | None,
     path_lease: object | None = None,
     close_presentation: Callable[[], None] | None = None,
+    cosmetics: object | None = None,
 ) -> Exception | None:
     failure: Exception | None = None
     safe_to_release_owners = service is None or service_shutdown_complete
@@ -1283,6 +1296,13 @@ def _finalize_primary(
             close_presentation()
         except Exception as error:
             _log_cleanup_failure("startup.presentation_cleanup_failed", error)
+            if failure is None:
+                failure = error
+    if safe_to_release_owners and cosmetics is not None:
+        try:
+            cosmetics.close()
+        except Exception as error:
+            _log_cleanup_failure("startup.cosmetic_cleanup_failed", error)
             if failure is None:
                 failure = error
     if logging_configured and safe_to_release_owners:
