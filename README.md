@@ -73,8 +73,11 @@ local database files must be reset together before creating a fresh pair.
   Evergreen runtime install (x86/x64/ARM64 all exist); it is included in-box on
   Windows 11. Runtime support on *very* old Win10 (< 1607) is unverified.
 - **Appearance:** Mica needs build ≥ **22621** (Windows 11 22H2). Windows 11 21H2 and
-  all Windows 10 fall back to an opaque window *by design* ([appearance.py:107](namisync/interfaces/web/appearance.py#L107)).
-  Proper downgrading is accounted for, NamiSync will run, just uglier.
+  all Windows 10 fall back to an opaque window *by design* ([appearance.py:114](namisync/interfaces/web/appearance.py#L114)).
+  The header's persisted System/Light/Dark choice drives both native material
+  and page tokens; active high contrast still follows Windows without changing
+  that stored choice. Proper downgrading is accounted for, NamiSync will run,
+  just uglier.
 - **Shell / ARM block:** the `netfx` pin + `require_supported_pythonnet_runtime()`
   refusal ([pywebview_runtime.py:44](namisync/interfaces/web/pywebview_runtime.py#L44))
   anchor the shell to .NET Framework, which has no native ARM64 build. Native

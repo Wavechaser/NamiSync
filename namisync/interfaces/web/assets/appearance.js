@@ -47,12 +47,15 @@ function isAppearanceMessage(value, previousRevision) {
     && COLOR.test(value.accentPressedForeground);
 }
 
-export function installAppearanceReceiver(webview, root) {
+export function installAppearanceReceiver(webview, root, onApplied = null) {
   if (webview === null || typeof webview !== "object") {
     throw new TypeError("WebView2 appearance receiver is unavailable");
   }
   if (!(root instanceof HTMLElement)) {
     throw new TypeError("Appearance root must be an HTML element");
+  }
+  if (onApplied !== null && typeof onApplied !== "function") {
+    throw new TypeError("Appearance observer must be callable");
   }
 
   let revision = 0;
@@ -86,6 +89,13 @@ export function installAppearanceReceiver(webview, root) {
       (waiter) => revision <= waiter.previousRevision,
     );
     for (const waiter of ready) waiter.resolve();
+    if (onApplied !== null) {
+      try {
+        onApplied();
+      } catch {
+        // Appearance application remains independently degradable.
+      }
+    }
   };
 
   const whenAppliedAfter = (previousRevision) => {

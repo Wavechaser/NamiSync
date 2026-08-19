@@ -26,6 +26,7 @@ INITIAL_ASSETS = {
     "readiness.js",
     "render.js",
     "tokens.css",
+    "theme.js",
     "tree.js",
 }
 

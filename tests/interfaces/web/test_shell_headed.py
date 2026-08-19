@@ -91,8 +91,10 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "host.run_desktop(" in source
     assert "AppPaths.from_root(arguments.data_dir)" in source
     assert "DesktopInstanceIdentity(arguments.mutex, arguments.title)" in source
-    assert "original(window)" in source
+    assert "original(window, *appearance_args, **appearance_kwargs)" in source
     assert '"Input.dispatchKeyEvent"' in source
+    assert source.count('press("Tab", "Tab", 9,') == 2
+    assert 'document.querySelector("#theme-mode")' in source
     assert '"Input.dispatchMouseEvent"' in source
     assert '"type": "mouseWheel"' in source
     assert "wheel(value, 112, after_scroll_wheel)" in source
@@ -292,6 +294,15 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "row_h": 28,
         "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
         "active_node": keyboard_root_id,
+    }
+    assert page["theme_focus"] == {
+        "active": True,
+        "associated_label": "Theme",
+        "disabled": False,
+        "id": "theme-mode",
+        "tag": "SELECT",
+        "value": "system",
+        "visible": True,
     }
     assert page["first_focus"] == {
         "label": "Keyboard tree evidence",
@@ -612,6 +623,7 @@ def _assert_report_schema(result: object) -> None:
     assert set(result["page"]) == {
         "initial",
         "keyboard_tree",
+        "theme_focus",
         "first_focus",
         "second_focus",
         "disclosure_click",
@@ -658,6 +670,15 @@ def _assert_report_schema(result: object) -> None:
         "row_h",
         "fixture_schema",
         "active_node",
+    }
+    assert set(result["page"]["theme_focus"]) == {
+        "active",
+        "associated_label",
+        "disabled",
+        "id",
+        "tag",
+        "value",
+        "visible",
     }
     for focus_name in ("first_focus", "second_focus"):
         assert set(result["page"][focus_name]) == {

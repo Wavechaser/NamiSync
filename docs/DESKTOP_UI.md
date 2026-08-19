@@ -238,27 +238,35 @@ high-contrast snapshot and CDP `forced-colors` emulation in the same production
 window, then compares resolved surfaces with dynamic system-color probes while
 retaining the native Mica-off checks. It does not claim to exercise a real OS
 contrast-theme transition.
-The ratified cosmetic-channel checkpoint will add a labelled System/Light/Dark
-selector to the product header. It stays disabled until its initial section
+The product header now includes the labelled System/Light/Dark selector carried
+by the ratified cosmetic channel. It stays disabled until its initial section
 read succeeds; exhausted initial transport failure leaves only that control
 disabled and does not alter operational readiness. It serializes replacements,
 reconciles only server-accepted state, and never mutates theme CSS
 optimistically. After exhausted uncertain
-replacement delivery it performs a guarded read before settling or enabling
-another change. Save failure remains a sanitized log event in this checkpoint;
+replacement delivery it performs a guarded read; an unchanged revision remains
+ambiguous and therefore disabled. A new page generation waits any prior
+replacement settlement when the JavaScript realm remains live. After a full
+document replacement, a later validated native appearance publication triggers
+another authoritative section read on the healthy publication path; it
+converges a late prior-document mutation without claiming a zero-stale interval
+when the old realm no longer exists. Save failure remains a sanitized log event
+in this checkpoint;
 it does not block bridge readiness or replace the shell's operational status.
-The stored override will drive both the native window material and the page
-tokens. Active high contrast will temporarily win without overwriting the
+The stored override drives both the native window material and the page
+tokens. Active high contrast temporarily wins without overwriting the
 stored choice; system accent and reduced-motion state remain unchanged.
-Component gallery `light` and `reduced` modes will seed `light`, while `dark`
-and `forced` seed `dark`, before window creation so native material and page
-theme are tested as one effective appearance.
-The host must load the cosmetic authority before choosing the opaque fallback
+Component gallery `light` and `reduced` modes seed `light`, while `dark` and
+`forced` seed `dark`, before window creation. The installed witness forces a
+real accepted selector change, proves the choice is not rendered
+optimistically, restores the seeded choice, and checks native/page agreement.
+The host loads the cosmetic authority before choosing the opaque fallback
 background or creating the window. That same initial effective snapshot feeds
 title-bar/material policy, the appearance controller, and the first page
 appearance envelope; page-side section initialization remains post-`OPEN` and
-cannot delay readiness. This ordering prevents a stored light override from
-opening first with dark native Mica or dark page tokens.
+cannot delay readiness. The precreate opaque background and first authoritative
+appearance envelope use the same override, and settled native/page presentation
+must agree; this is not a compositor-level claim of flash-free first paint.
 Opaque fallback requires sufficient structured backdrop/glass/form/controller
 landing evidence. A live reapply that confirms neither native path publishes
 `degraded`, which returns the page itself to its theme-correct opaque base;

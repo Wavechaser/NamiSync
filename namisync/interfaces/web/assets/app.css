@@ -39,6 +39,13 @@ body {
   overflow-wrap: anywhere;
 }
 
+.nami-shell__theme {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
 #host-status,
 .nami-shell__guidance {
   color: var(--color-neutral-foreground-secondary);

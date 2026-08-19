@@ -77,6 +77,7 @@ _ASSETS = (
     "readiness.js",
     "render.js",
     "tokens.css",
+    "theme.js",
     "tree.js",
 )
 
@@ -90,14 +91,22 @@ _INITIAL_PROBE = r"""
   }
   const app = document.querySelector("#app");
   const status = document.querySelector("#host-status");
+  const theme = document.querySelector("#theme-mode");
   const rail = document.querySelector(".nami-task-rail");
   const work = document.querySelector(".nami-work-panel");
   if (!(app instanceof HTMLElement) || !(status instanceof HTMLElement) ||
+      !(theme instanceof HTMLSelectElement) ||
       !(rail instanceof HTMLElement) || !(work instanceof HTMLElement)) {
     throw new Error("production shell is unavailable");
   }
   if (status.textContent !== "Ready") {
     throw new Error("production bridge readiness is unavailable");
+  }
+  for (let attempt = 0; attempt < 100 && theme.disabled; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+  if (theme.disabled) {
+    throw new Error("production theme selector is unavailable");
   }
   const railRect = rail.getBoundingClientRect();
   const workRect = work.getBoundingClientRect();
@@ -130,6 +139,24 @@ _INITIAL_PROBE = r"""
       work_top: workRect.top,
       work_bottom: workRect.bottom,
     },
+  };
+})()
+"""
+
+_THEME_FOCUS_PROBE = r"""
+(() => {
+  const selector = document.querySelector("#theme-mode");
+  const active = document.activeElement;
+  const rect = selector?.getBoundingClientRect();
+  return {
+    active: active === selector,
+    associated_label: selector?.labels?.[0]?.textContent ?? null,
+    disabled: selector?.disabled ?? null,
+    id: active?.id ?? null,
+    tag: active?.tagName ?? null,
+    value: selector?.value ?? null,
+    visible: rect !== undefined && rect.width > 0 && rect.height > 0 &&
+      rect.top < innerHeight && rect.bottom > 0,
   };
 })()
 """
@@ -1105,9 +1132,16 @@ def _begin_probe(
 
     def after_keyboard_tree(value: object) -> None:
         page["keyboard_tree"] = value
-        press("Tab", "Tab", 9, after_first_tab)
+        press("Tab", "Tab", 9, after_theme_tab)
 
-    def after_first_tab(_value: object) -> None:
+    def after_theme_tab(_value: object) -> None:
+        evaluate(_THEME_FOCUS_PROBE, after_theme_focus)
+
+    def after_theme_focus(value: object) -> None:
+        page["theme_focus"] = value
+        press("Tab", "Tab", 9, after_tree_tab)
+
+    def after_tree_tab(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_first_focus)
 
     def after_first_focus(value: object) -> None:
@@ -1212,8 +1246,10 @@ def _configure_probe(
     original: Callable[..., object],
     fixture_text: str,
     fixture_manifest: dict[str, object],
+    *appearance_args: object,
+    **appearance_kwargs: object,
 ) -> object:
-    controller = original(window)
+    controller = original(window, *appearance_args, **appearance_kwargs)
 
     def loaded() -> None:
         from System import Action
@@ -1259,13 +1295,15 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             patch.object(
                 host,
                 "_configure_window_appearance",
-                lambda window: _configure_probe(
+                lambda window, *args, **kwargs: _configure_probe(
                     window,
                     recorder,
                     retained,
                     original,
                     fixture_text,
                     fixture_manifest,
+                    *args,
+                    **kwargs,
                 ),
             )
         )

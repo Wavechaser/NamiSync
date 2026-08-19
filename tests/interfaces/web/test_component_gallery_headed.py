@@ -277,6 +277,7 @@ def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() ->
 
 def test_component_gallery_child_preserves_production_host_and_bridge() -> None:
     child = _CHILD.read_text(encoding="utf-8")
+    script = _SCENARIO.read_text(encoding="utf-8")
 
     assert "from _startup_test_support import headed_command_extension" in child
     assert "headed_command_extension(" in child
@@ -284,11 +285,18 @@ def test_component_gallery_child_preserves_production_host_and_bridge() -> None:
     assert "arguments.mode," in child
     assert "original_configure(" in child
     assert "host.run_desktop(" in child
+    assert 'patch.object(host, "_ui_state_owner", create_seeded_ui_state)' in child
+    assert 'patch.object(\n                host,\n                "_opaque_window_background"' in child
+    assert "ThemeMode.LIGHT" in child
+    assert "ThemeMode.DARK" in child
     assert "EvidencePublisher(" in child
     assert 'parser.add_argument("--evidence-dir"' in child
     assert 'parser.add_argument("--output"' not in child
     assert "register" not in child.casefold()
     assert "extra_commands" not in child
+    assert "readCosmeticSection" in script
+    assert "replaceCosmeticSection" in script
+    assert re.search(r"document\.documentElement\.dataset\.theme\s*=(?!=)", script) is None
 
 
 def test_component_gallery_failure_evidence_is_sanitized(tmp_path: Path) -> None:
@@ -366,6 +374,98 @@ def test_component_gallery_media_modes_are_exact_and_scenario_bounded() -> None:
     assert "--scenario" in source
 
 
+@pytest.mark.parametrize(
+    ("mode", "theme"),
+    [
+        ("light", "light"),
+        ("dark", "dark"),
+        ("forced", "dark"),
+        ("reduced", "light"),
+    ],
+)
+def test_component_gallery_seeds_real_cosmetic_owner_before_launch(
+    tmp_path: Path,
+    mode: str,
+    theme: str,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class Recorder:
+        def set(self, name: str, value: object) -> None:
+            captured[name] = value
+
+    path = tmp_path / mode / "ui-state.json"
+    owner = component_gallery_child._seeded_ui_state_owner(
+        path,
+        mode,
+        Recorder(),  # type: ignore[arg-type]
+    )
+    try:
+        snapshot = owner.read_section("appearance", 1)
+        assert snapshot.revision == 1
+        assert snapshot.value.theme.value == theme
+    finally:
+        owner.close()
+
+    assert captured["seeded_cosmetic"] == {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 1,
+        "dirty": True,
+        "value": {"theme": theme},
+        "disposition": "applied",
+    }
+    assert json.loads(path.read_text(encoding="utf-8")) == {
+        "schema_version": 1,
+        "sections": {
+            "appearance": {
+                "value_version": 1,
+                "value": {"theme": theme},
+            }
+        },
+    }
+
+
+def test_component_gallery_seed_accepts_a_persisted_same_mode_relaunch(
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class Recorder:
+        def set(self, name: str, value: object) -> None:
+            captured[name] = value
+
+    path = tmp_path / "light" / "ui-state.json"
+    first = component_gallery_child._seeded_ui_state_owner(
+        path,
+        "light",
+        Recorder(),  # type: ignore[arg-type]
+    )
+    first.close()
+
+    second = component_gallery_child._seeded_ui_state_owner(
+        path,
+        "light",
+        Recorder(),  # type: ignore[arg-type]
+    )
+    try:
+        snapshot = second.read_section("appearance", 1)
+        assert snapshot.revision == 0
+        assert snapshot.dirty is False
+        assert snapshot.value.theme.value == "light"
+    finally:
+        second.close()
+
+    assert captured["seeded_cosmetic"] == {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 0,
+        "dirty": False,
+        "value": {"theme": "light"},
+        "disposition": "noop",
+    }
+
+
 def test_component_gallery_report_parser_is_exact_and_nested(
     tmp_path: Path,
 ) -> None:
@@ -425,10 +525,48 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         for control in component_gallery_child._CONTROL_KEYS
         for state in component_gallery_child._CONTROL_STATES
     ]
+    cosmetic_snapshot = {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 1,
+        "dirty": True,
+        "value": {"theme": "light"},
+    }
+    changed_snapshot = {
+        **cosmetic_snapshot,
+        "revision": 2,
+        "value": {"theme": "dark"},
+    }
+    restored_snapshot = {
+        **cosmetic_snapshot,
+        "revision": 3,
+    }
     report = {
         "phase": "complete",
         "mode": "light",
         "media": {"dark": False, "forced": False, "reduced": False},
+        "cosmetic": {
+            "initial": dict(cosmetic_snapshot),
+            "after_change": dict(changed_snapshot),
+            "replacement": {
+                **restored_snapshot,
+                "disposition": "noop",
+            },
+            "final": dict(restored_snapshot),
+            "page_theme": "light",
+            "selector": {
+                "initial_value": "light",
+                "initial_disabled": False,
+                "change_immediate_value": "light",
+                "change_immediate_disabled": True,
+                "change_settled_value": "dark",
+                "change_settled_disabled": False,
+                "restore_immediate_value": "dark",
+                "restore_immediate_disabled": True,
+                "final_value": "light",
+                "final_disabled": False,
+            },
+        },
         "statuses": [semantic(key) for key in component_gallery_child._STATUS_KEYS],
         "operations": [
             semantic(key) for key in component_gallery_child._OPERATION_KEYS
@@ -527,6 +665,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "phase": "complete",
             "mode": "light",
             "media": {"dark": False, "forced": False, "reduced": False},
+            "cosmetic": report["cosmetic"],
             "part_count": len(part_values),
         },
         context=_OPEN_CONTEXT,
@@ -551,6 +690,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "phase": "complete",
                 "mode": "light",
                 "media": {"dark": False, "forced": False, "reduced": False},
+                "cosmetic": report["cosmetic"],
                 "part_count": len(part_values),
             },
             context=_OPEN_CONTEXT,
@@ -586,6 +726,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     report["media"]["unknown"] = False
     assert component_gallery_child._valid_complete_report(report) is False
     del report["media"]["unknown"]
+    report["cosmetic"]["replacement"]["disposition"] = "applied"
+    assert component_gallery_child._valid_complete_report(report) is False
+    report["cosmetic"]["replacement"]["disposition"] = "noop"
     report["controls"][0]["state"] = "invented"
     assert component_gallery_child._valid_complete_report(report) is False
 
@@ -684,6 +827,34 @@ def test_component_gallery_enables_dom_before_css_pseudo_state_agent(
 
     assert core.methods == ["DOM.enable", "CSS.enable", "DOM.getDocument"]
     assert core.scripts == ["globalThis.__namiGalleryPseudoReady = true;"]
+
+
+@pytest.mark.headed
+def test_br_g_46_theme_selector_reconciles_only_accepted_state(
+    component_gallery_evidence: _GalleryEvidence,
+) -> None:
+    for mode in _MODES:
+        report = component_gallery_evidence.result(mode)["report"]
+        expected_theme = component_gallery_child._EXPECTED_THEME[mode]
+        alternate_theme = "light" if expected_theme == "dark" else "dark"
+        cosmetic = report["cosmetic"]
+        assert cosmetic["selector"] == {
+            "initial_value": expected_theme,
+            "initial_disabled": False,
+            "change_immediate_value": expected_theme,
+            "change_immediate_disabled": True,
+            "change_settled_value": alternate_theme,
+            "change_settled_disabled": False,
+            "restore_immediate_value": alternate_theme,
+            "restore_immediate_disabled": True,
+            "final_value": expected_theme,
+            "final_disabled": False,
+        }
+        assert cosmetic["after_change"]["revision"] == (
+            cosmetic["initial"]["revision"] + 1
+        )
+        assert cosmetic["replacement"]["disposition"] == "noop"
+        assert cosmetic["page_theme"] == expected_theme
 
 
 @pytest.mark.headed
@@ -1000,6 +1171,52 @@ def _run_gallery_mode(
     assert result["combined_command_names"] == sorted(
         [*result["production_command_names"], "test_report"]
     )
+    expected_theme = component_gallery_child._EXPECTED_THEME[mode]
+    assert result["seeded_cosmetic"] == {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 1,
+        "dirty": True,
+        "value": {"theme": expected_theme},
+        "disposition": "applied",
+    }
+    assert result["native_initial_cosmetic"] == {
+        "section": "appearance",
+        "value_version": 1,
+        "revision": 1,
+        "dirty": True,
+        "value": {"theme": expected_theme},
+    }
+    assert result["initial_background_color"] == (
+        "#1F1F1F" if expected_theme == "dark" else "#F5F5F5"
+    )
+    assert (
+        result["report"]["cosmetic"]["initial"]["revision"]
+        == 1
+    )
+    assert result["report"]["cosmetic"]["initial"]["value"] == {
+        "theme": expected_theme
+    }
+    assert result["report"]["cosmetic"]["replacement"][
+        "disposition"
+    ] == "noop"
+    assert result["report"]["cosmetic"]["selector"] == {
+        "initial_value": expected_theme,
+        "initial_disabled": False,
+        "change_immediate_value": expected_theme,
+        "change_immediate_disabled": True,
+        "change_settled_value": (
+            "light" if expected_theme == "dark" else "dark"
+        ),
+        "change_settled_disabled": False,
+        "restore_immediate_value": (
+            "light" if expected_theme == "dark" else "dark"
+        ),
+        "restore_immediate_disabled": True,
+        "final_value": expected_theme,
+        "final_disabled": False,
+    }
+    assert result["report"]["cosmetic"]["page_theme"] == expected_theme
     trusted = urlsplit(result["trusted_url"])
     assert trusted.scheme == "http"
     assert trusted.hostname in {"127.0.0.1", "localhost"}

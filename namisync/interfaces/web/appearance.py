@@ -8,10 +8,17 @@ import re
 import sys
 import winreg
 from ctypes import wintypes
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from threading import Lock
 from typing import Callable, Literal, Protocol
 
+from namisync.interfaces.ui_state import (
+    APPEARANCE_VALUE_VERSION,
+    AppearanceValue,
+    CosmeticSectionSnapshot,
+    CosmeticSubscription,
+    ThemeMode,
+)
 from namisync.interfaces.web.document_channel import DocumentChannel
 
 
@@ -164,6 +171,14 @@ class _AppearanceNative(Protocol):
     ) -> None: ...
 
     def subscribe(self, callback: Callable[[], None]) -> Callable[[], None]: ...
+
+
+class _CosmeticAuthority(Protocol):
+    def subscribe(
+        self,
+        section: str,
+        callback: Callable[[CosmeticSectionSnapshot], None],
+    ) -> CosmeticSubscription: ...
 
 
 class _WindowsAppearanceNative:
@@ -493,7 +508,13 @@ class _WindowsAppearanceNative:
 class WindowAppearanceController:
     """Own native material observation and one-way appearance publication."""
 
-    def __init__(self, window: object, native: _AppearanceNative) -> None:
+    def __init__(
+        self,
+        window: object,
+        native: _AppearanceNative,
+        *,
+        initial_cosmetic: CosmeticSectionSnapshot | None = None,
+    ) -> None:
         self._window = window
         self._native = native
         self._native_window: object | None = None
@@ -506,6 +527,13 @@ class WindowAppearanceController:
         self._presentation_revision = 0
         self._surface_safety_failure: UnsafeSurfaceError | None = None
         self._unsubscribe: Callable[[], None] | None = None
+        self._cosmetic_subscription: CosmeticSubscription | None = None
+        if initial_cosmetic is None:
+            self._theme_mode = ThemeMode.SYSTEM
+            self._cosmetic_revision = -1
+        else:
+            self._theme_mode = _cosmetic_theme(initial_cosmetic)
+            self._cosmetic_revision = initial_cosmetic.revision
         self._observation_active = False
         self._observation_generation = 0
         self._observation_scheduled = False
@@ -522,13 +550,38 @@ class WindowAppearanceController:
         with self._lock:
             return self._surface_safety_failure
 
-    def attach(self) -> None:
-        self._window.events.before_load += self._before_load
+    def bind_cosmetics(self, cosmetics: _CosmeticAuthority) -> None:
+        """Subscribe atomically without making cosmetics a readiness input."""
+
         try:
+            subscription = cosmetics.subscribe(
+                "appearance",
+                self._on_cosmetic_changed,
+            )
+        except Exception as error:
+            _log_failure("appearance.cosmetic_subscribe_failed", error)
+            return
+        with self._lock:
+            if self._closed:
+                keep_subscription = False
+            else:
+                self._cosmetic_subscription = subscription
+                keep_subscription = True
+        if not keep_subscription:
+            self._close_cosmetic_subscription(subscription)
+            return
+        self._on_cosmetic_changed(subscription.snapshot)
+
+    def attach(self) -> None:
+        before_attached = False
+        try:
+            self._window.events.before_load += self._before_load
+            before_attached = True
             self._window.events.loaded += self._on_loaded
         except Exception:
-            event = self._window.events.before_load
-            event -= self._before_load
+            if before_attached:
+                self._remove_event_handler("before_load", self._before_load)
+            self._abort_attachment()
             raise
 
     def close(self) -> None:
@@ -538,11 +591,16 @@ class WindowAppearanceController:
             self._closed = True
             unsubscribe = self._unsubscribe
             self._unsubscribe = None
+            cosmetic_subscription = self._cosmetic_subscription
+            self._cosmetic_subscription = None
             self._observation_active = False
+            self._observation_generation += 1
             self._observation_scheduled = False
             self._initial_observation_pending = False
             self._publication_in_flight = None
             self._surface_settlement_callbacks.clear()
+        if cosmetic_subscription is not None:
+            self._close_cosmetic_subscription(cosmetic_subscription)
         if unsubscribe is not None:
             try:
                 unsubscribe()
@@ -550,6 +608,24 @@ class WindowAppearanceController:
                 _log_failure("appearance.preference_unsubscribe_failed", error)
         self._remove_event_handler("before_load", self._before_load)
         self._remove_event_handler("loaded", self._on_loaded)
+
+    def _abort_attachment(self) -> None:
+        with self._lock:
+            self._closed = True
+            self._observation_generation += 1
+            subscription = self._cosmetic_subscription
+            self._cosmetic_subscription = None
+        if subscription is not None:
+            self._close_cosmetic_subscription(subscription)
+
+    @staticmethod
+    def _close_cosmetic_subscription(
+        subscription: CosmeticSubscription,
+    ) -> None:
+        try:
+            subscription.close()
+        except Exception as error:
+            _log_failure("appearance.cosmetic_unsubscribe_failed", error)
 
     def request_initial_surface_settlement(
         self,
@@ -638,17 +714,45 @@ class WindowAppearanceController:
         with self._lock:
             if self._closed or not self._observation_active:
                 return
-            self._observation_generation += 1
-            if self._observation_scheduled:
-                return
-            self._observation_scheduled = True
-            native_window = self._native_window
-            generation = self._observation_generation
-        if native_window is None:
-            with self._lock:
-                self._observation_scheduled = False
+            dispatch = self._advance_observation_locked()
+        if dispatch is None:
             return
+        native_window, generation = dispatch
         self._dispatch_observation(native_window, generation, deferred=False)
+
+    def _on_cosmetic_changed(
+        self,
+        snapshot: CosmeticSectionSnapshot,
+    ) -> None:
+        try:
+            theme_mode = _cosmetic_theme(snapshot)
+        except (TypeError, ValueError) as error:
+            _log_failure("appearance.cosmetic_notification_invalid", error)
+            return
+        with self._lock:
+            if self._closed or snapshot.revision <= self._cosmetic_revision:
+                return
+            self._cosmetic_revision = snapshot.revision
+            self._theme_mode = theme_mode
+            if not self._observation_active:
+                return
+            dispatch = self._advance_observation_locked()
+        if dispatch is None:
+            return
+        native_window, generation = dispatch
+        self._dispatch_observation(native_window, generation, deferred=False)
+
+    def _advance_observation_locked(self) -> tuple[object, int] | None:
+        self._observation_generation += 1
+        if self._observation_scheduled:
+            return None
+        self._observation_scheduled = True
+        native_window = self._native_window
+        generation = self._observation_generation
+        if native_window is None:
+            self._observation_scheduled = False
+            return None
+        return native_window, generation
 
     def _dispatch_observation(
         self,
@@ -658,6 +762,10 @@ class WindowAppearanceController:
         deferred: bool,
         retry_newer: bool = True,
     ) -> None:
+        with self._lock:
+            if self._closed or not self._observation_active:
+                self._observation_scheduled = False
+                return
         try:
             dispatch = self._native.defer if deferred else self._native.invoke
             dispatch(native_window, self._drain_observation)
@@ -697,6 +805,8 @@ class WindowAppearanceController:
                 self._observation_scheduled = False
                 return
             generation = self._observation_generation
+            cosmetic_revision = self._cosmetic_revision
+            theme_mode = self._theme_mode
             initial = self._initial_observation_pending
             native_window = self._native_window
         if native_window is None:
@@ -707,7 +817,7 @@ class WindowAppearanceController:
             return
         surface_error: UnsafeSurfaceError | None = None
         try:
-            system = self._native.read()
+            raw_system = self._native.read()
         except Exception as error:
             _log_failure("appearance.system_read_failed", error)
             if initial:
@@ -726,12 +836,20 @@ class WindowAppearanceController:
                     startup=False,
                 )
         else:
-            surface_error = self._apply(
-                native_window,
-                system,
-                publish=False,
-                startup=initial,
-            )
+            system = _effective_system_appearance(raw_system, theme_mode)
+            with self._lock:
+                current_cosmetic = (
+                    not self._closed
+                    and self._observation_active
+                    and cosmetic_revision == self._cosmetic_revision
+                )
+            if current_cosmetic:
+                surface_error = self._apply(
+                    native_window,
+                    system,
+                    publish=False,
+                    startup=initial,
+                )
 
         if surface_error is not None:
             self._settle_initial_surface(surface_error)
@@ -1015,19 +1133,51 @@ class WindowAppearanceController:
         try:
             event = getattr(self._window.events, event_name)
             event -= handler
-        except (AttributeError, ValueError) as error:
+        except Exception as error:
             _log_failure("appearance.event_unsubscribe_failed", error)
+
+
+def _cosmetic_theme(snapshot: CosmeticSectionSnapshot) -> ThemeMode:
+    if not isinstance(snapshot, CosmeticSectionSnapshot):
+        raise TypeError("appearance snapshot has the wrong type")
+    if snapshot.section != "appearance":
+        raise ValueError("appearance snapshot has the wrong section")
+    if snapshot.value_version != APPEARANCE_VALUE_VERSION:
+        raise ValueError("appearance snapshot has the wrong value version")
+    if (
+        type(snapshot.revision) is not int
+        or snapshot.revision < 0
+        or not isinstance(snapshot.value, AppearanceValue)
+    ):
+        raise ValueError("appearance snapshot is invalid")
+    return snapshot.value.theme
+
+
+def _effective_system_appearance(
+    raw_system: SystemAppearance,
+    theme_mode: ThemeMode,
+) -> SystemAppearance:
+    """Compose a cosmetic color mode without altering Windows-owned evidence."""
+
+    if not isinstance(theme_mode, ThemeMode):
+        raise TypeError("theme mode must be a ThemeMode")
+    if raw_system.high_contrast or theme_mode is ThemeMode.SYSTEM:
+        return raw_system
+    dark = theme_mode is ThemeMode.DARK
+    return raw_system if raw_system.dark is dark else replace(raw_system, dark=dark)
 
 
 def opaque_window_background(
     *,
     native: _AppearanceNative | None = None,
+    theme_mode: ThemeMode = ThemeMode.SYSTEM,
 ) -> str:
     """Return the opaque public-window background used before enhancement."""
 
     implementation = native or _WindowsAppearanceNative()
     try:
-        system = implementation.read()
+        raw_system = implementation.read()
+        system = _effective_system_appearance(raw_system, theme_mode)
         background = implementation.opaque_background(system)
         if _RGB.fullmatch(background) is None:
             raise ValueError("opaque background must be uppercase #RRGGBB")
@@ -1044,13 +1194,18 @@ def configure_window_appearance(
     window: object,
     *,
     native: _AppearanceNative | None = None,
+    cosmetics: _CosmeticAuthority | None = None,
+    initial_cosmetic: CosmeticSectionSnapshot | None = None,
 ) -> WindowAppearanceController:
     """Register appearance after security at the same synchronous native seam."""
 
     controller = WindowAppearanceController(
         window,
         native or _WindowsAppearanceNative(),
+        initial_cosmetic=initial_cosmetic,
     )
+    if cosmetics is not None:
+        controller.bind_cosmetics(cosmetics)
     controller.attach()
     return controller
 

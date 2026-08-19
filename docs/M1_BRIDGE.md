@@ -1837,7 +1837,13 @@ There is no cross-process mutex. Save failure remains a sanitized log event in
 this checkpoint; `dirty` is retained for a later settings surface and does not
 replace the operational shell status. After uncertain replacement delivery or
 timeout, the page performs a guarded section read and
-reconciles before enabling another theme change.
+reconciles before enabling another theme change. An unchanged expected
+revision remains delivery-ambiguous and disabled. A same-realm bridge
+generation waits the prior replacement settlement before its initial read. If
+a full document replacement destroys that realm, a later validated native
+appearance publication triggers another authoritative section read on the
+healthy publication path; this converges a late prior-document mutation but
+does not claim a zero-stale interval while publication is pending or degraded.
 
 ---
 
@@ -2810,9 +2816,9 @@ headings are organizational, not lane ownership.
   high contrast temporarily wins, and accent/reduced-motion values stay
   system-owned. No bridge oracle or compositor sentinel is required: exact
   native policy/static tests, fault-directed material tests, and the installed
-  transport/gallery witnesses jointly own this gate. The typed owner and exact
-  two-row bridge channel are active; **gate status remains pending the
-  pre-Slice-5 appearance consumer and visual-coherence checkpoint.** *Not
+  transport/gallery witnesses jointly own this gate. The typed owner, exact
+  two-row bridge channel, appearance consumer, and named headed selector
+  witness are active; **gate status: complete.** *Not
   satisfied by* changing page CSS alone, seeding gallery DOM state after window
   creation, persisting a
   permissive dictionary, retrying failed I/O on a timer, or proving only the

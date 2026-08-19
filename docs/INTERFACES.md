@@ -7,8 +7,8 @@ retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's typed cosmetic UI-state owner,
 two-row bridge channel, tested WebView2 security seam, classified launchers,
 coordinated database-pair facade, secured product-host composition, and
-hardened production transport are implemented; the appearance override
-consumer remains in the pending pre-Slice-5 checkpoint. `M1_BRIDGE.md` is the sole
+hardened production transport and the persistent appearance override consumer
+are implemented. `M1_BRIDGE.md` is the sole
 normative bridge/BR-G authority. The installed real-WebView2 browser witnesses
 and fixed, non-sliding
 150 ms progress-only linger have landed. With an active long poll, the first
@@ -336,9 +336,8 @@ type. Close waits an in-flight write and flushes only a current dirty document
 generation that has never been attempted, never a failed or unsupported one.
 Cross-process semantic write coordination remains in the database settings
 store and is deliberately not implied for cosmetics.
-This typed owner lifecycle and its exact read/replace bridge rows are active.
-The appearance consumer remains pending in the next cosmetic-channel
-checkpoint.
+This typed owner lifecycle, its exact read/replace bridge rows, and the
+appearance consumer are active.
 
 `interfaces/web/bridge.py` owns the promoted security-sensitive host boundary;
 the product window composes it without changing the proven guard behavior. The
@@ -500,14 +499,22 @@ and one bounded UI-thread drain reads and applies current state before assigning
 the next publication revision. A newer notification is deferred to another UI
 turn, so an older callback-thread snapshot cannot win or starve the pump.
 
-Raw `SystemAppearance` remains Windows-owned evidence. The ratified theme
-consumer will turn that same path into effective-appearance publication by
+Raw `SystemAppearance` remains Windows-owned evidence. The theme consumer turns
+that same path into effective-appearance publication by
 combining it with the stored override only when deriving native and page
 presentation: `system` follows Windows, `light` and `dark` replace the
 ordinary color mode, and active high contrast temporarily retains Windows
 authority without changing the stored choice. Accent and reduced-motion inputs
 remain system-owned. Cosmetic initialization is independently degradable and
-never joins document readiness or operational command admission.
+never joins document readiness or operational command admission. The host
+reads the initial cosmetic snapshot before window creation, uses it for the
+opaque background and appearance controller, and then subscribes with
+monotonic revision filtering. The page selector starts only after `OPEN`,
+serializes replacements, and leaves an unchanged post-uncertainty revision
+disabled rather than claiming settlement. Each validated native appearance
+publication asks an already-open selector to refresh through the same typed
+read, allowing a healthy new document to converge a late prior-document
+mutation without widening the bridge.
 
 GUI Break 1's icon helper is presentation-only and never becomes another bridge
 or asset-authority surface. It resolves one exact visual glyph name through a

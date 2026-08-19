@@ -1173,7 +1173,7 @@ This table maps shell delivery order to the sole BR-G definitions in
 | Slice 3 | BR-G-33, BR-G-41 transport/lifecycle foundations, and event/transport-custody portion of BR-G-42 | complete, including accepted independent holdout-b; full BR-G-41 and other BR-G-42 rows remain on later owning slices |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause, BR-G-32 generic-tree-sink portion, and BR-G-34 | complete |
-| Cosmetic thaw/refreeze | BR-G-46 | pending before Slices 5–7 |
+| Cosmetic thaw/refreeze | BR-G-46 | complete before Slices 5–7 |
 | Slice 5 | BR-G-32 plan-DOM portion, BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
 | Slice 6 | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39; inventory portion of BR-G-42 | pending |
 | Slice 7 | BR-G-40, BR-G-41, BR-G-45; history portion of BR-G-42 | pending |

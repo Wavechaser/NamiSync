@@ -746,8 +746,16 @@ def _install_native_boundary_observers(
         )
         return bool(result)
 
-    def configure(window: object, *args: object, **kwargs: object):
-        controller_owner = original_configure(window, *args, **kwargs)
+    def configure(
+        window: object,
+        cosmetics: object | None = None,
+        initial_cosmetic: object | None = None,
+    ):
+        controller_owner = original_configure(
+            window,
+            cosmetics=cosmetics,
+            initial_cosmetic=initial_cosmetic,
+        )
 
         def after_appearance() -> None:
             try:

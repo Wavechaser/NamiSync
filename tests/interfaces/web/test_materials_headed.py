@@ -173,7 +173,8 @@ def test_materials_gate_faults_are_exact_and_delegate_other_native_calls() -> No
     assert "original_controller(" in source
     assert "original_glass(native, native_window, enabled=enabled)" in source
     assert "original_dwm(native, native_window, attribute, value)" in source
-    assert "original_configure(window, *args, **kwargs)" in source
+    assert "cosmetics=cosmetics" in source
+    assert "initial_cosmetic=initial_cosmetic" in source
     assert 'scenario == "capable"' in source
     assert 'scenario == "light-no-material"' in source
     assert 'scenario == "dark-no-material"' in source

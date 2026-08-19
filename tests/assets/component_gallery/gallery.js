@@ -21,6 +21,26 @@ function validAccepted(value) {
     value.accepted === true;
 }
 
+async function waitForTheme(theme) {
+  for (let frame = 0; frame < 120; frame += 1) {
+    if (document.documentElement.dataset.theme === theme) {
+      return;
+    }
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  throw new Error("the seeded cosmetic theme did not reach the page");
+}
+
+async function waitForThemeSelector(select, theme, disabled) {
+  for (let frame = 0; frame < 300; frame += 1) {
+    if (select.value === theme && select.disabled === disabled) {
+      return;
+    }
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  }
+  throw new Error("the product theme selector did not reconcile");
+}
+
 async function reportFailure(error) {
   const candidate = error !== null && typeof error === "object" ? error.name : "";
   const type = FAILURE_TYPES.has(candidate) ? candidate : "Error";
@@ -106,7 +126,11 @@ async function reportFailure(error) {
     "info",
   ]);
 
-  const [{ dispatchInteractive }, { renderText }, iconModule] = await Promise.all([
+  const [{
+    dispatchInteractive,
+    readCosmeticSection,
+    replaceCosmeticSection,
+  }, { renderText }, iconModule] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
@@ -121,7 +145,88 @@ async function reportFailure(error) {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
   const mode = forced ? "forced" : reduced ? "reduced" : dark ? "dark" : "light";
-  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  const expectedTheme = dark ? "dark" : "light";
+  const alternateTheme = expectedTheme === "dark" ? "light" : "dark";
+  const initialCosmetic = await readCosmeticSection();
+  if (initialCosmetic.value.theme !== expectedTheme) {
+    throw new Error("the gallery cosmetic seed is unavailable");
+  }
+  await waitForTheme(expectedTheme);
+  const themeSelector = document.querySelector("#theme-mode");
+  if (!(themeSelector instanceof HTMLSelectElement)) {
+    throw new Error("the product theme selector is unavailable");
+  }
+  await waitForThemeSelector(themeSelector, expectedTheme, false);
+  themeSelector.value = alternateTheme;
+  themeSelector.dispatchEvent(new Event("change", { bubbles: true }));
+  const changeImmediateValue = themeSelector.value;
+  const changeImmediateDisabled = themeSelector.disabled;
+  if (
+    changeImmediateValue !== expectedTheme
+    || changeImmediateDisabled !== true
+  ) {
+    throw new Error("the selector rendered an unaccepted theme choice");
+  }
+  await waitForThemeSelector(themeSelector, alternateTheme, false);
+  await waitForTheme(alternateTheme);
+  const afterChange = await readCosmeticSection();
+  if (
+    afterChange.revision !== initialCosmetic.revision + 1
+    || afterChange.value.theme !== alternateTheme
+  ) {
+    throw new Error("the selector change did not become authoritative");
+  }
+
+  themeSelector.value = expectedTheme;
+  themeSelector.dispatchEvent(new Event("change", { bubbles: true }));
+  const restoreImmediateValue = themeSelector.value;
+  const restoreImmediateDisabled = themeSelector.disabled;
+  if (
+    restoreImmediateValue !== alternateTheme
+    || restoreImmediateDisabled !== true
+  ) {
+    throw new Error("the selector rendered an unaccepted restore choice");
+  }
+  await waitForThemeSelector(themeSelector, expectedTheme, false);
+  await waitForTheme(expectedTheme);
+  const restoredCosmetic = await readCosmeticSection();
+  if (
+    restoredCosmetic.revision !== afterChange.revision + 1
+    || restoredCosmetic.value.theme !== expectedTheme
+  ) {
+    throw new Error("the selector did not restore authoritative state");
+  }
+  const cosmeticReplacement = await replaceCosmeticSection(
+    restoredCosmetic.revision,
+    expectedTheme,
+  );
+  if (
+    cosmeticReplacement.disposition !== "noop"
+    || cosmeticReplacement.revision !== restoredCosmetic.revision
+  ) {
+    throw new Error("the gallery cosmetic replacement did not reconcile");
+  }
+  const finalCosmetic = await readCosmeticSection();
+  await waitForTheme(expectedTheme);
+  const cosmeticEvidence = Object.freeze({
+    initial: initialCosmetic,
+    after_change: afterChange,
+    replacement: cosmeticReplacement,
+    final: finalCosmetic,
+    page_theme: document.documentElement.dataset.theme,
+    selector: Object.freeze({
+      initial_value: initialCosmetic.value.theme,
+      initial_disabled: false,
+      change_immediate_value: changeImmediateValue,
+      change_immediate_disabled: changeImmediateDisabled,
+      change_settled_value: afterChange.value.theme,
+      change_settled_disabled: false,
+      restore_immediate_value: restoreImmediateValue,
+      restore_immediate_disabled: restoreImmediateDisabled,
+      final_value: themeSelector.value,
+      final_disabled: themeSelector.disabled,
+    }),
+  });
   document.documentElement.dataset.testGalleryMarker = TEST_ONLY_GALLERY_MARKER;
 
   const app = document.querySelector("#app");
@@ -578,6 +683,7 @@ async function reportFailure(error) {
       phase: "complete",
       mode,
       media: Object.freeze({ dark, forced, reduced }),
+      cosmetic: cosmeticEvidence,
       part_count: reportParts.length,
     }),
     validAccepted,

@@ -714,6 +714,7 @@ def run_desktop(
     registry = None
     dispatcher = None
     cosmetics = None
+    initial_appearance = None
     close_controller: _DesktopCloseController | None = None
     appearance_controller = None
     document_channel = None
@@ -766,6 +767,7 @@ def run_desktop(
             )
         registry = _task_registry(service)
         cosmetics = _ui_state_owner(paths.ui_state)
+        initial_appearance = _read_initial_appearance(cosmetics)
         startup_gate = DesktopReadinessGate(startup_deadline_scheduler)
 
         document = _pending_document()
@@ -783,7 +785,7 @@ def run_desktop(
             identity.window_title,
             _desktop_index_path(index_path),
             js_api=None,
-            background_color=_opaque_window_background(),
+            background_color=_opaque_window_background(initial_appearance),
             transparent=False,
         )
         if window is None:
@@ -859,7 +861,11 @@ def run_desktop(
 
             window.events.before_load += bind_document_channel
             try:
-                appearance_controller = _configure_window_appearance(window)
+                appearance_controller = _configure_window_appearance(
+                    window,
+                    cosmetics,
+                    initial_appearance,
+                )
             except Exception as error:
                 _log_presentation_failure(
                     "appearance.configuration_failed",
@@ -1040,6 +1046,14 @@ def _ui_state_owner(path: Path):
     return UiStateOwner(path)
 
 
+def _read_initial_appearance(cosmetics: object):
+    try:
+        return cosmetics.read_section("appearance", 1)
+    except Exception as error:
+        _log_presentation_failure("appearance.cosmetic_initial_read_failed", error)
+        return None
+
+
 def _production_commands(
     *,
     picker: object,
@@ -1152,16 +1166,26 @@ def _configure_window_security(
     )
 
 
-def _opaque_window_background() -> str:
+def _opaque_window_background(initial_appearance: object | None = None) -> str:
     from .appearance import opaque_window_background
 
-    return opaque_window_background()
+    if initial_appearance is None:
+        return opaque_window_background()
+    return opaque_window_background(theme_mode=initial_appearance.value.theme)
 
 
-def _configure_window_appearance(window: object):
+def _configure_window_appearance(
+    window: object,
+    cosmetics: object | None = None,
+    initial_appearance: object | None = None,
+):
     from .appearance import configure_window_appearance
 
-    return configure_window_appearance(window)
+    return configure_window_appearance(
+        window,
+        cosmetics=cosmetics,
+        initial_cosmetic=initial_appearance,
+    )
 
 
 def _bind_document_origin(document: object, trusted_url: str) -> None:

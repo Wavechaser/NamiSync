@@ -209,6 +209,7 @@ def test_modules_use_only_local_explicit_js_imports(
             "./bridge.js",
             "./readiness.js",
             "./appearance.js",
+            "./theme.js",
             "./panels.js",
             "./rail.js",
             "./render.js",
@@ -220,6 +221,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "rail.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
+        "theme.js": ["./bridge.js"],
         "tree.js": ["./render.js"],
     }
     assert all(
@@ -258,6 +260,11 @@ def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
     assert source.count('setAttribute("aria-activedescendant",') == 1
 
     appearance = assets["appearance.js"]
+    assert {
+        name
+        for name, source in assets.items()
+        if "root.dataset.theme =" in source
+    } == {"appearance.js"}
     assert "setAttribute" not in appearance
     assert ".style =" not in appearance
     assert ".cssText" not in appearance
@@ -333,6 +340,7 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
         "resolvedAfterValidMessage": True,
         "resolvedBeforeNewRevision": False,
         "resolvedAfterNewRevision": True,
+        "observerCalls": 2,
         "listenerRemoved": True,
     }
 
@@ -380,6 +388,33 @@ def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
                 / "web"
                 / "assets"
                 / "app.js"
+            ),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_theme_selector_reconciles_authoritative_state() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental theme probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "theme_selector_probe.mjs"),
+            str(
+                PROJECT_ROOT
+                / "namisync"
+                / "interfaces"
+                / "web"
+                / "assets"
+                / "theme.js"
             ),
         ],
         capture_output=True,
@@ -877,6 +912,9 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     assert app.index("installReadinessReceiver(") < app.index(
         "installAppearanceReceiver("
     )
+    assert app.index("installThemeSelector(") < app.index(
+        "installAppearanceReceiver("
+    )
     assert app.index("installAppearanceReceiver(") < app.index(
         "app.append(createTaskRail(), createWorkPanel());"
     )
@@ -900,9 +938,15 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     assert "if (!acknowledged)" in startup
     assert "appearance.whenAppliedAfter" not in startup
     assert startup.index("markBridgeOperational()") < startup.index(
+        "void theme.open();"
+    )
+    assert startup.index("void theme.open();") < startup.index(
         'renderText(status, "Ready");'
     )
+    assert "await theme.open()" not in startup
+    assert "void theme.refresh();" in app
     assert 'window.addEventListener("pywebviewready"' in app
+    assert "theme.invalidate();" in app
     assert "startupRerunReadinessBaseline = readinessBaseline;" in app
     assert "readinessBaseline: rerunReadinessBaseline" in app
     assert "readinessBaseline = readiness.revision()," in app
@@ -927,6 +971,16 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert '<main id="app">' in index
     assert index.count('id="host-status"') == 1
     assert '<p id="host-status" role="status" aria-live="polite">' in index
+    assert (
+        '<label class="nami-field__label" for="theme-mode">Theme</label>'
+        in index
+    )
+    assert '<select class="nami-select" id="theme-mode" disabled>' in index
+    assert re.findall(r'<option value="([a-z]+)">([A-Za-z]+)</option>', index) == [
+        ("system", "System"),
+        ("light", "Light"),
+        ("dark", "Dark"),
+    ]
     assert '<main id="app" aria-live=' not in index
     assert 'ariaLabel = "Task navigation";' in rail
     assert 'renderText(heading, "Tasks");' in rail
@@ -943,6 +997,17 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'panel.classList.add("nami-card", "nami-work-panel");' in panels
     assert "app.append(createTaskRail(), createWorkPanel());" in app
     assert 'status.textContent === "Starting..."' in app
+
+    theme = assets["theme.js"]
+    assert "select.disabled = true;" in theme
+    assert "snapshot.revision < state.authoritative.revision" in theme
+    assert "error instanceof BridgeTransportError" in theme
+    assert "await reconcileAfterUncertainty(" in theme
+    assert "expectedRevision," in theme
+    assert "result.disposition === \"conflict\"" in theme
+    assert ".dataset" not in theme
+    assert ".style" not in theme
+    assert "#host-status" not in theme
 
     assert "window.pywebview" not in shell
     assert '"./bridge.js"' not in rail + panels

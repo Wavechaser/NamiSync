@@ -567,8 +567,10 @@ admission. Revisions are process-local concurrency evidence, while the
 document schema protects durable compatibility. Adding a recognized section
 or changing an on-disk value shape advances the global schema so older
 binaries preserve rather than erase newer cosmetic state. The exact read and
-guarded-replace rows are active at the desktop bridge; appearance consumption
-remains pending in the dedicated pre-Slice-5 checkpoint.
+guarded-replace rows and their appearance consumer are active at the desktop
+bridge. One pre-window snapshot drives the opaque background and native
+controller; later cosmetic revisions compose effective appearance without
+reclassifying raw Windows evidence or entering sync authority.
 
 Windows host security, bridge transport, presentation tokens, and lifecycle
 policy remain adapter concerns. `interfaces/web/readiness.py` is the named owner

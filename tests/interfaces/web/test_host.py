@@ -440,6 +440,15 @@ def _patch_primary(
         lambda actual: order.append(("ui_state_owner", actual, cosmetics))
         or cosmetics,
     )
+    initial_appearance = object()
+    monkeypatch.setattr(
+        host,
+        "_read_initial_appearance",
+        lambda actual: order.append(
+            ("read_initial_appearance", actual, initial_appearance)
+        )
+        or initial_appearance,
+    )
     monkeypatch.setattr(
         host,
         "_pending_document",
@@ -507,7 +516,10 @@ def _patch_primary(
     monkeypatch.setattr(
         host,
         "_opaque_window_background",
-        lambda: order.append("opaque_background") or "#F3F3F3",
+        lambda actual: order.append(
+            ("opaque_background", actual)
+        )
+        or "#F3F3F3",
     )
 
     def default_security(window, url, actual_document, renderer_callback):
@@ -531,7 +543,14 @@ def _patch_primary(
     monkeypatch.setattr(
         host,
         "_configure_window_appearance",
-        lambda window: order.append(("configure_appearance", window))
+        lambda window, actual_cosmetics, actual_initial: order.append(
+            (
+                "configure_appearance",
+                window,
+                actual_cosmetics,
+                actual_initial,
+            )
+        )
         or Appearance(),
     )
 
@@ -622,6 +641,7 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "validate_databases",
         "task_registry",
         "ui_state_owner",
+        "read_initial_appearance",
         "pending_document",
         "folder_slots",
         "native_picker",
@@ -662,8 +682,21 @@ def test_host_prepares_before_create_and_starts_only_edge(
         item for item in order if item[0] == "task_registry"
     )[2]
     owner_entry = next(item for item in order if item[0] == "ui_state_owner")
+    initial_entry = next(
+        item for item in order if item[0] == "read_initial_appearance"
+    )
+    background_entry = next(
+        item for item in order if item[0] == "opaque_background"
+    )
+    appearance_entry = next(
+        item for item in order if item[0] == "configure_appearance"
+    )
     assert owner_entry[1] == paths.ui_state
     assert commands_entry[1]["cosmetics"] is owner_entry[2]
+    assert initial_entry[1] is owner_entry[2]
+    assert background_entry[1] is initial_entry[2]
+    assert appearance_entry[2] is owner_entry[2]
+    assert appearance_entry[3] is initial_entry[2]
     assert bridge_entry[2] is commands_entry[2]
     assert created[3] is None
     assert created[4] == "#F3F3F3"
@@ -1429,7 +1462,7 @@ def test_appearance_configuration_failure_keeps_opaque_safe_baseline(
     monkeypatch.setattr(
         host,
         "_configure_window_appearance",
-        lambda _window: (_ for _ in ()).throw(
+        lambda _window, *_args: (_ for _ in ()).throw(
             RuntimeError("injected material failure")
         ),
     )
@@ -1534,7 +1567,7 @@ def test_appearance_cleanup_failure_is_nonfatal(
     monkeypatch.setattr(
         host,
         "_configure_window_appearance",
-        lambda _window: Appearance(),
+        lambda _window, *_args: Appearance(),
     )
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
@@ -1576,7 +1609,7 @@ def test_unsafe_window_surface_refuses_startup_before_open_state(
     monkeypatch.setattr(
         host,
         "_configure_window_appearance",
-        lambda _window: Appearance(),
+        lambda _window, *_args: Appearance(),
     )
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
@@ -1603,7 +1636,7 @@ def test_security_failure_never_attempts_appearance_configuration(
     monkeypatch.setattr(
         host,
         "_configure_window_appearance",
-        lambda window: configured.append(window),
+        lambda window, *_args: configured.append(window),
     )
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)

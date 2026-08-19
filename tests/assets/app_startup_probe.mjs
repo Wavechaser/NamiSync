@@ -13,13 +13,23 @@ class HTMLElementFake {
   }
 }
 
+class HTMLSelectElementFake extends HTMLElementFake {}
+
 globalThis.HTMLElement = HTMLElementFake;
+globalThis.HTMLSelectElement = HTMLSelectElementFake;
 const app = new HTMLElementFake();
 const status = new HTMLElementFake("Starting...");
+const theme = new HTMLSelectElementFake();
 globalThis.document = {
   documentElement: new HTMLElementFake(),
   querySelector(selector) {
-    return selector === "#app" ? app : selector === "#host-status" ? status : null;
+    return selector === "#app"
+      ? app
+      : selector === "#host-status"
+        ? status
+        : selector === "#theme-mode"
+          ? theme
+          : null;
   },
 };
 
@@ -36,6 +46,9 @@ globalThis.window = {
 const shellAcknowledgements = [];
 const echoAttempts = [];
 let operationalMarks = 0;
+let themeInvalidations = 0;
+let themeOpens = 0;
+let themeRefreshes = 0;
 let rawApiReady = false;
 let resolveRawApiReadiness;
 const rawApiReadiness = new Promise((resolve) => {
@@ -112,7 +125,17 @@ const readinessStub = moduleUrl(`
   export const installReadinessReceiver = () => globalThis.startupHarness.readiness;
 `);
 const appearanceStub = moduleUrl(`
-  export const installAppearanceReceiver = () => Object.freeze({});
+  export const installAppearanceReceiver = (_webview, _root, onApplied) => {
+    onApplied();
+    return Object.freeze({});
+  };
+`);
+const themeStub = moduleUrl(`
+  export const installThemeSelector = () => Object.freeze({
+    invalidate() { globalThis.startupHarness.invalidateTheme(); },
+    open() { return globalThis.startupHarness.openTheme(); },
+    refresh() { return globalThis.startupHarness.refreshTheme(); },
+  });
 `);
 const railStub = moduleUrl("export const createTaskRail = () => ({});");
 const panelsStub = moduleUrl("export const createWorkPanel = () => ({});");
@@ -128,6 +151,7 @@ source = source.replace(
 source = source
   .replace("./readiness.js", readinessStub)
   .replace("./appearance.js", appearanceStub)
+  .replace("./theme.js", themeStub)
   .replace("./panels.js", panelsStub)
   .replace("./rail.js", railStub)
   .replace("./render.js", renderStub);
@@ -135,8 +159,20 @@ source = source
 window.addEventListener("pywebviewready", () => {
   globalThis.startupHarness.signalBridgeApiReady();
 });
+globalThis.startupHarness.invalidateTheme = () => {
+  themeInvalidations += 1;
+};
+globalThis.startupHarness.openTheme = () => {
+  themeOpens += 1;
+  return new Promise(() => {});
+};
+globalThis.startupHarness.refreshTheme = () => {
+  themeRefreshes += 1;
+  return Promise.resolve(false);
+};
 await import(moduleUrl(source));
 for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+assert.equal(themeRefreshes, 1, "early appearance refresh is readiness-neutral");
 assert.equal(
   shellAcknowledgements.length,
   0,
@@ -163,6 +199,7 @@ echoAttempts[0].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 1);
+assert.equal(themeOpens, 1, "post-OPEN cosmetic initialization is fire-and-forget");
 
 shellAcknowledgements.length = 0;
 echoAttempts.length = 0;
@@ -206,6 +243,7 @@ echoAttempts[1].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 1);
+assert.equal(themeOpens, 2);
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
@@ -231,6 +269,7 @@ echoAttempts[3].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 2);
+assert.equal(themeOpens, 3);
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
@@ -246,5 +285,9 @@ assert.equal(
 );
 assert.equal(operationalMarks, 2);
 assert.equal(echoAttempts.length, 4);
+assert.ok(
+  themeInvalidations >= 4,
+  "every bridge reincarnation invalidates the older cosmetic attempt",
+);
 
 process.stdout.write("ok");

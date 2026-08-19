@@ -12,6 +12,12 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.web.appearance as appearance
+from namisync.interfaces.ui_state import (
+    AppearanceValue,
+    CosmeticSectionSnapshot,
+    CosmeticSubscription,
+    ThemeMode,
+)
 from namisync.interfaces.web.appearance import (
     SystemAppearance,
     configure_window_appearance,
@@ -40,6 +46,12 @@ class _RefusingHook(_Hook):
     def __iadd__(self, handler):
         del handler
         raise RuntimeError("injected event refusal")
+
+
+class _RefusingRemovalHook(_Hook):
+    def __isub__(self, handler):
+        del handler
+        raise RuntimeError("injected event removal refusal")
 
 
 class _Core:
@@ -114,6 +126,36 @@ class _FakeNative:
             handler()
 
 
+class _FakeCosmetics:
+    def __init__(
+        self,
+        snapshot: CosmeticSectionSnapshot,
+        *,
+        before_return: CosmeticSectionSnapshot | None = None,
+    ) -> None:
+        self.snapshot = snapshot
+        self.before_return = before_return
+        self.callbacks: list[object] = []
+        self.close_count = 0
+
+    def subscribe(self, section: str, callback) -> CosmeticSubscription:
+        assert section == "appearance"
+        self.callbacks.append(callback)
+        if self.before_return is not None:
+            callback(self.before_return)
+
+        def close() -> None:
+            self.close_count += 1
+            if callback in self.callbacks:
+                self.callbacks.remove(callback)
+
+        return CosmeticSubscription(self.snapshot, close)
+
+    def emit(self, snapshot: CosmeticSectionSnapshot) -> None:
+        for callback in tuple(self.callbacks):
+            callback(snapshot)
+
+
 def _system(
     *,
     dark: bool = False,
@@ -122,6 +164,19 @@ def _system(
     accent: str = "#123ABC",
 ) -> SystemAppearance:
     return SystemAppearance(dark, high_contrast, accent, build)
+
+
+def _cosmetic(
+    revision: int,
+    theme: ThemeMode,
+) -> CosmeticSectionSnapshot:
+    return CosmeticSectionSnapshot(
+        section="appearance",
+        value_version=1,
+        revision=revision,
+        dirty=False,
+        value=AppearanceValue(theme),
+    )
 
 
 def _window() -> SimpleNamespace:
@@ -816,6 +871,229 @@ def test_subscription_gap_change_is_included_in_the_initial_snapshot() -> None:
     assert native.calls.count("read") == 1
     assert applied == [_system(dark=True, accent="#ABCDEF")]
     controller.close()
+
+
+def test_cosmetic_subscription_snapshot_cannot_regress_a_racing_callback() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=False, accent="#112233"))
+    initial = _cosmetic(0, ThemeMode.SYSTEM)
+    cosmetics = _FakeCosmetics(
+        initial,
+        before_return=_cosmetic(2, ThemeMode.DARK),
+    )
+
+    controller = configure_window_appearance(
+        window,
+        native=native,
+        cosmetics=cosmetics,
+        initial_cosmetic=initial,
+    )
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied == [_system(dark=True, accent="#112233")]
+    assert window.appearance_messages.messages[-1]["theme"] == "dark"
+    controller.close()
+
+
+def test_reversed_cosmetic_callbacks_cannot_regress_effective_appearance() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=False, accent="#112233"))
+    initial = _cosmetic(0, ThemeMode.SYSTEM)
+    cosmetics = _FakeCosmetics(initial)
+    controller = configure_window_appearance(
+        window,
+        native=native,
+        cosmetics=cosmetics,
+        initial_cosmetic=initial,
+    )
+    window.events.before_load.emit()
+    queued: list[object] = []
+    native.invoke = lambda _window, callback: queued.append(callback)
+
+    cosmetics.emit(_cosmetic(2, ThemeMode.DARK))
+    cosmetics.emit(_cosmetic(1, ThemeMode.LIGHT))
+
+    assert len(queued) == 1
+    queued[0]()
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-1] == _system(dark=True, accent="#112233")
+    controller.close()
+
+
+def test_cosmetic_change_during_native_read_skips_the_superseded_mode() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=False, accent="#112233"))
+    initial = _cosmetic(0, ThemeMode.SYSTEM)
+    cosmetics = _FakeCosmetics(initial)
+    controller = configure_window_appearance(
+        window,
+        native=native,
+        cosmetics=cosmetics,
+        initial_cosmetic=initial,
+    )
+    window.events.before_load.emit()
+    initial_apply_count = sum(
+        isinstance(call, tuple) and call[0] == "apply" for call in native.calls
+    )
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_read = native.read
+    emitted = False
+
+    def read() -> SystemAppearance:
+        nonlocal emitted
+        raw = original_read()
+        if not emitted:
+            emitted = True
+            cosmetics.emit(_cosmetic(2, ThemeMode.DARK))
+        return raw
+
+    native.read = read
+
+    cosmetics.emit(_cosmetic(1, ThemeMode.LIGHT))
+
+    assert len(deferred) == 1
+    assert sum(
+        isinstance(call, tuple) and call[0] == "apply" for call in native.calls
+    ) == initial_apply_count
+    deferred[0]()
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-1] == _system(dark=True, accent="#112233")
+    controller.close()
+
+
+def test_cosmetic_change_during_native_apply_publishes_only_the_newest_mode() -> None:
+    window = _window()
+    native = _FakeNative(_system(dark=False, accent="#112233"))
+    initial = _cosmetic(0, ThemeMode.SYSTEM)
+    cosmetics = _FakeCosmetics(initial)
+    controller = configure_window_appearance(
+        window,
+        native=native,
+        cosmetics=cosmetics,
+        initial_cosmetic=initial,
+    )
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    deferred: list[object] = []
+    native.defer = lambda _window, callback: deferred.append(callback)
+    original_apply = native.apply
+    emitted = False
+
+    def apply(native_window: object, system: SystemAppearance):
+        nonlocal emitted
+        result = original_apply(native_window, system)
+        if not emitted:
+            emitted = True
+            cosmetics.emit(_cosmetic(2, ThemeMode.DARK))
+        return result
+
+    native.apply = apply
+
+    cosmetics.emit(_cosmetic(1, ThemeMode.LIGHT))
+
+    assert len(deferred) == 1
+    assert [
+        message["theme"] for message in window.appearance_messages.messages
+    ] == ["light"]
+    deferred[0]()
+    applied = [
+        call[2]
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "apply"
+    ]
+    assert applied[-2:] == [
+        _system(dark=False, accent="#112233"),
+        _system(dark=True, accent="#112233"),
+    ]
+    assert [
+        message["theme"] for message in window.appearance_messages.messages
+    ] == ["light", "dark"]
+    controller.close()
+
+
+def test_cosmetic_callback_after_close_is_inert_and_closes_each_owner_once() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    initial = _cosmetic(0, ThemeMode.SYSTEM)
+    cosmetics = _FakeCosmetics(initial)
+    controller = configure_window_appearance(
+        window,
+        native=native,
+        cosmetics=cosmetics,
+        initial_cosmetic=initial,
+    )
+    captured_callback = cosmetics.callbacks[0]
+    window.events.before_load.emit()
+    apply_count = sum(
+        isinstance(call, tuple) and call[0] == "apply" for call in native.calls
+    )
+
+    controller.close()
+    controller.close()
+    captured_callback(_cosmetic(1, ThemeMode.DARK))
+
+    assert cosmetics.close_count == 1
+    assert native.calls.count("unsubscribe") == 1
+    assert sum(
+        isinstance(call, tuple) and call[0] == "apply" for call in native.calls
+    ) == apply_count
+
+
+def test_cosmetic_subscription_rolls_back_once_when_event_attachment_fails() -> None:
+    window = _window()
+    window.events.loaded = _RefusingHook()
+    initial = _cosmetic(0, ThemeMode.LIGHT)
+    cosmetics = _FakeCosmetics(initial)
+
+    with pytest.raises(RuntimeError, match="event refusal"):
+        configure_window_appearance(
+            window,
+            native=_FakeNative(_system(dark=True)),
+            cosmetics=cosmetics,
+            initial_cosmetic=initial,
+        )
+
+    assert cosmetics.close_count == 1
+    assert cosmetics.callbacks == []
+    assert window.events.before_load.handlers == []
+
+
+def test_cosmetic_attachment_rollback_survives_event_removal_failure() -> None:
+    window = _window()
+    window.events.before_load = _RefusingRemovalHook()
+    window.events.loaded = _RefusingHook()
+    initial = _cosmetic(0, ThemeMode.LIGHT)
+    cosmetics = _FakeCosmetics(initial)
+    native = _FakeNative(_system(dark=True))
+
+    with pytest.raises(RuntimeError, match="event refusal"):
+        configure_window_appearance(
+            window,
+            native=native,
+            cosmetics=cosmetics,
+            initial_cosmetic=initial,
+        )
+
+    assert cosmetics.close_count == 1
+    assert cosmetics.callbacks == []
+    assert len(window.events.before_load.handlers) == 1
+    window.events.before_load.emit()
+    assert "read" not in native.calls
 
 
 def test_deferred_initial_generation_finishes_before_loaded_publication() -> None:
@@ -1673,6 +1951,75 @@ def test_off_ui_before_load_leaves_initial_opaque_window_untouched() -> None:
     assert native.calls == []
     assert native.preference_handlers == []
     controller.close()
+
+
+@pytest.mark.parametrize(
+    ("raw_dark", "high_contrast", "theme_mode", "expected_dark"),
+    (
+        (False, False, ThemeMode.SYSTEM, False),
+        (True, False, ThemeMode.SYSTEM, True),
+        (True, False, ThemeMode.LIGHT, False),
+        (False, False, ThemeMode.DARK, True),
+        (False, True, ThemeMode.DARK, False),
+        (True, True, ThemeMode.LIGHT, True),
+    ),
+)
+def test_effective_theme_matrix_preserves_raw_windows_authority(
+    raw_dark: bool,
+    high_contrast: bool,
+    theme_mode: ThemeMode,
+    expected_dark: bool,
+) -> None:
+    raw = SystemAppearance(
+        dark=raw_dark,
+        high_contrast=high_contrast,
+        accent="#123456",
+        build=26100,
+        accent_hover="#345678",
+        accent_pressed="#012345",
+    )
+
+    effective = appearance._effective_system_appearance(raw, theme_mode)
+
+    assert raw.dark is raw_dark
+    assert effective.dark is expected_dark
+    assert effective.high_contrast is high_contrast
+    assert effective.accent == raw.accent
+    assert effective.accent_hover == raw.accent_hover
+    assert effective.accent_pressed == raw.accent_pressed
+    assert effective.build == raw.build
+
+
+@pytest.mark.parametrize(
+    ("raw", "theme_mode", "expected_dark"),
+    (
+        (_system(dark=True), ThemeMode.LIGHT, False),
+        (_system(dark=False), ThemeMode.DARK, True),
+        (_system(dark=True, high_contrast=True), ThemeMode.LIGHT, True),
+    ),
+)
+def test_precreate_background_uses_the_effective_theme(
+    raw: SystemAppearance,
+    theme_mode: ThemeMode,
+    expected_dark: bool,
+) -> None:
+    native = _FakeNative(raw)
+    raw_dark = raw.dark
+
+    assert (
+        opaque_window_background(native=native, theme_mode=theme_mode)
+        == "#F3F3F3"
+    )
+
+    background_call = next(
+        call
+        for call in native.calls
+        if isinstance(call, tuple) and call[0] == "opaque_background"
+    )
+    effective = background_call[1]
+    assert isinstance(effective, SystemAppearance)
+    assert effective.dark is expected_dark
+    assert raw.dark is raw_dark
 
 
 def test_opaque_window_background_is_validated_and_fault_isolated(

@@ -246,7 +246,7 @@ provision.
 - **Mapping-Scoped State**. Shared physical locations can participate in multiple mappings while retaining independent source identity and correspondence state.
 - **Run Idempotency**. Executor run tokens uniquely correlate and protect repeated ledger recording.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
-- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` beside the selected ledger under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. Interface-owned `ui-state.json` is a separate strict cosmetic document; its ratified first production section will store the System/Light/Dark appearance override. Recents, window geometry, columns, sorting, treegrid expansion/grouping state, and filter chips remain planned typed sections whose durable keys are defined with their consumers. UI state never persists a request, session, task, selection, view id, or projection revision.
+- **Split Local Settings**. Schema-versioned semantic settings live in `settings.json` beside the selected ledger under database ownership and serialize cross-process read-modify-replace writes with a Windows named mutex; settings that shape a plan are snapshotted into it and admitted execution never rereads defaults. Interface-owned `ui-state.json` is a separate strict cosmetic document; its first production section stores the System/Light/Dark appearance override. Recents, window geometry, columns, sorting, treegrid expansion/grouping state, and filter chips remain planned typed sections whose durable keys are defined with their consumers. UI state never persists a request, session, task, selection, view id, or projection revision.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
 - **M1 Evidence Reset Boundary**. Ledger v3/history v5 require immutable final-contract markers. Ledger v1-v2, every history v1-v4 file, and current-version files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
 - **M1 Windowed History Contract**. History v5 stores an append-only reliable receipt journal, dense canonical item projections, exact semantic-duplicate links, bounded hash-only rejection receipts, provisional run watermarks/counts, and bounded terminal phase summaries. The reset boundary is deliberate: history v4 lacks the receipt facts needed to reconstruct the new authenticated chain.
@@ -383,9 +383,12 @@ unrealized unless an entry says otherwise.
 - **Cooperative UI Workers**. Long-running operations run through cancellable worker sessions with guarded cleanup and release handling, independent of whichever UI toolkit hosts them.
 - **GUI Single Instance**. A second desktop launch activates the existing window and exits successfully; activation failure is visible. Read-only CLI commands and non-conflicting CLI mutations are not subject to the GUI-instance restriction.
 - **Mismatch Severity**. A mismatched-hash row — content differing from recorded evidence while its stats look unchanged — renders distinctly from an ordinary modified row, with a persistent badge on the location until acknowledged; it is the one signal this application exists to surface and it never reads as just another list row.
-- **System Theme And Accessibility**. The desktop shell follows Windows light,
-  dark, high-contrast, accent, and reduced-motion preferences. Mica is a
-  progressive native enhancement; opaque high-contrast/no-material fallbacks
+- **System Theme And Accessibility**. A labelled selector persists System,
+  Light, or Dark independently from semantic settings. System follows Windows;
+  an ordinary Light/Dark override drives both native material and page tokens,
+  while active high contrast temporarily retains Windows authority without
+  overwriting the stored choice. Accent and reduced-motion remain system-owned.
+  Mica is a progressive native enhancement; opaque high-contrast/no-material fallbacks
   preserve readability, focus, and status semantics without relying on color
   alone.
 - **Fluent Neutral And Windows Accent Roles**. `tokens.css` owns a pinned

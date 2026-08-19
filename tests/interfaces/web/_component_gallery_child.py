@@ -101,6 +101,12 @@ _EXPECTED_MEDIA = {
     "forced": {"dark": True, "forced": True, "reduced": False},
     "reduced": {"dark": False, "forced": False, "reduced": True},
 }
+_EXPECTED_THEME = {
+    "light": "light",
+    "dark": "dark",
+    "forced": "dark",
+    "reduced": "light",
+}
 _FAILURE_STAGES = frozenset(
     {
         "module_import",
@@ -321,6 +327,48 @@ def _installed_asset_evidence() -> dict[str, dict[str, object]]:
     return evidence
 
 
+def _seeded_ui_state_owner(
+    path: Path,
+    mode: str,
+    recorder: _Recorder,
+):
+    from namisync.interfaces.ui_state import (
+        APPEARANCE_VALUE_VERSION,
+        AppearanceValue,
+        ThemeMode,
+        UiStateOwner,
+    )
+
+    theme = (
+        ThemeMode.LIGHT
+        if mode in {"light", "reduced"}
+        else ThemeMode.DARK
+    )
+    owner = UiStateOwner(path)
+    try:
+        result = owner.replace_section(
+            "appearance",
+            APPEARANCE_VALUE_VERSION,
+            0,
+            AppearanceValue(theme),
+        )
+    except BaseException:
+        owner.close()
+        raise
+    recorder.set(
+        "seeded_cosmetic",
+        {
+            "section": result.section,
+            "value_version": result.value_version,
+            "revision": result.revision,
+            "dirty": result.dirty,
+            "value": {"theme": result.value.theme.value},
+            "disposition": result.disposition.value,
+        },
+    )
+    return owner
+
+
 def _test_report_spec(
     recorder: _Recorder,
     schedule_pseudos: object,
@@ -403,12 +451,14 @@ def _test_report_spec(
             "phase",
             "mode",
             "media",
+            "cosmetic",
             "part_count",
         }:
             raise CommandPayloadError("component gallery report is invalid")
         if (
             type(payload["mode"]) is not str
             or type(payload["media"]) is not dict
+            or type(payload["cosmetic"]) is not dict
             or type(payload["part_count"]) is not int
             or payload["part_count"] != len(_REPORT_PART_NAMES)
         ):
@@ -454,6 +504,7 @@ def _test_report_spec(
             "phase": "complete",
             "mode": payload["mode"],
             "media": payload["media"],
+            "cosmetic": payload["cosmetic"],
             "statuses": values["statuses"],
             "operations": values["operations"],
             "controls": controls,
@@ -485,6 +536,7 @@ def _valid_complete_report(
     expected_mode: str | None = None,
 ) -> bool:
     media = payload["media"]
+    cosmetic = payload["cosmetic"]
     motion = payload["motion"]
     icons = payload["icons"]
     statuses = payload["statuses"]
@@ -498,6 +550,10 @@ def _valid_complete_report(
         and set(media) == {"dark", "forced", "reduced"}
         and all(type(media[name]) is bool for name in media)
         and media == _EXPECTED_MEDIA[payload["mode"]]
+        and _valid_cosmetic_evidence(
+            cosmetic,
+            expected_theme=_EXPECTED_THEME[payload["mode"]],
+        )
         and _valid_semantic_rows(statuses, _STATUS_KEYS)
         and _valid_semantic_rows(operations, _OPERATION_KEYS)
         and _valid_control_rows(controls)
@@ -511,6 +567,88 @@ def _valid_complete_report(
         and motion["indeterminate_iteration_count"]
         == ("1" if payload["mode"] == "reduced" else "infinite")
         and _valid_icon_evidence(icons)
+    )
+
+
+def _valid_cosmetic_evidence(
+    value: object,
+    *,
+    expected_theme: str,
+) -> bool:
+    if type(value) is not dict or set(value) != {
+        "initial",
+        "after_change",
+        "replacement",
+        "final",
+        "page_theme",
+        "selector",
+    }:
+        return False
+    initial = value["initial"]
+    after_change = value["after_change"]
+    replacement = value["replacement"]
+    final = value["final"]
+    alternate_theme = "light" if expected_theme == "dark" else "dark"
+    if not (
+        _valid_cosmetic_snapshot(initial, expected_theme=expected_theme)
+        and _valid_cosmetic_snapshot(
+            after_change,
+            expected_theme=alternate_theme,
+        )
+        and _valid_cosmetic_snapshot(
+            replacement,
+            expected_theme=expected_theme,
+            replacement=True,
+        )
+        and _valid_cosmetic_snapshot(final, expected_theme=expected_theme)
+    ):
+        return False
+    return (
+        after_change["revision"] == initial["revision"] + 1
+        and replacement["revision"] == after_change["revision"] + 1
+        and replacement["disposition"] == "noop"
+        and final["revision"] == replacement["revision"]
+        and value["page_theme"] == expected_theme
+        and value["selector"]
+        == {
+            "initial_value": expected_theme,
+            "initial_disabled": False,
+            "change_immediate_value": expected_theme,
+            "change_immediate_disabled": True,
+            "change_settled_value": alternate_theme,
+            "change_settled_disabled": False,
+            "restore_immediate_value": alternate_theme,
+            "restore_immediate_disabled": True,
+            "final_value": expected_theme,
+            "final_disabled": False,
+        }
+    )
+
+
+def _valid_cosmetic_snapshot(
+    value: object,
+    *,
+    expected_theme: str,
+    replacement: bool = False,
+) -> bool:
+    keys = {"section", "value_version", "revision", "dirty", "value"}
+    if replacement:
+        keys.add("disposition")
+    return (
+        type(value) is dict
+        and set(value) == keys
+        and value["section"] == "appearance"
+        and value["value_version"] == 1
+        and type(value["revision"]) is int
+        and 0 <= value["revision"] <= 9_007_199_254_740_991
+        and type(value["dirty"]) is bool
+        and type(value["value"]) is dict
+        and set(value["value"]) == {"theme"}
+        and value["value"]["theme"] == expected_theme
+        and (
+            not replacement
+            or value["disposition"] in {"applied", "noop", "conflict"}
+        )
     )
 
 
@@ -857,8 +995,30 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     recorder.set("installed_assets", _installed_asset_evidence())
     recorder.set("media_parameters", json.loads(_media_parameters(arguments.mode)))
     original_configure = host._configure_window_security
+    original_background = host._opaque_window_background
     retained_delegates: list[object] = []
     pseudo_scheduler: dict[str, object] = {}
+
+    def create_seeded_ui_state(path: Path):
+        return _seeded_ui_state_owner(path, arguments.mode, recorder)
+
+    def record_initial_background(*args: object, **kwargs: object) -> str:
+        if len(args) != 1 or kwargs:
+            raise RuntimeError("component gallery initial appearance is unavailable")
+        snapshot = args[0]
+        recorder.set(
+            "native_initial_cosmetic",
+            {
+                "section": snapshot.section,
+                "value_version": snapshot.value_version,
+                "revision": snapshot.revision,
+                "dirty": snapshot.dirty,
+                "value": {"theme": snapshot.value.theme.value},
+            },
+        )
+        value = original_background(*args, **kwargs)
+        recorder.set("initial_background_color", value)
+        return value
 
     def extension(_document: object, _registry: object) -> dict[str, object]:
         def schedule(targets: list[dict[str, object]]) -> None:
@@ -985,6 +1145,16 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )
         stack.enter_context(
             patch.object(host, "_configure_window_security", configure)
+        )
+        stack.enter_context(
+            patch.object(host, "_ui_state_owner", create_seeded_ui_state)
+        )
+        stack.enter_context(
+            patch.object(
+                host,
+                "_opaque_window_background",
+                record_initial_background,
+            )
         )
         exit_code = host.run_desktop(
             AppPaths.from_root(arguments.data_dir),
