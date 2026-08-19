@@ -185,13 +185,16 @@ directly.
   write): semantic keys that shape a plan (filters, default deletion policy,
   trash-on-update default). Written through the facade on explicit settings
   commits. No unused retention key ships while retention is deferred.
-- `ui-state.json`, owned by `interfaces/`: recents (5 source + 5 target,
-  maintained separately, per the settled FEATURES bullet), window geometry,
-  column/sort state, collapsed paths, and filter chips. Plain file the GUI owns
-  outright; `interfaces/` may write files, it just can't import `db/`. The
-  bridge refinement forbids plan request ids, session/task ids, selection,
-  `view_id`, and projection revision here so cosmetic persistence cannot become
-  an unreconciled session store.
+- `ui-state.json`, owned by `interfaces/`: one strict, schema-versioned
+  cosmetic document. Its first production section is the appearance override;
+  recents, window geometry, column/sort state, treegrid expansion/grouping
+  state, and filter chips remain planned typed sections rather than permissive
+  dictionaries in the initial schema. Every registered section and value has an explicit
+  version, and any change to the recognized on-disk section set or shape also
+  advances the document schema so an older binary cannot overwrite newer
+  cosmetic state. The bridge refinement forbids plan request ids,
+  session/task ids, selection, `view_id`, and projection revision here so
+  cosmetic persistence cannot become an unreconciled session store.
 This amends the FEATURES.md *Local Settings File* bullet from one file to
 two — the smaller edit, given what it buys.
 **Also removes obsolete preflight plumbing:** the `SettingsReader` protocol
@@ -1106,7 +1109,7 @@ Stage 6 presentation helper.
 - Rewrite `DESKTOP_UI.md` for the web target and update `ui_mockup/` from
   staging artifact to implementation starting point.
 
-The exact eight implementation slices, dependency graph, 45 BR-G gates,
+The exact eight implementation slices, dependency graph, 46 BR-G gates,
 regression watchlist, reference-machine latency/memory budgets, and 100k-file /
 120k-node / one-million-history-item scale envelope live in `M1_BRIDGE.md` and
 are normative for this stage.

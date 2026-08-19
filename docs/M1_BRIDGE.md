@@ -120,6 +120,7 @@ or layer it binds; the linked section contains the normative rule.
 | [DR-BR-25](#dr-br-25--hostile-name-rendering-is-proven-in-a-real-browser) | Browser verification | Prove hostile-name sinks in installed WebView2 plus static scans. |
 | [DR-BR-26](#dr-br-26--the-node-tree-is-a-pure-function) | Workflow node tree/tests | Keep hierarchy construction pure and headlessly testable. |
 | [DR-BR-27](#dr-br-27--receipted-commands-are-idempotent-revisioned-view-mutations-are-guarded) | Service/web commands | Assign retry receipts and view-revision guards per command. |
+| [DR-BR-28](#dr-br-28--cosmetic-persistence-crosses-one-typed-section-channel) | Interface UI state/web commands | Freeze one section-versioned cosmetic channel without admitting semantic or session state. |
 
 ---
 
@@ -1472,9 +1473,10 @@ its grammar; otherwise it is `null`. The code/message vocabulary is exact:
 
 Retry policy is
 owned by the immutable command row and browser wrapper, not returned as handler
-data. A structured refusal is definitive; only uncertain transport delivery or
-`internal_error` from an admitted receipted command may trigger that row's one
-same-command replay. Messages expose no request body, command payload, real
+data. A structured refusal is definitive. An immutable row may declare one
+identical-payload replay after uncertain transport delivery when a receipt or
+revision rule makes that replay safe; only an admitted receipted command may
+also declare replay after `internal_error`. Messages expose no request body, command payload, real
 path, exception text, traceback, Python type, or implementation detail; a
 handler exception never crosses pywebview as its native traceback-bearing error
 value.
@@ -1560,14 +1562,15 @@ source-slot/target-slot/deletion-policy wire intent, and the resolved
 source/target/deletion intent. A different wire or resolved intent under the
 same command id remains a conflict.
 
-The immutable production command mapping is exactly `shell_ready`,
+The thaw/refreeze checkpoint must make the production command mapping exactly `shell_ready`,
 `readiness_echo`, `pick_folder`, `start_plan`, `next_events`,
-`release_terminal_session`, and `close_task`.
+`release_terminal_session`, `close_task`, `read_cosmetic_section`, and
+`replace_cosmetic_section`.
 `test_report` is a test-owned constructor-only
 harness row: the harness builds a new immutable mapping from those production rows plus its own
 validator, handler, payload, and result schema under `tests/`. No product argv,
 environment, page value, or bridge request can enable it, and it has no product
-retry class. Later plan, inventory, settings, and history commands
+retry class. Later plan, inventory, semantic-settings, and history commands
 are not reserved or allowlisted until their owning slices
 land each row with its schema, receipt/revision rule, deadline, retry policy,
 and gate.
@@ -1725,18 +1728,112 @@ the real `sync-plan` terminal-record identity, terminal release without
 automatic task close, and task/listener/timer cleanup.
 
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
-as the GUI-owned counterpart to `db/settings.json` — recents, window geometry,
-column and sort state — and this document's slice 7 is where it is finally
-written. It is bounded here because it is the one new persistent artifact Stage 6
-adds and §0's non-goals defer durable plan/session persistence: it may hold
-window geometry, column widths and order, sort state, collapsed sets, the active
-filter chips, and the recents lists. It may **not** hold a plan request id, a
-session id, a task identity, a selection, a `view_id`, or a projection revision.
-The distinction is not stylistic — anything in the second list would be a durable
-session store arriving through the back door, unversioned and unreconciled with
-the process-local truth it would contradict on the next launch. A corrupt or
-absent file is a recoverable cosmetic reset, never a lost task; the GUI starts
-with defaults and says nothing.
+as the GUI-owned counterpart to `db/settings.json`. The ratified strict v1 schema
+contains only the appearance override; later recents, window geometry, column
+and sort state, active filter chips, and file-list treegrid state require
+explicit typed section additions whose durable keys are ratified by their
+owning slice. It may **not** hold a plan
+request id, a session id, a task identity, a selection, a `view_id`, or a
+projection revision. The distinction is not stylistic — anything in the
+second list would be a durable session store arriving through the back door,
+unreconciled with the process-local truth it would contradict on the next
+launch.
+
+### DR-BR-28 — Cosmetic persistence crosses one typed section channel
+
+The bridge thaw adds two generic-shaped commands and one accepted section,
+then refreezes the protocol. Future cosmetic sections extend a source-owned
+registry with their own bounded value schema; they do not add one bridge
+command per widget and do not pass through semantic settings or the service
+facade. The v1 appearance value is exactly `{"theme":"system"}`,
+`{"theme":"light"}`, or `{"theme":"dark"}`.
+
+| Command | Exact payload | Exact success `result` | Identity / revision | Availability, deadline, and retry |
+| --- | --- | --- | --- | --- |
+| `read_cosmetic_section` | `{"section":"appearance","value_version":1}` | `{"section":"appearance","value_version":1,"revision":N,"dirty":false-or-true,"value":{"theme":"system-or-light-or-dark"}}` | `READ_ONLY`; `command_id` and request revision metadata forbidden; returns a nonnegative JavaScript-safe process-local section revision | `OPEN`; local 5,000 ms; after transport uncertainty or timeout, at most one retry with the identical payload and a fresh request id |
+| `replace_cosmetic_section` | `{"section":"appearance","value_version":1,"expected_revision":N,"value":{"theme":"system-or-light-or-dark"}}` | the read result plus `"disposition":"applied-or-noop-or-conflict"` | `MUTATING`; `command_id` forbidden and request revision metadata required; `expected_revision` is a non-Boolean JavaScript-safe integer | `OPEN`; local 5,000 ms; no automatic replay; after transport uncertainty or timeout, reconcile through `read_cosmetic_section` before another replacement |
+
+Every object is exact: missing or unknown members, another section, a
+`value_version` other than the non-Boolean integer `1`, an invalid theme, or a negative, fractional, Boolean, or
+greater-than-`9007199254740991` expected revision is `invalid_payload`. No new
+bridge error code is added. Each loaded section starts at revision zero;
+accepted value changes advance its process-local revision by one and also
+advance one private process-local document generation. The document generation
+is not persisted or exposed; it orders whole-file snapshots across all current
+and future sections. `dirty` is
+document-wide because all sections share one atomic file; it covers a pending
+or failed save and the session-only fallback used for unsupported forward state.
+
+Replacement is serialized and follows this complete decision table:
+
+- current revision plus a different value updates memory, advances the
+  revision, notifies isolated subscribers, and returns `applied` with
+  `dirty:true`. When persistence is permitted it schedules the new current
+  document generation for the shared writer; forward-version protection instead keeps the
+  value session-only without touching the file;
+- current revision plus the same clean value returns `noop` without writing;
+- current revision plus the same dirty value returns `noop` and explicitly
+  schedules the current document generation when persistence is permitted; forward-
+  version protection performs no attempt;
+- stale revision plus the already-current value returns `noop` without another
+  write, making duplicate delivery harmless;
+- stale revision plus a different value returns `conflict` without mutation or
+  persistence.
+
+A subscriber failure is logged without its exception text, cannot change an
+accepted disposition, and cannot prevent other subscribers from observing the
+revision. Registration and current-snapshot capture are atomic; callbacks run
+outside the state lock, carry the revision, and consumers discard non-newer
+delivery so appearance composition has neither a read/subscribe gap nor a
+reversed-notification regression. Cosmetic reads and writes never invoke
+the service, registry, planner, task state, semantic settings, or plan hashing.
+They remain independently degradable and do not participate in readiness.
+
+The on-disk v1 shape is exactly:
+
+```json
+{"schema_version":1,"sections":{"appearance":{"value_version":1,"value":{"theme":"system"}}}}
+```
+
+The owner reads at most 1 MiB plus one sentinel byte before UTF-8 decoding or
+JSON construction and rejects duplicate keys, non-finite values, excessive
+nesting, and every unknown or malformed member. Missing state yields clean
+defaults and creates no file. The unversioned prototype is recognized only by
+its exact top-level key set — `recent_sources`, `recent_targets`, `window`,
+`columns`, and `sort`; it and a malformed current document yield dirty defaults
+and a sanitized diagnostic, but load itself does not mutate the artifact. A newer document schema or appearance value
+version yields dirty session defaults with persistence blocked for the life of
+that owner; an older binary never overwrites state it cannot understand.
+Adding a registered section advances the global document schema and starts the
+new section at value version one. Changing an existing persisted value shape
+advances both the global schema and that section's value version. The canonical
+encoded document is checked against the same 1 MiB ceiling before any write.
+
+The single process-local writer waits 250 ms after an explicit schedule. Each
+schedule captures the private document generation and the complete typed
+document. A newer accepted document generation cancels and replaces a pending attempt before it
+starts, so intermediate revisions coalesce; an attempt already in progress is
+serialized ahead of the newer snapshot. A completed write may mark the
+document clean only when the written document generation is still current.
+Every explicit
+schedule receives at most one atomic attempt, and a superseded pending schedule
+receives none. A failed document generation may be scheduled again only by a later
+same-value request carrying that current revision; close never invents that
+retry. Failure preserves the accepted session value,
+leaves `dirty` true, and logs only a stable event plus exception type. Access
+or path failure, full disk, and unclassified I/O end that attempt immediately;
+there is no timer retry loop.
+
+Close first stops new cosmetic commands, then cancels a pending timer and waits
+for any in-flight atomic replacement. It flushes the current snapshot exactly
+once only when its document generation is dirty, persistence-permitted, and
+has never been attempted; it does not retry a failed document generation and never writes
+unsupported forward state. Missing state is not created merely by launch.
+There is no cross-process mutex. Save failure remains a sanitized log event in
+this checkpoint; `dirty` is retained for a later settings surface and does not
+replace the operational shell status. After uncertain replacement delivery or
+timeout, the page performs a guarded section read and
+reconciles before enabling another theme change.
 
 ---
 
@@ -2358,10 +2455,12 @@ headings are organizational, not lane ownership.
 - **BR-G-32 — The transport is one allowlisted, inert-data channel.** Slice 2
   proves every public view type round-trips through the production JSON codec
   and the one exposed `dispatch(command_json)`; the two Slice 2 rows are exactly
-  `pick_folder` and `start_plan`, and the current allowlist adds the
+  `pick_folder` and `start_plan`, and the thaw/refreeze allowlist adds the
   foundation-only readiness rows `shell_ready` and `readiness_echo`, Slice 3's
   `next_events`, plus
-  lifecycle-only `release_terminal_session` and `close_task`, while
+  lifecycle-only `release_terminal_session` and `close_task`, and the
+  pre-Slice-5 cosmetic rows `read_cosmetic_section` and
+  `replace_cosmetic_section`, while
   `test_report` is possible only through test-owned
   constructor composition. Host composition, rather than transport, joins the
   final command mapping to current-document readiness through an exact opaque
@@ -2573,10 +2672,11 @@ headings are organizational, not lane ownership.
   runtime, bridge, and adapter registries bounded while retained history remains
   readable. The rail renders `pausing` distinctly until `paused` or terminal,
   with repeat pause/resume disabled and cancel still available. Closing a
-  terminal task asks nothing. `ui-state.json` round-trips
-  only the permitted cosmetic fields, including collapsed opaque node-id sets,
-  but never serializes a plan request id, session id, task identity, selection,
-  `view_id`, or projection revision; corruption recovers with defaults. Settings
+  terminal task asks nothing. `ui-state.json` round-trips only registered typed
+  cosmetic sections — beginning with appearance and later adding file-list
+  expansion state only after its durable key is ratified — but never serializes a plan request id, session id,
+  task identity, selection, `view_id`, or projection revision; corruption
+  recovers with defaults while unsupported newer state is preserved. Settings
   round-trip through the service;
   invalid values do not poison the file, and changed semantics affect the next
   plan but never an already committed one. Shutdown under concurrent dispatch
@@ -2684,6 +2784,33 @@ headings are organizational, not lane ownership.
   reusing one interned path/detail value, measuring an empty/summary result,
   clearing truth before its presentation/retry boundary, assuming degraded
   history can reconstruct it, or treating SH-G-8/SH-G-15 as substitutes.
+- **BR-G-46 — Cosmetic state is typed, bounded, non-authoritative, and visually
+  coherent.** The exact nine-row native mapping and browser policy mirror
+  agree on both cosmetic rows, their `OPEN` phase, five-second deadline,
+  field requirements, read-only uncertainty replay, and replacement read-
+  reconciliation policy.
+  Focused tests prove the complete revision decision table, concurrent
+  serialization, 250 ms coalescing, single-attempt failure behavior, guarded
+  close flush, subscriber isolation/order, the 1 MiB read/write bounds, strict
+  and duplicate-key decoding, forward-version preservation, and atomic
+  replacement. Fault injection proves an accepted in-memory value survives a
+  failed save without leaking path, payload, exception text, or traceback.
+
+  Cosmetic reads and replacements leave semantic `settings.json`, service,
+  registry, planner, plan fingerprints, tasks, and sessions untouched;
+  pre-`OPEN`, off-origin, oversized, and malformed requests produce no state or
+  file mutation. The product loads the initial override before window creation,
+  then headed installed-WebView2 evidence proves the selector reconciles only
+  accepted state and light/reduced versus dark/forced gallery modes agree across
+  native material and page tokens. Raw Windows appearance remains distinct,
+  high contrast temporarily wins, and accent/reduced-motion values stay
+  system-owned. No bridge oracle or compositor sentinel is required: exact
+  native policy/static tests, fault-directed material tests, and the installed
+  transport/gallery witnesses jointly own this gate. **Status: pending the
+  pre-Slice-5 cosmetic thaw/refreeze checkpoint.** *Not satisfied by* changing
+  page CSS alone, seeding gallery DOM state after window creation, persisting a
+  permissive dictionary, retrying failed I/O on a timer, or proving only the
+  happy-path file round trip.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**
   `DESKTOP_UI.md`, the focused component documents, README overview/index/
   limitations/changelog, and `ui_mockup/` status agree with the implemented
@@ -2724,7 +2851,9 @@ sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
 `tests/interfaces/web/test_bridge_event_benchmark.py`, the custody-runner
 contract lives in `tests/interfaces/web/test_bridge_transport_custody.py`, and
 BR-G-45's focused artifact/retention cases will live in
-`tests/interfaces/web/test_terminal_artifact_scale.py`. Their gate tests retain the
+`tests/interfaces/web/test_terminal_artifact_scale.py`; BR-G-46's typed state
+and bridge/appearance cases live in `tests/interfaces/test_ui_state.py` and
+`tests/interfaces/web/test_cosmetic_channel.py`. Their gate tests retain the
 `test_br_g_<number>_` prefix. A slice may add narrower unit files, but moving a
 gate test elsewhere requires updating this table in the same change so no
 acceptance test becomes undiscoverable.
@@ -2764,6 +2893,7 @@ its row and the applicable regression rows are green.
 | DR-BR-25 | BR-G-32, BR-G-35, BR-G-39 |
 | DR-BR-26 | BR-G-1–3, BR-G-35 |
 | DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33 |
+| DR-BR-28 | BR-G-46 |
 
 BR-G-19, BR-G-43, and BR-G-44 are cross-cutting release gates and therefore
 apply to every row even where not repeated. Product goals 1–5 are witnessed,
@@ -2827,14 +2957,16 @@ plan and inventory so Slices 5 and 6 can proceed in parallel.
 | 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33, BR-G-41 transport/lifecycle foundations, the closed BR-G-42 event/transport-custody portion, plus XV-18 |
 | GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; visual contract in `DESKTOP_UI.md` |
 | 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-32 generic-tree-sink portion, BR-G-34, SH-G-7 closed |
+| Cosmetic thaw/refreeze | Interface/web | Typed UI-state lifecycle, two-row cosmetic channel, persistent theme override, native/page agreement, and headed gallery repair | 4 | BR-G-46 |
 | 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
 | 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
-| 7 | Lifecycle | Database-paged history, settings, `ui-state.json`, task close sequence, clean shutdown, terminal-artifact retention policy | 5, 6 | BR-G-40, BR-G-41, BR-G-45, and the history portion of BR-G-42 |
+| 7 | Lifecycle | Database-paged history, settings, remaining typed `ui-state.json` consumers, task close sequence, clean shutdown, terminal-artifact retention policy | 5, 6 | BR-G-40, BR-G-41, BR-G-45, and the history portion of BR-G-42 |
 | GUI 2 | Visual cohesion | Holistic spacing, motion, empty/error-state, accessibility, and responsive review across the completed product surfaces | 7 | `DESKTOP_UI.md` holistic review before release |
 | 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | GUI Break 2 | BR-G-43, BR-G-44, and shell-owned SH-G-15 |
 
 **Ordering.** Host/transport Slices 0→1→2→3 precede GUI Break 1
-and Slice 4. Once Slice 4 and Lane D are complete, Slices 5 and 6 may run in
+and Slice 4. The cosmetic thaw/refreeze closes before Slices 5–7 add traffic to
+the bridge. Once Slice 4 and Lane D are complete, Slices 5 and 6 may run in
 parallel; Slice 7 joins them, then GUI Break 2 and Slice 8 close the milestone.
 `DESKTOP_UI.md` owns visual-cohesion criteria and `M1_SHELL.md` owns host and
 package closure. This ordering makes no duration or critical-path claim.

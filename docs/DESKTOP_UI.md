@@ -238,6 +238,27 @@ high-contrast snapshot and CDP `forced-colors` emulation in the same production
 window, then compares resolved surfaces with dynamic system-color probes while
 retaining the native Mica-off checks. It does not claim to exercise a real OS
 contrast-theme transition.
+The ratified cosmetic-channel checkpoint will add a labelled System/Light/Dark
+selector to the product header. It stays disabled until its initial section
+read succeeds; exhausted initial transport failure leaves only that control
+disabled and does not alter operational readiness. It serializes replacements,
+reconciles only server-accepted state, and never mutates theme CSS
+optimistically. After exhausted uncertain
+replacement delivery it performs a guarded read before settling or enabling
+another change. Save failure remains a sanitized log event in this checkpoint;
+it does not block bridge readiness or replace the shell's operational status.
+The stored override will drive both the native window material and the page
+tokens. Active high contrast will temporarily win without overwriting the
+stored choice; system accent and reduced-motion state remain unchanged.
+Component gallery `light` and `reduced` modes will seed `light`, while `dark`
+and `forced` seed `dark`, before window creation so native material and page
+theme are tested as one effective appearance.
+The host must load the cosmetic authority before choosing the opaque fallback
+background or creating the window. That same initial effective snapshot feeds
+title-bar/material policy, the appearance controller, and the first page
+appearance envelope; page-side section initialization remains post-`OPEN` and
+cannot delay readiness. This ordering prevents a stored light override from
+opening first with dark native Mica or dark page tokens.
 Opaque fallback requires sufficient structured backdrop/glass/form/controller
 landing evidence. A live reapply that confirms neither native path publishes
 `degraded`, which returns the page itself to its theme-correct opaque base;
@@ -352,9 +373,13 @@ mount for ambiguity rather than inferring one from a mapping or prior task.
 
 Semantic settings and UI state are deliberately separate. Semantic settings
 are read and partially committed through the facade, then captured immutably
-by planning. `ui_state.py` owns only cosmetic recents, geometry, columns, and
-sorting in `ui-state.json`; it must not become another semantic-settings or
-session store.
+by planning. The ratified `ui_state.py` replacement will own a strict,
+section-versioned cosmetic document; schema v1 contains only the appearance
+override. Recents, geometry, columns,
+sorting, treegrid expansion/grouping state, and filter chips remain planned
+typed sections, including the state later needed by the file-list treegrid. It
+must not become
+another semantic-settings or session store.
 
 ## Bridge and renderer security
 

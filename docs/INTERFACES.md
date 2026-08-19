@@ -5,10 +5,12 @@ sync/history adapter, explicit inventory/baseline/verify/rebaseline commands,
 semantic-settings seam, revisioned selection, opaque-id location actions,
 retry receipts, typed scan warnings, and final axis-preserving result
 classification are implemented. M1 Stage 1's isolated cosmetic UI-state
-storage, tested WebView2 security seam, classified launchers, coordinated
+prototype, tested WebView2 security seam, classified launchers, coordinated
 database-pair facade, secured product-host composition, and hardened production
-transport are implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G
-authority. The installed real-WebView2 browser witnesses and fixed, non-sliding
+transport are implemented; its typed cosmetic lifecycle and bridge replacement
+are ratified for the pending pre-Slice-5 checkpoint. `M1_BRIDGE.md` is the sole
+normative bridge/BR-G authority. The installed real-WebView2 browser witnesses
+and fixed, non-sliding
 150 ms progress-only linger have landed. With an active long poll, the first
 detailed progress snapshot may use that full interval; receipt and reliable
 running-state feedback bypass that linger. Benchmark accounting now uses bounded
@@ -315,12 +317,24 @@ through a lazy wrapper.
 `M1_BRIDGE.md` owns the exact transport mechanisms and acceptance gates below
 it. This document records their interface-layer implementation.
 
-`interfaces/ui_state.py` owns strict-shape `ui-state.json` independently
-from database-owned semantic defaults. It retains at most five source and five
-target recents separately, deduplicates Windows spellings, and stores only
-cosmetic window/column/sort mappings. Atomic replacement prevents torn JSON;
-cross-process semantic write coordination deliberately remains in the database
-settings store.
+The ratified replacement for the unused `interfaces/ui_state.py` prototype
+will own strict-shape `ui-state.json` independently from database-owned
+semantic defaults. Schema v1 contains only the typed appearance section and
+its `system`, `light`, or `dark` value; later recents, geometry, column, sort,
+treegrid expansion/grouping, and filter state require typed schema additions.
+The owner bounds the file before decoding, refuses duplicate or unknown
+members, and never rewrites during load. Missing state yields clean defaults;
+malformed current state yields dirty session defaults; a newer unsupported
+document or section value is additionally persistence-blocked so an older
+binary cannot destroy it. Explicit guarded replacements update memory and
+subscribers immediately, then schedule a 250 ms process-local coalescing
+writer. Each scheduled document generation gets at most one serialized atomic
+attempt; failures remain dirty and emit only a stable diagnostic plus exception
+type. Close waits an in-flight write and flushes only a current dirty document
+generation that has never been attempted, never a failed or unsupported one.
+Cross-process semantic write coordination remains in the database settings
+store and is deliberately not implied for cosmetics.
+This lifecycle is pending until the dedicated cosmetic-channel checkpoint.
 
 `interfaces/web/bridge.py` owns the promoted security-sensitive host boundary;
 the product window composes it without changing the proven guard behavior. The
@@ -471,9 +485,9 @@ or display path. CSS bidi isolation contains ordinary directional text without
 rewriting Arabic, Hebrew, combining sequences, emoji/variation selectors,
 ZWNJ/ZWJ, or long labels.
 
-The sole presentation-only native-to-page path is the system-appearance
-publication defined in `M1_BRIDGE.md`, posted through WebView2 after native
-origin/security attachment. Its packaged receiver validates the complete schema and may update
+The sole presentation-only native-to-page path is the existing system-
+appearance publication defined in `M1_BRIDGE.md`, posted through WebView2 after
+native origin/security attachment. Its packaged receiver validates the complete schema and may update
 only fixed root appearance datasets and CSS custom properties. It exposes no
 browser-to-native sender, command, URL, path, HTML, or dynamic property name and
 therefore does not widen bridge authority. Windows observation subscribes
@@ -481,6 +495,15 @@ before its mandatory initial read; notifications only advance a generation,
 and one bounded UI-thread drain reads and applies current state before assigning
 the next publication revision. A newer notification is deferred to another UI
 turn, so an older callback-thread snapshot cannot win or starve the pump.
+
+Raw `SystemAppearance` remains Windows-owned evidence. The ratified theme
+consumer will turn that same path into effective-appearance publication by
+combining it with the stored override only when deriving native and page
+presentation: `system` follows Windows, `light` and `dark` replace the
+ordinary color mode, and active high contrast temporarily retains Windows
+authority without changing the stored choice. Accent and reduced-motion inputs
+remain system-owned. Cosmetic initialization is independently degradable and
+never joins document readiness or operational command admission.
 
 GUI Break 1's icon helper is presentation-only and never becomes another bridge
 or asset-authority surface. It resolves one exact visual glyph name through a

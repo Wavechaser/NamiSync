@@ -560,6 +560,15 @@ server projections as authoritative.
 Workflow code owns hierarchy and membership; the web adapter owns generic
 flattening, filtering, windowing, and accessible presentation. Cosmetic state
 is stored separately from semantic settings and never persists authority.
+The ratified cosmetic-channel thaw assigns typed, versioned full-section reads
+and guarded replacements to one interface-owned `ui-state.json` authority at
+the desktop bridge; it does not pass through the service facade, workflows,
+database settings, plan hashing, or sync admission. Revisions are process-
+local concurrency evidence, while the
+document schema protects durable compatibility. Adding a recognized section
+or changing an on-disk value shape advances the global schema so older
+binaries preserve rather than erase newer cosmetic state. This assignment is
+pending until the dedicated pre-Slice-5 implementation checkpoint lands.
 
 Windows host security, bridge transport, presentation tokens, and lifecycle
 policy remain adapter concerns. `interfaces/web/readiness.py` is the named owner
