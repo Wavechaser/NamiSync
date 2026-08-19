@@ -17,6 +17,7 @@ from namisync.core.evidence import (
     Provenance,
     RecordingStatus,
 )
+from namisync.core.events import StateChanged
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -842,6 +843,7 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         clock=FakeClock(),
         audit_observer_factory=runtime.audit_observer,
     )
+    paused_stream = None
     try:
         session_id = dispatcher.submit(
             VERIFY_KIND,
@@ -851,6 +853,7 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
                 location_id=location_id,
             ),
         )
+        paused_stream = dispatcher.subscribe(session_id)
         assert first_completed.wait(2)
         assert dispatcher.pause(session_id).accepted
         allow_checkpoint.set()
@@ -860,6 +863,10 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         assert len(continuation.selection_item_ids) == 2
         assert len(continuation.completed_bytes) == 1
         assert continuation.processed_bytes == 7
+        while True:
+            envelope = paused_stream.next(2)
+            if envelope.body == StateChanged(SessionState.PAUSED):
+                break
         paused_history = runtime.get_history_summary("pause-verify")
         paused_items = runtime.get_history_items("pause-verify")
         assert paused_history.completion_status == "incomplete"
@@ -892,6 +899,8 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         ]
     finally:
         allow_checkpoint.set()
+        if paused_stream is not None:
+            paused_stream.close()
         assert dispatcher.shutdown().complete
         runtime.close()
 
