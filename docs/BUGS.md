@@ -379,6 +379,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-19). Audit-barrier observation race. The paused-
+  verification integration regression could read retained history before its
+  `PAUSED` event reached the durable-audit attempt, intermittently producing a
+  missing-run failure although dispatcher and history behavior were correct.
+  Cause: the test synchronized on direct session state, which intentionally may
+  lead live event and audit publication, then treated that observation as an
+  audit-read barrier. Fixed by subscribing after submit and waiting for live
+  `StateChanged(PAUSED)` before reading history; production ordering is
+  unchanged.
 - MODERATE - FIXED (2026-08-08). Observer failure-domain poisoning. One
   oversized valid event or exact repeated item could make the observer reject
   its whole window, permanently discard every later event, and omit terminal
@@ -582,6 +591,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
+  event registration failed and removal of the already-installed `before_load`
+  handler also raised, appearance configuration escaped without aborting its
+  controller. The window retained the bound callback after configuration was
+  reported failed; once cosmetic binding preceded attachment, it also retained
+  a live subscription. Cause: inline handler removal could short-circuit all
+  remaining resource retirement. Fixed by fault-isolating removal, always
+  aborting partial attachment, closing the cosmetic subscription exactly once,
+  and invalidating the controller so a retained handler is inert.
 - MODERATE - OPEN (2026-08-17). Headed compositor-restart evidence blindness. A
   headed checkpoint can report green while Windows DWM restarts during the same
   session because the harness observes its child/page result but has no shared
