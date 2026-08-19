@@ -1801,9 +1801,13 @@ nesting, and every unknown or malformed member. Missing state yields clean
 defaults and creates no file. The unversioned prototype is recognized only by
 its exact top-level key set — `recent_sources`, `recent_targets`, `window`,
 `columns`, and `sort`; it and a malformed current document yield dirty defaults
-and a sanitized diagnostic, but load itself does not mutate the artifact. A newer document schema or appearance value
+and a sanitized diagnostic, but load itself does not mutate the artifact. A
+newer document schema or appearance value
 version yields dirty session defaults with persistence blocked for the life of
-that owner; an older binary never overwrites state it cannot understand.
+that owner. An existing artifact that cannot be read likewise yields dirty
+session defaults with persistence blocked; the owner never overwrites content
+it could not inspect. An older binary never overwrites state it cannot
+understand.
 Adding a registered section advances the global document schema and starts the
 new section at value version one. Changing an existing persisted value shape
 advances both the global schema and that section's value version. The canonical

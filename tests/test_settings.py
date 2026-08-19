@@ -18,7 +18,6 @@ from namisync.db.settings import (
     SemanticSettingsStore,
     SettingsFormatError,
 )
-from namisync.interfaces.ui_state import UiState, UiStateFormatError, UiStateStore
 
 
 def _delayed_filter_commit(
@@ -183,39 +182,3 @@ def test_concurrent_semantic_commits_reread_under_named_mutex(
         filters=FilterSet(("*.tmp",)),
         deletion_policy=DeletionPolicy.ADDITIVE,
     )
-
-
-def test_ui_state_keeps_source_and_target_recents_separate_and_bounded(
-    tmp_path: Path,
-) -> None:
-    value = UiState()
-    for index in range(7):
-        value = value.remember_source(rf"C:\source-{index}")
-    value = value.remember_target(r"D:\target").remember_source(r"C:\source-4")
-    store = UiStateStore(tmp_path / "ui-state.json")
-    store.write(value)
-
-    decoded = store.read()
-    assert decoded.recent_sources == (
-        r"C:\source-4",
-        r"C:\source-6",
-        r"C:\source-5",
-        r"C:\source-3",
-        r"C:\source-2",
-    )
-    assert decoded.recent_targets == (r"D:\target",)
-
-
-def test_ui_state_rejects_unknown_top_level_keys(tmp_path: Path) -> None:
-    path = tmp_path / "ui-state.json"
-    path.write_text('{"recent_sources":[]}', encoding="utf-8")
-
-    with pytest.raises(UiStateFormatError, match="missing or unknown"):
-        UiStateStore(path).read()
-
-
-def test_ui_state_rejects_non_json_nested_state() -> None:
-    with pytest.raises(ValueError, match="string-keyed"):
-        UiState(window={"nested": {1: "not-json"}})
-    with pytest.raises(ValueError, match="finite"):
-        UiState(columns={"width": float("nan")})

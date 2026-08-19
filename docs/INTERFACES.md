@@ -317,8 +317,8 @@ through a lazy wrapper.
 `M1_BRIDGE.md` owns the exact transport mechanisms and acceptance gates below
 it. This document records their interface-layer implementation.
 
-The ratified replacement for the unused `interfaces/ui_state.py` prototype
-will own strict-shape `ui-state.json` independently from database-owned
+The replacement for the unused `interfaces/ui_state.py` prototype now owns
+strict-shape `ui-state.json` independently from database-owned
 semantic defaults. Schema v1 contains only the typed appearance section and
 its `system`, `light`, or `dark` value; later recents, geometry, column, sort,
 treegrid expansion/grouping, and filter state require typed schema additions.
@@ -326,7 +326,9 @@ The owner bounds the file before decoding, refuses duplicate or unknown
 members, and never rewrites during load. Missing state yields clean defaults;
 malformed current state yields dirty session defaults; a newer unsupported
 document or section value is additionally persistence-blocked so an older
-binary cannot destroy it. Explicit guarded replacements update memory and
+binary cannot destroy it. An existing artifact that cannot be read is also
+persistence-blocked so close cannot overwrite uninspected content. Explicit
+guarded replacements update memory and
 subscribers immediately, then schedule a 250 ms process-local coalescing
 writer. Each scheduled document generation gets at most one serialized atomic
 attempt; failures remain dirty and emit only a stable diagnostic plus exception
@@ -334,7 +336,9 @@ type. Close waits an in-flight write and flushes only a current dirty document
 generation that has never been attempted, never a failed or unsupported one.
 Cross-process semantic write coordination remains in the database settings
 store and is deliberately not implied for cosmetics.
-This lifecycle is pending until the dedicated cosmetic-channel checkpoint.
+This typed owner lifecycle is active. Composition behind the two cosmetic
+bridge rows and the appearance consumer remains pending in the later
+cosmetic-channel checkpoints.
 
 `interfaces/web/bridge.py` owns the promoted security-sensitive host boundary;
 the product window composes it without changing the proven guard behavior. The

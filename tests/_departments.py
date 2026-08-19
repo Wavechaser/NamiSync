@@ -62,6 +62,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/dispatcher/test_event_bus.py",
     ),
     "interfaces": (
+        "tests/interfaces/test_ui_state.py",
         "tests/interfaces/test_launcher.py",
         "tests/interfaces/web/test_bridge.py",
         "tests/interfaces/web/test_bridge_event_benchmark.py",
