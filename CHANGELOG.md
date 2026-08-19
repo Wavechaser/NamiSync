@@ -115,6 +115,26 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
+#### Thaw and refreeze the cosmetic state channel (2026-08-19)
+
+- Ratified `ui-state.json` as a strict, interface-owned cosmetic document,
+  implemented its bounded typed lifecycle, and kept it outside semantic
+  settings, plan hashing, service state, and sync-plan construction.
+- Added the fixed `read_cosmetic_section` and `replace_cosmetic_section` bridge
+  rows with guarded revisions, bounded retry/reconciliation policy, host
+  quiescence ownership, and no new authority for session or workflow state.
+- Made the persisted System/Light/Dark choice drive both native material and
+  page tokens while preserving Windows ownership of high contrast, accent, and
+  reduced motion; selector initialization remains independent of readiness.
+- Repaired the component gallery to seed the real cosmetic owner before window
+  creation and added installed-WebView2 evidence for accepted-only selector
+  reconciliation, native/page agreement, and keyboard order, plus focused
+  coverage for reusable development relaunches.
+- Independently reviewed persistence races, shutdown custody, browser
+  reincarnation, attachment rollback, forward-version preservation, and
+  evidence honesty. Kept the file-list/treegrid consumer and its durable keys
+  for the owning later slice without reopening the refrozen bridge protocol.
+
 #### Concentrate bridge contract authority (2026-08-19)
 
 - Reduced `M1_BRIDGE.md` to standing scope, one owner-oriented decision map,

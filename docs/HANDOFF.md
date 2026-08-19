@@ -1,112 +1,119 @@
 # Session Handoff
 
-Status (2026-08-18): the editable GUI launcher supports concurrent grouped
-gallery profiles while preserving its concrete per-mode mutexes, and routine
-gallery closure now uses one concise profile receipt. The real shell profile
-and every diagnostic cleanup safety check remain unchanged. This handoff
-records the reviewed delivery and final repository-wide verification sweep.
+Status (2026-08-19): the cosmetic-state bridge thaw is complete and refrozen.
+`ui-state.json` now has a strict interface-owned lifecycle, the bridge exposes
+its fixed two-row section channel, and the header's persisted System/Light/Dark
+choice drives both native window appearance and page tokens. The file-list
+surface remains intentionally unbuilt; its eventual treegrid state must extend
+the typed document without changing the bridge rows.
 
 ## Delivered
 
-- Added `tools/gui.ps1` as a PowerShell 7 foreground launcher. Bare invocation
-  starts the real editable development shell; `gallery` starts the dark
-  component gallery, and `-Mode light|dark|forced|reduced` selects the explicit
-  gallery environment. Implicit and explicit dark use the same child, data
-  root, mutex, title, and test-owned scenario.
-- Added `-Mode fluent` for concurrent light/dark galleries and `-Mode all` for
-  concurrent light/dark/forced/reduced galleries. Grouped launch starts every
-  selected child before waiting and offers one relaunch/Q prompt after all
-  selected windows close.
-- Used only `.venv\Scripts\python.exe`, verified that isolated import resolution
-  points into this checkout, removed inherited `PYTHON*` behavior controls, and
-  restored controlled UTF-8 mode. The launcher does not build a wheel, create
-  or clean a venv, fall back to PATH, watch files, or implement hot reload.
-- Gave shell and gallery profiles development-only titles, child mutexes,
-  launcher-control mutexes, persistent data roots, and logs beneath
-  `%LOCALAPPDATA%\NamiSync-Development`. Production launcher behavior and
-  identity are unchanged. Gallery locks remain concrete per-mode: different
-  modes may coexist, but a second instance of the same mode is refused.
-- Started children with `ProcessStartInfo.ArgumentList`, inherited their live
-  console streams, and waited on only the returned process objects. `fluent`
-  acquires the existing light/dark locks; `all` acquires all four locks in fixed
-  order. Neither adds a global gallery lock or touches the shell lock.
-- Printed source, interpreter, data, log, gallery scenario, diagnostic output,
-  and PID around each launch. Normal closure prints one receipt for the selected
-  single or grouped profile; Enter relaunches with a fresh diagnostic directory,
-  while Q or unavailable input exits. An abnormal launch names its mode and
-  reason, retains the exact diagnostic directory, shows a bounded log tail, and
-  labels an unchanged persistent log as old.
-- Reused the unchanged `_headed_host_child.py`,
-  `_component_gallery_child.py`, and gallery scenario. Editable gallery
-  milestones remain diagnostics, not clean-wheel acceptance evidence.
-- Bound normal gallery cleanup to a random marker, exact ready/final entry set,
-  regular non-reparse files, and unchanged reviewed stats. Routine success hides
-  the complete cleanup plan and each removal on PowerShell's `-Verbose` stream;
-  partial failure still prints completed paths and remaining root/marker state.
-  Any abnormal lifecycle, unknown entry, replacement, stat drift, or cleanup
-  error fails closed and retains the remaining output.
+- Ratified the cosmetic boundary before implementation. `ui-state.json` is
+  separate from semantic `settings.json`, plan fingerprints, service state,
+  tasks, sessions, selections, and projection revisions. Schema v1 accepts only
+  the versioned `appearance` section.
+- Added a bounded typed owner with strict duplicate/shape/size checks,
+  pathological-depth rejection, forward-version and unreadable-artifact
+  preservation, process-local section revisions, one private whole-document
+  generation, 250 ms coalescing, atomic replacement, one-attempt failure
+  custody, and guarded close behavior.
+- Added `read_cosmetic_section` and `replace_cosmetic_section` as the eighth and
+  ninth production bridge commands. Their exact five-second policy, read-only
+  uncertainty replay, mutating no-replay rule, guarded read reconciliation,
+  origin/phase admission, and hostile-input bounds are frozen in
+  `M1_BRIDGE.md`.
+- Constructed one cosmetic owner in the desktop host, injected it only into the
+  interface command and appearance paths, and closed it after handler
+  quiescence and appearance teardown but before logging, path, and mutex
+  release. It does not enter `NamiSyncService` or readiness.
+- Added the labelled System/Light/Dark selector. It waits for `OPEN`, never
+  renders an optimistic choice, serializes replacements, accepts conflict
+  authority, reconciles uncertain delivery by guarded read, and suppresses
+  stale generations. A same live realm waits prior mutation settlement; a new
+  realm converges a late mutation through healthy validated appearance
+  publication and a fresh authoritative read.
+- Applied the stored choice to the precreate opaque background, native
+  material/title-bar policy, and page tokens. Active high contrast continues to
+  follow Windows without overwriting the stored choice; accent and reduced
+  motion remain system-owned.
+- Seeded the real cosmetic owner before component-gallery window creation:
+  light/reduced profiles use Light and dark/forced profiles use Dark. The
+  installed witness operates the production selector, proves accepted-only
+  reconciliation, restores the seed, and checks native/page agreement. The
+  editable launcher may reuse an already persisted same-mode seed without
+  weakening fresh clean-wheel evidence.
+- Corrected one pre-existing dispatcher test synchronization race as its own
+  checkpoint. The inventory test now waits for live `PAUSED` publication before
+  reading audit history, matching the documented publication barrier without
+  changing production ordering.
+
+## Checkpoints
+
+- `9c2fa56 docs(bridge): ratify cosmetic channel thaw`
+- `2de4593 feat(interfaces): own cosmetic state lifecycle`
+- `3090dfc feat(bridge): expose cosmetic state channel`
+- `4e4fd2e test(dispatcher): wait for paused audit publication`
+- `5496db2 feat(web): persist effective theme override`
 
 ## Adversarial Review
 
-- Independent PowerShell, lifecycle, and documentation reviewers challenged
-  environment parity, secondary-activation ambiguity, output ownership,
-  coercive JSON, prompt failures, stale log attribution, argument quoting, and
-  fixed test mutex collisions.
-- The final child environment removes every inherited case-insensitive
-  `PYTHON*` key before setting `PYTHONUTF8=1`; the same process seam serves the
-  editable probe and GUI child.
-- Full ready-payload validation was removed from the convenience launcher. It
-  validates only the final host-return/exit/post-ready facts needed to decide
-  whether a launch was abnormal; the clean-wheel pytest parent remains the
-  complete evidence authority.
-- Runtime loop tests mock launcher mutex acquisition, while the real contention
-  regression uses a bounded GUID-scoped mutex. Tests therefore do not collide
-  with an operator's active development GUI.
-- A forced mid-cleanup mutation proves truthful partial receipts: the already
-  removed path is reported, the changed file is preserved, root/marker state is
-  printed, logical exit becomes nonzero, and the relaunch prompt remains.
-- Focused presentation regressions prove normal single and grouped launches emit
-  one profile receipt without per-mode exit/status chatter, while `-Verbose`
-  restores the successful cleanup plan and every exact removal line.
-- Grouped-profile review required all per-mode launcher locks and child-mutex
-  prechecks before the first child starts. A busy later launcher lock releases
-  earlier acquisitions, and a later child start failure still waits for every
-  child that did start before reporting and prompting.
-- Tests prove all selected `start-*` events precede the first `wait-*` event,
-  individual mode locks remain distinct, grouped locks release in reverse
-  order, and `fluent` may not create a duplicate dark window while one exists.
+- Independent contract review rejected a speculative synchronous rewrite and
+  retained the ratified coalesced writer while separating unsupported-forward,
+  unreadable, malformed, and missing-state custody. Older binaries never erase
+  state they cannot understand.
+- Persistence review exercised concurrent replacement, stale generations,
+  failed atomic replacement, encoded-size refusal, subscriber isolation,
+  in-flight write plus close, exact-once close flush, and sanitized diagnostics.
+- Bridge review checked every exact command-list consumer, retry asymmetry,
+  pre-`OPEN` refusal, browser readiness, real authority round trips, host
+  quiescence, and shutdown retention on incomplete service settlement.
+- Native review found and fixed an attachment rollback leak when both event
+  attachment and handler removal failed. Generation gates now prevent reversed
+  cosmetic callbacks, callbacks after close, and a superseded native snapshot
+  from becoming the published presentation.
+- UI review found and fixed a replacement crossing a live bridge-generation
+  reset, the missing installed selector witness, stale gallery relaunch
+  assumptions, and the old shell expectation that the tree was the first Tab
+  stop. The gate now proves the selector first and the tree second without
+  weakening tree keyboard or virtualization evidence.
+- The final staged audit found no blocker and confirmed that every changed file
+  traced to the cosmetic consumer, native/page integration, owning docs, or a
+  directly affected witness.
 
 ## Verification
 
-- Focused launcher suite: `31 passed` in `12.61s`.
-- Tools department: `282 passed, 3 skipped, 2270 deselected` in `35.91s`.
-  The three skips require unavailable Windows symlink privileges; the launcher
-  cleanup still has ownership, unknown-entry, and injected stat-drift coverage,
-  while its source guard explicitly refuses reparse entries.
-- Ordinary repository suite: `2514 passed, 14 skipped, 27 deselected` in
-  `133.70s`.
-- Import boundary lint: `11 kept, 0 broken` across 71 files and 253
+- Ordinary repository suite: `2627 passed, 16 skipped, 28 deselected` in
+  `123.41s`.
+- Affected installed-wheel headed neighborhood: `28 passed, 58 deselected` in
+  `104.36s`, covering the four-mode component gallery, materials, native host,
+  shell, Slice 1, and transport gates.
+- Focused cosmetic/theme neighborhood: `412 passed, 8 skipped, 11 deselected`;
+  the later shell-focus adjustment separately passed `40` non-headed/static
+  checks and its installed headed gate.
+- Bundled Node probes for selector concurrency/reconciliation, startup
+  readiness independence, and appearance publication all passed.
+- Import boundary lint: `11 kept, 0 broken` across 71 files and 256
   dependencies.
-- PowerShell parsing, `git diff --check`, and the clean-wheel child/scenario
-  diff check are clean. No production package, headed acceptance child,
-  gallery scenario, or clean-wheel test changed.
+- `git diff --check` was clean apart from the repository's expected LF-to-CRLF
+  notices.
 
 ## Remaining Work
 
-- No automated headed smoke opened the new convenience launcher during this
-  closeout, because it intentionally waits for the operator to close the real
-  window. The existing headed acceptance paths remain unchanged; the next
-  ordinary UI-tinkering invocation is the direct manual smoke.
-- A directly launched same-profile child can still win the narrow interval
-  between the wrapper's child-mutex precheck and child admission. Gallery mode
-  reports missing/failure diagnostics; shell mode inherits the host's
-  secondary-activation-and-return behavior. Concurrent wrappers are serialized
-  only when their concrete mode sets overlap; unrelated modes remain concurrent.
-- Normal gallery diagnostics are removed only after exact validation. Abnormal
-  or suspicious directories and persistent data/log roots are intentionally
-  retained at the printed locations for operator inspection; there is no broad
-  automatic cleanup command.
-- The launcher deliberately depends on private test-owned child compositions
-  for development convenience. If those child arguments or final milestone
-  contract change, update `tools/gui.ps1`, its focused tests, and `TOOLS.md`
-  together. This does not make the launcher or its output release evidence.
+- Slices 5–7 remain the next product boundary. They may add registered cosmetic
+  sections and advance the on-disk schema, but they must not change the two
+  refrozen bridge rows or route semantic/session state through them.
+- The file-list surface remains pending. Its existing treegrid foundation is
+  the intended UI primitive; expansion/grouping, column, sort, and filter state
+  need consumer-owned typed keys when that slice is designed. No such keys were
+  guessed here.
+- A full-document late mutation converges through healthy appearance
+  publication. If native observation/publication is degraded, a stored change
+  can persist without visually landing until a later authoritative read or
+  conflict; there is not yet a selector capability signal.
+- Save failure remains a sanitized log event with `dirty` retained for a later
+  settings surface. It does not replace the operational status or block bridge
+  readiness.
+- Precreate background and the first authoritative appearance envelope share
+  the override, and settled native/page presentation agrees. There is no
+  compositor sentinel and no claim of flash-free first visible paint.

@@ -219,8 +219,9 @@ ownership explicit without changing public or persisted contracts.
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, and bounded presentation core; later workflow surfaces and beta
-packaging remain future phases.
+foundation, bounded presentation core, and a persisted native/page theme
+override over the refrozen cosmetic-state channel; later workflow surfaces and
+beta packaging remain future phases.
 
 ### M1 Features
 
