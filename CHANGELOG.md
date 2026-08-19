@@ -115,6 +115,16 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
+#### Concentrate bridge contract authority (2026-08-19)
+
+- Reduced `M1_BRIDGE.md` to standing scope, one owner-oriented decision map,
+  ruling-first live contracts, concise dispositions, and the authoritative
+  BR-G gate register; moved dated status to this changelog and removed obsolete
+  deliberation without weakening ids, limits, or gate criteria.
+- Kept the fixed scale and transport-custody contract with BR-G-42, retained
+  current delivery ordering while compressing lane narrative, and redirected
+  shell references from the retired §9.4 location.
+
 #### Add an editable GUI development launcher (2026-08-18)
 
 - Added `tools/gui.ps1` for a foreground editable-source development shell and

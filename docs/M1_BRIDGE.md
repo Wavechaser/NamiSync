@@ -1,80 +1,18 @@
 # M1 Bridge and Presentation Contract
 
-Status (2026-07-30, contract realigned 2026-08-14, hardened and reverified
-2026-08-17): design, decision, and
-acceptance log for implemented M1 Stage 5.5 (facade completion) and active
-Stage 6 (web desktop shell). Stage 6's installed, secured product-host and
-existing transport chain through Slice 3 and the post-Slice-3 hardening have
-landed. The fixed 150 ms progress-only linger has landed with focused
-fixed-anchor, non-sliding replacement, immediate-wake, and lifecycle-race
-evidence. Benchmark/accounting support now provides bounded manifested streams,
-post-exit assembly, direct-Job admission, event/diagnostic result separation,
-and a path-local retained-state sizer. The frozen `sh-g-8-transport-v1`
-calibration-a/holdout-b corpora and production-path transport-custody runner
-have also landed. The committed calibration-a artifact now supplies the
-normative transport measurement, and the separate contract freezes the
-1,966,080-byte ceiling. Independent holdout-b passes, closing SH-G-8 and
-BR-G-42 event/transport custody only. That accepted v1 authority covers its
-fixed realistic corpus and remains a historical, non-precedential soft memory
-guard rather than a complete admitted-domain hard wall.
-GUI Break 1 and Slice 4 completed the audited realignment recorded here and
-were hardened and reverified on 2026-08-17;
-Slices 5-8 and GUI Break 2 remain. The installed real-WebView2 browser-gate
-migration is complete. Other BR-G-42 rows, including current-source event
-timing and later feature surfaces, remain open on their owning slices.
-BR-G-45 separately keeps the 100,000-subject terminal
-artifact set and aggregate completed-task retention policy open. Shell-owned
-SH-G-15 separately keeps version-bound whole-runtime containment open. The
-explicit-`Gap`-only recovery and command-specific `start_plan` revision
-decisions are ratified and their named regressions have landed.
-Stage 5.5 landed its tree substrate,
-recursive scan scope, selection semantics, and facade integration without
-taking Stage 6 presentation work. It
-governs the seam between `NamiSyncService` and the packaged frontend: what
-computes where, how large plans and inventories reach the client, how
-selection binds, and what the bridge may carry. Closing that seam necessarily
-reaches below the facade where information would otherwise be lost: the
-execution continuation retains user-selection provenance, and selected
-inventory refresh gains an explicit recursive-subtree scan-and-record scope.
-The implemented seam remains authoritative, while §9 and BR-G-45 now identify
-the production terminal-retention policy, analytical containment proof, and
-any separately classified irreducible empirical residual that must be fixed
-before closure; those open gates are not silently resolved by the existing
-implementation.
+**Standing.** This document is the normative authority for the M1 bridge seam:
+facade-to-frontend envelopes, command and revision contracts, event/terminal
+semantics, presentation data ownership, and the BR-G acceptance gates.
+`DEFENSE.md`, `FEATURES.md`, and `ARCHITECTURE.md` outrank it for defense,
+product behavior, and cross-system architecture. `M1_PLAN.md` owns milestone
+decisions; `M1_SHELL.md` owns host/package sequencing and SH-G gates; and
+`DESKTOP_UI.md` owns the user-facing visual contract.
 
-**Standing.** `DEFENSE.md` owns the trusted-base decision, threat ceiling,
-tolerance policy, and model-reopen triggers; `FEATURES.md` owns behavior and
-`ARCHITECTURE.md` owns contracts. All three outrank this file within those
-scopes. `M1_PLAN.md` owns the milestone's decision
-log, and DR-M1-14 through DR-M1-19 remain the governing bridge decisions —
-this document refines them with implementation detail settled afterward and
-does not overrule them. Where it adds a decision M1_PLAN did not make, it is
-numbered `DR-BR-##` to avoid colliding with either existing series.
-`DESKTOP_UI.md` remains the user-facing delivery contract; this file is the
-mechanism behind it. Within Stage 6, this is the sole normative authority for
-bridge envelopes and limits, command schemas and exact errors, retry identity
-and deadlines, command-specific revisions, sequence/`Gap`/terminal semantics,
-terminal-session release versus task close, and every BR-G acceptance gate.
-`M1_SHELL.md` owns only the remaining Stage 6 implementation sequence, host and
-package placement, launcher/packaging decisions, SH-G definitions, and their
-mapping to these BR-G dependencies. Its later console/GUI entry-point decision
-supersedes this file's older no-subcommand desktop-launch wording; it may link
-to this contract but does not restate or refine it.
-
-Section 10 is normative for implementation: a lane or slice is complete only
-when its numbered acceptance gates, decision prerequisites, regression rows,
-and integration/release gates are all satisfied. The delivery table is an
-ordering aid, not an alternative definition of done.
-
-**Propagation is implementation-gated.** Stage 5.5 behavior and Stage 6's
-secured host and production transport are promoted into the active focused
-documents and README. GUI Break 1 and Slice 4 completion claims were hardened
-and reverified on 2026-08-17 after their ordinary, scale, security, and clean-
-wheel headed gates passed. The
-complete Stage 6 UI remains unshipped; `M1_SHELL.md` and `DESKTOP_UI.md` record
-the remaining product-surface, second GUI-break, and packaging work, while
-slice 8 still performs the
-final as-built pass over every active document and `ui_mockup/`.
+**Scope.** Sections 1–8 state bridge decisions and contracts. Section 9 records
+only deferred, rejected, and resolved dispositions. Section 10 retains the
+normative BR-G gate register and the remaining M1 delivery order; a lane or
+slice closes only when all applicable gates and regressions pass. Dated build
+status and evidence are recorded under [M1 GUI in the changelog](../CHANGELOG.md#m1-gui).
 
 ---
 
@@ -148,198 +86,40 @@ none of them and depends on none of them.
 
 ## Map of this document
 
-Twenty-seven primary decisions plus two numbered DR-BR-16 subdecisions have
-accumulated across eleven sections. The two lists below are navigation only. The
-first follows the document's own top-level sections; the second re-sorts every
-`DR-BR-##` by the module or layer it actually binds, which frequently cuts
-across those sections (DR-BR-17 is filed under §4 but is a selection decision;
-DR-BR-26 is filed under §8 but is a node-tree decision). Each entry is one
-sentence: what the decision does, and what it connects to.
+This table is the navigation index. Each decision appears once under the module
+or layer it binds; the linked section contains the normative rule.
 
-### Contents
-
-0. [Goals](#0-goals) — product and engineering objectives everything below serves
-1. [Stage 5.5 — Facade Completion](#1-stage-55--facade-completion)
-2. [Compute Ownership](#2-compute-ownership)
-3. [The Node Tree](#3-the-node-tree)
-4. [Paging and Live State](#4-paging-and-live-state)
-5. [Task and Process Lifecycle](#5-task-and-process-lifecycle)
-6. [Concurrency](#6-concurrency)
-7. [Inherited Bridge Posture](#7-inherited-bridge-posture)
-8. [Verification](#8-verification)
-9. [Deferred, Rejected, and Resolved](#9-deferred-rejected-and-resolved)
-10. [Delivery](#10-delivery) — work lanes, decision prerequisites, acceptance
-    traceability, executable regression watchlist, and Stage 6 slices
-
-### Decisions by area
-
-**`workflows/selection.py` + `interfaces/service.py` — selection and
-commitment.** Who owns the checked/unchecked state of a plan, and what
-"Execute" is allowed to freeze.
-
-- **[DR-BR-01](#dr-br-01--user-selection-enters-the-facade-as-a-separate-set)**
-  — user deselection is a second exclusion set alongside the planner's safety
-  exclusions, never merged into one dictionary, so a reselect can't silently
-  readmit a blocked operation. Its canonical provenance crosses the execution
-  payload under the named `user-deselected` reason so `SKIPPED` user choices
-  cannot be reconstructed as `DEFERRED` or mistaken for genuine `NOOP`; this
-  advances the strict workflow payload to v4 and feeds DR-BR-02 and DR-BR-03
-  directly.
-- **[DR-BR-02](#dr-br-02--reselection-closes-upward-over-the-user-set-only)**
-  — reselecting an operation removes its dependencies from the *user*-deselected
-  set only, never from DR-BR-01's safety exclusions, so a checkbox can't
-  immediately grey itself back out.
-- **[DR-BR-03](#dr-br-03--selection-is-revisioned-and-commitment-freezes-it)**
-  — selection gets an optimistic-concurrency revision number and a three-state
-  commit (`reviewing → committing → committed`) so concurrent bridge handlers
-  (DR-BR-24) can't race an execution start; the service owns that state while
-  the runtime constructs a request from its immutable snapshot. Also where the
-  typed-confirmation question and destructive-action confirmation get settled.
-- **[DR-BR-04](#dr-br-04--deselection-does-not-survive-a-replan)**
-  — a replan discards the prior selection but advances the request's revision
-  epoch and retains retry tombstones, because deterministic operation ids and
-  a reset-to-zero ABA would otherwise let stale intent silently re-apply to a
-  plan no one reviewed.
-- **[DR-BR-17](#dr-br-17--selection-is-server-side-state-the-dom-is-disposable)**
-  — restates DR-BR-03's ownership for virtualized rows: a recycled DOM node
-  must re-read authority from the server rather than remember it, and toggles
-  batch into one revisioned mutation.
-
-**`interfaces/service.py` — facade surface.** What the GUI can actually call.
-
-- **[DR-BR-05](#dr-br-05--four-runtime-methods-reach-the-facade)**
-  — lifts `acknowledge_inventory`/`restore_inventory`/`list_unacknowledged_missing`/
-  `list_stale_inventory` from the runtime to the facade as plain passthroughs,
-  closing an oversight the inventory view needs.
-- **[DR-BR-06](#dr-br-06--location-commands-accept-opaque-ids)**
-  — adds an id-based form of the location commands so the inventory view can
-  drive scoped refresh/baseline/verify/rebaseline without ever sending a path;
-  row ids mean one exact row while folder-node ids mean the complete recursive
-  subtree, DR-BR-11's location scope validates ownership, and completed subtree
-  refreshes use a genuine third reconciliation branch with indexed literal
-  ranges. The recursive scan shares the full-walk helper and inherits every one
-  of its incompleteness causes rather than the exact-path scan's ignore rule;
-  folder actions are named separately from row actions instead of predicting a
-  count they cannot honestly compute; and kind-aware decoding advances only the
-  inventory payload to v2, with integrity continuation restructuring deferred
-  behind a named pause-latency benchmark.
-
-**`modules/scanner.py` — scanner contract.** Already-landed, kept for context.
-
-- **[DR-BR-07](#dr-br-07--scanner-ignore-contract-narrowed)**
-  — records the landed removal of unused `IgnoreSet` snapshot machinery and the
-  gap it leaves open: filtered files still have no visible "why" in plan review.
-
-**Cross-cutting — the compute-ownership principle.** The rule everything else
-in this document argues from.
-
-- **[DR-BR-08](#dr-br-08--the-ui-never-computes-means-authority)**
-  — reframes "the UI never computes" as *authority*, not *location*, sanctioning
-  purely cosmetic client-side work (tri-state checkboxes, autoscroll anchor,
-  filter chips) without contradicting the rule; sets up DR-BR-09's module split.
-
-**`workflows/node_tree.py` + `core/pathing.py` — the node tree.** One shared
-hierarchy builder behind both the plan tree and the inventory tree.
-
-- **[DR-BR-09](#dr-br-09--node-trees-are-built-in-workflows-not-interfaces)**
-  — puts the shared tree builder in `workflows/node_tree.py` because
-  `interfaces` can't import `core`'s path arithmetic; contains the layer table
-  this whole map is organized around.
-- **[DR-BR-10](#dr-br-10--path-helpers-promote-to-corepathingpy)**
-  — promotes the planner's three private path helpers to `core/pathing.py`
-  unchanged, so DR-BR-09's tree builder can reuse instead of duplicate them.
-- **[DR-BR-11](#dr-br-11--node-identity-is-deterministic-and-the-plan-tree-is-memoized)**
-  — node ids are deterministic over `(tree kind, scope identity, path key)`,
-  which is what lets DR-BR-06 validate that an id belongs to its location and
-  lets a plan tree be memoized safely.
-- **[DR-BR-12](#dr-br-12--folder-selection-is-path-scoped-and-the-tree-owns-the-scope)**
-  — "deselect this folder" means every operation at or under that path,
-  computed once by the same tree that produces rollups so the two can't
-  disagree; the inventory side reuses that subtree index for DR-BR-06's
-  recursive folder actions.
-- **[DR-BR-13](#dr-br-13--decomposed-moves-render-as-a-paired-annotation)**
-  — a folder rename's per-file moves group under the destination folder node
-  with a dimmed ghost at the old location, annotated rather than reclassified
-  into a second selection unit.
-- **[DR-BR-26](#dr-br-26--the-node-tree-is-a-pure-function)**
-  — keeps the tree builder testable in plain pytest with no bridge involved,
-  including the hostile-name case DR-BR-11's location-scoped ids introduced.
-
-**`interfaces/web` + `workflows/views.py` — paging, search, and live state.**
-The bridge-facing layer that turns a tree plus view parameters into what the
-client actually renders.
-
-- **[DR-BR-14](#dr-br-14--progress-carries-item-identity-never-a-display-path)**
-  — adds optional `item_id`/`item_type` to `Progress` as an additive wire
-  change, giving DR-BR-19's autoscroll something to anchor on besides a
-  display path.
-- **[DR-BR-15](#dr-br-15--flattened-windows-over-a-stateless-visible-sequence)**
-  — the server flattens tree + collapsed set + search + filters into one
-  visible sequence and the client pages `[offset, limit]` windows of it — the
-  shared shape behind the plan tree, inventory tree, and history. One canonical
-  projection remains; at most the latest derived sequence is cached per view.
-- **[DR-BR-16](#dr-br-16--paging-bounds-payload-and-must-also-bound-work)**
-  (with
-  **[DR-BR-16.1](#dr-br-161--the-inventory-projections-lifecycle)** and
-  **[DR-BR-16.2](#dr-br-162--history-is-paged-at-the-database-not-after-it)**)
-  — extends DR-BR-15 so paging bounds *work*, not just payload: a memoized
-  plan tree, a cached per-view inventory projection with its own eviction and
-  shallow copy-on-write rules, and a paged/aggregated history query. A persisted
-  history summary is explicitly post-M1, not a fallback schema change.
-- **[DR-BR-18](#dr-br-18--search-executes-on-the-backend)**
-  — a search query is just another server-side view parameter alongside
-  DR-BR-15's collapsed set, not a client-side filter, so plan scale and hostile
-  filenames never become a JS matching problem.
-- **[DR-BR-19](#dr-br-19--autoscroll-anchors-on-the-nearest-visible-ancestor-or-self)**
-  — one rule collapses every follow-mode special case: the server resolves
-  DR-BR-14's ancestor chain to the nearest visible node and visible-sequence
-  index under the active view parameters.
-- **[DR-BR-20](#dr-br-20--no-inventory-snapshot-token)**
-  — rejects a generation-token mechanism for torn inventory reads in favor of
-  re-reading on view-open/session-terminal/acknowledge, and defines
-  acknowledgment as a hide-not-count filter touching only DR-BR-16.1's cache.
-
-**`interfaces/web` — task and process lifecycle.** The client-visible unit
-above any one session.
-
-- **[DR-BR-21](#dr-br-21--a-task-is-client-state-sessions-come-and-go-beneath-it)**
-  — a task card is durable UI state that outlives any one session beneath it,
-  and is where a compound execute-then-verify run's two phases surface as one
-  rail entry.
-- **[DR-BR-22](#dr-br-22--closing-a-busy-task-cancels-waits-then-closes)**
-  — specifies the confirm → cancel → wait-for-terminal-record → unsubscribe
-  sequence for closing a running task, and the terminal-event-vs-terminal-record
-  race that makes the ordering matter.
-- **[DR-BR-23](#dr-br-23--single-instance-activates-the-existing-window)**
-  — a named mutex plus Win32 window activation stops a second launch from
-  opening a second window.
-
-**`interfaces/web` — concurrency.** What the bridge's threading model forces
-everything above to account for.
-
-- **[DR-BR-24](#dr-br-24--bridge-handlers-are-concurrent-and-must-be-synchronized)**
-  — catalogs every piece of state Stage 6 adds that needs explicit
-  synchronization because pywebview handlers run on separate threads:
-  selection revision (DR-BR-03), reliable-event backpressure, the event-drain
-  guard and sequence-gap recovery, the subscription registry, and shutdown
-  order.
-
-- **[DR-BR-27](#dr-br-27--receipted-commands-are-idempotent-revisioned-view-mutations-are-guarded)**
-  — assigns retry identity and revision guards per command rather than as one
-  blanket mutation schema: a gesture-scoped idempotency key, the typed
-  `APPLIED`/`NOOP`/`STALE`/`CONFLICT` disposition reaching the view, and a
-  `view_id` + projection-revision guard so an id-based command cannot freeze a
-  subject set the user never saw, with the receipt consulted before the guard so
-  the two do not cancel. Slice 2's `start_plan` is receipted without a revision;
-  `pick_folder` has neither. The former single-mechanism assumption is resolved
-  by the recorder/service receipt split in DR-BR-27 and §9.1.
-
-**Verification.** Proof obligations that don't live at a single module.
-
-- **[DR-BR-25](#dr-br-25--hostile-name-rendering-is-proven-in-a-real-browser)**
-  — requires both a real WebView2 DOM test and a broadened static sink scan,
-  with bridge transport proved in slice 2 and the actual plan/inventory DOM
-  sinks proved only once those production renderers exist.
+| Decision | Binds | Ruling |
+| --- | --- | --- |
+| [DR-BR-01](#dr-br-01--user-selection-enters-the-facade-as-a-separate-set) | Selection workflow/service | Keep user deselection distinct from safety exclusions and retain its execution provenance. |
+| [DR-BR-02](#dr-br-02--reselection-closes-upward-over-the-user-set-only) | Selection workflow | Reselection closes dependencies only within the user-deselected set. |
+| [DR-BR-03](#dr-br-03--selection-is-revisioned-and-commitment-freezes-it) | Service selection state | Revision selection and freeze it through reviewing, committing, and committed states. |
+| [DR-BR-04](#dr-br-04--deselection-does-not-survive-a-replan) | Selection workflow/service | Replan clears deselection, advances the revision epoch, and retains retry tombstones. |
+| [DR-BR-05](#dr-br-05--four-runtime-methods-reach-the-facade) | Service facade | Lift the four inventory acknowledgment/staleness reads as typed passthroughs. |
+| [DR-BR-06](#dr-br-06--location-commands-accept-opaque-ids) | Service, scanner, recorder | Resolve opaque row/folder ids server-side; folder refresh uses recursive subtree scope. |
+| [DR-BR-07](#dr-br-07--scanner-ignore-contract-narrowed) | Scanner | Remove unused ignore snapshots while retaining the known filter-visibility gap. |
+| [DR-BR-08](#dr-br-08--the-ui-never-computes-means-authority) | Cross-cutting UI | Keep decisions authoritative on the backend while permitting cosmetic client computation. |
+| [DR-BR-09](#dr-br-09--node-trees-are-built-in-workflows-not-interfaces) | Workflow node tree | Build shared hierarchy in workflows, below presentation adapters. |
+| [DR-BR-10](#dr-br-10--path-helpers-promote-to-corepathingpy) | Core pathing | Promote shared lexical path helpers unchanged into core. |
+| [DR-BR-11](#dr-br-11--node-identity-is-deterministic-and-the-plan-tree-is-memoized) | Workflow node tree | Scope deterministic node ids and memoize immutable plan trees. |
+| [DR-BR-12](#dr-br-12--folder-selection-is-path-scoped-and-the-tree-owns-the-scope) | Workflow node tree/selection | Derive folder selection and subtree membership from the same index. |
+| [DR-BR-13](#dr-br-13--decomposed-moves-render-as-a-paired-annotation) | Plan presentation | Render decomposed moves as paired annotations, not new selection units. |
+| [DR-BR-14](#dr-br-14--progress-carries-item-identity-never-a-display-path) | Core events/reporters | Carry item identity in progress; never join authority on display paths. |
+| [DR-BR-15](#dr-br-15--flattened-windows-over-a-stateless-visible-sequence) | Presentation views/web | Derive one server-side visible sequence and return bounded windows. |
+| [DR-BR-16](#dr-br-16--paging-bounds-payload-and-must-also-bound-work) | Views, service, database | Bound repeated work with plan memos, inventory projections, and database history pages. |
+| [DR-BR-16.1](#dr-br-161--the-inventory-projections-lifecycle) | Service projection cache | Own immutable revisioned projections by opaque view id under a six-entry LRU. |
+| [DR-BR-16.2](#dr-br-162--history-is-paged-at-the-database-not-after-it) | Database/history views | Keyset-page bounded history and capture committed traversal watermarks. |
+| [DR-BR-17](#dr-br-17--selection-is-server-side-state-the-dom-is-disposable) | Service/web selection | Treat DOM rows as disposable views of server-owned selection. |
+| [DR-BR-18](#dr-br-18--search-executes-on-the-backend) | Presentation views | Execute literal search with the server-side view parameters. |
+| [DR-BR-19](#dr-br-19--autoscroll-anchors-on-the-nearest-visible-ancestor-or-self) | Presentation views | Resolve follow mode to the nearest visible ancestor-or-self. |
+| [DR-BR-20](#dr-br-20--no-inventory-snapshot-token) | Inventory presentation | Re-read at causal boundaries; acknowledgment hides rows without changing counts. |
+| [DR-BR-21](#dr-br-21--a-task-is-client-state-sessions-come-and-go-beneath-it) | Web task lifecycle | Let adapter task state outlive the sessions beneath it. |
+| [DR-BR-22](#dr-br-22--closing-a-busy-task-cancels-waits-then-closes) | Web task lifecycle | Cancel, await durable terminal truth, then unsubscribe and release. |
+| [DR-BR-23](#dr-br-23--single-instance-activates-the-existing-window) | Desktop host | Activate the existing window instead of starting a second instance. |
+| [DR-BR-24](#dr-br-24--bridge-handlers-are-concurrent-and-must-be-synchronized) | Web concurrency | Synchronize shared bridge state without holding adapter locks across facade I/O. |
+| [DR-BR-25](#dr-br-25--hostile-name-rendering-is-proven-in-a-real-browser) | Browser verification | Prove hostile-name sinks in installed WebView2 plus static scans. |
+| [DR-BR-26](#dr-br-26--the-node-tree-is-a-pure-function) | Workflow node tree/tests | Keep hierarchy construction pure and headlessly testable. |
+| [DR-BR-27](#dr-br-27--receipted-commands-are-idempotent-revisioned-view-mutations-are-guarded) | Service/web commands | Assign retry receipts and view-revision guards per command. |
 
 ---
 
@@ -635,301 +415,107 @@ facade.
 
 ### DR-BR-06 — Location commands accept opaque ids
 
-The facade's location commands accept `selected_paths`, but DR-M1-16 forbids
-JavaScript from sending paths. As specified, the inventory view could not
-drive a scoped refresh, baseline, verify, or rebaseline at all.
+**Binding rule.** Desktop location commands send opaque row or folder-node ids,
+never paths. The service resolves and validates every id against the named
+location, refuses foreign or empty id sets, and unions duplicate subjects before
+constructing one workflow request. The CLI path form remains exact-path scope;
+recursive CLI scope is not inferred.
 
-**Resolution:** each location command gains an id-based form accepting opaque
-node or row ids. The service validates that every id belongs to the named
-location. An id belonging to another location is a refusal, not a silent
-filter. Multiple ids are unioned and deduplicated before a workflow request is
-constructed. The id-based form refuses an empty id collection before scope
-construction; it must not reinterpret "nothing selected" as the path form's
-deliberate full-location request.
+#### Command and scope contract
 
-**Row and folder ids deliberately have different scope.** A row id resolves to
-that one exact inventory subject. A folder-node id resolves to the folder and
-its complete recursive subtree through the same descendant index the tree uses
-for rollups, regardless of which descendants currently pass a view filter.
-Treating a folder as one exact path — or as only its visible descendants —
-would make a hierarchical context action appear to cover its children while
-silently omitting part of the subtree.
+- A row id denotes exactly one inventory subject. A folder-node id denotes that
+  folder and its complete indexed subtree, independent of the current view
+  filter.
+- Integrity commands freeze the folder's currently indexed eligible rows into
+  exact subjects before admission. An unreadable frozen subject yields one
+  visible `unsupported` result and makes verification incomplete while other
+  readable subjects continue. Root/location failure, cancellation, or
+  incompleteness not attributable to a frozen subject still refuses before
+  hashing.
+- Folder actions and row actions have distinct labels. No pre-admission
+  descendant count is shown because baseline, verify, and rebaseline select
+  different eligible subsets. These pausable, cancelable operations require no
+  confirmation dialog; admitted progress reports the actual count.
+- Folder refresh uses `ScanScopeKind.SUBTREES` so new descendants are
+  discoverable. A mixed refresh carries both `selected_paths` and
+  `subtree_roots` in one session.
+- Scope normalization is segment-aware: overlapping roots reduce to minimal
+  roots; exact paths beneath a root are redundant; exact paths outside roots
+  remain exact; an exact directory-row id does not become recursive; and the
+  location's empty root canonicalizes the whole request to `FULL`.
+- The invariants are exact: `FULL` carries neither scoped field; `PATHS`
+  carries nonempty exact paths and no roots; `SUBTREES` carries at least one
+  root and may carry exact paths. Only an explicit full request or the location
+  root may normalize to `FULL`.
 
-Integrity actions (`baseline`, `verify`, `rebaseline`) freeze the folder's
-currently indexed descendant rows into exact row ids/paths before admission;
-their existing exact-subject workflow semantics remain unchanged.
+#### Scan and reconciliation contract
 
-**One consequence of that reuse is not neutral.** `run_integrity` currently
-refuses the whole session when its scoped pre-scan is
-not authoritative — `InventoryScopeIncomplete`, taken before any subject is
-examined — and that pre-scan is the exact-path scan, which marks itself
-incomplete on a single per-path access error. Today `selected_paths` holds a
-handful of paths a user named. After folder expansion it holds an entire indexed
-subtree, so one permission-denied descendant among fifty thousand aborts the
-whole folder verify. The input cardinality changes by orders of magnitude while
-the all-or-nothing guard stays fixed, which is the same shape of mismatch this
-decision rejects for refresh two paragraphs below.
+Recursive scope is the full-walk algorithm bounded to roots, not a generalized
+exact-path scan. It shares the full-walk helper and therefore inherits every
+present and future full-walk incompleteness cause. The helper accepts an
+`(absolute_path, relative_prefix)` start, probes the root kind, distinguishes
+conclusive absence from `ROOT_UNAVAILABLE`, names the failing relative root,
+and shares one visited-directory identity set across all requested roots.
 
-**Resolution:** a folder-expanded integrity request continues over every
-readable frozen subject. A frozen subject whose exact pre-scan access fails is
-emitted once as `unsupported`, with its warning retained, and receives no
-attestation; the session reports verification incomplete while the remaining
-eligible subjects run normally. This relaxation is narrow: cancellation,
-location/root resolution failure, or any incompleteness not attributable to a
-named frozen subject still refuses the scope before hashing. A folder verify
-with one unreadable descendant is a required test so partial truth cannot become
-a silently clean attestation.
+A missing root and a former folder now observed as a file are conclusive; prior
+descendants may become missing. A file placeholder or file reparse point is a
+conclusive unsupported subject. A directory placeholder, directory reparse
+point, repeated directory identity, denial, enumeration/stat/type failure,
+case collision, or another inherited full-walk uncertainty makes the combined
+scan incomplete and withholds all missing inference.
 
-**The action names its scope; it does not predict its count.** A folder
-integrity action can admit far more work than a row action, and integrity
-workflows carry no plan, no review, and no commitment to make that legible the
-way DR-BR-03's plan review does for sync. The temptation is a count in the menu
-item, and it is **rejected as unimplementable honestly**: the descendant rollup
-is not the subject set that will run. `baseline` selects eligible unbaselined
-subjects, `rebaseline` selects eligible baselined ones, `verify` has its own
-candidate set, and directories are normally excluded from all three. A rollup
-number would therefore be wrong for every mode, and wrong in the direction that
-overstates — the worst kind of reassurance. Computing three mode-specific counts
-before admission would duplicate each mode's eligibility rules outside the
-workflow that owns them, which is the browser-authority failure DR-BR-08 forbids
-one layer down.
+After a complete scan, the recorder handles all three scope kinds explicitly:
 
-**What is rejected is a *predicted* count, not a reported one.** Once a mode has
-selected its subjects, the count is a fact the workflow owns, and progress and
-results report it per action as they do for any other session. The rejection is
-narrow and specific: no number is asserted *before* admission, from a rollup
-that does not model eligibility. Slice 6 renders what each action actually
-selected; the menu promises nothing.
+- `FULL` reconciles the full location.
+- `PATHS` retains exact-key reconciliation.
+- `SUBTREES` reconciles the union of remaining exact paths plus every root and
+  descendant, considering prior `present` and `unsupported` rows.
 
-**Menu wording carries the distinction instead.** Row actions and folder actions
-are separate, plainly named commands — "Verify selected items" versus "Verify
-folders" — so the scope of the gesture is legible from the label without
-asserting a quantity the facade cannot yet know. Verification is pausable and
-cancelable and writes nothing irreversible, so under DR-BR-03's own rule it
-takes no dialog either: a user who asks for too much stops it, which is the
-ordinary control rather than a failure.
-
-**Refresh is different:** expanding only current inventory rows would miss files
-newly created beneath the folder. The scanner therefore gains an explicit recursive
-subtree scan scope, distinct from today's exact selected-path scope. A folder
-refresh passes that subtree root and discovers the folder's current and new
-descendants in one ordinary inventory session.
-
-The scope contract is explicit rather than inferred from a directory path:
-`ScanScopeKind` gains `SUBTREES` alongside `FULL` and exact `PATHS`. Overlapping
-subtree roots canonicalize by path-segment ancestry to the minimal
-non-overlapping roots, never by raw string prefix. Exact paths at or below one
-of those roots are redundant and are removed; exact paths outside them remain
-exact, including an exact directory-row id that must not become recursive.
-Selecting the location's empty relative root canonicalizes the entire mixed
-scope to `FULL`: it covers the whole location, and treating `""` as an ordinary
-delimiter range would miss every top-level entry. A successful subtree scan is
-complete for its remaining roots and exact paths, not for the whole location.
-
-`SUBTREES` is also the mixed scoped form. If an id-based refresh contains both
-row ids and folder-node ids, `ScanScope` carries `selected_paths` and
-`subtree_roots` together under `SUBTREES`; it does not discard either half,
-promote exact directory rows to recursive roots, create a fourth scope kind,
-or split one user action into multiple sessions. Its constructor invariants
-are exact: `FULL` carries neither field; `PATHS` carries nonempty
-`selected_paths` and no roots; `SUBTREES` carries at least one
-`subtree_root` and may also carry exact paths. Canonicalization chooses `FULL`
-when both scoped fields are empty. Only the existing explicit full-request form
-or selection of the location's root node may reach that state.
-
-This is a third reconciliation shape, not a new value that may fall through
-the existing two-way discriminator. `ScanResult.is_full_scan` remains true
-only for `FULL`; after checking `scan.complete`, `db/recorder.py` branches
-explicitly on all three scope kinds:
-
-- `FULL` uses the current all-location observed-key anti-join;
-- exact `PATHS` retains its exact-key missing inference; and
-- `SUBTREES` uses the same observed-key anti-join, bounded independently to
-  the union of any remaining exact paths plus each completed root and its
-  descendants.
-
-The subtree branch reconciles rows whose prior presence is either `present` or
-`unsupported`, matching full-scan reconciliation. It marks one missing only
-when the row was absent from the completed scan and its canonical key is
-either the root itself or in this wildcard-free descendant range:
+Rows outside that union are untouched. Subtree descendants use the indexed,
+wildcard-free binary range below, with equality to `:root` tested separately:
 
 ```sql
 rel_path_key >= :root || '\'
 AND rel_path_key < :root || ']'
 ```
 
-The equality case `rel_path_key = :root` is tested separately. `]` (0x5D) is
-the immediate binary successor of the canonical separator `\` (0x5C), so this
-range selects exactly keys beginning with `root || '\'` under SQLite's default
-binary collation. `LIKE` is forbidden here: `%` and `_` are legal hostile-name
-characters and would turn a literal subtree root into a wildcard pattern.
-Rows outside the roots are untouched. Any incomplete subtree scan
-conservatively withholds all missing inference.
+`LIKE` is forbidden because `%` and `_` are legal filename characters.
+`inventory_location_presence_idx(location_id, presence, rel_path_key)` must
+serve the range; BR-G-27 pins the query plan.
 
-**The subtree walk is the full scan bounded to a root, not the exact-path scan
-generalized.** That framing decides completeness, and the two existing scan
-paths do not agree on what breaks it. `_scan_selected` marks the whole scan
-incomplete when a requested path is ignored, because an explicitly named path
-the scanner refuses to report on leaves the requested key set unresolved.
-`_scan_full` skips an ignored entry and preserves completeness, because there
-the ignore contract is an ordinary part of the sweep. A recursive walk meets
-that contract constantly — `THUMBS.DB` and `DESKTOP.INI` appear in ordinary
-picture and settings folders, and the owned-temp grammar appears wherever a
-prior run wrote. Inheriting the exact-path rule would make nearly every real
-subtree refresh incomplete and withhold all missing inference, leaving the
-feature green on a synthetic fixture tree while doing nothing on an actual
-volume.
+#### Evidence and payload contract
 
-**Resolution: the recursive implementation shares the full-walk helper and
-inherits every one of its incompleteness causes**, rather than restating a list
-that would drift the first time the scanner grows a case. Only the exact paths
-named alongside the roots keep exact-path semantics. The recursive scope is
-incomplete wherever `_scan_full` is already incomplete — which today includes
-root unavailability, enumeration failure, unrepresentable paths, type-probe and
-stat failures, unknown entry types, case-colliding keys, an unhydrated
-**directory** placeholder, a **directory** reparse point, and a repeated
-directory identity. Those last three are worth naming as examples because they
-are the ones a scoped implementation is most likely to get wrong, **not because
-the list is exhaustive**: sharing the helper is the contract, and any cause the
-full walk later adds applies to subtree scope automatically.
+`InventoryDetails` retains typed scan warnings and
+`InventoryDetailsView` exposes primitives-only code/path/detail beside
+`complete`. Stage 5.5 proves the evidence reaches the facade; Slice 6 must
+render incomplete scope and its reason distinctly from a clean refresh.
 
-**Sharing the helper means parameterizing it**, because its root handling is
-written for the location root and silently assumes three things an arbitrary
-subtree root does not satisfy. Each assumption is correct today only because
-`root` is always the resolved location root, which is exactly why the sharing
-contract must state them:
+Inventory workflow payload v2 carries subtree roots separately from exact
+paths and rejects v1. Integrity payload remains v1 because its folder scope is
+frozen into existing exact subjects. The shared decoder accepts explicit
+`(expected_kind, expected_version)` and rejects wrong-kind or wrong-version
+bodies.
 
-- It takes a starting **`(absolute path, relative prefix)` pair** rather than an
-  absolute path alone. The helper currently hardcodes the root record and its
-  traversal prefix to `""`, so a walk rooted at `Photos` would emit a root
-  record claiming to be the location root and record descendants under keys like
-  `IMG.JPG` instead of `PHOTOS\IMG.JPG` — wrong canonical keys written into
-  inventory, reconciled against the wrong rows.
-- It **probes the root's entry kind** instead of asserting
-  `EntryKind.DIRECTORY`, so the former-folder-now-a-file case above is recorded
-  as the file it is rather than as a directory record that contradicts the disk.
-- It **distinguishes `FileNotFoundError` from other root-lstat failures**, the
-  way `_scan_selected` already does for exact paths. Absence is the conclusive
-  empty observation described above; denial or IO error is `ROOT_UNAVAILABLE`
-  and incomplete. Catching them together — the current behavior — would make the
-  absent-root case unreachable and quietly contradict this decision.
+Integrity continuation restructuring remains deferred until a late-run pause
+benchmark over representative 10k, 100k, and large-folder subject sets proves a
+problem. Any replacement must preserve paused/unpaused result and phase truth;
+a nested payload alone is not accepted as bounded work.
 
-`ROOT_UNAVAILABLE` also carries the failing root's relative path rather than
-`None`, since a multi-root scan must say *which* root it could not open; that
-value is what the scope-warning surfacing below has to render. One `visited`
-identity set spans every root in a scan: the roots are canonicalized
-non-overlapping, so a repeated identity across two of them is a genuine junction
-cycle rather than legitimate reuse.
+> **Rationale (non-normative).**
+>
+> Opaque ids keep paths and subtree interpretation out of JavaScript. Folder
+> integrity continues past subject-local unreadability because expansion turns a
+> handful of explicit paths into tens of thousands of frozen subjects, while
+> non-subject uncertainty still invalidates the whole scope. Refresh cannot
+> expand only indexed rows because that would miss newly created descendants.
+> The recursive walk shares full-scan completeness so ordinary ignored files do
+> not make real subtrees permanently inconclusive, and the literal range avoids
+> hostile-name wildcard bugs. Predicted folder counts and the withdrawn nested
+> continuation draft were rejected because neither matched workflow-owned
+> eligibility nor demonstrated bounded work.
 
-The directory qualifier on placeholder and reparse is load-bearing rather than
-descriptive: a *file* placeholder or file reparse point is a conclusive
-unsupported observation and leaves completeness intact, because nothing was
-being enumerated through it. For those two conditions this is a deliberate
-divergence from `_scan_selected`, which records them as conclusive even for a
-directory. Recorded explicitly because an implementer reading the exact-path
-branch as the model will otherwise carry the wrong behavior across.
-
-Completeness distinguishes absence from uncertainty. If a subtree root no
-longer exists, that root is a successful empty observation and its previously
-indexed root/descendant rows may become missing. **A former folder root that is
-now an ordinary file is equally conclusive:** the scanner observed the path,
-records it as the file it now is, and its former descendants may become missing,
-because nothing about that observation is uncertain. Any inherited
-incompleteness cause, by contrast, means the scanner could not observe the
-claimed recursive scope; it makes the whole multi-root `ScanResult` incomplete
-and therefore marks nothing missing under any requested root. Per-root
-completeness would require a richer result contract and is not introduced
-implicitly here.
-
-**An incomplete refresh must say so.** "Refreshed, nothing disappeared" and
-"refreshed, but I could not see enough to tell you" are different facts that
-currently render identically — the missing chip simply does not move.
-Withholding the inference is correct; reporting an unqualified clean refresh
-afterwards is not, and it is the same invisible-exclusion gap DR-BR-07 records
-for filters, asked the other way round: "why wasn't this deleted file marked
-missing?"
-
-**This needs plumbing, and an earlier draft wrongly said it did not.** The
-scanner produces the evidence as typed `ScanWarning`s, but nothing carries it
-upward: `run_inventory` reads `scan.complete` and discards `scan.warnings`
-entirely, `InventoryDetails` has no warning field, and `InventoryDetailsView`
-consequently cannot have one either. A user is told *that* a refresh was
-incomplete only through a chip that failed to move, and never *why*. The chain
-is four small steps: the workflow retains the warnings already in scope at the
-`InventoryDetails` construction site, `InventoryDetails` carries them, a
-primitives-only warning view converts code/path/detail under DR-M1-07's rule,
-and the facade delivers them beside `complete`. Small, but new — and therefore
-owed to a stage rather than assumed.
-
-**Delivery splits along the interface boundary.** Stage 5.5 proves the warning
-details reach the facade, which is a workflow/service obligation provable
-without a second interface. Stage 6 slice 6 proves the inventory UI visibly
-distinguishes an incomplete refresh from a clean one and renders its reason.
-
-The existing
-`inventory_location_presence_idx(location_id, presence, rel_path_key)` serves
-the location/presence equalities plus each root range directly. A focused
-`EXPLAIN QUERY PLAN` assertion verifies indexed range search for a
-representative subtree rather than leaving the bounded-cost claim as an
-assumption.
-
-`InventoryRequest`/`InventoryWorkflowRequest` carry subtree roots separately
-from exact selected paths, including both fields for a mixed id selection. The
-inventory workflow payload advances from v1 to v2 for that new field and
-rejects v1.
-
-The integrity payload **remains v1**, because folder integrity actions are
-expanded into its existing exact subjects before admission and no field changes
-shape. The two decoders currently share `_payload`, whose hardcoded v1 guard
-expresses no per-kind version at all, so that divergence is impossible as
-written. Its signature becomes
-`_payload(payload, expected_kind, expected_version)`;
-`decode_inventory_request` passes 2 and `decode_integrity_request` passes 1.
-Tests prove inventory v2 round-trips while inventory v1 is rejected, integrity
-v1 remains accepted, and a body of the wrong kind is rejected at either version.
-
-**Restructuring the integrity continuation is noted and deferred, not adopted.**
-Folder expansion makes `selected_paths`/`selection_item_ids` large, and
-`_IntegrityInvocation.snapshot` re-encodes the whole request on every pause
-alongside `completed_bytes`, which grows toward the subject count as items
-settle — so the largest jobs plausibly pay the most to pause, which is where a
-user most wants to. A drafted fix split the body into an immutable `subjects`
-half and a mutable `progress` half so pause rebuilt only progress. It is
-withdrawn for M1 on four grounds:
-
-- **The proposed immutable half was not immutable.** `refresh_generation` is
-  incremented by `snapshot()` on every pause, and `selection_item_ids` is
-  recomputed there from the live selection. Both would have to sit in the
-  mutable half, which removes much of what the split was meant to freeze.
-- **Nesting does not bound the work.** `completed_bytes` still grows toward
-  O(subject count), and reassembling the single `bytes` payload the dispatcher
-  requires still copies the immutable section on every pause.
-- **The cache has no specified owner or framing.** Each resumed invocation would
-  have to recreate or recover the retained fragment, and the document named
-  neither the owner nor the serialization boundary.
-- **The cost is reasoned, not measured**, and a strict payload version change is
-  the wrong thing to spend on a hypothesis.
-
-M1 therefore retains inventory v2 / integrity v1 and the kind-aware validator
-until a benchmark demonstrates a pause-latency problem. **The measurement is
-named:** representative 10k, 100k, and large-folder continuations, each sampled
-at late-run `completed_bytes` rather than at admission, since that is when the
-mutable half is largest. If it fails the gate, the continuation is designed
-around the measured cost rather than around this draft — which may well not be a
-nesting change at all.
-
-Should the split be kept anyway for structural clarity, three corrections are
-binding: `refresh_generation` moves into `progress`, fragment ownership is
-`_IntegrityInvocation`'s, and full-payload copying is acknowledged as remaining.
-Its acceptance test is **semantic and result equivalence** between a paused and
-an unpaused run over the same subjects — identical items, outcomes, phase
-truth, and terminal classification. "Resumes byte-identically" is not a
-well-defined criterion, since a resumed run legitimately differs in
-`refresh_generation`, timestamps, and scope token.
-
-The path form remains for the CLI, which legitimately has paths and retains its
-current exact-path meaning. Recursive CLI scope is not inferred or added as a
-side effect of the desktop contract.
+Landed behavior is recorded under
+[Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30).
 
 ### DR-BR-07 — Scanner ignore contract narrowed
 
@@ -1213,399 +799,171 @@ The bridge enriches `item_id` into an ancestor node-id chain. **Never join on
 
 ### DR-BR-15 — Flattened windows over a stateless visible sequence
 
-DR-M1-18 fixed that bridge data is paged pull/RPC but not the shape. Per-node
-lazy expansion was considered and rejected: a review UI wants everything
-expanded by default — "show me what you are about to do" is the point of a
-dry run — and lazy expansion makes the default state cost one round trip per
-folder.
+**Binding rule.** The server derives one ordered visible sequence from the
+canonical tree projection plus collapsed ids, literal search, and domain-owned
+filters. Clients request exact `[offset, limit]` windows; the DOM never owns or
+reconstructs the hierarchy.
 
-**Resolution:** the server flattens the tree into an ordered visible sequence
-given the active **view parameters** — collapsed nodes, search query, and
-filters — and the client requests `[offset, limit]` windows of it. One command
-shape serves the plan tree, the inventory tree, and history items, and scroll
-position maps directly to an index.
+#### Sequence contract
 
-**One canonical projection per open view, one active parameter set.**
-Filtering, searching, and collapsing never produce additional trees. "Session"
-is intentionally not the identity here: a reviewed plan has no live session,
-and inventory projections are keyed by the service-minted `view_id` of
-DR-BR-16.1. Every paging request applies the view's current parameters to its
-one canonical projection
-and slices the resulting visible sequence. Changing a parameter **replaces the
-current visible sequence**; it does not fork a second structure to cache,
-invalidate, or drift against the first. This keeps the plan memo in DR-BR-11
-and each projection in DR-BR-16.1 single objects rather than families keyed by
-parameter combinations.
+- Plan and inventory use the same pure flatten/window shape. One canonical
+  projection exists per open view; changing view parameters replaces the
+  derived sequence rather than retaining a parameter-keyed cache family.
+- A folder is visible only when it matches directly or retains a visible
+  descendant. Synthetic-only ancestor chains disappear with the annotation they
+  hosted. Folder rollups describe the unfiltered folder, while filter chips
+  describe the current view.
+- A visible container with a retained child reports `expanded=true|false`; a
+  leaf, empty root, or direct match with all descendants filtered reports
+  `expanded=null` and exposes no disclosure.
+- Offset is an exact nonnegative integer and limit is an exact integer from
+  1 through 256. Refuse oversize or invalid requests; never return silent
+  truncation that looks complete.
+- `interfaces/web/visible_sequence.py` remains tree-agnostic and pure. It may
+  retain source/visible indexes and accessibility metadata for one derivation,
+  but no path authority, domain filter vocabulary, projection lifecycle, or
+  active-view cache.
+- Search is literal, case-folded display matching. The first Slice 5/6 request
+  owner applies a fixed 150 ms trailing debounce, advances generation on every
+  search/collapse/filter intent, sends only the final burst value, and ignores
+  stale success or failure while leaving the current valid window visible.
 
-**Filters apply symmetrically to both trees.** Sync and Integrity use the same
-flatten signature, so the Integrity side gets identical behavior rather than a
-parallel implementation with its own semantics.
+#### Renderer contract
 
-**A folder renders only if it has a visible descendant, or is itself a
-match.** Without this, every filter leaves a skeleton of empty directories —
-"deletions only" would render the whole directory structure with almost nothing
-in it. The second clause carries real weight on the plan side, where a folder
-can be an operation in its own right (`MKDIR`, cleanup `DELETE`), and it also
-disposes of the move-ghost case correctly: a ghost hidden by a filter takes its
-synthesized ancestor chain with it, since those nodes exist only to host it
-(DR-BR-13). Where a ghost was *not* emitted because the old location still held
-real operations, that folder is visible on its own merits and is unaffected.
+The installed renderer uses fixed 28-pixel rows, two spacers, and one tab stop.
+Its only data callback is `requestIndex(index, generation)`; the Slice 5/6
+owner fetches a window containing that index and commits it under the supplied
+generation. Parameter changes call `beginWindowRequest`; a callback does not
+mint a second generation.
 
-Expansion describes the active projection rather than the workflow container
-bit. A visible container whose projection retains an immediate child emits
-`expanded=true` or `expanded=false` according to collapse state. A leaf, empty
-root, or directly matching container whose descendants were all filtered emits
-`expanded=null`, no `aria-expanded`, and no disclosure. The pure sequence keeps
-one immutable visible-position-aligned retained-child tuple; this adds no wire
-key and no second hierarchy.
+Passive scroll and one per-tree `ResizeObserver` coalesce into one animation-
+frame reconciliation. Missing leading or trailing spacer indexes are requested
+once; covered ranges request nothing. Scroll commits preserve `scrollTop` and
+reject stale generations before reading payloads. A newer user scroll invalidates
+older keyboard or different-index requests, while repeated requests for the same
+missing index are suppressed. An unchanged viewport does not autonomously page
+again after a valid narrow response.
 
-**Rollups on a folder row describe the folder, not the filtered view.** A
-number whose meaning changes with filter state is a bug factory, and selection
-already commits to unfiltered semantics (DR-BR-17): a folder checkbox covers
-every operation beneath it regardless of what is rendered. Rollups follow that
-same rule, and the filter chips carry the counts that describe the current
-view. A move annotation is provenance rather than a count and reads the same
-under any filter.
+Before removing a root, its owner calls idempotent `dispose()`, which disconnects
+the observer, removes controller-owned listeners, invalidates pending work, and
+makes queued frames and later commits inert. Pointer disclosure focuses the row
+and requests expansion without triggering row activation; projected terminal
+nodes remain inert.
 
-Collapse, filter, and search ride on the request rather than being retained as
-independent server-side objects, so **the view parameters** leak no lifecycle.
-That is a narrower claim than an earlier draft made: DR-BR-16's cached
-inventory projection is genuine server-side per-view state, and its lifecycle
-is specified there rather than denied here. The default is expanded, so
-collapsing is a deliberate act on a handful of folders. The pure helper accepts
-at most 65,536 UTF-8 bytes of search text; the bridge separately caps the
-complete serialized request at 65,536 bytes, including JSON overhead. A future
-non-bridge external adapter imposes an equal-or-stricter complete-request bound
-at ingress.
-**Responses have a common server-enforced `limit` ceiling of 256 rows** for
-plan, inventory, and history windows. The current transport cap is inbound
-only, and a truncation must be an explicit refusal rather than a short list
-that reads as a complete tree. M1 starts at 256 because it covers multiple
-fixed-height viewports of prefetch while keeping query, decode, allocation, and
-serialization firmly bounded by one shared number.
+#### Text contract
 
-Fixed row height is a design constraint, not an aesthetic preference:
-variable heights require measurement passes that make window math fragile.
+Workflow nodes, derived sequences, wire windows, and literal search preserve
+exact valid Unicode. Only the renderer maps the fixed active layout controls
+and marker delimiters from `DEFENSE.md` to visible `⟦U+XXXX⟧` text.
+That spelling is not decoded by search and creates no second wire shape. The
+bridge bounds the complete serialized request at 65,536 UTF-8 bytes; the pure
+helper's search input may not exceed that bound.
 
-The generic renderer owns the generation of a window request, not its data.
-Its callback is exactly `requestIndex(index, generation)`: the Slice 5/6 owner
-fetches a window containing `index` and commits it with that supplied
-`generation`; it does not call `beginWindowRequest` a second time. Parameter
-changes and other external projection work do start a new generation through
-`beginWindowRequest`, and that authority is never superseded by interpreting
-scroll state from the now-stale DOM.
+> **Rationale (non-normative).**
+>
+> Per-node lazy expansion was rejected because review defaults expanded and
+> would pay one round trip per folder. Row-level windows give scroll a stable
+> index and keep payloads bounded. Filtering empty ancestors prevents a skeletal
+> tree, unfiltered rollups keep selection meaning stable, and fixed height avoids
+> measurement-dependent window geometry. Last-request-wins plus explicit
+> disposal prevents stale responses or viewport feedback loops from creating
+> authority in JavaScript.
 
-Viewport reconciliation is a bounded presentation operation. A passive scroll
-listener and one per-tree `ResizeObserver` feed the same coalesced
-animation-frame check, so a layout-only resize cannot leave newly exposed
-spacer rows blank and does not create another paging controller. For a
-viewport `[top, top + height)`, intersecting row indexes are
-`floor(top / 28)` through `ceil((top + height) / 28) - 1`, clipped to the
-visible-sequence extent. If that range intersects a spacer, the renderer
-requests the missing leading or trailing index once. If the current window
-already covers it, no request is sent. When the current rows contain a fully
-visible row, the active descendant moves there presentation-only, chosen from
-`ceil(top / 28)` through `floor((top + height) / 28) - 1`; otherwise the
-renderer clears it until a covering commit. Neither path invokes domain
-activation.
-
-A scroll-owned commit preserves `scrollTop` and rejects stale generations
-before reading their payload. A later real user scroll invalidates an older
-keyboard request or a scroll request for a different missing index; a repeated
-request for the same missing index is suppressed. A scroll frame queued before
-a keyboard request cannot overtake that request, and a programmatic active-row
-reveal is not a newer user intent. Returning to an already covered window
-invalidates an unneeded scroll request so its late response cannot replace the
-correct rows.
-Any valid scroll response is terminal for the `scrollTop` and `clientHeight`
-snapshot that requested it: an unchanged viewport does not autonomously ask
-for another page merely because the response was narrower than that viewport.
-A later viewport change may issue one new last-state-wins request. This keeps a
-valid narrow collaborator response from creating an unbounded endpoint
-ping-pong without imposing an undocumented page-width requirement on the
-owner.
-This is the last-request-wins behavior for viewport paging; it does not create
-selection, projection, or bridge authority in JavaScript.
-Before removing a tree root, its owner calls the controller's idempotent
-`dispose()`. Disposal disconnects the root observer, removes controller-owned
-root listeners, invalidates pending work, and makes an already queued viewport
-frame inert; later commits are refused before their payload is read.
-
-Search responsiveness is interaction-owned, not an excuse for a tiny semantic
-query limit. The first Slice 5/6 request owner uses a fixed 150 ms trailing
-debounce and advances its window generation on every search, collapse, or
-filter intent before dispatch. Only the final search in a burst is sent; stale
-successes and failures are ignored, the current valid window remains visible
-while pending, and teardown cancels the timer. Slice 4 supplies the generation
-primitive but adds no dormant command or timer.
-
-This document freezes the pure request boundary: a typed structural
-view over the workflow-owned node object, collapsed known-container ids, a literal display-search string,
-and an optional sparse mapping of caller-decided direct-match counts. That
-mapping deliberately carries no filter vocabulary into the generic layer.
-Offset is an exact nonnegative integer, limit is an exact 1..256 integer, and
-the pure derived sequence is replaced rather than cached as a parameter-keyed
-family. Domain command rows and projection revisions remain with their first
-Slice 5/6 consumers.
-
-Display values remain exact valid Unicode in the workflow node, derived
-sequence, `{offset,total,rows}` wire view, and literal search operation. The
-renderer alone maps `DEFENSE.md`'s fixed active layout controls and input marker
-delimiters to visible `⟦U+XXXX⟧` text. That spelling is not decoded by search:
-an actual U+202E query matches actual U+202E data, while the typed characters
-`⟦U+202E⟧` match only that literal spelling. This presentation projection adds
-no field cap or second wire shape.
-
-**Realignment completed after audit (2026-08-13; hardened and reverified
-2026-08-17).**
-`interfaces/web/visible_sequence.py` remains the single tree-agnostic pure
-implementation. The corrected seam uses
-the workflow-owned array directly, retains source/visible indexes once, and
-derives compact active-tree accessibility metadata before windowing. It keeps strict pre-order structure
-validation, collapse after match retention, literal case-folded display search,
-caller-supplied sparse direct-match counts, exact 1..256 windows, and
-deepest-visible ancestor anchoring proportional to chain depth. It retains no projection, path, domain
-filter vocabulary, or active-view cache. The installed frontend consumes only
-the generic `{offset,total,rows}` window through a fixed-height renderer with
-two spacers, stale-generation refusal, and a single-tab-stop operable tree.
-Keyboard and completed off-window targets are revealed inside that tree with
-the exact global-index/28-pixel geometry. The disclosure owns its pointer event:
-it focuses the row and emits one desired expansion change without invoking row
-activation, while a projected end node remains inert.
-The focused structural/security regressions and real clean-wheel shell evidence pass,
-closing BR-G-34 and SH-G-7. The 120,000-node fixture is a complete retained-
-representation witness plus a deterministic field-access scaling guard, not a
-latency acceptance measurement. Positive renderer evidence is bound to one
-canonical temporary JSON manifest produced through the production
-`build_node_tree` -> `derive_visible_sequence` ->
-`window_visible_sequence` -> `to_visible_window_view` chain. Direct Node and
-the installed WebView2 child consume those exact bytes, and Python, child, and
-page report the same SHA-256. Its cases cover the `head`, `next`, `tail`,
-`empty`, `maximum`, and `layout_control` windows, all three expansion states on
-one real node across the pointer and projected-empty windows, and ordinary-
-Unicode and long display values in `next` admitted by the real `NodeTree` path
-contract. The exhaustive fixed-set sink probe remains
-renderer-local because C0 characters are not valid Windows filename input; it
-proves the presentation transform, not workflow authority. The manifest is
-test-only and absent from package data. Plan and inventory command rows and
-projection ownership remain unimplemented until Slices 5 and 6.
+The landed presentation-core realignment and its browser evidence are recorded
+under [Complete and harden the accessible desktop foundation](../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18).
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
-Windowing solves response size. It does not, by itself, solve
-responsiveness: a naive implementation rebuilds the tree from the whole plan,
-flattens it entirely, and then slices — doing whole-collection work for every
-viewport scroll. Inventory is worse, since `get_inventory` loads an entire
-location per call with no `LIMIT`/`OFFSET`.
+**Binding rule.** Windowing must bound repeated query, decode, allocation, and
+serialization work, not only response bytes.
 
-**Row-level SQL paging is rejected.** An earlier draft moved `LIMIT`/`OFFSET`
-into the repository query. It does not compose with this tree design, for
-three independent reasons:
+- Immutable plan trees are memoized per request id.
+- Inventory uses one slim all-row structure query per projection and fetches
+  full snapshots only for the visible window's row ids.
+- History summaries and details page in the database under DR-BR-16.2.
+- Flattening remains per-request work. If BR-G-42 demonstrates a need, one
+  latest visible-sequence value may be retained per open view and replaced on
+  any parameter change; a parameter-keyed cache family is forbidden.
+- `preview_selection` retains its
+  O(operations × dependency depth) fixpoint and is measured at the declared
+  depth under BR-G-42.
+- BR-G-42 owns the fixed M1 scale fixtures, reference profile, budgets, and
+  evidence tier. Measurements may pass or fail that contract but may not
+  redefine it after observation.
 
-1. Ancestor synthesis needs the whole collection to know which folders exist,
-   and subtree rollups need every descendant. A page of rows cannot produce
-   either.
-2. Paging happens *after* collapse and search produce a visible hierarchical
-   sequence, so the offset a client asks for is an index into the visible
-   tree, not into a row ordering.
-3. The visible tree order is not `(rel_path_key, id)` order. Lexicographic
-   path-key sorting is not depth-first pre-order, because the separator `\`
-   (0x5C) sorts *after* characters that are legal in filenames — `a-x` sorts
-   before `a\b`, while the tree places `a\b` inside `a` and `a-x` after it.
-   The two orders genuinely differ.
-
-A folder node id also cannot be resolved to its subtree without the location
-index rebuilt anyway.
-
-**Resolution: one coherent model — a cached per-view projection, built from a
-slim query.**
-
-- **Plan tree:** memoized per request id (DR-BR-11), exact because the
-  artifact is immutable.
-- **Inventory tree:** the repository gains a **slim structure query** —
-  explicit columns, not `SELECT *`, and no full `InventorySnapshot`
-  construction — returning every row in the location. The tree builder holds
-  that projection per open view. A **detail query** then fetches full
-  snapshots for the visible window's row ids only, so the expensive per-row
-  work is bounded by the viewport while the structure work is bounded by the
-  view's lifetime. Its lifecycle is DR-BR-16.1.
-- **History:** see DR-BR-16.2. Its data path currently loads everything, and
-  slicing afterward would bound only the bridge payload.
-- **Named scale gate.** Synthetic plans, inventories, and history at defined
-  sizes, with recorded window-response times, recorded projection build and
-  memory cost, and recorded `preview_selection` times at realistic dependency
-  depth. History is measured on a run with a large item count, not only a
-  large run count. This is not the executor's measured-throughput standard; it
-  is a stated ceiling with numbers behind it. If a size cannot be served
-  responsively, **the supported M1 ceiling is documented rather than left as
-  an unknown cliff.** The in-memory projection makes location size a memory
-  question as well as a time question, and the gate must record both.
-  Section 9.4 fixes the M1 fixtures, reference machine, sample rules, and
-  ceilings; an implementation result may fail or pass them but may not redefine
-  them after measurement.
-
-Flattening under the active collapsed set, filter, and search remains the
-per-request cost for both trees. If the gate shows it matters, the named
-fallback is one **latest visible-sequence cache per open view**, tagged with
-the exact parameter tuple that produced it. Scroll-only paging with unchanged
-parameters hits that cache; changing any parameter replaces it. No
-parameter-keyed family is retained. The cache is not built before the numbers
-justify it.
-
-The `derive_execution_selection` fixpoint remains O(operations × dependency
-depth) per preview and is measured by the same gate.
+Row-level SQL `LIMIT/OFFSET` is not inventory-tree paging: ancestor synthesis
+and rollups require the structure, client offsets address the post-filter
+visible sequence, and lexical key order is not depth-first pre-order.
 
 #### DR-BR-16.1 — The inventory projection's lifecycle
 
-A cached projection is server-side per-view state and needs its rules stated,
-or it leaks memory and serves torn reads.
+**Binding rule.** Inventory projections are immutable, revisioned, service-owned
+objects identified by opaque `view_id`.
 
-- **Identity, and who owns it.** An earlier draft keyed projections by
-  `(task id, location id)` while also placing the cache in the service. Those
-  contradict: DR-BR-21 makes task identity the **adapter's**, so the service
-  would hold a cache keyed by a word it cannot mint, validate, or enumerate.
-  **Resolution:** the service mints an opaque **`view_id`** when a location view
-  is opened and keys the projection by that alone; the adapter maps its own
-  `(task id, location id)` to a `view_id` and sends the `view_id` thereafter.
-  Opening the same location in two tasks yields two `view_id`s and therefore two
-  projections, because their invalidation timing is independent — the property
-  the original key was reaching for, obtained without importing task vocabulary
-  below the bridge. Cache state stays under the same ownership as selection
-  state (DR-BR-03), which is what lets both be validated atomically.
-- **Cleanup.** Released definitively when the view changes location, through the
-  task-owned facade artifact release when the task closes, and at service
-  shutdown. The adapter separately drops its task/projection references.
-- **Swap, never mutate.** Rebuilds construct a new immutable projection and swap
-  the reference under a lock. A window request already holding a reference
-  finishes against consistent structure instead of watching rows move beneath it.
-
-  **The lock is the service's, per `view_id` — not the adapter's `TaskState`
-  lock.** An earlier draft said "under the task lock", which inverts ownership:
-  DR-BR-24 puts that lock on `TaskState` in `interfaces/web`, DR-BR-21 makes task
-  identity the adapter's, and the projection is service-owned. Reaching an
-  adapter lock from the service is the inversion; holding it *across* the facade
-  call collides with DR-BR-24's own "never hold a task lock across I/O", since a
-  rebuild runs a query. The `TaskState` lock guards adapter state only and is
-  never held across a facade call. The LRU map is guarded by the same
-  service-side lock — an unguarded cache map is not made safe by immutable
-  values, because insert and evict mutate the map itself.
-
-  **The rebuild happens outside the guard; only the swap is inside it.** But a
-  *patch* is not a swap: read, shallow-copy, replace the node, bump, and store is
-  one read-modify-write and must be one critical section per `view_id`, or two
-  concurrent acknowledges silently discard one another's change while both
-  clients see an advanced revision and trust it. A full rebuild and a patch are
-  mutually exclusive under that same guard, and a patch whose base revision no
-  longer matches is dropped rather than applied over newer structure.
-- **Projection revision.** Each projection carries a monotonic process-local
-  revision returned with every window response. A page request carrying a
-  stale revision is refused and the client restarts, so old structure can
-  never be combined with newly fetched details. **This is not the database
-  generation token rejected in DR-BR-20** — it identifies an in-process cached
-  object, requires no schema change, and cannot silently miss a change because
-  the process performing the invalidation is the one bumping it.
-- **Background views retain, up to an LRU cap.** An earlier draft said
-  background views release and rebuild on return, *and* that an LRU cap bounds
-  the total. Those cannot both hold: if every background view releases, the
-  live count never exceeds the visible views and the cap is unreachable —
-  documented as a memory safeguard while protecting nothing. Background views
-  therefore retain, and the cap evicts beyond it, least-recently-used first.
-  Switching among the two or three views someone is actually alternating
-  between stays instant; a view untouched long enough rebuilds.
-
-  The cap is a **count**, not a size-aware budget — predictable, no eviction
-  heuristics — and is **six live projections** for M1. The WebView2 process tree
-  dwarfs a few slim projections, so being stingy here optimizes the wrong thing.
-  Projection
-  size does scale with location size, so the scale gate records per-projection
-  memory and the number is revised against that rather than re-guessed.
-
-  Plan-tree memos (DR-BR-11) do **not** share this cap. They are keyed per
-  request id, hold structure over a frozen artifact, are typically far smaller,
-  and die with the task — a large location must not be able to evict one.
-- **Invalidation is causal, and patches in place by copy-on-write.** A
-  completed acknowledge or restore changes exactly one known row, and
-  acknowledgment participates in no rollup (DR-BR-20), so no ancestor is
-  affected. A pure `patch_row(projection, row_id, …) -> projection` in
-  `workflows/node_tree.py` **shallow-copies** the node array — a copy of
-  references, sharing every unchanged node object and the position indexes
-  untouched, since nothing reorders — and returns a new projection with that one
-  node replaced. The service calls it, bumps the revision, and stores the result
-  under its per-`view_id` lock.
-
-  **Constructing the replacement node is `workflows/`' job, not the service's.**
-  Deciding what an acknowledged row now looks like is domain semantics, and
-  DR-BR-09's table already assigns node structure to `node_tree.py` while giving
-  the service only projection ownership. The current tree has no precedent for
-  the alternative: `interfaces/service.py` calls `inventory_row_view(row)` rather
-  than assembling row views itself. Keeping the patch pure also makes it
-  unit-testable without a cache.
-
-  Shallow is the operative word. Reconstructing every node object would be
-  hundreds of thousands of allocations for a one-field edit; it would skip the
-  query and the tree build while giving back most of the saving, and it would
-  present as an unexplained stall during exactly the triage workflow the
-  inventory view exists for. Rollups, where a future change does touch them,
-  are adjusted by delta along the ancestor chain — never recomputed over a
-  subtree, which is O(n) again regardless of copy depth.
-
-  A projection is never mutated while a window request may still hold it. Only
-  an observed session terminal, which may have changed many rows, forces a full
-  rebuild.
-- **Eviction is indistinguishable from invalidation, client-side.** A returning
-  view rebuilds and mints a new projection revision, so a stale client revision
-  is refused down the path invalidation already uses — no second mechanism.
-  Eviction also cannot race an in-flight window request: projections are
-  immutable and swapped by reference, so a request already holding one
-  completes correctly even after the cache entry is dropped, and the client's
-  *next* request takes the stale-revision refusal. The cap therefore needs no
-  ordering machinery of its own — but "no ordering machinery" is not "no lock":
-  insert and evict mutate the cache map, so they take the same service-side lock
-  as the swap. Immutable *values* do not make a mutable *map* safe, and an
-  earlier draft's "needs no defensive locking" elided the two.
+- The service mints `view_id`; the adapter maps its own
+  `(task_id, location_id)` to that id. Opening one location in two tasks creates
+  independent projections without importing adapter task identity into the
+  service.
+- A view change, task-owned facade-artifact release, or service shutdown releases
+  the projection. Background views remain cached under a six-live-projection
+  least-recently-used cap. Plan-tree memos do not share this cap.
+- Rebuilds happen outside the service guard and swap immutable references inside
+  it. The LRU map and each per-view read-modify-write patch use that same
+  service-side synchronization. The adapter `TaskState` lock guards adapter
+  state only and is never held across facade I/O.
+- Every projection has a monotonic process-local revision returned with its
+  windows. A stale revision is refused so structure and detail from different
+  generations cannot combine. This is an in-process projection revision, not
+  the rejected database snapshot token of DR-BR-20.
+- Acknowledge/restore uses pure
+  `patch_row(projection, row_id, ...) -> projection` in
+  `workflows/node_tree.py`. It shallow-copies the node array, shares unchanged
+  nodes and indexes, replaces the one workflow-constructed node, bumps revision,
+  and stores atomically. Concurrent patches cannot lose one another; a patch
+  against an obsolete base is dropped.
+- A session terminal that may affect many rows forces a full rebuild. Rollup
+  changes, if later introduced, update only the ancestor chain.
+- Eviction and causal invalidation share the stale-revision path. An in-flight
+  request may finish against its immutable reference; the next request rebuilds
+  or refuses stale state.
 
 #### DR-BR-16.2 — History is paged at the database, not after it
 
-The old path loaded and decoded every item for one run, and the list path called
-that full getter once per listed run. A 50-run list therefore performed N+1
-query sets and materialized every selected item before the bridge could discard
-all but one window.
+**Binding rule.** History reads never materialize unbounded run detail before
+windowing.
 
-**Resolution (introduced in history v4 and retained by receipt-aware v5):**
+- `list_summaries(limit)` uses a run query plus fixed phase/aggregate queries
+  and never decodes canonical event JSON. The database returns finite
+  conditional facts; workflows own selection, integrity, and headline meaning.
+- `get_item_page` keyset-pages dense immutable `item_order`;
+  `get_event_page` keyset-pages reliable `event_seq`. Both accept limits
+  1..256, fetch one raw lookahead row, and decode at most the requested limit.
+- The first page captures a committed `through_*` watermark in the same read
+  transaction. Later pages reuse it while new history commits. Event watermarks
+  are inclusive sparse bounds and need not name a retained row.
+- A fresh recovery traversal whose last accepted non-`Gap` cursor is already
+  ahead of durability returns one empty terminal page. A later repair omits the
+  old watermark and captures a new committed prefix; a reversed fixed interval
+  is invalid.
+- Terminal phase summaries have a 256-row recording ceiling and may load with a
+  summary. Item and event detail may not.
+- The service exposes summary, item-page, and event-page methods; CLI detail
+  consumes those pages. `history_events_run_item_order_idx`, the composite
+  primary key, and `history_events_run_item_aggregate_idx` serve the bounded
+  seeks, pinned by query-plan regressions.
+- Reset-only history v4 introduced this contract and receipt-aware v5 retains
+  it. Durable reliable pages repair live gaps; lossy progress gaps remain valid,
+  and finalized summaries supply terminal truth.
 
-- `list_summaries(limit)` uses one run query plus fixed phase and aggregate
-  queries. It never selects or decodes canonical event JSON. The repository
-  returns one fixed-size conditional fact object per run; free-form item kinds
-  and reasons cannot expand Python object retention. Workflow code supplies the
-  finite selection/no-op predicates and owns selection, integrity, and headline
-  interpretation, preserving the `db → workflows` import prohibition.
-- `get_item_page(...)` keyset-pages dense immutable `item_order`, and
-  `get_event_page(...)` keyset-pages reliable `event_seq`. Both reject limits
-  outside 1..256. The first page captures a committed `through_*` watermark in
-  the same read transaction; subsequent pages reuse it while new history
-  windows continue committing. Caller-supplied event watermarks are inclusive
-  sparse bounds and need not name a retained row. Every request verifies the
-  official durable maximum through the composite primary-key index, fetches one
-  raw lookahead row, and decodes no more than the requested limit.
-- A fresh event traversal whose last successfully applied non-`Gap` cursor is
-  ahead of durability returns one empty terminal page. That traversal ends;
-  the next repair attempt omits `through_seq` and captures a new committed
-  prefix. Echoing the older watermark with the preserved cursor is an invalid
-  reversed fixed interval.
-- Terminal phase summaries have an explicit 256-row recording ceiling and may
-  therefore load with the summary. Item/event detail never does.
-- The service exposes summary, item-page, and event-page methods and removes the
-  unbounded full-run getter. CLI detail rendering consumes item pages directly.
-- `history_events_run_item_order_idx` serves item windows, the composite primary
-  key serves event catch-up, and `history_events_run_item_aggregate_idx` serves
-  typed summary facts. Query-plan regressions pin those seeks.
-
-This change deliberately advances the reset-only history contract to v4 rather
-than pretending the v3 terminal-only rows could recover discarded state and
-phase events. It also makes committed reliable pages the backend recovery path
-for a live subscriber gap. Missing lossy `Progress` sequence numbers remain
-valid; a finalized summary supplies terminal truth if the live `Terminal` was
-lost.
+> **Rationale (non-normative).**
+>
+> The rejected row-page draft bounded SQL rows but could not construct correct
+> tree ancestry, rollups, or visible ordering. Service-owned `view_id` avoids
+> keying service state by adapter-owned task identity. Background retention makes
+> the LRU meaningful; immutable swaps let active readers finish consistently;
+> and shallow copy-on-write prevents a one-row acknowledgment from rebuilding
+> hundreds of thousands of nodes. History keyset pages eliminate the former N+1
+> full-run materialization without weakening durable gap recovery.
 
 ### DR-BR-17 — Selection is server-side state; the DOM is disposable
 
@@ -2579,365 +1937,56 @@ unrecognized body — so it is asserted, not assumed.
 
 ## 9. Deferred, Rejected, and Resolved
 
-**Rejected with reasons recorded:** the inventory snapshot token (DR-BR-20);
-per-node lazy expansion in favor of flattened windows (DR-BR-15); a
-minimum-size threshold and per-group sub-windows for move groups (DR-BR-13);
-synthetic operation ids for structural folders (DR-BR-11); a client-side
-search implementation (DR-BR-18); merging safety exclusions with user
-deselection (DR-BR-01); discarding late selection responses by request id in
-favor of revision conflict (DR-BR-03); path-only node ids in favor of
-scope-qualified ids (DR-BR-11); row-level SQL `LIMIT`/`OFFSET` for the
-inventory tree, which cannot express visible-tree semantics (DR-BR-16);
-freezing selection straight to `committed`, which strands a task when
-dispatcher admission fails (DR-BR-03); a typed confirmation phrase in the
-desktop (DR-BR-03); and CLI acknowledge/restore/staleness commands as the
-Stage 5.5 verification route, which needed a larger interface design than the
-lift they were meant to prove (§10); client-side view filtering, which filters
-a window rather than windowing a filter (DR-BR-08); releasing every background
-inventory projection, which made the LRU cap unreachable (DR-BR-16.1);
-deep-copying a projection to patch one row (DR-BR-16.1); and a `cli → web`
-import for no-subcommand launch, replaced by a launcher module (§10);
-reconstructing user-selection reasons from the final selected-id set
-(DR-BR-01); exact-path semantics for a folder-node location command
-(DR-BR-06); generalizing the exact-path scan for recursive scope, whose
-ignore rule would make almost every real subtree refresh incomplete
-(DR-BR-06); restating the full scan's incompleteness causes as a closed list
-rather than sharing its helper (DR-BR-06); a descendant count on folder
-integrity menu items, which no rollup can honestly supply because each mode
-selects its own eligible subjects (DR-BR-06); a confirmation dialog for
-folder-scoped integrity actions, which are pausable and cancelable
-(DR-BR-06); a client-only autoscroll anchor that cannot locate an
-unmaterialized row (DR-BR-19); and a second bridge-specific reliable-loss
-policy instead of the dispatcher's existing visible `Gap` path (DR-BR-24).
+This section records dispositions only. Live rules remain in their DR-BR section
+or BR-G gate; dated delivery and evidence remain in the changelog and owning
+artifact documents.
 
-**Deferred:** integrity continuation restructuring, held behind a named
-pause-latency benchmark over late-run `completed_bytes` rather than adopted on a
-reasoned cost (DR-BR-06); filter-exclusion visibility in plan review (DR-BR-07);
-`get_plan_review` rebuilding every view object per call, which the memoized
-tree and direct `preview_selection` path route around rather than fix; and
-persisted selected-kind/integrity summary columns on `history_runs`, which
-require a later schema-version decision rather than an M1 fallback
-(DR-BR-16.2).
+### Rejected
 
-**Resolved implementation prerequisites:**
+| Proposal | Disposition |
+| --- | --- |
+| Inventory snapshot token | Rejected — causal rereads plus projection revision cover the owned consistency boundary without a database generation. |
+| Per-node lazy expansion | Rejected — expanded review would cost one round trip per folder; bounded visible windows serve the same hierarchy. |
+| Move-group thresholds or sub-windows | Rejected — a move is one paired annotation, not a second paging or selection unit. |
+| Synthetic operation ids for structural folders | Rejected — scope-qualified node ids represent structure without impersonating operations. |
+| Client-side search or filtering | Rejected — the client sees only a window and cannot filter/search the authoritative unmaterialized set. |
+| Merge safety exclusions with user deselection | Rejected — reselection could silently readmit planner-refused work. |
+| Discard late selection by request id | Rejected — revision conflict is the authoritative concurrency decision. |
+| Path-only node ids | Rejected — identical relative paths across scopes would collide. |
+| Inventory row-level SQL paging | Rejected — row order cannot express synthesized ancestry, rollups, or the post-filter visible sequence. |
+| Freeze selection directly to committed | Rejected — failed dispatcher admission would strand an uneditable task. |
+| Typed desktop confirmation phrase | Rejected — ordinary explicit confirmation supplies the intended irreversible-action friction. |
+| Stage 5.5 CLI acknowledgment commands | Rejected — ids were undiscoverable and a coherent CLI contract exceeded the facade-lift scope. |
+| Release every background projection | Rejected — it makes the LRU cap unreachable and defeats fast task switching. |
+| Deep-copy a projection for one-row patch | Rejected — it restores O(n) allocation for a local change. |
+| `cli → web` launch import | Rejected — a sibling import violates the interface boundary; the launcher owns selection. |
+| Reconstruct deselection reasons from selected ids | Rejected — final membership cannot recover user-choice provenance. |
+| Exact-path semantics for folder commands | Rejected — it silently omits descendants and cannot discover new files during refresh. |
+| Generalize the exact-path scanner for recursion | Rejected — exact-path ignore semantics make ordinary recursive scopes inconclusive. |
+| Restate subtree incompleteness causes | Rejected — a closed copy would drift from the shared full-walk contract. |
+| Predict folder-integrity descendant counts | Rejected — each mode owns a different eligibility set. |
+| Confirm folder integrity actions | Rejected — the operation is non-destructive, pausable, and cancelable. |
+| Client-only autoscroll anchor | Rejected — the target may not be materialized in the DOM. |
+| Second bridge reliable-loss protocol | Rejected — dispatcher `Gap` plus durable reconciliation already owns visible loss. |
 
-1. **Idempotency uses two mechanisms, not one fictional universal receipt.**
-   Recorder mutations use a reproducible per-(gesture, row) key and
-   caller-supplied timestamp; session-creating facade commands use the
-   service-held command receipt and lifecycle specified in DR-BR-27.
-2. **Folder integrity continues past unreadable frozen subjects.** Each such
-   subject becomes one visible `unsupported` result, the run stays explicitly
-   verification-incomplete, and every other eligible frozen subject proceeds.
-   Non-subject-specific incompleteness still refuses before hashing.
-3. **Drain recovery is explicit-gap/uncertainty recovery.** No client
-   acknowledgment, echoed cursor, response cache, or second server receipt is
-   added. A failed/malformed drain takes the existing
-   resubscribe/terminal-record path from the sequence after the last accepted
-   non-`Gap` event; an explicit `Gap` uses its exact `first_missed_seq`, with a
-   matching leading recovery gap proving the missing prefix unavailable rather
-   than causing another loop. Numeric sequence holes are legal when
-   replaceable progress coalesces and do not themselves trigger recovery.
-4. **M1's scale envelope is 100,000 file-backed subjects, with concrete
-   reference budgets.** This matches the current user's upper bound; ordinary
-   directories are expected to be in the thousands to tens of thousands. The
-   first reference profile is intentionally this development machine, not a
-   claim about minimum supported hardware:
+### Deferred
 
-   - Windows 11 Pro build 26200;
-   - Intel Core i7-13700K, 16 cores / 24 logical processors;
-   - 63.7 GiB RAM;
-   - repository, fixtures, and SQLite databases on a WD_BLACK SN850X 4 TB NVMe;
-   - CPython 3.13.14 and SQLite 3.50.4.
+| Work | Reopen condition |
+| --- | --- |
+| Integrity continuation restructuring | A late-run 10k/100k/large-folder pause benchmark demonstrates unacceptable cost. |
+| Filter-exclusion visibility in plan review | A product slice owns the missing review explanation. |
+| Eliminate `get_plan_review` full-view rebuilding | A measured caller still pays it after memoized tree and direct preview paths. |
+| Persist selected-kind/integrity history summaries | A later schema-version decision owns the columns; M1 does not add a fallback. |
 
-   Measure on AC power with no unrelated sustained workload. Each p95 uses at
-   least 30 warm samples; each cold maximum uses at least five fresh-process or
-   cold-projection samples. The benchmark artifact records exact commit,
-   machine/runtime profile, fixture seed, raw samples, p95, and maximum.
+### Resolved
 
-   | Fixture | Required shape |
-   | --- | --- |
-   | Plan | 100,000 operations plus up to 20,000 synthesized/real folder nodes; dependency and path depth reach 32 |
-   | Inventory | 100,000 file rows plus up to 20,000 directory rows in one location; the slim projection therefore reaches 120,000 nodes |
-   | History | 50 recent-run summaries covering 1,000,000 retained items total, with at least one 100,000-item run; detail paging targets that large run |
-   | Projection retention | Six populated 120,000-node inventory projections, then a seventh view to exercise LRU eviction |
-   | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
-
-   | Measurement on the reference profile | Ceiling | Authority status |
-   | --- | --- | --- |
-   | Local pending/disabled feedback after a critical click | 50 ms maximum | Tier 0 reasoned target; Tier 2 reference acceptance required in the owning slice |
-   | Typed facade receipt for execute, pause/resume/cancel, or one-row acknowledge/restore, excluding admitted work | 100 ms p95; 250 ms maximum | Tier 0 reasoned target; Tier 2 reference acceptance required in the owning slice |
-   | Admission that freezes/normalizes the full 100,000-subject scope (folder refresh/integrity or multi-row visibility) | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 reference acceptance required in the owning slice |
-   | Reliable/terminal bridge delivery under the event fixture | 100 ms p95; 250 ms maximum; no `Gap` | Tier 1 ordering/delivery behavior only, not latency-ceiling evidence; current-source Tier 2 timing acceptance pending after the linger change |
-   | Replaceable progress delivery under the event fixture | 1 s p95; 2 s maximum; monotonic and ordered after coalescing | Tier 1 coalescing/cadence behavior only, not latency-ceiling evidence; current-source Tier 2 timing acceptance pending after the linger change |
-   | Cold 120,000-node plan projection build | 2 s maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required |
-   | Cold 120,000-node inventory slim-projection build | 3 s maximum | Tier 0 reasoned target; Tier 2 Slice 6 reference acceptance required |
-   | Unchanged-parameter 256-row plan/inventory window | 250 ms p95; 500 ms maximum | Tier 0 reasoned target; Tier 2 Slice 5/6 reference acceptance required |
-   | Changed collapse/filter/search visible sequence plus 256-row window | 750 ms p95; 1.5 s maximum | Tier 0 reasoned target; Tier 2 Slice 5/6 reference acceptance required |
-   | `preview_selection` over the plan fixture at depth 32 | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required |
-   | Fifty-run / 1,000,000-item history summary | 3 s maximum | Tier 0 reasoned target; Tier 2 Slice 7 reference acceptance required |
-   | 256-row history detail window | 500 ms p95; 1 s maximum | Tier 0 reasoned target; Tier 2 Slice 7 reference acceptance required |
-   | Incremental plan projection memory | 128 MiB maximum | Tier 0 reasoned target; Tier 2 Slice 5 reference acceptance required, escalating under repository Tier 3 triggers |
-   | Incremental inventory projection memory | 192 MiB maximum each; 1,152 MiB for six | Tier 0 reasoned target; Tier 2 Slice 6 reference acceptance required, escalating under repository Tier 3 triggers |
-   | Identity-deduplicated bridge transport custody under the event fixture | 1,966,080 bytes | Frozen historical protected authority; Tier 1 current-source drift guard active; not a valid-domain hard bound or precedent |
-   | One 100,000-subject terminal artifact set plus the declared aggregate completed-task policy | Production policy and bound not yet derived | Analytical containment required first; empirical tier applies only to an irreducible residual |
-
-   Tier 0 rows above are design targets, not measured closure evidence. A
-   deterministic count, shape, serializer, or behavioral test does not promote
-   an unrelated timing or allocator-memory row; an exact structural-memory
-   calculation follows the deterministic authority rules in `DEFENSE.md` §7.
-   Compatible Tier 2 rows may share one reference artifact in their owning
-   vertical slice rather than building one harness per number. The 2026-08-13
-   event artifact remains useful historical characterization, but the later
-   150 ms linger changed current-source timing; reliable/terminal and progress
-   latency therefore still need Tier 2 evidence. `DEFENSE.md` §7 owns
-   escalation to Tier 3.
-
-   **BR-G-42 event-correctness/transport-custody definition (required by SH-G-8; REALIGNED; SH-G-8 SCOPE CLOSED, CURRENT-SOURCE LATENCY ACCEPTANCE OPEN).**
-   Transport custody
-   includes only the live dispatcher replay deques, subscriber deques, and
-   adapter task queues, measured as one identity-deduplicated deep Python graph.
-   Queue containers and nonterminal event values count. A terminal event or
-   `SessionRecordView` occupies its queue slot, but its result graph does not:
-   terminal artifacts scale with subject count and are measured only by
-   BR-G-45. The instrument reports each root class separately as well as their
-   deduplicated union so one scaling axis cannot be charged to another.
-
-   The named corpus is `sh-g-8-transport-v1`: four tasks use distinct,
-   Windows-legal subject/prior paths at depth 32 and exactly 240, 1,024, or
-   4,096 UTF-16 code units, with a 2:1:1 ASCII/BMP/non-BMP alphabet ratio;
-   derived MOVE_UPDATE trash paths add their real `.synctrash` prefix. The
-   ordinary 6,000 progress values distribute those lengths 5,700/240/60; its
-   600 reliable outcomes distribute them 570/24/6. The maximum no-`Gap` fixture
-   emits 516 reliable outcomes with a 490/21/5 distribution. Reachable failure
-   details rotate among the committed failed-COPY cleanup/unverified branch
-   (`io-error`, primary and publication-state `PermissionError`, and
-   `cleanup_error`), failed `move_update` / `recorder-failed`, and failed update
-   mutation / `io-error`; none fabricates a `durability_warnings` entry. This is
-   not the distinct post-flush warning branch. Subject paths, ids, and
-   path-bearing detail values are each unique while fixed categorical strings
-   retain their production values. The COPY and MOVE_UPDATE `published_path`
-   fields deliberately reuse the exact `ItemOutcome.path` object, matching
-   production identity instead of inflating the graph; MOVE_UPDATE's trash path
-   embeds an equal but separately allocated prior path. Item ids are 32
-   lowercase hexadecimal characters from the first 128 SHA-256 bits over
-   corpus/variant/fixture/task/local identity and are disjoint across variants
-   and fixtures. Calibration-a uses rank
-   `(ordinal*37+17) mod population` and
-   alphabet `ordinal mod 4`; holdout-b uses `(ordinal*41+31) mod population`
-   and alphabet `(ordinal+1) mod 4`, so their generated values are disjoint.
-
-   The landed corpus and runner preserve the existing capacities, event rates,
-   ordering, coalescing, no-`Gap`, and latency predicates while using a declared
-   named realistic path/detail corpus with distinct values rather than
-   shared test strings. It records both the ordinary four-task run and the
-   maximum reachable no-`Gap` custody shape: per task, the 128-entry replay,
-   64-entry subscriber, and 64-entry adapter bounds are driven through the
-   production offer/observation path and sampled from a quiescent snapshot. The
-   construction emits 64 outcomes per task to fill adapter custody, admits one
-   further production transfer, then emits the 64-outcome tail; no queue value
-   is inserted synthetically. The committed calibration artifact, generated
-   from clean source, records the frozen corpus version/hash,
-   raw root measurements, interpreter, allocation method, and every achieved
-   high-water mark. The already-declared derivation rule applies 25 percent
-   headroom to the largest calibration
-   `transport_custody_bytes` measurement and rounds upward to 65,536 bytes. The
-   separate committed ceiling contract now freezes the resulting 1,966,080-byte
-   limit before an independent holdout run; the calibration run cannot validate
-   its own limit. The former 16 MiB
-   whole-Job ceiling is retired rather than inherited or raised.
-   Payload-byte totals and complete-process memory are invalid substitutes for
-   retained transport custody.
-
-   **BR-G-42 event-correctness/transport custody / SH-G-8 evidence status (REALIGNED; SH-G-8 SCOPE CLOSED, CURRENT-SOURCE LATENCY ACCEPTANCE OPEN; 2026-08-14).** The deterministic ordinary
-   fixture now drives four simultaneous tasks through 60 logical seconds with
-   exactly 6,000 `Progress` emissions, 600 reliable item emissions, and terminal
-   truth for every task. It proves every observer is attached before tick zero,
-   no normal-envelope `Gap` occurs, all reliable ids arrive exactly once and in
-   per-session order, delivered progress is strictly monotonic after coalescing
-   and reaches 1,500 per task, every terminal record is exact, and neither the
-   dispatcher subscriber queue nor adapter task queue exceeds 64. The existing
-   260-reliable fault-injected overflow case remains a
-   separate, explicitly beyond-envelope witness for visible `Gap`, retained-tail
-   recovery, and terminal reconciliation. Those correctness predicates pass,
-   and the production drain now anchors one fixed 150 ms deadline at first
-   progress-only availability without restarting it for replacement,
-   supersession, or retry. Reliable, `Gap`, terminal, recovery, close, and
-   supersession wake immediately; 175 focused drain/command/host checks pass.
-   The former short-path 289,147-byte diagnostic does not close
-   realistic-payload custody because it included terminal records and ran
-   beside the whole-Job sampler. A separate retained-state sizer now snapshots
-   the real replay, subscriber, and adapter deques under their owner locks,
-   requires two identical structural captures, refuses unknown graph types,
-   reports those three non-additive graphs plus one identity-deduplicated union,
-   and stops at terminal-result subtrees only along terminal paths. It is
-   accounting support, not acceptance evidence. The frozen
-   `sh-g-8-transport-v1` corpus and its disjoint calibration-a/holdout-b variants
-   now drive the real built-in deques through
-   `Dispatcher` -> `NamiSyncService`/`SessionObserver` -> `TaskRegistry`. The
-   runner samples 60 exact-body producer-quiescent ordinary checkpoints, then
-   constructs the quiescent per-task replay/subscriber/adapter 128/64/64
-   maximum without a synthetic `Gap`; cleanup proves all 129 reliable items per
-   task arrive exactly once and ordered before exact terminal records. Its
-   ordinary report retains independent observed high-water values across those
-   checkpoints plus the terminal transport projection; in particular,
-   `transport_custody_bytes` is an observed union high water, never a sum of
-   component maxima. The 128/64/64 measurement is one unchanged exact
-   quiescent snapshot. Its terminal witness includes the queue slot while
-   cutting and separately reporting result artifacts, so it is not BR-G-45
-   complete-retention evidence. Each dataset
-   requires an isolated/safe-path parent launched with `-I -S`
-   (`isolated=1`, `ignore_environment=1`, `no_site=1`, `safe_path=true`). After
-   proving clean committed source authority, the parent manually compiles the
-   exact verified child bytes; it does not import that contract through an
-   executable site-package startup path. It then launches three fresh Windows
-   CPython 3.13 children with `-P -S`, `no_site=1`, safe-path mode, and a fresh empty
-   per-child bytecode-cache prefix outside the source tree. Source and dependency
-   authority are rechecked around every child. Stable source, dependency,
-   corpus, instrument, and normalized runtime-qualifier hashes plus each
-   child's external exact-schema digest receipt bind the dataset; each child's
-   exact runtime and cache path are also recorded and hashed.
-
-   The runtime qualifier is final non-debug 64-bit CPython 3.13 on Windows with
-   explicit `pymalloc` and optimization/dev/tracemalloc disabled. All inherited
-   `PYTHON*` variables are removed before setting only `PYTHONHASHSEED=0`,
-   `PYTHONMALLOC=pymalloc`, `PYTHONNOUSERSITE=1`, `PYTHONUTF8=1`, and the fresh
-   `PYTHONPYCACHEPREFIX`. The exact active-venv `xxhash/__init__.py`,
-   `xxhash/version.py`, and sole `_xxhash*.pyd` file, their origins, and their
-   combined digest are recorded. The durable normative calibration-a artifact
-   is `tests/interfaces/web/sh_g_8_transport_calibration.json`. It was generated
-   from clean tested commit
-   `56c50b43dc19090ad33af031891503bfec80599b`; its file SHA-256 is
-   `13589307538eb90f05da2322c7e0ba627234e060c8455d9b7e3013aa575cece8`, and
-   its three measured child PIDs are 47288, 47520, and 26968. It records an
-   ordinary union high water of 1,376,690 bytes / 4,890 objects and an exact
-   maximum no-`Gap` union of 1,534,946 bytes / 5,499 objects. Its stable
-   evidence, corpus, normalized runtime-qualifier, and dependency-authority
-   SHA-256 values are respectively
-   `62930023783624e742aebaba6a148351a7103a213e93e08a1972b2c90ce4c3ea`,
-   `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`,
-   `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`, and
-   `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
-   That calibration artifact remains measurement-only. The committed
-   `tests/interfaces/web/sh_g_8_transport_ceiling.json` contract mechanically
-   freezes `ceil((1,534,946 * 5 / 4) / 65,536) * 65,536` as 1,966,080 bytes
-   (1.875 MiB). Its file SHA-256 is
-   `09170695e6b8b2404c220289213d998fbef9b721f140e3e7c0090d6328b0302d`.
-   The acceptance validator remains frozen in
-   `tests/interfaces/web/test_bridge_transport_custody.py` at Git blob
-   `c6da8e17de96e2c73a677c091b8bfb13e261cbd2`;
-   `tests/interfaces/web/test_bridge_transport_custody_holdout.py` supplies the
-   closure witness without changing that authority. The frozen holdout-b
-   corpus SHA-256 is
-   `b4f23a5c9452f11e06e5520e52c02a0c1fd3e94698e87f70d7d3144c09d787c9`.
-   The accepted `tests/interfaces/web/sh_g_8_transport_holdout.json` artifact
-   was generated from clean ceiling commit
-   `455df3a6fdc1307af140bf91b1dea95774fb36fe`; its file SHA-256 is
-   `96ec4003c74fa5ca2800ae2ec5672d3c509ceaaf79bca23ad0c864112e9d32d1`.
-   Its fresh process ids are 37508, 44384, and 44596, its evidence SHA-256 is
-   `95dabfdb4cf58c94abf5f7f1ddca1ed56c4e343ee5277411cf65a138d76e593b`,
-   and its corpus hash is the frozen holdout-b value above. Source, instrument,
-   dependency, runtime-qualifier, ceiling, and frozen-validator authorities
-   match exactly. Ordinary custody is 1,351,794 bytes and exact-maximum no-`Gap`
-   custody is 1,513,014 bytes, respectively 614,286 and 453,066 bytes below
-   1,966,080. No-`Gap`, ordering, 128/64/64 custody, cleanup, and terminal truth
-   all pass. The new holdout witness invokes the frozen validator with its
-   default real-Git authority; its two tests and the 60 frozen-validator tests
-   pass together as 62 focused checks.
-
-   `tests/interfaces/web/test_bridge_transport_custody_live.py` separately runs
-   one current-source calibration-a child during the ordinary suite, validates
-   its full artifact with artifact-derived development authority, authenticates
-   this frozen contract, and requires both ordinary and maximum no-`Gap`
-   custody to remain at or below 1,966,080 bytes. This is a live drift guard,
-   not calibration, holdout, or replacement acceptance evidence. Together with
-   the frozen-validator and holdout selection above, custody has 63 focused
-   checks.
-
-   This accepted v1 authority is historical, exceptional, and non-precedential.
-   With its function, corpus, runtime, and representation fixed, the structural
-   `sys.getsizeof` graph has one deterministic value; byte-identical fresh
-   children added provenance but no statistical power. The committed
-   calibration, ceiling, holdout, validators, hashes, and line-ending pins stay
-   frozen rather than being retroactively rewritten. A later transport
-   representation must select authority from its consequence, production
-   enforceability, and deterministic or noisy character instead of inheriting
-   this apparatus.
-
-   Root `.gitattributes` pins the runner, frozen validator, holdout witness, and
-   ceiling JSON to LF, while pinning the calibration and holdout JSON artifacts
-   to CRLF. This preserves the contracted Git blobs and raw artifact hashes
-   across Windows checkouts; the Tier-1 live guard is not byte authority.
-   Calibration can be reproduced from a clean commit with
-   `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py calibration --output "$env:TEMP\namisync-bridge-transport-custody-calibration.json"`.
-   The accepted holdout was recorded with
-   `.\.venv\Scripts\python.exe -I -S tests\bridge_transport_custody.py holdout --output "$env:TEMP\namisync-bridge-transport-custody-holdout.json"`.
-   This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45 and
-   SH-G-15 retain their separate open scale predicates.
-
-   The standalone `tests/bridge_event_benchmark.py` harness builds and installs
-   the archived-HEAD wheel, loads a test-owned benchmark page with the installed
-   production bridge/readiness/render assets in real WebView2, completes the
-   shared test-owned neutral readiness bootstrap, runs the same aggregate rates
-   for a real 60 seconds, and records latency, `Gap`, fixture, runtime,
-   dirty-state, and
-   whole-Job diagnostics that may inform, but cannot close, shell-owned SH-G-15.
-   The browser streams bounded sample batches and the producers stream bounded
-   timing batches to SHA-256-manifested sidecars; the measured child retains no
-   growing sample dictionary and performs no repeated full producer-document
-   serialization during the fixture. Final evidence attachment and artifact
-   assembly happen only after the child exits. The actual Python child is
-   assigned directly to the Job before product composition rather than hiding
-   an unmeasured launcher outside it. Whole-Job diagnostics preserve per-PID
-   role/private bytes, sampled thread/handle counts, and membership/topology
-   transitions. Their fields are scoped to that event artifact: `passed` and
-   `event_passed` describe only the event envelope, its local
-   `sh_g_8_acceptance` remains `incomplete-without-custody`, and diagnostic
-   completeness is separate. The accepted custody artifact above supplies the
-   global SH-G-8 closure; `whole_runtime_acceptance` remains `not-defined`.
-   The former 16 MiB whole-Job ceiling has no pass/fail effect.
-   The artifact also
-   identifies and enforces the declared Windows build, CPU/core shape, RAM,
-   repository NVMe, AC-power state, and declared Python/SQLite plus pinned
-   pywebview/pythonnet profile; it records the resolved Bottle, evergreen
-   WebView2, and loaded CLR identities without pretending they are all
-   package-pinned. Reproduce it from the repository root with:
-
-   ```powershell
-   .\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "$env:TEMP\namisync-bridge-event-benchmark.json"
-   ```
-
-   The 2026-08-13 reference run of archived commit
-   `288969426d6e005bac7a7e540e0cfdbacf28f9eb` completed the exact 60-second
-   fixture with 6,000 `Progress` and 620 reliable/terminal deliveries (600
-   `ItemOutcome`, 12 `StateChanged`, four `Terminal`, and four terminal
-   records), four valid sessions, every item id exactly once and ordered,
-   monotonic progress, no `Gap`, and clean shutdown. Measured producer rates
-   were 100.043 `Progress`/s and 10.004 reliable items/s. Progress latency was
-   4 ms p95 / 17 ms maximum; reliable/terminal
-   latency was 5 ms p95 / 28 ms maximum. Its declared archive, machine/runtime
-   identity-profile, event, latency, cadence, and terminal predicates passed;
-   those were not SH-G-15 containment predicates. The complete headed Job
-   sampled 287,506,432 idle-baseline bytes and a 354,881,536-byte peak, a
-   67,375,104-byte delta against the 16,777,216-byte ceiling, over 3,006
-   fixture samples with a 21.042 ms maximum interval. That conservative
-   overage is intentionally non-normative. It does not measure transport
-   custody and was not used for realigned SH-G-8 closure. Queue capacities and
-   event latency budgets are unchanged; the later calibration, ceiling, and
-   holdout artifacts above own custody acceptance. The
-   archived source scope was clean; its recorded worktree status contained only
-   the two approved temporary root references, removed during final cleanup.
-
-   Critical feedback and command admission are strict because they determine
-   whether the interface feels alive. Page, projection, progress, and history
-   work may be late up to the larger ceilings, but lateness never permits a
-   torn page, stale mutation, fabricated sequence, wrong count, or clean result
-   from incomplete evidence.
-5. **The common maximum page size is 256 rows.** Plan, inventory, and history
-   use the same ceiling and refuse 257 rather than truncating it.
-
-**Closed earlier:** DR-BR-15 settles the former move-ghost filter question —
-when a filter hides the ghost, its synthetic-only ancestor chain disappears
-with it.
+| Disposition | Landed record |
+| --- | --- |
+| User selection, subtree scope, partial subject-local integrity, and page size use the contracts in DR-BR-01–06 and DR-BR-15. | [Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30) |
+| Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../CHANGELOG.md#close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11) |
+| Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14) |
+| The 100,000-subject scale envelope and transport-custody authority are governed by BR-G-42; terminal artifacts remain separate under BR-G-45. | [Ratify measurement and documentation authority](../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
+| Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18) |
 
 ---
 
@@ -2945,195 +1994,59 @@ with it.
 
 ### Packaging
 
-`pywebview` is a normal runtime dependency, not an optional extra. The console
-script `nami-sync` and `python -m namisync` remain CLI-only; no-subcommand use
-prints usage and points to the GUI launcher. The `nami-sync-gui` GUI script
-starts the same web adapter without retaining a console window. Explicit CLI
-work does not import or initialize `pywebview`, and GUI imports stay
-quarantined under `interfaces/web`.
+`pywebview` is a required runtime dependency. `nami-sync` and
+`python -m namisync` remain CLI-only and point no-subcommand users to
+`nami-sync-gui`, which launches without a retained console. Missing or
+incompatible WebView2 is refused with an actionable error; MSHTML is not a
+fallback.
 
-This packaging decision does not accept a renderer fallback. Slice 0 pins the
-supported pywebview version range after proving Python 3.13 compatibility and
-the required bridge behavior. Slice 1 refuses a missing or incompatible
-WebView2 runtime with an actionable error rather than falling back to MSHTML.
-Moving the host to an optional extra remains possible later, but is not an M1
-distribution mode.
+`interfaces/launcher.py` sits above the sibling CLI and web adapters and
+imports only the selected adapter lazily:
+`launcher → {cli, web} → service`, while `cli ↮ web`. Explicit CLI work
+does not import or initialize `pywebview`; GUI code remains under
+`interfaces/web`. BR-G-19 enforces this boundary.
 
-**Both entry-point families use a launcher module.** The current console script
-is `namisync.interfaces.cli:main`; Slice 1 retargets it and the package module
-entry point to `interfaces.launcher:main`, while the GUI script targets
-`interfaces.launcher:gui_main`. The launcher is **neither adapter**: its two
-functions import the selected sibling lazily, and the layers contract permits
-`launcher → {cli, web}` while `cli ↮ web` stands. It lives at
-**`namisync/interfaces/launcher.py`** so the existing `interfaces` forbidden
-imports and BR-G-19 static scan cover it. The new top layer sits above
-`cli | web`, which remain above `service`. Importing the web adapter lazily from
-`cli.main` would still violate that contract.
+### Stage 5.5 lanes
 
-### Stage 5.5 — four work lanes
+Stage 5.5 used three disjoint implementation lanes converging on the facade.
+The table remains as ownership context for its gates; delivery status is in
+[Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30).
 
-Stage 5.5 grew well past what one sequential list describes usefully. It
-decomposes by owning module into **three lanes that share no files and may run
-concurrently, converging on a fourth**. Lane assignment is by module, so two
-people can take two lanes without coordinating on anything but the lane
-boundary.
-
-| Lane | Owns | Delivers | Depends on |
+| Lane | Owns | Delivery | Depends on |
 | --- | --- | --- | --- |
-| **A — Tree substrate** | `core/pathing.py`, `workflows/node_tree.py`, `modules/planner.py` | DR-BR-10 helper promotion (which *removes* the three private helpers from `planner.py`, so that file is owned here); DR-BR-09's hierarchy core (ancestor synthesis, ordering, subtree membership, rollups); DR-BR-11 location-scoped ids and id→path lookup; the ordered depth/parent-indexed array; DR-BR-26 pure-function tests | nothing |
-| **B — Scan scope** | `core/models.py`, `modules/scanner.py`, `db/recorder.py`, `workflows/inventory.py` | DR-BR-06's `SUBTREES` scope and invariants; the parameterized full-walk helper; the three-way recorder branch and indexed literal range; inventory payload v2 and the kind-aware validator; scan-warning retention into `InventoryDetails` | nothing |
-| **C — Selection semantics** | `workflows/selection.py`, `core/execution.py`, `workflows/payloads.py`, `workflows/views.py`, `workflows/sync.py` | DR-BR-01 user deselection, `USER_DESELECTED`, `ExecutionSet` provenance, payload v4, and `run_execution`'s re-derivation and mismatch refusal; DR-BR-02 upward closure; DR-BR-04 replan discard; the corrected `all-noop` predicate | nothing |
-| **D — Facade** | `interfaces/service.py`, `workflows/runtime.py` | DR-BR-03 revision and three-state commitment; DR-BR-05 four lifts with the disposition view; DR-BR-06 id-based commands; the Stage 5.5 portions of DR-BR-27; `preview_selection`; the scan-warning view field | **A, B, C** |
+| **A — Tree substrate** | `core/pathing.py`, `workflows/node_tree.py`, `modules/planner.py` | Shared path helpers, hierarchy/index, scoped ids, pure tree tests | — |
+| **B — Scan scope** | `core/models.py`, scanner, recorder, inventory workflow | `SUBTREES`, shared walk, literal reconciliation range, inventory v2/warnings | — |
+| **C — Selection semantics** | Selection, execution/payload/view/sync workflows | Deselection provenance, payload v4, re-derivation, closure, `all-noop` truth | — |
+| **D — Facade** | Service and workflow runtime | Revisions/commitment, inventory lifts, opaque-id commands, receipts, preview | A, B, C |
 
-A, B, and C touch disjoint files and can land in any order. **D is the
-integration point** and is where a disagreement between them surfaces — which
-is the same posture `M1_PLAN.md` takes toward its Stage 4 slice, for the same
-reason.
-
-The lane table owns production files, not every gate that mentions their
-output. `patch_row`, projection ownership, `view_id`, and the projection
-revision guard land together in Stage 6 slice 6, where their cache consumer
-exists. Lane A supplies the immutable array and row indexes that slice consumes;
-Lane D does not pre-mint an otherwise unusable `view_id`. This is engineering
-goal 6 applied to the delivery plan.
-
-Two lane notes worth stating so they are not rediscovered:
-
-- **Lane A's promotion is a pure relocation.** DR-BR-10's caution is the
-  acceptance criterion: the planner's existing tests pass unchanged, with no
-  tidying of `_depth`, `_parent`, or `_is_descendant` during the move.
-- **Lane B is the only lane that can corrupt stored data.** Its wrong outcomes
-  are wrong `rel_path_key`s and wrongly-missing rows, neither of which raises.
-  It carries the heaviest gate below for that reason.
-- **`workflows/sync.py` is Lane C's, not Lane D's.** DR-BR-01's provenance is
-  inert until `run_execution` re-derives from `(plan, user_deselected)`, and
-  `_exclusion_items` is the only site that turns an `OperationExclusion` into a
-  `result.items` entry. Both live there. Lane D consumes the result but must not
-  edit that file, or the two lanes conflict at the one place their contracts
-  meet.
-- **`modules/planner.py` is Lane A's for one reason only:** DR-BR-10's promotion
-  deletes three helpers from it. No other planner behavior is in scope, and
-  BR-G-3 is what holds that line.
-- **DR-BR-14 belongs to no Stage 5.5 lane.** It edits `core/events.py`,
-  both reporters in `modules/`, and `envelope_from_dict`. It is Stage 6 work,
-  listed in that table rather than here, and is called out because a
-  presentation slice otherwise reaches into `core/` and `modules/` unannounced.
-
-The builder's plan-presentation layers stay in Stage 6: move grouping, ghost
-annotation, and nested-move suppression (DR-BR-13) are plan tree concerns, and
-Stage 5.5 needs none of them to resolve an inventory node id.
-
-Stage 5.5 is **verified through headless Python tests rather than new CLI
-surface**. Cross-lane behavior is driven through `NamiSyncService`; pure
-builder, scanner, codec, query-plan, and recorder-receipt invariants are tested
-at their owning boundary because a facade test can make those specific defects
-unobservable. Contract tests prove:
-
-- strict workflow payload v4 round-trips user deselection through pause/resume
-  and rejects v3; direct choices settle `SKIPPED`, and dependency fallout
-  settles `DEFERRED`;
-- an empty user selection is refused while a genuine nonempty `NOOP`-only
-  selection executes, records, and classifies `all-noop` from selected kinds
-  rather than from `Outcome.SKIPPED` alone;
-- the CLI's omitted revision is accepted only for untouched default selection;
-- a nested folder refresh discovers a descendant absent from the prior
-  inventory, marks disappeared `present` and `unsupported` descendants
-  missing, and leaves absent rows outside the subtree untouched; incomplete
-  subtree scans infer no missing rows, a genuinely absent root is complete and
-  marks its indexed subtree missing, `%`/`_`/`]` hostile roots remain literal,
-  overlapping roots canonicalize by segment ancestry, and selecting the
-  location root takes the full-scan branch; a mixed row/folder refresh retains
-  the exact row outside the subtree without recursively expanding an exact
-  directory row; folder-scoped baseline/verify/rebaseline resolve over the
-  folder's complete indexed subtree regardless of which descendants a view
-  filter hides, with each mode's existing eligibility rules then selecting its
-  own subjects; the representative subtree reconciliation query proves an
-  indexed range search; and empty-id and foreign-location requests are refused;
-- a subtree containing ignored entries — `THUMBS.DB`, `DESKTOP.INI`, an owned
-  temp — stays complete and still reconciles; a former folder root that is now a
-  file is recorded as that file and its former descendants become missing; a
-  *file* placeholder or file reparse point leaves completeness intact; a
-  **directory** placeholder, directory reparse point, and repeated directory
-  identity each make the scan incomplete and mark nothing missing; the recursive
-  path is asserted to share the full-walk helper so a newly added full-scan
-  incompleteness cause propagates without a doc edit; and an incomplete subtree
-  refresh delivers its typed scope warnings through `InventoryDetails` to
-  `InventoryDetailsView` — code, path, and detail — rather than reducing to a
-  bare `complete=False`, with rendering left to Stage 6 slice 6;
-- the parameterized walk records a nested root's descendants under the root's
-  own canonical key rather than the location root's, records a root that is now
-  a file as a file, treats an absent root as conclusive while denial or IO error
-  is `ROOT_UNAVAILABLE` and incomplete, names the failing root in that warning
-  instead of `None`, and trips the identity cycle guard for a junction crossing
-  from one requested root into another;
-- inventory v2 round-trips and rejects v1 while integrity v1 remains accepted
-  through the shared kind-aware validator, and a wrong-kind body is rejected at
-  either version.
-
-Stage 5.5 establishes identity and server-side resolution, not desktop
-presentation or per-view caching. Stage 6 consumes the same tree/index
-structure for flattening, paging, selection controls, and DR-BR-16's cached
-inventory projection rather than introducing a second node-id implementation.
-
-Two earlier claims were wrong and are corrected here. All of Stage 5.5 is not
-"provable through the CLI" — the CLI commits the automatic selection directly
-and has no selection surface at all. And the proposed CLI acknowledge, restore,
-and stale-inventory commands were named without a command contract: both
-mutations need a location and a row id, but the CLI's inventory listing prints
-only presence and path, so the required identifier is undiscoverable from its
-own output. Specifying them properly means command names, arguments, an
-identifier the listing actually exposes, idempotency ids, and cutoff semantics
-for staleness — a larger change than the lift it was meant to verify.
-
-Dropping the CLI additions is therefore the smaller Stage 5.5. A CLI surface
-for acknowledge, restore, and staleness can be designed on its own merits
-later, driven by headless demand rather than by a need to test a facade
-passthrough.
+A, B, and C could land independently; D was the integration point. The table
+owns production boundaries, not every later consumer: projection ownership,
+`patch_row`, `view_id`, and projection revision belong to Slice 6, while
+DR-BR-14 belongs to Stage 6. Stage 5.5 was verified headlessly at the facade and
+each owning scanner/recorder/codec/tree boundary; it did not add CLI surface or
+desktop presentation.
 
 ### Acceptance gates
 
-The bullet lists above say what to build. These say **when it is done**, and
-they are written adversarially on purpose: each names the cheap implementation
-that would pass a naive test, so satisfying the gate cannot be faked by
-someone — including a future one of us, in a hurry — who only wants the suite
-green. The `*Not satisfied by*` idiom is `M1_PLAN.md` §5.1's and is used here
-for the same reason. Numbered `BR-G-##` to avoid colliding with the `XV`
-series.
+A BR-G gate is closed only by its stated production entry point and
+counterexample. Every gate has a collected `test_br_g_<number>_*` pytest at
+each named level; fault injection may replace a dependency, never the unit under
+test. A skipped, xfailed, uncollected, or comment-only counterexample leaves the
+gate open.
 
-**Gate closure protocol.** A checked box is not evidence. Every numbered gate
-has at least one collected pytest whose name begins `test_br_g_<number>_`; a
-gate split across levels has one such test at each level it names. Tests call
-the production entry point named by the gate. A test double may fault-inject
-the named dependency, but may not replace the unit whose behavior is under
-test. The counterexample in *Not satisfied by* must be present in the fixture
-or assertion, not merely quoted in a comment.
+Only a gate-required installed-WebView2 check, source/import scan, or recorded
+measurement may supplement pytest. Those artifacts link from the implementation
+change. BR-G-42 owns its exact reference profile and budgets below. Gate
+headings are organizational, not lane ownership.
 
-The only non-pytest evidence is a real-WebView2 platform check, a recorded
-scale result, or a source/import scan explicitly required below. Those produce
-an artifact linked from the implementation change. BR-G-42's pytest proves
-deterministic query/decode/allocation bounds and the benchmark harness; its
-wall-clock and memory budgets run separately on §9.4's reference profile. On
-the supported Windows environment, no ordinary gate test may be skipped or
-xfailed; an uncollected, conditionally skipped, or expected-failing test leaves
-the gate open.
-
-To keep the production lanes disjoint without moving their collisions into
-tests, new Stage 5.5 gate tests have fixed owners:
-
-| Owner | New gate-test module | May close independently |
+| Owner | Gate-test module | Independent Stage 5.5 scope |
 | --- | --- | --- |
-| A | `tests/test_bridge_tree.py` | BR-G-1's builder clauses, BR-G-2's structure clauses, BR-G-3 |
-| B | `tests/test_bridge_scan_scope.py` | BR-G-4–9 and BR-G-25–28 |
-| C | `tests/test_bridge_selection.py` | BR-G-11 and BR-G-12 |
-| D/integration | `tests/test_bridge_service.py` and `tests/test_bridge_resume.py` | BR-G-1's service refusal, BR-G-10, BR-G-13–18, BR-G-20, BR-G-21, BR-G-24, BR-G-29 |
+| A | `tests/test_bridge_tree.py` | BR-G-1 builder, BR-G-2 structure, BR-G-3 |
+| B | `tests/test_bridge_scan_scope.py` | BR-G-4–9, BR-G-25–28 |
+| C | `tests/test_bridge_selection.py` | BR-G-11–12 |
+| D/integration | `tests/test_bridge_service.py`, `tests/test_bridge_resume.py` | BR-G-1 service refusal, BR-G-10, BR-G-13–18, BR-G-20–21, BR-G-24, BR-G-29 |
 
-The headings below group related contracts; they do **not** imply that every
-gate under a heading is lane-local. A, B, and C are independently mergeable
-only on the clauses in the table's last column plus their regression rows. D
-closes the cross-lane Stage 5.5 gates. Section 9's five former prerequisites are
-resolved and are part of the gates below; implementation may not substitute a
-different retry, partial-integrity, drain, scale, or page-size contract merely
-because its local tests are easier.
+**Lane A — tree substrate**
 
 **Lane A — tree substrate**
 
@@ -3670,52 +2583,76 @@ because its local tests are easier.
   satisfies DR-BR-24 and XV-18. *Not satisfied by* cleanup triggered by the
   terminal event, by releasing only the plan, by a task rail reconstructed only
   from `list_sessions()`, or by a clean idle shutdown.
-- **BR-G-42 — The named scale envelope passes fixed budgets.** Using §9.4's
-  exact fixtures, reference profile, sample rules, and ceilings, record critical
-  click feedback, command/frozen-scope receipt latency, plan projection build
-  and memory, inventory slim-projection build and per-projection memory,
-  unchanged-parameter and changed-parameter window latency, bounded detail-query
-  row and decode counts, `preview_selection` at depth 32, and history
-  summary/detail latency over the exact retained-item fixture. It also records
-  event-drain latency and peak identity-deduplicated transport custody under
-  the stated normal burst/rate and maximum reachable no-`Gap` shape using the
-  SH-G-8 definition above. It proves no `Gap` occurs below the ordinary
-  envelope. The ordinary pytest
-  deterministically asserts query count, decoded row count,
-  allocation-sensitive object count, queue bound/coalescing, and fixture shape;
-  the named benchmark command runs cold and warm cases separately and records
-  machine/runtime identity. *Not satisfied by* choosing sizes after seeing
-  results, reporting averages without the declared percentile/maximum,
-  measuring payload bytes, whole-process memory, or a short/shared-string
-  fixture instead of the declared live custody roots, folding terminal result
-  graphs into transport, omitting one root class or achieved high-water mark,
-  allowing normal-load gaps, or using many empty history runs instead of a
-  large retained run.
+- **BR-G-42 — The named scale envelope passes fixed budgets.** The
+  implementation records every row below against the predeclared fixtures and
+  profile. Ordinary pytest proves deterministic shape/query/decode/allocation
+  bounds; the owning benchmark records raw samples, source, machine/runtime,
+  fixture seed, statistic, run count, p95, and maximum. Sizes and ceilings may
+  not be selected after observation.
 
-  **Current status:** the exact logical-time fixture and standalone
-  installed-wheel benchmark harness have landed, while the separate
-  beyond-envelope overflow regression remains passing. The fixed 150 ms
-  progress-only linger and focused regressions have landed. Benchmark evidence
-  is now bounded/streamed and manifest-checked, final assembly is outside the
-  measured child lifetime, event acceptance is independent of diagnostic
-  whole-runtime completeness, and the old 16 MiB line is retired. The
-  path-local retained-state sizer, frozen/disjoint realistic corpus, and
-  production-path three-fresh-process runner have also landed. The runner
-  verifies real built-in deque roots, the exact quiescent per-task 128/64/64
-  no-`Gap` shape and ordered cleanup, terminal path-cut reporting, and clean
-  source/dependency/runtime/digest authority. The committed calibration-a
-  artifact now records the normative 1,376,690-byte ordinary and
-  1,534,946-byte exact-maximum union measurements. The separate committed
-  contract freezes the 1,966,080-byte ceiling. Independent holdout-b passes at
-  1,351,794 ordinary and 1,513,014 exact-maximum bytes under every frozen
-  authority and correctness predicate. The 2026-08-13 run of
-  archived commit `288969426d6e005bac7a7e540e0cfdbacf28f9eb` passed exact
-  event truth, ordering, no-`Gap`, latency, cadence, identity, and clean-exit
-  predicates. Its 67,375,104-byte whole-Job delta is not transport-custody
-  evidence and did not decide this realigned clause. SH-G-8 and BR-G-42
-  event/transport custody are closed by the independent holdout; other BR-G-42
-  rows, including current-source event timing and later feature surfaces,
-  remain open on their owning slices.
+  **Reference profile and sampling.** Windows 11 Pro build 26200; Intel
+  i7-13700K (16 cores/24 logical processors); 63.7 GiB RAM; repository,
+  fixtures, and SQLite on a WD_BLACK SN850X 4 TB NVMe; CPython 3.13.14 and
+  SQLite 3.50.4; AC power with no unrelated sustained workload. P95 rows use at
+  least 30 warm samples; cold maxima use at least five fresh-process or
+  cold-projection samples.
+
+  | Fixture | Required shape |
+  | --- | --- |
+  | Plan | 100,000 operations plus up to 20,000 folder nodes; dependency/path depth reaches 32 |
+  | Inventory | 100,000 file rows plus up to 20,000 directory rows in one location |
+  | History | 50 run summaries covering 1,000,000 retained items, including one 100,000-item run |
+  | Projection retention | Six populated 120,000-node inventory projections, then a seventh view to force LRU eviction |
+  | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
+
+  | Measurement | Ceiling and authority |
+  | --- | --- |
+  | Local critical-click feedback | 50 ms maximum; Tier 0 target, Tier 2 Slice 5/6 acceptance |
+  | Typed execute/control/one-row receipt, excluding admitted work | 100 ms p95, 250 ms maximum; Tier 0 target, Tier 2 owning-slice acceptance |
+  | Freeze/normalize a 100,000-subject scope | 500 ms p95, 1 s maximum; Tier 0 target, Tier 2 owning-slice acceptance |
+  | Reliable/terminal delivery under event fixture | 100 ms p95, 250 ms maximum, no `Gap`; current-source Tier 2 timing remains open |
+  | Replaceable progress delivery | 1 s p95, 2 s maximum, monotonic after coalescing; current-source Tier 2 timing remains open |
+  | Cold 120,000-node plan projection | 2 s maximum; Tier 2 Slice 5 acceptance |
+  | Cold 120,000-node inventory projection | 3 s maximum; Tier 2 Slice 6 acceptance |
+  | Unchanged-parameter 256-row window | 250 ms p95, 500 ms maximum; Tier 2 Slice 5/6 acceptance |
+  | Changed search/filter/collapse plus 256-row window | 750 ms p95, 1.5 s maximum; Tier 2 Slice 5/6 acceptance |
+  | `preview_selection` at depth 32 | 500 ms p95, 1 s maximum; Tier 2 Slice 5 acceptance |
+  | Fifty-run/1,000,000-item history summary | 3 s maximum; Tier 2 Slice 7 acceptance |
+  | 256-row history detail window | 500 ms p95, 1 s maximum; Tier 2 Slice 7 acceptance |
+  | Incremental plan projection memory | 128 MiB maximum; Tier 2 Slice 5 acceptance |
+  | Incremental inventory projection memory | 192 MiB each, 1,152 MiB for six; Tier 2 Slice 6 acceptance |
+  | Identity-deduplicated transport custody | 1,966,080 bytes; frozen protected authority plus Tier 1 live guard |
+  | Terminal artifacts plus completed-task retention | No derived bound yet; BR-G-45 remains open |
+
+  **Transport-custody clause.** Custody is the identity-deduplicated live graph
+  rooted at dispatcher replay deques, subscriber deques, and adapter task
+  queues. It includes containers and nonterminal event values. A terminal value
+  occupies its queue slot, but the subject-scaled result graph is cut and
+  charged to BR-G-45. The instrument reports every root class and their
+  deduplicated union; payload bytes and whole-process memory are invalid
+  substitutes.
+
+  The frozen `sh-g-8-transport-v1` corpus drives four tasks through the
+  production dispatcher/service/task-registry path, covers the ordinary
+  60-second rate and exact per-task 128/64/64 maximum no-`Gap` custody shape,
+  and requires ordered cleanup plus exact terminal truth. The authoritative
+  corpus, calibration, ceiling, holdout, validator, and live-guard files are
+  `tests/bridge_transport_custody.py` and
+  `tests/interfaces/web/sh_g_8_transport_*`; `TOOLS.md` explains their use.
+  The frozen ceiling is 1,966,080 bytes. Calibration never validates its own
+  limit, and later representations must select authority anew under
+  `DEFENSE.md` §7.
+
+  **Status.** Event correctness and transport custody are closed by the frozen
+  calibration/ceiling and independent holdout recorded in
+  [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14).
+  Current-source event timing and the Slice 5–7 product-view rows remain open on
+  their owning slices. BR-G-45 terminal retention and shell-owned SH-G-15
+  whole-runtime containment are separate gates. *Not satisfied by* changing
+  fixtures after measurement, reporting averages in place of the declared
+  statistic, using empty history runs or shared short strings, omitting a
+  custody root/high-water mark, including terminal artifacts in custody, or
+  treating payload/whole-process bytes as the retained transport graph.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
   separately.** First define a bounded production representation and enforce
   per-completion plus aggregate completed-task budgets over the exact
@@ -3835,14 +2772,11 @@ respectively, by `{34,35,42}`, `{12,20,24,37,39}`,
 
 ### Regression watchlist (existing M1)
 
-These are preservation guards, not restatements of the new gates. Every
-currently existing target passes before bridge work; changing an old assertion or fixture to
-accommodate the bridge is a regression unless the governing DR explicitly
-changes that behavior. Commands are repository-root PowerShell commands and use
-stable files/symbols rather than line numbers. A row may run more tests than its
-named XV because that is safer than maintaining a brittle node-id list. XV-19's
-split transport/static files and two later surface files are created by slices
-2, 5, and 6 and become mandatory as each lands.
+These preservation commands supplement rather than replace BR-G gates. A
+changed pre-existing assertion is a regression unless its governing DR changes
+the contract.
+
+| Watch | Required command | Why it is at risk / owner |
 
 | Watch | Required command | Why it is at risk / owner |
 | --- | --- | --- |
@@ -3863,13 +2797,9 @@ split transport/static files and two later surface files are created by slices
 | Inventory/integrity payload and pause behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py tests/test_payload_roundtrip.py` | A kind-aware shared validator and expanded frozen subject set must preserve integrity v1, pause order, and incomplete-scope settlement / B, C, D |
 | Service facade and import boundary | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/test_package.py` then `.\.venv\Scripts\lint-imports.exe` | New lifts, state, launcher, and web adapter must preserve primitives-only views, lazy CLI imports, shutdown order, and every layer edge / D, slices 1–3 |
 
-A lane runs every row naming it before merge. D runs all Stage 5.5 rows because
-it integrates A/B/C. Every Stage 6 slice runs its named rows plus its
-`test_br_g_*` module. Before Stage 5.5 integration, before each vertical slice
-(5–7), and before release, BR-G-44's full-suite command is mandatory; this
-watchlist never authorizes a partial-suite sign-off.
-
-The BR-G-44 release evidence is the unedited output of:
+A lane runs every row naming it; integration lane D runs all Stage 5.5 rows.
+Each Stage 6 slice runs its named watch rows and `test_br_g_*` module. BR-G-44
+requires the complete suite before each vertical slice and release:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -o "addopts="
@@ -3877,19 +2807,17 @@ The BR-G-44 release evidence is the unedited output of:
 git diff --check
 ```
 
-The pytest summary must contain no skipped, xfailed, or xpassed bridge gate on
-the supported Windows profile. The implementation change also records the
-collected `test_br_g_*` node ids, so a misspelled or undiscovered gate test
-cannot disappear behind a green full-suite total.
+No bridge gate may be skipped, xfailed, xpassed, or uncollected on the supported
+Windows profile. The implementation record includes collected
+`test_br_g_*` ids.
 
 ### Stage 6
 
-Regrouped by department. The change from the original ordering is **slice 4**:
-flatten, window, search, filter, and anchor resolution were previously built
-inside the plan tree and reused implicitly by inventory, which made the
-inventory work depend on plan work it does not need. Extracting the
-tree-agnostic presentation core lets the plan and inventory surfaces proceed as
-a parallel pair.
+The table is the remaining owner/dependency sequence; the BR-G entries above,
+not the slice prose, define completion. Presentation core is separated from
+plan and inventory so Slices 5 and 6 can proceed in parallel.
+
+| # | Department | Slice | Depends on | Acceptance gate |
 
 | # | Department | Slice | Depends on | Acceptance gate |
 | --- | --- | --- | --- | --- |
@@ -3905,20 +2833,8 @@ a parallel pair.
 | GUI 2 | Visual cohesion | Holistic spacing, motion, empty/error-state, accessibility, and responsive review across the completed product surfaces | 7 | `DESKTOP_UI.md` holistic review before release |
 | 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | GUI Break 2 | BR-G-43, BR-G-44, and shell-owned SH-G-15 |
 
-**Ordering and parallelism.** Slice 0 shares nothing with Stage 5.5 and runs
-beside it. It is the falsification gate for the chosen host and must complete
-before later host/transport or vertical slices rely on assumptions no code has
-verified against a real runtime. Slices 1→2→3 are serial within the
-host/transport departments. GUI Break 1 closes after Slice 3 and before Slice 4;
-its exact 13-swatch palette, semantic mappings, contrast/forced-colors evidence,
-no-raw-surface-color rule, and closed local Fluent icon foundation are
-normative in `DESKTOP_UI.md`.
-Slice 4 additionally needs GUI Break 1, while its Lane A logic may be prepared
-earlier. **Slices 5 and 6 are a parallel pair**
-only once the host/transport chain through slice 3, slice 4, and Lane D are all
-in. Slice 7 needs 5 and 6; GUI Break 2 needs 7; slice 8 needs GUI Break 2.
-
-There is no fixed critical path without duration estimates. The dependency
-shape is
-`max(max(0→1→2→3→GUI1, A)→4, max(A,B,C)→D) → (5 ∥ 6) → 7 → GUI2 → 8`. Lanes B and C and slices
-0–3 are therefore parallelizable prerequisites, not work "off" the path.
+**Ordering.** Host/transport Slices 0→1→2→3 precede GUI Break 1
+and Slice 4. Once Slice 4 and Lane D are complete, Slices 5 and 6 may run in
+parallel; Slice 7 joins them, then GUI Break 2 and Slice 8 close the milestone.
+`DESKTOP_UI.md` owns visual-cohesion criteria and `M1_SHELL.md` owns host and
+package closure. This ordering makes no duration or critical-path claim.

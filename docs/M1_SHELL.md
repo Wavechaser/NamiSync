@@ -671,8 +671,8 @@ named regressions. Numeric sequence holes alone are not a recovery signal, and
 session creation does not invent a revision.
 
 SH-G-8 acceptance evidence and its residual scale boundaries are consolidated
-under the gate in §5. `M1_BRIDGE.md` §9.4 remains the sole authority for the
-event contract, custody roots, corpus, measurement method, and BR-G-42 timing
+under the gate in §5. `M1_BRIDGE.md` BR-G-42 remains the sole authority for the
+event contract, custody roots, corpus, measurement method, and bridge timing
 rows.
 
 ### GUI Break 1 - Presentation foundation (completed 2026-08-13; hardened and reverified 2026-08-17)
@@ -904,7 +904,7 @@ carry the `headed` marker; all are collected by the release command.
   interval; receipt and reliable running-state feedback bypass it, as do
   `Gap`, terminal, close, supersession, and recovery values.
 
-  Custody acceptance follows `M1_BRIDGE.md` §9.4 and counts the
+  Custody acceptance follows `M1_BRIDGE.md` BR-G-42 and counts the
   identity-deduplicated replay, subscriber, and adapter graph while excluding
   terminal-result subtrees. The real production queue path reaches the exact
   per-task 128/64/64 no-`Gap` shape and ordered cleanup under frozen, disjoint
