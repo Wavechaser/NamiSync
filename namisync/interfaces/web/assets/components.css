@@ -26,15 +26,22 @@ body {
 .nami-toggle__control,
 .nami-chip,
 .nami-icon-button,
-.nami-segmented__item {
+.nami-segmented__item,
+.nami-combobox__trigger,
+.nami-combobox__option {
   outline: none;
 }
 
 .nami-input,
-.nami-select,
-.nami-menu,
-.nami-dialog {
+.nami-select {
   border: 1px solid var(--color-neutral-border);
+}
+
+.nami-menu,
+.nami-dialog,
+.nami-combobox__popup {
+  border: 1px solid var(--color-flyout-border-solid);
+  border-color: var(--color-flyout-border);
 }
 
 .nami-button,
@@ -87,7 +94,9 @@ body {
 .nami-tree-row:focus-visible,
 .nami-tree:focus-visible,
 .nami-task-card:focus-visible,
-.nami-segmented__item:focus-visible {
+.nami-segmented__item:focus-visible,
+.nami-combobox__trigger:focus-visible,
+.nami-combobox__option:focus-visible {
   box-shadow: 0 0 0 2px var(--color-focus-ring);
   outline: none;
 }
@@ -95,6 +104,7 @@ body {
 .nami-button:disabled,
 .nami-input:disabled,
 .nami-select:disabled,
+.nami-combobox[aria-disabled="true"] .nami-combobox__trigger,
 .nami-checkbox:disabled,
 .nami-toggle__control:disabled,
 .nami-chip:disabled,
@@ -152,6 +162,130 @@ body {
 
 .nami-select {
   padding-inline-end: var(--space-4);
+}
+
+.nami-combobox {
+  display: inline-flex;
+}
+
+.nami-combobox__trigger {
+  --nami-combobox-trigger-background: var(--color-neutral-surface);
+  --nami-combobox-trigger-border-start: var(--color-control-elevation-border-start);
+  --nami-combobox-trigger-border-end: var(--color-control-elevation-border-end);
+  align-items: center;
+  background-color: var(--nami-combobox-trigger-background);
+  background-image:
+    linear-gradient(
+      var(--nami-combobox-trigger-background),
+      var(--nami-combobox-trigger-background)
+    ),
+    linear-gradient(
+      to bottom,
+      var(--nami-combobox-trigger-border-start),
+      var(--nami-combobox-trigger-border-end)
+    );
+  background-clip: padding-box, border-box;
+  background-origin: border-box;
+  border: 1px solid var(--color-neutral-subtle-background);
+  border-radius: var(--radius-small);
+  color: var(--color-neutral-foreground);
+  cursor: pointer;
+  display: inline-flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  min-block-size: 2rem;
+  min-inline-size: 7rem;
+  padding: var(--space-2) var(--space-3);
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.nami-combobox__trigger::after {
+  border-block-end: 1px solid currentColor;
+  border-inline-end: 1px solid currentColor;
+  block-size: 0.35rem;
+  content: "";
+  inline-size: 0.35rem;
+  margin-block-start: -0.2rem;
+  transform: rotate(45deg);
+}
+
+.nami-combobox__trigger:not(:disabled):hover {
+  --nami-combobox-trigger-background: var(--color-neutral-surface-subtle);
+}
+
+.nami-combobox__trigger:not(:disabled):active,
+.nami-combobox__trigger[aria-expanded="true"] {
+  --nami-combobox-trigger-background: var(--color-neutral-surface-pressed);
+  --nami-combobox-trigger-border-start: var(--color-control-elevation-border-flat);
+  --nami-combobox-trigger-border-end: var(--color-control-elevation-border-flat);
+}
+
+.nami-combobox__popup {
+  background: var(--color-flyout-background-solid);
+  border-radius: var(--radius-medium);
+  box-shadow: var(--elevation-16);
+  color: var(--color-neutral-foreground);
+  display: grid;
+  gap: var(--space-1);
+  max-block-size: calc(100vh - 2 * var(--space-3));
+  min-inline-size: 7rem;
+  overflow-y: auto;
+  padding: var(--space-2);
+  position: fixed;
+  z-index: 1000;
+}
+
+.nami-combobox__popup[hidden] {
+  display: none;
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .nami-combobox__popup {
+    backdrop-filter: blur(30px) saturate(1.2);
+    background: var(--color-flyout-background);
+  }
+}
+
+@media (dynamic-range: high) {
+  :root[data-theme="dark"] .nami-dialog:not(:focus-visible),
+  :root[data-theme="dark"] .nami-menu,
+  :root[data-theme="dark"] .nami-combobox__popup {
+    box-shadow: none;
+  }
+}
+
+.nami-combobox__option {
+  align-items: center;
+  background: var(--color-neutral-subtle-background);
+  border-radius: var(--radius-small);
+  color: var(--color-neutral-foreground);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 3px minmax(0, 1fr);
+  min-block-size: 2rem;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
+}
+
+.nami-combobox__option:is(:hover, [data-active]) {
+  background: var(--color-neutral-subtle-hover);
+}
+
+.nami-combobox__option:active {
+  background: var(--color-neutral-subtle-pressed);
+}
+
+.nami-combobox__selection {
+  background: var(--color-neutral-subtle-background);
+  border-radius: var(--radius-circular);
+  block-size: 1rem;
+  inline-size: 3px;
+}
+
+.nami-combobox__option[aria-selected="true"] .nami-combobox__selection {
+  background: var(--color-accent);
 }
 
 .nami-field {
@@ -419,6 +553,7 @@ body {
 .nami-card {
   background: var(--color-card-background-solid);
   background: var(--color-card-background);
+  background-clip: padding-box;
   border: 1px solid var(--color-card-border-solid);
   border-color: var(--color-card-border);
   border-radius: var(--radius-medium);
@@ -614,17 +749,18 @@ body {
 
 .nami-segmented__item[aria-checked="true"] {
   background: var(--color-accent);
-  color: var(--color-accent-foreground);
+  color: var(--color-neutral-surface);
 }
 
-.nami-segmented__item[aria-checked="true"]:hover {
-  background: var(--color-accent-hover);
-  color: var(--color-accent-hover-foreground);
-}
-
-.nami-segmented__item[aria-checked="true"]:active {
+.nami-segmented__item[aria-checked="true"]:not(:disabled):hover {
   background: var(--color-accent-pressed);
-  color: var(--color-accent-pressed-foreground);
+  color: var(--color-neutral-surface);
+}
+
+.nami-segmented__item[aria-checked="true"]:not(:disabled):active {
+  background: var(--color-accent-pressed);
+  color: var(--color-neutral-surface);
+  filter: brightness(0.82);
 }
 
 .nami-badge,
@@ -1047,6 +1183,9 @@ body {
   .nami-task-card,
   .nami-dialog,
   .nami-menu,
+  .nami-combobox__trigger,
+  .nami-combobox__popup,
+  .nami-combobox__option,
   .nami-segmented,
   .nami-badge,
   .nami-status-pill,
@@ -1059,8 +1198,29 @@ body {
     forced-color-adjust: none;
   }
 
-  .nami-button--primary:not(:disabled):active {
+  .nami-button--primary:not(:disabled):active,
+  .nami-segmented__item[aria-checked="true"]:not(:disabled):active {
     filter: none;
+  }
+
+  .nami-combobox__popup {
+    backdrop-filter: none;
+    background: var(--color-flyout-background-solid);
+    border-color: var(--color-flyout-border);
+    box-shadow: none;
+    color: var(--color-neutral-foreground);
+  }
+
+  .nami-combobox__trigger {
+    background: var(--color-neutral-surface);
+    background-image: none;
+    border-color: var(--color-control-elevation-border-flat);
+    color: var(--color-neutral-foreground);
+  }
+
+  .nami-combobox__option {
+    background: var(--color-neutral-surface);
+    color: var(--color-neutral-foreground);
   }
 
   .nami-button:not(:disabled):hover,
@@ -1085,6 +1245,15 @@ body {
   .nami-segmented__item:not(:disabled):hover,
   .nami-segmented__item:not(:disabled):active {
     color: var(--color-accent-foreground);
+  }
+
+  .nami-combobox__option:is(:hover, :active, [data-active], [aria-selected="true"]) {
+    background: var(--color-neutral-surface-selected);
+    color: var(--color-accent-foreground);
+  }
+
+  .nami-combobox__option[aria-selected="true"] .nami-combobox__selection {
+    background: var(--color-accent-foreground);
   }
 
   .nami-button--primary:not(:disabled),
@@ -1158,6 +1327,8 @@ body {
   .nami-dialog:focus-visible,
   .nami-menu__item:focus-visible,
   .nami-segmented__item:focus-visible,
+  .nami-combobox__trigger:focus-visible,
+  .nami-combobox__option:focus-visible,
   .nami-progress:focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;

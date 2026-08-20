@@ -580,9 +580,12 @@ def _valid_complete_report(
         type(payload["mode"]) is str
         and payload["mode"] in _EXPECTED_MEDIA
         and (expected_mode is None or payload["mode"] == expected_mode)
-        and set(media) == {"dark", "forced", "reduced"}
+        and set(media) == {"dark", "forced", "reduced", "hdr"}
         and all(type(media[name]) is bool for name in media)
-        and media == _EXPECTED_MEDIA[payload["mode"]]
+        and all(
+            media[name] == expected
+            for name, expected in _EXPECTED_MEDIA[payload["mode"]].items()
+        )
         and _valid_cosmetic_evidence(
             cosmetic,
             expected_theme=_EXPECTED_THEME[payload["mode"]],
@@ -799,6 +802,8 @@ def _valid_control_contract(value: object) -> bool:
         "tri_state",
         "dialog_exit",
         "segmented",
+        "combobox",
+        "task_rail",
         "file_list",
         "integrity_list",
     }:
@@ -806,6 +811,8 @@ def _valid_control_contract(value: object) -> bool:
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
     segmented = value["segmented"]
+    combobox = value["combobox"]
+    task_rail = value["task_rail"]
     file_list = value["file_list"]
     integrity_list = value["integrity_list"]
     return (
@@ -826,6 +833,75 @@ def _valid_control_contract(value: object) -> bool:
             "selected_checked": "true",
             "unselected_role": "radio",
             "unselected_checked": "false",
+        }
+        and type(combobox) is dict
+        and set(combobox)
+        == {
+            "trigger_role",
+            "popup_role",
+            "expanded",
+            "selected",
+            "option_count",
+            "popup_width_delta",
+            "popup_within_viewport",
+            "selected_center_error",
+            "placement_clamped",
+            "trigger_background_image",
+            "trigger_outline_style",
+            "popup_background",
+            "popup_border",
+            "popup_border_width",
+            "popup_shadow",
+            "popup_backdrop_filter",
+            "ordinary_option_background",
+            "selected_pill_width",
+            "selected_pill_background",
+        }
+        and combobox["trigger_role"] == "combobox"
+        and combobox["popup_role"] == "listbox"
+        and combobox["expanded"] == "true"
+        and combobox["selected"] == "true"
+        and combobox["option_count"] == 3
+        and type(combobox["popup_width_delta"]) in {int, float}
+        and 0 <= combobox["popup_width_delta"] < 0.5
+        and combobox["popup_within_viewport"] is True
+        and type(combobox["selected_center_error"]) in {int, float}
+        and combobox["selected_center_error"] >= 0
+        and type(combobox["placement_clamped"]) is bool
+        and all(
+            type(combobox[name]) is str and bool(combobox[name])
+            for name in (
+                "trigger_background_image",
+                "trigger_outline_style",
+                "popup_background",
+                "popup_border",
+                "popup_border_width",
+                "popup_shadow",
+                "popup_backdrop_filter",
+                "ordinary_option_background",
+                "selected_pill_background",
+            )
+        )
+        and type(combobox["selected_pill_width"]) in {int, float}
+        and 2.5 <= combobox["selected_pill_width"] <= 3.5
+        and type(task_rail) is dict
+        and set(task_rail)
+        == {
+            "card_count",
+            "outside_content_card",
+            "left_of_work",
+            "selected_count",
+            "current_count",
+            "transparent_boundaries",
+        }
+        and task_rail
+        == {
+            "card_count": 3,
+            "outside_content_card": True,
+            "left_of_work": True,
+            "selected_count": 1,
+            "current_count": 1,
+            "transparent_boundaries": True,
         }
         and _valid_plan_evidence(file_list)
         and _valid_integrity_evidence(integrity_list)
@@ -848,6 +924,10 @@ def _valid_file_list_evidence(
         "collapse_restores_children",
         "child_selection_selects_folder",
         "child_selection_restores_mixed",
+        "master_initially_mixed",
+        "master_selects_all",
+        "master_deselects_all",
+        "master_label",
         "resize_handle_count",
         "column_resize_changes_width",
         "column_resize_delta",
@@ -915,6 +995,11 @@ def _valid_file_list_evidence(
         or value["collapse_restores_children"] is not True
         or value["child_selection_selects_folder"] is not True
         or value["child_selection_restores_mixed"] is not True
+        or value["master_initially_mixed"] is not True
+        or value["master_selects_all"] is not True
+        or value["master_deselects_all"] is not True
+        or type(value["master_label"]) is not str
+        or not value["master_label"].startswith("Select all ")
         or value["resize_handle_count"] != 6
         or value["column_resize_changes_width"] is not True
         or type(value["column_resize_delta"]) not in {int, float}

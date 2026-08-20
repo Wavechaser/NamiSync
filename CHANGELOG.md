@@ -148,6 +148,9 @@ later workflow surfaces and beta packaging remain future phases.
   column drag, basename hierarchy, main status mappings, display-ready checksums,
   finite row-only striping, transparent cells, wide work-area fill, and
   narrow-container overflow.
+- Added a test-owned header master checkbox to both file-list specimens. It
+  derives checked/mixed state from every selectable row and exercises select
+  all/deselect all without defining Slice 5 selection authority.
 
 #### Tune solid desktop control states (2026-08-20)
 
@@ -177,6 +180,15 @@ later workflow surfaces and beta packaging remain future phases.
 - Aligned primary-button labels with the ordinary inverse-neutral theme rule,
   held their color through interaction, and separated the darker hover role
   from an additional pressed brightness step without affecting forced colors.
+- Replaced the packaged native theme selector with a production-owned DOM
+  combobox: a subtle gradient trigger boundary becomes flat while open, the
+  elevation-16 acrylic/opaque listbox aligns its selected option and clamps to
+  the viewport, and forced colors retain system authority. The gallery now
+  includes three left-rail task-card state specimens outside content cards.
+- Split elevated-surface strokes from accessible control borders at black 6%
+  Light/20% Dark, clipped content-card fill to the padding box, and added a
+  dark-HDR shadowless flyout fallback plus normal/shadowless/opaque gallery
+  isolates for the transparent WebView2/Mica halo diagnosis.
 
 #### Thaw and refreeze the cosmetic state channel (2026-08-19)
 

@@ -224,7 +224,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "rail.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
-        "theme.js": ["./bridge.js"],
+        "theme.js": ["./bridge.js", "./render.js"],
         "tree.js": ["./render.js"],
     }
     assert all(
@@ -260,7 +260,7 @@ def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
 
     assert _active_sink_hits(source) == ()
     assert _attribute_sink_hits(source) == ()
-    assert source.count('setAttribute("aria-activedescendant",') == 1
+    assert source.count('setAttribute("aria-activedescendant",') == 2
 
     appearance = assets["appearance.js"]
     assert {
@@ -1061,20 +1061,23 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert '<main id="app">' in index
     assert index.count('id="host-status"') == 1
     assert '<p id="host-status" role="status" aria-live="polite">' in index
-    assert (
-        '<label class="nami-field__label" for="theme-mode">Theme</label>'
-        in index
-    )
-    assert '<select class="nami-select" id="theme-mode" disabled>' in index
-    assert re.findall(r'<option value="([a-z]+)">([A-Za-z]+)</option>', index) == [
-        ("system", "System"),
-        ("light", "Light"),
-        ("dark", "Dark"),
-    ]
+    assert '<span class="nami-field__label" id="theme-mode-label">Theme</span>' in index
+    assert '<div class="nami-combobox" data-value="system" id="theme-mode">' in index
+    assert 'class="nami-combobox__trigger"' in index
+    assert 'role="combobox"' in index
+    assert 'aria-haspopup="listbox"' in index
+    assert 'aria-controls="theme-options"' in index
+    assert 'id="theme-options" role="listbox"' in index
+    assert re.findall(
+        r'class="nami-combobox__option"[^>]+data-value="([a-z]+)"[^>]*>.*?<span>([A-Za-z]+)</span>',
+        index,
+    ) == [("system", "System"), ("light", "Light"), ("dark", "Dark")]
+    assert "<select" not in index
     assert '<main id="app" aria-live=' not in index
     assert 'ariaLabel = "Task navigation";' in rail
     assert 'renderText(heading, "Tasks");' in rail
     assert 'renderText(empty, "No tasks are available.");' in rail
+    assert 'emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");' in rail
     assert 'ariaLabel = "Work area";' in panels
     assert 'panel.setAttribute("role", "region");' in panels
     assert 'renderText(heading, "Work area");' in panels
@@ -1092,14 +1095,17 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'status.textContent === "Starting..."' in app
 
     theme = assets["theme.js"]
+    assert "export function installThemeCombobox(root)" in theme
+    assert "popup.style.inlineSize" in theme
+    assert "window.innerHeight - popupBounds.height" in theme
+    assert 'trigger.ariaExpanded = "true"' in theme
+    assert 'root.dispatchEvent(new Event("change", { bubbles: true }))' in theme
     assert "select.disabled = true;" in theme
     assert "snapshot.revision < state.authoritative.revision" in theme
     assert "error instanceof BridgeTransportError" in theme
     assert "await reconcileAfterUncertainty(" in theme
     assert "expectedRevision," in theme
     assert "result.disposition === \"conflict\"" in theme
-    assert ".dataset" not in theme
-    assert ".style" not in theme
     assert "#host-status" not in theme
 
     assert "window.pywebview" not in shell

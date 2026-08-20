@@ -7,7 +7,7 @@ import {
 } from "./bridge.js";
 import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
-import { installThemeSelector } from "./theme.js";
+import { installThemeCombobox, installThemeSelector } from "./theme.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
 import { renderText } from "./render.js";
@@ -18,13 +18,14 @@ const themeSelector = document.querySelector("#theme-mode");
 if (
   !(app instanceof HTMLElement)
   || !(status instanceof HTMLElement)
-  || !(themeSelector instanceof HTMLSelectElement)
+  || !(themeSelector instanceof HTMLElement)
 ) {
   throw new TypeError("NamiSync shell elements are unavailable");
 }
 
 const readiness = installReadinessReceiver(window.chrome.webview);
-const theme = installThemeSelector(themeSelector);
+const themeCombobox = installThemeCombobox(themeSelector);
+const theme = installThemeSelector(themeCombobox);
 installAppearanceReceiver(
   window.chrome.webview,
   document.documentElement,

@@ -415,7 +415,16 @@ unrealized unless an entry says otherwise.
   layers rather than controls: white 70% with a black 6% blended stroke in
   Light, white 5% with a black 10% blended stroke in Dark, plus opaque solid
   stroke fallbacks and system-color forced-color fallbacks. They never acquire
-  task-card hover or active behavior.
+  task-card hover or active behavior, and clip their translucent fill to the
+  padding box to avoid rounded-corner alpha seams.
+- **Flyouts And Theme Combobox**. Dialogs, menus, and the production-owned DOM
+  theme listbox use a dedicated black 6% Light/20% Dark flyout stroke rather
+  than the conspicuous accessible control border. The combobox owns WinUI-like
+  selected-option placement, viewport clamping, acrylic/opaque popup layers,
+  a 3 px selected accent pill, subtle raised/flat closed-control boundaries,
+  and keyboard-only focus indication. Ordinary SDR elevation remains; dark HDR
+  suppresses CSS flyout shadows to avoid transparent WebView2/Mica alpha halos,
+  while forced colors use system surfaces without acrylic or shadow.
 - **Dormant File-List Row Foundation**. Packaged `file_row.js` owns the shared
   compact row skeleton, while `plan.js` and `integrity.js` expose narrow
   presentation-local renderers. Both consume already-projected 16 px checkbox,
@@ -429,7 +438,8 @@ unrealized unless an entry says otherwise.
   error/unsupported, and representative integrity states. Operation and
   integrity-state text uses authored family main swatches in both ordinary
   themes; forced colors retain system authority. The gallery headers also
-  support pointer-drag and arrow-key column resizing without persistence.
+  support pointer-drag and arrow-key column resizing without persistence and a
+  master checkbox that derives and changes all selectable specimen rows.
 - **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
   red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
   `tokens.css` only; yellow and purple intentionally have no `light` input.

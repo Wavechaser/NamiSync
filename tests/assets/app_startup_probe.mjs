@@ -131,6 +131,7 @@ const appearanceStub = moduleUrl(`
   };
 `);
 const themeStub = moduleUrl(`
+  export const installThemeCombobox = (root) => root;
   export const installThemeSelector = () => Object.freeze({
     invalidate() { globalThis.startupHarness.invalidateTheme(); },
     open() { return globalThis.startupHarness.openTheme(); },

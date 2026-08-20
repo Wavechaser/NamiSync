@@ -15,14 +15,19 @@
       <h1>NamiSync</h1>
       <p id="host-status" role="status" aria-live="polite">Starting...</p>
       <div class="nami-shell__theme">
-        <label class="nami-field__label" for="theme-mode">Theme</label>
-        <select class="nami-select" id="theme-mode" disabled>
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
+        <span class="nami-field__label" id="theme-mode-label">Theme</span>
+        <div class="nami-combobox" data-value="system" id="theme-mode">
+          <button class="nami-combobox__trigger" id="theme-mode-trigger" type="button" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="theme-options" aria-labelledby="theme-mode-label theme-mode-value" disabled>
+            <span id="theme-mode-value">System</span>
+          </button>
+        </div>
       </div>
     </header>
   </main>
+  <div class="nami-combobox__popup" id="theme-options" role="listbox" aria-labelledby="theme-mode-label" hidden>
+    <div class="nami-combobox__option" id="theme-option-system" role="option" data-value="system" aria-selected="true"><span class="nami-combobox__selection" aria-hidden="true"></span><span>System</span></div>
+    <div class="nami-combobox__option" id="theme-option-light" role="option" data-value="light" aria-selected="false"><span class="nami-combobox__selection" aria-hidden="true"></span><span>Light</span></div>
+    <div class="nami-combobox__option" id="theme-option-dark" role="option" data-value="dark" aria-selected="false"><span class="nami-combobox__selection" aria-hidden="true"></span><span>Dark</span></div>
+  </div>
 </body>
 </html>

@@ -62,6 +62,26 @@ body {
   grid-area: rail;
 }
 
+.nami-task-rail__empty-slot {
+  margin-block-start: var(--space-4);
+  min-block-size: 5rem;
+}
+
+.nami-task-rail__empty-slot .nami-shell__empty {
+  margin-block-start: 0;
+}
+
+.nami-task-rail__specimens {
+  display: grid;
+  gap: var(--space-2);
+  margin-block-start: var(--space-4);
+}
+
+.nami-task-rail__specimens .nami-task-card {
+  inline-size: 100%;
+  text-align: start;
+}
+
 .nami-work-panel {
   grid-area: work;
 }

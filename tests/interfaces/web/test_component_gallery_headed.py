@@ -169,12 +169,9 @@ _SELECTED_TASK_CARD_KEYS = {
     "task_card_current",
 }
 _BOUNDARY_CONTROL_KEYS = {
-    "dropdown",
     "tri_state_checkbox",
     "text_input",
     "toggle",
-    "dialog",
-    "context_menu",
 }
 _OUTLINE_FREE_CONTROL_KEYS = {
     "button",
@@ -729,6 +726,10 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "collapse_restores_children": True,
             "child_selection_selects_folder": True,
             "child_selection_restores_mixed": True,
+            "master_initially_mixed": True,
+            "master_selects_all": True,
+            "master_deselects_all": True,
+            "master_label": "Select all projected rows",
             "resize_handle_count": 6,
             "column_resize_changes_width": True,
             "column_resize_delta": 40.0,
@@ -752,7 +753,12 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     report = {
         "phase": "complete",
         "mode": "light",
-        "media": {"dark": False, "forced": False, "reduced": False},
+        "media": {
+            "dark": False,
+            "forced": False,
+            "reduced": False,
+            "hdr": False,
+        },
         "cosmetic": {
             "initial": dict(cosmetic_snapshot),
             "after_change": dict(changed_snapshot),
@@ -798,6 +804,35 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "selected_checked": "true",
                 "unselected_role": "radio",
                 "unselected_checked": "false",
+            },
+            "combobox": {
+                "trigger_role": "combobox",
+                "popup_role": "listbox",
+                "expanded": "true",
+                "selected": "true",
+                "option_count": 3,
+                "popup_width_delta": 0.0,
+                "popup_within_viewport": True,
+                "selected_center_error": 0.0,
+                "placement_clamped": False,
+                "trigger_background_image": "linear-gradient(rgb(1, 1, 1), rgb(1, 1, 1))",
+                "trigger_outline_style": "none",
+                "popup_background": "rgba(255, 255, 255, 0.75)",
+                "popup_border": "rgba(0, 0, 0, 0.06)",
+                "popup_border_width": "1px",
+                "popup_shadow": "rgba(0, 0, 0, 0.22) 0px 8px 16px 0px",
+                "popup_backdrop_filter": "blur(30px)",
+                "ordinary_option_background": "rgba(0, 0, 0, 0)",
+                "selected_pill_width": 3.0,
+                "selected_pill_background": "rgb(0, 120, 212)",
+            },
+            "task_rail": {
+                "card_count": 3,
+                "outside_content_card": True,
+                "left_of_work": True,
+                "selected_count": 1,
+                "current_count": 1,
+                "transparent_boundaries": True,
             },
             "file_list": file_list(
                 plan_rows,
@@ -887,7 +922,12 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         {
             "phase": "complete",
             "mode": "light",
-            "media": {"dark": False, "forced": False, "reduced": False},
+            "media": {
+                "dark": False,
+                "forced": False,
+                "reduced": False,
+                "hdr": False,
+            },
             "cosmetic": report["cosmetic"],
             "part_count": len(part_values),
         },
@@ -912,7 +952,12 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             {
                 "phase": "complete",
                 "mode": "light",
-                "media": {"dark": False, "forced": False, "reduced": False},
+                "media": {
+                    "dark": False,
+                    "forced": False,
+                    "reduced": False,
+                    "hdr": False,
+                },
                 "cosmetic": report["cosmetic"],
                 "part_count": len(part_values),
             },
@@ -985,6 +1030,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/icons.js")' in script
     assert 'import("/plan.js")' in script
     assert 'import("/integrity.js")' in script
+    assert 'import("/rail.js")' in script
     assert "PLAN_ROW_CASES,\n    renderPlanRow," in script
     assert "INTEGRITY_ROW_CASES,\n    renderIntegrityRow," in script
     assert "renderer(row, definition.rowView);" in script
@@ -994,6 +1040,12 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'resizer.addEventListener("pointerdown"' in script
     assert 'window.addEventListener("pointermove", move);' in script
     assert 'resizer.addEventListener("keydown"' in script
+    assert 'masterCheckbox.addEventListener("change"' in script
+    assert 'surface.dataset.galleryHdrIsolate = isolate;' in script
+    assert 'surface.style.boxShadow = "var(--elevation-8)";' in script
+    assert '["Translucent surface without shadow", "shadowless"]' in script
+    assert '["Opaque surface with shadow", "opaque"]' in script
+    assert 'document.createElement("select")' not in script
     assert "localStorage" not in script
     assert "sessionStorage" not in script
     assert not any(
@@ -1108,21 +1160,26 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
     forced = component_gallery_evidence.result("forced")["report"]
     _assert_installed_assets(component_gallery_evidence)
 
-    assert light["media"] == {
+    media_names = ("dark", "forced", "reduced")
+    assert {name: light["media"][name] for name in media_names} == {
         "dark": False,
         "forced": False,
         "reduced": False,
     }
-    assert dark["media"] == {
+    assert {name: dark["media"][name] for name in media_names} == {
         "dark": True,
         "forced": False,
         "reduced": False,
     }
-    assert forced["media"] == {
+    assert {name: forced["media"][name] for name in media_names} == {
         "dark": True,
         "forced": True,
         "reduced": False,
     }
+    assert all(
+        type(report["media"]["hdr"]) is bool
+        for report in (light, dark, forced)
+    )
     for report in (light, dark, forced):
         _assert_complete_gallery_matrix(report)
         _assert_icon_registry_evidence(
@@ -1168,7 +1225,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 and control["control"] != "filter_delete"
                 and not (
                     report["media"]["dark"]
-                    and control["control"] == "button_primary"
+                    and control["control"] in {
+                        "button_primary",
+                        "segmented_control",
+                    }
                 )
                 and control["state"] != "disabled"
             ):
@@ -1198,6 +1258,13 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             }
             for key in _CONTROL_KEYS
         }
+        expected_flyout_alpha = 0.2 if report["media"]["dark"] else 0.06
+        assert _color_alpha(
+            controls_by_key["dialog"]["rest"]["border"]
+        ) == pytest.approx(expected_flyout_alpha)
+        assert _color_alpha(
+            controls_by_key["context_menu"]["rest"]["root_border"]
+        ) == pytest.approx(expected_flyout_alpha)
         assert (
             controls_by_key["button"]["rest"]["background"]
             != controls_by_key["button_primary"]["rest"]["background"]
@@ -1322,6 +1389,12 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         for row in forced["controls"]
         if row["state"] == "rest"
     }
+    assert forced_rest_controls["dialog"]["border"] == (
+        forced["icons"]["system_colors"]["ButtonBorder"]
+    )
+    assert forced_rest_controls["context_menu"]["root_border"] == (
+        forced["icons"]["system_colors"]["ButtonBorder"]
+    )
     for control in _FORCED_STATIC_ACCENT_CONTROL_KEYS:
         assert forced_rest_controls[control]["background"] == (
             forced["icons"]["system_colors"]["Highlight"]
@@ -1802,6 +1875,10 @@ def _assert_file_list_evidence(
     assert evidence["collapse_restores_children"] is True
     assert evidence["child_selection_selects_folder"] is True
     assert evidence["child_selection_restores_mixed"] is True
+    assert evidence["master_initially_mixed"] is True
+    assert evidence["master_selects_all"] is True
+    assert evidence["master_deselects_all"] is True
+    assert evidence["master_label"].startswith("Select all ")
     assert evidence["resize_handle_count"] == 6
     assert evidence["column_resize_changes_width"] is True
     assert evidence["column_resize_delta"] == pytest.approx(40.0, abs=1.0)
@@ -1897,6 +1974,52 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "unselected_role": "radio",
         "unselected_checked": "false",
     }
+    assert report["control_contract"]["task_rail"] == {
+        "card_count": 3,
+        "outside_content_card": True,
+        "left_of_work": True,
+        "selected_count": 1,
+        "current_count": 1,
+        "transparent_boundaries": True,
+    }
+    combobox = report["control_contract"]["combobox"]
+    assert combobox["trigger_role"] == "combobox"
+    assert combobox["popup_role"] == "listbox"
+    assert combobox["expanded"] == "true"
+    assert combobox["selected"] == "true"
+    assert combobox["option_count"] == 3
+    assert combobox["popup_width_delta"] == pytest.approx(0.0, abs=0.5)
+    assert combobox["popup_within_viewport"] is True
+    assert combobox["placement_clamped"] or (
+        combobox["selected_center_error"] == pytest.approx(0.0, abs=1.0)
+    )
+    assert combobox["trigger_outline_style"] == "none"
+    popup_border_width = float(
+        combobox["popup_border_width"].removesuffix("px")
+    )
+    assert 0 < popup_border_width <= 1.0
+    assert combobox["selected_pill_width"] == pytest.approx(3.0, abs=0.5)
+    if report["media"]["forced"]:
+        system_colors = report["icons"]["system_colors"]
+        assert combobox["trigger_background_image"] == "none"
+        assert combobox["popup_background"] == system_colors["Canvas"]
+        assert combobox["popup_border"] == system_colors["ButtonBorder"]
+        assert combobox["popup_shadow"] == "none"
+        assert combobox["popup_backdrop_filter"] == "none"
+        assert combobox["ordinary_option_background"] == system_colors["Canvas"]
+    else:
+        assert not _opaque_color(combobox["ordinary_option_background"])
+        assert "linear-gradient" in combobox["trigger_background_image"]
+        assert _color_alpha(combobox["popup_background"]) == pytest.approx(0.75)
+        expected_stroke_alpha = 0.2 if report["media"]["dark"] else 0.06
+        assert _color_alpha(combobox["popup_border"]) == pytest.approx(
+            expected_stroke_alpha
+        )
+        if report["media"]["dark"] and report["media"]["hdr"]:
+            assert combobox["popup_shadow"] == "none"
+        else:
+            assert combobox["popup_shadow"] != "none"
+        assert combobox["popup_backdrop_filter"] != "none"
     for control in _CONTROL_KEYS:
         rows = {
             row["state"]: row
@@ -1912,6 +2035,12 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
             ):
                 continue
             if control == "card":
+                continue
+            if (
+                report["media"]["forced"]
+                and control == "dropdown"
+                and state in {"hover", "pressed"}
+            ):
                 continue
             if (
                 report["media"]["forced"]

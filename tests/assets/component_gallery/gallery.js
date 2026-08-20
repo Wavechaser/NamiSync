@@ -31,9 +31,14 @@ async function waitForTheme(theme) {
   throw new Error("the seeded cosmetic theme did not reach the page");
 }
 
-async function waitForThemeSelector(select, theme, disabled) {
+async function waitForThemeSelector(root, theme, disabled) {
   for (let frame = 0; frame < 300; frame += 1) {
-    if (select.value === theme && select.disabled === disabled) {
+    const trigger = root.querySelector(".nami-combobox__trigger");
+    if (
+      trigger instanceof HTMLButtonElement
+      && root.dataset.value === theme
+      && trigger.disabled === disabled
+    ) {
       return;
     }
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -121,7 +126,7 @@ async function reportFailure(error) {
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
     { key: "button_primary", className: "nami-button nami-button--primary", tag: "button" },
-    { key: "dropdown", className: "nami-select", tag: "select" },
+    { key: "dropdown", className: "nami-combobox__trigger", tag: "button" },
     { key: "tri_state_checkbox", className: "nami-checkbox", tag: "input" },
     { key: "progress_determinate", className: "nami-progress", tag: "progress" },
     { key: "progress_indeterminate", className: "nami-progress", tag: "progress" },
@@ -164,12 +169,13 @@ async function reportFailure(error) {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
     import("/plan.js"),
     import("/integrity.js"),
+    import("/rail.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
@@ -185,6 +191,7 @@ async function reportFailure(error) {
   const forced = matchMedia("(forced-colors: active)").matches;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const hdr = matchMedia("(dynamic-range: high)").matches;
   const mode = forced ? "forced" : reduced ? "reduced" : dark ? "dark" : "light";
   const expectedTheme = dark ? "dark" : "light";
   const alternateTheme = expectedTheme === "dark" ? "light" : "dark";
@@ -194,14 +201,26 @@ async function reportFailure(error) {
   }
   await waitForTheme(expectedTheme);
   const themeSelector = document.querySelector("#theme-mode");
-  if (!(themeSelector instanceof HTMLSelectElement)) {
+  const themeTrigger = themeSelector?.querySelector(".nami-combobox__trigger");
+  const alternateOption = document.querySelector(
+    `.nami-combobox__option[data-value="${alternateTheme}"]`,
+  );
+  const expectedOption = document.querySelector(
+    `.nami-combobox__option[data-value="${expectedTheme}"]`,
+  );
+  if (
+    !(themeSelector instanceof HTMLElement)
+    || !(themeTrigger instanceof HTMLButtonElement)
+    || !(alternateOption instanceof HTMLElement)
+    || !(expectedOption instanceof HTMLElement)
+  ) {
     throw new Error("the product theme selector is unavailable");
   }
   await waitForThemeSelector(themeSelector, expectedTheme, false);
-  themeSelector.value = alternateTheme;
-  themeSelector.dispatchEvent(new Event("change", { bubbles: true }));
-  const changeImmediateValue = themeSelector.value;
-  const changeImmediateDisabled = themeSelector.disabled;
+  themeTrigger.click();
+  alternateOption.click();
+  const changeImmediateValue = themeSelector.dataset.value;
+  const changeImmediateDisabled = themeTrigger.disabled;
   if (
     changeImmediateValue !== expectedTheme
     || changeImmediateDisabled !== true
@@ -218,10 +237,10 @@ async function reportFailure(error) {
     throw new Error("the selector change did not become authoritative");
   }
 
-  themeSelector.value = expectedTheme;
-  themeSelector.dispatchEvent(new Event("change", { bubbles: true }));
-  const restoreImmediateValue = themeSelector.value;
-  const restoreImmediateDisabled = themeSelector.disabled;
+  themeTrigger.click();
+  expectedOption.click();
+  const restoreImmediateValue = themeSelector.dataset.value;
+  const restoreImmediateDisabled = themeTrigger.disabled;
   if (
     restoreImmediateValue !== alternateTheme
     || restoreImmediateDisabled !== true
@@ -264,25 +283,54 @@ async function reportFailure(error) {
       change_settled_disabled: false,
       restore_immediate_value: restoreImmediateValue,
       restore_immediate_disabled: restoreImmediateDisabled,
-      final_value: themeSelector.value,
-      final_disabled: themeSelector.disabled,
+      final_value: themeSelector.dataset.value,
+      final_disabled: themeTrigger.disabled,
     }),
   });
   document.documentElement.dataset.testGalleryMarker = TEST_ONLY_GALLERY_MARKER;
 
   const app = document.querySelector("#app");
-  if (!(app instanceof HTMLElement)) {
+  const themeField = themeSelector.parentElement;
+  if (!(app instanceof HTMLElement) || !(themeField instanceof HTMLElement)) {
     throw new TypeError("installed page app root is unavailable");
   }
   app.replaceChildren();
+  const galleryHeader = document.createElement("header");
+  galleryHeader.className = "nami-shell__header";
   const heading = document.createElement("h1");
   renderText(heading, "NamiSync component gallery");
-  app.append(heading);
   const status = document.createElement("p");
   status.id = "host-status";
   status.setAttribute("role", "status");
   renderText(status, `Gallery ${mode} measuring`);
-  app.append(status);
+  galleryHeader.append(heading, status, themeField);
+  app.append(galleryHeader);
+
+  const galleryRail = createTaskRail();
+  const taskSlot = galleryRail.querySelector(".nami-task-rail__empty-slot");
+  if (!(taskSlot instanceof HTMLElement)) {
+    throw new TypeError("gallery task rail slot is unavailable");
+  }
+  taskSlot.classList.remove("nami-card", "nami-task-rail__empty-slot");
+  taskSlot.classList.add("nami-task-rail__specimens");
+  taskSlot.replaceChildren();
+  for (const [label, state] of [
+    ["Current sync", "selected"],
+    ["Queued verification", "rest"],
+    ["Completed sync", "current"],
+  ]) {
+    const task = document.createElement("button");
+    task.className = "nami-task-card";
+    task.type = "button";
+    if (state === "selected") {
+      task.setAttribute("aria-selected", "true");
+    } else if (state === "current") {
+      task.setAttribute("aria-current", "true");
+    }
+    renderText(task, label);
+    taskSlot.append(task);
+  }
+  app.append(galleryRail);
 
   function icon(name, size = "md") {
     const value = createIcon(document, name, size);
@@ -380,9 +428,18 @@ async function reportFailure(error) {
       element.dataset.operation = definition.operation;
     }
     if (definition.key === "dropdown") {
-      const option = document.createElement("option");
-      renderText(option, "Folder");
-      element.append(option);
+      root = document.createElement("div");
+      root.className = "nami-combobox";
+      element = document.createElement("button");
+      element.className = definition.className;
+      element.type = "button";
+      element.setAttribute("role", "combobox");
+      element.setAttribute("aria-haspopup", "listbox");
+      element.setAttribute("aria-expanded", "false");
+      const value = document.createElement("span");
+      renderText(value, "Folder");
+      element.append(value);
+      root.append(element);
     } else if (definition.key === "tri_state_checkbox") {
       element.type = "checkbox";
       element.setAttribute("aria-checked", "false");
@@ -475,7 +532,10 @@ async function reportFailure(error) {
     element.dataset.galleryControl = definition.key;
     element.dataset.galleryState = state;
     element.setAttribute("aria-label", `${definition.key} ${state}`);
-    if (element.tagName === "BUTTON" && definition.key !== "segmented_control") {
+    if (
+      element.tagName === "BUTTON"
+      && !new Set(["dropdown", "segmented_control"]).has(definition.key)
+    ) {
       element.setAttribute("aria-pressed", String(definition.pressed ?? false));
     }
     if (state === "disabled") {
@@ -483,6 +543,9 @@ async function reportFailure(error) {
         element.disabled = true;
       }
       element.setAttribute("aria-disabled", "true");
+      if (definition.key === "dropdown") {
+        root.setAttribute("aria-disabled", "true");
+      }
     }
     if (state === "focused") {
       element.tabIndex = 0;
@@ -521,14 +584,21 @@ async function reportFailure(error) {
     header.setAttribute("role", "row");
     const columnNames = ["selection", "name", "size", "primary", "secondary", "notes"];
     const columnMinimums = [32, 128, 64, 96, 80, 160];
+    let masterCheckbox = null;
     for (const [index, text] of headers.entries()) {
       const cell = document.createElement("div");
       cell.className = "nami-file-list__header-cell";
       cell.setAttribute("role", "columnheader");
       if (index === 0) {
         cell.setAttribute("aria-label", "Selection");
+        masterCheckbox = document.createElement("input");
+        masterCheckbox.className = "nami-checkbox";
+        masterCheckbox.type = "checkbox";
+        masterCheckbox.setAttribute("aria-label", `Select all ${label} rows`);
+        cell.append(masterCheckbox);
+      } else {
+        renderText(cell, text);
       }
-      renderText(cell, text);
       const resizer = document.createElement("div");
       resizer.className = "nami-file-list__column-resizer";
       resizer.dataset.column = columnNames[index];
@@ -556,6 +626,10 @@ async function reportFailure(error) {
       }
       body.append(row);
     }
+    if (!(masterCheckbox instanceof HTMLInputElement)) {
+      throw new TypeError("gallery master selection control is unavailable");
+    }
+    const folderReconcilers = [];
     for (const folder of body.querySelectorAll('[data-folder="true"]')) {
       const disclosure = folder.querySelector(".nami-file-row__disclosure");
       const folderCheckbox = folder.querySelector(".nami-checkbox");
@@ -597,6 +671,7 @@ async function reportFailure(error) {
         folderCheckbox.indeterminate = mixed;
         folderCheckbox.ariaChecked = mixed ? "mixed" : String(all);
       };
+      folderReconcilers.push(reconcileFolderCheckbox);
       for (const checkbox of childCheckboxes) {
         checkbox.addEventListener("change", reconcileFolderCheckbox);
       }
@@ -607,6 +682,38 @@ async function reportFailure(error) {
         reconcileFolderCheckbox();
       });
     }
+    const rowCheckboxes = [...body.querySelectorAll(
+      '.nami-checkbox[type="checkbox"]',
+    )];
+    const selectableCheckboxes = rowCheckboxes.filter(
+      (checkbox) => !checkbox.disabled,
+    );
+    const reconcileMasterCheckbox = () => {
+      const all = selectableCheckboxes.every(
+        (checkbox) => checkbox.checked && !checkbox.indeterminate,
+      );
+      const none = selectableCheckboxes.every(
+        (checkbox) => !checkbox.checked && !checkbox.indeterminate,
+      );
+      masterCheckbox.checked = all;
+      masterCheckbox.indeterminate = !all && !none;
+      masterCheckbox.ariaChecked = masterCheckbox.indeterminate
+        ? "mixed"
+        : String(all);
+    };
+    body.addEventListener("change", reconcileMasterCheckbox);
+    masterCheckbox.addEventListener("change", () => {
+      for (const checkbox of selectableCheckboxes) {
+        checkbox.checked = masterCheckbox.checked;
+        checkbox.indeterminate = false;
+        checkbox.ariaChecked = String(masterCheckbox.checked);
+      }
+      for (const reconcile of folderReconcilers) {
+        reconcile();
+      }
+      reconcileMasterCheckbox();
+    });
+    reconcileMasterCheckbox();
     grid.append(header, body);
     list.append(grid);
     planSection.append(heading, list);
@@ -655,7 +762,7 @@ async function reportFailure(error) {
         setWidth(cell.getBoundingClientRect().width + direction * 8);
       });
     }
-    return { list, grid, header, body };
+    return { list, grid, header, body, masterCheckbox };
   }
 
   const planSpecimen = createFileList(
@@ -700,6 +807,37 @@ async function reportFailure(error) {
   mixedCheckbox.setAttribute("aria-checked", "mixed");
   mixedCheckbox.setAttribute("aria-label", "Mixed tri-state specimen");
   controlsSection.append(mixedCheckbox);
+
+  const hdrIsolation = document.createElement("section");
+  hdrIsolation.className = "nami-card";
+  hdrIsolation.dataset.gallerySection = "hdr_flyout_isolation";
+  const hdrHeading = document.createElement("h2");
+  renderText(hdrHeading, "HDR flyout isolation");
+  hdrIsolation.append(hdrHeading);
+  for (const [labelText, isolate] of [
+    ["Normal translucent surface with shadow", "normal"],
+    ["Translucent surface without shadow", "shadowless"],
+    ["Opaque surface with shadow", "opaque"],
+  ]) {
+    const surface = document.createElement("div");
+    surface.className = "nami-menu";
+    surface.dataset.galleryHdrIsolate = isolate;
+    if (isolate === "shadowless") {
+      surface.style.boxShadow = "none";
+    } else {
+      surface.style.boxShadow = "var(--elevation-8)";
+      if (isolate === "opaque") {
+        surface.style.background = "var(--color-flyout-background-solid)";
+      }
+    }
+    const item = document.createElement("button");
+    item.className = "nami-menu__item";
+    item.type = "button";
+    renderText(item, labelText);
+    surface.append(item);
+    hdrIsolation.append(surface);
+  }
+  controlsSection.append(hdrIsolation);
 
   const pseudoTargets = CONTROL_CASES.flatMap((definition) => [
     { selector: `#gallery-control-${definition.key}-hover`, classes: ["hover"] },
@@ -803,7 +941,7 @@ async function reportFailure(error) {
   }
 
   function collectFileListEvidence(specimen, definitions) {
-    const { list, grid, header, body } = specimen;
+    const { list, grid, header, body, masterCheckbox } = specimen;
     const fillsWorkArea = Math.abs(
       list.getBoundingClientRect().width - planSectionContentWidth,
     ) < 0.5;
@@ -847,6 +985,40 @@ async function reportFailure(error) {
     const childSelectionRestoresMixed = !folderCheckbox.checked
       && folderCheckbox.indeterminate
       && folderCheckbox.ariaChecked === "mixed";
+    const rowCheckboxes = [...body.querySelectorAll(
+      '.nami-checkbox[type="checkbox"]',
+    )];
+    const selectionSnapshot = rowCheckboxes.map((checkbox) => ({
+      checked: checkbox.checked,
+      indeterminate: checkbox.indeterminate,
+      ariaChecked: checkbox.getAttribute("aria-checked"),
+    }));
+    const masterInitiallyMixed = !masterCheckbox.checked
+      && masterCheckbox.indeterminate
+      && masterCheckbox.ariaChecked === "mixed";
+    masterCheckbox.checked = true;
+    masterCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    const masterSelectsAll = rowCheckboxes.every(
+      (checkbox) => checkbox.disabled || (checkbox.checked && !checkbox.indeterminate),
+    ) && masterCheckbox.checked && !masterCheckbox.indeterminate;
+    masterCheckbox.checked = false;
+    masterCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    const masterDeselectsAll = rowCheckboxes.every(
+      (checkbox) => checkbox.disabled || (!checkbox.checked && !checkbox.indeterminate),
+    ) && !masterCheckbox.checked && !masterCheckbox.indeterminate;
+    for (const [index, checkbox] of rowCheckboxes.entries()) {
+      const snapshot = selectionSnapshot[index];
+      checkbox.checked = snapshot.checked;
+      checkbox.indeterminate = snapshot.indeterminate;
+      if (snapshot.ariaChecked === null) {
+        checkbox.removeAttribute("aria-checked");
+      } else {
+        checkbox.setAttribute("aria-checked", snapshot.ariaChecked);
+      }
+    }
+    masterCheckbox.checked = false;
+    masterCheckbox.indeterminate = true;
+    masterCheckbox.ariaChecked = "mixed";
     const nameResizer = header.querySelector(
       '.nami-file-list__column-resizer[data-column="name"]',
     );
@@ -973,6 +1145,10 @@ async function reportFailure(error) {
       collapse_restores_children: collapseRestoresChildren,
       child_selection_selects_folder: childSelectionSelectsFolder,
       child_selection_restores_mixed: childSelectionRestoresMixed,
+      master_initially_mixed: masterInitiallyMixed,
+      master_selects_all: masterSelectsAll,
+      master_deselects_all: masterDeselectsAll,
+      master_label: masterCheckbox.getAttribute("aria-label"),
       resize_handle_count: header.querySelectorAll(
         ".nami-file-list__column-resizer",
       ).length,
@@ -1085,6 +1261,37 @@ async function reportFailure(error) {
   };
   const mixedStyle = getComputedStyle(mixedCheckbox, "::after");
   const dialogExit = await dialogExitEvidence();
+  themeTrigger.blur();
+  themeTrigger.click();
+  await new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const themePopup = document.querySelector("#theme-options");
+  const selectedThemeOption = themePopup?.querySelector(
+    '.nami-combobox__option[aria-selected="true"]',
+  );
+  const ordinaryThemeOption = themePopup?.querySelector(
+    '.nami-combobox__option[aria-selected="false"]',
+  );
+  const selectionPill = selectedThemeOption?.querySelector(
+    ".nami-combobox__selection",
+  );
+  if (
+    !(themePopup instanceof HTMLElement)
+    || !(selectedThemeOption instanceof HTMLElement)
+    || !(ordinaryThemeOption instanceof HTMLElement)
+    || !(selectionPill instanceof HTMLElement)
+    || themePopup.hidden
+  ) {
+    throw new TypeError("production combobox popup evidence is unavailable");
+  }
+  const triggerBounds = themeTrigger.getBoundingClientRect();
+  const popupBounds = themePopup.getBoundingClientRect();
+  const selectedBounds = selectedThemeOption.getBoundingClientRect();
+  const triggerStyle = getComputedStyle(themeTrigger);
+  const popupStyle = getComputedStyle(themePopup);
+  const taskCards = [...galleryRail.querySelectorAll(".nami-task-card")];
+  const taskRailBounds = galleryRail.getBoundingClientRect();
+  const planBounds = planSection.getBoundingClientRect();
   const controlContract = {
     tri_state: {
       aria_checked: mixedCheckbox.getAttribute("aria-checked"),
@@ -1115,6 +1322,55 @@ async function reportFailure(error) {
         unselected_checked: unselected.getAttribute("aria-checked"),
       };
     })(),
+    combobox: {
+      trigger_role: themeTrigger.getAttribute("role"),
+      popup_role: themePopup.getAttribute("role"),
+      expanded: themeTrigger.getAttribute("aria-expanded"),
+      selected: selectedThemeOption.getAttribute("aria-selected"),
+      option_count: themePopup.querySelectorAll(".nami-combobox__option").length,
+      popup_width_delta: Number(
+        Math.abs(popupBounds.width - triggerBounds.width).toFixed(3),
+      ),
+      popup_within_viewport: popupBounds.top >= 7.5
+        && popupBounds.left >= 7.5
+        && popupBounds.right <= window.innerWidth - 7.5
+        && popupBounds.bottom <= window.innerHeight - 7.5,
+      selected_center_error: Number(Math.abs(
+        (selectedBounds.top + selectedBounds.height / 2)
+        - (triggerBounds.top + triggerBounds.height / 2)
+      ).toFixed(3)),
+      placement_clamped: popupBounds.top <= 8.5
+        || popupBounds.bottom >= window.innerHeight - 8.5,
+      trigger_background_image: triggerStyle.backgroundImage,
+      trigger_outline_style: triggerStyle.outlineStyle,
+      popup_background: popupStyle.backgroundColor,
+      popup_border: popupStyle.borderColor,
+      popup_border_width: popupStyle.borderWidth,
+      popup_shadow: popupStyle.boxShadow,
+      popup_backdrop_filter: popupStyle.backdropFilter,
+      ordinary_option_background: getComputedStyle(
+        ordinaryThemeOption,
+      ).backgroundColor,
+      selected_pill_width: selectionPill.getBoundingClientRect().width,
+      selected_pill_background: getComputedStyle(selectionPill).backgroundColor,
+    },
+    task_rail: {
+      card_count: taskCards.length,
+      outside_content_card: taskCards.every(
+        (task) => task.closest(".nami-card") === null,
+      ),
+      left_of_work: taskRailBounds.right <= planBounds.left + 0.5,
+      selected_count: galleryRail.querySelectorAll(
+        '.nami-task-card[aria-selected="true"]',
+      ).length,
+      current_count: galleryRail.querySelectorAll(
+        '.nami-task-card[aria-current="true"]',
+      ).length,
+      transparent_boundaries: taskCards.every((task) => {
+        const style = getComputedStyle(task);
+        return style.borderStyle === "none" || parseFloat(style.borderWidth) === 0;
+      }),
+    },
     file_list: planEvidence,
     integrity_list: integrityEvidence,
   };
@@ -1158,7 +1414,7 @@ async function reportFailure(error) {
     Object.freeze({
       phase: "complete",
       mode,
-      media: Object.freeze({ dark, forced, reduced }),
+      media: Object.freeze({ dark, forced, reduced, hdr }),
       cosmetic: cosmeticEvidence,
       part_count: reportParts.length,
     }),

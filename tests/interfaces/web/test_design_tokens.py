@@ -238,6 +238,26 @@ AUTHORED_CARD_VALUES = {
         "--color-card-border": "rgba(0,0,0,0.10)",
     },
 }
+AUTHORED_FLYOUT_VALUES = {
+    "light": {
+        "--color-flyout-background-solid": "#ffffff",
+        "--color-flyout-background": "rgba(255,255,255,0.75)",
+        "--color-flyout-border-solid": "#ebebeb",
+        "--color-flyout-border": "rgba(0,0,0,0.06)",
+        "--color-control-elevation-border-start": "rgba(0,0,0,0.04)",
+        "--color-control-elevation-border-end": "rgba(0,0,0,0.12)",
+        "--color-control-elevation-border-flat": "rgba(0,0,0,0.10)",
+    },
+    "dark": {
+        "--color-flyout-background-solid": "#292929",
+        "--color-flyout-background": "rgba(41,41,41,0.75)",
+        "--color-flyout-border-solid": "#1c1c1c",
+        "--color-flyout-border": "rgba(0,0,0,0.20)",
+        "--color-control-elevation-border-start": "rgba(0,0,0,0.08)",
+        "--color-control-elevation-border-end": "rgba(0,0,0,0.26)",
+        "--color-control-elevation-border-flat": "rgba(0,0,0,0.20)",
+    },
+}
 STATUSES = (
     "complete",
     "success",
@@ -388,6 +408,8 @@ def test_sh_g_11_tokens_preserve_exact_authored_palette_without_missing_lights()
                 *WINDOWS_ACCENT_FALLBACK.values(),
                 *AUTHORED_CARD_VALUES["light"].values(),
                 *AUTHORED_CARD_VALUES["dark"].values(),
+                *AUTHORED_FLYOUT_VALUES["light"].values(),
+                *AUTHORED_FLYOUT_VALUES["dark"].values(),
         )
         if value != "transparent"
     }
@@ -428,6 +450,9 @@ def test_sh_g_11_fluent_table_matches_pinned_source_transcription() -> None:
     assert AUTHORED_CARD_VALUES["light"].items() <= light.items()
     assert AUTHORED_CARD_VALUES["dark"].items() <= dark.items()
     assert AUTHORED_CARD_VALUES["dark"].items() <= automatic_dark.items()
+    assert AUTHORED_FLYOUT_VALUES["light"].items() <= light.items()
+    assert AUTHORED_FLYOUT_VALUES["dark"].items() <= dark.items()
+    assert AUTHORED_FLYOUT_VALUES["dark"].items() <= automatic_dark.items()
     assert str(FLUENT_SOURCE["package"]).removeprefix(
         "@fluentui/tokens@"
     ) in source
@@ -700,6 +725,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     layout = APP_LAYOUT.read_text(encoding="utf-8")
     controls = {
         "nami-button",
+        "nami-combobox",
         "nami-select",
         "nami-checkbox",
         "nami-progress",
@@ -847,9 +873,46 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "background: var(--color-card-background);" in card
     assert "border: 1px solid var(--color-card-border-solid);" in card
     assert "border-color: var(--color-card-border);" in card
+    assert "background-clip: padding-box;" in card
     assert "box-shadow: none;" in card
     assert ".nami-card:hover" not in source
     assert ".nami-card:active" not in source
+    assert """.nami-menu,
+.nami-dialog,
+.nami-combobox__popup {""" in source
+    elevated = _block(source, ".nami-menu,")
+    assert "border: 1px solid var(--color-flyout-border-solid);" in elevated
+    assert "border-color: var(--color-flyout-border);" in elevated
+    combobox_trigger = _block(source, ".nami-combobox__trigger ")
+    assert "var(--color-control-elevation-border-start)" in combobox_trigger
+    assert "var(--color-control-elevation-border-end)" in combobox_trigger
+    assert "linear-gradient(" in combobox_trigger
+    combobox_open = _block(
+        source,
+        '.nami-combobox__trigger:not(:disabled):active,',
+    )
+    assert "var(--color-control-elevation-border-flat)" in combobox_open
+    assert """.nami-combobox__trigger:not(:disabled):active,
+.nami-combobox__trigger[aria-expanded="true"] {""" in source
+    popup = next(
+        block
+        for block in re.findall(
+            r"(?ms)^\.nami-combobox__popup\s*\{(.*?)^\}",
+            source,
+        )
+        if "box-shadow" in block
+    )
+    assert "background: var(--color-flyout-background-solid);" in popup
+    assert "box-shadow: var(--elevation-16);" in popup
+    assert "border-radius: var(--radius-medium);" in popup
+    hdr_fallback = _block(source, "@media (dynamic-range: high)")
+    assert ':root[data-theme="dark"] .nami-dialog:not(:focus-visible)' in hdr_fallback
+    assert ':root[data-theme="dark"] .nami-menu' in hdr_fallback
+    assert ':root[data-theme="dark"] .nami-combobox__popup' in hdr_fallback
+    assert "box-shadow: none;" in hdr_fallback
+    assert ".nami-combobox__trigger:focus-visible" in source
+    assert ".nami-combobox__trigger:focus:not(:focus-visible)" not in source
+    assert not re.search(r"\.nami-combobox__trigger:focus\s*[,\{]", source)
     task_card = _block(source, ".nami-task-card ")
     assert "background: var(--color-neutral-subtle-background);" in task_card
     assert "border: 0;" in task_card
@@ -1007,7 +1070,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     forced = _block(source, "@media (forced-colors: active)")
     forced_primary_active = _block(
         forced,
-        ".nami-button--primary:not(:disabled):active ",
+        ".nami-button--primary:not(:disabled):active,",
     )
     assert "filter: none;" in forced_primary_active
     assert ".nami-button--danger" not in source
@@ -1093,7 +1156,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         '.nami-segmented__item[aria-checked="true"] ',
     )
     assert "background: var(--color-accent);" in selected_segment
-    assert "color: var(--color-accent-foreground);" in selected_segment
+    assert "color: var(--color-neutral-surface);" in selected_segment
 
 
 def test_sh_g_11_shipped_page_loads_tokens_components_then_layout() -> None:

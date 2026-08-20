@@ -57,6 +57,10 @@ source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
   `import { BridgeTransportError, readCosmeticSection, replaceCosmeticSection } from "${bridgeStub}";`,
 );
+source = source.replace(
+  'import { renderText } from "./render.js";',
+  "const renderText = (element, value) => { element.textContent = value; };",
+);
 const { installThemeSelector } = await import(moduleUrl(source));
 const BridgeTransportError = globalThis.themeHarness.BridgeTransportError;
 

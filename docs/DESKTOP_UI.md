@@ -246,7 +246,10 @@ button labels follow the ordinary button's inverse-neutral theme rule—white in
 Light and dark in Dark—and never invert during interaction. Hover uses the
 sampled darker accent role; press retains that role and applies one additional
 brightness step. Forced colors remove that visual filter and retain the system
-`Highlight`/`HighlightText` pair. Filter
+`Highlight`/`HighlightText` pair. The selected Sync/Integrity half deliberately
+inherits this same label rule; these dark-on-accent pairs are product-specified
+visual exceptions recorded by the headed matrix rather than claimed to meet
+the normal-text contrast floor. Filter
 pills are likewise borderless: inactive pills use an inverse grayscale surface
 and text pairing, while an active operation filter uses that operation family's
 exact main swatch with contrast-selected grayscale text. Delete is the
@@ -263,6 +266,17 @@ without hover/pressed inset strokes. The two-half Sync/Integrity component's sta
 roles. The owning later renderer still supplies interaction behavior. These
 ordinary-theme border removals do not remove keyboard focus indication or
 override forced-color authority.
+
+Elevated surfaces use a dedicated flyout boundary rather than the accessible
+control-stroke role: black 6% in Light and black 20% in Dark, with opaque
+Light/Dark stroke fallbacks. Dialogs and menus keep their ordinary black
+elevation shadows in SDR. On a high-dynamic-range display, a dark transparent
+WebView2/Mica composition suppresses those CSS shadows because Windows HDR
+alpha compositing can otherwise produce a bright perimeter halo; the subtle
+flyout boundary remains. The test-only gallery places normal, shadowless, and
+opaque-base flyout specimens side by side so an HDR operator can distinguish a
+shadow-compositing defect from a surface-alpha defect. This is a platform
+fallback, not a claim that SDR shadows are defective.
 
 The pre-Slice-5 file-list checkpoint ships three deliberately dormant surface
 modules. `file_row.js` owns the shared row skeleton; `plan.js` exports only
@@ -302,7 +316,11 @@ children. A second static array covers integrity presence/match/mismatch/error
 states and another partially selected folder with two children. Test-owned
 listeners exercise computed collapse/restore and direct-child checkbox
 reconciliation—including mixed to fully selected and back—without inventing
-product hierarchy or recursive selection policy. The same driver exercises a
+product hierarchy or recursive selection policy. Each gallery header also owns
+a test-only master checkbox whose checked/mixed state is derived from every
+selectable specimen row and whose change selects or deselects them all; this
+settles the interaction without claiming Slice 5's server-owned selection
+policy. The same driver exercises a
 40 px header drag and proves the rendered row track changes. The specimens
 fill the shell's wide `work` area; a transient constrained measurement proves
 horizontal overflow without leaving
@@ -361,6 +379,20 @@ Component gallery `light` and `reduced` modes seed `light`, while `dark` and
 `forced` seed `dark`, before window creation. The installed witness forces a
 real accepted selector change, proves the choice is not rendered
 optimistically, restores the seeded choice, and checks native/page agreement.
+The selector is a production-owned DOM combobox rather than the browser's
+native picker. Its fixed-position listbox is portaled under `body`, matches the
+trigger width, aligns the selected option center with the trigger center when
+space permits, and clamps to an 8 px viewport inset. Ordinary options are
+transparent, hover/press use neutral interaction fills, and the selected option
+has a 3 px accent pill. The closed trigger uses a subtle tokenized vertical
+elevation boundary at rest/hover and a flat subtle boundary while pressed/open;
+mouse activation does not request a focus ring, while `:focus-visible` retains
+a separate keyboard ring. The popup uses the flyout stroke, overlay radius,
+in-app acrylic approximation with opaque fallback, and elevation 16. Forced
+colors remove acrylic/shadow and use Canvas, CanvasText, ButtonBorder,
+Highlight, and HighlightText through system-owned tokens. Microsoft's official
+[XAML styling guide](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-styling-guide.md)
+is the reference for the closed control-elevation boundary.
 The host loads the cosmetic authority before choosing the opaque fallback
 background or creating the window. That same initial effective snapshot feeds
 title-bar/material policy, the appearance controller, and the first page

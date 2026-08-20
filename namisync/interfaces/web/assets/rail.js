@@ -7,9 +7,12 @@ export function createTaskRail() {
 
   const heading = document.createElement("h2");
   renderText(heading, "Tasks");
+  const emptySlot = document.createElement("div");
+  emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");
   const empty = document.createElement("p");
   empty.classList.add("nami-shell__empty");
   renderText(empty, "No tasks are available.");
-  rail.append(heading, empty);
+  emptySlot.append(empty);
+  rail.append(heading, emptySlot);
   return rail;
 }
