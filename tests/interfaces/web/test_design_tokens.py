@@ -222,6 +222,22 @@ WINDOWS_ACCENT_FALLBACK = {
     "--color-accent-hover-foreground": "#000000",
     "--color-accent-pressed-foreground": "#FFFFFF",
 }
+AUTHORED_CARD_VALUES = {
+    "light": {
+        "--color-card-background": "rgba(255,255,255,0.7)",
+        "--color-card-background-secondary": "rgba(246,246,246,0.5)",
+        "--color-card-background-tertiary": "#ffffff",
+        "--color-card-border-solid": "#ebebeb",
+        "--color-card-border": "rgba(0,0,0,0.06)",
+    },
+    "dark": {
+        "--color-card-background": "rgba(255,255,255,0.05)",
+        "--color-card-background-secondary": "rgba(255,255,255,0.03)",
+        "--color-card-background-tertiary": "rgba(255,255,255,0.07)",
+        "--color-card-border-solid": "#1c1c1c",
+        "--color-card-border": "rgba(0,0,0,0.10)",
+    },
+}
 STATUSES = (
     "complete",
     "success",
@@ -369,7 +385,9 @@ def test_sh_g_11_tokens_preserve_exact_authored_palette_without_missing_lights()
             *AUTHORED_PALETTE.values(),
             *FLUENT_LIGHT_VALUES.values(),
             *FLUENT_DARK_VALUES.values(),
-            *WINDOWS_ACCENT_FALLBACK.values(),
+                *WINDOWS_ACCENT_FALLBACK.values(),
+                *AUTHORED_CARD_VALUES["light"].values(),
+                *AUTHORED_CARD_VALUES["dark"].values(),
         )
         if value != "transparent"
     }
@@ -407,6 +425,9 @@ def test_sh_g_11_fluent_table_matches_pinned_source_transcription() -> None:
     assert expected_scales.items() <= light.items()
     assert expected_shadows.items() <= light.items()
     assert WINDOWS_ACCENT_FALLBACK.items() <= light.items()
+    assert AUTHORED_CARD_VALUES["light"].items() <= light.items()
+    assert AUTHORED_CARD_VALUES["dark"].items() <= dark.items()
+    assert AUTHORED_CARD_VALUES["dark"].items() <= automatic_dark.items()
     assert str(FLUENT_SOURCE["package"]).removeprefix(
         "@fluentui/tokens@"
     ) in source
@@ -614,19 +635,9 @@ def test_plan_intent_aliases_prefer_main_colors_in_both_themes() -> None:
 
     for status in ("error", "blocked"):
         plan_token = f"--plan-intent-{status}-foreground"
-        assert light[plan_token] == f"var(--status-{status}-foreground)"
-        assert _resolve(plan_token, light) == _resolve(
-            "--palette-red-dark",
-            light,
-        )
+        assert light[plan_token] == "var(--palette-red-main)"
         for dark in (explicit_dark, automatic_dark):
             assert dark[plan_token] == "var(--palette-red-main)"
-            foreground = _resolve(plan_token, dark)
-            for surface in (
-                "--color-neutral-surface",
-                "--color-neutral-surface-subtle",
-            ):
-                assert _contrast(foreground, _resolve(surface, dark)) >= 4.5
         assert forced[plan_token] == "CanvasText"
 
     assert "--plan-intent-noop-foreground" not in light
@@ -749,31 +760,26 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         '.nami-tree-row:not([aria-disabled="true"]):active',
         '.nami-task-card:not([aria-disabled="true"]):hover',
         '.nami-task-card:not([aria-disabled="true"]):active',
-        '.nami-card:not([aria-disabled="true"]):active',
         '.nami-dialog:not([aria-disabled="true"]):active',
         ".nami-menu__item:not(:disabled):hover",
         ".nami-menu__item:not(:disabled):active",
         ".nami-segmented__item:not(:disabled):hover",
         ".nami-segmented__item:not(:disabled):active",
     }
-    selected_forced_hover = _block(
+    selected_interactions = _block(
         forced,
         '.nami-task-card[aria-selected="true"]:'
         'not([aria-disabled="true"]):hover,',
     )
-    assert "outline: 1px solid var(--color-accent-foreground);" in (
-        selected_forced_hover
-    )
-    assert "outline-offset: -1px;" in selected_forced_hover
-    selected_forced_pressed = _block(
+    assert "background: var(--color-accent);" in selected_interactions
+    assert "color: var(--color-accent-foreground);" in selected_interactions
+    assert "outline" not in selected_interactions
+    selected_focus = _block(
         forced,
-        '.nami-task-card[aria-selected="true"]:'
-        'not([aria-disabled="true"]):active,',
+        '.nami-task-card[aria-selected="true"]:focus-visible,',
     )
-    assert "outline: 2px solid var(--color-accent-foreground);" in (
-        selected_forced_pressed
-    )
-    assert "outline-offset: -2px;" in selected_forced_pressed
+    assert "box-shadow: none;" in selected_focus
+    assert "outline: 2px solid var(--color-focus-ring);" in selected_focus
     selected_forced = _block(
         forced,
         '.nami-task-card[aria-selected="true"]:'
@@ -808,7 +814,6 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     for selector in (
         ".nami-input:not(:disabled):hover",
         ".nami-select:not(:disabled):hover",
-        '.nami-card:not([aria-disabled="true"]):hover',
         '.nami-dialog:not([aria-disabled="true"]):hover',
     ):
         assert selector in forced
@@ -837,16 +842,25 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "background: var(--color-neutral-subtle-background);" in (
         task_rail.group(1)
     )
+    card = _block(source, ".nami-card ")
+    assert "background: var(--color-card-background-solid);" in card
+    assert "background: var(--color-card-background);" in card
+    assert "border: 1px solid var(--color-card-border-solid);" in card
+    assert "border-color: var(--color-card-border);" in card
+    assert "box-shadow: none;" in card
+    assert ".nami-card:hover" not in source
+    assert ".nami-card:active" not in source
     task_card = _block(source, ".nami-task-card ")
     assert "background: var(--color-neutral-subtle-background);" in task_card
-    assert "border: 1px solid var(--color-neutral-subtle-background);" in task_card
+    assert "border: 0;" in task_card
+    assert "box-shadow: none;" in task_card
     selected_task = _block(
         source,
         '.nami-task-card[aria-selected="true"],',
     )
-    assert "background: var(--color-neutral-surface-selected);" in selected_task
-    assert "border-color: var(--color-neutral-border);" in selected_task
-    assert "box-shadow: var(--elevation-2);" in selected_task
+    assert "background: var(--color-card-background);" in selected_task
+    assert "border" not in selected_task
+    assert "box-shadow" not in selected_task
     assert re.search(r"(?:^|;)\s*color\s*:", selected_task) is None
     assert '.nami-task-card[aria-current="true"]' in source
     assert ".nami-task-card:not([aria-disabled=\"true\"]):hover" in source
@@ -864,13 +878,13 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         '.nami-task-card[aria-selected="true"]:'
         'not([aria-disabled="true"]):hover,',
     )
-    assert "background: var(--color-neutral-surface-hover);" in selected_hover
+    assert "background: var(--color-card-background-secondary);" in selected_hover
     selected_pressed = _block(
         source,
         '.nami-task-card[aria-selected="true"]:'
         'not([aria-disabled="true"]):active,',
     )
-    assert "background: var(--color-neutral-surface-pressed);" in selected_pressed
+    assert "background: var(--color-card-background-secondary);" in selected_pressed
     disabled_task = _block(source, '.nami-task-card[aria-disabled="true"] ')
     assert "color: var(--color-neutral-foreground-disabled);" in disabled_task
     assert "cursor: default;" in disabled_task
@@ -878,9 +892,8 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         source,
         '.nami-task-card[aria-selected="true"]:focus-visible,',
     )
-    assert "box-shadow: var(--elevation-2);" in selected_focus
-    assert "outline: 2px solid var(--color-focus-ring);" in selected_focus
-    assert "outline-offset: 2px;" in selected_focus
+    assert "box-shadow: 0 0 0 2px var(--color-focus-ring);" in selected_focus
+    assert "outline: none;" in selected_focus
     cue_owners: set[tuple[str, str]] = set()
     for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", source):
         if re.search(r"(?:^|;)\s*content\s*:", rule.group(2)) is None:
@@ -941,7 +954,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         inverse_foreground = _resolve("--color-neutral-surface", theme)
         delete_foreground = _resolve("--filter-delete-foreground", theme)
         assert _contrast(inverse_foreground, inverse_background) >= 4.5
-        assert _contrast(delete_foreground, inverse_background) >= 4.5
+        assert delete_foreground == _resolve("--palette-red-main", theme)
         active_foreground = _resolve("--filter-active-foreground", theme)
         for operation, family in filter_backgrounds.items():
             background = _resolve(f"--filter-{operation}-background", theme)
@@ -956,7 +969,10 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
             _resolve("--filter-noop-foreground", theme),
             _resolve("--filter-noop-background", theme),
         ) >= 4.5
-        assert _resolve("--progress-fill", theme) == "#33AAEE"
+        assert _resolve("--progress-fill", theme) == _resolve(
+            "--color-accent",
+            theme,
+        )
 
     solid_controls = _block(
         source,
@@ -969,10 +985,31 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "color: var(--color-neutral-surface);" in solid_controls
     assert "border: 0;" in solid_controls
 
-    primary = _block(source, ".nami-button--primary ")
+    primary = _block(source, ".nami-button--primary:not(:disabled) ")
     assert "background: var(--color-accent);" in primary
-    assert "color: var(--color-accent-foreground);" in primary
+    assert "color: var(--color-neutral-surface);" in primary
     assert "border" not in primary
+    primary_hover = _block(
+        source,
+        ".nami-button--primary:not(:disabled):hover ",
+    )
+    primary_active = _block(
+        source,
+        ".nami-button--primary:not(:disabled):active ",
+    )
+    for interaction in (primary_hover, primary_active):
+        assert "color: var(--color-neutral-surface);" in interaction
+        assert "--color-accent-hover-foreground" not in interaction
+        assert "--color-accent-pressed-foreground" not in interaction
+    assert "background: var(--color-accent-pressed);" in primary_hover
+    assert "background: var(--color-accent-pressed);" in primary_active
+    assert "filter: brightness(0.82);" in primary_active
+    forced = _block(source, "@media (forced-colors: active)")
+    forced_primary_active = _block(
+        forced,
+        ".nami-button--primary:not(:disabled):active ",
+    )
+    assert "filter: none;" in forced_primary_active
     assert ".nami-button--danger" not in source
 
     chip = _block(source, ".nami-chip ")

@@ -107,19 +107,20 @@ body {
   cursor: default;
 }
 
-.nami-button--primary {
+.nami-button--primary:not(:disabled) {
   background: var(--color-accent);
-  color: var(--color-accent-foreground);
+  color: var(--color-neutral-surface);
 }
 
-.nami-button--primary:hover {
-  background: var(--color-accent-hover);
-  color: var(--color-accent-hover-foreground);
-}
-
-.nami-button--primary:active {
+.nami-button--primary:not(:disabled):hover {
   background: var(--color-accent-pressed);
-  color: var(--color-accent-pressed-foreground);
+  color: var(--color-neutral-surface);
+}
+
+.nami-button--primary:not(:disabled):active {
+  background: var(--color-accent-pressed);
+  color: var(--color-neutral-surface);
+  filter: brightness(0.82);
 }
 
 .nami-input,
@@ -416,24 +417,14 @@ body {
 }
 
 .nami-card {
-  background: var(--color-neutral-surface);
-  border: 1px solid var(--color-neutral-border);
+  background: var(--color-card-background-solid);
+  background: var(--color-card-background);
+  border: 1px solid var(--color-card-border-solid);
+  border-color: var(--color-card-border);
   border-radius: var(--radius-medium);
-  box-shadow: var(--elevation-2);
+  box-shadow: none;
   color: var(--color-neutral-foreground);
   padding: var(--space-5);
-  transition:
-    background-color var(--motion-duration-fast) var(--motion-easing-standard),
-    border-color var(--motion-duration-fast) var(--motion-easing-standard),
-    box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.nami-card:hover {
-  background: var(--color-neutral-surface-hover);
-}
-
-.nami-card:active {
-  background: var(--color-neutral-surface-pressed);
 }
 
 .nami-card:focus-visible {
@@ -443,40 +434,38 @@ body {
 
 .nami-task-card {
   background: var(--color-neutral-subtle-background);
-  border: 1px solid var(--color-neutral-subtle-background);
+  border: 0;
   border-radius: var(--radius-medium);
+  box-shadow: none;
   color: var(--color-neutral-foreground);
   cursor: pointer;
   padding: var(--space-4);
   transition:
     background-color var(--motion-duration-fast) var(--motion-easing-standard),
-    border-color var(--motion-duration-fast) var(--motion-easing-standard),
     box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
 .nami-task-card:not([aria-disabled="true"]):hover {
-  background: var(--color-neutral-subtle-hover);
+  background: var(--color-card-background);
 }
 
 .nami-task-card:not([aria-disabled="true"]):active {
-  background: var(--color-neutral-subtle-pressed);
+  background: var(--color-card-background);
 }
 
 .nami-task-card[aria-selected="true"],
 .nami-task-card[aria-current="true"] {
-  background: var(--color-neutral-surface-selected);
-  border-color: var(--color-neutral-border);
-  box-shadow: var(--elevation-2);
+  background: var(--color-card-background);
 }
 
 .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
 .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
-  background: var(--color-neutral-surface-hover);
+  background: var(--color-card-background-secondary);
 }
 
 .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
 .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
-  background: var(--color-neutral-surface-pressed);
+  background: var(--color-card-background-secondary);
 }
 
 .nami-task-card[aria-disabled="true"] {
@@ -486,9 +475,8 @@ body {
 
 .nami-task-card[aria-selected="true"]:focus-visible,
 .nami-task-card[aria-current="true"]:focus-visible {
-  box-shadow: var(--elevation-2);
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+  outline: none;
 }
 
 .nami-dialog {
@@ -1013,7 +1001,6 @@ body {
   }
 }
 
-.nami-card[aria-disabled="true"],
 .nami-dialog[aria-disabled="true"],
 .nami-progress[aria-disabled="true"] {
   background: var(--color-neutral-disabled-background);
@@ -1072,6 +1059,10 @@ body {
     forced-color-adjust: none;
   }
 
+  .nami-button--primary:not(:disabled):active {
+    filter: none;
+  }
+
   .nami-button:not(:disabled):hover,
   .nami-button:not(:disabled):active,
   .nami-checkbox:not(:disabled):hover,
@@ -1088,7 +1079,6 @@ body {
   .nami-tree-row:not([aria-disabled="true"]):active,
   .nami-task-card:not([aria-disabled="true"]):hover,
   .nami-task-card:not([aria-disabled="true"]):active,
-  .nami-card:not([aria-disabled="true"]):active,
   .nami-dialog:not([aria-disabled="true"]):active,
   .nami-menu__item:not(:disabled):hover,
   .nami-menu__item:not(:disabled):active,
@@ -1101,7 +1091,9 @@ body {
   .nami-button:not(:disabled):hover,
   .nami-button:not(:disabled):active,
   .nami-chip[data-operation][aria-pressed="true"]:not(:disabled),
-  .nami-segmented__item[aria-checked="true"]:not(:disabled) {
+  .nami-segmented__item[aria-checked="true"]:not(:disabled),
+  .nami-task-card:not([aria-disabled="true"]):hover,
+  .nami-task-card:not([aria-disabled="true"]):active {
     background: var(--color-accent);
     color: var(--color-accent-foreground);
     forced-color-adjust: none;
@@ -1117,15 +1109,18 @@ body {
   }
 
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
-  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
-    outline: 1px solid var(--color-accent-foreground);
-    outline-offset: -1px;
+  .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover,
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
   }
 
-  .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
-  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
-    outline: 2px solid var(--color-accent-foreground);
-    outline-offset: -2px;
+  .nami-task-card[aria-selected="true"]:focus-visible,
+  .nami-task-card[aria-current="true"]:focus-visible {
+    box-shadow: none;
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
 
   .nami-toggle__control:not(:disabled):hover::after {
@@ -1134,7 +1129,6 @@ body {
 
   .nami-input:not(:disabled):hover,
   .nami-select:not(:disabled):hover,
-  .nami-card:not([aria-disabled="true"]):hover,
   .nami-dialog:not([aria-disabled="true"]):hover {
     border-color: var(--color-focus-ring);
     outline: 1px solid var(--color-focus-ring);

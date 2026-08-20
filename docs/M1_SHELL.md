@@ -991,10 +991,11 @@ carry the `headed` marker; all are collected by the release command.
 - **SH-G-12 — Native materials apply or degrade, never break.** On a capable
   system the DWM Mica backdrop and immersive dark title bar are applied and the
   WebView2 background is transparent; Mica shows through the intended seams —
-  title bar, rail, and card gutters — while the virtualized plan/inventory tree
-  renders on an opaque card rather than compositing the material behind scrolling
-  rows; under high contrast Mica is disabled and the high-contrast palette is
-  honored. The clean-wheel composition witness injects the native
+  title bar, rail, and card gutters — while background/content cards composite
+  the tokenized low-opacity primary material blend over that base; under high
+  contrast Mica is disabled, those cards become opaque system surfaces, and
+  the high-contrast palette is honored. The clean-wheel composition witness
+  injects the native
   high-contrast snapshot and activates renderer `forced-colors` in the same
   real WebView2 window, asserts dynamic system-color resolution, and retains
   every native Mica-off check; it is not evidence of a real OS theme toggle.
@@ -1095,7 +1096,7 @@ carry the `headed` marker; all are collected by the release command.
 SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
 themes with contrast, Mica apply/degrade, and reduced-motion with the motion
 tokens — is proven on GUI Break 1's gallery. Slice 4 closes the shared-shell
-clauses (no raw color in its renderer, the virtualized tree on an opaque card,
+clauses (no raw color in its renderer, tokenized translucent content cards,
 and no animation on row recycling); the production plan/inventory clauses
 finalize with their renderers in Slices 5 and 6.
 SH-G-14's closed registry and package foundation lands entirely in GUI Break 1;

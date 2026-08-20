@@ -345,10 +345,11 @@ unrealized unless an entry says otherwise.
   and adds no presentation command. The exact bridge surface remains solely in
   `M1_BRIDGE.md`.
 - **Task Rail**. The transparent rail exposes the window's Mica or opaque
-  fallback base. Unselected cards are transparent, hover/press use distinct
-  tokenized overlays, and the selected/current card uses the opaque selected
-  surface with an accessible neutral boundary without conflating selection
-  with running status. This rail/card visual component contract is active. The
+  fallback base. Resting cards are transparent; hover/press and selected/current
+  states use the primary translucent content tint, with a weaker secondary tint
+  while an active card is hovered or pressed. Task cards remain borderless and
+  do not conflate selection with running status. This rail/card visual component
+  contract is active. The
   task-backed behavior remains unrealized: a scrollable newest-first rail of
   adapter-owned task cards with status, paths, completion date, close controls,
   and mini progress bars; reviewed-plan retention without a live session;
@@ -398,15 +399,23 @@ unrealized unless an entry says otherwise.
   forced colors remain system-owned.
 - **Solid Desktop Control States**. The active component foundation exposes
   exactly two command-button tiers: solid inverse-gray for ordinary actions and
-  live Windows accent for primary Execute/Verify-class actions. Filter pills
+  live Windows accent for primary Execute/Verify-class actions. Primary labels
+  use the same white-Light/dark-Dark inverse-neutral rule as ordinary buttons,
+  stay fixed through interaction, and use successively darker hover/press
+  treatment. Filter pills
   use inverse grayscale when inactive and exact operation-family main swatches
-  with contrast-selected grayscale text when active; Delete keeps a
-  contrast-checked red-family label in either state. Operation/file badges,
-  status pills, and the gray-track/blue-main progress component are borderless,
-  while keyboard focus remains visible. The Sync/Integrity
+  with contrast-selected grayscale text when active; inactive Delete uses exact
+  red-main text while active Delete retains red-main/red-dark. Operation/file
+  badges, status pills, and the gray-track/live-accent progress component are
+  borderless, while keyboard focus remains visible. The Sync/Integrity
   two-half state specimen uses radio-group semantics and highlights its checked
   half with the accent roles. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
+- **Content Cards**. Background/content cards are static translucent material
+  layers rather than controls: white 70% with a black 6% blended stroke in
+  Light, white 5% with a black 10% blended stroke in Dark, plus opaque solid
+  stroke fallbacks and system-color forced-color fallbacks. They never acquire
+  task-card hover or active behavior.
 - **Dormant File-List Row Foundation**. Packaged `file_row.js` owns the shared
   compact row skeleton, while `plan.js` and `integrity.js` expose narrow
   presentation-local renderers. Both consume already-projected 16 px checkbox,

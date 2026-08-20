@@ -156,8 +156,8 @@ later workflow surfaces and beta packaging remain future phases.
   keyboard focus and forced-color authority.
 - Made inactive filters inverse grayscale and active filters consume the exact
   main swatch for their operation family with contrast-selected neutral text.
-  Delete retains a contrast-checked red label across both states; its active
-  pairing uses red-main/red-dark, while a stronger inverse hover surface fixes
+  Delete uses exact red-main text at rest; its active pairing uses
+  red-main/red-dark, while a stronger inverse hover surface fixes
   the 4.09:1 light-theme regression exposed by the headed matrix. Active-chip
   interaction stays fully opaque and uses geometry instead of contrast-eroding
   opacity.
@@ -166,8 +166,17 @@ later workflow surfaces and beta packaging remain future phases.
   checked half highlighted by accent rest/hover/pressed tokens.
 - Expanded installed-wheel gallery evidence for default/primary hierarchy,
   active/inactive Copy and Delete filters, borderless file/status chips,
-  gray-track blue-main progress, and selected segmented state across light, dark,
+  gray-track live-accent progress, and selected segmented state across light, dark,
   forced-color, and reduced-motion profiles.
+- Made content cards static translucent material layers with the requested
+  Light/Dark fill and stroke blends, and separated borderless task cards into
+  transparent-rest, primary-tint hover/selection, and weaker active-hover states.
+- Kept inactive Delete text and light Error/Unsupported list states on exact
+  red-main, moved progress fill to the live Windows accent, and kept active
+  Delete's existing red-main/red-dark pairing.
+- Aligned primary-button labels with the ordinary inverse-neutral theme rule,
+  held their color through interaction, and separated the darker hover role
+  from an additional pressed brightness step without affecting forced colors.
 
 #### Thaw and refreeze the cosmetic state channel (2026-08-19)
 

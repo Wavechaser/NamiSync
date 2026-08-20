@@ -160,7 +160,6 @@ _TEXT_CONTROL_KEYS = {
     "filter_delete_active",
     "list_row",
     "tree_row",
-    "card",
     "dialog",
     "context_menu",
     "segmented_control",
@@ -174,10 +173,9 @@ _BOUNDARY_CONTROL_KEYS = {
     "tri_state_checkbox",
     "text_input",
     "toggle",
-    "card",
     "dialog",
     "context_menu",
-} | _SELECTED_TASK_CARD_KEYS
+}
 _OUTLINE_FREE_CONTROL_KEYS = {
     "button",
     "button_primary",
@@ -195,6 +193,8 @@ _FORCED_STATIC_ACCENT_CONTROL_KEYS = {
     "filter_copy_active",
     "filter_delete_active",
     "segmented_control",
+    "task_card_selected",
+    "task_card_current",
 }
 _RGB = re.compile(
     r"rgba?\(\s*([0-9.]+)(?:\s*,|\s+)\s*([0-9.]+)"
@@ -592,6 +592,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "outline_style": "solid",
             "box_shadow": "rgb(0, 0, 0) 0px 0px 0px 2px",
             "surrounding": "rgb(255, 255, 255)",
+            "visual_filter": "none",
             "opacity": "1",
             "transform": "none",
             "transition_duration": "0.1s",
@@ -976,7 +977,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert _declared_keys(script, "PLAN_ROW_CASES") == _PLAN_ROW_CASE_KEYS
     assert _declared_keys(script, "INTEGRITY_ROW_CASES") == _INTEGRITY_ROW_CASE_KEYS
     assert _declared_keys(script, "CONTROL_CASES") == _CONTROL_KEYS
-    assert _SELECTED_TASK_CARD_KEYS <= _BOUNDARY_CONTROL_KEYS
+    assert _SELECTED_TASK_CARD_KEYS.isdisjoint(_BOUNDARY_CONTROL_KEYS)
     assert "task_card" not in _BOUNDARY_CONTROL_KEYS
     assert _declared_keys(script, "CONTROL_STATES") == _CONTROL_STATES
     assert 'import("/bridge.js")' in script
@@ -1130,7 +1131,6 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         )
         _assert_plan_list_evidence(
             report["control_contract"]["file_list"],
-            dark=report["media"]["dark"],
             forced=report["media"]["forced"],
             system_colors=report["icons"]["system_colors"],
         )
@@ -1165,6 +1165,11 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 )
             if (
                 control["control"] in _TEXT_CONTROL_KEYS
+                and control["control"] != "filter_delete"
+                and not (
+                    report["media"]["dark"]
+                    and control["control"] == "button_primary"
+                )
                 and control["state"] != "disabled"
             ):
                 assert _contrast(control["foreground"], control["background"]) >= 4.5
@@ -1201,6 +1206,27 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             controls_by_key["button_primary"]["rest"]["background"]
             == controls_by_key["segmented_control"]["rest"]["background"]
         )
+        assert controls_by_key["button_primary"]["rest"]["foreground"] == (
+            controls_by_key["button"]["rest"]["foreground"]
+        )
+        assert controls_by_key["button_primary"]["hover"]["foreground"] == (
+            controls_by_key["button_primary"]["rest"]["foreground"]
+        )
+        assert controls_by_key["button_primary"]["pressed"]["foreground"] == (
+            controls_by_key["button_primary"]["rest"]["foreground"]
+        )
+        assert controls_by_key["button_primary"]["hover"]["visual_filter"] == (
+            "none"
+        )
+        assert controls_by_key["button_primary"]["pressed"]["visual_filter"] == (
+            "brightness(0.82)"
+        )
+        assert controls_by_key["button_primary"]["disabled"]["background"] == (
+            controls_by_key["button"]["disabled"]["background"]
+        )
+        assert controls_by_key["button_primary"]["disabled"]["foreground"] == (
+            controls_by_key["button"]["disabled"]["foreground"]
+        )
         inactive_filter_background = controls_by_key["chip"]["rest"]["background"]
         assert controls_by_key["filter_copy"]["rest"]["background"] == (
             inactive_filter_background
@@ -1221,8 +1247,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert controls_by_key["filter_delete_active"]["rest"]["foreground"] == (
             "rgb(85, 17, 17)"
         )
-        assert controls_by_key["filter_delete"]["rest"]["foreground"] != (
-            controls_by_key["filter_copy"]["rest"]["foreground"]
+        assert all(
+            controls_by_key["filter_delete"][state]["foreground"]
+            == "rgb(238, 102, 102)"
+            for state in {"rest", "hover", "pressed", "focused"}
         )
         for filter_key in {
             "filter_copy",
@@ -1244,7 +1272,9 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         for progress_key in ("progress_determinate", "progress_indeterminate"):
             progress = controls_by_key[progress_key]
             assert progress["rest"]["background"] != progress["rest"]["fill_background"]
-            assert progress["rest"]["fill_background"] == "rgb(51, 170, 238)"
+            assert progress["rest"]["fill_background"] == (
+                controls_by_key["button_primary"]["rest"]["background"]
+            )
             assert progress["hover"]["box_shadow"] == "none"
             assert progress["pressed"]["box_shadow"] == "none"
         by_control = {
@@ -1257,11 +1287,34 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         }
         transparent = by_control["task_card"]
         assert not _opaque_color(transparent["rest"]["background"])
-        assert not _opaque_color(transparent["rest"]["border"])
+        assert all(row["border_width"] == "0px" for row in transparent.values())
+        card = controls_by_key["card"]
+        assert len({row["background"] for row in card.values()}) == 1
+        assert len({row["border"] for row in card.values()}) == 1
+        assert all(
+            _painted_border(row["border_width"], row["border_style"])
+            for row in card.values()
+        )
+        assert _color_alpha(card["rest"]["background"]) == pytest.approx(
+            0.05 if report["media"]["dark"] else 0.7,
+            abs=0.005,
+        )
+        assert _color_alpha(card["rest"]["border"]) == pytest.approx(
+            0.10 if report["media"]["dark"] else 0.06,
+            abs=0.005,
+        )
+        assert transparent["hover"]["background"] == card["rest"]["background"]
+        assert transparent["pressed"]["background"] == card["rest"]["background"]
         for control in _SELECTED_TASK_CARD_KEYS:
-            for row in by_control[control].values():
-                assert _opaque_color(row["background"])
-                assert _opaque_color(row["border"])
+            selected = by_control[control]
+            assert selected["rest"]["background"] == card["rest"]["background"]
+            assert selected["focused"]["background"] == card["rest"]["background"]
+            assert selected["hover"]["background"] != selected["rest"]["background"]
+            assert selected["pressed"]["background"] == selected["hover"]["background"]
+            assert _color_alpha(selected["hover"]["background"]) < (
+                _color_alpha(selected["rest"]["background"])
+            )
+            assert all(row["border_width"] == "0px" for row in selected.values())
     system_colors = set(forced["icons"]["system_colors"].values())
     assert system_colors
     forced_rest_controls = {
@@ -1286,17 +1339,17 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert _contrast(row["shape_color"], row["background"]) >= 3.0
     for control in forced["controls"]:
         if control["control"] in _SELECTED_TASK_CARD_KEYS:
-            assert (
-                control["background"]
-                == forced["icons"]["system_colors"]["Highlight"]
-            )
-            assert control["border"] in system_colors
+            assert control["border_width"] == "0px"
             if control["state"] == "disabled":
                 assert (
                     control["foreground"]
                     == forced["icons"]["system_colors"]["GrayText"]
                 )
             else:
+                assert (
+                    control["background"]
+                    == forced["icons"]["system_colors"]["Highlight"]
+                )
                 assert (
                     control["foreground"]
                     == forced["icons"]["system_colors"]["HighlightText"]
@@ -1305,10 +1358,14 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                     _contrast(control["foreground"], control["background"])
                     >= 4.5
                 )
-                assert _control_boundary_contrast(control) >= 3.0
         if control["state"] == "focused":
-            assert control["outline_width"] not in {"0px", "0"}
-            assert control["outline_style"] != "none"
+            assert (
+                control["box_shadow"] != "none"
+                or (
+                    control["outline_width"] not in {"0px", "0"}
+                    and control["outline_style"] != "none"
+                )
+            ), control["control"]
             assert control["outline_color"] in system_colors
             assert (
                 _contrast(control["outline_color"], control["surrounding"])
@@ -1607,7 +1664,6 @@ def _assert_installed_assets(evidence: _GalleryEvidence) -> None:
 def _assert_plan_list_evidence(
     evidence: dict[str, object],
     *,
-    dark: bool,
     forced: bool,
     system_colors: dict[str, str],
 ) -> None:
@@ -1681,15 +1737,16 @@ def _assert_plan_list_evidence(
         colored_operation = (
             row["primary_tone"] == "operation" and row["primary_key"] != "noop"
         )
+        colored_status = row["primary_tone"] == "status"
         if forced:
             assert row["primary_color"] == system_colors["CanvasText"]
         elif colored_operation:
             assert row["primary_color"] == _OPERATION_MAIN_RGB[row["primary_key"]]
-        elif dark and row["primary_tone"] == "status":
+        elif colored_status:
             assert row["primary_color"] == _STATUS_MAIN_RGB[row["primary_key"]]
         else:
             assert row["primary_color"] == row["primary_alias_color"]
-        if forced or not colored_operation:
+        if forced or not (colored_operation or colored_status):
             assert _contrast(row["primary_color"], row["background"]) >= 4.5
 
 
@@ -1854,13 +1911,21 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
                 and state in {"hover", "pressed"}
             ):
                 continue
+            if control == "card":
+                continue
             if (
                 report["media"]["forced"]
                 and control in _FORCED_STATIC_ACCENT_CONTROL_KEYS
-                and state in {"hover", "pressed"}
+                and (
+                    state in {"hover", "pressed"}
+                    or (
+                        control in _SELECTED_TASK_CARD_KEYS
+                        and state == "focused"
+                    )
+                )
             ):
                 continue
-            assert _control_signature(rows[state]) != rest
+            assert _control_signature(rows[state]) != rest, (control, state)
 
 
 def _control_signature(row: dict[str, str]) -> tuple[str, ...]:
@@ -1882,6 +1947,7 @@ def _control_signature(row: dict[str, str]) -> tuple[str, ...]:
             "outline_color",
             "outline_style",
             "box_shadow",
+            "visual_filter",
             "opacity",
             "transform",
         )
@@ -1954,6 +2020,12 @@ def _opaque_color(value: str) -> bool:
     if match is None:
         return False
     return match.group(4) is None or math.isclose(float(match.group(4)), 1.0)
+
+
+def _color_alpha(value: str) -> float:
+    match = _RGB.fullmatch(value)
+    assert match is not None, value
+    return 1.0 if match.group(4) is None else float(match.group(4))
 
 
 def _assert_icon_registry_evidence(

@@ -769,6 +769,7 @@ def _valid_control_rows(rows: object) -> bool:
         "outline_style",
         "box_shadow",
         "surrounding",
+        "visual_filter",
         "opacity",
         "transform",
         "transition_duration",

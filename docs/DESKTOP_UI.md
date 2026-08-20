@@ -159,11 +159,18 @@ establishes the completed design-token foundation. NamiSync presents as a
 Fluent 2 Windows 11 app using Segoe UI Variable for body text and
 Cascadia Mono/Consolas for paths and hashes. It retains the standard native
 frame. Mica is the whole-window base: the page, controller, task rail, and
-unselected task cards are transparent, while selected/current cards and
-scrolling work/tree panes are opaque for readability. High contrast,
+resting task cards are transparent, while background/content cards use a low-
+opacity primary blend over that base. High contrast,
 unavailable material, or a transparency failure falls back to an opaque
 system-appropriate neutral surface. M1 adds neither Acrylic nor a custom
 caption.
+
+When building, reviewing, or tuning UI elements, refer to Microsoft's official
+[Fluent UI](https://github.com/microsoft/fluentui/) and
+[WinUI](https://github.com/microsoft/microsoft-ui-xaml/) examples. NamiSync's
+web surface remains framework-free, but the official React and XAML
+implementations remain instructive for behavior, states, accessibility, and
+visual details; adapt their lessons rather than importing their frameworks.
 
 `tokens.css` is the only source file allowed to contain these exact 13 authored
 red/green/blue/yellow/purple palette primitives:
@@ -199,8 +206,9 @@ authoritative. If product design explicitly keeps a main foreground below the
 normal-text contrast target, that exception must retain visible non-color text,
 be measured rather than claimed accessible, and be recorded here. The sync
 operation and integrity-state list labels are that explicit exception on light
-zebra rows: they keep the authored mains for distinction, while their words
-carry meaning independently of color and forced colors replace them with
+zebra rows, and the inactive Delete filter is the same kind of explicit main-
+red foreground exception on its neutral resting fill. Their words carry
+meaning independently of color and forced colors replace them with
 `CanvasText`.
 
 A future hardcoded or derived color value is possible only after an explicit
@@ -233,17 +241,22 @@ indicators/boundaries.
 
 The tuned component contract has two command-button tiers: a solid inverse-
 gray default and a Windows-accent primary modifier for consequential actions
-such as Execute and Verify. Both are borderless in ordinary themes. Filter
+such as Execute and Verify. Both are borderless in ordinary themes. Primary
+button labels follow the ordinary button's inverse-neutral theme rule—white in
+Light and dark in Dark—and never invert during interaction. Hover uses the
+sampled darker accent role; press retains that role and applies one additional
+brightness step. Forced colors remove that visual filter and retain the system
+`Highlight`/`HighlightText` pair. Filter
 pills are likewise borderless: inactive pills use an inverse grayscale surface
 and text pairing, while an active operation filter uses that operation family's
 exact main swatch with contrast-selected grayscale text. Delete is the
-deliberate exception and retains a contrast-checked red-family label in both
-inactive and active states; the active red-main surface uses red-dark text.
+deliberate exception: its inactive label is exact red-main in both ordinary
+themes, while its active red-main surface keeps the contrast-safe red-dark text.
 Active chip hover/press cues preserve the opaque color pair and use a small
 geometric change rather than reducing opacity.
 Operation/file badges and status pills keep their established semantic fill,
 typography, icon, and cue but have no painted border. Progress uses a neutral
-gray track and the exact blue-main (`#33AAEE`) fill in both ordinary themes,
+gray track and the live sampled Windows accent fill in both ordinary themes,
 without hover/pressed inset strokes. The two-half Sync/Integrity component's state contract uses
 `radiogroup`/`radio` semantics: exactly one half carries
 `aria-checked="true"`, and that selected half uses the live Windows accent
@@ -645,15 +658,23 @@ evidence adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.
-An unselected task card is transparent, hover and pointer press use distinct
-tokenized overlays, and the selected/current card uses the opaque work-card
-selected surface with an accessible neutral boundary and elevation. In forced
-colors, every enabled selected/current card pairs the `Highlight` surface with
-`HighlightText` at rest, focus, hover, and press; disabled cards retain
-`GrayText`, and hover and press retain distinct outlines. Selection is conveyed
+A resting unselected task card is fully transparent. Hover, press, selection,
+and current state use the same primary blend as a content card; hovering or
+pressing a selected/current card weakens that tint to the secondary blend. Task
+cards have no painted border or elevation in ordinary themes. In forced colors,
+every enabled selected/current card pairs the `Highlight` surface with
+`HighlightText`; disabled cards retain `GrayText`, and keyboard focus retains a
+system-visible outline. Selection is conveyed
 with `aria-selected`/`aria-current` and is not
-inferred from a task's running status. Work panels and tree viewports remain
-opaque for readability and scroll performance.
+inferred from a task's running status.
+
+Background/content cards are a separate static component role. They do not
+react to hover or press. Light uses a solid `#EBEBEB` stroke fallback beneath a
+black 6% blended stroke and a white 70% primary fill; Dark uses a solid
+`#1C1C1C` fallback beneath a black 10% blended stroke and a white 5% primary
+fill. The token foundation also retains the supplied secondary and tertiary
+blends for state/context use. Forced colors replace these material blends with
+opaque system surfaces and boundaries.
 
 The task rail is a presentation grouping over live service sessions and
 retained history, not a new durable task model. It shows activity kind, source

@@ -722,6 +722,13 @@ async function reportFailure(error) {
   await new Promise((resolve) => setTimeout(resolve, PSEUDO_STATE_SETTLE_MS));
 
   galleryStage = "measurement";
+  const controlsSurfaceProbe = document.createElement("div");
+  controlsSurfaceProbe.style.background = "var(--color-card-background-solid)";
+  controlsSurfaceProbe.style.position = "fixed";
+  controlsSurfaceProbe.style.visibility = "hidden";
+  document.body.append(controlsSurfaceProbe);
+  const controlsSurrounding = getComputedStyle(controlsSurfaceProbe).backgroundColor;
+  controlsSurfaceProbe.remove();
   const controls = [];
   let nonessentialMax = 0;
   let indeterminateIterationCount = "";
@@ -769,7 +776,8 @@ async function reportFailure(error) {
         outline_color: style.outlineColor,
         outline_style: style.outlineStyle,
         box_shadow: style.boxShadow,
-        surrounding: getComputedStyle(controlsSection).backgroundColor,
+        surrounding: controlsSurrounding,
+        visual_filter: style.filter,
         opacity: style.opacity,
         transform: style.transform,
         transition_duration: motionStyle.transitionDuration,

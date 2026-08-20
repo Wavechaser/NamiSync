@@ -271,13 +271,13 @@ def test_materials_gate_page_report_rejects_malformed_protocol_values() -> None:
 def test_materials_gate_renderer_alpha_matches_the_material_layer() -> None:
     transparent = {"a": 0, "r": 0, "g": 0, "b": 0}
     opaque = {"a": 255, "r": 0, "g": 0, "b": 0}
-    card = {"a": 255, "r": 0, "g": 0, "b": 0}
-
     def result(material: str, gutter: dict[str, int]) -> dict[str, object]:
         return {
+            "selected_system": {"high_contrast": False},
             "page": {
                 "material": material,
-                "card_background": "rgb(18, 18, 18)",
+                "theme": "dark",
+                "card_background": "rgba(255, 255, 255, 0.05)",
             },
             "screenshot": {
                 "samples": {
@@ -286,7 +286,12 @@ def test_materials_gate_renderer_alpha_matches_the_material_layer() -> None:
                     "scale_x": 1.0,
                     "scale_y": 1.0,
                     "gutter_pixels": [gutter, gutter, gutter],
-                    "card_pixel": card,
+                    "card_pixel": {
+                        "a": 13 if material == "mica" else 255,
+                        "r": 0,
+                        "g": 0,
+                        "b": 0,
+                    },
                 }
             },
         }
@@ -915,8 +920,18 @@ def _assert_renderer_surfaces(result: dict[str, object]) -> None:
         assert all(pixel["a"] == 0 for pixel in gutters)
     else:
         assert all(pixel["a"] == 255 for pixel in gutters)
-    assert card["a"] == 255
-    assert _opaque_css(result["page"]["card_background"])
+    if result["selected_system"]["high_contrast"]:
+        expected_alpha = 1.0
+    else:
+        expected_alpha = 0.05 if result["page"]["theme"] == "dark" else 0.7
+    if result["page"]["material"] == "mica":
+        assert card["a"] == pytest.approx(round(expected_alpha * 255), abs=1)
+    else:
+        assert card["a"] == 255
+    assert _css_alpha(result["page"]["card_background"]) == pytest.approx(
+        expected_alpha,
+        abs=0.005,
+    )
 
 
 def _assert_forced_color_rendering(result: dict[str, object]) -> None:
@@ -973,6 +988,12 @@ def _opaque_css(value: str) -> bool:
     return match is not None and (
         match.group(4) is None or float(match.group(4)) == 1
     )
+
+
+def _css_alpha(value: str) -> float:
+    match = _RGB.fullmatch(value)
+    assert match is not None, value
+    return 1.0 if match.group(4) is None else float(match.group(4))
 
 
 def _hex_color(value: str) -> dict[str, int]:
