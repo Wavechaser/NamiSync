@@ -332,11 +332,12 @@ animation-frame check and requests a missing spacer index through the
 generation it supplies to the owning view. Before root removal, the owner calls
 the controller's idempotent disposal to disconnect resize observation, remove
 root listeners, invalidate pending work, and suppress an already queued frame.
-`plan.js` and `inventory.js` keep the two vertical renderers disjoint;
-`panels.js` owns only their shared panel frame. `tokens.css` holds the Fluent
+The dormant `plan.js` row primitive and the later `inventory.js` renderer keep
+the two vertical surfaces disjoint; `panels.js` owns only their shared panel
+frame. `tokens.css` holds the Fluent
 design tokens defined in `DESKTOP_UI.md`, `components.css` the Fluent control set built on
-them, and `app.css` layout only; surface renderers consume tokens and
-components and define no color of their own.
+them, and `app.css` shell/surface layout plus dormant plan-row presentation;
+styles and renderers consume token aliases and define no color of their own.
 
 At Slice 2 closure the exact shipped asset set is `index.html`, `app.css`,
 `app.js`, `bridge.js`, and `render.js`; later entries in the target layout do
@@ -348,6 +349,13 @@ remain under `tests/assets/` and are excluded from package data.
 GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, `appearance.js`,
 and the exact four SVGs plus source/license records under `assets/icons/`; its
 component-gallery scenario remains test-only and absent from the wheel.
+The pre-Slice-5 visual checkpoint is the one later-layout exception: packaged
+`plan.js` exposes only a dormant presentation-row renderer, while `app.js` and
+`panels.js` remain unchanged and import none of it. A static projected fixture
+under `tests/assets/component_gallery/` calls the installed renderer directly;
+the fixture does not ship and introduces no command, domain object, session,
+or wire contract. Slice 5 remains the first owner of real plan projection,
+transport, interaction, and product DOM.
 Post-realignment readiness hardening adds `readiness.py`,
 `document_channel.py`, and packaged `readiness.js`; it does not add another
 bridge or application-data transport.
@@ -699,7 +707,9 @@ Land the plan projection and review surface, selection controls,
 destructive-confirmation flow, execution admission, progress identity, and
 indexed follow mode. Extend the existing transport only through the Slice 5
 command rows and gates defined by `M1_BRIDGE.md`. Close BR-G-35 through
-BR-G-37 and the plan portion of BR-G-42.
+BR-G-37 and the plan portion of BR-G-42. The validated Python projection may
+map into the dormant page-local row view, but that object is not a frozen wire
+payload and creates no backwards-compatibility obligation for the bridge.
 
 ### Slice 6 - Inventory and integrity surface
 

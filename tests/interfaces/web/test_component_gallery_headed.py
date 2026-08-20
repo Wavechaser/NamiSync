@@ -42,8 +42,17 @@ from _headed_native import (
 _CHILD = Path(__file__).with_name("_component_gallery_child.py")
 _SCENARIO = Path(__file__).parents[2] / "assets" / "component_gallery" / "gallery.js"
 _MODES = ("light", "dark", "forced", "reduced")
-_ASSET_NAMES = ("index.html", "tokens.css", "components.css")
-_TEST_ONLY_MARKER = b"NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74"
+_ASSET_NAMES = (
+    "index.html",
+    "tokens.css",
+    "components.css",
+    "app.css",
+    "plan.js",
+)
+_TEST_ONLY_MARKERS = (
+    b"NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74",
+    b"NAMISYNC_TEST_ONLY_PLAN_ROWS_45C8C53D55D34893",
+)
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 _STATUS_KEYS = {
     "complete",
@@ -72,6 +81,34 @@ _OPERATION_KEYS = {
     "trash",
     "delete",
     "noop",
+}
+_OPERATION_MAIN_RGB = {
+    "copy": "rgb(51, 170, 238)",
+    "update": "rgb(51, 221, 153)",
+    "move": "rgb(187, 136, 238)",
+    "move_update": "rgb(187, 136, 238)",
+    "recase": "rgb(51, 170, 238)",
+    "mkdir": "rgb(51, 221, 153)",
+    "trash": "rgb(255, 221, 68)",
+    "delete": "rgb(238, 102, 102)",
+}
+_STATUS_MAIN_RGB = {
+    "error": "rgb(238, 102, 102)",
+    "blocked": "rgb(238, 102, 102)",
+}
+_PLAN_ROW_CASE_KEYS = {
+    "plain",
+    "copy",
+    "update",
+    "move",
+    "move_update",
+    "recase",
+    "mkdir",
+    "trash",
+    "delete",
+    "noop",
+    "error",
+    "unsupported",
 }
 _CONTROL_KEYS = {
     "button",
@@ -283,7 +320,7 @@ def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() ->
 
     assert _SCENARIO.is_relative_to(Path(__file__).parents[2] / "assets")
     assert "importlib.resources.files" in child
-    assert '"index.html", "tokens.css", "components.css"' in child
+    assert all(f'"{name}"' in child for name in _ASSET_NAMES)
     assert "index_path=" not in child
     assert "_execute_script_checked(" in child
     assert 'stage="scenario_injection"' in child
@@ -567,6 +604,56 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         **cosmetic_snapshot,
         "revision": 3,
     }
+    plan_cases = (
+        "plain",
+        "mkdir",
+        "copy",
+        "update",
+        "move",
+        "move_update",
+        "recase",
+        "trash",
+        "delete",
+        "noop",
+        "error",
+        "unsupported",
+    )
+    plan_rows = []
+    for index, case in enumerate(plan_cases):
+        tone = ""
+        intent_key = ""
+        if case in component_gallery_child._OPERATION_KEYS:
+            tone = "operation"
+            intent_key = case
+        elif case in {"error", "unsupported"}:
+            tone = "status"
+            intent_key = "error" if case == "error" else "blocked"
+        plan_rows.append(
+            {
+                "case": case,
+                "role": "row",
+                "cell_roles": ["cell"] * 5,
+                "checkbox_label": f"Select {case}",
+                "checkbox_checked": False,
+                "checkbox_disabled": case in {"error", "unsupported"},
+                "depth": 1 if case == "copy" else 0,
+                "folder": case == "mkdir",
+                "path": f"{case}.example",
+                "intent": case,
+                "tone": tone,
+                "intent_key": intent_key,
+                "checksum": (
+                    "—" if case in {"mkdir", "error", "unsupported"} else "12345678"
+                ),
+                "notes": f"{case} notes",
+                "background": "rgb(255, 255, 255)",
+                "intent_color": "rgb(0, 0, 0)",
+                "intent_alias_color": "rgb(0, 0, 0)",
+                "cell_backgrounds": ["rgba(0, 0, 0, 0)"] * 5,
+                "column_lefts": [float(index) for index in range(5)],
+                "path_padding_left": 24.0 if case == "copy" else 8.0,
+            }
+        )
     report = {
         "phase": "complete",
         "mode": "light",
@@ -616,6 +703,35 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "selected_checked": "true",
                 "unselected_role": "radio",
                 "unselected_checked": "false",
+            },
+            "file_list": {
+                "table_role": "table",
+                "header_role": "row",
+                "body_role": "rowgroup",
+                "gallery_uses_work_area": True,
+                "gallery_fills_work_area": True,
+                "header_foreground": "rgb(0, 0, 0)",
+                "header_background": "rgb(255, 255, 255)",
+                "header_texts": [
+                    "",
+                    "Files / path",
+                    "Intended op / status",
+                    "Checksum",
+                    "Reason / notes",
+                ],
+                "header_cell_roles": ["columnheader"] * 5,
+                "selection_header_label": "Selection",
+                "column_count": 5,
+                "row_count": len(plan_rows),
+                "body_child_count": len(plan_rows),
+                "checkbox_count": len(plan_rows),
+                "body_ends_at_last_row": True,
+                "body_height_matches_rows": True,
+                "horizontal_overflow": True,
+                "overflow_x": "auto",
+                "client_width": 576.0,
+                "scroll_width": 864.0,
+                "rows": plan_rows,
             },
         },
         "motion": {
@@ -784,6 +900,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
 
     assert _declared_keys(script, "STATUS_CASES") == _STATUS_KEYS
     assert _declared_keys(script, "OPERATION_CASES") == _OPERATION_KEYS
+    assert _declared_keys(script, "PLAN_ROW_CASES") == _PLAN_ROW_CASE_KEYS
     assert _declared_keys(script, "CONTROL_CASES") == _CONTROL_KEYS
     assert _SELECTED_TASK_CARD_KEYS <= _BOUNDARY_CONTROL_KEYS
     assert "task_card" not in _BOUNDARY_CONTROL_KEYS
@@ -791,6 +908,15 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/bridge.js")' in script
     assert 'import("/render.js")' in script
     assert 'import("/icons.js")' in script
+    assert 'import("/plan.js")' in script
+    assert "renderPlanRow(row, rowView);" in script
+    assert 'planSection.style.gridArea = "work";' in script
+    assert 'planList.style.setProperty("inline-size", "36rem");' in script
+    assert 'planList.style.removeProperty("inline-size");' in script
+    assert not any(
+        name in script
+        for name in ("SyncPlan", "start_plan", "workflow", "dispatcher", "session")
+    )
     assert "const PSEUDO_STATE_SETTLE_MS = 350;" in script
     assert "setTimeout(resolve, PSEUDO_STATE_SETTLE_MS)" in script
     assert 'dialog.dataset.closing = "true";' in script
@@ -919,6 +1045,12 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         _assert_icon_registry_evidence(
             report["icons"],
             forced=report["media"]["forced"],
+        )
+        _assert_plan_list_evidence(
+            report["control_contract"]["file_list"],
+            dark=report["media"]["dark"],
+            forced=report["media"]["forced"],
+            system_colors=report["icons"]["system_colors"],
         )
         assert all(
             row["aliases_consumed"] is True
@@ -1354,7 +1486,8 @@ def _assert_installed_assets(evidence: _GalleryEvidence) -> None:
         assert not any("component_gallery" in name for name in names)
         assert not any(name.rsplit("/", 1)[-1] == "gallery.js" for name in names)
         assert all(
-            _TEST_ONLY_MARKER not in archive.read(name)
+            marker not in archive.read(name)
+            for marker in _TEST_ONLY_MARKERS
             for name in names
             if not name.endswith("/")
         )
@@ -1382,6 +1515,124 @@ def _assert_installed_assets(evidence: _GalleryEvidence) -> None:
     assert index.index('href="/tokens.css"') < index.index(
         'href="/components.css"'
     )
+
+
+def _assert_plan_list_evidence(
+    evidence: dict[str, object],
+    *,
+    dark: bool,
+    forced: bool,
+    system_colors: dict[str, str],
+) -> None:
+    expected_order = (
+        "plain",
+        "mkdir",
+        "copy",
+        "update",
+        "move",
+        "move_update",
+        "recase",
+        "trash",
+        "delete",
+        "noop",
+        "error",
+        "unsupported",
+    )
+    assert evidence["table_role"] == "table"
+    assert evidence["header_role"] == "row"
+    assert evidence["body_role"] == "rowgroup"
+    assert evidence["gallery_uses_work_area"] is True
+    assert evidence["gallery_fills_work_area"] is True
+    assert _contrast(
+        evidence["header_foreground"], evidence["header_background"]
+    ) >= 4.5
+    if forced:
+        assert evidence["header_foreground"] == system_colors["HighlightText"]
+        assert evidence["header_background"] == system_colors["Highlight"]
+    assert evidence["header_texts"] == [
+        "",
+        "Files / path",
+        "Intended op / status",
+        "Checksum",
+        "Reason / notes",
+    ]
+    assert evidence["header_cell_roles"] == ["columnheader"] * 5
+    assert evidence["selection_header_label"] == "Selection"
+    assert evidence["column_count"] == 5
+    assert evidence["row_count"] == len(expected_order)
+    assert evidence["body_child_count"] == len(expected_order)
+    assert evidence["checkbox_count"] == len(expected_order)
+    assert evidence["body_ends_at_last_row"] is True
+    assert evidence["body_height_matches_rows"] is True
+    assert evidence["horizontal_overflow"] is True
+    assert evidence["overflow_x"] == "auto"
+    assert evidence["scroll_width"] > evidence["client_width"] > 0
+
+    rows = evidence["rows"]
+    assert tuple(row["case"] for row in rows) == expected_order
+    by_case = {row["case"]: row for row in rows}
+    assert set(by_case) == _PLAN_ROW_CASE_KEYS
+    assert {
+        row["intent_key"]
+        for row in rows
+        if row["tone"] == "operation"
+    } == _OPERATION_KEYS
+    assert (by_case["error"]["tone"], by_case["error"]["intent_key"]) == (
+        "status",
+        "error",
+    )
+    assert (
+        by_case["unsupported"]["tone"],
+        by_case["unsupported"]["intent_key"],
+    ) == ("status", "blocked")
+    assert (by_case["plain"]["tone"], by_case["plain"]["intent_key"]) == (
+        "",
+        "",
+    )
+    assert by_case["mkdir"]["folder"] is True
+    assert by_case["copy"]["folder"] is False
+    assert by_case["copy"]["depth"] > by_case["mkdir"]["depth"]
+    assert (
+        by_case["copy"]["path_padding_left"]
+        > by_case["mkdir"]["path_padding_left"]
+    )
+    assert by_case["error"]["checkbox_disabled"] is True
+    assert by_case["unsupported"]["checkbox_disabled"] is True
+
+    expected_columns = rows[0]["column_lefts"]
+    for row in rows:
+        assert row["role"] == "row"
+        assert row["cell_roles"] == ["cell"] * 5
+        assert row["checkbox_label"]
+        assert row["path"]
+        assert row["intent"]
+        assert row["notes"]
+        assert row["checksum"] == "—" or len(row["checksum"]) == 8
+        colored_operation = (
+            row["tone"] == "operation" and row["intent_key"] != "noop"
+        )
+        if forced:
+            assert row["intent_color"] == system_colors["CanvasText"]
+        elif dark and colored_operation:
+            assert row["intent_color"] == _OPERATION_MAIN_RGB[row["intent_key"]]
+        elif dark and row["tone"] == "status":
+            assert row["intent_color"] == _STATUS_MAIN_RGB[row["intent_key"]]
+        else:
+            assert row["intent_color"] == row["intent_alias_color"]
+        assert _contrast(row["intent_color"], row["background"]) >= 4.5
+        assert all(
+            not _opaque_color(background)
+            for background in row["cell_backgrounds"]
+        )
+        assert row["column_lefts"] == pytest.approx(expected_columns, abs=0.5)
+
+    if not forced:
+        odd_backgrounds = {row["background"] for row in rows[::2]}
+        even_backgrounds = {row["background"] for row in rows[1::2]}
+        assert len(odd_backgrounds) == 1
+        assert len(even_backgrounds) == 1
+        assert odd_backgrounds != even_backgrounds
+        assert by_case["mkdir"]["background"] in even_backgrounds
 
 
 def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:

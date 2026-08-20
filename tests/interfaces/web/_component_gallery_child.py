@@ -20,7 +20,13 @@ from _headed_evidence import EvidencePaths, EvidencePublisher
 from _startup_test_support import headed_command_extension
 
 
-_ASSET_NAMES = ("index.html", "tokens.css", "components.css")
+_ASSET_NAMES = (
+    "index.html",
+    "tokens.css",
+    "components.css",
+    "app.css",
+    "plan.js",
+)
 _MEDIA_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
     "light": (
         ("prefers-color-scheme", "light"),
@@ -99,6 +105,22 @@ _OPERATION_KEYS = frozenset(
         "noop",
     }
 )
+_PLAN_ROW_CASE_KEYS = frozenset(
+    {
+        "plain",
+        "copy",
+        "update",
+        "move",
+        "move_update",
+        "recase",
+        "mkdir",
+        "trash",
+        "delete",
+        "noop",
+        "error",
+        "unsupported",
+    }
+)
 _CONTROL_STATES = frozenset({"rest", "hover", "pressed", "disabled", "focused"})
 _EXPECTED_MEDIA = {
     "light": {"dark": False, "forced": False, "reduced": False},
@@ -117,6 +139,7 @@ _FAILURE_STAGES = frozenset(
         "module_import",
         "page_setup",
         "semantic_matrix",
+        "plan_matrix",
         "control_matrix",
         "pseudo_states",
         "measurement",
@@ -770,11 +793,13 @@ def _valid_control_contract(value: object) -> bool:
         "tri_state",
         "dialog_exit",
         "segmented",
+        "file_list",
     }:
         return False
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
     segmented = value["segmented"]
+    file_list = value["file_list"]
     return (
         type(tri_state) is dict
         and set(tri_state) == {"aria_checked", "indeterminate", "cue_content"}
@@ -794,7 +819,155 @@ def _valid_control_contract(value: object) -> bool:
             "unselected_role": "radio",
             "unselected_checked": "false",
         }
+        and _valid_plan_evidence(file_list)
     )
+
+
+def _valid_plan_evidence(value: object) -> bool:
+    keys = {
+        "table_role",
+        "header_role",
+        "body_role",
+        "gallery_uses_work_area",
+        "gallery_fills_work_area",
+        "header_foreground",
+        "header_background",
+        "header_texts",
+        "header_cell_roles",
+        "selection_header_label",
+        "column_count",
+        "row_count",
+        "body_child_count",
+        "checkbox_count",
+        "body_ends_at_last_row",
+        "body_height_matches_rows",
+        "horizontal_overflow",
+        "overflow_x",
+        "client_width",
+        "scroll_width",
+        "rows",
+    }
+    row_keys = {
+        "case",
+        "role",
+        "cell_roles",
+        "checkbox_label",
+        "checkbox_checked",
+        "checkbox_disabled",
+        "depth",
+        "folder",
+        "path",
+        "intent",
+        "tone",
+        "intent_key",
+        "checksum",
+        "notes",
+        "background",
+        "intent_color",
+        "intent_alias_color",
+        "cell_backgrounds",
+        "column_lefts",
+        "path_padding_left",
+    }
+    if type(value) is not dict or set(value) != keys:
+        return False
+    rows = value["rows"]
+    expected_count = len(_PLAN_ROW_CASE_KEYS)
+    if (
+        value["table_role"] != "table"
+        or value["header_role"] != "row"
+        or value["body_role"] != "rowgroup"
+        or value["gallery_uses_work_area"] is not True
+        or value["gallery_fills_work_area"] is not True
+        or type(value["header_foreground"]) is not str
+        or not value["header_foreground"]
+        or type(value["header_background"]) is not str
+        or not value["header_background"]
+        or value["header_texts"]
+        != [
+            "",
+            "Files / path",
+            "Intended op / status",
+            "Checksum",
+            "Reason / notes",
+        ]
+        or value["header_cell_roles"] != ["columnheader"] * 5
+        or value["selection_header_label"] != "Selection"
+        or value["column_count"] != 5
+        or value["row_count"] != expected_count
+        or value["body_child_count"] != expected_count
+        or value["checkbox_count"] != expected_count
+        or value["body_ends_at_last_row"] is not True
+        or value["body_height_matches_rows"] is not True
+        or value["horizontal_overflow"] is not True
+        or value["overflow_x"] != "auto"
+        or type(value["client_width"]) not in {int, float}
+        or type(value["scroll_width"]) not in {int, float}
+        or not math.isfinite(value["client_width"])
+        or not math.isfinite(value["scroll_width"])
+        or not 0 < value["client_width"] < value["scroll_width"]
+        or type(rows) is not list
+        or len(rows) != expected_count
+    ):
+        return False
+    for row in rows:
+        if type(row) is not dict or set(row) != row_keys:
+            return False
+        tone = row["tone"]
+        intent_key = row["intent_key"]
+        if (
+            type(row["case"]) is not str
+            or row["role"] != "row"
+            or row["cell_roles"] != ["cell"] * 5
+            or type(row["checkbox_label"]) is not str
+            or not row["checkbox_label"]
+            or type(row["checkbox_checked"]) is not bool
+            or type(row["checkbox_disabled"]) is not bool
+            or type(row["depth"]) is not int
+            or row["depth"] < 0
+            or type(row["folder"]) is not bool
+            or any(
+                type(row[name]) is not str or not row[name]
+                for name in (
+                    "path",
+                    "intent",
+                    "checksum",
+                    "notes",
+                    "background",
+                    "intent_color",
+                    "intent_alias_color",
+                )
+            )
+            or tone not in {"", "operation", "status"}
+            or type(intent_key) is not str
+            or (tone == "") != (intent_key == "")
+            or (tone == "operation" and intent_key not in _OPERATION_KEYS)
+            or (tone == "status" and intent_key not in _STATUS_KEYS)
+            or row["checksum"] != "—" and len(row["checksum"]) != 8
+            or type(row["cell_backgrounds"]) is not list
+            or len(row["cell_backgrounds"]) != 5
+            or not all(
+                type(background) is str and bool(background)
+                for background in row["cell_backgrounds"]
+            )
+            or type(row["column_lefts"]) is not list
+            or len(row["column_lefts"]) != 5
+            or not all(
+                type(position) in {int, float} and math.isfinite(position)
+                for position in row["column_lefts"]
+            )
+            or not all(
+                left < right
+                for left, right in zip(
+                    row["column_lefts"], row["column_lefts"][1:]
+                )
+            )
+            or type(row["path_padding_left"]) not in {int, float}
+            or not math.isfinite(row["path_padding_left"])
+            or row["path_padding_left"] < 0
+        ):
+            return False
+    return {row["case"] for row in rows} == _PLAN_ROW_CASE_KEYS
 
 
 def _valid_icon_evidence(value: object) -> bool:

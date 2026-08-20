@@ -186,8 +186,21 @@ red/green/blue/yellow/purple palette primitives:
 
 Yellow and purple deliberately have no authored `light` input in the current
 foundation.
-A future hardcoded or derived color value is possible only after an explicit product-
-author design decision and a same-change contract/token/evidence update; it is
+
+Palette use is main-first. When an authored family communicates identity or
+state, its `main` swatch is the preferred color wherever the assigned surface
+preserves the required contrast. The family's `light` and `dark` tones normally
+contextualize that main—as a supporting surface, inverse, interaction tone, or
+contrast fallback—and do not replace it merely because the page theme changed.
+A role that intentionally makes a light/dark tone primary without its main must
+be named as an explicit exception in this visual contract and receive a
+same-change token and evidence update. Required contrast and Windows forced
+colors remain hard constraints; the light-theme plan intent foregrounds are an
+explicit contrast fallback because the authored mains do not meet 4.5:1 on the
+light zebra surfaces.
+
+A future hardcoded or derived color value is possible only after an explicit
+product-author design decision and a same-change contract/token/evidence update; it is
 not silently synthesized by a renderer. `tokens.css` also owns meaning-named
 semantic aliases for statuses and operation categories; neutral roles use a
 pinned Microsoft Fluent light/dark subset and interactive accent roles use the
@@ -233,6 +246,49 @@ without hover/pressed inset strokes. The two-half Sync/Integrity component's sta
 roles. The owning later renderer still supplies interaction behavior. These
 ordinary-theme border removals do not remove keyboard focus indication or
 override forced-color authority.
+
+The pre-Slice-5 file-list checkpoint ships one deliberately dormant surface
+primitive: `plan.js` exports only `renderPlanRow(element, rowView)`. Its input
+is a page-local presentation view, not a bridge envelope or compatibility
+contract. The caller supplies checkbox state and accessible label, numeric
+depth and folder styling, filesystem display text, explicit `operation` or
+`status` tone/key, display-ready checksum text, and notes. The renderer does
+not interpret planner enums, derive reasons, truncate hashes, reconstruct
+hierarchy, or dispatch anything; all text still passes through `render.js`.
+Neither `app.js` nor `panels.js` imports the module, so the production work area
+remains the honest empty Slice 4 shell until Slice 5 owns a validated Python
+projection and bridge path.
+
+The shared layout has five aligned columns: an unlabelled visual selection
+header with the accessible name `Selection`, Files / path, Intended op /
+status, Checksum, and Reason / notes. The first column contains native
+checkboxes, paths use defended filesystem text and depth indentation, folders
+use a weight cue, intent text consumes the explicit semantic alias, checksums
+are monospaced, and notes wrap. Plan-specific intent aliases retain the
+contrast-safe semantic foregrounds on light surfaces and prefer each authored
+operation-family `main` swatch on dark surfaces where all row pairs still meet
+4.5:1; dark Error and Unsupported/Blocked rows likewise use red-main, while
+no-op remains neutral. Zebra backgrounds are applied only to direct
+rendered row children, including folder rows; cells and columns are transparent
+and the row group has no filler height, so striping ends at the final row. A
+minimum aligned grid width produces horizontal scrolling in a constrained
+container rather than collapsing or misaligning columns. Forced colors replace
+intent color with the system neutral foreground because visible intent text
+already carries the operation/status meaning.
+
+The component gallery owns the only current caller and fixture. Its static
+test-only array contains one plain row, every established operation exactly
+once (with the create-folder row followed by an indented Copy), and error plus
+unsupported status rows. Each object is already projected and supplies an
+eight-character checksum or the visible em dash. The specimen occupies and
+fills the shell's wide `work` area; a transient constrained measurement proves
+horizontal overflow without leaving the visible gallery narrow. The clean-wheel
+gallery imports the installed `plan.js`, passes each `rowView` directly to
+`renderPlanRow`, and proves the resulting DOM; fixture markers and gallery code
+are absent from the wheel. No temporary command, fake `SyncPlan`, workflow,
+dispatcher, or session participates. Slice 5 therefore begins at validated
+Python projection → existing bridge → this local row renderer, without a
+temporary data channel to preserve or remove.
 
 The same break establishes only the icon infrastructure, not the later surface
 icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored

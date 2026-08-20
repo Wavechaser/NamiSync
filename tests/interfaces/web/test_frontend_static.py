@@ -218,6 +218,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "bridge.js": [],
         "icons.js": [],
         "panels.js": ["./render.js"],
+        "plan.js": ["./render.js"],
         "rail.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
@@ -461,6 +462,7 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
 ) -> None:
     assets = _wheel_assets(built_wheel)
     renderer = assets["render.js"]
+    plan = assets["plan.js"]
     tree = assets["tree.js"]
 
     text_assignments = {
@@ -498,6 +500,66 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
         "renderFilesystemText(label, row.display);",
     ]
     assert re.search(r"\.textContent\s*=(?!=)", tree) is None
+    assert (
+        'import { renderFilesystemText, renderText } from "./render.js";'
+        in plan
+    )
+    assert "renderFilesystemText(path, rowView.pathText);" in plan
+    assert "renderText(intent, rowView.intentText);" in plan
+    assert "renderText(checksum, rowView.checksumText);" in plan
+    assert "renderText(notes, rowView.notesText);" in plan
+    assert re.search(r"\.textContent\s*=(?!=)", plan) is None
+
+
+def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    plan = assets["plan.js"]
+    layout = assets["app.css"]
+    production_shell = "\n".join(
+        assets[name] for name in ("index.html", "app.js", "panels.js", "rail.js")
+    )
+
+    assert re.findall(r"export function ([A-Za-z0-9_]+)\(", plan) == [
+        "renderPlanRow"
+    ]
+    assert '"./plan.js"' not in production_shell
+    assert "renderPlanRow" not in production_shell
+    assert '"./bridge.js"' not in plan
+    assert not any(
+        name in plan
+        for name in (
+            "SyncPlan",
+            "workflow",
+            "dispatcher",
+            "session",
+            "dispatchInteractive",
+        )
+    )
+    assert ".slice(" not in plan
+    assert ".substring(" not in plan
+    assert 'intent.dataset[rowView.intentTone] = rowView.intentKey;' in plan
+    assert 'element.setAttribute("role", "row");' in plan
+    assert plan.count('cell.setAttribute("role", "cell");') == 1
+    assert 'checkbox.type = "checkbox";' in plan
+    assert 'element.replaceChildren(selection, path, intent, checksum, notes);' in plan
+
+    zebra = ".nami-plan-list__body > .nami-plan-row:nth-child(even)"
+    assert zebra in layout
+    assert "repeating-linear-gradient" not in layout
+    assert "repeating-radial-gradient" not in layout
+    assert not re.search(r"\.nami-plan-row__cell[^\{]*:nth-child", layout)
+    assert not re.search(r"\.nami-plan-list__header-cell[^\{]*:nth-child", layout)
+    assert "background: initial;" in layout
+    assert layout.count("--nami-plan-preferred-foreground:") == 10
+    assert layout.count("var(--plan-intent-") == 10
+    assert "--palette-" not in layout
+    assert '[data-operation="noop"]' in layout
+    assert re.search(
+        r"(?ms)^\.nami-plan-list__body\s*\{[^}]*min-(?:block-)?size",
+        layout,
+    ) is None
 
 
 def test_sh_g_7_tree_geometry_and_static_ownership_are_exact(
@@ -996,6 +1058,8 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'rail.classList.add("nami-card"' not in rail
     assert 'panel.classList.add("nami-card", "nami-work-panel");' in panels
     assert "app.append(createTaskRail(), createWorkPanel());" in app
+    assert '"./plan.js"' not in app + panels
+    assert "renderPlanRow" not in shell
     assert 'status.textContent === "Starting..."' in app
 
     theme = assets["theme.js"]

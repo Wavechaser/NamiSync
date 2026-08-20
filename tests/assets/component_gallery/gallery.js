@@ -65,6 +65,8 @@ async function reportFailure(error) {
 
   const TEST_ONLY_GALLERY_MARKER =
     "NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74";
+  const TEST_ONLY_PLAN_ROW_MARKER =
+    "NAMISYNC_TEST_ONLY_PLAN_ROWS_45C8C53D55D34893";
   const STATUS_CASES = Object.freeze([
     { key: "complete", text: "Complete", icon: "checkmark-circle", shape: "circle-check", cue: "Completed" },
     { key: "success", text: "Success", icon: "checkmark-circle", shape: "circle-check", cue: "Succeeded" },
@@ -92,6 +94,164 @@ async function reportFailure(error) {
     { key: "trash", text: "Move to trash", icon: "warning", shape: "trash", cue: "Recoverable removal" },
     { key: "delete", text: "Delete", icon: "dismiss-circle", shape: "trash-x", cue: "Permanent removal" },
     { key: "noop", text: "No change", icon: "info", shape: "dash", cue: "No operation" },
+  ]);
+  const PLAN_ROW_CASES = Object.freeze([
+    { key: "plain", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select readme.txt",
+      depth: 0,
+      folder: false,
+      pathText: "readme.txt",
+      intentText: "—",
+      intentTone: "",
+      intentKey: "",
+      checksumText: "5a2f8c10",
+      notesText: "Plain projected file row.",
+    }) },
+    { key: "mkdir", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select photos folder",
+      depth: 0,
+      folder: true,
+      pathText: "photos\\",
+      intentText: "Create folder",
+      intentTone: "operation",
+      intentKey: "mkdir",
+      checksumText: "—",
+      notesText: "Folder row; nested file follows.",
+    }) },
+    { key: "copy", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select photos summer.jpg",
+      depth: 1,
+      folder: false,
+      pathText: "photos\\summer.jpg",
+      intentText: "Copy",
+      intentTone: "operation",
+      intentKey: "copy",
+      checksumText: "12ab34cd",
+      notesText: "New file beneath the folder row.",
+    }) },
+    { key: "update", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select settings.json",
+      depth: 0,
+      folder: false,
+      pathText: "settings.json",
+      intentText: "Update",
+      intentTone: "operation",
+      intentKey: "update",
+      checksumText: "90ef12ab",
+      notesText: "Replace destination content.",
+    }) },
+    { key: "move", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select archive report.pdf",
+      depth: 0,
+      folder: false,
+      pathText: "archive\\report.pdf",
+      intentText: "Move",
+      intentTone: "operation",
+      intentKey: "move",
+      checksumText: "3456cdef",
+      notesText: "Relocate without replacing bytes.",
+    }) },
+    { key: "move_update", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select drafts notes.md",
+      depth: 0,
+      folder: false,
+      pathText: "drafts\\notes.md",
+      intentText: "Move + update",
+      intentTone: "operation",
+      intentKey: "move_update",
+      checksumText: "7890abcd",
+      notesText: "Relocate and replace content.",
+    }) },
+    { key: "recase", rowView: Object.freeze({
+      checked: true,
+      selectionDisabled: false,
+      selectionLabel: "Select Logo.PNG",
+      depth: 0,
+      folder: false,
+      pathText: "Logo.PNG",
+      intentText: "Recase",
+      intentTone: "operation",
+      intentKey: "recase",
+      checksumText: "bcde1234",
+      notesText: "Change only the path casing.",
+    }) },
+    { key: "trash", rowView: Object.freeze({
+      checked: false,
+      selectionDisabled: false,
+      selectionLabel: "Select old export.zip",
+      depth: 0,
+      folder: false,
+      pathText: "old\\export.zip",
+      intentText: "Move to trash",
+      intentTone: "operation",
+      intentKey: "trash",
+      checksumText: "def05678",
+      notesText: "Recoverable removal specimen.",
+    }) },
+    { key: "delete", rowView: Object.freeze({
+      checked: false,
+      selectionDisabled: false,
+      selectionLabel: "Select obsolete.tmp",
+      depth: 0,
+      folder: false,
+      pathText: "obsolete.tmp",
+      intentText: "Delete",
+      intentTone: "operation",
+      intentKey: "delete",
+      checksumText: "1357ace0",
+      notesText: "Permanent removal specimen.",
+    }) },
+    { key: "noop", rowView: Object.freeze({
+      checked: false,
+      selectionDisabled: false,
+      selectionLabel: "Select unchanged.bin",
+      depth: 0,
+      folder: false,
+      pathText: "unchanged.bin",
+      intentText: "No change",
+      intentTone: "operation",
+      intentKey: "noop",
+      checksumText: "2468bdf1",
+      notesText: "No operation is intended.",
+    }) },
+    { key: "error", rowView: Object.freeze({
+      checked: false,
+      selectionDisabled: true,
+      selectionLabel: "Selection unavailable for locked.dat",
+      depth: 0,
+      folder: false,
+      pathText: "locked.dat",
+      intentText: "Error",
+      intentTone: "status",
+      intentKey: "error",
+      checksumText: "—",
+      notesText: "The projected row reports a read error.",
+    }) },
+    { key: "unsupported", rowView: Object.freeze({
+      checked: false,
+      selectionDisabled: true,
+      selectionLabel: "Selection unavailable for device-link",
+      depth: 0,
+      folder: false,
+      pathText: "device-link",
+      intentText: "Unsupported",
+      intentTone: "status",
+      intentKey: "blocked",
+      checksumText: "—",
+      notesText: "Unsupported entry type.",
+    }) },
   ]);
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
@@ -139,13 +299,18 @@ async function reportFailure(error) {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
+    import("/plan.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
-  if (typeof createIcon !== "function" || !Array.isArray(ICON_NAMES)) {
+  if (
+    typeof createIcon !== "function"
+    || !Array.isArray(ICON_NAMES)
+    || typeof renderPlanRow !== "function"
+  ) {
     throw new TypeError("installed icon registry has an invalid public shape");
   }
   galleryStage = "page_setup";
@@ -470,6 +635,51 @@ async function reportFailure(error) {
   galleryStage = "semantic_matrix";
   const statuses = semanticRows(STATUS_CASES, "status", "nami-status-pill");
   const operations = semanticRows(OPERATION_CASES, "operation", "nami-badge");
+  galleryStage = "plan_matrix";
+  const planSection = document.createElement("section");
+  planSection.className = "nami-card";
+  planSection.dataset.gallerySection = "plan_rows";
+  planSection.style.gridArea = "work";
+  const planHeading = document.createElement("h2");
+  renderText(planHeading, "Projected file-list rows");
+  const planList = document.createElement("div");
+  planList.className = "nami-plan-list";
+  planList.setAttribute("role", "table");
+  planList.setAttribute("aria-label", "Projected sync plan specimen");
+  const planGrid = document.createElement("div");
+  planGrid.className = "nami-plan-list__grid";
+  const planHeader = document.createElement("div");
+  planHeader.className = "nami-plan-list__header";
+  planHeader.setAttribute("role", "row");
+  for (const [index, text] of [
+    "",
+    "Files / path",
+    "Intended op / status",
+    "Checksum",
+    "Reason / notes",
+  ].entries()) {
+    const cell = document.createElement("div");
+    cell.className = "nami-plan-list__header-cell";
+    cell.setAttribute("role", "columnheader");
+    if (index === 0) {
+      cell.setAttribute("aria-label", "Selection");
+    }
+    renderText(cell, text);
+    planHeader.append(cell);
+  }
+  const planBody = document.createElement("div");
+  planBody.className = "nami-plan-list__body";
+  planBody.setAttribute("role", "rowgroup");
+  for (const { key, rowView } of PLAN_ROW_CASES) {
+    const row = document.createElement("div");
+    renderPlanRow(row, rowView);
+    row.dataset.galleryPlanCase = key;
+    planBody.append(row);
+  }
+  planGrid.append(planHeader, planBody);
+  planList.append(planGrid);
+  planSection.append(planHeading, planList);
+  app.append(planSection);
   galleryStage = "control_matrix";
   const controlsSection = document.createElement("section");
   controlsSection.className = "nami-card";
@@ -573,6 +783,122 @@ async function reportFailure(error) {
       });
     }
   }
+
+  const planSectionStyle = getComputedStyle(planSection);
+  const planSectionContentWidth = planSection.clientWidth
+    - parseFloat(planSectionStyle.paddingLeft)
+    - parseFloat(planSectionStyle.paddingRight);
+  const galleryUsesWorkArea = planSectionStyle.gridArea === "work";
+  const galleryFillsWorkArea = Math.abs(
+    planList.getBoundingClientRect().width - planSectionContentWidth,
+  ) < 0.5;
+  planList.style.setProperty("inline-size", "36rem");
+  const renderedPlanRows = [...planBody.children];
+  const planRowEvidence = renderedPlanRows.map((row, index) => {
+    if (!(row instanceof HTMLElement)) {
+      throw new TypeError("gallery plan row is unavailable");
+    }
+    const definition = PLAN_ROW_CASES[index];
+    const cells = [...row.children];
+    const checkbox = row.querySelector(".nami-checkbox");
+    const path = row.querySelector(".nami-plan-row__path");
+    const intent = row.querySelector(".nami-plan-row__intent");
+    const checksum = row.querySelector(".nami-plan-row__checksum");
+    const notes = row.querySelector(".nami-plan-row__notes");
+    if (
+      definition === undefined
+      || !(checkbox instanceof HTMLInputElement)
+      || !(path instanceof HTMLElement)
+      || !(intent instanceof HTMLElement)
+      || !(checksum instanceof HTMLElement)
+      || !(notes instanceof HTMLElement)
+      || cells.length !== 5
+      || !cells.every((cell) => cell instanceof HTMLElement)
+    ) {
+      throw new TypeError("gallery plan row structure is unavailable");
+    }
+    const tone = intent.dataset.operation !== undefined
+      ? "operation"
+      : intent.dataset.status !== undefined
+        ? "status"
+        : "";
+    const intentKey = tone === "" ? "" : intent.dataset[tone];
+    if (intentKey === undefined) {
+      throw new TypeError("gallery plan row intent is unavailable");
+    }
+    const intentColor = getComputedStyle(intent).color;
+    return {
+      case: definition.key,
+      role: row.getAttribute("role"),
+      cell_roles: cells.map((cell) => cell.getAttribute("role")),
+      checkbox_label: checkbox.getAttribute("aria-label"),
+      checkbox_checked: checkbox.checked,
+      checkbox_disabled: checkbox.disabled,
+      depth: Number(row.style.getPropertyValue("--nami-plan-depth")),
+      folder: row.dataset.folder === "true",
+      path: path.textContent,
+      intent: intent.textContent,
+      tone,
+      intent_key: intentKey,
+      checksum: checksum.textContent,
+      notes: notes.textContent,
+      background: getComputedStyle(row).backgroundColor,
+      intent_color: intentColor,
+      intent_alias_color: tone === ""
+        ? intentColor
+        : resolvedAlias(tone, intentKey).foreground,
+      cell_backgrounds: cells.map(
+        (cell) => getComputedStyle(cell).backgroundColor,
+      ),
+      column_lefts: cells.map(
+        (cell) => Number(cell.getBoundingClientRect().left.toFixed(3)),
+      ),
+      path_padding_left: Number(
+        parseFloat(getComputedStyle(path).paddingLeft).toFixed(3),
+      ),
+    };
+  });
+  const planHeaderCells = [...planHeader.children];
+  const planBodyBounds = planBody.getBoundingClientRect();
+  const lastPlanRow = renderedPlanRows[renderedPlanRows.length - 1];
+  if (
+    !(lastPlanRow instanceof HTMLElement)
+    || planHeaderCells.length !== 5
+    || !planHeaderCells.every((cell) => cell instanceof HTMLElement)
+  ) {
+    throw new TypeError("gallery plan list structure is unavailable");
+  }
+  const planRowsHeight = renderedPlanRows.reduce(
+    (total, row) => total + row.getBoundingClientRect().height,
+    0,
+  );
+  const planHeaderStyle = getComputedStyle(planHeader);
+  const planEvidence = {
+    table_role: planList.getAttribute("role"),
+    header_role: planHeader.getAttribute("role"),
+    body_role: planBody.getAttribute("role"),
+    gallery_uses_work_area: galleryUsesWorkArea,
+    gallery_fills_work_area: galleryFillsWorkArea,
+    header_foreground: planHeaderStyle.color,
+    header_background: planHeaderStyle.backgroundColor,
+    header_texts: planHeaderCells.map((cell) => cell.textContent),
+    header_cell_roles: planHeaderCells.map((cell) => cell.getAttribute("role")),
+    selection_header_label: planHeaderCells[0].getAttribute("aria-label"),
+    column_count: planHeaderCells.length,
+    row_count: planRowEvidence.length,
+    body_child_count: planBody.children.length,
+    checkbox_count: planBody.querySelectorAll('.nami-checkbox[type="checkbox"]').length,
+    body_ends_at_last_row: Math.abs(
+      planBodyBounds.bottom - lastPlanRow.getBoundingClientRect().bottom,
+    ) < 0.5,
+    body_height_matches_rows: Math.abs(planBodyBounds.height - planRowsHeight) < 0.5,
+    horizontal_overflow: planList.scrollWidth > planList.clientWidth,
+    overflow_x: getComputedStyle(planList).overflowX,
+    client_width: planList.clientWidth,
+    scroll_width: planList.scrollWidth,
+    rows: planRowEvidence,
+  };
+  planList.style.removeProperty("inline-size");
 
   const systemColors = {};
   for (const name of [
@@ -682,6 +1008,7 @@ async function reportFailure(error) {
         unselected_checked: unselected.getAttribute("aria-checked"),
       };
     })(),
+    file_list: planEvidence,
   };
 
   galleryStage = "report";

@@ -112,8 +112,33 @@ ownership explicit without changing public or persisted contracts.
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, and bounded presentation core; later workflow surfaces and beta
-packaging remain future phases.
+foundation, bounded presentation core, and a dormant file-list row renderer;
+later workflow surfaces and beta packaging remain future phases.
+
+#### Establish the dormant file-list row renderer (2026-08-20)
+
+- Added packaged `plan.js` with one presentation-only
+  `renderPlanRow(element, rowView)` export. It consumes explicit display text,
+  selection state, depth/folder styling, and semantic tone keys through the
+  defended text helpers; it imports no bridge or domain code and production
+  startup does not import it, so the shipped GUI remains honestly empty.
+- Added the five-column responsive grid for selection, path, intended
+  operation/status, eight-character projected checksum, and notes. Zebra
+  backgrounds belong only to rendered row elements—including folders—and stop
+  at the last row; cells stay transparent and constrained widths scroll the
+  complete aligned grid horizontally. The gallery specimen fills the wide work
+  area, and plan-specific aliases prefer authored main operation colors on dark
+  rows—including red-main Error and Unsupported/Blocked—while retaining
+  contrast-safe dark-family light-theme text and forced-color text.
+- Drove the installed production renderer from a test-only static gallery
+  array covering a plain row, all nine operation tones exactly once, a folder
+  with a nested file, and error/unsupported statuses. No bridge command,
+  `SyncPlan`, workflow, dispatcher, session, or provisional wire payload was
+  introduced, and exact wheel checks exclude both fixture markers.
+- Extended four-profile headed evidence for roles and blank selection header,
+  checkbox labels/states, columns, indentation, semantic text contrast,
+  display-ready checksums, finite row-only striping, transparent cells, wide
+  work-area fill, and narrow-container overflow.
 
 #### Tune solid desktop control states (2026-08-20)
 

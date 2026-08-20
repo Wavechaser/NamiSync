@@ -407,6 +407,18 @@ unrealized unless an entry says otherwise.
   two-half state specimen uses radio-group semantics and highlights its checked
   half with the accent roles. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
+- **Dormant File-List Row Foundation**. Packaged `plan.js` exposes only the
+  presentation-local `renderPlanRow(element, rowView)` primitive. It renders an
+  already-projected selection checkbox, filesystem path, explicit semantic
+  intent text, display-ready eight-character checksum, and notes into the
+  shared five-column layout. Actual plans, projection, transport, selection
+  behavior, execution, and progress remain unrealized Slice 5 work: production
+  does not import this module and still renders no file rows. A test-only static
+  gallery fixture settles plain/folder/nested, every operation, error, and
+  unsupported appearances without constructing domain or session objects. It
+  fills the gallery's wide work area, and its intent text uses contrast-safe
+  plan aliases that prefer authored main colors on dark rows, including
+  red-main Error and Unsupported/Blocked statuses.
 - **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
   red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
   `tokens.css` only; yellow and purple intentionally have no `light` input.

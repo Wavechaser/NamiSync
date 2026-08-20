@@ -231,6 +231,17 @@
   --operation-noop-foreground: var(--semantic-neutral-foreground);
   --operation-noop-background: var(--semantic-neutral-background);
   --operation-noop-indicator: var(--semantic-neutral-indicator);
+
+  --plan-intent-copy-foreground: var(--operation-copy-foreground);
+  --plan-intent-update-foreground: var(--operation-update-foreground);
+  --plan-intent-move-foreground: var(--operation-move-foreground);
+  --plan-intent-move_update-foreground: var(--operation-move_update-foreground);
+  --plan-intent-recase-foreground: var(--operation-recase-foreground);
+  --plan-intent-mkdir-foreground: var(--operation-mkdir-foreground);
+  --plan-intent-trash-foreground: var(--operation-trash-foreground);
+  --plan-intent-delete-foreground: var(--operation-delete-foreground);
+  --plan-intent-error-foreground: var(--status-error-foreground);
+  --plan-intent-blocked-foreground: var(--status-blocked-foreground);
 }
 
 :root[data-window-material="mica"] {
@@ -286,6 +297,16 @@
   --semantic-neutral-foreground: var(--color-neutral-foreground);
   --semantic-neutral-background: var(--color-neutral-surface-hover);
   --semantic-neutral-indicator: var(--color-neutral-foreground-secondary);
+  --plan-intent-copy-foreground: var(--palette-blue-main);
+  --plan-intent-update-foreground: var(--palette-green-main);
+  --plan-intent-move-foreground: var(--palette-purple-main);
+  --plan-intent-move_update-foreground: var(--palette-purple-main);
+  --plan-intent-recase-foreground: var(--palette-blue-main);
+  --plan-intent-mkdir-foreground: var(--palette-green-main);
+  --plan-intent-trash-foreground: var(--palette-yellow-main);
+  --plan-intent-delete-foreground: var(--palette-red-main);
+  --plan-intent-error-foreground: var(--palette-red-main);
+  --plan-intent-blocked-foreground: var(--palette-red-main);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -338,6 +359,16 @@
     --semantic-neutral-foreground: var(--color-neutral-foreground);
     --semantic-neutral-background: var(--color-neutral-surface-hover);
     --semantic-neutral-indicator: var(--color-neutral-foreground-secondary);
+    --plan-intent-copy-foreground: var(--palette-blue-main);
+    --plan-intent-update-foreground: var(--palette-green-main);
+    --plan-intent-move-foreground: var(--palette-purple-main);
+    --plan-intent-move_update-foreground: var(--palette-purple-main);
+    --plan-intent-recase-foreground: var(--palette-blue-main);
+    --plan-intent-mkdir-foreground: var(--palette-green-main);
+    --plan-intent-trash-foreground: var(--palette-yellow-main);
+    --plan-intent-delete-foreground: var(--palette-red-main);
+    --plan-intent-error-foreground: var(--palette-red-main);
+    --plan-intent-blocked-foreground: var(--palette-red-main);
   }
 }
 
@@ -412,6 +443,16 @@
     --semantic-neutral-foreground: CanvasText;
     --semantic-neutral-background: Canvas;
     --semantic-neutral-indicator: ButtonText;
+    --plan-intent-copy-foreground: CanvasText;
+    --plan-intent-update-foreground: CanvasText;
+    --plan-intent-move-foreground: CanvasText;
+    --plan-intent-move_update-foreground: CanvasText;
+    --plan-intent-recase-foreground: CanvasText;
+    --plan-intent-mkdir-foreground: CanvasText;
+    --plan-intent-trash-foreground: CanvasText;
+    --plan-intent-delete-foreground: CanvasText;
+    --plan-intent-error-foreground: CanvasText;
+    --plan-intent-blocked-foreground: CanvasText;
   }
 }
 

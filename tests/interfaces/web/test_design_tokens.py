@@ -572,6 +572,70 @@ def test_sh_g_11_only_tokens_owns_raw_colors_and_palette_consumption() -> None:
     assert palette_consumers == {"tokens.css"}
 
 
+def test_plan_intent_aliases_prefer_main_colors_only_on_dark_surfaces() -> None:
+    source = TOKENS.read_text(encoding="utf-8")
+    light = _variables(_block(source, ":root "))
+    explicit_dark = light | _variables(
+        _block(source, ':root[data-theme="dark"]')
+    )
+    automatic_dark_media = _block(
+        source,
+        "@media (prefers-color-scheme: dark)",
+    )
+    automatic_dark = light | _variables(
+        _block(automatic_dark_media, ':root:not([data-theme="light"])')
+    )
+    forced = _variables(_block(source, "@media (forced-colors: active)"))
+    families = {
+        "copy": "blue",
+        "update": "green",
+        "move": "purple",
+        "move_update": "purple",
+        "recase": "blue",
+        "mkdir": "green",
+        "trash": "yellow",
+        "delete": "red",
+    }
+
+    for operation, family in families.items():
+        plan_token = f"--plan-intent-{operation}-foreground"
+        assert light[plan_token] == f"var(--operation-{operation}-foreground)"
+        assert _resolve(plan_token, light) == _resolve(
+            f"--palette-{family}-dark",
+            light,
+        )
+        expected_main = f"var(--palette-{family}-main)"
+        assert explicit_dark[plan_token] == expected_main
+        assert automatic_dark[plan_token] == expected_main
+        assert forced[plan_token] == "CanvasText"
+        for dark in (explicit_dark, automatic_dark):
+            foreground = _resolve(plan_token, dark)
+            for surface in (
+                "--color-neutral-surface",
+                "--color-neutral-surface-subtle",
+            ):
+                assert _contrast(foreground, _resolve(surface, dark)) >= 4.5
+
+    for status in ("error", "blocked"):
+        plan_token = f"--plan-intent-{status}-foreground"
+        assert light[plan_token] == f"var(--status-{status}-foreground)"
+        assert _resolve(plan_token, light) == _resolve(
+            "--palette-red-dark",
+            light,
+        )
+        for dark in (explicit_dark, automatic_dark):
+            assert dark[plan_token] == "var(--palette-red-main)"
+            foreground = _resolve(plan_token, dark)
+            for surface in (
+                "--color-neutral-surface",
+                "--color-neutral-surface-subtle",
+            ):
+                assert _contrast(foreground, _resolve(surface, dark)) >= 4.5
+        assert forced[plan_token] == "CanvasText"
+
+    assert "--plan-intent-noop-foreground" not in light
+
+
 def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> None:
     for mutation in (
         ".x { color: red; }",
