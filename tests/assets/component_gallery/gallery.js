@@ -117,11 +117,11 @@ async function reportFailure(error) {
     { key: "unsupported", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for device-link", depth: 0, folder: false, expanded: false, nameText: "device-link", sizeText: "—", intentText: "Unsupported", intentTone: "status", intentKey: "blocked", checksumText: "—", notesText: "Unsupported entry type." }) },
   ]);
   const INTEGRITY_ROW_CASES = Object.freeze([
-    { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Mixed", presenceStatus: "warning", integrityText: "Mixed", integrityStatus: "warning", notesText: "Partially selected folder." }) },
-    { key: "match", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Both", presenceStatus: "complete", integrityText: "Match", integrityStatus: "complete", notesText: "Content matches." }) },
-    { key: "source_only", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Source only", presenceStatus: "warning", integrityText: "Not compared", integrityStatus: "deferred", notesText: "No target file." }) },
-    { key: "mismatch", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select archive.zip", depth: 0, folder: false, expanded: false, nameText: "archive.zip", sizeText: "18.4 MB", presenceText: "Both", presenceStatus: "complete", integrityText: "Mismatch", integrityStatus: "mismatch", notesText: "Checksums differ." }) },
-    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", presenceText: "Unknown", presenceStatus: "error", integrityText: "Error", integrityStatus: "error", notesText: "Read failed." }) },
+    { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Mixed", presenceStatus: "warning", checksumText: "—", notesText: "Partially selected folder." }) },
+    { key: "match", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Both · match", presenceStatus: "complete", checksumText: "5a2f8c10", notesText: "Content matches." }) },
+    { key: "source_only", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Source only", presenceStatus: "warning", checksumText: "—", notesText: "No target file." }) },
+    { key: "mismatch", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select archive.zip", depth: 0, folder: false, expanded: false, nameText: "archive.zip", sizeText: "18.4 MB", presenceText: "Both · mismatch", presenceStatus: "mismatch", checksumText: "90ef12ab", notesText: "Checksums differ." }) },
+    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", presenceText: "Unknown", presenceStatus: "error", checksumText: "—", notesText: "Read failed." }) },
   ]);
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
@@ -191,7 +191,6 @@ async function reportFailure(error) {
   const forced = matchMedia("(forced-colors: active)").matches;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  const hdr = matchMedia("(dynamic-range: high)").matches;
   const mode = forced ? "forced" : reduced ? "reduced" : dark ? "dark" : "light";
   const expectedTheme = dark ? "dark" : "light";
   const alternateTheme = expectedTheme === "dark" ? "light" : "dark";
@@ -315,16 +314,15 @@ async function reportFailure(error) {
   taskSlot.classList.add("nami-task-rail__specimens");
   taskSlot.replaceChildren();
   for (const [label, state] of [
-    ["Current sync", "selected"],
+    ["Current sync", "selected_current"],
     ["Queued verification", "rest"],
-    ["Completed sync", "current"],
+    ["Completed sync", "rest"],
   ]) {
     const task = document.createElement("button");
     task.className = "nami-task-card";
     task.type = "button";
-    if (state === "selected") {
+    if (state === "selected_current") {
       task.setAttribute("aria-selected", "true");
-    } else if (state === "current") {
       task.setAttribute("aria-current", "true");
     }
     renderText(task, label);
@@ -442,7 +440,8 @@ async function reportFailure(error) {
       root.append(element);
     } else if (definition.key === "tri_state_checkbox") {
       element.type = "checkbox";
-      element.setAttribute("aria-checked", "false");
+      element.indeterminate = true;
+      element.setAttribute("aria-checked", "mixed");
     } else if (definition.key === "progress_determinate") {
       root = document.createElement("div");
       root.className = "nami-progress";
@@ -475,7 +474,7 @@ async function reportFailure(error) {
       element.className = "nami-toggle__control";
       element.type = "checkbox";
       element.setAttribute("role", "switch");
-      element.checked = false;
+      element.checked = true;
       const toggleText = document.createElement("span");
       renderText(toggleText, "Mirror options");
       root.append(element, toggleText);
@@ -776,7 +775,7 @@ async function reportFailure(error) {
   const integritySpecimen = createFileList(
     "Projected integrity rows",
     "Projected integrity specimen",
-    ["", "Filename", "Size", "Presence", "Integrity", "Notes"],
+    ["", "Filename", "Size", "Presence", "Checksum", "Notes"],
     INTEGRITY_ROW_CASES,
     renderIntegrityRow,
     "integrity",
@@ -807,6 +806,11 @@ async function reportFailure(error) {
   mixedCheckbox.setAttribute("aria-checked", "mixed");
   mixedCheckbox.setAttribute("aria-label", "Mixed tri-state specimen");
   controlsSection.append(mixedCheckbox);
+  const uncheckedCheckbox = document.createElement("input");
+  uncheckedCheckbox.className = "nami-checkbox";
+  uncheckedCheckbox.type = "checkbox";
+  uncheckedCheckbox.setAttribute("aria-label", "Unchecked checkbox specimen");
+  controlsSection.append(uncheckedCheckbox);
 
   const hdrIsolation = document.createElement("section");
   hdrIsolation.className = "nami-card";
@@ -839,9 +843,32 @@ async function reportFailure(error) {
   }
   controlsSection.append(hdrIsolation);
 
+  const ordinaryThemeOption = document.querySelector("#theme-option-system");
+  const pressedThemeOptionSource = document.querySelector(
+    `#theme-option-${alternateTheme}`,
+  );
+  if (
+    !(ordinaryThemeOption instanceof HTMLElement)
+    || !(pressedThemeOptionSource instanceof HTMLElement)
+  ) {
+    throw new TypeError("production combobox option probes are unavailable");
+  }
   const ordinaryOptionRestBackground = getComputedStyle(
-    document.querySelector("#theme-option-system"),
+    ordinaryThemeOption,
   ).backgroundColor;
+  const optionStatePopup = document.createElement("div");
+  optionStatePopup.className = "nami-combobox__popup";
+  optionStatePopup.setAttribute("aria-hidden", "true");
+  optionStatePopup.style.position = "fixed";
+  optionStatePopup.style.insetInlineStart = "-10000px";
+  optionStatePopup.style.insetBlockStart = "0";
+  optionStatePopup.style.display = "grid";
+  const hoveredThemeOption = ordinaryThemeOption.cloneNode(true);
+  const pressedThemeOption = pressedThemeOptionSource.cloneNode(true);
+  hoveredThemeOption.id = "gallery-theme-option-hover";
+  pressedThemeOption.id = "gallery-theme-option-pressed";
+  optionStatePopup.append(hoveredThemeOption, pressedThemeOption);
+  document.body.append(optionStatePopup);
 
   const pseudoTargets = CONTROL_CASES.flatMap((definition) => [
     { selector: `#gallery-control-${definition.key}-hover`, classes: ["hover"] },
@@ -849,9 +876,9 @@ async function reportFailure(error) {
     { selector: `#gallery-control-${definition.key}-focused`, classes: ["focus", "focus-visible"] },
   ]);
   pseudoTargets.push(
-    { selector: "#theme-option-system", classes: ["hover"] },
+    { selector: "#gallery-theme-option-hover", classes: ["hover"] },
     {
-      selector: `#theme-option-${alternateTheme}`,
+      selector: "#gallery-theme-option-pressed",
       classes: ["hover", "active"],
     },
   );
@@ -1085,6 +1112,7 @@ async function reportFailure(error) {
       const secondaryColor = getComputedStyle(secondary).color;
       const disclosure = row.querySelector(".nami-file-row__disclosure");
       const checkboxBounds = checkbox.getBoundingClientRect();
+      const rowStyle = getComputedStyle(row);
       return {
         case: definition.key,
         role: row.getAttribute("role"),
@@ -1110,7 +1138,7 @@ async function reportFailure(error) {
         secondary_tone: secondaryTone,
         secondary_key: secondaryKey,
         notes: notes.textContent,
-        background: getComputedStyle(row).backgroundColor,
+        background: rowStyle.backgroundColor,
         primary_color: primaryColor,
         primary_alias_color: primaryTone === ""
           ? primaryColor
@@ -1129,6 +1157,7 @@ async function reportFailure(error) {
           parseFloat(getComputedStyle(name).paddingLeft).toFixed(3),
         ),
         row_height: row.getBoundingClientRect().height,
+        font_size: parseFloat(rowStyle.fontSize),
       };
     });
     const headerCells = [...header.children];
@@ -1271,6 +1300,8 @@ async function reportFailure(error) {
     system_colors: systemColors,
   };
   const mixedStyle = getComputedStyle(mixedCheckbox, "::after");
+  const mixedCheckboxStyle = getComputedStyle(mixedCheckbox);
+  const uncheckedCheckboxStyle = getComputedStyle(uncheckedCheckbox);
   const dialogExit = await dialogExitEvidence();
   themeTrigger.blur();
   themeTrigger.click();
@@ -1279,12 +1310,6 @@ async function reportFailure(error) {
   const themePopup = document.querySelector("#theme-options");
   const selectedThemeOption = themePopup?.querySelector(
     '.nami-combobox__option[aria-selected="true"]',
-  );
-  const hoveredThemeOption = themePopup?.querySelector(
-    '#theme-option-system',
-  );
-  const pressedThemeOption = themePopup?.querySelector(
-    `#theme-option-${alternateTheme}`,
   );
   const selectionPill = selectedThemeOption?.querySelector(
     ".nami-combobox__selection",
@@ -1319,11 +1344,33 @@ async function reportFailure(error) {
   }
   const taskRailBounds = galleryRail.getBoundingClientRect();
   const planBounds = planSection.getBoundingClientRect();
+  const accentTokens = Object.fromEntries([
+    ["fill", "--color-accent-fill"],
+    ["fill_hover", "--color-accent-fill-hover"],
+    ["fill_pressed", "--color-accent-fill-pressed"],
+    ["foreground", "--color-accent-fill-foreground"],
+  ].map(([name, token]) => {
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = `var(${token})`;
+    probe.style.position = "fixed";
+    probe.style.visibility = "hidden";
+    app.append(probe);
+    const resolved = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return [name, resolved];
+  }));
   const controlContract = {
+    accent: accentTokens,
     tri_state: {
       aria_checked: mixedCheckbox.getAttribute("aria-checked"),
       indeterminate: mixedCheckbox.indeterminate,
       cue_content: mixedStyle.content,
+      unchecked_border: uncheckedCheckboxStyle.borderColor,
+      unchecked_border_width: uncheckedCheckboxStyle.borderWidth,
+      mixed_background: mixedCheckboxStyle.backgroundColor,
+      mixed_foreground: mixedCheckboxStyle.color,
+      mixed_border: mixedCheckboxStyle.borderColor,
+      mixed_border_width: mixedCheckboxStyle.borderWidth,
     },
     dialog_exit: dialogExit,
     segmented: (() => {
@@ -1400,6 +1447,7 @@ async function reportFailure(error) {
       current_count: galleryRail.querySelectorAll(
         '.nami-task-card[aria-current="true"]',
       ).length,
+      selected_current_same_card: selectedTaskCard === currentTaskCard,
       transparent_boundaries: taskCards.every((task) => {
         const style = getComputedStyle(task);
         return style.borderStyle === "none" || parseFloat(style.borderWidth) === 0;
@@ -1419,6 +1467,8 @@ async function reportFailure(error) {
     file_list: planEvidence,
     integrity_list: integrityEvidence,
   };
+
+  optionStatePopup.remove();
 
   galleryStage = "report";
   const reportParts = [
@@ -1459,7 +1509,12 @@ async function reportFailure(error) {
     Object.freeze({
       phase: "complete",
       mode,
-      media: Object.freeze({ dark, forced, reduced, hdr }),
+      media: Object.freeze({
+        dark,
+        forced,
+        reduced,
+        hdr: matchMedia("(dynamic-range: high)").matches,
+      }),
       cosmetic: cosmeticEvidence,
       part_count: reportParts.length,
     }),

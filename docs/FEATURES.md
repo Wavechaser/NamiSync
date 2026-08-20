@@ -307,6 +307,11 @@ location activities through the shared service.
 
 - **GUI Entry Points**. `interfaces.launcher` sits above the sibling CLI and web adapters. Console entry points retain CLI behavior, while the `nami-sync-gui` GUI-subsystem entry point opens the sole desktop implementation without a retained console window.
 - **Secured Desktop Host**. The installed wheel now opens only through the pinned Edge Chromium/WebView2 stack, binds bridge authority to the committed loopback origin, blocks external navigation and popups, validates the coordinated database pair before window admission, owns one fixed production instance, and closes through bounded retryable service teardown. Native load does not admit ordinary commands: on startup and same-origin reload, the fixed packaged shell must acknowledge receiver/DOM installation, settle a readable base surface, and complete a neutral current-generation host challenge/page echo within five seconds. Appearance publication and enhancement quality remain independently degradable. Close presentation binds the current loaded document before asynchronous work and cannot change shutdown truth on a DOM failure. The packaged document is trusted code while every value it handles remains untrusted data; `DEFENSE.md` owns that trusted-base decision and its reopen trigger. Enforced refusal of an elevated host remains unrealized beta-release work.
+- **Explicit Desktop Geometry**. The public pywebview construction contract sets
+  a 1280 x 800 logical-pixel initial window and 1024 x 640 logical-pixel
+  minimum. Pywebview owns DPI conversion; NamiSync performs no late native or
+  JavaScript correction. The former viewport media query is gone; WebView2
+  zoom can still reach the CSS stacked layout through its inline-size container.
 - **Desktop Command Transport**. One function-only pywebview dispatch entry provides bounded requests, opaque folder authority, sanitized failures, idempotent replay, and bounded task/event-drain ownership. Reliable events retain ordering and explicit-gap recovery while progress is coalesced without delaying terminal or control feedback. `M1_BRIDGE.md` owns the exact envelopes, capacities, timing, recovery rules, browser evidence, and acceptance status.
 
 ## DESKTOP UI
@@ -394,15 +399,19 @@ unrealized unless an entry says otherwise.
   alone.
 - **Fluent Neutral And Windows Accent Roles**. `tokens.css` owns a pinned
   transcribed Microsoft Fluent light/dark neutral subset. Native appearance
-  publishes Windows `Accent`, `AccentLight1`, and `AccentDark1` as distinct
-  rest/hover/pressed roles through a fixed revisioned host-to-page envelope;
-  forced colors remain system-owned.
+  retains raw Windows `Accent`, `AccentLight1`, `AccentLight2`, and
+  `AccentDark1` values, then publishes only semantic fill roles through the
+  revisioned appearance v2 host-to-page envelope. Light uses `AccentDark1`,
+  Dark uses `AccentLight2`, hover/press apply 90%/80% opacity, and one
+  base-fill contrast foreground stays fixed through interaction; forced colors
+  remain system-owned.
 - **Solid Desktop Control States**. The active component foundation exposes
-  exactly two command-button tiers: solid inverse-gray for ordinary actions and
-  live Windows accent for primary Execute/Verify-class actions. Primary and
+  exactly two command-button tiers: WinUI-neutral fills with subtle boundaries
+  for ordinary actions and live Windows accent for primary
+  Execute/Verify-class actions. Primary and
   other accent-filled labels use the native base accent's contrast-selected
-  exact black or white, stay fixed through interaction, and use darker hover/press
-  treatment. Filter pills
+  exact black or white, stay fixed through interaction, and use 90%/80%
+  base-fill opacity for hover/press. Filter pills
   use inverse grayscale when inactive and exact operation-family main swatches
   with contrast-selected grayscale text when active; inactive Delete uses exact
   red-main text while active Delete retains red-main/red-dark. Operation/file
@@ -410,7 +419,9 @@ unrealized unless an entry says otherwise.
   borderless, while ordinary keyboard focus uses opposing inner/outer Fluent
   strokes and forced colors retain system outlines. The Sync/Integrity
   two-half state specimen uses radio-group semantics and highlights its checked
-  half with the accent roles. Task-backed switching, keyboard behavior, and
+  half with the accent roles. Unchecked checkboxes use a softer 2 px neutral
+  boundary; textboxes use a subtle 2 px boundary plus neutral/accent resting/focused
+  underline. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
 - **Content Cards**. Background/content cards are static translucent material
   layers rather than controls: white 70% with a black 6% blended stroke in
@@ -422,17 +433,21 @@ unrealized unless an entry says otherwise.
   theme listbox use a dedicated black 6% Light/20% Dark flyout stroke rather
   than the conspicuous accessible control border. The combobox owns WinUI-like
   selected-option placement, viewport clamping, an opaque M1 popup layer,
-  a persistent filled selected option with a 3 px accent pill, distinct
-  hover/press fills, subtle raised/flat closed-control boundaries,
-  and keyboard-only focus indication. Ordinary SDR elevation remains; dark HDR
+  a persistent filled selected option with a 3 px accent pill, one shared
+  hover/selected overlay with a weaker pressed state, subtle raised/flat
+  closed-control boundaries, and keyboard-only focus indication. Task cards
+  use the same transparent-rest, hover/selected, and weaker-pressed roles.
+  Ordinary SDR elevation remains; dark HDR
   suppresses CSS flyout shadows to avoid transparent WebView2/Mica alpha halos,
   while forced colors use system surfaces without acrylic or shadow.
 - **Dormant File-List Row Foundation**. Packaged `file_row.js` owns the shared
   compact row skeleton, while `plan.js` and `integrity.js` expose narrow
   presentation-local renderers. Both consume already-projected 16 px checkbox,
   mixed/folder/disclosure, basename, size, status, and notes values in a 24 px
-  six-column layout; the sync specialization adds operation and eight-character
-  checksum cells, while integrity adds presence and integrity cells. Actual
+  row with 12 px text and a 48 rem horizontally scrolling content floor. In
+  the six-column layout, the sync specialization adds operation and eight-character
+  checksum cells, while integrity adds a combined presence/status cell and an
+  eight-character checksum cell. Actual
   projection, transport, selection/tree policy, execution, and progress remain
   unrealized Slice 5 work: production imports neither specialization and still
   renders no rows. Test-only static fixtures settle plain and partially selected

@@ -163,7 +163,15 @@ def _system(
     build: int = 22621,
     accent: str = "#123ABC",
 ) -> SystemAppearance:
-    return SystemAppearance(dark, high_contrast, accent, build)
+    return SystemAppearance(
+        dark,
+        high_contrast,
+        accent,
+        build,
+        accent_light_1=accent,
+        accent_light_2=accent,
+        accent_dark_1=accent,
+    )
 
 
 def _cosmetic(
@@ -1126,7 +1134,7 @@ def test_deferred_initial_generation_finishes_before_loaded_publication() -> Non
 
     assert controller.surface_safety_failure is None
     assert results == [None]
-    assert [message["accent"] for message in window.appearance_messages.messages] == [
+    assert [message["accentFill"] for message in window.appearance_messages.messages] == [
         "#222222"
     ]
     controller.close()
@@ -1160,7 +1168,7 @@ def test_loaded_before_deferred_initial_generation_waits_for_final_state() -> No
 
     assert controller.surface_safety_failure is None
     assert results == [None]
-    assert [message["accent"] for message in window.appearance_messages.messages] == [
+    assert [message["accentFill"] for message in window.appearance_messages.messages] == [
         "#222222"
     ]
     controller.close()
@@ -1278,7 +1286,7 @@ def test_reload_automatically_publishes_to_the_new_receiver() -> None:
     window.events.loaded.emit()
 
     assert [
-        (message["revision"], message["accent"])
+            (message["revision"], message["accentFill"])
         for message in window.appearance_messages.messages
     ] == [(1, "#123456"), (2, "#123456")]
     controller.close()
@@ -1346,17 +1354,15 @@ def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -
 
     assert window.appearance_messages.messages == [
         {
-            "kind": "namisync.appearance.v1",
+            "kind": "namisync.appearance.v2",
             "revision": 1,
             "theme": "dark",
             "highContrast": False,
             "material": "mica",
-            "accent": "#A1B2C3",
-            "accentHover": "#0091F8",
-            "accentPressed": "#0067C0",
-            "accentForeground": "#000000",
-            "accentHoverForeground": "#000000",
-            "accentPressedForeground": "#FFFFFF",
+            "accentFill": "#A1B2C3",
+            "accentFillHover": "#A1B2C3E6",
+            "accentFillPressed": "#A1B2C3CC",
+            "accentFillForeground": "#000000",
         }
     ]
     controller.close()
@@ -1372,7 +1378,7 @@ def test_document_publication_uses_the_native_ui_dispatcher_without_dom_eval() -
     window.events.loaded.emit()
 
     assert ("invoke", window.native) in native.calls
-    assert window.appearance_messages.messages[-1]["accent"] == "#A1B2C3"
+    assert window.appearance_messages.messages[-1]["accentFill"] == "#A1B2C3"
     assert not hasattr(controller, "_publish_thread")
     controller.close()
 
@@ -1441,7 +1447,7 @@ def test_preference_change_republishes_after_loaded() -> None:
         2,
     ]
     assert window.appearance_messages.messages[-1]["theme"] == "dark"
-    assert window.appearance_messages.messages[-1]["accent"] == "#ABCDEF"
+    assert window.appearance_messages.messages[-1]["accentFill"] == "#ABCDEF"
     controller.close()
 
 
@@ -1581,7 +1587,7 @@ def test_preference_change_during_apply_defers_latest_state_to_next_ui_turn() ->
         if isinstance(call, tuple) and call[0] == "apply"
     ]
     assert applied[-1] == _system(dark=True, accent="#222222")
-    assert [message["accent"] for message in window.appearance_messages.messages] == [
+    assert [message["accentFill"] for message in window.appearance_messages.messages] == [
         "#111111"
     ]
 
@@ -1598,7 +1604,7 @@ def test_preference_change_during_apply_defers_latest_state_to_next_ui_turn() ->
     ]
     assert _system(dark=False, accent="#333333") not in applied
     assert native.calls.count("read") == 3
-    assert [message["accent"] for message in window.appearance_messages.messages] == [
+    assert [message["accentFill"] for message in window.appearance_messages.messages] == [
         "#111111",
         "#444444",
     ]
@@ -1712,7 +1718,7 @@ def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     queued[2]()
 
     assert [value["revision"] for value in window.appearance_messages.messages] == [2]
-    assert window.appearance_messages.messages[0]["accent"] == "#222222"
+    assert window.appearance_messages.messages[0]["accentFill"] == "#222222"
     assert results == [None]
     controller.close()
 
@@ -1798,7 +1804,7 @@ def test_preference_read_failure_restores_opaque_presentation() -> None:
     native.system = _system(dark=False, accent="#ABCDEF")
     native.emit_preference_change()
     assert window.appearance_messages.messages[-1]["material"] == "mica"
-    assert window.appearance_messages.messages[-1]["accent"] == "#ABCDEF"
+    assert window.appearance_messages.messages[-1]["accentFill"] == "#ABCDEF"
     controller.close()
 
 
@@ -1889,17 +1895,15 @@ def test_unconfirmed_live_fallback_publishes_degraded_opaque_page_state() -> Non
     native.emit_preference_change()
 
     assert window.appearance_messages.messages[-1] == {
-        "kind": "namisync.appearance.v1",
+        "kind": "namisync.appearance.v2",
         "revision": 2,
         "theme": "dark",
         "highContrast": False,
         "material": "degraded",
-        "accent": "#ABCDEF",
-        "accentHover": "#0091F8",
-        "accentPressed": "#0067C0",
-        "accentForeground": "#000000",
-        "accentHoverForeground": "#000000",
-        "accentPressedForeground": "#FFFFFF",
+        "accentFill": "#ABCDEF",
+        "accentFillHover": "#ABCDEFE6",
+        "accentFillPressed": "#ABCDEFCC",
+        "accentFillForeground": "#000000",
     }
     controller.close()
 
@@ -1975,8 +1979,9 @@ def test_effective_theme_matrix_preserves_raw_windows_authority(
         high_contrast=high_contrast,
         accent="#123456",
         build=26100,
-        accent_hover="#345678",
-        accent_pressed="#012345",
+        accent_light_1="#345678",
+        accent_light_2="#89ABCD",
+        accent_dark_1="#012345",
     )
 
     effective = appearance._effective_system_appearance(raw, theme_mode)
@@ -1985,9 +1990,32 @@ def test_effective_theme_matrix_preserves_raw_windows_authority(
     assert effective.dark is expected_dark
     assert effective.high_contrast is high_contrast
     assert effective.accent == raw.accent
-    assert effective.accent_hover == raw.accent_hover
-    assert effective.accent_pressed == raw.accent_pressed
+    assert effective.accent_light_1 == raw.accent_light_1
+    assert effective.accent_light_2 == raw.accent_light_2
+    assert effective.accent_dark_1 == raw.accent_dark_1
+    expected_fill = raw.accent_light_2 if expected_dark else raw.accent_dark_1
+    assert effective.accent_fill == expected_fill
+    assert effective.accent_fill_hover == f"{expected_fill}E6"
+    assert effective.accent_fill_pressed == f"{expected_fill}CC"
     assert effective.build == raw.build
+
+
+def test_semantic_accent_fill_selects_the_theme_rung_and_stable_foreground() -> None:
+    light = SystemAppearance(False, False, "#0078D4", 26100)
+    dark = SystemAppearance(True, False, "#0078D4", 26100)
+
+    assert (
+        light.accent_fill,
+        light.accent_fill_hover,
+        light.accent_fill_pressed,
+        light.accent_fill_foreground,
+    ) == ("#0067C0", "#0067C0E6", "#0067C0CC", "#FFFFFF")
+    assert (
+        dark.accent_fill,
+        dark.accent_fill_hover,
+        dark.accent_fill_pressed,
+        dark.accent_fill_foreground,
+    ) == ("#4CC2FF", "#4CC2FFE6", "#4CC2FFCC", "#000000")
 
 
 @pytest.mark.parametrize(
@@ -2059,7 +2087,12 @@ def test_native_snapshot_reads_each_windows_appearance_owner(
     monkeypatch.setattr(
         appearance,
         "_read_accent_palette",
-        lambda _settings: ("#445566", "#667788", "#223344"),
+        lambda _settings: appearance._AccentPalette(
+            accent="#445566",
+            light_1="#667788",
+            light_2="#8899AA",
+            dark_1="#223344",
+        ),
     )
     monkeypatch.setattr(appearance, "_windows_build", lambda: 26100)
     native = appearance._WindowsAppearanceNative()
@@ -2070,12 +2103,13 @@ def test_native_snapshot_reads_each_windows_appearance_owner(
         high_contrast=False,
         accent="#445566",
         build=26100,
-        accent_hover="#667788",
-        accent_pressed="#223344",
+        accent_light_1="#667788",
+        accent_light_2="#8899AA",
+        accent_dark_1="#223344",
     )
 
 
-def test_windows_accent_palette_uses_all_three_ui_settings_variants(
+def test_windows_accent_palette_uses_required_ui_settings_variants(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class Enum:
@@ -2086,7 +2120,8 @@ def test_windows_accent_palette_uses_all_three_ui_settings_variants(
     colors = {
         "Accent": SimpleNamespace(R=1, G=2, B=3),
         "AccentLight1": SimpleNamespace(R=4, G=5, B=6),
-        "AccentDark1": SimpleNamespace(R=7, G=8, B=9),
+        "AccentLight2": SimpleNamespace(R=7, G=8, B=9),
+        "AccentDark1": SimpleNamespace(R=10, G=11, B=12),
     }
     getter = SimpleNamespace(
         Invoke=lambda _settings, arguments: colors[arguments[0]],
@@ -2100,10 +2135,11 @@ def test_windows_accent_palette_uses_all_three_ui_settings_variants(
         SimpleNamespace(Enum=Enum, Type=fake_type),
     )
 
-    assert appearance._read_accent_palette(settings) == (
-        "#010203",
-        "#040506",
-        "#070809",
+    assert appearance._read_accent_palette(settings) == appearance._AccentPalette(
+        accent="#010203",
+        light_1="#040506",
+        light_2="#070809",
+        dark_1="#0A0B0C",
     )
 
 
@@ -2125,8 +2161,15 @@ def test_pinned_runtime_reads_the_live_ui_settings_palette() -> None:
         return f"#{int(value.R):02X}{int(value.G):02X}{int(value.B):02X}"
 
     assert settings.GetType().FullName == "Windows.UI.ViewManagement.UISettings"
-    assert appearance._read_accent_palette(settings) == tuple(
-        direct(name) for name in ("Accent", "AccentLight1", "AccentDark1")
+    palette = appearance._read_accent_palette(settings)
+    assert (
+        palette.accent,
+        palette.light_1,
+        palette.light_2,
+        palette.dark_1,
+    ) == tuple(
+        direct(name)
+        for name in ("Accent", "AccentLight1", "AccentLight2", "AccentDark1")
     )
 
 
@@ -2230,10 +2273,11 @@ def test_coincident_ui_settings_palette_values_are_preserved(
         ),
     )
 
-    assert appearance._read_accent_palette(settings) == (
-        "#010203",
-        "#010203",
-        "#010203",
+    assert appearance._read_accent_palette(settings) == appearance._AccentPalette(
+        accent="#010203",
+        light_1="#010203",
+        light_2="#010203",
+        dark_1="#010203",
     )
 
 
@@ -2429,6 +2473,14 @@ def test_system_snapshot_rejects_non_inert_accent_values() -> None:
         _system(accent="#aabbcc")
     with pytest.raises(ValueError, match="uppercase"):
         _system(accent="red; background: url(https://example.invalid)")
+    with pytest.raises(ValueError, match="accent_light_2"):
+        SystemAppearance(
+            False,
+            False,
+            "#AABBCC",
+            26100,
+            accent_light_2="#aabbcc",
+        )
 
 
 def test_documented_accent_read_and_no_direct_document_sink() -> None:
@@ -2436,6 +2488,7 @@ def test_documented_accent_read_and_no_direct_document_sink() -> None:
 
     assert "UISettings" in source
     assert 'read("AccentLight1")' in source
+    assert 'read("AccentLight2")' in source
     assert 'read("AccentDark1")' in source
     assert "DwmSetWindowAttribute" in source
     assert "SetSysColors" not in source

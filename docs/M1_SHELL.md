@@ -448,7 +448,8 @@ third-party notices, signing, or a WebView2 bootstrapper.
    compose admit(name) over the final mapping and current readiness context
    create BridgeDispatcher(document=pending_state, commands=mapping,
                            admit=composition_admit)
-   create_window(local index path, js_api=None)
+   create_window(local index path, js_api=None,
+                 width=1280, height=800, min_size=(1024, 640))
    expose only dispatch(command_json) through the function table
    start_edge_chromium(http_server=True, private_mode=True,
                        storage_path=paths.webview2)
@@ -469,7 +470,11 @@ third-party notices, signing, or a WebView2 bootstrapper.
    ```
 
    Dispatch remains closed while document authority is pending or failed.
-   Pywebview private window fields are not mutated to solve construction order.
+   Width, height, and minimum size are logical pywebview construction values;
+   its WinForms backend owns DPI conversion. Private window fields are not
+   mutated to solve construction order or geometry. The former viewport media
+   query is removed; a 48 rem inline-size container preserves stacked reflow
+   under WebView2 zoom despite the native minimum.
 
    A failure before `start_edge_chromium` unwinds acquired state through one
    bounded finalizer: close the service if constructed, log any cleanup failure

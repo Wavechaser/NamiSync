@@ -497,6 +497,9 @@ def test_br_g_31_installed_host_composition_preserves_security_boundaries(
     create_event = _only_event(events, "create_window.begin")
     start_event = _only_event(events, "webview.start")
     assert create_event["settings"] == _REQUIRED_SETTINGS
+    assert create_event["width"] == 1280
+    assert create_event["height"] == 800
+    assert create_event["min_size"] == [1024, 640]
     assert start_event["settings"] == _REQUIRED_SETTINGS
     assert start_event["gui"] == "edgechromium"
     assert start_event["debug"] is False
@@ -921,6 +924,9 @@ def _assert_packaged_popup_evidence(
     events = evidence["events"]
     create = _only_event(events, "create_window.begin")
     index = Path(create["index"]).resolve()
+    assert create["width"] == 1280
+    assert create["height"] == 800
+    assert create["min_size"] == [1024, 640]
     assert index.is_relative_to(installed_root)
     assert index.parts[-3:] == ("web", "assets", "index.html")
     execute = _only_event(events, "packaged_probe.execute")

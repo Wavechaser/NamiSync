@@ -5,6 +5,7 @@ body {
 }
 
 body {
+  container-type: inline-size;
   min-block-size: 100vh;
 }
 
@@ -91,7 +92,7 @@ body {
   margin-block-start: var(--space-4);
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 48rem) {
   #app {
     grid-template-areas:
       "header"
@@ -147,7 +148,7 @@ body {
   --nami-file-column-secondary: var(--file-column-secondary-default);
   --nami-file-column-notes: var(--file-column-notes-default);
   inline-size: 100%;
-  min-inline-size: 60rem;
+  min-inline-size: 48rem;
 }
 
 .nami-file-list__header,
@@ -177,6 +178,8 @@ body {
   background: var(--color-neutral-surface);
   block-size: var(--file-row-h);
   color: var(--color-neutral-foreground);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
 }
 
 .nami-file-list__body > .nami-file-row:nth-child(even) {
@@ -227,7 +230,7 @@ body {
 }
 
 .nami-file-list__column-resizer:is(:hover, :focus-visible)::after {
-  background: var(--color-accent);
+  background: var(--color-accent-fill);
   inline-size: 2px;
 }
 
@@ -349,7 +352,8 @@ body {
   --nami-state-foreground: var(--nami-plan-preferred-foreground);
 }
 
-.nami-plan-row__checksum {
+.nami-plan-row__checksum,
+.nami-integrity-row__checksum {
   font-family: var(--font-family-monospace);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
@@ -361,8 +365,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-.nami-integrity-row__presence,
-.nami-integrity-row__integrity {
+.nami-integrity-row__presence {
   color: var(--nami-file-status-foreground);
   font-weight: var(--font-weight-semibold);
 }
@@ -370,21 +373,11 @@ body {
 .nami-integrity-row__presence:is(
   [data-status="complete"],
   [data-status="success"]
-),
-.nami-integrity-row__integrity:is(
-  [data-status="complete"],
-  [data-status="success"]
 ) {
   --nami-file-status-foreground: var(--file-status-positive-foreground);
 }
 
 .nami-integrity-row__presence:is(
-  [data-status="failure"],
-  [data-status="error"],
-  [data-status="canceled"],
-  [data-status="blocked"]
-),
-.nami-integrity-row__integrity:is(
   [data-status="failure"],
   [data-status="error"],
   [data-status="canceled"],
@@ -398,36 +391,23 @@ body {
   [data-status="degraded"],
   [data-status="incomplete"],
   [data-status="deferred"]
-),
-.nami-integrity-row__integrity:is(
-  [data-status="warning"],
-  [data-status="degraded"],
-  [data-status="incomplete"],
-  [data-status="deferred"]
 ) {
   --nami-file-status-foreground: var(--file-status-warning-foreground);
 }
 
-.nami-integrity-row__presence[data-status="active"],
-.nami-integrity-row__integrity[data-status="active"] {
+.nami-integrity-row__presence[data-status="active"] {
   --nami-file-status-foreground: var(--file-status-active-foreground);
 }
 
-.nami-integrity-row__presence[data-status="paused"],
-.nami-integrity-row__integrity[data-status="paused"] {
+.nami-integrity-row__presence[data-status="paused"] {
   --nami-file-status-foreground: var(--file-status-paused-foreground);
 }
 
-.nami-integrity-row__presence[data-status="mismatch"],
-.nami-integrity-row__integrity[data-status="mismatch"] {
+.nami-integrity-row__presence[data-status="mismatch"] {
   --nami-file-status-foreground: var(--file-status-mismatch-foreground);
 }
 
 .nami-integrity-row__presence:is(
-  [data-status="neutral"],
-  [data-status="noop"]
-),
-.nami-integrity-row__integrity:is(
   [data-status="neutral"],
   [data-status="noop"]
 ) {
@@ -436,14 +416,13 @@ body {
 
 @media (forced-colors: active) {
   .nami-file-list__header {
-    background: var(--color-accent);
-    color: var(--color-accent-foreground);
+    background: var(--color-accent-fill);
+    color: var(--color-accent-fill-foreground);
     forced-color-adjust: none;
   }
 
   .nami-plan-row__intent,
-  .nami-integrity-row__presence,
-  .nami-integrity-row__integrity {
+  .nami-integrity-row__presence {
     color: var(--color-neutral-foreground);
   }
 }

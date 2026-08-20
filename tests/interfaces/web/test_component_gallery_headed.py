@@ -169,12 +169,12 @@ _SELECTED_TASK_CARD_KEYS = {
     "task_card_current",
 }
 _BOUNDARY_CONTROL_KEYS = {
+    "button",
     "tri_state_checkbox",
     "text_input",
     "toggle",
 }
 _OUTLINE_FREE_CONTROL_KEYS = {
-    "button",
     "button_primary",
     "progress_determinate",
     "progress_indeterminate",
@@ -192,6 +192,38 @@ _FORCED_STATIC_ACCENT_CONTROL_KEYS = {
     "segmented_control",
     "task_card_selected",
     "task_card_current",
+}
+_FORCED_STATE_COLLAPSE_CONTROL_KEYS = _FORCED_STATIC_ACCENT_CONTROL_KEYS | {
+    "tri_state_checkbox",
+    "toggle",
+}
+_ACCENT_INTERACTIVE_CONTROL_KEYS = {
+    "button_primary",
+    "tri_state_checkbox",
+    "toggle",
+    "segmented_control",
+}
+_CONTROL_FILL_RGB = {
+    "light": {
+        "rest": "rgb(251, 251, 251)",
+        "hover": "rgb(246, 246, 246)",
+        "pressed": "rgb(245, 245, 245)",
+        "border": "rgb(229, 229, 229)",
+    },
+    "dark": {
+        "rest": "rgb(45, 45, 45)",
+        "hover": "rgb(50, 50, 50)",
+        "pressed": "rgb(39, 39, 39)",
+        "border": "rgb(53, 53, 53)",
+    },
+}
+_CHECKBOX_STRONG_STROKE = {
+    "light": ((0.0, 0.0, 0.0), 0x72 / 0xFF),
+    "dark": ((255.0, 255.0, 255.0), 0x8B / 0xFF),
+}
+_SELECTION_HIGHLIGHT = {
+    "light": ((0.0, 0.0, 0.0), 0.04, 0.02),
+    "dark": ((255.0, 255.0, 255.0), 0.08, 0.04),
 }
 _RGB = re.compile(
     r"rgba?\(\s*([0-9.]+)(?:\s*,|\s+)\s*([0-9.]+)"
@@ -599,6 +631,13 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         for control in component_gallery_child._CONTROL_KEYS
         for state in component_gallery_child._CONTROL_STATES
     ]
+    for control in controls:
+        if control["control"] in {"tri_state_checkbox", "text_input"}:
+            control["border_width"] = "2px"
+        if control["control"] == "text_input":
+            control["box_shadow"] = (
+                "rgba(0, 0, 0, 0.45) 0px -2px 0px 0px inset"
+            )
     cosmetic_snapshot = {
         "section": "appearance",
         "value_version": 1,
@@ -674,6 +713,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "column_lefts": [float(index) for index in range(6)],
                 "name_padding_left": 24.0 if case in {"copy", "update"} else 8.0,
                 "row_height": 24.0,
+                "font_size": 12.0,
             }
         )
 
@@ -699,9 +739,11 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "primary": "Both",
                 "primary_tone": "status",
                 "primary_key": "complete",
-                "secondary": "Match",
-                "secondary_tone": "status",
-                "secondary_key": "complete",
+                "secondary": (
+                    "12345678" if case in {"match", "mismatch"} else "—"
+                ),
+                "secondary_tone": "",
+                "secondary_key": "",
                 "notes": f"{case} notes",
                 "background": "rgb(255, 255, 255)",
                 "primary_color": "rgb(0, 0, 0)",
@@ -712,6 +754,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "column_lefts": [float(index) for index in range(6)],
                 "name_padding_left": 24.0 if case in {"match", "source_only"} else 8.0,
                 "row_height": 24.0,
+                "font_size": 12.0,
             }
         )
 
@@ -787,10 +830,22 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         ],
         "controls": controls,
         "control_contract": {
+            "accent": {
+                "fill": "rgb(0, 103, 192)",
+                "fill_hover": "rgba(0, 103, 192, 0.9)",
+                "fill_pressed": "rgba(0, 103, 192, 0.8)",
+                "foreground": "rgb(255, 255, 255)",
+            },
             "tri_state": {
                 "aria_checked": "mixed",
                 "indeterminate": True,
                 "cue_content": '"−"',
+                "unchecked_border": "rgba(0, 0, 0, 0.447059)",
+                "unchecked_border_width": "2px",
+                "mixed_background": "rgb(0, 103, 192)",
+                "mixed_foreground": "rgb(255, 255, 255)",
+                "mixed_border": "rgb(0, 103, 192)",
+                "mixed_border_width": "2px",
             },
             "dialog_exit": {
                 "opened": True,
@@ -823,9 +878,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "popup_shadow": "rgba(0, 0, 0, 0.22) 0px 8px 16px 0px",
                 "popup_backdrop_filter": "none",
                 "ordinary_option_background": "rgba(0, 0, 0, 0)",
-                "selected_option_background": "rgb(235, 235, 235)",
-                "hovered_option_background": "rgb(245, 245, 245)",
-                "pressed_option_background": "rgb(224, 224, 224)",
+                "selected_option_background": "rgba(0, 0, 0, 0.04)",
+                "hovered_option_background": "rgba(0, 0, 0, 0.04)",
+                "pressed_option_background": "rgba(0, 0, 0, 0.02)",
                 "selected_pill_width": 3.0,
                 "selected_pill_background": "rgb(0, 120, 212)",
             },
@@ -835,6 +890,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "left_of_work": True,
                 "selected_count": 1,
                 "current_count": 1,
+                "selected_current_same_card": True,
                 "transparent_boundaries": True,
                 "selected_marker_width": 3.0,
                 "current_marker_width": 3.0,
@@ -847,7 +903,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             ),
             "integrity_list": file_list(
                 integrity_rows,
-                ["", "Filename", "Size", "Presence", "Integrity", "Notes"],
+                ["", "Filename", "Size", "Presence", "Checksum", "Notes"],
             ),
         },
         "motion": {
@@ -905,11 +961,18 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     report_root.mkdir()
     report_paths = EvidencePaths(report_root.resolve())
     recorder = component_gallery_child._Recorder(report_paths, "light")
+    scheduled: list[list[dict[str, object]]] = []
     spec = component_gallery_child._test_report_spec(
         recorder,
-        lambda _targets: None,
+        scheduled.append,
         "light",
     )
+    pseudo_targets = component_gallery_child._expected_pseudo_targets("light")
+    assert spec.invoke(
+        {"phase": "prepare", "targets": pseudo_targets},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert scheduled == [pseudo_targets]
     for sequence, (name, value) in enumerate(part_values):
         payload = {
             "phase": "part",
@@ -942,6 +1005,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     ) == {"accepted": True}
     recorded = EvidenceReader(report_paths).read_ready()
     assert recorded is not None
+    assert recorded["schema_version"] == 2
     assert recorded["report"] == report
 
     incomplete_root = tmp_path / "incomplete"
@@ -1053,6 +1117,12 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert '["Translucent surface without shadow", "shadowless"]' in script
     assert '["Opaque surface with shadow", "opaque"]' in script
     assert 'document.createElement("select")' not in script
+    assert "replaceWith(" not in script
+    assert 'ordinaryThemeOption.cloneNode(true)' in script
+    assert 'pressedThemeOptionSource.cloneNode(true)' in script
+    assert 'hoveredThemeOption.id = "gallery-theme-option-hover";' in script
+    assert 'pressedThemeOption.id = "gallery-theme-option-pressed";' in script
+    assert "optionStatePopup.remove();" in script
     assert "localStorage" not in script
     assert "sessionStorage" not in script
     assert not any(
@@ -1125,8 +1195,11 @@ def test_component_gallery_enables_dom_before_css_pseudo_state_agent(
         ),
         [],
     )
-
-    assert core.methods == ["DOM.enable", "CSS.enable", "DOM.getDocument"]
+    assert core.methods == [
+        "DOM.enable",
+        "CSS.enable",
+        "DOM.getDocument",
+    ]
     assert core.scripts == ["globalThis.__namiGalleryPseudoReady = true;"]
 
 
@@ -1244,7 +1317,22 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 control["control"] in _BOUNDARY_CONTROL_KEYS
                 and control["state"] != "disabled"
             ):
-                assert _control_boundary_contrast(control) >= 3.0
+                assert _painted_border(
+                    control["border_width"],
+                    control["border_style"],
+                ) or _painted_border(
+                    control["root_border_width"],
+                    control["root_border_style"],
+                )
+                if control["control"] in {"tri_state_checkbox", "toggle"}:
+                    assert _control_boundary_contrast(control) >= 3.0
+                elif control["control"] == "text_input":
+                    underline_colors = _inset_shadow_colors(control)
+                    assert underline_colors
+                    assert max(
+                        _composited_contrast(color, control["background"])
+                        for color in underline_colors
+                    ) >= 3.0
             if control["state"] == "focused":
                 assert (
                     control["box_shadow"] != "none"
@@ -1264,6 +1352,27 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             }
             for key in _CONTROL_KEYS
         }
+        theme = "dark" if report["media"]["dark"] else "light"
+        normal_button = controls_by_key["button"]
+        for state in ("rest", "hover", "pressed"):
+            assert normal_button[state]["background"] == (
+                _CONTROL_FILL_RGB[theme][state]
+            )
+            assert normal_button[state]["border"] == (
+                _CONTROL_FILL_RGB[theme]["border"]
+            )
+        for state in _CONTROL_STATES:
+            button_width = _css_pixel_width(normal_button[state]["border_width"])
+            checkbox_width = _css_pixel_width(
+                controls_by_key["tri_state_checkbox"][state]["border_width"]
+            )
+            input_width = _css_pixel_width(
+                controls_by_key["text_input"][state]["border_width"]
+            )
+            assert button_width > 0
+            assert checkbox_width >= button_width * 1.75
+            assert input_width >= button_width * 1.75
+            assert checkbox_width == pytest.approx(input_width, abs=0.01)
         expected_flyout_alpha = 0.2 if report["media"]["dark"] else 0.06
         assert _color_alpha(
             controls_by_key["dialog"]["rest"]["border"]
@@ -1296,8 +1405,62 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             "none"
         )
         assert controls_by_key["button_primary"]["pressed"]["visual_filter"] == (
-            "brightness(0.82)"
+            "none"
         )
+        accent = report["control_contract"]["accent"]
+        accent_rgb = _color_rgb(accent["fill"])
+        accent_states = {
+            "rest": ("fill", 1.0),
+            "hover": ("fill_hover", 0.9),
+            "pressed": ("fill_pressed", 0.8),
+        }
+        assert controls_by_key["button_primary"]["rest"]["foreground"] == (
+            accent["foreground"]
+        )
+        for state, (semantic_role, alpha) in accent_states.items():
+            semantic_fill = accent[semantic_role]
+            assert _color_rgb(semantic_fill) == pytest.approx(accent_rgb)
+            assert _color_alpha(semantic_fill) == pytest.approx(alpha)
+            primary_background = controls_by_key["button_primary"][state][
+                "background"
+            ]
+            assert primary_background == semantic_fill
+            for control in _ACCENT_INTERACTIVE_CONTROL_KEYS - {
+                "button_primary"
+            }:
+                assert controls_by_key[control][state]["background"] == (
+                    primary_background
+                )
+        tri_state = report["control_contract"]["tri_state"]
+        checkbox_stroke_rgb, checkbox_stroke_alpha = _CHECKBOX_STRONG_STROKE[
+            theme
+        ]
+        assert _color_rgb(tri_state["unchecked_border"]) == pytest.approx(
+            checkbox_stroke_rgb
+        )
+        assert _color_alpha(tri_state["unchecked_border"]) == pytest.approx(
+            checkbox_stroke_alpha,
+            abs=0.001,
+        )
+        assert tri_state["mixed_background"] == (
+            controls_by_key["button_primary"]["rest"]["background"]
+        )
+        assert tri_state["mixed_border"] == tri_state["mixed_background"]
+        input_states = controls_by_key["text_input"]
+        assert all("inset" in input_states[state]["box_shadow"] for state in (
+            "rest",
+            "hover",
+            "pressed",
+            "focused",
+        ))
+        rest_underline = _inset_shadow_colors(input_states["rest"])
+        focused_underline = _inset_shadow_colors(input_states["focused"])
+        assert len(rest_underline) == 1
+        assert len(focused_underline) == 1
+        assert focused_underline[0] == (
+            controls_by_key["button_primary"]["rest"]["background"]
+        )
+        assert rest_underline != focused_underline
         assert controls_by_key["button_primary"]["disabled"]["background"] == (
             controls_by_key["button"]["disabled"]["background"]
         )
@@ -1380,17 +1543,38 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             0.10 if report["media"]["dark"] else 0.06,
             abs=0.005,
         )
-        assert transparent["hover"]["background"] == card["rest"]["background"]
-        assert transparent["pressed"]["background"] != card["rest"]["background"]
+        selection_rgb, selected_alpha, pressed_alpha = _SELECTION_HIGHLIGHT[theme]
+        assert _color_rgb(transparent["hover"]["background"]) == pytest.approx(
+            selection_rgb
+        )
+        assert _color_alpha(transparent["hover"]["background"]) == pytest.approx(
+            selected_alpha
+        )
+        assert _color_rgb(transparent["pressed"]["background"]) == pytest.approx(
+            selection_rgb
+        )
+        assert _color_alpha(transparent["pressed"]["background"]) == pytest.approx(
+            pressed_alpha
+        )
+        combobox = report["control_contract"]["combobox"]
+        assert combobox["selected_option_background"] == (
+            combobox["hovered_option_background"]
+        )
+        assert combobox["selected_option_background"] == (
+            transparent["hover"]["background"]
+        )
+        assert combobox["pressed_option_background"] == (
+            transparent["pressed"]["background"]
+        )
+        assert combobox["selected_pill_background"] == (
+            controls_by_key["button_primary"]["rest"]["background"]
+        )
         for control in _SELECTED_TASK_CARD_KEYS:
             selected = by_control[control]
-            assert selected["rest"]["background"] == card["rest"]["background"]
-            assert selected["focused"]["background"] == card["rest"]["background"]
-            assert selected["hover"]["background"] != selected["rest"]["background"]
-            assert selected["pressed"]["background"] != selected["hover"]["background"]
-            assert _color_alpha(selected["hover"]["background"]) < (
-                _color_alpha(selected["rest"]["background"])
-            )
+            assert selected["rest"]["background"] == transparent["hover"]["background"]
+            assert selected["focused"]["background"] == selected["rest"]["background"]
+            assert selected["hover"]["background"] == selected["rest"]["background"]
+            assert selected["pressed"]["background"] == transparent["pressed"]["background"]
             assert all(row["border_width"] == "0px" for row in selected.values())
     system_colors = set(forced["icons"]["system_colors"].values())
     assert system_colors
@@ -1411,6 +1595,10 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         )
         assert forced_rest_controls[control]["foreground"] == (
             forced["icons"]["system_colors"]["HighlightText"]
+        )
+    for control in {"tri_state_checkbox", "toggle"}:
+        assert forced_rest_controls[control]["background"] == (
+            forced["icons"]["system_colors"]["Highlight"]
         )
     for row in (*forced["statuses"], *forced["operations"]):
         assert row["foreground"] in system_colors
@@ -1620,6 +1808,7 @@ def _run_gallery_mode(
     result = dict(initial)
     result["exit_code"] = final["exit_code"]
     assert result["exit_code"] == 0
+    assert result["schema_version"] == 2
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
@@ -1845,7 +2034,7 @@ def _assert_integrity_list_evidence(
     rows = _assert_file_list_evidence(
         evidence,
         expected_order=expected_order,
-        expected_headers=["", "Filename", "Size", "Presence", "Integrity", "Notes"],
+        expected_headers=["", "Filename", "Size", "Presence", "Checksum", "Notes"],
         forced=forced,
         system_colors=system_colors,
     )
@@ -1858,16 +2047,17 @@ def _assert_integrity_list_evidence(
     assert by_case["match"]["depth"] > by_case["folder"]["depth"]
     for row in rows:
         assert row["primary_tone"] == "status"
-        assert row["secondary_tone"] == "status"
+        assert row["secondary_tone"] == ""
+        assert row["secondary_key"] == ""
+        assert row["secondary"] == "—" or len(row["secondary"]) == 8
         if forced:
             assert row["primary_color"] == system_colors["CanvasText"]
-            assert row["secondary_color"] == system_colors["CanvasText"]
         else:
             assert row["primary_color"] == _STATUS_MAIN_RGB[row["primary_key"]]
-            assert row["secondary_color"] == _STATUS_MAIN_RGB[row["secondary_key"]]
+        assert row["secondary_color"] == row["secondary_alias_color"]
+        assert _contrast(row["secondary_color"], row["background"]) >= 4.5
         if forced:
             assert _contrast(row["primary_color"], row["background"]) >= 4.5
-            assert _contrast(row["secondary_color"], row["background"]) >= 4.5
 
 
 def _assert_file_list_evidence(
@@ -1927,6 +2117,7 @@ def _assert_file_list_evidence(
         assert row["checkbox_width"] == pytest.approx(16.0, abs=0.5)
         assert row["checkbox_height"] == pytest.approx(16.0, abs=0.5)
         assert row["row_height"] == pytest.approx(24.0, abs=0.5)
+        assert row["font_size"] == pytest.approx(12.0, abs=0.25)
         assert all(
             not _opaque_color(background)
             for background in row["cell_backgrounds"]
@@ -1955,6 +2146,9 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     assert len(statuses) == len(_STATUS_KEYS)
     assert len(operations) == len(_OPERATION_KEYS)
     assert len(controls) == len(_CONTROL_KEYS) * len(_CONTROL_STATES)
+    accent = report["control_contract"]["accent"]
+    assert set(accent) == {"fill", "fill_hover", "fill_pressed", "foreground"}
+    assert all(type(color) is str and color for color in accent.values())
     for row in (*statuses, *operations):
         assert row["text"]
         assert row["icon"]
@@ -1973,6 +2167,10 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     assert tri_state["aria_checked"] == "mixed"
     assert tri_state["indeterminate"] is True
     assert tri_state["cue_content"] not in {"", "none", "normal"}
+    unchecked_width = _css_pixel_width(tri_state["unchecked_border_width"])
+    mixed_width = _css_pixel_width(tri_state["mixed_border_width"])
+    assert unchecked_width > 0
+    assert mixed_width == pytest.approx(unchecked_width, abs=0.01)
     assert report["control_contract"]["dialog_exit"] == {
         "opened": True,
         "retained_while_closing": True,
@@ -1994,6 +2192,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "left_of_work": True,
         "selected_count": 1,
         "current_count": 1,
+        "selected_current_same_card": True,
         "transparent_boundaries": True,
         "selected_marker_width": 3.0,
         "current_marker_width": 3.0,
@@ -2031,11 +2230,12 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         assert not _opaque_color(combobox["ordinary_option_background"])
         assert "linear-gradient" in combobox["trigger_background_image"]
         assert _opaque_color(combobox["popup_background"])
-        assert len({
-            combobox["selected_option_background"],
-            combobox["hovered_option_background"],
-            combobox["pressed_option_background"],
-        }) == 3
+        assert combobox["selected_option_background"] == (
+            combobox["hovered_option_background"]
+        )
+        assert combobox["pressed_option_background"] != (
+            combobox["selected_option_background"]
+        )
         expected_stroke_alpha = 0.2 if report["media"]["dark"] else 0.06
         assert _color_alpha(combobox["popup_border"]) == pytest.approx(
             expected_stroke_alpha
@@ -2069,7 +2269,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
                 continue
             if (
                 report["media"]["forced"]
-                and control in _FORCED_STATIC_ACCENT_CONTROL_KEYS
+                and control in _FORCED_STATE_COLLAPSE_CONTROL_KEYS
                 and (
                     state in {"hover", "pressed"}
                     or (
@@ -2078,6 +2278,8 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
                     )
                 )
             ):
+                continue
+            if control in _SELECTED_TASK_CARD_KEYS and state == "hover":
                 continue
             assert _control_signature(rows[state]) != rest, (control, state)
 
@@ -2120,10 +2322,12 @@ def _control_boundary_contrast(row: dict[str, str]) -> float:
             ),
         )
         if _painted_border(row[width], row[style])
-        and _opaque_color(row[color])
     ]
     assert painted, f"no painted control boundary: {row!r}"
-    return max(_contrast(color, row["surrounding"]) for color in painted)
+    return max(
+        _composited_contrast(color, row["surrounding"])
+        for color in painted
+    )
 
 
 def _painted_border(width: str, style: str) -> bool:
@@ -2134,6 +2338,13 @@ def _painted_border(width: str, style: str) -> bool:
         and side_style not in {"none", "hidden"}
         for side_width, side_style in zip(widths, styles, strict=True)
     )
+
+
+def _css_pixel_width(value: str) -> float:
+    assert value.endswith("px")
+    width = float(value.removesuffix("px"))
+    assert math.isfinite(width)
+    return width
 
 
 def _expand_css_sides(value: str) -> tuple[str, str, str, str]:
@@ -2171,7 +2382,31 @@ def _rendered_focus_color(row: dict[str, str]) -> str:
 
 
 def _focus_shadow_colors(row: dict[str, str]) -> list[str]:
-    return [match.group(0) for match in _RGB.finditer(row["box_shadow"])]
+    return _shadow_colors(row, inset=False)
+
+
+def _inset_shadow_colors(row: dict[str, str]) -> list[str]:
+    return _shadow_colors(row, inset=True)
+
+
+def _shadow_colors(row: dict[str, str], *, inset: bool) -> list[str]:
+    value = row["box_shadow"]
+    matches = list(_RGB.finditer(value))
+    return [
+        match.group(0)
+        for index, match in enumerate(matches)
+        if (
+            "inset"
+            in value[
+                match.end() : (
+                    matches[index + 1].start()
+                    if index + 1 < len(matches)
+                    else len(value)
+                )
+            ]
+        )
+        is inset
+    ]
 
 
 def _opaque_color(value: str) -> bool:
@@ -2185,6 +2420,24 @@ def _color_alpha(value: str) -> float:
     match = _RGB.fullmatch(value)
     assert match is not None, value
     return 1.0 if match.group(4) is None else float(match.group(4))
+
+
+def _color_rgb(value: str) -> tuple[float, float, float]:
+    match = _RGB.fullmatch(value)
+    assert match is not None, value
+    return tuple(float(match.group(index)) for index in range(1, 4))
+
+
+def _composited_contrast(foreground: str, background: str) -> float:
+    alpha = _color_alpha(foreground)
+    foreground_rgb = tuple(channel / 255.0 for channel in _color_rgb(foreground))
+    background_rgb = _rgb(background)
+    composite = tuple(
+        source * alpha + base * (1.0 - alpha)
+        for source, base in zip(foreground_rgb, background_rgb, strict=True)
+    )
+    low, high = sorted((_luminance(composite), _luminance(background_rgb)))
+    return (high + 0.05) / (low + 0.05)
 
 
 def _assert_icon_registry_evidence(

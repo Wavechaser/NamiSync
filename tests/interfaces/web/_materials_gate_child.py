@@ -134,17 +134,14 @@ _PAGE_PROBE = r"""
     theme: root.getAttribute("data-theme"),
     high_contrast: root.getAttribute("data-high-contrast"),
     forced_colors_active: matchMedia("(forced-colors: active)").matches,
-    inline_accent: root.style.getPropertyValue("--color-accent").trim(),
-    inline_accent_hover: root.style
-      .getPropertyValue("--color-accent-hover").trim(),
-    inline_accent_pressed: root.style
-      .getPropertyValue("--color-accent-pressed").trim(),
-    inline_accent_foreground: root.style
-      .getPropertyValue("--color-accent-foreground").trim(),
-    inline_accent_hover_foreground: root.style
-      .getPropertyValue("--color-accent-hover-foreground").trim(),
-    inline_accent_pressed_foreground: root.style
-      .getPropertyValue("--color-accent-pressed-foreground").trim(),
+    inline_accent_fill: root.style
+      .getPropertyValue("--color-accent-fill").trim(),
+    inline_accent_fill_hover: root.style
+      .getPropertyValue("--color-accent-fill-hover").trim(),
+    inline_accent_fill_pressed: root.style
+      .getPropertyValue("--color-accent-fill-pressed").trim(),
+    inline_accent_fill_foreground: root.style
+      .getPropertyValue("--color-accent-fill-foreground").trim(),
     root_background: rootStyle.backgroundColor,
     body_background: bodyStyle.backgroundColor,
     body_foreground: bodyStyle.color,
@@ -185,7 +182,7 @@ class _Recorder:
         self._initial: str | None = None
         self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "scenario": scenario,
             "phase": "starting",
             "startup_errors": [],
@@ -306,11 +303,13 @@ def _appearance_snapshot(value: object) -> dict[str, object]:
         "dark": bool(value.dark),
         "high_contrast": bool(value.high_contrast),
         "accent": str(value.accent),
-        "accent_hover": str(value.accent_hover),
-        "accent_pressed": str(value.accent_pressed),
-        "accent_foreground": str(value.accent_foreground),
-        "accent_hover_foreground": str(value.accent_hover_foreground),
-        "accent_pressed_foreground": str(value.accent_pressed_foreground),
+        "accent_light_1": str(value.accent_light_1),
+        "accent_light_2": str(value.accent_light_2),
+        "accent_dark_1": str(value.accent_dark_1),
+        "accent_fill": str(value.accent_fill),
+        "accent_fill_hover": str(value.accent_fill_hover),
+        "accent_fill_pressed": str(value.accent_fill_pressed),
+        "accent_fill_foreground": str(value.accent_fill_foreground),
         "build": int(value.build),
         "supports_mica": bool(value.supports_mica),
     }
@@ -631,8 +630,9 @@ def _install_native_boundary_observers(
                 high_contrast=False,
                 accent=actual.accent,
                 build=appearance._MICA_MINIMUM_BUILD - 1,
-                accent_hover=actual.accent_hover,
-                accent_pressed=actual.accent_pressed,
+                accent_light_1=actual.accent_light_1,
+                accent_light_2=actual.accent_light_2,
+                accent_dark_1=actual.accent_dark_1,
             )
         elif scenario == "dark-no-material":
             selected = appearance.SystemAppearance(
@@ -640,8 +640,9 @@ def _install_native_boundary_observers(
                 high_contrast=False,
                 accent=actual.accent,
                 build=appearance._MICA_MINIMUM_BUILD - 1,
-                accent_hover=actual.accent_hover,
-                accent_pressed=actual.accent_pressed,
+                accent_light_1=actual.accent_light_1,
+                accent_light_2=actual.accent_light_2,
+                accent_dark_1=actual.accent_dark_1,
             )
         elif scenario == "high-contrast":
             selected = appearance.SystemAppearance(
@@ -649,8 +650,9 @@ def _install_native_boundary_observers(
                 high_contrast=True,
                 accent=actual.accent,
                 build=max(actual.build, appearance._MICA_MINIMUM_BUILD),
-                accent_hover=actual.accent_hover,
-                accent_pressed=actual.accent_pressed,
+                accent_light_1=actual.accent_light_1,
+                accent_light_2=actual.accent_light_2,
+                accent_dark_1=actual.accent_dark_1,
             )
         else:
             selected = appearance.SystemAppearance(
@@ -658,8 +660,9 @@ def _install_native_boundary_observers(
                 high_contrast=False,
                 accent=actual.accent,
                 build=max(actual.build, appearance._MICA_MINIMUM_BUILD),
-                accent_hover=actual.accent_hover,
-                accent_pressed=actual.accent_pressed,
+                accent_light_1=actual.accent_light_1,
+                accent_light_2=actual.accent_light_2,
+                accent_dark_1=actual.accent_dark_1,
             )
         recorder.set("selected_system", _appearance_snapshot(selected))
         recorder.set("opaque_system_color", native.opaque_background(selected))

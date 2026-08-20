@@ -92,6 +92,9 @@ class _Webview:
         js_api: object,
         background_color: str,
         transparent: bool,
+        width: int,
+        height: int,
+        min_size: tuple[int, int],
     ):
         self.order.append(
             (
@@ -101,6 +104,9 @@ class _Webview:
                 js_api,
                 background_color,
                 transparent,
+                width,
+                height,
+                min_size,
             )
         )
         return self.window
@@ -251,7 +257,7 @@ def test_shared_host_handshake_channel_rejects_nonreadiness_and_extra_posts() ->
 
     with pytest.raises(AssertionError, match="non-readiness"):
         channel.post(
-            {"kind": "namisync.appearance.v1", "challenge": "a" * 32},
+            {"kind": "namisync.appearance.v2", "challenge": "a" * 32},
             still_current=lambda: pytest.fail("unexpected currentness check"),
             completion=lambda _error: pytest.fail("unexpected completion"),
         )
@@ -701,6 +707,9 @@ def test_host_prepares_before_create_and_starts_only_edge(
     assert created[3] is None
     assert created[4] == "#F3F3F3"
     assert created[5] is False
+    assert created[6] == 1280
+    assert created[7] == 800
+    assert created[8] == (1024, 640)
     assert len(webview.window.exposed_functions) == 1
     exposed_dispatch = webview.window.exposed_functions[0]
     assert exposed_dispatch.__name__ == "dispatch"

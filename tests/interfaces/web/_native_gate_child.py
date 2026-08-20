@@ -328,6 +328,9 @@ def _install_module_observers(
             recorder.event(
                 "create_window.begin",
                 index=str(args[1]) if len(args) > 1 else str(kwargs.get("url")),
+                width=kwargs.get("width"),
+                height=kwargs.get("height"),
+                min_size=list(kwargs["min_size"]),
                 settings=_settings_snapshot(module),
             )
             window = original_create(*args, **kwargs)

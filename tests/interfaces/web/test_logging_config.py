@@ -164,10 +164,16 @@ class Webview:
         js_api,
         background_color,
         transparent,
+        width,
+        height,
+        min_size,
     ):
         assert js_api is None
         assert background_color == "#F3F3F3"
         assert transparent is False
+        assert width == 1280
+        assert height == 800
+        assert min_size == (1024, 640)
         return self.window
 
 

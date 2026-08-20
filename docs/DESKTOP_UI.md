@@ -215,8 +215,9 @@ A future hardcoded or derived color value is possible only after an explicit
 product-author design decision and a same-change contract/token/evidence update; it is
 not silently synthesized by a renderer. `tokens.css` also owns meaning-named
 semantic aliases for statuses and operation categories; neutral roles use a
-pinned Microsoft Fluent light/dark subset and interactive accent roles use the
-observed Windows `Accent`, `AccentLight1`, and `AccentDark1` palette. These
+pinned Microsoft Fluent light/dark subset. Native appearance retains the
+observed Windows `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1`
+ramp values, while the page receives only semantic accent-fill roles. These
 externally owned design inputs are tested separately from the 13
 NamiSync-authored primitives. The neutral and scale values are transcribed from
 pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
@@ -235,20 +236,26 @@ colors, and text plus icon/shape/state cues keep every status understandable
 without color. The gallery resolves production HTML/CSS from a clean installed
 wheel and records exact installed `tokens.css`/`components.css` bytes; its own
 page remains tests-only. That clean-wheel statement applies to the pytest
-acceptance composition, not the editable `tools/gui.ps1` preview. Computed pairs
-must reach 4.5:1 for normal text and 3:1 for large text and non-text UI
-indicators/boundaries.
+acceptance composition, not the editable `tools/gui.ps1` preview. Computed text
+pairs must reach 4.5:1 for normal text and 3:1 for large text. State indicators,
+checkbox/toggle boundaries, and the textbox underline meet the 3:1 non-text
+floor. Ordinary button and textbox elevation strokes are deliberately subtle
+construction lines; the dual keyboard-focus stroke remains the accessible
+control boundary.
 
-The tuned component contract has two command-button tiers: a solid inverse-
-gray default and a Windows-accent primary modifier for consequential actions
-such as Execute and Verify. Both are borderless in ordinary themes. Primary
-button labels use exact black or white chosen from the sampled base accent by
-the native WCAG relative-luminance calculation. Every accent-filled label
-retains that base-rung foreground through hover and press, so fill darkening
-does not reverse its text. Hover uses the sampled darker accent role; press
-retains that role and applies one additional brightness step. Forced colors
-remove that visual filter and retain the system `Highlight`/`HighlightText`
-pair. The selected Sync/Integrity half inherits the same stable foreground.
+The tuned component contract has two command-button tiers. Ordinary buttons
+use the WinUI control composites: `#fbfbfb` fill with a subtle `#e5e5e5`
+boundary in Light and `#2d2d2d` fill with `#353535` in Dark. A Windows-accent
+primary modifier marks consequential actions such as Execute and Verify.
+Light selects Windows `AccentDark1` as its base; Dark selects `AccentLight2`.
+Hover and press retain that base at 90% and 80% opacity respectively, so Mica
+or the owning control surface remains the real compositing base. Primary
+button labels use exact black or white chosen once from the opaque base by the
+native WCAG relative-luminance calculation. Every accent-filled label retains
+that foreground through interaction, so text never reverses. The selected
+Sync/Integrity half, checked boxes, and toggles use the same state ladder;
+progress and selection markers consume only the base fill. Forced colors use
+the system `Highlight`/`HighlightText` pair.
 Filter
 pills are likewise borderless: inactive pills use an inverse grayscale surface
 and text pairing, while an active operation filter uses that operation family's
@@ -274,6 +281,16 @@ keeps the page-contrast ring distinct from inverse control fills. Mouse
 activation does not request that ring. Forced colors continue to use the
 system focus outline and its explicit offset.
 
+Unchecked checkboxes use the neutral Fluent `ControlStrongStrokeColorDefault`
+2 px boundary (`#72000000` Light / `#8BFFFFFF` Dark in WinUI ARGB notation,
+authored as CSS RGBA hex). Their selected fill and boundary become semantic
+accent states while retaining the 16 px outer geometry. Textboxes use a
+separate subtle 2 px control
+boundary and a stronger neutral bottom stroke at rest; focus changes only that
+underline to the semantic accent fill. Mouse focus therefore does not gain a
+keyboard ring, while `:focus-visible` composes the accented underline with the
+shared dual focus stroke.
+
 Elevated surfaces use a dedicated flyout boundary rather than the accessible
 control-stroke role: black 6% in Light and black 20% in Dark, with opaque
 Light/Dark stroke fallbacks. Dialogs and menus keep their ordinary black
@@ -298,10 +315,12 @@ still passes through `render.js`. Neither `app.js` nor `panels.js` imports these
 modules, so production remains the honest empty Slice 4 shell until Slice 5
 owns validated Python projections and bridge paths.
 
-Both lists use the same compact six-column grid and 24 px rows with 16 px
-native checkboxes. The sync plan order is Selection, Filename, Size, Operation
-/ status, Checksum, Notes. The integrity order is Selection, Filename, Size,
-Presence, Integrity, Notes. Selection has no visible header text and retains
+Both lists use the same compact six-column grid, 24 px rows, 12 px row text,
+and 16 px native checkboxes. The sync plan order is Selection, Filename, Size,
+Operation / status, Checksum, Notes. The integrity order is Selection,
+Filename, Size, Presence, Checksum, Notes: integrity classification is carried
+inside the projected presence/status label because a checksum comparison is
+irrelevant when the expected file is absent. Selection has no visible header text and retains
 the accessible name `Selection`. Each header exposes a focusable vertical
 separator that changes its grid track by pointer drag or Left/Right arrow; the
 gallery retains the resulting width only in its current DOM and deliberately
@@ -313,7 +332,8 @@ both ordinary themes; plan Error/Unsupported and integrity negative states use
 red-main, while neutral/no-op stays neutral. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
 the row group has no filler height, so striping ends at the final row. The
-aligned grid scrolls horizontally when constrained. Forced colors replace
+aligned grid has a 48 rem content floor and scrolls horizontally when
+constrained. Forced colors replace
 colored state text with the system neutral foreground.
 
 The component gallery owns the only current callers and fixtures. The static
@@ -352,9 +372,13 @@ icon-only controls require their own accessible name. Later slices extend the
 fixed set only when their real controls make a glyph necessary.
 
 Native appearance observes Windows light/dark/high-contrast state and live
-`UISettings` `Accent`, `AccentLight1`, and `AccentDark1` values. A fixed
-revisioned envelope reaches packaged `appearance.js` through UI-thread
+`UISettings` `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1` values.
+The raw ramp stays native-side. The revisioned `namisync.appearance.v2`
+envelope publishes only `accentFill`, its 90% hover and 80% pressed values, and
+one contrast-selected foreground to packaged `appearance.js` through UI-thread
 `document_channel.py`; only its exact schema and fixed CSSOM sinks are valid.
+This internal document-envelope revision changes neither the persisted cosmetic
+value version nor the bridge request protocol.
 Observation subscribes before its mandatory initial read. Later native events
 advance one coalesced generation whose current state is read and applied on the
 window UI thread; a newer generation is deferred to another UI turn so stale
@@ -390,8 +414,9 @@ The selector is a production-owned DOM combobox rather than the browser's
 native picker. Its fixed-position listbox is portaled under `body`, matches the
 trigger width, aligns the selected option center with the trigger center when
 space permits, and clamps to an 8 px viewport inset. Ordinary options are
-transparent at rest; the selected option keeps a filled neutral tab plus a
-3 px accent pill, while hover and press use distinct neutral interaction fills.
+transparent at rest. Hover and selection use one shared neutral overlay;
+selection additionally keeps a 3 px accent pill, and press temporarily weakens
+that overlay. Task cards consume the same two selection roles.
 The closed trigger uses a subtle tokenized vertical
 elevation boundary at rest/hover and a flat subtle boundary while pressed/open;
 mouse activation does not request a focus ring, while `:focus-visible` retains
@@ -408,6 +433,13 @@ appearance envelope; page-side section initialization remains post-`OPEN` and
 cannot delay readiness. The precreate opaque background and first authoritative
 appearance envelope use the same override, and settled native/page presentation
 must agree; this is not a compositor-level claim of flash-free first paint.
+The native window is constructed at 1280 x 800 logical pixels with an explicit
+1024 x 640 logical-pixel minimum through pywebview's public `create_window`
+arguments. Pywebview's WinForms backend performs the DPI conversion; NamiSync
+does not mutate `window.native.MinimumSize` or correct geometry from JavaScript.
+The former viewport media query is removed. A 48 rem inline-size container
+query retains the stacked reflow because WebView2 zoom can still make the CSS
+viewport narrower than the logical host dimensions.
 Opaque fallback requires sufficient structured backdrop/glass/form/controller
 landing evidence. A live reapply that confirms neither native path publishes
 `degraded`, which returns the page itself to its theme-correct opaque base;
@@ -698,10 +730,9 @@ evidence adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.
-A resting unselected task card is fully transparent. Hover, press, selection,
-and current state remain separate: unselected hover uses the primary card blend
-and press uses secondary; selected/current rest uses primary, hover secondary,
-and press tertiary. Selected/current cards retain a 3 px sampled-accent marker,
+A resting unselected task card is fully transparent. Hover and selected/current
+rest use the same neutral selection overlay; press temporarily weakens it.
+Selected/current cards retain a 3 px sampled-accent marker,
 so hover never erases selection. Task cards have no painted border or elevation
 in ordinary themes. In forced colors,
 every enabled selected/current card pairs the `Highlight` surface with

@@ -92,20 +92,29 @@ _INITIAL_PROBE = r"""
   const app = document.querySelector("#app");
   const status = document.querySelector("#host-status");
   const theme = document.querySelector("#theme-mode");
+  const themeTrigger = theme?.querySelector(".nami-combobox__trigger");
+  const themePopupId = themeTrigger?.getAttribute("aria-controls");
+  const themePopup = themePopupId === null || themePopupId === undefined
+    ? null
+    : document.getElementById(themePopupId);
   const rail = document.querySelector(".nami-task-rail");
   const work = document.querySelector(".nami-work-panel");
   if (!(app instanceof HTMLElement) || !(status instanceof HTMLElement) ||
-      !(theme instanceof HTMLSelectElement) ||
+      !(theme instanceof HTMLElement) ||
+      !(themeTrigger instanceof HTMLButtonElement) ||
+      !(themePopup instanceof HTMLElement) ||
+      themeTrigger.getAttribute("role") !== "combobox" ||
+      themePopup.getAttribute("role") !== "listbox" ||
       !(rail instanceof HTMLElement) || !(work instanceof HTMLElement)) {
     throw new Error("production shell is unavailable");
   }
   if (status.textContent !== "Ready") {
     throw new Error("production bridge readiness is unavailable");
   }
-  for (let attempt = 0; attempt < 100 && theme.disabled; attempt += 1) {
+  for (let attempt = 0; attempt < 100 && themeTrigger.disabled; attempt += 1) {
     await new Promise((resolve) => window.setTimeout(resolve, 50));
   }
-  if (theme.disabled) {
+  if (themeTrigger.disabled) {
     throw new Error("production theme selector is unavailable");
   }
   const railRect = rail.getBoundingClientRect();
@@ -146,15 +155,30 @@ _INITIAL_PROBE = r"""
 _THEME_FOCUS_PROBE = r"""
 (() => {
   const selector = document.querySelector("#theme-mode");
+  const trigger = selector?.querySelector(".nami-combobox__trigger");
+  const popupId = trigger?.getAttribute("aria-controls");
+  const popup = popupId === null || popupId === undefined
+    ? null
+    : document.getElementById(popupId);
+  const selected = popup?.querySelector('[role="option"][aria-selected="true"]');
+  const labelId = trigger?.getAttribute("aria-labelledby")
+    ?.split(/\s+/u)[0];
   const active = document.activeElement;
-  const rect = selector?.getBoundingClientRect();
+  const rect = trigger?.getBoundingClientRect();
   return {
-    active: active === selector,
-    associated_label: selector?.labels?.[0]?.textContent ?? null,
-    disabled: selector?.disabled ?? null,
+    active: active === trigger,
+    associated_label: labelId === undefined
+      ? null
+      : document.getElementById(labelId)?.textContent ?? null,
+    disabled: trigger?.disabled ?? null,
     id: active?.id ?? null,
     tag: active?.tagName ?? null,
-    value: selector?.value ?? null,
+    role: trigger?.getAttribute("role") ?? null,
+    expanded: trigger?.getAttribute("aria-expanded") ?? null,
+    controls: popupId ?? null,
+    popup_role: popup?.getAttribute("role") ?? null,
+    selected_value: selected?.dataset.value ?? null,
+    value: selector?.dataset.value ?? null,
     visible: rect !== undefined && rect.width > 0 && rect.height > 0 &&
       rect.top < innerHeight && rect.bottom > 0,
   };

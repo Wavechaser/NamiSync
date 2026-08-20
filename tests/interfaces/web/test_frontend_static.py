@@ -272,19 +272,17 @@ def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
     assert ".style =" not in appearance
     assert ".cssText" not in appearance
     assert ".postMessage" not in appearance
-    assert appearance.count("root.style.setProperty(") == 6
+    assert appearance.count("root.style.setProperty(") == 4
     assert appearance.count('addEventListener("message", receive)') == 1
     assert appearance.count('removeEventListener("message", receive)') == 1
     properties = re.findall(
         r'root\.style\.setProperty\(\s*"(--[a-z-]+)"', appearance
     )
     assert properties == [
-        "--color-accent",
-        "--color-accent-hover",
-        "--color-accent-pressed",
-        "--color-accent-foreground",
-        "--color-accent-hover-foreground",
-        "--color-accent-pressed-foreground",
+        "--color-accent-fill",
+        "--color-accent-fill-hover",
+        "--color-accent-fill-pressed",
+        "--color-accent-fill-foreground",
     ]
 
     tokens = assets["tokens.css"]
@@ -325,19 +323,17 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
     assert completed.returncode == 0, completed.stderr
     result = json.loads(completed.stdout)
     assert result == {
-        "revision": 6,
+        "revision": 7,
         "dataset": {
             "theme": "light",
             "highContrast": "false",
             "windowMaterial": "degraded",
         },
         "properties": {
-            "--color-accent": "#123456",
-            "--color-accent-hover": "#234567",
-            "--color-accent-pressed": "#012345",
-            "--color-accent-foreground": "#FFFFFF",
-            "--color-accent-hover-foreground": "#FFFFFF",
-            "--color-accent-pressed-foreground": "#FFFFFF",
+            "--color-accent-fill": "#123456",
+            "--color-accent-fill-hover": "#123456E6",
+            "--color-accent-fill-pressed": "#123456CC",
+            "--color-accent-fill-foreground": "#FFFFFF",
         },
         "resolvedBeforeValidMessage": False,
         "resolvedAfterValidMessage": True,
@@ -566,6 +562,15 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert 'checkbox.indeterminate = rowView.mixed;' in file_row
     assert 'renderFileRow(element, rowView, {' in plan
     assert 'renderFileRow(element, rowView, {' in integrity
+    assert all(
+        field in integrity
+        for field in ('"presenceText"', '"presenceStatus"', '"checksumText"')
+    )
+    assert '"integrityText"' not in integrity
+    assert '"integrityStatus"' not in integrity
+    assert '"nami-integrity-row__presence"' in integrity
+    assert '"nami-integrity-row__checksum"' in integrity
+    assert '"nami-integrity-row__integrity"' not in integrity
     assert 'element.replaceChildren(selection, name, size, ...details.cells, notes);' in file_row
 
     zebra = ".nami-file-list__body > .nami-file-row:nth-child(even)"
@@ -582,6 +587,20 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert "background: initial;" in layout
     assert "--file-row-h: 24px;" in assets["tokens.css"]
     assert layout.count("block-size: var(--file-row-h);") == 2
+    file_grid = re.search(
+        r"(?ms)^\.nami-file-list__grid\s*\{(?P<body>.*?)^\}",
+        layout,
+    )
+    assert file_grid is not None
+    assert "min-inline-size: 48rem;" in file_grid.group("body")
+    file_rows = re.search(
+        r"(?ms)^\.nami-file-list__body > \.nami-file-row\s*"
+        r"\{(?P<body>.*?)^\}",
+        layout,
+    )
+    assert file_rows is not None
+    assert "font-size: var(--font-size-caption);" in file_rows.group("body")
+    assert "line-height: var(--line-height-caption);" in file_rows.group("body")
     assert layout.count("--nami-plan-preferred-foreground:") == 10
     assert layout.count("var(--plan-intent-") == 10
     assert "--palette-" not in layout
@@ -1126,7 +1145,9 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
 
     assert '"rail work"' in app_css
     assert "minmax(12rem, 18rem) minmax(0, 1fr)" in app_css
-    assert "@media (max-width: 48rem)" in app_css
+    assert "container-type: inline-size;" in app_css
+    assert "@container (max-width: 48rem)" in app_css
+    assert "@media (max-width: 48rem)" not in app_css
     assert '"rail"' in app_css and '"work"' in app_css
     assert "grid-template-columns: minmax(0, 1fr);" in app_css
     assert app_css.count("min-inline-size: 0;") >= 2

@@ -690,6 +690,16 @@ def _assert_installed_sources(
     keywords = {keyword.arg: keyword.value for keyword in calls[0].keywords}
     assert isinstance(keywords["transparent"], ast.Constant)
     assert keywords["transparent"].value is False
+    for name, expected in (("width", 1280), ("height", 800)):
+        assert isinstance(keywords[name], ast.Constant)
+        assert keywords[name].value == expected
+    minimum = keywords["min_size"]
+    assert isinstance(minimum, ast.Tuple)
+    assert [
+        element.value
+        for element in minimum.elts
+        if isinstance(element, ast.Constant)
+    ] == [1024, 640]
     background = keywords["background_color"]
     assert isinstance(background, ast.Call)
     assert isinstance(background.func, ast.Name)
@@ -729,7 +739,7 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
         "screenshot",
         "exit_code",
     }
-    assert result["schema_version"] == 1
+    assert result["schema_version"] == 2
     assert result["scenario"] in _SCENARIOS
     assert result["phase"] == "complete"
     assert type(result["startup_errors"]) is list
@@ -753,11 +763,13 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
             "dark",
             "high_contrast",
             "accent",
-            "accent_hover",
-            "accent_pressed",
-            "accent_foreground",
-            "accent_hover_foreground",
-            "accent_pressed_foreground",
+            "accent_light_1",
+            "accent_light_2",
+            "accent_dark_1",
+            "accent_fill",
+            "accent_fill_hover",
+            "accent_fill_pressed",
+            "accent_fill_foreground",
             "build",
             "supports_mica",
         }
@@ -772,12 +784,10 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
         "theme",
         "high_contrast",
         "forced_colors_active",
-        "inline_accent",
-        "inline_accent_hover",
-        "inline_accent_pressed",
-        "inline_accent_foreground",
-        "inline_accent_hover_foreground",
-        "inline_accent_pressed_foreground",
+        "inline_accent_fill",
+        "inline_accent_fill_hover",
+        "inline_accent_fill_pressed",
+        "inline_accent_fill_foreground",
         "root_background",
         "body_background",
         "body_foreground",
@@ -892,17 +902,12 @@ def _assert_appearance_publication(result: dict[str, object]) -> None:
     assert page["high_contrast"] == str(
         selected["high_contrast"]
     ).lower()
-    assert page["inline_accent"] == selected["accent"]
-    assert page["inline_accent_hover"] == selected["accent_hover"]
-    assert page["inline_accent_pressed"] == selected["accent_pressed"]
-    assert page["inline_accent_foreground"] == selected["accent_foreground"]
+    assert page["inline_accent_fill"] == selected["accent_fill"]
+    assert page["inline_accent_fill_hover"] == selected["accent_fill_hover"]
+    assert page["inline_accent_fill_pressed"] == selected["accent_fill_pressed"]
     assert (
-        page["inline_accent_hover_foreground"]
-        == selected["accent_hover_foreground"]
-    )
-    assert (
-        page["inline_accent_pressed_foreground"]
-        == selected["accent_pressed_foreground"]
+        page["inline_accent_fill_foreground"]
+        == selected["accent_fill_foreground"]
     )
 
 

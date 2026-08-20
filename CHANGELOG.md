@@ -115,7 +115,7 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
-#### Establish the dormant file-list row renderer (2026-08-20)
+#### Establish the dormant file-list row renderer (2026-08-20 – 2026-08-21)
 
 - Added a shared packaged `file_row.js` skeleton plus presentation-only
   `renderPlanRow(element, rowView)` and `renderIntegrityRow(element, rowView)`
@@ -124,15 +124,16 @@ later workflow surfaces and beta packaging remain future phases.
   production startup, so the shipped GUI remains honestly empty.
 - Expanded the responsive grid to six columns. Both lists order selection,
   basename, and size first; sync adds operation/status and eight-character
-  checksum, while integrity adds presence and integrity status before notes.
-  Rows are 24 px, checkboxes are 16 px, and projected folders expose disclosure
+  checksum, while integrity adds combined presence/status and eight-character
+  checksum cells before notes.
+  Rows are 24 px with 12 px text, checkboxes are 16 px, and projected folders expose disclosure
   buttons, mixed selection, and indented basename-only children. The test-only
   driver collapses/restores actual computed rows and reconciles each folder's
   checkbox from its two direct children. Focusable header separators resize
   each grid track by pointer drag or arrow key without persistence. Zebra
   backgrounds belong only to rendered row elements—including folders—and stop
   at the last row; cells stay transparent and constrained widths scroll the
-  complete aligned grid horizontally. The gallery specimen fills the wide work
+  complete aligned grid horizontally from a 48 rem content floor. The gallery specimen fills the wide work
   area. Plan operation and integrity-state aliases use authored family main
   colors in both ordinary themes—including red-main negative states—while
   forced colors retain system authority.
@@ -152,11 +153,12 @@ later workflow surfaces and beta packaging remain future phases.
   derives checked/mixed state from every selectable row and exercises select
   all/deselect all without defining Slice 5 selection authority.
 
-#### Tune solid desktop control states (2026-08-20)
+#### Tune solid desktop control states (2026-08-20 – 2026-08-21)
 
-- Removed ordinary-theme painted borders from default/primary buttons, filter
-  pills, operation/file badges, and progress tracks while retaining visible
-  keyboard focus and forced-color authority.
+- Kept primary buttons, filter pills, operation/file badges, and progress
+  tracks borderless, while ordinary buttons now use the WinUI-neutral
+  `#fbfbfb`/`#2d2d2d` fills and subtle `#e5e5e5`/`#353535` boundaries.
+  Keyboard focus and forced-color authority remain separate.
 - Made inactive filters inverse grayscale and active filters consume the exact
   main swatch for their operation family with contrast-selected neutral text.
   Delete uses exact red-main text at rest; its active pairing uses
@@ -177,10 +179,12 @@ later workflow surfaces and beta packaging remain future phases.
 - Kept inactive Delete text and light Error/Unsupported list states on exact
   red-main, moved progress fill to the live Windows accent, and kept active
   Delete's existing red-main/red-dark pairing.
-- Made primary-button and selected-segment labels consume the native base
-  accent's contrast-selected black/white result, held that color through
-  interaction, and separated the darker hover role from an additional pressed
-  brightness step without affecting forced colors.
+- Kept the raw Windows Accent/Light1/Light2/Dark1 ramp native-side and replaced
+  the old page roles with appearance v2 semantic fills: AccentDark1 in Light,
+  AccentLight2 in Dark, then 90% hover and 80% pressed opacity. Primary-button,
+  segmented, checkbox, and toggle states share that ladder and one stable
+  contrast-selected black/white foreground; progress and selection markers use
+  the base fill.
 - Replaced the packaged native theme selector with a production-owned DOM
   combobox: a subtle gradient trigger boundary becomes flat while open, the
   elevation-16 opaque listbox aligns its selected option and clamps to
@@ -190,14 +194,21 @@ later workflow surfaces and beta packaging remain future phases.
   Light/20% Dark, clipped content-card fill to the padding box, and added a
   dark-HDR shadowless flyout fallback plus normal/shadowless/opaque gallery
   isolates for the transparent WebView2/Mica halo diagnosis.
-- Made the M1 combobox popup opaque, gave its selected option a persistent
-  filled tab plus the accent pill, and separated selected/hover/pressed option
-  fills. Task-card selection/current state now has the same 3 px accent marker,
-  while hover and press occupy distinct tint rungs.
+- Made the M1 combobox popup opaque and aligned options with task cards:
+  transparent rest, one visible hover/selected overlay, a weaker pressed
+  overlay, and one accent-pill/marker for selection. The gallery rail carries
+  only one highlighted task even when it exposes both current and selected
+  semantics.
 - Reopened the native base-accent black/white contrast result for all
   accent-filled labels without allowing hover/press reversal; added opposing
   inner/outer Fluent focus strokes, stabilized plain-chip labels, corrected
   toggle-knob travel, and reduced only file-table rows from 28 px to 24 px.
+- Added a neutral Fluent strong-stroke 2 px unchecked-checkbox boundary, a
+  subtle 2 px textbox boundary with neutral-to-accent underline, and explicit
+  1280 x 800 initial / 1024 x 640 minimum
+  logical host geometry through pywebview's public construction arguments.
+  Removed the former 48 rem viewport media query while preserving the proven
+  zoom-responsive stacked layout with an inline-size container query.
 
 #### Thaw and refreeze the cosmetic state channel (2026-08-19)
 

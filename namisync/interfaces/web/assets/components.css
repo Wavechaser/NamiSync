@@ -34,7 +34,7 @@ body {
 
 .nami-input,
 .nami-select {
-  border: 1px solid var(--color-neutral-border);
+  border: 2px solid var(--color-textbox-border);
 }
 
 .nami-menu,
@@ -49,9 +49,6 @@ body {
 .nami-icon-button,
 .nami-segmented__item {
   align-items: center;
-  background: var(--color-neutral-foreground-secondary);
-  border: 0;
-  color: var(--color-neutral-surface);
   cursor: pointer;
   display: inline-flex;
   font-weight: var(--font-weight-medium);
@@ -62,6 +59,19 @@ body {
     box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
+.nami-button,
+.nami-icon-button {
+  background: var(--color-control-fill);
+  border: 1px solid var(--color-control-border);
+  color: var(--color-neutral-foreground);
+}
+
+.nami-chip {
+  background: var(--color-neutral-foreground-secondary);
+  border: 0;
+  color: var(--color-neutral-surface);
+}
+
 .nami-button {
   border-radius: var(--radius-small);
   min-block-size: 2rem;
@@ -69,16 +79,20 @@ body {
 }
 
 .nami-button:hover,
-.nami-chip:hover,
-.nami-icon-button:hover,
-.nami-segmented__item:hover {
-  background: var(--color-neutral-border-hover);
+.nami-icon-button:hover {
+  background: var(--color-control-fill-hover);
 }
 
 .nami-button:active,
-.nami-chip:active,
-.nami-icon-button:active,
-.nami-segmented__item:active {
+.nami-icon-button:active {
+  background: var(--color-control-fill-pressed);
+}
+
+.nami-chip:hover {
+  background: var(--color-neutral-border-hover);
+}
+
+.nami-chip:active {
   background: var(--color-neutral-border);
 }
 
@@ -119,26 +133,30 @@ body {
   cursor: default;
 }
 
+.nami-button--primary {
+  border: 0;
+}
+
 .nami-button--primary:not(:disabled) {
-  background: var(--color-accent);
-  color: var(--color-accent-foreground);
+  background: var(--color-accent-fill);
+  color: var(--color-accent-fill-foreground);
 }
 
 .nami-button--primary:not(:disabled):hover {
-  background: var(--color-accent-pressed);
-  color: var(--color-accent-foreground);
+  background: var(--color-accent-fill-hover);
+  color: var(--color-accent-fill-foreground);
 }
 
 .nami-button--primary:not(:disabled):active {
-  background: var(--color-accent-pressed);
-  color: var(--color-accent-foreground);
-  filter: brightness(0.82);
+  background: var(--color-accent-fill-pressed);
+  color: var(--color-accent-fill-foreground);
 }
 
 .nami-input,
 .nami-select {
   background: var(--color-neutral-surface);
   border-radius: var(--radius-small);
+  box-shadow: inset 0 -2px 0 var(--color-textbox-underline);
   color: var(--color-neutral-foreground);
   min-block-size: 2rem;
   padding: var(--space-2) var(--space-3);
@@ -155,7 +173,20 @@ body {
 
 .nami-input:active,
 .nami-select:active {
-  border-color: var(--color-neutral-border-pressed);
+  border-color: var(--color-textbox-border);
+}
+
+.nami-input:focus,
+.nami-select:focus {
+  box-shadow: inset 0 -2px 0 var(--color-accent-fill);
+}
+
+.nami-input:focus-visible,
+.nami-select:focus-visible {
+  box-shadow:
+    inset 0 -2px 0 var(--color-accent-fill),
+    0 0 0 1px var(--color-focus-inner),
+    0 0 0 3px var(--color-focus-ring);
 }
 
 .nami-input::placeholder {
@@ -265,11 +296,11 @@ body {
 }
 
 .nami-combobox__option:is(:hover, [data-active]) {
-  background: var(--color-neutral-surface-hover);
+  background: var(--color-selection-highlight);
 }
 
 .nami-combobox__option:active {
-  background: var(--color-neutral-surface-pressed);
+  background: var(--color-selection-highlight-pressed);
 }
 
 .nami-combobox__selection {
@@ -280,19 +311,19 @@ body {
 }
 
 .nami-combobox__option[aria-selected="true"] {
-  background: var(--color-neutral-surface-selected);
+  background: var(--color-selection-highlight);
 }
 
 .nami-combobox__option[aria-selected="true"] .nami-combobox__selection {
-  background: var(--color-accent);
+  background: var(--color-accent-fill);
 }
 
 .nami-combobox__option[aria-selected="true"]:is(:hover, [data-active]) {
-  background: var(--color-neutral-surface-hover);
+  background: var(--color-selection-highlight);
 }
 
 .nami-combobox__option[aria-selected="true"]:active {
-  background: var(--color-neutral-surface-pressed);
+  background: var(--color-selection-highlight-pressed);
 }
 
 .nami-field {
@@ -314,9 +345,9 @@ body {
 .nami-checkbox {
   appearance: none;
   background: var(--color-neutral-surface);
-  border: 1px solid var(--color-neutral-border);
+  border: 2px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-small);
-  color: var(--color-accent-foreground);
+  color: var(--color-accent-fill-foreground);
   cursor: pointer;
   display: inline-grid;
   font-size: var(--font-size-caption);
@@ -334,14 +365,24 @@ body {
 }
 
 .nami-checkbox:active {
-  border-color: var(--color-neutral-border-pressed);
+  border-color: var(--color-control-strong-stroke);
 }
 
 .nami-checkbox:checked,
 .nami-checkbox:indeterminate,
 .nami-checkbox[aria-checked="mixed"] {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-accent-fill);
+  border-color: var(--color-accent-fill);
+}
+
+.nami-checkbox:is(:checked, :indeterminate, [aria-checked="mixed"]):hover {
+  background: var(--color-accent-fill-hover);
+  border-color: var(--color-accent-fill-hover);
+}
+
+.nami-checkbox:is(:checked, :indeterminate, [aria-checked="mixed"]):active {
+  background: var(--color-accent-fill-pressed);
+  border-color: var(--color-accent-fill-pressed);
 }
 
 .nami-checkbox:checked::after {
@@ -397,18 +438,28 @@ body {
 }
 
 .nami-toggle__control:checked {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
+  background: var(--color-accent-fill);
+  border-color: var(--color-accent-fill);
+}
+
+.nami-toggle__control:checked:hover {
+  background: var(--color-accent-fill-hover);
+  border-color: var(--color-accent-fill-hover);
+}
+
+.nami-toggle__control:checked:active {
+  background: var(--color-accent-fill-pressed);
+  border-color: var(--color-accent-fill-pressed);
 }
 
 .nami-toggle__control:checked::after {
-  background: var(--color-accent-foreground);
+  background: var(--color-accent-fill-foreground);
   transform: translateX(1.25rem);
 }
 
 .nami-chip {
-  --nami-chip-active-background: var(--color-accent);
-  --nami-chip-active-foreground: var(--color-accent-foreground);
+  --nami-chip-active-background: var(--color-accent-fill);
+  --nami-chip-active-foreground: var(--color-accent-fill-foreground);
   border-radius: var(--radius-circular);
   min-block-size: 1.75rem;
   padding: var(--space-1) var(--space-3);
@@ -420,12 +471,12 @@ body {
 }
 
 .nami-chip[aria-pressed="true"]:hover {
-  background: var(--color-accent-hover);
+  background: var(--color-accent-fill-hover);
   color: var(--nami-chip-active-foreground);
 }
 
 .nami-chip[aria-pressed="true"]:active {
-  background: var(--color-accent-pressed);
+  background: var(--color-accent-fill-pressed);
   color: var(--nami-chip-active-foreground);
 }
 
@@ -517,7 +568,7 @@ body {
 .nami-row[aria-selected="true"],
 .nami-list-row[aria-selected="true"],
 .nami-tree-row[aria-selected="true"] {
-  border-inline-start: 3px solid var(--color-accent);
+  border-inline-start: 3px solid var(--color-accent-fill);
   font-weight: var(--font-weight-medium);
 }
 
@@ -591,21 +642,21 @@ body {
 }
 
 .nami-task-card:not([aria-disabled="true"]):hover {
-  background: var(--color-card-background);
+  background: var(--color-selection-highlight);
 }
 
 .nami-task-card:not([aria-disabled="true"]):active {
-  background: var(--color-card-background-secondary);
+  background: var(--color-selection-highlight-pressed);
 }
 
 .nami-task-card[aria-selected="true"],
 .nami-task-card[aria-current="true"] {
-  background: var(--color-card-background);
+  background: var(--color-selection-highlight);
 }
 
 .nami-task-card[aria-selected="true"]::before,
 .nami-task-card[aria-current="true"]::before {
-  background: var(--color-accent);
+  background: var(--color-accent-fill);
   block-size: 1rem;
   border-radius: var(--radius-circular);
   content: "";
@@ -618,12 +669,12 @@ body {
 
 .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
 .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
-  background: var(--color-card-background-secondary);
+  background: var(--color-selection-highlight);
 }
 
 .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
 .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
-  background: var(--color-card-background-tertiary);
+  background: var(--color-selection-highlight-pressed);
 }
 
 .nami-task-card[aria-disabled="true"] {
@@ -762,6 +813,7 @@ body {
 
 .nami-segmented__item {
   background: var(--color-neutral-subtle-background);
+  border: 0;
   border-radius: var(--radius-small);
   color: var(--color-neutral-foreground);
   min-block-size: 1.75rem;
@@ -777,19 +829,18 @@ body {
 }
 
 .nami-segmented__item[aria-checked="true"] {
-  background: var(--color-accent);
-  color: var(--color-accent-foreground);
+  background: var(--color-accent-fill);
+  color: var(--color-accent-fill-foreground);
 }
 
 .nami-segmented__item[aria-checked="true"]:not(:disabled):hover {
-  background: var(--color-accent-pressed);
-  color: var(--color-accent-foreground);
+  background: var(--color-accent-fill-hover);
+  color: var(--color-accent-fill-foreground);
 }
 
 .nami-segmented__item[aria-checked="true"]:not(:disabled):active {
-  background: var(--color-accent-pressed);
-  color: var(--color-accent-foreground);
-  filter: brightness(0.82);
+  background: var(--color-accent-fill-pressed);
+  color: var(--color-accent-fill-foreground);
 }
 
 .nami-badge,
@@ -1275,16 +1326,16 @@ body {
   .nami-menu__item:not(:disabled):active,
   .nami-segmented__item:not(:disabled):hover,
   .nami-segmented__item:not(:disabled):active {
-    color: var(--color-accent-foreground);
+    color: var(--color-accent-fill-foreground);
   }
 
   .nami-combobox__option:is(:hover, :active, [data-active], [aria-selected="true"]) {
     background: var(--color-neutral-surface-selected);
-    color: var(--color-accent-foreground);
+    color: var(--color-accent-fill-foreground);
   }
 
   .nami-combobox__option[aria-selected="true"] .nami-combobox__selection {
-    background: var(--color-accent-foreground);
+    background: var(--color-accent-fill-foreground);
   }
 
   .nami-button--primary:not(:disabled),
@@ -1294,8 +1345,8 @@ body {
   .nami-segmented__item[aria-checked="true"]:not(:disabled),
   .nami-task-card:not([aria-disabled="true"]):hover,
   .nami-task-card:not([aria-disabled="true"]):active {
-    background: var(--color-accent);
-    color: var(--color-accent-foreground);
+    background: var(--color-accent-fill);
+    color: var(--color-accent-fill-foreground);
     forced-color-adjust: none;
     opacity: 1;
   }
@@ -1304,21 +1355,21 @@ body {
   .nami-task-card[aria-current="true"]:not([aria-disabled="true"]) {
     background: var(--color-neutral-surface-selected);
     box-shadow: none;
-    color: var(--color-accent-foreground);
+    color: var(--color-accent-fill-foreground);
     forced-color-adjust: none;
   }
 
   .nami-task-card[aria-selected="true"]::before,
   .nami-task-card[aria-current="true"]::before {
-    background: var(--color-accent-foreground);
+    background: var(--color-accent-fill-foreground);
   }
 
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
   .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover,
   .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
-    background: var(--color-accent);
-    color: var(--color-accent-foreground);
+    background: var(--color-accent-fill);
+    color: var(--color-accent-fill-foreground);
   }
 
   .nami-task-card[aria-selected="true"]:focus-visible,
@@ -1329,7 +1380,7 @@ body {
   }
 
   .nami-toggle__control:not(:disabled):hover::after {
-    background: var(--color-accent-foreground);
+    background: var(--color-accent-fill-foreground);
   }
 
   .nami-input:not(:disabled):hover,
@@ -1340,11 +1391,11 @@ body {
   }
 
   .nami-tree-row[data-active="true"] {
-    color: var(--color-accent-foreground);
+    color: var(--color-accent-fill-foreground);
   }
 
   .nami-tree-row[data-active="true"] .nami-tree-row__disclosure {
-    border-color: var(--color-accent-foreground);
+    border-color: var(--color-accent-fill-foreground);
   }
 
   .nami-button:focus-visible,

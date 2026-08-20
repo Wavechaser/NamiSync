@@ -34,20 +34,18 @@ const firstApplication = receiver.whenApplied().then(() => {
   applied = true;
 });
 const base = {
-  kind: "namisync.appearance.v1",
+  kind: "namisync.appearance.v2",
   revision: 2,
   theme: "dark",
   highContrast: false,
   material: "mica",
-  accent: "#123456",
-  accentHover: "#234567",
-  accentPressed: "#012345",
-  accentForeground: "#FFFFFF",
-  accentHoverForeground: "#FFFFFF",
-  accentPressedForeground: "#FFFFFF",
+  accentFill: "#123456",
+  accentFillHover: "#123456E6",
+  accentFillPressed: "#123456CC",
+  accentFillForeground: "#FFFFFF",
 };
 
-receive({ data: { ...base, revision: 1, accent: "red;url(x)" } });
+receive({ data: { ...base, revision: 1, accentFill: "red;url(x)" } });
 await Promise.resolve();
 const resolvedBeforeValidMessage = applied;
 receive({ data: base });
@@ -57,13 +55,14 @@ let reapplied = false;
 const nextApplication = receiver.whenAppliedAfter(2).then(() => {
   reapplied = true;
 });
-receive({ data: { ...base, revision: 1, accent: "#999999" } });
-receive({ data: { ...base, revision: 3, accent: "red;url(x)" } });
-receive({ data: { ...base, revision: 4, unexpected: true } });
-receive({ data: Object.assign(Object.create(null), { ...base, revision: 5 }) });
+receive({ data: { ...base, revision: 1, accentFill: "#999999" } });
+receive({ data: { ...base, revision: 3, accentFill: "red;url(x)" } });
+receive({ data: { ...base, revision: 4, accentFillHover: "#123456" } });
+receive({ data: { ...base, revision: 5, unexpected: true } });
+receive({ data: Object.assign(Object.create(null), { ...base, revision: 6 }) });
 await Promise.resolve();
 const resolvedBeforeNewRevision = reapplied;
-receive({ data: { ...base, revision: 6, material: "degraded", theme: "light" } });
+receive({ data: { ...base, revision: 7, material: "degraded", theme: "light" } });
 await nextApplication;
 
 const result = {

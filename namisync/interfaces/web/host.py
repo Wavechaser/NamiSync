@@ -787,6 +787,9 @@ def run_desktop(
             js_api=None,
             background_color=_opaque_window_background(initial_appearance),
             transparent=False,
+            width=1280,
+            height=800,
+            min_size=(1024, 640),
         )
         if window is None:
             raise DesktopStartupError("NamiSync could not create its desktop window")

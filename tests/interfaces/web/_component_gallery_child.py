@@ -200,12 +200,13 @@ _EXPECTED_PSEUDO_TARGETS = [
 
 
 def _expected_pseudo_targets(mode: str) -> list[dict[str, object]]:
-    alternate_theme = "light" if _EXPECTED_THEME[mode] == "dark" else "dark"
+    if mode not in _EXPECTED_THEME:
+        raise ValueError("component gallery mode is invalid")
     return [
         *_EXPECTED_PSEUDO_TARGETS,
-        {"selector": "#theme-option-system", "classes": ["hover"]},
+        {"selector": "#gallery-theme-option-hover", "classes": ["hover"]},
         {
-            "selector": f"#theme-option-{alternate_theme}",
+            "selector": "#gallery-theme-option-pressed",
             "classes": ["hover", "active"],
         },
     ]
@@ -230,7 +231,7 @@ class _Recorder:
         self._initial: str | None = None
         self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "mode": mode,
             "startup_errors": [],
         }
@@ -440,7 +441,8 @@ def _test_report_spec(
             "phase",
             "targets",
         }:
-            if payload["targets"] != _expected_pseudo_targets(expected_mode):
+            expected_targets = _expected_pseudo_targets(expected_mode)
+            if payload["targets"] != expected_targets:
                 raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
         if payload["phase"] == "failure" and set(payload) == {
@@ -798,7 +800,7 @@ def _valid_control_rows(rows: object) -> bool:
         for control in _CONTROL_KEYS
         for state in _CONTROL_STATES
     }
-    return (
+    if not (
         type(rows) is list
         and len(rows) == len(expected)
         and all(
@@ -808,11 +810,79 @@ def _valid_control_rows(rows: object) -> bool:
             for row in rows
         )
         and {(row["control"], row["state"]) for row in rows} == expected
+    ):
+        return False
+    by_control_state = {
+        (row["control"], row["state"]): row for row in rows
+    }
+    return (
+        all(
+            _valid_control_boundary_widths(by_control_state, state)
+            for state in _CONTROL_STATES
+        )
+        and all(
+            by_control_state[(control, state)]["background"]
+            == by_control_state[("button_primary", state)]["background"]
+            for control in (
+                "tri_state_checkbox",
+                "toggle",
+                "segmented_control",
+            )
+            for state in ("rest", "hover", "pressed")
+        )
+    )
+
+
+def _valid_control_boundary_widths(
+    rows: dict[tuple[str, str], dict[str, str]],
+    state: str,
+) -> bool:
+    button = _css_pixel_width(rows[("button", state)]["border_width"])
+    checkbox = _css_pixel_width(
+        rows[("tri_state_checkbox", state)]["border_width"]
+    )
+    text_input = _css_pixel_width(
+        rows[("text_input", state)]["border_width"]
+    )
+    return (
+        button is not None
+        and button > 0
+        and checkbox is not None
+        and (
+            checkbox >= button * 1.75
+            or math.isclose(checkbox, button, abs_tol=0.01)
+        )
+        and text_input is not None
+        and math.isclose(checkbox, text_input, abs_tol=0.01)
+    )
+
+
+def _css_pixel_width(value: object) -> float | None:
+    if type(value) is not str or not value.endswith("px"):
+        return None
+    try:
+        width = float(value[:-2])
+    except ValueError:
+        return None
+    if not math.isfinite(width) or width < 0:
+        return None
+    return width
+
+
+def _equal_positive_css_pixel_widths(left: object, right: object) -> bool:
+    left_width = _css_pixel_width(left)
+    right_width = _css_pixel_width(right)
+    return (
+        left_width is not None
+        and left_width > 0
+        and right_width is not None
+        and math.isclose(left_width, right_width, abs_tol=0.01)
     )
 
 
 def _valid_control_contract(value: object) -> bool:
     if type(value) is not dict or set(value) != {
+        "accent",
         "tri_state",
         "dialog_exit",
         "segmented",
@@ -822,6 +892,7 @@ def _valid_control_contract(value: object) -> bool:
         "integrity_list",
     }:
         return False
+    accent = value["accent"]
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
     segmented = value["segmented"]
@@ -830,12 +901,41 @@ def _valid_control_contract(value: object) -> bool:
     file_list = value["file_list"]
     integrity_list = value["integrity_list"]
     return (
-        type(tri_state) is dict
-        and set(tri_state) == {"aria_checked", "indeterminate", "cue_content"}
+        type(accent) is dict
+        and set(accent) == {"fill", "fill_hover", "fill_pressed", "foreground"}
+        and all(type(color) is str and bool(color) for color in accent.values())
+        and type(tri_state) is dict
+        and set(tri_state)
+        == {
+            "aria_checked",
+            "indeterminate",
+            "cue_content",
+            "unchecked_border",
+            "unchecked_border_width",
+            "mixed_background",
+            "mixed_foreground",
+            "mixed_border",
+            "mixed_border_width",
+        }
         and tri_state["aria_checked"] == "mixed"
         and tri_state["indeterminate"] is True
         and type(tri_state["cue_content"]) is str
         and tri_state["cue_content"] not in {"", "none", "normal"}
+        and all(
+            type(tri_state[name]) is str and bool(tri_state[name])
+            for name in (
+                "unchecked_border",
+                "unchecked_border_width",
+                "mixed_background",
+                "mixed_foreground",
+                "mixed_border",
+                "mixed_border_width",
+            )
+        )
+        and _equal_positive_css_pixel_widths(
+            tri_state["unchecked_border_width"],
+            tri_state["mixed_border_width"],
+        )
         and type(dialog_exit) is dict
         and set(dialog_exit)
         == {"opened", "retained_while_closing", "faded", "closed"}
@@ -904,6 +1004,8 @@ def _valid_control_contract(value: object) -> bool:
         )
         and type(combobox["selected_pill_width"]) in {int, float}
         and 2.5 <= combobox["selected_pill_width"] <= 3.5
+        and combobox["selected_option_background"]
+        == combobox["hovered_option_background"]
         and type(task_rail) is dict
         and set(task_rail)
         == {
@@ -912,6 +1014,7 @@ def _valid_control_contract(value: object) -> bool:
             "left_of_work",
             "selected_count",
             "current_count",
+            "selected_current_same_card",
             "transparent_boundaries",
             "selected_marker_width",
             "current_marker_width",
@@ -923,6 +1026,7 @@ def _valid_control_contract(value: object) -> bool:
         and task_rail["left_of_work"] is True
         and task_rail["selected_count"] == 1
         and task_rail["current_count"] == 1
+        and task_rail["selected_current_same_card"] is True
         and task_rail["transparent_boundaries"] is True
         and type(task_rail["selected_marker_width"]) in {int, float}
         and 2.5 <= task_rail["selected_marker_width"] <= 3.5
@@ -1008,6 +1112,7 @@ def _valid_file_list_evidence(
         "column_lefts",
         "name_padding_left",
         "row_height",
+        "font_size",
     }
     if type(value) is not dict or set(value) != keys:
         return False
@@ -1078,7 +1183,12 @@ def _valid_file_list_evidence(
                 type(row[name]) not in {int, float}
                 or not math.isfinite(row[name])
                 or row[name] <= 0
-                for name in ("checkbox_width", "checkbox_height", "row_height")
+                for name in (
+                    "checkbox_width",
+                    "checkbox_height",
+                    "row_height",
+                    "font_size",
+                )
             )
             or type(row["depth"]) is not int
             or row["depth"] < 0
@@ -1132,6 +1242,7 @@ def _valid_file_list_evidence(
             or type(row["name_padding_left"]) not in {int, float}
             or not math.isfinite(row["name_padding_left"])
             or row["name_padding_left"] < 0
+            or not math.isclose(row["font_size"], 12.0, abs_tol=0.25)
         ):
             return False
     return {row["case"] for row in rows} == expected_cases
@@ -1167,14 +1278,15 @@ def _valid_integrity_evidence(value: object) -> bool:
             "Filename",
             "Size",
             "Presence",
-            "Integrity",
+            "Checksum",
             "Notes",
         ],
     ):
         return False
     return all(
         row["primary_tone"] == "status"
-        and row["secondary_tone"] == "status"
+        and row["secondary_tone"] == ""
+        and (row["secondary"] == "—" or len(row["secondary"]) == 8)
         for row in value["rows"]
     )
 
@@ -1482,8 +1594,8 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                             "component gallery UI dispatch did not reach the UI thread"
                         )
                     core = native.browser.webview.CoreWebView2
-                    pseudo_scheduler["value"] = (
-                        lambda targets: _schedule_pseudo_states(
+                    pseudo_scheduler["value"] = lambda targets: (
+                        _schedule_pseudo_states(
                             native,
                             core,
                             targets,

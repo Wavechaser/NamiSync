@@ -95,6 +95,10 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert '"Input.dispatchKeyEvent"' in source
     assert source.count('press("Tab", "Tab", 9,') == 2
     assert 'document.querySelector("#theme-mode")' in source
+    assert 'theme?.querySelector(".nami-combobox__trigger")' in source
+    assert "themeTrigger instanceof HTMLButtonElement" in source
+    assert "themePopup.getAttribute(\"role\") !== \"listbox\"" in source
+    assert "HTMLSelectElement" not in source
     assert '"Input.dispatchMouseEvent"' in source
     assert '"type": "mouseWheel"' in source
     assert "wheel(value, 112, after_scroll_wheel)" in source
@@ -299,8 +303,13 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "active": True,
         "associated_label": "Theme",
         "disabled": False,
-        "id": "theme-mode",
-        "tag": "SELECT",
+        "id": "theme-mode-trigger",
+        "tag": "BUTTON",
+        "role": "combobox",
+        "expanded": "false",
+        "controls": "theme-options",
+        "popup_role": "listbox",
+        "selected_value": "system",
         "value": "system",
         "visible": True,
     }
@@ -677,6 +686,11 @@ def _assert_report_schema(result: object) -> None:
         "disabled",
         "id",
         "tag",
+        "role",
+        "expanded",
+        "controls",
+        "popup_role",
+        "selected_value",
         "value",
         "visible",
     }

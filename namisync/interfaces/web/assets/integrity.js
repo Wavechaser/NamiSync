@@ -4,8 +4,7 @@ import { renderText } from "./render.js";
 const STRING_FIELDS = Object.freeze([
   "presenceText",
   "presenceStatus",
-  "integrityText",
-  "integrityStatus",
+  "checksumText",
 ]);
 const STATUS_KEYS = Object.freeze(new Set([
   "complete",
@@ -30,17 +29,21 @@ function validRowView(rowView) {
     typeof rowView === "object" &&
     !Array.isArray(rowView) &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
-    STATUS_KEYS.has(rowView.presenceStatus) &&
-    STATUS_KEYS.has(rowView.integrityStatus);
+    STATUS_KEYS.has(rowView.presenceStatus);
 }
 
-function createStatusCell(ownerDocument, className, column, status, text) {
+function createCell(ownerDocument, className, column, text) {
   const cell = ownerDocument.createElement("div");
   cell.className = `nami-file-row__cell ${className}`;
   cell.dataset.fileColumn = column;
-  cell.dataset.status = status;
   cell.setAttribute("role", "cell");
   renderText(cell, text);
+  return cell;
+}
+
+function createStatusCell(ownerDocument, className, column, status, text) {
+  const cell = createCell(ownerDocument, className, column, text);
+  cell.dataset.status = status;
   return cell;
 }
 
@@ -59,15 +62,14 @@ export function renderIntegrityRow(element, rowView) {
     rowView.presenceStatus,
     rowView.presenceText,
   );
-  const integrity = createStatusCell(
+  const checksum = createCell(
     ownerDocument,
-    "nami-integrity-row__integrity",
+    "nami-integrity-row__checksum",
     "secondary",
-    rowView.integrityStatus,
-    rowView.integrityText,
+    rowView.checksumText,
   );
   renderFileRow(element, rowView, {
     className: "nami-integrity-row",
-    cells: [presence, integrity],
+    cells: [presence, checksum],
   });
 }
