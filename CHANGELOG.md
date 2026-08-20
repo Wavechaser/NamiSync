@@ -115,6 +115,26 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, and bounded presentation core; later workflow surfaces and beta
 packaging remain future phases.
 
+#### Tune solid desktop control states (2026-08-20)
+
+- Removed ordinary-theme painted borders from default/primary buttons, filter
+  pills, operation/file badges, and progress tracks while retaining visible
+  keyboard focus and forced-color authority.
+- Made inactive filters inverse grayscale and active filters consume the exact
+  main swatch for their operation family with contrast-selected neutral text.
+  Delete retains a contrast-checked red label across both states; its active
+  pairing uses red-main/red-dark, while a stronger inverse hover surface fixes
+  the 4.09:1 light-theme regression exposed by the headed matrix. Active-chip
+  interaction stays fully opaque and uses geometry instead of contrast-eroding
+  opacity.
+- Kept exactly two button tiers—solid gray and live Windows-accent primary—and
+  made the Sync/Integrity specimen an exact-one-selected radiogroup with the
+  checked half highlighted by accent rest/hover/pressed tokens.
+- Expanded installed-wheel gallery evidence for default/primary hierarchy,
+  active/inactive Copy and Delete filters, borderless file/status chips,
+  gray-track blue-main progress, and selected segmented state across light, dark,
+  forced-color, and reduced-motion profiles.
+
 #### Thaw and refreeze the cosmetic state channel (2026-08-19)
 
 - Ratified `ui-state.json` as a strict, interface-owned cosmetic document,

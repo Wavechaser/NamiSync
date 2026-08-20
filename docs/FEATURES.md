@@ -396,6 +396,17 @@ unrealized unless an entry says otherwise.
   publishes Windows `Accent`, `AccentLight1`, and `AccentDark1` as distinct
   rest/hover/pressed roles through a fixed revisioned host-to-page envelope;
   forced colors remain system-owned.
+- **Solid Desktop Control States**. The active component foundation exposes
+  exactly two command-button tiers: solid inverse-gray for ordinary actions and
+  live Windows accent for primary Execute/Verify-class actions. Filter pills
+  use inverse grayscale when inactive and exact operation-family main swatches
+  with contrast-selected grayscale text when active; Delete keeps a
+  contrast-checked red-family label in either state. Operation/file badges,
+  status pills, and the gray-track/blue-main progress component are borderless,
+  while keyboard focus remains visible. The Sync/Integrity
+  two-half state specimen uses radio-group semantics and highlights its checked
+  half with the accent roles. Task-backed switching, keyboard behavior, and
+  actions remain part of the later unrealized work surfaces.
 - **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
   red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
   `tokens.css` only; yellow and purple intentionally have no `light` input.

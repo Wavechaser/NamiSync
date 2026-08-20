@@ -95,6 +95,7 @@ async function reportFailure(error) {
   ]);
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
+    { key: "button_primary", className: "nami-button nami-button--primary", tag: "button" },
     { key: "dropdown", className: "nami-select", tag: "select" },
     { key: "tri_state_checkbox", className: "nami-checkbox", tag: "input" },
     { key: "progress_determinate", className: "nami-progress", tag: "progress" },
@@ -102,6 +103,14 @@ async function reportFailure(error) {
     { key: "text_input", className: "nami-input", tag: "input" },
     { key: "toggle", className: "nami-toggle__control", tag: "input" },
     { key: "chip", className: "nami-chip", tag: "button" },
+    { key: "filter_copy", className: "nami-chip", tag: "button",
+      operation: "copy", pressed: false },
+    { key: "filter_copy_active", className: "nami-chip", tag: "button",
+      operation: "copy", pressed: true },
+    { key: "filter_delete", className: "nami-chip", tag: "button",
+      operation: "delete", pressed: false },
+    { key: "filter_delete_active", className: "nami-chip", tag: "button",
+      operation: "delete", pressed: true },
     { key: "list_row", className: "nami-list-row", tag: "div" },
     { key: "tree_row", className: "nami-tree-row", tag: "div" },
     { key: "card", className: "nami-card", tag: "section" },
@@ -291,13 +300,15 @@ async function reportFailure(error) {
       shape_height: shapeBounds.height,
       foreground: style.color,
       background: style.backgroundColor,
-      indicator: style.borderColor,
+      indicator: shapeStyle.color,
+      border_width: style.borderWidth,
+      border_style: style.borderStyle,
       alias_foreground: aliases.foreground,
       alias_background: aliases.background,
       alias_indicator: aliases.indicator,
       aliases_consumed: style.color === aliases.foreground &&
         style.backgroundColor === aliases.background &&
-        style.borderColor === aliases.indicator,
+        shapeStyle.color === aliases.indicator,
       large_text: fontSize >= 24 || (fontSize >= 18.66 && fontWeight >= 700),
       icon_color: getComputedStyle(element.querySelector(".nami-icon")).backgroundColor,
       mask_image: getComputedStyle(element.querySelector(".nami-icon")).maskImage,
@@ -333,6 +344,9 @@ async function reportFailure(error) {
     let root = document.createElement(definition.tag);
     let element = root;
     element.className = definition.className;
+    if (definition.operation !== undefined) {
+      element.dataset.operation = definition.operation;
+    }
     if (definition.key === "dropdown") {
       const option = document.createElement("option");
       renderText(option, "Folder");
@@ -406,13 +420,16 @@ async function reportFailure(error) {
     } else if (definition.key === "segmented_control") {
       root = document.createElement("div");
       root.className = "nami-segmented";
-      root.setAttribute("role", "group");
+      root.setAttribute("role", "radiogroup");
+      root.setAttribute("aria-label", "Activity mode");
       const sync = document.createElement("button");
       sync.className = "nami-segmented__item";
-      sync.setAttribute("aria-checked", "false");
+      sync.setAttribute("role", "radio");
+      sync.setAttribute("aria-checked", "true");
       renderText(sync, "Sync");
       const integrity = document.createElement("button");
       integrity.className = "nami-segmented__item";
+      integrity.setAttribute("role", "radio");
       integrity.setAttribute("aria-checked", "false");
       renderText(integrity, "Integrity");
       root.append(sync, integrity);
@@ -426,8 +443,8 @@ async function reportFailure(error) {
     element.dataset.galleryControl = definition.key;
     element.dataset.galleryState = state;
     element.setAttribute("aria-label", `${definition.key} ${state}`);
-    if (element.tagName === "BUTTON") {
-      element.setAttribute("aria-pressed", "false");
+    if (element.tagName === "BUTTON" && definition.key !== "segmented_control") {
+      element.setAttribute("aria-pressed", String(definition.pressed ?? false));
     }
     if (state === "disabled") {
       if ("disabled" in element) {
@@ -534,6 +551,7 @@ async function reportFailure(error) {
         label: `${definition.key.replaceAll("_", " ")} — ${state.key}`,
         foreground: style.color,
         background: style.backgroundColor,
+        fill_background: motionStyle.backgroundColor,
         border: style.borderColor,
         border_width: style.borderWidth,
         border_style: style.borderStyle,
@@ -641,6 +659,29 @@ async function reportFailure(error) {
       cue_content: mixedStyle.content,
     },
     dialog_exit: dialogExit,
+    segmented: (() => {
+      const selected = document.querySelector(
+        "#gallery-control-segmented_control-rest",
+      );
+      const group = selected?.parentElement;
+      const unselected = group?.querySelector(
+        '.nami-segmented__item[aria-checked="false"]',
+      );
+      if (
+        !(selected instanceof HTMLButtonElement)
+        || !(group instanceof HTMLElement)
+        || !(unselected instanceof HTMLButtonElement)
+      ) {
+        throw new TypeError("segmented state specimen is unavailable");
+      }
+      return {
+        group_role: group.getAttribute("role"),
+        selected_role: selected.getAttribute("role"),
+        selected_checked: selected.getAttribute("aria-checked"),
+        unselected_role: unselected.getAttribute("role"),
+        unselected_checked: unselected.getAttribute("aria-checked"),
+      };
+    })(),
   };
 
   galleryStage = "report";

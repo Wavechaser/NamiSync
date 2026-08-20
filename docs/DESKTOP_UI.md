@@ -196,7 +196,9 @@ externally owned design inputs are tested separately from the 13
 NamiSync-authored primitives. The neutral and scale values are transcribed from
 pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
 `32b42a5bf79c1836047dfc7fae07b1320731bce4`; exact source hashes are retained
-in test fixtures and accessible stroke roles own visible control boundaries.
+in test fixtures. Accessible stroke roles own visible boundaries only for
+components whose visual contract still uses a stroke; keyboard focus remains a
+separate visible ring even on borderless controls.
 `components.css`
 consumes only those aliases for badges, banners, status pills, progress
 indicators, and related controls; Slice 4-7 renderers consume
@@ -211,6 +213,26 @@ page remains tests-only. That clean-wheel statement applies to the pytest
 acceptance composition, not the editable `tools/gui.ps1` preview. Computed pairs
 must reach 4.5:1 for normal text and 3:1 for large text and non-text UI
 indicators/boundaries.
+
+The tuned component contract has two command-button tiers: a solid inverse-
+gray default and a Windows-accent primary modifier for consequential actions
+such as Execute and Verify. Both are borderless in ordinary themes. Filter
+pills are likewise borderless: inactive pills use an inverse grayscale surface
+and text pairing, while an active operation filter uses that operation family's
+exact main swatch with contrast-selected grayscale text. Delete is the
+deliberate exception and retains a contrast-checked red-family label in both
+inactive and active states; the active red-main surface uses red-dark text.
+Active chip hover/press cues preserve the opaque color pair and use a small
+geometric change rather than reducing opacity.
+Operation/file badges and status pills keep their established semantic fill,
+typography, icon, and cue but have no painted border. Progress uses a neutral
+gray track and the exact blue-main (`#33AAEE`) fill in both ordinary themes,
+without hover/pressed inset strokes. The two-half Sync/Integrity component's state contract uses
+`radiogroup`/`radio` semantics: exactly one half carries
+`aria-checked="true"`, and that selected half uses the live Windows accent
+roles. The owning later renderer still supplies interaction behavior. These
+ordinary-theme border removals do not remove keyboard focus indication or
+override forced-color authority.
 
 The same break establishes only the icon infrastructure, not the later surface
 icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored

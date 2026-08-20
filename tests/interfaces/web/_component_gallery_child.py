@@ -45,6 +45,7 @@ _MEDIA_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
 }
 _CONTROL_KEYS = (
     "button",
+    "button_primary",
     "dropdown",
     "tri_state_checkbox",
     "progress_determinate",
@@ -52,6 +53,10 @@ _CONTROL_KEYS = (
     "text_input",
     "toggle",
     "chip",
+    "filter_copy",
+    "filter_copy_active",
+    "filter_delete",
+    "filter_delete_active",
     "list_row",
     "tree_row",
     "card",
@@ -673,6 +678,8 @@ def _valid_semantic_rows(
         "foreground",
         "background",
         "indicator",
+        "border_width",
+        "border_style",
         "alias_foreground",
         "alias_background",
         "alias_indicator",
@@ -720,6 +727,7 @@ def _valid_control_rows(rows: object) -> bool:
         "label",
         "foreground",
         "background",
+        "fill_background",
         "border",
         "border_width",
         "border_style",
@@ -761,10 +769,12 @@ def _valid_control_contract(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "tri_state",
         "dialog_exit",
+        "segmented",
     }:
         return False
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
+    segmented = value["segmented"]
     return (
         type(tri_state) is dict
         and set(tri_state) == {"aria_checked", "indeterminate", "cue_content"}
@@ -776,6 +786,14 @@ def _valid_control_contract(value: object) -> bool:
         and set(dialog_exit)
         == {"opened", "retained_while_closing", "faded", "closed"}
         and all(value is True for value in dialog_exit.values())
+        and segmented
+        == {
+            "group_role": "radiogroup",
+            "selected_role": "radio",
+            "selected_checked": "true",
+            "unselected_role": "radio",
+            "unselected_checked": "false",
+        }
     )
 
 

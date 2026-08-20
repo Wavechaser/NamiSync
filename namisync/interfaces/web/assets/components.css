@@ -30,12 +30,8 @@ body {
   outline: none;
 }
 
-.nami-button,
 .nami-input,
 .nami-select,
-.nami-chip,
-.nami-icon-button,
-.nami-segmented,
 .nami-menu,
 .nami-dialog {
   border: 1px solid var(--color-neutral-border);
@@ -46,8 +42,9 @@ body {
 .nami-icon-button,
 .nami-segmented__item {
   align-items: center;
-  background: var(--color-neutral-surface);
-  color: var(--color-neutral-foreground);
+  background: var(--color-neutral-foreground-secondary);
+  border: 0;
+  color: var(--color-neutral-surface);
   cursor: pointer;
   display: inline-flex;
   font-weight: var(--font-weight-medium);
@@ -55,7 +52,6 @@ body {
   justify-content: center;
   transition:
     background-color var(--motion-duration-fast) var(--motion-easing-standard),
-    border-color var(--motion-duration-fast) var(--motion-easing-standard),
     box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
@@ -69,14 +65,14 @@ body {
 .nami-chip:hover,
 .nami-icon-button:hover,
 .nami-segmented__item:hover {
-  background: var(--color-neutral-surface-hover);
+  background: var(--color-neutral-border-hover);
 }
 
 .nami-button:active,
 .nami-chip:active,
 .nami-icon-button:active,
 .nami-segmented__item:active {
-  background: var(--color-neutral-surface-pressed);
+  background: var(--color-neutral-border);
 }
 
 .nami-button:focus-visible,
@@ -113,26 +109,17 @@ body {
 
 .nami-button--primary {
   background: var(--color-accent);
-  border-color: var(--color-accent);
   color: var(--color-accent-foreground);
 }
 
 .nami-button--primary:hover {
   background: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
   color: var(--color-accent-hover-foreground);
 }
 
 .nami-button--primary:active {
   background: var(--color-accent-pressed);
-  border-color: var(--color-accent-pressed);
   color: var(--color-accent-pressed-foreground);
-}
-
-.nami-button--danger {
-  background: var(--status-error-background);
-  border-color: var(--status-error-indicator);
-  color: var(--status-error-foreground);
 }
 
 .nami-input,
@@ -277,16 +264,26 @@ body {
 }
 
 .nami-chip {
-  border: 1px solid var(--color-neutral-border);
+  --nami-chip-active-background: var(--color-accent);
+  --nami-chip-active-foreground: var(--color-accent-foreground);
   border-radius: var(--radius-circular);
   min-block-size: 1.75rem;
   padding: var(--space-1) var(--space-3);
 }
 
 .nami-chip[aria-pressed="true"] {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-foreground);
+  background: var(--nami-chip-active-background);
+  color: var(--nami-chip-active-foreground);
+}
+
+.nami-chip[aria-pressed="true"]:hover {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-hover-foreground);
+}
+
+.nami-chip[aria-pressed="true"]:active {
+  background: var(--color-accent-pressed);
+  color: var(--color-accent-pressed-foreground);
 }
 
 .nami-icon-button {
@@ -603,22 +600,42 @@ body {
 }
 
 .nami-segmented {
-  background: var(--color-neutral-surface);
+  background: var(--color-neutral-surface-selected);
+  border: 0;
   border-radius: var(--radius-small);
   display: inline-flex;
   padding: var(--space-1);
 }
 
 .nami-segmented__item {
-  border: 0;
+  background: var(--color-neutral-subtle-background);
   border-radius: var(--radius-small);
+  color: var(--color-neutral-foreground);
   min-block-size: 1.75rem;
   padding: var(--space-1) var(--space-4);
+}
+
+.nami-segmented__item:hover {
+  background: var(--color-neutral-surface-hover);
+}
+
+.nami-segmented__item:active {
+  background: var(--color-neutral-surface-pressed);
 }
 
 .nami-segmented__item[aria-checked="true"] {
   background: var(--color-accent);
   color: var(--color-accent-foreground);
+}
+
+.nami-segmented__item[aria-checked="true"]:hover {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-hover-foreground);
+}
+
+.nami-segmented__item[aria-checked="true"]:active {
+  background: var(--color-accent-pressed);
+  color: var(--color-accent-pressed-foreground);
 }
 
 .nami-badge,
@@ -634,7 +651,7 @@ body {
 .nami-status-pill {
   align-items: center;
   background: var(--nami-state-background);
-  border: 1px solid var(--nami-state-indicator);
+  border: 0;
   border-radius: var(--radius-circular);
   color: var(--nami-state-foreground);
   display: inline-flex;
@@ -809,6 +826,74 @@ body {
   --nami-state-indicator: var(--operation-noop-indicator);
 }
 
+.nami-chip[data-operation] {
+  --nami-chip-active-foreground: var(--filter-active-foreground);
+}
+
+.nami-chip[data-operation="copy"] {
+  --nami-chip-active-background: var(--filter-copy-background);
+}
+
+.nami-chip[data-operation="update"] {
+  --nami-chip-active-background: var(--filter-update-background);
+}
+
+.nami-chip[data-operation="move"] {
+  --nami-chip-active-background: var(--filter-move-background);
+}
+
+.nami-chip[data-operation="move_update"] {
+  --nami-chip-active-background: var(--filter-move-update-background);
+}
+
+.nami-chip[data-operation="recase"] {
+  --nami-chip-active-background: var(--filter-recase-background);
+}
+
+.nami-chip[data-operation="mkdir"] {
+  --nami-chip-active-background: var(--filter-mkdir-background);
+}
+
+.nami-chip[data-operation="trash"] {
+  --nami-chip-active-background: var(--filter-trash-background);
+}
+
+.nami-chip[data-operation="noop"] {
+  --nami-chip-active-background: var(--filter-noop-background);
+  --nami-chip-active-foreground: var(--filter-noop-foreground);
+}
+
+.nami-chip[data-operation][aria-pressed="true"]:not(:disabled):hover {
+  background: var(--nami-chip-active-background);
+  color: var(--nami-chip-active-foreground);
+  transform: translateY(-1px);
+}
+
+.nami-chip[data-operation][aria-pressed="true"]:not(:disabled):active {
+  background: var(--nami-chip-active-background);
+  color: var(--nami-chip-active-foreground);
+  transform: scale(0.98);
+}
+
+.nami-chip[data-operation="delete"] {
+  --nami-chip-active-background: var(--filter-delete-background);
+  --nami-chip-active-foreground: var(--filter-delete-active-foreground);
+  color: var(--filter-delete-foreground);
+}
+
+.nami-chip[data-operation="delete"][aria-pressed="true"] {
+  color: var(--nami-chip-active-foreground);
+}
+
+.nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):hover,
+.nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):active {
+  background: var(--color-neutral-foreground);
+}
+
+.nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):active {
+  transform: scale(0.98);
+}
+
 [data-status="complete"] .nami-state-cue::before,
 [data-status="success"] .nami-state-cue::before {
   content: "\2713";
@@ -889,8 +974,8 @@ body {
 
 .nami-progress {
   appearance: none;
-  background: var(--nami-state-background);
-  border: 1px solid var(--nami-state-indicator);
+  background: var(--color-neutral-surface-pressed);
+  border: 0;
   border-radius: var(--radius-circular);
   block-size: var(--space-3);
   color: var(--nami-state-indicator);
@@ -898,16 +983,7 @@ body {
   overflow: hidden;
   position: relative;
   transition:
-    border-color var(--motion-duration-fast) var(--motion-easing-standard),
     box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
-}
-
-.nami-progress:hover {
-  box-shadow: inset 0 0 0 1px var(--nami-state-indicator);
-}
-
-.nami-progress:active {
-  box-shadow: inset 0 0 0 2px var(--nami-state-indicator);
 }
 
 .nami-progress:focus-visible {
@@ -916,7 +992,7 @@ body {
 }
 
 .nami-progress__bar {
-  background: var(--nami-state-indicator);
+  background: var(--progress-fill);
   block-size: 100%;
   inline-size: var(--nami-progress-value, 0%);
   transition: inline-size var(--motion-duration-normal) var(--motion-easing-decelerate);
@@ -956,6 +1032,7 @@ body {
 .nami-toggle__control:disabled,
 .nami-toggle__control:disabled:checked,
 .nami-chip:disabled,
+.nami-chip:disabled[aria-pressed="true"],
 .nami-icon-button:disabled,
 .nami-menu__item:disabled,
 .nami-segmented__item:disabled,
@@ -1019,6 +1096,17 @@ body {
     color: var(--color-accent-foreground);
   }
 
+  .nami-button--primary:not(:disabled),
+  .nami-button:not(:disabled):hover,
+  .nami-button:not(:disabled):active,
+  .nami-chip[data-operation][aria-pressed="true"]:not(:disabled),
+  .nami-segmented__item[aria-checked="true"]:not(:disabled) {
+    background: var(--color-accent);
+    color: var(--color-accent-foreground);
+    forced-color-adjust: none;
+    opacity: 1;
+  }
+
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]),
   .nami-task-card[aria-current="true"]:not([aria-disabled="true"]) {
     background: var(--color-neutral-surface-selected);
@@ -1049,14 +1137,6 @@ body {
   .nami-dialog:not([aria-disabled="true"]):hover {
     border-color: var(--color-focus-ring);
     outline: 1px solid var(--color-focus-ring);
-  }
-
-  .nami-progress:not([aria-disabled="true"]):hover {
-    outline: 1px solid var(--color-focus-ring);
-  }
-
-  .nami-progress:not([aria-disabled="true"]):active {
-    outline: 2px solid var(--color-focus-ring);
   }
 
   .nami-tree-row[data-active="true"] {

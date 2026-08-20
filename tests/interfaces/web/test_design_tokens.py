@@ -521,6 +521,22 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
     assert "--color-neutral-surface-selected: Highlight;" in forced
     assert "--color-accent-foreground: HighlightText;" in forced
     assert "--color-neutral-border: ButtonBorder;" in forced
+    for name in (
+        "filter-active-foreground",
+        "filter-copy-background",
+        "filter-update-background",
+        "filter-move-background",
+        "filter-move-update-background",
+        "filter-recase-background",
+        "filter-mkdir-background",
+        "filter-trash-background",
+        "filter-delete-background",
+        "filter-delete-active-foreground",
+        "filter-noop-background",
+        "filter-noop-foreground",
+        "progress-fill",
+    ):
+        assert f"--{name}:" in forced
     for family in (
         "positive",
         "negative",
@@ -703,10 +719,10 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         ".nami-select:not(:disabled):hover",
         '.nami-card:not([aria-disabled="true"]):hover',
         '.nami-dialog:not([aria-disabled="true"]):hover',
-        '.nami-progress:not([aria-disabled="true"]):hover',
-        '.nami-progress:not([aria-disabled="true"]):active',
     ):
         assert selector in forced
+    assert '.nami-progress:not([aria-disabled="true"]):hover' not in forced
+    assert '.nami-progress:not([aria-disabled="true"]):active' not in forced
     row_focus = _block(source, ".nami-row:focus-visible")
     assert "box-shadow: 0 0 0 2px var(--color-focus-ring);" in row_focus
     assert "outline: none;" in row_focus
@@ -808,6 +824,148 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         r"\.nami-icon\s*\{\s*forced-color-adjust:\s*none;\s*\}",
         forced,
     )
+
+
+def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> None:
+    tokens = TOKENS.read_text(encoding="utf-8")
+    source = COMPONENTS.read_text(encoding="utf-8")
+    light = _variables(_block(tokens, ":root "))
+    dark = light | _variables(_block(tokens, ':root[data-theme="dark"]'))
+
+    filter_backgrounds = {
+        "copy": "blue",
+        "update": "green",
+        "move": "purple",
+        "move-update": "purple",
+        "recase": "blue",
+        "mkdir": "green",
+        "trash": "yellow",
+        "delete": "red",
+    }
+    for theme in (light, dark):
+        inverse_background = _resolve(
+            "--color-neutral-foreground-secondary",
+            theme,
+        )
+        inverse_foreground = _resolve("--color-neutral-surface", theme)
+        delete_foreground = _resolve("--filter-delete-foreground", theme)
+        assert _contrast(inverse_foreground, inverse_background) >= 4.5
+        assert _contrast(delete_foreground, inverse_background) >= 4.5
+        active_foreground = _resolve("--filter-active-foreground", theme)
+        for operation, family in filter_backgrounds.items():
+            background = _resolve(f"--filter-{operation}-background", theme)
+            assert background == _resolve(f"--palette-{family}-main", theme)
+            foreground = (
+                _resolve("--filter-delete-active-foreground", theme)
+                if operation == "delete"
+                else active_foreground
+            )
+            assert _contrast(foreground, background) >= 4.5, operation
+        assert _contrast(
+            _resolve("--filter-noop-foreground", theme),
+            _resolve("--filter-noop-background", theme),
+        ) >= 4.5
+        assert _resolve("--progress-fill", theme) == "#33AAEE"
+
+    solid_controls = _block(
+        source,
+        ".nami-button,\n.nami-chip,\n.nami-icon-button,\n.nami-segmented__item ",
+    )
+    assert (
+        "background: var(--color-neutral-foreground-secondary);"
+        in solid_controls
+    )
+    assert "color: var(--color-neutral-surface);" in solid_controls
+    assert "border: 0;" in solid_controls
+
+    primary = _block(source, ".nami-button--primary ")
+    assert "background: var(--color-accent);" in primary
+    assert "color: var(--color-accent-foreground);" in primary
+    assert "border" not in primary
+    assert ".nami-button--danger" not in source
+
+    chip = _block(source, ".nami-chip ")
+    assert "--nami-chip-active-background: var(--color-accent);" in chip
+    operation_chip = _block(source, ".nami-chip[data-operation] ")
+    assert (
+        "--nami-chip-active-foreground: var(--filter-active-foreground);"
+        in operation_chip
+    )
+    active_operation_hover = _block(
+        source,
+        '.nami-chip[data-operation][aria-pressed="true"]:'
+        "not(:disabled):hover ",
+    )
+    active_operation_pressed = _block(
+        source,
+        '.nami-chip[data-operation][aria-pressed="true"]:'
+        "not(:disabled):active ",
+    )
+    assert "opacity:" not in active_operation_hover
+    assert "opacity:" not in active_operation_pressed
+    assert "transform: translateY(-1px);" in active_operation_hover
+    assert "transform: scale(0.98);" in active_operation_pressed
+    for operation in filter_backgrounds:
+        selector_operation = operation.replace("-", "_")
+        operation_filter = _block(
+            source,
+            f'.nami-chip[data-operation="{selector_operation}"] ',
+        )
+        assert (
+            f"--nami-chip-active-background: "
+            f"var(--filter-{operation}-background);"
+            in operation_filter
+        )
+    delete_chip = _block(source, '.nami-chip[data-operation="delete"] ')
+    assert "color: var(--filter-delete-foreground);" in delete_chip
+    assert (
+        "--nami-chip-active-foreground: "
+        "var(--filter-delete-active-foreground);"
+        in delete_chip
+    )
+    delete_inactive_interaction = _block(
+        source,
+        '.nami-chip[data-operation="delete"]:'
+        'not([aria-pressed="true"]):not(:disabled):hover,',
+    )
+    assert (
+        "background: var(--color-neutral-foreground);"
+        in delete_inactive_interaction
+    )
+
+    badges = _block(source, ".nami-badge,\n.nami-status-pill ")
+    assert "border: 0;" in badges
+    progress_match = re.search(
+        r"(?ms)^\.nami-progress\s*\{\s*appearance:\s*none;(?P<body>.*?)^\}",
+        source,
+    )
+    assert progress_match is not None
+    progress = progress_match.group("body")
+    assert "background: var(--color-neutral-surface-pressed);" in progress
+    assert "border: 0;" in progress
+    progress_bar = _block(source, ".nami-progress__bar ")
+    assert "background: var(--progress-fill);" in progress_bar
+    assert ".nami-progress:hover" not in source
+    assert ".nami-progress:active" not in source
+
+    segmented_match = re.search(
+        r"(?ms)^\.nami-segmented\s*\{\s*background:\s*"
+        r"var\(--color-neutral-surface-selected\);(?P<body>.*?)^\}",
+        source,
+    )
+    assert segmented_match is not None
+    segmented = segmented_match.group("body")
+    assert "border: 0;" in segmented
+    assert (
+        "background: var(--color-neutral-surface-selected);"
+        in segmented_match.group(0)
+    )
+    selected_segment = _block(
+        source,
+        '.nami-segmented__item[aria-checked="true"] ',
+    )
+    assert "background: var(--color-accent);" in selected_segment
+    assert "color: var(--color-accent-foreground);" in selected_segment
 
 
 def test_sh_g_11_shipped_page_loads_tokens_components_then_layout() -> None:
