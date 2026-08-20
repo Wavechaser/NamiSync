@@ -1,8 +1,10 @@
-import { renderFilesystemText, renderText } from "./render.js";
+import { renderFileRow } from "./file_row.js";
+import { renderText } from "./render.js";
 
 const STRING_FIELDS = Object.freeze([
   "selectionLabel",
-  "pathText",
+  "nameText",
+  "sizeText",
   "intentText",
   "intentTone",
   "intentKey",
@@ -15,10 +17,13 @@ function validRowView(rowView) {
     typeof rowView === "object" &&
     !Array.isArray(rowView) &&
     typeof rowView.checked === "boolean" &&
+    typeof rowView.mixed === "boolean" &&
+    !(rowView.checked && rowView.mixed) &&
     typeof rowView.selectionDisabled === "boolean" &&
     Number.isSafeInteger(rowView.depth) &&
     rowView.depth >= 0 &&
     typeof rowView.folder === "boolean" &&
+    typeof rowView.expanded === "boolean" &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
     ["", "operation", "status"].includes(rowView.intentTone) &&
     (
@@ -28,9 +33,10 @@ function validRowView(rowView) {
     );
 }
 
-function createCell(ownerDocument, className) {
+function createCell(ownerDocument, className, column) {
   const cell = ownerDocument.createElement("div");
-  cell.className = `nami-plan-row__cell ${className}`;
+  cell.className = `nami-file-row__cell ${className}`;
+  cell.dataset.fileColumn = column;
   cell.setAttribute("role", "cell");
   return cell;
 }
@@ -44,33 +50,17 @@ export function renderPlanRow(element, rowView) {
   }
 
   const ownerDocument = element.ownerDocument;
-  const selection = createCell(ownerDocument, "nami-plan-row__selection");
-  const checkbox = ownerDocument.createElement("input");
-  checkbox.className = "nami-checkbox";
-  checkbox.type = "checkbox";
-  checkbox.checked = rowView.checked;
-  checkbox.disabled = rowView.selectionDisabled;
-  checkbox.ariaLabel = rowView.selectionLabel;
-  selection.append(checkbox);
-
-  const path = createCell(ownerDocument, "nami-plan-row__path");
-  renderFilesystemText(path, rowView.pathText);
-
-  const intent = createCell(ownerDocument, "nami-plan-row__intent");
+  const intent = createCell(ownerDocument, "nami-plan-row__intent", "primary");
   if (rowView.intentTone !== "") {
     intent.dataset[rowView.intentTone] = rowView.intentKey;
   }
   renderText(intent, rowView.intentText);
 
-  const checksum = createCell(ownerDocument, "nami-plan-row__checksum");
+  const checksum = createCell(ownerDocument, "nami-plan-row__checksum", "secondary");
   renderText(checksum, rowView.checksumText);
 
-  const notes = createCell(ownerDocument, "nami-plan-row__notes");
-  renderText(notes, rowView.notesText);
-
-  element.className = "nami-plan-row";
-  element.dataset.folder = String(rowView.folder);
-  element.setAttribute("role", "row");
-  element.style.setProperty("--nami-plan-depth", String(rowView.depth));
-  element.replaceChildren(selection, path, intent, checksum, notes);
+  renderFileRow(element, rowView, {
+    className: "nami-plan-row",
+    cells: [intent, checksum],
+  });
 }

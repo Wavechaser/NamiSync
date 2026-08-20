@@ -216,9 +216,11 @@ def test_modules_use_only_local_explicit_js_imports(
         ],
         "appearance.js": [],
         "bridge.js": [],
+        "file_row.js": ["./render.js"],
         "icons.js": [],
+        "integrity.js": ["./file_row.js", "./render.js"],
         "panels.js": ["./render.js"],
-        "plan.js": ["./render.js"],
+        "plan.js": ["./file_row.js", "./render.js"],
         "rail.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
@@ -462,6 +464,8 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
 ) -> None:
     assets = _wheel_assets(built_wheel)
     renderer = assets["render.js"]
+    file_row = assets["file_row.js"]
+    integrity = assets["integrity.js"]
     plan = assets["plan.js"]
     tree = assets["tree.js"]
 
@@ -502,12 +506,16 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
     assert re.search(r"\.textContent\s*=(?!=)", tree) is None
     assert (
         'import { renderFilesystemText, renderText } from "./render.js";'
-        in plan
+        in file_row
     )
-    assert "renderFilesystemText(path, rowView.pathText);" in plan
+    assert "renderFilesystemText(label, rowView.nameText);" in file_row
+    assert "renderText(size, rowView.sizeText);" in file_row
+    assert "renderText(notes, rowView.notesText);" in file_row
     assert "renderText(intent, rowView.intentText);" in plan
     assert "renderText(checksum, rowView.checksumText);" in plan
-    assert "renderText(notes, rowView.notesText);" in plan
+    assert "renderText(cell, text);" in integrity
+    assert re.search(r"\.textContent\s*=(?!=)", file_row) is None
+    assert re.search(r"\.textContent\s*=(?!=)", integrity) is None
     assert re.search(r"\.textContent\s*=(?!=)", plan) is None
 
 
@@ -515,6 +523,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
+    file_row = assets["file_row.js"]
+    integrity = assets["integrity.js"]
     plan = assets["plan.js"]
     layout = assets["app.css"]
     production_shell = "\n".join(
@@ -524,11 +534,19 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", plan) == [
         "renderPlanRow"
     ]
+    assert re.findall(r"export function ([A-Za-z0-9_]+)\(", integrity) == [
+        "renderIntegrityRow"
+    ]
+    assert re.findall(r"export function ([A-Za-z0-9_]+)\(", file_row) == [
+        "renderFileRow"
+    ]
     assert '"./plan.js"' not in production_shell
+    assert '"./integrity.js"' not in production_shell
     assert "renderPlanRow" not in production_shell
-    assert '"./bridge.js"' not in plan
+    dormant_renderers = "\n".join((file_row, plan, integrity))
+    assert '"./bridge.js"' not in dormant_renderers
     assert not any(
-        name in plan
+        name in dormant_renderers
         for name in (
             "SyncPlan",
             "workflow",
@@ -537,27 +555,37 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
             "dispatchInteractive",
         )
     )
-    assert ".slice(" not in plan
-    assert ".substring(" not in plan
+    assert ".slice(" not in dormant_renderers
+    assert ".substring(" not in dormant_renderers
+    assert ".split(" not in dormant_renderers
     assert 'intent.dataset[rowView.intentTone] = rowView.intentKey;' in plan
-    assert 'element.setAttribute("role", "row");' in plan
+    assert 'element.setAttribute("role", "row");' in file_row
     assert plan.count('cell.setAttribute("role", "cell");') == 1
-    assert 'checkbox.type = "checkbox";' in plan
-    assert 'element.replaceChildren(selection, path, intent, checksum, notes);' in plan
+    assert integrity.count('cell.setAttribute("role", "cell");') == 1
+    assert 'checkbox.type = "checkbox";' in file_row
+    assert 'checkbox.indeterminate = rowView.mixed;' in file_row
+    assert 'renderFileRow(element, rowView, {' in plan
+    assert 'renderFileRow(element, rowView, {' in integrity
+    assert 'element.replaceChildren(selection, name, size, ...details.cells, notes);' in file_row
 
-    zebra = ".nami-plan-list__body > .nami-plan-row:nth-child(even)"
+    zebra = ".nami-file-list__body > .nami-file-row:nth-child(even)"
     assert zebra in layout
+    assert ".nami-file-list__body > .nami-file-row[hidden]" in layout
+    assert "display: none;" in layout
+    assert layout.count("--nami-file-column-") == 12
+    assert ".nami-file-list__column-resizer" in layout
+    assert "cursor: col-resize;" in layout
     assert "repeating-linear-gradient" not in layout
     assert "repeating-radial-gradient" not in layout
-    assert not re.search(r"\.nami-plan-row__cell[^\{]*:nth-child", layout)
-    assert not re.search(r"\.nami-plan-list__header-cell[^\{]*:nth-child", layout)
+    assert not re.search(r"\.nami-file-row__cell[^\{]*:nth-child", layout)
+    assert not re.search(r"\.nami-file-list__header-cell[^\{]*:nth-child", layout)
     assert "background: initial;" in layout
     assert layout.count("--nami-plan-preferred-foreground:") == 10
     assert layout.count("var(--plan-intent-") == 10
     assert "--palette-" not in layout
     assert '[data-operation="noop"]' in layout
     assert re.search(
-        r"(?ms)^\.nami-plan-list__body\s*\{[^}]*min-(?:block-)?size",
+        r"(?ms)^\.nami-file-list__body\s*\{[^}]*min-(?:block-)?size",
         layout,
     ) is None
 
@@ -1059,6 +1087,7 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'panel.classList.add("nami-card", "nami-work-panel");' in panels
     assert "app.append(createTaskRail(), createWorkPanel());" in app
     assert '"./plan.js"' not in app + panels
+    assert '"./integrity.js"' not in app + panels
     assert "renderPlanRow" not in shell
     assert 'status.textContent === "Starting..."' in app
 

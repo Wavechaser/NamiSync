@@ -1,107 +1,80 @@
 # Session Handoff
 
-Status (2026-08-20): the shared desktop controls are tuned and committed at
-`849a584`, and the pre-Slice-5 file-list visual foundation is implemented for
-the next checkpoint. The packaged row renderer remains dormant in production;
-only the test-owned installed-wheel gallery supplies projected specimens. Real
-plan projection, bridge commands, selection behavior, and execution remain
-Slice 5 work.
+Status (2026-08-20): the pre-Slice-5 sync and integrity file-list visual
+foundation is implemented and remains dormant in production. Only the
+test-owned installed-wheel gallery supplies projected specimens. Real
+projection, transport, selection/tree policy, and execution remain Slice 5+
+work.
 
 ## Delivered
 
-- Reduced ordinary command buttons to two tiers: an inverse-gray default and a
-  Windows-accent `nami-button--primary` modifier. Removed the unused danger
-  modifier and all ordinary painted button borders.
-- Made inactive filter pills inverse grayscale in both themes. Active operation
-  filters consume the operation family's exact main swatch with
-  contrast-selected neutral text; Delete uses the contrast-valid
-  red-main/red-dark pairing when active and a stronger inverse hover surface
-  when inactive.
-- Removed the painted border from operation/file badges and status pills
-  without changing their semantic fills, icons, type, spacing, or non-color
-  cues.
-- Replaced the tinted, outlined progress track and hover/press inset strokes
-  with a neutral gray track and exact blue-main (`#33AAEE`) fill in both themes.
-  Keyboard-only focus
-  indication remains available.
-- Restyled the two-half segmented component with a neutral group surface and
-  accent rest/hover/pressed selected state. The gallery specimen now uses
-  `radiogroup`/`radio` semantics and marks Sync as the one checked half.
-- Expanded the clean-wheel gallery matrix with primary buttons and inactive/
-  active Copy and Delete filters, plus computed fill and border evidence.
-- Added packaged `plan.js` with one narrow
-  `renderPlanRow(element, rowView)` export. It consumes explicit presentation
-  values through the defended text helpers and imports neither bridge nor
-  domain code; `app.js` and `panels.js` remain unchanged, so production still
-  renders no file rows.
-- Added the responsive five-column plan grid with an accessible blank selection
-  header, checkbox/path/intent/checksum/notes cells, folder weight and depth,
-  semantic intent text, row-only zebra backgrounds, transparent cells, and
-  aligned horizontal overflow at constrained widths. The gallery specimen now
-  fills the shell's wide work area instead of occupying the narrow rail side.
-- Added plan-specific intent aliases: light rows retain their contrast-safe
-  semantic foregrounds, dark rows prefer the authored operation-family main
-  swatches, Error and Unsupported/Blocked use red-main on dark rows, no-op stays
-  neutral, and forced colors resolve to `CanvasText`.
-- Added a 12-row static test-only gallery fixture: plain; all nine operations
-  exactly once, including a folder followed by an indented file; error; and
-  unsupported. It passes already-projected `rowView` objects directly to the
-  installed renderer and is proven absent from the wheel.
+- Added shared packaged `file_row.js` presentation structure and kept
+  `plan.js` and `integrity.js` as separate narrow, display-ready row renderers.
+  None imports the bridge or domain code, and production imports none of them.
+- Standardized both lists on six columns and compact geometry: 28 px rows,
+  16 px native checkboxes, selection/filename/size first, and notes last. Sync
+  uses operation/checksum middle columns; integrity uses presence/integrity.
+- Added projected folder disclosure, mixed checkbox state, depth indentation,
+  and basename-only child labels. Gallery folders each have two children and
+  the test-owned driver proves computed collapse/restore and reconciles mixed,
+  fully selected, and unselected direct-child states without defining product
+  recursive hierarchy semantics.
+- Added focusable separator handles to all six gallery headers. Pointer drag
+  and Left/Right arrows resize the shared grid tracks for the current DOM only;
+  no persistence, cosmetic state, or bridge contract was added.
+- Changed light-theme sync operation text from dark-family variants to exact
+  authored main swatches. Added dedicated file-status aliases so integrity
+  presence/integrity text likewise uses green, yellow, purple, red, or blue
+  main swatches in both ordinary themes. Forced colors still use `CanvasText`.
+- Extended the static gallery with representative integrity rows while keeping
+  all fixtures under `tests/assets/component_gallery/` and outside the wheel.
 
 ## Adversarial Review
 
-- Confirmed the change is component-foundation work only; it does not invent
-  task-backed controls, bridge commands, workflow state, or cosmetic storage.
-- Kept keyboard focus rings despite removing persistent borders, and preserved
-  forced-color system authority rather than hardcoding ordinary-theme colors
-  into high contrast.
-- Headed computed evidence caught one light-theme Delete-hover contrast defect
-  at 4.09:1. The corrected state uses the stronger inverse gray and the complete
-  four-profile gallery now passes.
-- Adversarial review then rejected active-chip opacity because its composited
-  hover/pressed pairs fell below 4.5:1 despite valid raw colors. Those states
-  now remain fully opaque and use a small transform cue; the complete gallery
-  was rerun after the correction.
-- Verified active Copy uses blue-main with contrast-valid neutral text, active
-  Delete uses the red-main/red-dark pair, file/status-chip border widths resolve
-  to zero, progress resolves to the same blue-main fill in both themes, and
-  the checked segmented half resolves to the same accent background as the
-  primary button.
-- Rejected any temporary Slice 5 transport or domain fixture. The renderer's
-  object is explicitly page-local and display-ready: there is no bridge row,
-  `SyncPlan`, workflow, dispatcher, session, checksum inference, or planner
-  semantic mapping to preserve later.
-- Verified that stripes are backgrounds on actual direct row children only,
-  including the folder; the body height ends at the final row, cells remain
-  transparent, five columns align, and the constrained gallery scrolls the
-  intact grid rather than painting filler or column bands.
-- Rejected direct palette consumption from `app.css`; the final mapping remains
-  token-owned in explicit dark, automatic dark, and forced-color authorities.
-  Rendered evidence verifies both wide-area fill and operation-text contrast.
+- Kept the row-view inputs page-local and already projected: renderers do not
+  split paths, aggregate file sizes, truncate hashes, infer status families,
+  reconstruct trees, or dispatch commands.
+- Confirmed `app.js` and `panels.js` remain unchanged and import neither list,
+  so the production GUI still has no Slice 5 content.
+- Verified folders render their full visual context once, while child rows show
+  only `DSC_1000.jpeg`/`DSC_1001.jpeg` or the integrity fixture basenames with
+  greater indentation.
+- Fixed a headed-evidence false positive: the grid display rule had overridden
+  the browser's default `[hidden]` behavior. An explicit hidden-row rule now
+  collapses computed layout, and evidence checks computed display rather than
+  only the DOM property.
+- Verified both folder checkboxes are genuinely indeterminate with
+  `aria-checked="mixed"`; selecting the second child selects the parent, and
+  clearing it restores the mixed parent state. Disclosures return to expanded
+  state after the test, cells remain transparent, zebra backgrounds stop at
+  the final row, and the
+  aligned grid scrolls rather than collapsing when constrained.
+- Verified a synthetic 40 px pointer drag changes the corresponding rendered
+  filename track by 40 px in both sync and integrity specimens, then resets the
+  fixture before remaining measurements.
+- Documented the main-first palette rule: light/dark tones support or
+  contextualize the main and may replace it only as an explicit designed
+  exception. The light main-colored list labels are an explicit measured
+  contrast exception whose visible words preserve non-color meaning; Windows
+  forced colors remain authoritative.
 
 ## Verification
 
-- Focused ordinary frontend, token, and gallery contracts: `63 passed, 7
-  skipped, 4 deselected`.
-- Interface-owned headed suite: `28 passed, 2646 deselected` in `116.41s`,
-  including the installed-wheel gallery across light, dark, forced-color, and
+- Focused ordinary token, frontend, and component-gallery contracts: `64
+  passed, 7 skipped, 4 deselected` in `3.03s`.
+- Neighborhood installed-wheel component-gallery headed tests: `4 passed, 15
+  deselected` in `31.77s`, covering light, dark, forced-color, and
   reduced-motion profiles.
-- Interface department: `1118 passed, 12 skipped, 1544 deselected` in `33.26s`.
-- Ordinary repository suite: `2630 passed, 16 skipped, 28 deselected` in
-  `135.15s`.
+- Per user scope, no department or full repository suite was run.
 
 ## Remaining Work
 
-- Slices 5–7 must apply `nami-button--primary` only to consequential actions
-  such as Execute and Verify and set exactly one Sync/Integrity radio checked.
-- Actual filter definitions/counts, task mode transitions, progress data, and
-  action enablement remain owned by their later renderers and workflows; this
-  session changes presentation contracts only.
-- Slice 5 must supply the first validated Python plan projection, bridge
-  command, product list scaffolding, selection behavior, and live updates. It
-  may map into the page-local row view without treating that view as a wire
-  compatibility contract.
-- The in-app browser inspection plugin was unavailable because its bundled
-  service failed the app's trusted-code-path check. The native installed-wheel
-  WebView2 gallery remained the rendered verification authority for this
-  session.
+- Slice 5+ must own validated Python projections, bridge commands, real list
+  scaffolding/controllers, selection propagation, hierarchy updates, and live
+  workflow state. The page-local row views are not wire contracts.
+- Product list ownership must decide keyboard tree/table interaction and zebra
+  parity across dynamically hidden or virtualized descendants; this visual
+  checkpoint intentionally does not invent those semantics.
+- The in-app Browser had no open user tab to claim for an additional manual
+  inspection. The native installed-wheel WebView2 gallery remained the
+  rendered verification authority.

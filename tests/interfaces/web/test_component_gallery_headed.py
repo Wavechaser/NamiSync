@@ -47,6 +47,8 @@ _ASSET_NAMES = (
     "tokens.css",
     "components.css",
     "app.css",
+    "file_row.js",
+    "integrity.js",
     "plan.js",
 )
 _TEST_ONLY_MARKERS = (
@@ -93,8 +95,12 @@ _OPERATION_MAIN_RGB = {
     "delete": "rgb(238, 102, 102)",
 }
 _STATUS_MAIN_RGB = {
+    "complete": "rgb(51, 221, 153)",
     "error": "rgb(238, 102, 102)",
     "blocked": "rgb(238, 102, 102)",
+    "warning": "rgb(255, 221, 68)",
+    "deferred": "rgb(255, 221, 68)",
+    "mismatch": "rgb(187, 136, 238)",
 }
 _PLAN_ROW_CASE_KEYS = {
     "plain",
@@ -109,6 +115,13 @@ _PLAN_ROW_CASE_KEYS = {
     "noop",
     "error",
     "unsupported",
+}
+_INTEGRITY_ROW_CASE_KEYS = {
+    "folder",
+    "match",
+    "source_only",
+    "mismatch",
+    "error",
 }
 _CONTROL_KEYS = {
     "button",
@@ -632,28 +645,109 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             {
                 "case": case,
                 "role": "row",
-                "cell_roles": ["cell"] * 5,
+                "cell_roles": ["cell"] * 6,
                 "checkbox_label": f"Select {case}",
                 "checkbox_checked": False,
                 "checkbox_disabled": case in {"error", "unsupported"},
-                "depth": 1 if case == "copy" else 0,
+                "checkbox_indeterminate": case == "mkdir",
+                "checkbox_aria_checked": "mixed" if case == "mkdir" else None,
+                "checkbox_width": 16.0,
+                "checkbox_height": 16.0,
+                "depth": 1 if case in {"copy", "update"} else 0,
                 "folder": case == "mkdir",
-                "path": f"{case}.example",
-                "intent": case,
-                "tone": tone,
-                "intent_key": intent_key,
-                "checksum": (
+                "expanded": "true" if case == "mkdir" else None,
+                "name": f"{case}.example",
+                "size": "1 KB",
+                "primary": case,
+                "primary_tone": tone,
+                "primary_key": intent_key,
+                "secondary": (
                     "—" if case in {"mkdir", "error", "unsupported"} else "12345678"
                 ),
+                "secondary_tone": "",
+                "secondary_key": "",
                 "notes": f"{case} notes",
                 "background": "rgb(255, 255, 255)",
-                "intent_color": "rgb(0, 0, 0)",
-                "intent_alias_color": "rgb(0, 0, 0)",
-                "cell_backgrounds": ["rgba(0, 0, 0, 0)"] * 5,
-                "column_lefts": [float(index) for index in range(5)],
-                "path_padding_left": 24.0 if case == "copy" else 8.0,
+                "primary_color": "rgb(0, 0, 0)",
+                "primary_alias_color": "rgb(0, 0, 0)",
+                "secondary_color": "rgb(0, 0, 0)",
+                "secondary_alias_color": "rgb(0, 0, 0)",
+                "cell_backgrounds": ["rgba(0, 0, 0, 0)"] * 6,
+                "column_lefts": [float(index) for index in range(6)],
+                "name_padding_left": 24.0 if case in {"copy", "update"} else 8.0,
+                "row_height": 28.0,
             }
         )
+
+    integrity_rows = []
+    for case in ("folder", "match", "source_only", "mismatch", "error"):
+        integrity_rows.append(
+            {
+                "case": case,
+                "role": "row",
+                "cell_roles": ["cell"] * 6,
+                "checkbox_label": f"Select {case}",
+                "checkbox_checked": case in {"match", "mismatch"},
+                "checkbox_disabled": case == "error",
+                "checkbox_indeterminate": case == "folder",
+                "checkbox_aria_checked": "mixed" if case == "folder" else None,
+                "checkbox_width": 16.0,
+                "checkbox_height": 16.0,
+                "depth": 1 if case in {"match", "source_only"} else 0,
+                "folder": case == "folder",
+                "expanded": "true" if case == "folder" else None,
+                "name": f"{case}.example",
+                "size": "1 KB",
+                "primary": "Both",
+                "primary_tone": "status",
+                "primary_key": "complete",
+                "secondary": "Match",
+                "secondary_tone": "status",
+                "secondary_key": "complete",
+                "notes": f"{case} notes",
+                "background": "rgb(255, 255, 255)",
+                "primary_color": "rgb(0, 0, 0)",
+                "primary_alias_color": "rgb(0, 0, 0)",
+                "secondary_color": "rgb(0, 0, 0)",
+                "secondary_alias_color": "rgb(0, 0, 0)",
+                "cell_backgrounds": ["rgba(0, 0, 0, 0)"] * 6,
+                "column_lefts": [float(index) for index in range(6)],
+                "name_padding_left": 24.0 if case in {"match", "source_only"} else 8.0,
+                "row_height": 28.0,
+            }
+        )
+
+    def file_list(rows: list[dict[str, object]], headers: list[str]) -> dict[str, object]:
+        return {
+            "table_role": "table",
+            "header_role": "row",
+            "body_role": "rowgroup",
+            "gallery_uses_work_area": True,
+            "gallery_fills_work_area": True,
+            "collapse_hides_children": True,
+            "collapse_restores_children": True,
+            "child_selection_selects_folder": True,
+            "child_selection_restores_mixed": True,
+            "resize_handle_count": 6,
+            "column_resize_changes_width": True,
+            "column_resize_delta": 40.0,
+            "header_foreground": "rgb(0, 0, 0)",
+            "header_background": "rgb(255, 255, 255)",
+            "header_texts": headers,
+            "header_cell_roles": ["columnheader"] * 6,
+            "selection_header_label": "Selection",
+            "column_count": 6,
+            "row_count": len(rows),
+            "body_child_count": len(rows),
+            "checkbox_count": len(rows),
+            "body_ends_at_last_row": True,
+            "body_height_matches_rows": True,
+            "horizontal_overflow": True,
+            "overflow_x": "auto",
+            "client_width": 576.0,
+            "scroll_width": 960.0,
+            "rows": rows,
+        }
     report = {
         "phase": "complete",
         "mode": "light",
@@ -704,35 +798,14 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "unselected_role": "radio",
                 "unselected_checked": "false",
             },
-            "file_list": {
-                "table_role": "table",
-                "header_role": "row",
-                "body_role": "rowgroup",
-                "gallery_uses_work_area": True,
-                "gallery_fills_work_area": True,
-                "header_foreground": "rgb(0, 0, 0)",
-                "header_background": "rgb(255, 255, 255)",
-                "header_texts": [
-                    "",
-                    "Files / path",
-                    "Intended op / status",
-                    "Checksum",
-                    "Reason / notes",
-                ],
-                "header_cell_roles": ["columnheader"] * 5,
-                "selection_header_label": "Selection",
-                "column_count": 5,
-                "row_count": len(plan_rows),
-                "body_child_count": len(plan_rows),
-                "checkbox_count": len(plan_rows),
-                "body_ends_at_last_row": True,
-                "body_height_matches_rows": True,
-                "horizontal_overflow": True,
-                "overflow_x": "auto",
-                "client_width": 576.0,
-                "scroll_width": 864.0,
-                "rows": plan_rows,
-            },
+            "file_list": file_list(
+                plan_rows,
+                ["", "Filename", "Size", "Operation / status", "Checksum", "Notes"],
+            ),
+            "integrity_list": file_list(
+                integrity_rows,
+                ["", "Filename", "Size", "Presence", "Integrity", "Notes"],
+            ),
         },
         "motion": {
             "nonessential_max_ms": 100,
@@ -901,6 +974,7 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert _declared_keys(script, "STATUS_CASES") == _STATUS_KEYS
     assert _declared_keys(script, "OPERATION_CASES") == _OPERATION_KEYS
     assert _declared_keys(script, "PLAN_ROW_CASES") == _PLAN_ROW_CASE_KEYS
+    assert _declared_keys(script, "INTEGRITY_ROW_CASES") == _INTEGRITY_ROW_CASE_KEYS
     assert _declared_keys(script, "CONTROL_CASES") == _CONTROL_KEYS
     assert _SELECTED_TASK_CARD_KEYS <= _BOUNDARY_CONTROL_KEYS
     assert "task_card" not in _BOUNDARY_CONTROL_KEYS
@@ -909,10 +983,18 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/render.js")' in script
     assert 'import("/icons.js")' in script
     assert 'import("/plan.js")' in script
-    assert "renderPlanRow(row, rowView);" in script
+    assert 'import("/integrity.js")' in script
+    assert "PLAN_ROW_CASES,\n    renderPlanRow," in script
+    assert "INTEGRITY_ROW_CASES,\n    renderIntegrityRow," in script
+    assert "renderer(row, definition.rowView);" in script
     assert 'planSection.style.gridArea = "work";' in script
-    assert 'planList.style.setProperty("inline-size", "36rem");' in script
-    assert 'planList.style.removeProperty("inline-size");' in script
+    assert 'list.style.setProperty("inline-size", "36rem");' in script
+    assert 'list.style.removeProperty("inline-size");' in script
+    assert 'resizer.addEventListener("pointerdown"' in script
+    assert 'window.addEventListener("pointermove", move);' in script
+    assert 'resizer.addEventListener("keydown"' in script
+    assert "localStorage" not in script
+    assert "sessionStorage" not in script
     assert not any(
         name in script
         for name in ("SyncPlan", "start_plan", "workflow", "dispatcher", "session")
@@ -1049,6 +1131,11 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         _assert_plan_list_evidence(
             report["control_contract"]["file_list"],
             dark=report["media"]["dark"],
+            forced=report["media"]["forced"],
+            system_colors=report["icons"]["system_colors"],
+        )
+        _assert_integrity_list_evidence(
+            report["control_contract"]["integrity_list"],
             forced=report["media"]["forced"],
             system_colors=report["icons"]["system_colors"],
         )
@@ -1538,27 +1625,139 @@ def _assert_plan_list_evidence(
         "error",
         "unsupported",
     )
+    rows = _assert_file_list_evidence(
+        evidence,
+        expected_order=expected_order,
+        expected_headers=[
+            "",
+            "Filename",
+            "Size",
+            "Operation / status",
+            "Checksum",
+            "Notes",
+        ],
+        forced=forced,
+        system_colors=system_colors,
+    )
+    assert tuple(row["case"] for row in rows) == expected_order
+    by_case = {row["case"]: row for row in rows}
+    assert set(by_case) == _PLAN_ROW_CASE_KEYS
+    assert {
+        row["primary_key"]
+        for row in rows
+        if row["primary_tone"] == "operation"
+    } == _OPERATION_KEYS
+    assert (by_case["error"]["primary_tone"], by_case["error"]["primary_key"]) == (
+        "status",
+        "error",
+    )
+    assert (
+        by_case["unsupported"]["primary_tone"],
+        by_case["unsupported"]["primary_key"],
+    ) == ("status", "blocked")
+    assert (by_case["plain"]["primary_tone"], by_case["plain"]["primary_key"]) == (
+        "",
+        "",
+    )
+    assert by_case["mkdir"]["folder"] is True
+    assert by_case["copy"]["folder"] is False
+    assert by_case["copy"]["depth"] > by_case["mkdir"]["depth"]
+    assert (
+        by_case["copy"]["name_padding_left"]
+        > by_case["mkdir"]["name_padding_left"]
+    )
+    assert by_case["copy"]["name"] == "DSC_1000.jpeg"
+    assert by_case["update"]["name"] == "DSC_1001.jpeg"
+    assert "\\" not in by_case["copy"]["name"]
+    assert by_case["mkdir"]["checkbox_indeterminate"] is True
+    assert by_case["mkdir"]["checkbox_aria_checked"] == "mixed"
+    assert by_case["mkdir"]["expanded"] == "true"
+    assert by_case["error"]["checkbox_disabled"] is True
+    assert by_case["unsupported"]["checkbox_disabled"] is True
+
+    for row in rows:
+        assert row["secondary"] == "—" or len(row["secondary"]) == 8
+        assert row["secondary_tone"] == ""
+        colored_operation = (
+            row["primary_tone"] == "operation" and row["primary_key"] != "noop"
+        )
+        if forced:
+            assert row["primary_color"] == system_colors["CanvasText"]
+        elif colored_operation:
+            assert row["primary_color"] == _OPERATION_MAIN_RGB[row["primary_key"]]
+        elif dark and row["primary_tone"] == "status":
+            assert row["primary_color"] == _STATUS_MAIN_RGB[row["primary_key"]]
+        else:
+            assert row["primary_color"] == row["primary_alias_color"]
+        if forced or not colored_operation:
+            assert _contrast(row["primary_color"], row["background"]) >= 4.5
+
+
+def _assert_integrity_list_evidence(
+    evidence: dict[str, object],
+    *,
+    forced: bool,
+    system_colors: dict[str, str],
+) -> None:
+    expected_order = ("folder", "match", "source_only", "mismatch", "error")
+    rows = _assert_file_list_evidence(
+        evidence,
+        expected_order=expected_order,
+        expected_headers=["", "Filename", "Size", "Presence", "Integrity", "Notes"],
+        forced=forced,
+        system_colors=system_colors,
+    )
+    by_case = {row["case"]: row for row in rows}
+    assert set(by_case) == _INTEGRITY_ROW_CASE_KEYS
+    assert by_case["folder"]["checkbox_indeterminate"] is True
+    assert by_case["folder"]["checkbox_aria_checked"] == "mixed"
+    assert by_case["match"]["name"] == "report.pdf"
+    assert by_case["source_only"]["name"] == "draft.docx"
+    assert by_case["match"]["depth"] > by_case["folder"]["depth"]
+    for row in rows:
+        assert row["primary_tone"] == "status"
+        assert row["secondary_tone"] == "status"
+        if forced:
+            assert row["primary_color"] == system_colors["CanvasText"]
+            assert row["secondary_color"] == system_colors["CanvasText"]
+        else:
+            assert row["primary_color"] == _STATUS_MAIN_RGB[row["primary_key"]]
+            assert row["secondary_color"] == _STATUS_MAIN_RGB[row["secondary_key"]]
+        if forced:
+            assert _contrast(row["primary_color"], row["background"]) >= 4.5
+            assert _contrast(row["secondary_color"], row["background"]) >= 4.5
+
+
+def _assert_file_list_evidence(
+    evidence: dict[str, object],
+    *,
+    expected_order: tuple[str, ...],
+    expected_headers: list[str],
+    forced: bool,
+    system_colors: dict[str, str],
+) -> list[dict[str, object]]:
     assert evidence["table_role"] == "table"
     assert evidence["header_role"] == "row"
     assert evidence["body_role"] == "rowgroup"
     assert evidence["gallery_uses_work_area"] is True
     assert evidence["gallery_fills_work_area"] is True
+    assert evidence["collapse_hides_children"] is True
+    assert evidence["collapse_restores_children"] is True
+    assert evidence["child_selection_selects_folder"] is True
+    assert evidence["child_selection_restores_mixed"] is True
+    assert evidence["resize_handle_count"] == 6
+    assert evidence["column_resize_changes_width"] is True
+    assert evidence["column_resize_delta"] == pytest.approx(40.0, abs=1.0)
     assert _contrast(
         evidence["header_foreground"], evidence["header_background"]
     ) >= 4.5
     if forced:
         assert evidence["header_foreground"] == system_colors["HighlightText"]
         assert evidence["header_background"] == system_colors["Highlight"]
-    assert evidence["header_texts"] == [
-        "",
-        "Files / path",
-        "Intended op / status",
-        "Checksum",
-        "Reason / notes",
-    ]
-    assert evidence["header_cell_roles"] == ["columnheader"] * 5
+    assert evidence["header_texts"] == expected_headers
+    assert evidence["header_cell_roles"] == ["columnheader"] * 6
     assert evidence["selection_header_label"] == "Selection"
-    assert evidence["column_count"] == 5
+    assert evidence["column_count"] == 6
     assert evidence["row_count"] == len(expected_order)
     assert evidence["body_child_count"] == len(expected_order)
     assert evidence["checkbox_count"] == len(expected_order)
@@ -1567,72 +1766,33 @@ def _assert_plan_list_evidence(
     assert evidence["horizontal_overflow"] is True
     assert evidence["overflow_x"] == "auto"
     assert evidence["scroll_width"] > evidence["client_width"] > 0
-
     rows = evidence["rows"]
     assert tuple(row["case"] for row in rows) == expected_order
-    by_case = {row["case"]: row for row in rows}
-    assert set(by_case) == _PLAN_ROW_CASE_KEYS
-    assert {
-        row["intent_key"]
-        for row in rows
-        if row["tone"] == "operation"
-    } == _OPERATION_KEYS
-    assert (by_case["error"]["tone"], by_case["error"]["intent_key"]) == (
-        "status",
-        "error",
-    )
-    assert (
-        by_case["unsupported"]["tone"],
-        by_case["unsupported"]["intent_key"],
-    ) == ("status", "blocked")
-    assert (by_case["plain"]["tone"], by_case["plain"]["intent_key"]) == (
-        "",
-        "",
-    )
-    assert by_case["mkdir"]["folder"] is True
-    assert by_case["copy"]["folder"] is False
-    assert by_case["copy"]["depth"] > by_case["mkdir"]["depth"]
-    assert (
-        by_case["copy"]["path_padding_left"]
-        > by_case["mkdir"]["path_padding_left"]
-    )
-    assert by_case["error"]["checkbox_disabled"] is True
-    assert by_case["unsupported"]["checkbox_disabled"] is True
-
     expected_columns = rows[0]["column_lefts"]
     for row in rows:
         assert row["role"] == "row"
-        assert row["cell_roles"] == ["cell"] * 5
+        assert row["cell_roles"] == ["cell"] * 6
         assert row["checkbox_label"]
-        assert row["path"]
-        assert row["intent"]
+        assert row["name"]
+        assert row["size"]
+        assert row["primary"]
+        assert row["secondary"]
         assert row["notes"]
-        assert row["checksum"] == "—" or len(row["checksum"]) == 8
-        colored_operation = (
-            row["tone"] == "operation" and row["intent_key"] != "noop"
-        )
-        if forced:
-            assert row["intent_color"] == system_colors["CanvasText"]
-        elif dark and colored_operation:
-            assert row["intent_color"] == _OPERATION_MAIN_RGB[row["intent_key"]]
-        elif dark and row["tone"] == "status":
-            assert row["intent_color"] == _STATUS_MAIN_RGB[row["intent_key"]]
-        else:
-            assert row["intent_color"] == row["intent_alias_color"]
-        assert _contrast(row["intent_color"], row["background"]) >= 4.5
+        assert row["checkbox_width"] == pytest.approx(16.0, abs=0.5)
+        assert row["checkbox_height"] == pytest.approx(16.0, abs=0.5)
+        assert row["row_height"] == pytest.approx(28.0, abs=0.5)
         assert all(
             not _opaque_color(background)
             for background in row["cell_backgrounds"]
         )
         assert row["column_lefts"] == pytest.approx(expected_columns, abs=0.5)
-
     if not forced:
         odd_backgrounds = {row["background"] for row in rows[::2]}
         even_backgrounds = {row["background"] for row in rows[1::2]}
         assert len(odd_backgrounds) == 1
         assert len(even_backgrounds) == 1
         assert odd_backgrounds != even_backgrounds
-        assert by_case["mkdir"]["background"] in even_backgrounds
+    return rows
 
 
 def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:

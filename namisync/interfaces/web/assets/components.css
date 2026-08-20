@@ -177,8 +177,9 @@ body {
   color: var(--color-accent-foreground);
   cursor: pointer;
   display: inline-grid;
-  inline-size: var(--icon-size-md);
-  block-size: var(--icon-size-md);
+  font-size: var(--font-size-caption);
+  inline-size: var(--icon-size-sm);
+  block-size: var(--icon-size-sm);
   place-content: center;
   transition:
     background-color var(--motion-duration-fast) var(--motion-easing-standard),

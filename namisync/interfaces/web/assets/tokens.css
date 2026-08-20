@@ -53,6 +53,12 @@
   --icon-size-md: 20px;
   --icon-size-lg: 24px;
   --row-h: 28px;
+  --file-column-selection-default: 2rem;
+  --file-column-name-default: minmax(12rem, 1.8fr);
+  --file-column-size-default: minmax(5rem, 0.45fr);
+  --file-column-primary-default: minmax(8rem, 0.7fr);
+  --file-column-secondary-default: minmax(7rem, 0.65fr);
+  --file-column-notes-default: minmax(14rem, 1.3fr);
 
   /* Instant reduction and the progress cycle are NamiSync behavior tokens. */
   --motion-duration-instant: 0ms;
@@ -232,16 +238,23 @@
   --operation-noop-background: var(--semantic-neutral-background);
   --operation-noop-indicator: var(--semantic-neutral-indicator);
 
-  --plan-intent-copy-foreground: var(--operation-copy-foreground);
-  --plan-intent-update-foreground: var(--operation-update-foreground);
-  --plan-intent-move-foreground: var(--operation-move-foreground);
-  --plan-intent-move_update-foreground: var(--operation-move_update-foreground);
-  --plan-intent-recase-foreground: var(--operation-recase-foreground);
-  --plan-intent-mkdir-foreground: var(--operation-mkdir-foreground);
-  --plan-intent-trash-foreground: var(--operation-trash-foreground);
-  --plan-intent-delete-foreground: var(--operation-delete-foreground);
+  --plan-intent-copy-foreground: var(--palette-blue-main);
+  --plan-intent-update-foreground: var(--palette-green-main);
+  --plan-intent-move-foreground: var(--palette-purple-main);
+  --plan-intent-move_update-foreground: var(--palette-purple-main);
+  --plan-intent-recase-foreground: var(--palette-blue-main);
+  --plan-intent-mkdir-foreground: var(--palette-green-main);
+  --plan-intent-trash-foreground: var(--palette-yellow-main);
+  --plan-intent-delete-foreground: var(--palette-red-main);
   --plan-intent-error-foreground: var(--status-error-foreground);
   --plan-intent-blocked-foreground: var(--status-blocked-foreground);
+  --file-status-positive-foreground: var(--palette-green-main);
+  --file-status-negative-foreground: var(--palette-red-main);
+  --file-status-warning-foreground: var(--palette-yellow-main);
+  --file-status-active-foreground: var(--palette-blue-main);
+  --file-status-paused-foreground: var(--palette-purple-main);
+  --file-status-mismatch-foreground: var(--palette-purple-main);
+  --file-status-neutral-foreground: var(--color-neutral-foreground-secondary);
 }
 
 :root[data-window-material="mica"] {
@@ -453,6 +466,13 @@
     --plan-intent-delete-foreground: CanvasText;
     --plan-intent-error-foreground: CanvasText;
     --plan-intent-blocked-foreground: CanvasText;
+    --file-status-positive-foreground: CanvasText;
+    --file-status-negative-foreground: CanvasText;
+    --file-status-warning-foreground: CanvasText;
+    --file-status-active-foreground: CanvasText;
+    --file-status-paused-foreground: CanvasText;
+    --file-status-mismatch-foreground: CanvasText;
+    --file-status-neutral-foreground: CanvasText;
   }
 }
 

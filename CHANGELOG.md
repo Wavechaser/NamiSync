@@ -112,33 +112,42 @@ ownership explicit without changing public or persisted contracts.
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, and a dormant file-list row renderer;
+foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
 #### Establish the dormant file-list row renderer (2026-08-20)
 
-- Added packaged `plan.js` with one presentation-only
-  `renderPlanRow(element, rowView)` export. It consumes explicit display text,
-  selection state, depth/folder styling, and semantic tone keys through the
-  defended text helpers; it imports no bridge or domain code and production
-  startup does not import it, so the shipped GUI remains honestly empty.
-- Added the five-column responsive grid for selection, path, intended
-  operation/status, eight-character projected checksum, and notes. Zebra
+- Added a shared packaged `file_row.js` skeleton plus presentation-only
+  `renderPlanRow(element, rowView)` and `renderIntegrityRow(element, rowView)`
+  specializations. They consume explicit display values through the defended
+  text helpers, import no bridge or domain code, and remain unimported by
+  production startup, so the shipped GUI remains honestly empty.
+- Expanded the responsive grid to six columns. Both lists order selection,
+  basename, and size first; sync adds operation/status and eight-character
+  checksum, while integrity adds presence and integrity status before notes.
+  Rows are 28 px, checkboxes are 16 px, and projected folders expose disclosure
+  buttons, mixed selection, and indented basename-only children. The test-only
+  driver collapses/restores actual computed rows and reconciles each folder's
+  checkbox from its two direct children. Focusable header separators resize
+  each grid track by pointer drag or arrow key without persistence. Zebra
   backgrounds belong only to rendered row elements—including folders—and stop
   at the last row; cells stay transparent and constrained widths scroll the
   complete aligned grid horizontally. The gallery specimen fills the wide work
-  area, and plan-specific aliases prefer authored main operation colors on dark
-  rows—including red-main Error and Unsupported/Blocked—while retaining
-  contrast-safe dark-family light-theme text and forced-color text.
+  area. Plan operation and integrity-state aliases use authored family main
+  colors in both ordinary themes—including red-main negative states—while
+  forced colors retain system authority.
 - Drove the installed production renderer from a test-only static gallery
-  array covering a plain row, all nine operation tones exactly once, a folder
-  with a nested file, and error/unsupported statuses. No bridge command,
+  arrays covering a plain row, all nine operation tones exactly once, a folder
+  with two children, error/unsupported statuses, and representative integrity
+  states under another two-child folder. No bridge command,
   `SyncPlan`, workflow, dispatcher, session, or provisional wire payload was
   introduced, and exact wheel checks exclude both fixture markers.
 - Extended four-profile headed evidence for roles and blank selection header,
-  checkbox labels/states, columns, indentation, semantic text contrast,
-  display-ready checksums, finite row-only striping, transparent cells, wide
-  work-area fill, and narrow-container overflow.
+  checkbox labels/states and exact compact geometry, six columns, computed
+  collapse/restore, child-to-parent selection reconciliation, a measured 40 px
+  column drag, basename hierarchy, main status mappings, display-ready checksums,
+  finite row-only striping, transparent cells, wide work-area fill, and
+  narrow-container overflow.
 
 #### Tune solid desktop control states (2026-08-20)
 

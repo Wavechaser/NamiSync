@@ -40,8 +40,8 @@ M1's headless product is implemented and usable through the service and CLI:
 reviewed sync, inventory, integrity baseline/verify/rebaseline, optional
 post-copy verification, and retained history. The Windows desktop shell now has
 a secured WebView2 host, bounded command/event transport, native folder picking,
-the Fluent/accessibility foundation, and a dormant gallery-proven file-list row
-renderer. User-facing workflow views and controls, final packaging, and beta
+the Fluent/accessibility foundation, and dormant gallery-proven sync/integrity
+file-list row renderers. User-facing workflow views and controls, final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
 
 M1 state remains process-local: queued sessions and unexecuted plans do not
@@ -219,7 +219,7 @@ ownership explicit without changing public or persisted contracts.
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, a dormant file-list row renderer, and a
+foundation, bounded presentation core, dormant sync/integrity file-list row renderers, and a
 persisted native/page theme override over the refrozen cosmetic-state channel;
 later workflow surfaces and beta packaging remain future phases.
 

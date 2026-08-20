@@ -188,16 +188,20 @@ Yellow and purple deliberately have no authored `light` input in the current
 foundation.
 
 Palette use is main-first. When an authored family communicates identity or
-state, its `main` swatch is the preferred color wherever the assigned surface
-preserves the required contrast. The family's `light` and `dark` tones normally
-contextualize that main—as a supporting surface, inverse, interaction tone, or
-contrast fallback—and do not replace it merely because the page theme changed.
-A role that intentionally makes a light/dark tone primary without its main must
-be named as an explicit exception in this visual contract and receive a
-same-change token and evidence update. Required contrast and Windows forced
-colors remain hard constraints; the light-theme plan intent foregrounds are an
-explicit contrast fallback because the authored mains do not meet 4.5:1 on the
-light zebra surfaces.
+state, its `main` swatch is the default color in both ordinary themes. The
+family's `light` and `dark` tones normally contextualize that main—as a
+supporting surface, inverse, interaction tone, or contrast fallback—and do not
+replace it merely because the page theme changed. A role that intentionally
+makes a light/dark tone primary without its main must be named as an explicit
+exception in this visual contract and receive a same-change token and evidence
+update. Contrast remains a required default and Windows forced colors remain
+authoritative. If product design explicitly keeps a main foreground below the
+normal-text contrast target, that exception must retain visible non-color text,
+be measured rather than claimed accessible, and be recorded here. The sync
+operation and integrity-state list labels are that explicit exception on light
+zebra rows: they keep the authored mains for distinction, while their words
+carry meaning independently of color and forced colors replace them with
+`CanvasText`.
 
 A future hardcoded or derived color value is possible only after an explicit
 product-author design decision and a same-change contract/token/evidence update; it is
@@ -247,48 +251,54 @@ roles. The owning later renderer still supplies interaction behavior. These
 ordinary-theme border removals do not remove keyboard focus indication or
 override forced-color authority.
 
-The pre-Slice-5 file-list checkpoint ships one deliberately dormant surface
-primitive: `plan.js` exports only `renderPlanRow(element, rowView)`. Its input
-is a page-local presentation view, not a bridge envelope or compatibility
-contract. The caller supplies checkbox state and accessible label, numeric
-depth and folder styling, filesystem display text, explicit `operation` or
-`status` tone/key, display-ready checksum text, and notes. The renderer does
-not interpret planner enums, derive reasons, truncate hashes, reconstruct
-hierarchy, or dispatch anything; all text still passes through `render.js`.
-Neither `app.js` nor `panels.js` imports the module, so the production work area
-remains the honest empty Slice 4 shell until Slice 5 owns a validated Python
-projection and bridge path.
+The pre-Slice-5 file-list checkpoint ships three deliberately dormant surface
+modules. `file_row.js` owns the shared row skeleton; `plan.js` exports only
+`renderPlanRow(element, rowView)` and `integrity.js` exports only
+`renderIntegrityRow(element, rowView)`. Inputs are page-local presentation
+views, not bridge envelopes or compatibility contracts. Callers supply native
+checkbox state, mixed state and accessible labels; depth, folder and expanded
+state; display-ready basename and size text; list-specific status text; and
+notes. The renderers do not interpret domain enums, aggregate sizes, truncate
+hashes, split paths, reconstruct hierarchy, or dispatch anything. All text
+still passes through `render.js`. Neither `app.js` nor `panels.js` imports these
+modules, so production remains the honest empty Slice 4 shell until Slice 5
+owns validated Python projections and bridge paths.
 
-The shared layout has five aligned columns: an unlabelled visual selection
-header with the accessible name `Selection`, Files / path, Intended op /
-status, Checksum, and Reason / notes. The first column contains native
-checkboxes, paths use defended filesystem text and depth indentation, folders
-use a weight cue, intent text consumes the explicit semantic alias, checksums
-are monospaced, and notes wrap. Plan-specific intent aliases retain the
-contrast-safe semantic foregrounds on light surfaces and prefer each authored
-operation-family `main` swatch on dark surfaces where all row pairs still meet
-4.5:1; dark Error and Unsupported/Blocked rows likewise use red-main, while
-no-op remains neutral. Zebra backgrounds are applied only to direct
-rendered row children, including folder rows; cells and columns are transparent
-and the row group has no filler height, so striping ends at the final row. A
-minimum aligned grid width produces horizontal scrolling in a constrained
-container rather than collapsing or misaligning columns. Forced colors replace
-intent color with the system neutral foreground because visible intent text
-already carries the operation/status meaning.
+Both lists use the same compact six-column grid and 28 px rows with 16 px
+native checkboxes. The sync plan order is Selection, Filename, Size, Operation
+/ status, Checksum, Notes. The integrity order is Selection, Filename, Size,
+Presence, Integrity, Notes. Selection has no visible header text and retains
+the accessible name `Selection`. Each header exposes a focusable vertical
+separator that changes its grid track by pointer drag or Left/Right arrow; the
+gallery retains the resulting width only in its current DOM and deliberately
+adds no persistence or bridge state. Folder rows expose a borderless disclosure
+button and mixed checkboxes; projected child rows carry only their basename,
+indent under the folder, and never repeat the full visual path. Plan operation
+labels and integrity state labels consume authored family `main` swatches in
+both ordinary themes; plan Error/Unsupported and integrity negative states use
+red-main, while neutral/no-op stays neutral. Zebra backgrounds belong only to
+direct rendered rows, including folders; cells and columns are transparent and
+the row group has no filler height, so striping ends at the final row. The
+aligned grid scrolls horizontally when constrained. Forced colors replace
+colored state text with the system neutral foreground.
 
-The component gallery owns the only current caller and fixture. Its static
-test-only array contains one plain row, every established operation exactly
-once (with the create-folder row followed by an indented Copy), and error plus
-unsupported status rows. Each object is already projected and supplies an
-eight-character checksum or the visible em dash. The specimen occupies and
-fills the shell's wide `work` area; a transient constrained measurement proves
-horizontal overflow without leaving the visible gallery narrow. The clean-wheel
-gallery imports the installed `plan.js`, passes each `rowView` directly to
-`renderPlanRow`, and proves the resulting DOM; fixture markers and gallery code
-are absent from the wheel. No temporary command, fake `SyncPlan`, workflow,
-dispatcher, or session participates. Slice 5 therefore begins at validated
-Python projection → existing bridge → this local row renderer, without a
-temporary data channel to preserve or remove.
+The component gallery owns the only current callers and fixtures. The static
+sync array covers one plain row, every operation once, error/unsupported, and a
+partially selected expanded `photos` folder with two indented basename-only
+children. A second static array covers integrity presence/match/mismatch/error
+states and another partially selected folder with two children. Test-owned
+listeners exercise computed collapse/restore and direct-child checkbox
+reconciliation—including mixed to fully selected and back—without inventing
+product hierarchy or recursive selection policy. The same driver exercises a
+40 px header drag and proves the rendered row track changes. The specimens
+fill the shell's wide `work` area; a transient constrained measurement proves
+horizontal overflow without leaving
+the visible gallery narrow. The clean-wheel gallery passes projected row views
+directly to the two installed renderers and proves the resulting DOM. Fixture
+markers and gallery code are absent from the wheel. No temporary command, fake
+`SyncPlan`, workflow, dispatcher, or session participates. Slice 5 therefore
+begins at validated Python projection → existing bridge → the local renderers,
+without a temporary data channel to preserve or remove.
 
 The same break establishes only the icon infrastructure, not the later surface
 icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored

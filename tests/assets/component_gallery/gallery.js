@@ -67,6 +67,8 @@ async function reportFailure(error) {
     "NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74";
   const TEST_ONLY_PLAN_ROW_MARKER =
     "NAMISYNC_TEST_ONLY_PLAN_ROWS_45C8C53D55D34893";
+  const TEST_ONLY_INTEGRITY_ROW_MARKER =
+    "NAMISYNC_TEST_ONLY_INTEGRITY_ROWS_7A26DB6506CC49D8";
   const STATUS_CASES = Object.freeze([
     { key: "complete", text: "Complete", icon: "checkmark-circle", shape: "circle-check", cue: "Completed" },
     { key: "success", text: "Success", icon: "checkmark-circle", shape: "circle-check", cue: "Succeeded" },
@@ -96,162 +98,25 @@ async function reportFailure(error) {
     { key: "noop", text: "No change", icon: "info", shape: "dash", cue: "No operation" },
   ]);
   const PLAN_ROW_CASES = Object.freeze([
-    { key: "plain", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select readme.txt",
-      depth: 0,
-      folder: false,
-      pathText: "readme.txt",
-      intentText: "—",
-      intentTone: "",
-      intentKey: "",
-      checksumText: "5a2f8c10",
-      notesText: "Plain projected file row.",
-    }) },
-    { key: "mkdir", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select photos folder",
-      depth: 0,
-      folder: true,
-      pathText: "photos\\",
-      intentText: "Create folder",
-      intentTone: "operation",
-      intentKey: "mkdir",
-      checksumText: "—",
-      notesText: "Folder row; nested file follows.",
-    }) },
-    { key: "copy", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select photos summer.jpg",
-      depth: 1,
-      folder: false,
-      pathText: "photos\\summer.jpg",
-      intentText: "Copy",
-      intentTone: "operation",
-      intentKey: "copy",
-      checksumText: "12ab34cd",
-      notesText: "New file beneath the folder row.",
-    }) },
-    { key: "update", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select settings.json",
-      depth: 0,
-      folder: false,
-      pathText: "settings.json",
-      intentText: "Update",
-      intentTone: "operation",
-      intentKey: "update",
-      checksumText: "90ef12ab",
-      notesText: "Replace destination content.",
-    }) },
-    { key: "move", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select archive report.pdf",
-      depth: 0,
-      folder: false,
-      pathText: "archive\\report.pdf",
-      intentText: "Move",
-      intentTone: "operation",
-      intentKey: "move",
-      checksumText: "3456cdef",
-      notesText: "Relocate without replacing bytes.",
-    }) },
-    { key: "move_update", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select drafts notes.md",
-      depth: 0,
-      folder: false,
-      pathText: "drafts\\notes.md",
-      intentText: "Move + update",
-      intentTone: "operation",
-      intentKey: "move_update",
-      checksumText: "7890abcd",
-      notesText: "Relocate and replace content.",
-    }) },
-    { key: "recase", rowView: Object.freeze({
-      checked: true,
-      selectionDisabled: false,
-      selectionLabel: "Select Logo.PNG",
-      depth: 0,
-      folder: false,
-      pathText: "Logo.PNG",
-      intentText: "Recase",
-      intentTone: "operation",
-      intentKey: "recase",
-      checksumText: "bcde1234",
-      notesText: "Change only the path casing.",
-    }) },
-    { key: "trash", rowView: Object.freeze({
-      checked: false,
-      selectionDisabled: false,
-      selectionLabel: "Select old export.zip",
-      depth: 0,
-      folder: false,
-      pathText: "old\\export.zip",
-      intentText: "Move to trash",
-      intentTone: "operation",
-      intentKey: "trash",
-      checksumText: "def05678",
-      notesText: "Recoverable removal specimen.",
-    }) },
-    { key: "delete", rowView: Object.freeze({
-      checked: false,
-      selectionDisabled: false,
-      selectionLabel: "Select obsolete.tmp",
-      depth: 0,
-      folder: false,
-      pathText: "obsolete.tmp",
-      intentText: "Delete",
-      intentTone: "operation",
-      intentKey: "delete",
-      checksumText: "1357ace0",
-      notesText: "Permanent removal specimen.",
-    }) },
-    { key: "noop", rowView: Object.freeze({
-      checked: false,
-      selectionDisabled: false,
-      selectionLabel: "Select unchanged.bin",
-      depth: 0,
-      folder: false,
-      pathText: "unchanged.bin",
-      intentText: "No change",
-      intentTone: "operation",
-      intentKey: "noop",
-      checksumText: "2468bdf1",
-      notesText: "No operation is intended.",
-    }) },
-    { key: "error", rowView: Object.freeze({
-      checked: false,
-      selectionDisabled: true,
-      selectionLabel: "Selection unavailable for locked.dat",
-      depth: 0,
-      folder: false,
-      pathText: "locked.dat",
-      intentText: "Error",
-      intentTone: "status",
-      intentKey: "error",
-      checksumText: "—",
-      notesText: "The projected row reports a read error.",
-    }) },
-    { key: "unsupported", rowView: Object.freeze({
-      checked: false,
-      selectionDisabled: true,
-      selectionLabel: "Selection unavailable for device-link",
-      depth: 0,
-      folder: false,
-      pathText: "device-link",
-      intentText: "Unsupported",
-      intentTone: "status",
-      intentKey: "blocked",
-      checksumText: "—",
-      notesText: "Unsupported entry type.",
-    }) },
+    { key: "plain", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select readme.txt", depth: 0, folder: false, expanded: false, nameText: "readme.txt", sizeText: "1.2 KB", intentText: "—", intentTone: "", intentKey: "", checksumText: "5a2f8c10", notesText: "Plain projected file row." }) },
+    { key: "mkdir", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select photos folder", depth: 0, folder: true, expanded: true, nameText: "photos", sizeText: "14.8 MB", intentText: "Create folder", intentTone: "operation", intentKey: "mkdir", checksumText: "—", notesText: "Partially selected folder." }) },
+    { key: "copy", parentKey: "mkdir", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1000.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1000.jpeg", sizeText: "8.1 MB", intentText: "Copy", intentTone: "operation", intentKey: "copy", checksumText: "12ab34cd", notesText: "New child file." }) },
+    { key: "update", parentKey: "mkdir", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1001.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1001.jpeg", sizeText: "6.7 MB", intentText: "Update", intentTone: "operation", intentKey: "update", checksumText: "90ef12ab", notesText: "Changed child file." }) },
+    { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentTone: "operation", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
+    { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentTone: "operation", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
+    { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Recase", intentTone: "operation", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
+    { key: "trash", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select export.zip", depth: 0, folder: false, expanded: false, nameText: "export.zip", sizeText: "2.4 MB", intentText: "Move to trash", intentTone: "operation", intentKey: "trash", checksumText: "def05678", notesText: "Recoverable removal specimen." }) },
+    { key: "delete", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select obsolete.tmp", depth: 0, folder: false, expanded: false, nameText: "obsolete.tmp", sizeText: "128 B", intentText: "Delete", intentTone: "operation", intentKey: "delete", checksumText: "1357ace0", notesText: "Permanent removal specimen." }) },
+    { key: "noop", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select unchanged.bin", depth: 0, folder: false, expanded: false, nameText: "unchanged.bin", sizeText: "16 MB", intentText: "No change", intentTone: "operation", intentKey: "noop", checksumText: "2468bdf1", notesText: "No operation is intended." }) },
+    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", intentText: "Error", intentTone: "status", intentKey: "error", checksumText: "—", notesText: "The projected row reports a read error." }) },
+    { key: "unsupported", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for device-link", depth: 0, folder: false, expanded: false, nameText: "device-link", sizeText: "—", intentText: "Unsupported", intentTone: "status", intentKey: "blocked", checksumText: "—", notesText: "Unsupported entry type." }) },
+  ]);
+  const INTEGRITY_ROW_CASES = Object.freeze([
+    { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Mixed", presenceStatus: "warning", integrityText: "Mixed", integrityStatus: "warning", notesText: "Partially selected folder." }) },
+    { key: "match", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Both", presenceStatus: "complete", integrityText: "Match", integrityStatus: "complete", notesText: "Content matches." }) },
+    { key: "source_only", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Source only", presenceStatus: "warning", integrityText: "Not compared", integrityStatus: "deferred", notesText: "No target file." }) },
+    { key: "mismatch", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select archive.zip", depth: 0, folder: false, expanded: false, nameText: "archive.zip", sizeText: "18.4 MB", presenceText: "Both", presenceStatus: "complete", integrityText: "Mismatch", integrityStatus: "mismatch", notesText: "Checksums differ." }) },
+    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", presenceText: "Unknown", presenceStatus: "error", integrityText: "Error", integrityStatus: "error", notesText: "Read failed." }) },
   ]);
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
@@ -299,17 +164,19 @@ async function reportFailure(error) {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
     import("/plan.js"),
+    import("/integrity.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
     typeof createIcon !== "function"
     || !Array.isArray(ICON_NAMES)
     || typeof renderPlanRow !== "function"
+    || typeof renderIntegrityRow !== "function"
   ) {
     throw new TypeError("installed icon registry has an invalid public shape");
   }
@@ -640,45 +507,173 @@ async function reportFailure(error) {
   planSection.className = "nami-card";
   planSection.dataset.gallerySection = "plan_rows";
   planSection.style.gridArea = "work";
-  const planHeading = document.createElement("h2");
-  renderText(planHeading, "Projected file-list rows");
-  const planList = document.createElement("div");
-  planList.className = "nami-plan-list";
-  planList.setAttribute("role", "table");
-  planList.setAttribute("aria-label", "Projected sync plan specimen");
-  const planGrid = document.createElement("div");
-  planGrid.className = "nami-plan-list__grid";
-  const planHeader = document.createElement("div");
-  planHeader.className = "nami-plan-list__header";
-  planHeader.setAttribute("role", "row");
-  for (const [index, text] of [
-    "",
-    "Files / path",
-    "Intended op / status",
-    "Checksum",
-    "Reason / notes",
-  ].entries()) {
-    const cell = document.createElement("div");
-    cell.className = "nami-plan-list__header-cell";
-    cell.setAttribute("role", "columnheader");
-    if (index === 0) {
-      cell.setAttribute("aria-label", "Selection");
+  function createFileList(title, label, headers, definitions, renderer, caseName) {
+    const heading = document.createElement("h2");
+    renderText(heading, title);
+    const list = document.createElement("div");
+    list.className = "nami-file-list";
+    list.setAttribute("role", "table");
+    list.setAttribute("aria-label", label);
+    const grid = document.createElement("div");
+    grid.className = "nami-file-list__grid";
+    const header = document.createElement("div");
+    header.className = "nami-file-list__header";
+    header.setAttribute("role", "row");
+    const columnNames = ["selection", "name", "size", "primary", "secondary", "notes"];
+    const columnMinimums = [32, 128, 64, 96, 80, 160];
+    for (const [index, text] of headers.entries()) {
+      const cell = document.createElement("div");
+      cell.className = "nami-file-list__header-cell";
+      cell.setAttribute("role", "columnheader");
+      if (index === 0) {
+        cell.setAttribute("aria-label", "Selection");
+      }
+      renderText(cell, text);
+      const resizer = document.createElement("div");
+      resizer.className = "nami-file-list__column-resizer";
+      resizer.dataset.column = columnNames[index];
+      resizer.dataset.minimum = String(columnMinimums[index]);
+      resizer.setAttribute("role", "separator");
+      resizer.setAttribute("aria-orientation", "vertical");
+      resizer.setAttribute(
+        "aria-label",
+        `Resize ${text || "selection"} column`,
+      );
+      resizer.tabIndex = 0;
+      cell.append(resizer);
+      header.append(cell);
     }
-    renderText(cell, text);
-    planHeader.append(cell);
+    const body = document.createElement("div");
+    body.className = "nami-file-list__body";
+    body.setAttribute("role", "rowgroup");
+    for (const definition of definitions) {
+      const row = document.createElement("div");
+      renderer(row, definition.rowView);
+      row.dataset.galleryCase = definition.key;
+      row.dataset.galleryList = caseName;
+      if (definition.parentKey !== undefined) {
+        row.dataset.galleryParent = definition.parentKey;
+      }
+      body.append(row);
+    }
+    for (const folder of body.querySelectorAll('[data-folder="true"]')) {
+      const disclosure = folder.querySelector(".nami-file-row__disclosure");
+      const folderCheckbox = folder.querySelector(".nami-checkbox");
+      const children = [...body.querySelectorAll(
+        `[data-gallery-parent="${folder.dataset.galleryCase}"]`,
+      )];
+      const childCheckboxes = children.map((child) =>
+        child.querySelector(".nami-checkbox")
+      );
+      if (
+        !(disclosure instanceof HTMLButtonElement)
+        || !(folderCheckbox instanceof HTMLInputElement)
+        || children.length < 2
+        || !childCheckboxes.every(
+          (checkbox) => checkbox instanceof HTMLInputElement,
+        )
+      ) {
+        throw new TypeError("gallery folder controls are unavailable");
+      }
+      const disclosureLabel = disclosure.ariaLabel.replace(
+        /^(?:Collapse|Expand) /u,
+        "",
+      );
+      disclosure.addEventListener("click", () => {
+        const expanded = disclosure.ariaExpanded !== "true";
+        disclosure.ariaExpanded = String(expanded);
+        disclosure.ariaLabel = `${expanded ? "Collapse" : "Expand"} ${disclosureLabel}`;
+        for (const child of children) {
+          child.hidden = !expanded;
+        }
+      });
+      const reconcileFolderCheckbox = () => {
+        const selected = childCheckboxes.filter(
+          (checkbox) => checkbox.checked,
+        ).length;
+        const all = selected === childCheckboxes.length;
+        const mixed = selected > 0 && !all;
+        folderCheckbox.checked = all;
+        folderCheckbox.indeterminate = mixed;
+        folderCheckbox.ariaChecked = mixed ? "mixed" : String(all);
+      };
+      for (const checkbox of childCheckboxes) {
+        checkbox.addEventListener("change", reconcileFolderCheckbox);
+      }
+      folderCheckbox.addEventListener("change", () => {
+        for (const checkbox of childCheckboxes) {
+          checkbox.checked = folderCheckbox.checked;
+        }
+        reconcileFolderCheckbox();
+      });
+    }
+    grid.append(header, body);
+    list.append(grid);
+    planSection.append(heading, list);
+    for (const resizer of header.querySelectorAll(
+      ".nami-file-list__column-resizer",
+    )) {
+      const property = `--nami-file-column-${resizer.dataset.column}`;
+      const minimum = Number(resizer.dataset.minimum);
+      const cell = resizer.parentElement;
+      if (!(cell instanceof HTMLElement) || !Number.isFinite(minimum)) {
+        throw new TypeError("gallery column resizer is invalid");
+      }
+      const setWidth = (width) => {
+        const next = Math.max(minimum, Math.min(640, width));
+        grid.style.setProperty(property, `${next}px`);
+        resizer.setAttribute("aria-valuemin", String(minimum));
+        resizer.setAttribute("aria-valuemax", "640");
+        resizer.setAttribute("aria-valuenow", String(Math.round(next)));
+      };
+      resizer.setAttribute("aria-valuemin", String(minimum));
+      resizer.setAttribute("aria-valuemax", "640");
+      resizer.setAttribute(
+        "aria-valuenow",
+        String(Math.round(cell.getBoundingClientRect().width)),
+      );
+      resizer.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = cell.getBoundingClientRect().width;
+        const move = (moveEvent) => setWidth(
+          startWidth + moveEvent.clientX - startX,
+        );
+        const finish = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", finish);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", finish, { once: true });
+      });
+      resizer.addEventListener("keydown", (event) => {
+        if (!new Set(["ArrowLeft", "ArrowRight"]).has(event.key)) {
+          return;
+        }
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        setWidth(cell.getBoundingClientRect().width + direction * 8);
+      });
+    }
+    return { list, grid, header, body };
   }
-  const planBody = document.createElement("div");
-  planBody.className = "nami-plan-list__body";
-  planBody.setAttribute("role", "rowgroup");
-  for (const { key, rowView } of PLAN_ROW_CASES) {
-    const row = document.createElement("div");
-    renderPlanRow(row, rowView);
-    row.dataset.galleryPlanCase = key;
-    planBody.append(row);
-  }
-  planGrid.append(planHeader, planBody);
-  planList.append(planGrid);
-  planSection.append(planHeading, planList);
+
+  const planSpecimen = createFileList(
+    "Projected sync plan rows",
+    "Projected sync plan specimen",
+    ["", "Filename", "Size", "Operation / status", "Checksum", "Notes"],
+    PLAN_ROW_CASES,
+    renderPlanRow,
+    "plan",
+  );
+  const integritySpecimen = createFileList(
+    "Projected integrity rows",
+    "Projected integrity specimen",
+    ["", "Filename", "Size", "Presence", "Integrity", "Notes"],
+    INTEGRITY_ROW_CASES,
+    renderIntegrityRow,
+    "integrity",
+  );
   app.append(planSection);
   galleryStage = "control_matrix";
   const controlsSection = document.createElement("section");
@@ -789,116 +784,220 @@ async function reportFailure(error) {
     - parseFloat(planSectionStyle.paddingLeft)
     - parseFloat(planSectionStyle.paddingRight);
   const galleryUsesWorkArea = planSectionStyle.gridArea === "work";
-  const galleryFillsWorkArea = Math.abs(
-    planList.getBoundingClientRect().width - planSectionContentWidth,
-  ) < 0.5;
-  planList.style.setProperty("inline-size", "36rem");
-  const renderedPlanRows = [...planBody.children];
-  const planRowEvidence = renderedPlanRows.map((row, index) => {
-    if (!(row instanceof HTMLElement)) {
-      throw new TypeError("gallery plan row is unavailable");
+  function toneAndKey(cell) {
+    if (cell.dataset.operation !== undefined) {
+      return ["operation", cell.dataset.operation];
     }
-    const definition = PLAN_ROW_CASES[index];
-    const cells = [...row.children];
-    const checkbox = row.querySelector(".nami-checkbox");
-    const path = row.querySelector(".nami-plan-row__path");
-    const intent = row.querySelector(".nami-plan-row__intent");
-    const checksum = row.querySelector(".nami-plan-row__checksum");
-    const notes = row.querySelector(".nami-plan-row__notes");
-    if (
-      definition === undefined
-      || !(checkbox instanceof HTMLInputElement)
-      || !(path instanceof HTMLElement)
-      || !(intent instanceof HTMLElement)
-      || !(checksum instanceof HTMLElement)
-      || !(notes instanceof HTMLElement)
-      || cells.length !== 5
-      || !cells.every((cell) => cell instanceof HTMLElement)
-    ) {
-      throw new TypeError("gallery plan row structure is unavailable");
+    if (cell.dataset.status !== undefined) {
+      return ["status", cell.dataset.status];
     }
-    const tone = intent.dataset.operation !== undefined
-      ? "operation"
-      : intent.dataset.status !== undefined
-        ? "status"
-        : "";
-    const intentKey = tone === "" ? "" : intent.dataset[tone];
-    if (intentKey === undefined) {
-      throw new TypeError("gallery plan row intent is unavailable");
-    }
-    const intentColor = getComputedStyle(intent).color;
-    return {
-      case: definition.key,
-      role: row.getAttribute("role"),
-      cell_roles: cells.map((cell) => cell.getAttribute("role")),
-      checkbox_label: checkbox.getAttribute("aria-label"),
-      checkbox_checked: checkbox.checked,
-      checkbox_disabled: checkbox.disabled,
-      depth: Number(row.style.getPropertyValue("--nami-plan-depth")),
-      folder: row.dataset.folder === "true",
-      path: path.textContent,
-      intent: intent.textContent,
-      tone,
-      intent_key: intentKey,
-      checksum: checksum.textContent,
-      notes: notes.textContent,
-      background: getComputedStyle(row).backgroundColor,
-      intent_color: intentColor,
-      intent_alias_color: tone === ""
-        ? intentColor
-        : resolvedAlias(tone, intentKey).foreground,
-      cell_backgrounds: cells.map(
-        (cell) => getComputedStyle(cell).backgroundColor,
-      ),
-      column_lefts: cells.map(
-        (cell) => Number(cell.getBoundingClientRect().left.toFixed(3)),
-      ),
-      path_padding_left: Number(
-        parseFloat(getComputedStyle(path).paddingLeft).toFixed(3),
-      ),
-    };
-  });
-  const planHeaderCells = [...planHeader.children];
-  const planBodyBounds = planBody.getBoundingClientRect();
-  const lastPlanRow = renderedPlanRows[renderedPlanRows.length - 1];
-  if (
-    !(lastPlanRow instanceof HTMLElement)
-    || planHeaderCells.length !== 5
-    || !planHeaderCells.every((cell) => cell instanceof HTMLElement)
-  ) {
-    throw new TypeError("gallery plan list structure is unavailable");
+    return ["", ""];
   }
-  const planRowsHeight = renderedPlanRows.reduce(
-    (total, row) => total + row.getBoundingClientRect().height,
-    0,
+
+  function collectFileListEvidence(specimen, definitions) {
+    const { list, grid, header, body } = specimen;
+    const fillsWorkArea = Math.abs(
+      list.getBoundingClientRect().width - planSectionContentWidth,
+    ) < 0.5;
+    const folderDisclosure = body.querySelector(
+      '[data-folder="true"] .nami-file-row__disclosure',
+    );
+    const childRows = [...body.querySelectorAll("[data-gallery-parent]")];
+    if (!(folderDisclosure instanceof HTMLButtonElement) || childRows.length < 2) {
+      throw new TypeError("gallery hierarchy specimen is unavailable");
+    }
+    folderDisclosure.click();
+    const collapseHidesChildren = childRows.every(
+      (row) => row.hidden && getComputedStyle(row).display === "none",
+    );
+    folderDisclosure.click();
+    const collapseRestoresChildren = childRows.every(
+      (row) => !row.hidden && getComputedStyle(row).display !== "none",
+    );
+    const folderCheckbox = body.querySelector(
+      '[data-folder="true"] .nami-checkbox',
+    );
+    const childCheckboxes = childRows.map((row) =>
+      row.querySelector(".nami-checkbox")
+    );
+    const uncheckedChild = childCheckboxes.find(
+      (checkbox) => checkbox instanceof HTMLInputElement && !checkbox.checked,
+    );
+    if (
+      !(folderCheckbox instanceof HTMLInputElement)
+      || !(uncheckedChild instanceof HTMLInputElement)
+    ) {
+      throw new TypeError("gallery partial selection specimen is unavailable");
+    }
+    uncheckedChild.checked = true;
+    uncheckedChild.dispatchEvent(new Event("change", { bubbles: true }));
+    const childSelectionSelectsFolder = folderCheckbox.checked
+      && !folderCheckbox.indeterminate
+      && folderCheckbox.ariaChecked === "true";
+    uncheckedChild.checked = false;
+    uncheckedChild.dispatchEvent(new Event("change", { bubbles: true }));
+    const childSelectionRestoresMixed = !folderCheckbox.checked
+      && folderCheckbox.indeterminate
+      && folderCheckbox.ariaChecked === "mixed";
+    const nameResizer = header.querySelector(
+      '.nami-file-list__column-resizer[data-column="name"]',
+    );
+    const firstNameCell = body.querySelector(".nami-file-row__name");
+    if (
+      !(nameResizer instanceof HTMLElement)
+      || !(firstNameCell instanceof HTMLElement)
+    ) {
+      throw new TypeError("gallery column resize specimen is unavailable");
+    }
+    const widthBeforeResize = firstNameCell.getBoundingClientRect().width;
+    nameResizer.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true,
+      clientX: 200,
+    }));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: 240 }));
+    window.dispatchEvent(new PointerEvent("pointerup", { clientX: 240 }));
+    const resizeDelta = firstNameCell.getBoundingClientRect().width
+      - widthBeforeResize;
+    const columnResizeChangesWidth = resizeDelta > 39 && resizeDelta < 41;
+    grid.style.removeProperty("--nami-file-column-name");
+
+    list.style.setProperty("inline-size", "36rem");
+    const renderedRows = [...body.children];
+    const rows = renderedRows.map((row, index) => {
+      if (!(row instanceof HTMLElement)) {
+        throw new TypeError("gallery file row is unavailable");
+      }
+      const definition = definitions[index];
+      const cells = [...row.children];
+      const checkbox = row.querySelector(".nami-checkbox");
+      const name = row.querySelector('.nami-file-row__name');
+      const size = row.querySelector('.nami-file-row__size');
+      const primary = row.querySelector('[data-file-column="primary"]');
+      const secondary = row.querySelector('[data-file-column="secondary"]');
+      const notes = row.querySelector('.nami-file-row__notes');
+      if (
+        definition === undefined
+        || !(checkbox instanceof HTMLInputElement)
+        || !(name instanceof HTMLElement)
+        || !(size instanceof HTMLElement)
+        || !(primary instanceof HTMLElement)
+        || !(secondary instanceof HTMLElement)
+        || !(notes instanceof HTMLElement)
+        || cells.length !== 6
+        || !cells.every((cell) => cell instanceof HTMLElement)
+      ) {
+        throw new TypeError("gallery file row structure is unavailable");
+      }
+      const [primaryTone, primaryKey] = toneAndKey(primary);
+      const [secondaryTone, secondaryKey] = toneAndKey(secondary);
+      const primaryColor = getComputedStyle(primary).color;
+      const secondaryColor = getComputedStyle(secondary).color;
+      const disclosure = row.querySelector(".nami-file-row__disclosure");
+      const checkboxBounds = checkbox.getBoundingClientRect();
+      return {
+        case: definition.key,
+        role: row.getAttribute("role"),
+        cell_roles: cells.map((cell) => cell.getAttribute("role")),
+        checkbox_label: checkbox.getAttribute("aria-label"),
+        checkbox_checked: checkbox.checked,
+        checkbox_disabled: checkbox.disabled,
+        checkbox_indeterminate: checkbox.indeterminate,
+        checkbox_aria_checked: checkbox.getAttribute("aria-checked"),
+        checkbox_width: checkboxBounds.width,
+        checkbox_height: checkboxBounds.height,
+        depth: Number(row.style.getPropertyValue("--nami-file-depth")),
+        folder: row.dataset.folder === "true",
+        expanded: disclosure instanceof HTMLButtonElement
+          ? disclosure.ariaExpanded
+          : null,
+        name: row.querySelector(".nami-file-row__name-text")?.textContent,
+        size: size.textContent,
+        primary: primary.textContent,
+        primary_tone: primaryTone,
+        primary_key: primaryKey,
+        secondary: secondary.textContent,
+        secondary_tone: secondaryTone,
+        secondary_key: secondaryKey,
+        notes: notes.textContent,
+        background: getComputedStyle(row).backgroundColor,
+        primary_color: primaryColor,
+        primary_alias_color: primaryTone === ""
+          ? primaryColor
+          : resolvedAlias(primaryTone, primaryKey).foreground,
+        secondary_color: secondaryColor,
+        secondary_alias_color: secondaryTone === ""
+          ? secondaryColor
+          : resolvedAlias(secondaryTone, secondaryKey).foreground,
+        cell_backgrounds: cells.map(
+          (cell) => getComputedStyle(cell).backgroundColor,
+        ),
+        column_lefts: cells.map(
+          (cell) => Number(cell.getBoundingClientRect().left.toFixed(3)),
+        ),
+        name_padding_left: Number(
+          parseFloat(getComputedStyle(name).paddingLeft).toFixed(3),
+        ),
+        row_height: row.getBoundingClientRect().height,
+      };
+    });
+    const headerCells = [...header.children];
+    const bodyBounds = body.getBoundingClientRect();
+    const lastRow = renderedRows[renderedRows.length - 1];
+    if (
+      !(lastRow instanceof HTMLElement)
+      || headerCells.length !== 6
+      || !headerCells.every((cell) => cell instanceof HTMLElement)
+    ) {
+      throw new TypeError("gallery file list structure is unavailable");
+    }
+    const rowsHeight = renderedRows.reduce(
+      (total, row) => total + row.getBoundingClientRect().height,
+      0,
+    );
+    const headerStyle = getComputedStyle(header);
+    const evidence = {
+      table_role: list.getAttribute("role"),
+      header_role: header.getAttribute("role"),
+      body_role: body.getAttribute("role"),
+      gallery_uses_work_area: galleryUsesWorkArea,
+      gallery_fills_work_area: fillsWorkArea,
+      collapse_hides_children: collapseHidesChildren,
+      collapse_restores_children: collapseRestoresChildren,
+      child_selection_selects_folder: childSelectionSelectsFolder,
+      child_selection_restores_mixed: childSelectionRestoresMixed,
+      resize_handle_count: header.querySelectorAll(
+        ".nami-file-list__column-resizer",
+      ).length,
+      column_resize_changes_width: columnResizeChangesWidth,
+      column_resize_delta: Number(resizeDelta.toFixed(3)),
+      header_foreground: headerStyle.color,
+      header_background: headerStyle.backgroundColor,
+      header_texts: headerCells.map((cell) => cell.textContent),
+      header_cell_roles: headerCells.map((cell) => cell.getAttribute("role")),
+      selection_header_label: headerCells[0].getAttribute("aria-label"),
+      column_count: headerCells.length,
+      row_count: rows.length,
+      body_child_count: body.children.length,
+      checkbox_count: body.querySelectorAll('.nami-checkbox[type="checkbox"]').length,
+      body_ends_at_last_row: Math.abs(
+        bodyBounds.bottom - lastRow.getBoundingClientRect().bottom,
+      ) < 0.5,
+      body_height_matches_rows: Math.abs(bodyBounds.height - rowsHeight) < 0.5,
+      horizontal_overflow: list.scrollWidth > list.clientWidth,
+      overflow_x: getComputedStyle(list).overflowX,
+      client_width: list.clientWidth,
+      scroll_width: list.scrollWidth,
+      rows,
+    };
+    list.style.removeProperty("inline-size");
+    return evidence;
+  }
+
+  const planEvidence = collectFileListEvidence(planSpecimen, PLAN_ROW_CASES);
+  const integrityEvidence = collectFileListEvidence(
+    integritySpecimen,
+    INTEGRITY_ROW_CASES,
   );
-  const planHeaderStyle = getComputedStyle(planHeader);
-  const planEvidence = {
-    table_role: planList.getAttribute("role"),
-    header_role: planHeader.getAttribute("role"),
-    body_role: planBody.getAttribute("role"),
-    gallery_uses_work_area: galleryUsesWorkArea,
-    gallery_fills_work_area: galleryFillsWorkArea,
-    header_foreground: planHeaderStyle.color,
-    header_background: planHeaderStyle.backgroundColor,
-    header_texts: planHeaderCells.map((cell) => cell.textContent),
-    header_cell_roles: planHeaderCells.map((cell) => cell.getAttribute("role")),
-    selection_header_label: planHeaderCells[0].getAttribute("aria-label"),
-    column_count: planHeaderCells.length,
-    row_count: planRowEvidence.length,
-    body_child_count: planBody.children.length,
-    checkbox_count: planBody.querySelectorAll('.nami-checkbox[type="checkbox"]').length,
-    body_ends_at_last_row: Math.abs(
-      planBodyBounds.bottom - lastPlanRow.getBoundingClientRect().bottom,
-    ) < 0.5,
-    body_height_matches_rows: Math.abs(planBodyBounds.height - planRowsHeight) < 0.5,
-    horizontal_overflow: planList.scrollWidth > planList.clientWidth,
-    overflow_x: getComputedStyle(planList).overflowX,
-    client_width: planList.clientWidth,
-    scroll_width: planList.scrollWidth,
-    rows: planRowEvidence,
-  };
-  planList.style.removeProperty("inline-size");
 
   const systemColors = {};
   for (const name of [
@@ -1009,6 +1108,7 @@ async function reportFailure(error) {
       };
     })(),
     file_list: planEvidence,
+    integrity_list: integrityEvidence,
   };
 
   galleryStage = "report";

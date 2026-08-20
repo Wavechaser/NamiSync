@@ -25,6 +25,8 @@ _ASSET_NAMES = (
     "tokens.css",
     "components.css",
     "app.css",
+    "file_row.js",
+    "integrity.js",
     "plan.js",
 )
 _MEDIA_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
@@ -120,6 +122,9 @@ _PLAN_ROW_CASE_KEYS = frozenset(
         "error",
         "unsupported",
     }
+)
+_INTEGRITY_ROW_CASE_KEYS = frozenset(
+    {"folder", "match", "source_only", "mismatch", "error"}
 )
 _CONTROL_STATES = frozenset({"rest", "hover", "pressed", "disabled", "focused"})
 _EXPECTED_MEDIA = {
@@ -794,12 +799,14 @@ def _valid_control_contract(value: object) -> bool:
         "dialog_exit",
         "segmented",
         "file_list",
+        "integrity_list",
     }:
         return False
     tri_state = value["tri_state"]
     dialog_exit = value["dialog_exit"]
     segmented = value["segmented"]
     file_list = value["file_list"]
+    integrity_list = value["integrity_list"]
     return (
         type(tri_state) is dict
         and set(tri_state) == {"aria_checked", "indeterminate", "cue_content"}
@@ -820,16 +827,29 @@ def _valid_control_contract(value: object) -> bool:
             "unselected_checked": "false",
         }
         and _valid_plan_evidence(file_list)
+        and _valid_integrity_evidence(integrity_list)
     )
 
 
-def _valid_plan_evidence(value: object) -> bool:
+def _valid_file_list_evidence(
+    value: object,
+    *,
+    expected_cases: frozenset[str],
+    expected_headers: list[str],
+) -> bool:
     keys = {
         "table_role",
         "header_role",
         "body_role",
         "gallery_uses_work_area",
         "gallery_fills_work_area",
+        "collapse_hides_children",
+        "collapse_restores_children",
+        "child_selection_selects_folder",
+        "child_selection_restores_mixed",
+        "resize_handle_count",
+        "column_resize_changes_width",
+        "column_resize_delta",
         "header_foreground",
         "header_background",
         "header_texts",
@@ -854,46 +874,59 @@ def _valid_plan_evidence(value: object) -> bool:
         "checkbox_label",
         "checkbox_checked",
         "checkbox_disabled",
+        "checkbox_indeterminate",
+        "checkbox_aria_checked",
+        "checkbox_width",
+        "checkbox_height",
         "depth",
         "folder",
-        "path",
-        "intent",
-        "tone",
-        "intent_key",
-        "checksum",
+        "expanded",
+        "name",
+        "size",
+        "primary",
+        "primary_tone",
+        "primary_key",
+        "secondary",
+        "secondary_tone",
+        "secondary_key",
         "notes",
         "background",
-        "intent_color",
-        "intent_alias_color",
+        "primary_color",
+        "primary_alias_color",
+        "secondary_color",
+        "secondary_alias_color",
         "cell_backgrounds",
         "column_lefts",
-        "path_padding_left",
+        "name_padding_left",
+        "row_height",
     }
     if type(value) is not dict or set(value) != keys:
         return False
     rows = value["rows"]
-    expected_count = len(_PLAN_ROW_CASE_KEYS)
+    expected_count = len(expected_cases)
     if (
         value["table_role"] != "table"
         or value["header_role"] != "row"
         or value["body_role"] != "rowgroup"
         or value["gallery_uses_work_area"] is not True
         or value["gallery_fills_work_area"] is not True
+        or value["collapse_hides_children"] is not True
+        or value["collapse_restores_children"] is not True
+        or value["child_selection_selects_folder"] is not True
+        or value["child_selection_restores_mixed"] is not True
+        or value["resize_handle_count"] != 6
+        or value["column_resize_changes_width"] is not True
+        or type(value["column_resize_delta"]) not in {int, float}
+        or not math.isfinite(value["column_resize_delta"])
+        or not 39 < value["column_resize_delta"] < 41
         or type(value["header_foreground"]) is not str
         or not value["header_foreground"]
         or type(value["header_background"]) is not str
         or not value["header_background"]
-        or value["header_texts"]
-        != [
-            "",
-            "Files / path",
-            "Intended op / status",
-            "Checksum",
-            "Reason / notes",
-        ]
-        or value["header_cell_roles"] != ["columnheader"] * 5
+        or value["header_texts"] != expected_headers
+        or value["header_cell_roles"] != ["columnheader"] * 6
         or value["selection_header_label"] != "Selection"
-        or value["column_count"] != 5
+        or value["column_count"] != 6
         or value["row_count"] != expected_count
         or value["body_child_count"] != expected_count
         or value["checkbox_count"] != expected_count
@@ -913,45 +946,65 @@ def _valid_plan_evidence(value: object) -> bool:
     for row in rows:
         if type(row) is not dict or set(row) != row_keys:
             return False
-        tone = row["tone"]
-        intent_key = row["intent_key"]
+        primary_tone = row["primary_tone"]
+        primary_key = row["primary_key"]
+        secondary_tone = row["secondary_tone"]
+        secondary_key = row["secondary_key"]
         if (
             type(row["case"]) is not str
             or row["role"] != "row"
-            or row["cell_roles"] != ["cell"] * 5
+            or row["cell_roles"] != ["cell"] * 6
             or type(row["checkbox_label"]) is not str
             or not row["checkbox_label"]
             or type(row["checkbox_checked"]) is not bool
             or type(row["checkbox_disabled"]) is not bool
+            or type(row["checkbox_indeterminate"]) is not bool
+            or row["checkbox_aria_checked"] not in {None, "mixed"}
+            or any(
+                type(row[name]) not in {int, float}
+                or not math.isfinite(row[name])
+                or row[name] <= 0
+                for name in ("checkbox_width", "checkbox_height", "row_height")
+            )
             or type(row["depth"]) is not int
             or row["depth"] < 0
             or type(row["folder"]) is not bool
+            or row["expanded"] not in {None, "true", "false"}
+            or (row["folder"] and row["expanded"] is None)
+            or (not row["folder"] and row["expanded"] is not None)
             or any(
                 type(row[name]) is not str or not row[name]
                 for name in (
-                    "path",
-                    "intent",
-                    "checksum",
+                    "name",
+                    "size",
+                    "primary",
+                    "secondary",
                     "notes",
                     "background",
-                    "intent_color",
-                    "intent_alias_color",
+                    "primary_color",
+                    "primary_alias_color",
+                    "secondary_color",
+                    "secondary_alias_color",
                 )
             )
-            or tone not in {"", "operation", "status"}
-            or type(intent_key) is not str
-            or (tone == "") != (intent_key == "")
-            or (tone == "operation" and intent_key not in _OPERATION_KEYS)
-            or (tone == "status" and intent_key not in _STATUS_KEYS)
-            or row["checksum"] != "—" and len(row["checksum"]) != 8
+            or primary_tone not in {"", "operation", "status"}
+            or secondary_tone not in {"", "operation", "status"}
+            or type(primary_key) is not str
+            or type(secondary_key) is not str
+            or (primary_tone == "") != (primary_key == "")
+            or (secondary_tone == "") != (secondary_key == "")
+            or (primary_tone == "operation" and primary_key not in _OPERATION_KEYS)
+            or (secondary_tone == "operation" and secondary_key not in _OPERATION_KEYS)
+            or (primary_tone == "status" and primary_key not in _STATUS_KEYS)
+            or (secondary_tone == "status" and secondary_key not in _STATUS_KEYS)
             or type(row["cell_backgrounds"]) is not list
-            or len(row["cell_backgrounds"]) != 5
+            or len(row["cell_backgrounds"]) != 6
             or not all(
                 type(background) is str and bool(background)
                 for background in row["cell_backgrounds"]
             )
             or type(row["column_lefts"]) is not list
-            or len(row["column_lefts"]) != 5
+            or len(row["column_lefts"]) != 6
             or not all(
                 type(position) in {int, float} and math.isfinite(position)
                 for position in row["column_lefts"]
@@ -962,12 +1015,54 @@ def _valid_plan_evidence(value: object) -> bool:
                     row["column_lefts"], row["column_lefts"][1:]
                 )
             )
-            or type(row["path_padding_left"]) not in {int, float}
-            or not math.isfinite(row["path_padding_left"])
-            or row["path_padding_left"] < 0
+            or type(row["name_padding_left"]) not in {int, float}
+            or not math.isfinite(row["name_padding_left"])
+            or row["name_padding_left"] < 0
         ):
             return False
-    return {row["case"] for row in rows} == _PLAN_ROW_CASE_KEYS
+    return {row["case"] for row in rows} == expected_cases
+
+
+def _valid_plan_evidence(value: object) -> bool:
+    if not _valid_file_list_evidence(
+        value,
+        expected_cases=_PLAN_ROW_CASE_KEYS,
+        expected_headers=[
+            "",
+            "Filename",
+            "Size",
+            "Operation / status",
+            "Checksum",
+            "Notes",
+        ],
+    ):
+        return False
+    return all(
+        row["secondary_tone"] == ""
+        and (row["secondary"] == "—" or len(row["secondary"]) == 8)
+        for row in value["rows"]
+    )
+
+
+def _valid_integrity_evidence(value: object) -> bool:
+    if not _valid_file_list_evidence(
+        value,
+        expected_cases=_INTEGRITY_ROW_CASE_KEYS,
+        expected_headers=[
+            "",
+            "Filename",
+            "Size",
+            "Presence",
+            "Integrity",
+            "Notes",
+        ],
+    ):
+        return False
+    return all(
+        row["primary_tone"] == "status"
+        and row["secondary_tone"] == "status"
+        for row in value["rows"]
+    )
 
 
 def _valid_icon_evidence(value: object) -> bool:

@@ -407,18 +407,20 @@ unrealized unless an entry says otherwise.
   two-half state specimen uses radio-group semantics and highlights its checked
   half with the accent roles. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
-- **Dormant File-List Row Foundation**. Packaged `plan.js` exposes only the
-  presentation-local `renderPlanRow(element, rowView)` primitive. It renders an
-  already-projected selection checkbox, filesystem path, explicit semantic
-  intent text, display-ready eight-character checksum, and notes into the
-  shared five-column layout. Actual plans, projection, transport, selection
-  behavior, execution, and progress remain unrealized Slice 5 work: production
-  does not import this module and still renders no file rows. A test-only static
-  gallery fixture settles plain/folder/nested, every operation, error, and
-  unsupported appearances without constructing domain or session objects. It
-  fills the gallery's wide work area, and its intent text uses contrast-safe
-  plan aliases that prefer authored main colors on dark rows, including
-  red-main Error and Unsupported/Blocked statuses.
+- **Dormant File-List Row Foundation**. Packaged `file_row.js` owns the shared
+  compact row skeleton, while `plan.js` and `integrity.js` expose narrow
+  presentation-local renderers. Both consume already-projected 16 px checkbox,
+  mixed/folder/disclosure, basename, size, status, and notes values in a 28 px
+  six-column layout; the sync specialization adds operation and eight-character
+  checksum cells, while integrity adds presence and integrity cells. Actual
+  projection, transport, selection/tree policy, execution, and progress remain
+  unrealized Slice 5 work: production imports neither specialization and still
+  renders no rows. Test-only static fixtures settle plain and partially selected
+  folder hierarchies with two basename-only children, all operations,
+  error/unsupported, and representative integrity states. Operation and
+  integrity-state text uses authored family main swatches in both ordinary
+  themes; forced colors retain system authority. The gallery headers also
+  support pointer-drag and arrow-key column resizing without persistence.
 - **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
   red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
   `tokens.css` only; yellow and purple intentionally have no `light` input.

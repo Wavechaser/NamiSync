@@ -572,7 +572,7 @@ def test_sh_g_11_only_tokens_owns_raw_colors_and_palette_consumption() -> None:
     assert palette_consumers == {"tokens.css"}
 
 
-def test_plan_intent_aliases_prefer_main_colors_only_on_dark_surfaces() -> None:
+def test_plan_intent_aliases_prefer_main_colors_in_both_themes() -> None:
     source = TOKENS.read_text(encoding="utf-8")
     light = _variables(_block(source, ":root "))
     explicit_dark = light | _variables(
@@ -599,12 +599,8 @@ def test_plan_intent_aliases_prefer_main_colors_only_on_dark_surfaces() -> None:
 
     for operation, family in families.items():
         plan_token = f"--plan-intent-{operation}-foreground"
-        assert light[plan_token] == f"var(--operation-{operation}-foreground)"
-        assert _resolve(plan_token, light) == _resolve(
-            f"--palette-{family}-dark",
-            light,
-        )
         expected_main = f"var(--palette-{family}-main)"
+        assert light[plan_token] == expected_main
         assert explicit_dark[plan_token] == expected_main
         assert automatic_dark[plan_token] == expected_main
         assert forced[plan_token] == "CanvasText"
@@ -634,6 +630,37 @@ def test_plan_intent_aliases_prefer_main_colors_only_on_dark_surfaces() -> None:
         assert forced[plan_token] == "CanvasText"
 
     assert "--plan-intent-noop-foreground" not in light
+
+
+def test_file_status_aliases_prefer_main_colors_in_both_themes() -> None:
+    source = TOKENS.read_text(encoding="utf-8")
+    light = _variables(_block(source, ":root "))
+    explicit_dark = light | _variables(
+        _block(source, ':root[data-theme="dark"]')
+    )
+    automatic_dark = light | _variables(
+        _block(
+            _block(source, "@media (prefers-color-scheme: dark)"),
+            ':root:not([data-theme="light"])',
+        )
+    )
+    forced = _variables(_block(source, "@media (forced-colors: active)"))
+    families = {
+        "positive": "green",
+        "negative": "red",
+        "warning": "yellow",
+        "active": "blue",
+        "paused": "purple",
+        "mismatch": "purple",
+    }
+    for status, family in families.items():
+        token = f"--file-status-{status}-foreground"
+        expected = f"var(--palette-{family}-main)"
+        assert light[token] == expected
+        assert explicit_dark[token] == expected
+        assert automatic_dark[token] == expected
+        assert forced[token] == "CanvasText"
+    assert forced["--file-status-neutral-foreground"] == "CanvasText"
 
 
 def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> None:

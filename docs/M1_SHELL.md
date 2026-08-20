@@ -314,7 +314,9 @@ namisync/interfaces/web/
         tree.js
         rail.js
         panels.js
+        file_row.js
         plan.js
+        integrity.js
         inventory.js
         history.js
 namisync/interfaces/launcher.py
@@ -332,9 +334,9 @@ animation-frame check and requests a missing spacer index through the
 generation it supplies to the owning view. Before root removal, the owner calls
 the controller's idempotent disposal to disconnect resize observation, remove
 root listeners, invalidate pending work, and suppress an already queued frame.
-The dormant `plan.js` row primitive and the later `inventory.js` renderer keep
-the two vertical surfaces disjoint; `panels.js` owns only their shared panel
-frame. `tokens.css` holds the Fluent
+The dormant `plan.js` and `integrity.js` row primitives reuse only the shared
+presentation skeleton in `file_row.js`; the later `inventory.js` renderer stays
+disjoint, and `panels.js` owns only their shared panel frame. `tokens.css` holds the Fluent
 design tokens defined in `DESKTOP_UI.md`, `components.css` the Fluent control set built on
 them, and `app.css` shell/surface layout plus dormant plan-row presentation;
 styles and renderers consume token aliases and define no color of their own.
@@ -350,12 +352,13 @@ GUI Break 1 adds `tokens.css`, `components.css`, `icons.js`, `appearance.js`,
 and the exact four SVGs plus source/license records under `assets/icons/`; its
 component-gallery scenario remains test-only and absent from the wheel.
 The pre-Slice-5 visual checkpoint is the one later-layout exception: packaged
-`plan.js` exposes only a dormant presentation-row renderer, while `app.js` and
-`panels.js` remain unchanged and import none of it. A static projected fixture
-under `tests/assets/component_gallery/` calls the installed renderer directly;
-the fixture does not ship and introduces no command, domain object, session,
-or wire contract. Slice 5 remains the first owner of real plan projection,
-transport, interaction, and product DOM.
+`file_row.js`, `plan.js`, and `integrity.js` expose only dormant presentation
+renderers, while `app.js` and `panels.js` remain unchanged and import none of
+them. Static projected fixtures under `tests/assets/component_gallery/` call
+the installed specializations directly; the fixtures do not ship and
+introduce no command, domain object, session, or wire contract. Slice 5 remains
+the first owner of real plan/integrity projection, transport, interaction, and
+product DOM.
 Post-realignment readiness hardening adds `readiness.py`,
 `document_channel.py`, and packaged `readiness.js`; it does not add another
 bridge or application-data transport.
