@@ -53,6 +53,7 @@
   --icon-size-md: 20px;
   --icon-size-lg: 24px;
   --row-h: 28px;
+  --file-row-h: 24px;
   --file-column-selection-default: 2rem;
   --file-column-name-default: minmax(12rem, 1.8fr);
   --file-column-size-default: minmax(5rem, 0.45fr);
@@ -114,7 +115,6 @@
   --color-card-border-solid: #ebebeb;
   --color-card-border: rgba(0,0,0,0.06);
   --color-flyout-background-solid: #ffffff;
-  --color-flyout-background: rgba(255,255,255,0.75);
   --color-flyout-border-solid: #ebebeb;
   --color-flyout-border: rgba(0,0,0,0.06);
   --color-control-elevation-border-start: rgba(0,0,0,0.04);
@@ -127,10 +127,11 @@
   --color-accent: #0078D4;
   --color-accent-hover: #0091F8;
   --color-accent-pressed: #0067C0;
-  --color-accent-foreground: #FFFFFF;
+  --color-accent-foreground: #000000;
   --color-accent-hover-foreground: #000000;
   --color-accent-pressed-foreground: #FFFFFF;
   --color-focus-ring: #000000;
+  --color-focus-inner: #ffffff;
   --filter-delete-foreground: var(--palette-red-main);
   --filter-active-foreground: var(--color-neutral-foreground);
   --filter-copy-background: var(--palette-blue-main);
@@ -300,7 +301,6 @@
   --color-card-border-solid: #1c1c1c;
   --color-card-border: rgba(0,0,0,0.10);
   --color-flyout-background-solid: #292929;
-  --color-flyout-background: rgba(41,41,41,0.75);
   --color-flyout-border-solid: #1c1c1c;
   --color-flyout-border: rgba(0,0,0,0.20);
   --color-control-elevation-border-start: rgba(0,0,0,0.08);
@@ -310,6 +310,7 @@
   --color-shadow-ambient: rgba(0,0,0,0.24);
   --color-shadow-key: rgba(0,0,0,0.28);
   --color-focus-ring: #ffffff;
+  --color-focus-inner: #000000;
   --filter-delete-foreground: var(--palette-red-main);
   --filter-active-foreground: var(--color-neutral-surface);
   --semantic-positive-foreground: var(--palette-green-light);
@@ -375,7 +376,6 @@
     --color-card-border-solid: #1c1c1c;
     --color-card-border: rgba(0,0,0,0.10);
     --color-flyout-background-solid: #292929;
-    --color-flyout-background: rgba(41,41,41,0.75);
     --color-flyout-border-solid: #1c1c1c;
     --color-flyout-border: rgba(0,0,0,0.20);
     --color-control-elevation-border-start: rgba(0,0,0,0.08);
@@ -385,6 +385,7 @@
     --color-shadow-ambient: rgba(0,0,0,0.24);
     --color-shadow-key: rgba(0,0,0,0.28);
     --color-focus-ring: #ffffff;
+    --color-focus-inner: #000000;
     --filter-delete-foreground: var(--palette-red-main);
     --filter-active-foreground: var(--color-neutral-surface);
     --semantic-positive-foreground: var(--palette-green-light);
@@ -453,7 +454,6 @@
     --color-card-border-solid: ButtonBorder;
     --color-card-border: ButtonBorder;
     --color-flyout-background-solid: Canvas;
-    --color-flyout-background: Canvas;
     --color-flyout-border-solid: ButtonBorder;
     --color-flyout-border: ButtonBorder;
     --color-control-elevation-border-start: ButtonBorder;
@@ -470,6 +470,7 @@
     --color-accent-pressed: Highlight;
     --color-accent-pressed-foreground: HighlightText;
     --color-focus-ring: Highlight;
+    --color-focus-inner: Canvas;
     --filter-delete-foreground: CanvasText;
     --filter-active-foreground: HighlightText;
     --filter-copy-background: Highlight;

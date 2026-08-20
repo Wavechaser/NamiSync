@@ -165,7 +165,7 @@ body {
 
 .nami-file-list__header {
   background: var(--color-neutral-surface-selected);
-  block-size: var(--row-h);
+  block-size: var(--file-row-h);
   color: var(--color-neutral-foreground-secondary);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
@@ -175,7 +175,7 @@ body {
 .nami-file-list__body > .nami-file-row {
   --nami-state-foreground: var(--color-neutral-foreground-secondary);
   background: var(--color-neutral-surface);
-  block-size: var(--row-h);
+  block-size: var(--file-row-h);
   color: var(--color-neutral-foreground);
 }
 
@@ -194,7 +194,7 @@ body {
   display: flex;
   min-inline-size: 0;
   overflow: hidden;
-  padding: var(--space-1) var(--space-3);
+  padding: 0 var(--space-3);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -275,10 +275,10 @@ body {
 }
 
 .nami-file-row__disclosure:focus-visible {
-  outline-color: var(--color-focus-ring);
-  outline-style: solid;
-  outline-width: var(--focus-ring-w);
-  outline-offset: 0;
+  box-shadow:
+    0 0 0 1px var(--color-focus-inner),
+    0 0 0 3px var(--color-focus-ring);
+  outline: none;
 }
 
 .nami-file-row__chevron {

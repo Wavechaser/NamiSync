@@ -399,15 +399,16 @@ unrealized unless an entry says otherwise.
   forced colors remain system-owned.
 - **Solid Desktop Control States**. The active component foundation exposes
   exactly two command-button tiers: solid inverse-gray for ordinary actions and
-  live Windows accent for primary Execute/Verify-class actions. Primary labels
-  use the same white-Light/dark-Dark inverse-neutral rule as ordinary buttons,
-  stay fixed through interaction, and use successively darker hover/press
+  live Windows accent for primary Execute/Verify-class actions. Primary and
+  other accent-filled labels use the native base accent's contrast-selected
+  exact black or white, stay fixed through interaction, and use darker hover/press
   treatment. Filter pills
   use inverse grayscale when inactive and exact operation-family main swatches
   with contrast-selected grayscale text when active; inactive Delete uses exact
   red-main text while active Delete retains red-main/red-dark. Operation/file
   badges, status pills, and the gray-track/live-accent progress component are
-  borderless, while keyboard focus remains visible. The Sync/Integrity
+  borderless, while ordinary keyboard focus uses opposing inner/outer Fluent
+  strokes and forced colors retain system outlines. The Sync/Integrity
   two-half state specimen uses radio-group semantics and highlights its checked
   half with the accent roles. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
@@ -420,15 +421,16 @@ unrealized unless an entry says otherwise.
 - **Flyouts And Theme Combobox**. Dialogs, menus, and the production-owned DOM
   theme listbox use a dedicated black 6% Light/20% Dark flyout stroke rather
   than the conspicuous accessible control border. The combobox owns WinUI-like
-  selected-option placement, viewport clamping, acrylic/opaque popup layers,
-  a 3 px selected accent pill, subtle raised/flat closed-control boundaries,
+  selected-option placement, viewport clamping, an opaque M1 popup layer,
+  a persistent filled selected option with a 3 px accent pill, distinct
+  hover/press fills, subtle raised/flat closed-control boundaries,
   and keyboard-only focus indication. Ordinary SDR elevation remains; dark HDR
   suppresses CSS flyout shadows to avoid transparent WebView2/Mica alpha halos,
   while forced colors use system surfaces without acrylic or shadow.
 - **Dormant File-List Row Foundation**. Packaged `file_row.js` owns the shared
   compact row skeleton, while `plan.js` and `integrity.js` expose narrow
   presentation-local renderers. Both consume already-projected 16 px checkbox,
-  mixed/folder/disclosure, basename, size, status, and notes values in a 28 px
+  mixed/folder/disclosure, basename, size, status, and notes values in a 24 px
   six-column layout; the sync specialization adds operation and eight-character
   checksum cells, while integrity adds presence and integrity cells. Actual
   projection, transport, selection/tree policy, execution, and progress remain

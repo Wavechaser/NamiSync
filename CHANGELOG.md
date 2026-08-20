@@ -125,7 +125,7 @@ later workflow surfaces and beta packaging remain future phases.
 - Expanded the responsive grid to six columns. Both lists order selection,
   basename, and size first; sync adds operation/status and eight-character
   checksum, while integrity adds presence and integrity status before notes.
-  Rows are 28 px, checkboxes are 16 px, and projected folders expose disclosure
+  Rows are 24 px, checkboxes are 16 px, and projected folders expose disclosure
   buttons, mixed selection, and indented basename-only children. The test-only
   driver collapses/restores actual computed rows and reconciles each folder's
   checkbox from its two direct children. Focusable header separators resize
@@ -177,18 +177,27 @@ later workflow surfaces and beta packaging remain future phases.
 - Kept inactive Delete text and light Error/Unsupported list states on exact
   red-main, moved progress fill to the live Windows accent, and kept active
   Delete's existing red-main/red-dark pairing.
-- Aligned primary-button labels with the ordinary inverse-neutral theme rule,
-  held their color through interaction, and separated the darker hover role
-  from an additional pressed brightness step without affecting forced colors.
+- Made primary-button and selected-segment labels consume the native base
+  accent's contrast-selected black/white result, held that color through
+  interaction, and separated the darker hover role from an additional pressed
+  brightness step without affecting forced colors.
 - Replaced the packaged native theme selector with a production-owned DOM
   combobox: a subtle gradient trigger boundary becomes flat while open, the
-  elevation-16 acrylic/opaque listbox aligns its selected option and clamps to
+  elevation-16 opaque listbox aligns its selected option and clamps to
   the viewport, and forced colors retain system authority. The gallery now
   includes three left-rail task-card state specimens outside content cards.
 - Split elevated-surface strokes from accessible control borders at black 6%
   Light/20% Dark, clipped content-card fill to the padding box, and added a
   dark-HDR shadowless flyout fallback plus normal/shadowless/opaque gallery
   isolates for the transparent WebView2/Mica halo diagnosis.
+- Made the M1 combobox popup opaque, gave its selected option a persistent
+  filled tab plus the accent pill, and separated selected/hover/pressed option
+  fills. Task-card selection/current state now has the same 3 px accent marker,
+  while hover and press occupy distinct tint rungs.
+- Reopened the native base-accent black/white contrast result for all
+  accent-filled labels without allowing hover/press reversal; added opposing
+  inner/outer Fluent focus strokes, stabilized plain-chip labels, corrected
+  toggle-knob travel, and reduced only file-table rows from 28 px to 24 px.
 
 #### Thaw and refreeze the cosmetic state channel (2026-08-19)
 

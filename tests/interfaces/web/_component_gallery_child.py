@@ -197,6 +197,20 @@ _EXPECTED_PSEUDO_TARGETS = [
     for control in _CONTROL_KEYS
     for state, classes in _PSEUDO_CLASSES.items()
 ]
+
+
+def _expected_pseudo_targets(mode: str) -> list[dict[str, object]]:
+    alternate_theme = "light" if _EXPECTED_THEME[mode] == "dark" else "dark"
+    return [
+        *_EXPECTED_PSEUDO_TARGETS,
+        {"selector": "#theme-option-system", "classes": ["hover"]},
+        {
+            "selector": f"#theme-option-{alternate_theme}",
+            "classes": ["hover", "active"],
+        },
+    ]
+
+
 _CONTROL_REPORT_CHUNK_ROWS = 10
 _CONTROL_REPORT_ROW_COUNT = len(_CONTROL_KEYS) * len(_CONTROL_STATES)
 _CONTROL_REPORT_CHUNK_COUNT = math.ceil(
@@ -426,7 +440,7 @@ def _test_report_spec(
             "phase",
             "targets",
         }:
-            if payload["targets"] != _EXPECTED_PSEUDO_TARGETS:
+            if payload["targets"] != _expected_pseudo_targets(expected_mode):
                 raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
         if payload["phase"] == "failure" and set(payload) == {
@@ -854,6 +868,9 @@ def _valid_control_contract(value: object) -> bool:
             "popup_shadow",
             "popup_backdrop_filter",
             "ordinary_option_background",
+            "selected_option_background",
+            "hovered_option_background",
+            "pressed_option_background",
             "selected_pill_width",
             "selected_pill_background",
         }
@@ -879,6 +896,9 @@ def _valid_control_contract(value: object) -> bool:
                 "popup_shadow",
                 "popup_backdrop_filter",
                 "ordinary_option_background",
+                "selected_option_background",
+                "hovered_option_background",
+                "pressed_option_background",
                 "selected_pill_background",
             )
         )
@@ -893,16 +913,24 @@ def _valid_control_contract(value: object) -> bool:
             "selected_count",
             "current_count",
             "transparent_boundaries",
+            "selected_marker_width",
+            "current_marker_width",
+            "rest_marker_content",
+            "selected_marker_background",
         }
-        and task_rail
-        == {
-            "card_count": 3,
-            "outside_content_card": True,
-            "left_of_work": True,
-            "selected_count": 1,
-            "current_count": 1,
-            "transparent_boundaries": True,
-        }
+        and task_rail["card_count"] == 3
+        and task_rail["outside_content_card"] is True
+        and task_rail["left_of_work"] is True
+        and task_rail["selected_count"] == 1
+        and task_rail["current_count"] == 1
+        and task_rail["transparent_boundaries"] is True
+        and type(task_rail["selected_marker_width"]) in {int, float}
+        and 2.5 <= task_rail["selected_marker_width"] <= 3.5
+        and type(task_rail["current_marker_width"]) in {int, float}
+        and 2.5 <= task_rail["current_marker_width"] <= 3.5
+        and task_rail["rest_marker_content"] in {"none", "normal"}
+        and type(task_rail["selected_marker_background"]) is str
+        and bool(task_rail["selected_marker_background"])
         and _valid_plan_evidence(file_list)
         and _valid_integrity_evidence(integrity_list)
     )

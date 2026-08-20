@@ -580,6 +580,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert not re.search(r"\.nami-file-row__cell[^\{]*:nth-child", layout)
     assert not re.search(r"\.nami-file-list__header-cell[^\{]*:nth-child", layout)
     assert "background: initial;" in layout
+    assert "--file-row-h: 24px;" in assets["tokens.css"]
+    assert layout.count("block-size: var(--file-row-h);") == 2
     assert layout.count("--nami-plan-preferred-foreground:") == 10
     assert layout.count("var(--plan-intent-") == 10
     assert "--palette-" not in layout

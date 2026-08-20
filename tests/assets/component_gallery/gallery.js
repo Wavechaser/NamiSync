@@ -839,11 +839,22 @@ async function reportFailure(error) {
   }
   controlsSection.append(hdrIsolation);
 
+  const ordinaryOptionRestBackground = getComputedStyle(
+    document.querySelector("#theme-option-system"),
+  ).backgroundColor;
+
   const pseudoTargets = CONTROL_CASES.flatMap((definition) => [
     { selector: `#gallery-control-${definition.key}-hover`, classes: ["hover"] },
     { selector: `#gallery-control-${definition.key}-pressed`, classes: ["hover", "active"] },
     { selector: `#gallery-control-${definition.key}-focused`, classes: ["focus", "focus-visible"] },
   ]);
+  pseudoTargets.push(
+    { selector: "#theme-option-system", classes: ["hover"] },
+    {
+      selector: `#theme-option-${alternateTheme}`,
+      classes: ["hover", "active"],
+    },
+  );
   galleryStage = "pseudo_states";
   await dispatchInteractive(
     "test_report",
@@ -1269,8 +1280,11 @@ async function reportFailure(error) {
   const selectedThemeOption = themePopup?.querySelector(
     '.nami-combobox__option[aria-selected="true"]',
   );
-  const ordinaryThemeOption = themePopup?.querySelector(
-    '.nami-combobox__option[aria-selected="false"]',
+  const hoveredThemeOption = themePopup?.querySelector(
+    '#theme-option-system',
+  );
+  const pressedThemeOption = themePopup?.querySelector(
+    `#theme-option-${alternateTheme}`,
   );
   const selectionPill = selectedThemeOption?.querySelector(
     ".nami-combobox__selection",
@@ -1278,7 +1292,8 @@ async function reportFailure(error) {
   if (
     !(themePopup instanceof HTMLElement)
     || !(selectedThemeOption instanceof HTMLElement)
-    || !(ordinaryThemeOption instanceof HTMLElement)
+    || !(hoveredThemeOption instanceof HTMLElement)
+    || !(pressedThemeOption instanceof HTMLElement)
     || !(selectionPill instanceof HTMLElement)
     || themePopup.hidden
   ) {
@@ -1290,6 +1305,18 @@ async function reportFailure(error) {
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
   const taskCards = [...galleryRail.querySelectorAll(".nami-task-card")];
+  const selectedTaskCard = galleryRail.querySelector(
+    '.nami-task-card[aria-selected="true"]',
+  );
+  const currentTaskCard = galleryRail.querySelector(
+    '.nami-task-card[aria-current="true"]',
+  );
+  if (
+    !(selectedTaskCard instanceof HTMLElement)
+    || !(currentTaskCard instanceof HTMLElement)
+  ) {
+    throw new TypeError("gallery selected task specimens are unavailable");
+  }
   const taskRailBounds = galleryRail.getBoundingClientRect();
   const planBounds = planSection.getBoundingClientRect();
   const controlContract = {
@@ -1348,8 +1375,15 @@ async function reportFailure(error) {
       popup_border_width: popupStyle.borderWidth,
       popup_shadow: popupStyle.boxShadow,
       popup_backdrop_filter: popupStyle.backdropFilter,
-      ordinary_option_background: getComputedStyle(
-        ordinaryThemeOption,
+      ordinary_option_background: ordinaryOptionRestBackground,
+      selected_option_background: getComputedStyle(
+        selectedThemeOption,
+      ).backgroundColor,
+      hovered_option_background: getComputedStyle(
+        hoveredThemeOption,
+      ).backgroundColor,
+      pressed_option_background: getComputedStyle(
+        pressedThemeOption,
       ).backgroundColor,
       selected_pill_width: selectionPill.getBoundingClientRect().width,
       selected_pill_background: getComputedStyle(selectionPill).backgroundColor,
@@ -1370,6 +1404,17 @@ async function reportFailure(error) {
         const style = getComputedStyle(task);
         return style.borderStyle === "none" || parseFloat(style.borderWidth) === 0;
       }),
+      selected_marker_width: parseFloat(
+        getComputedStyle(selectedTaskCard, "::before").width,
+      ),
+      current_marker_width: parseFloat(
+        getComputedStyle(currentTaskCard, "::before").width,
+      ),
+      rest_marker_content: getComputedStyle(taskCards[1], "::before").content,
+      selected_marker_background: getComputedStyle(
+        selectedTaskCard,
+        "::before",
+      ).backgroundColor,
     },
     file_list: planEvidence,
     integrity_list: integrityEvidence,

@@ -242,21 +242,22 @@ indicators/boundaries.
 The tuned component contract has two command-button tiers: a solid inverse-
 gray default and a Windows-accent primary modifier for consequential actions
 such as Execute and Verify. Both are borderless in ordinary themes. Primary
-button labels follow the ordinary button's inverse-neutral theme rule—white in
-Light and dark in Dark—and never invert during interaction. Hover uses the
-sampled darker accent role; press retains that role and applies one additional
-brightness step. Forced colors remove that visual filter and retain the system
-`Highlight`/`HighlightText` pair. The selected Sync/Integrity half deliberately
-inherits this same label rule; these dark-on-accent pairs are product-specified
-visual exceptions recorded by the headed matrix rather than claimed to meet
-the normal-text contrast floor. Filter
+button labels use exact black or white chosen from the sampled base accent by
+the native WCAG relative-luminance calculation. Every accent-filled label
+retains that base-rung foreground through hover and press, so fill darkening
+does not reverse its text. Hover uses the sampled darker accent role; press
+retains that role and applies one additional brightness step. Forced colors
+remove that visual filter and retain the system `Highlight`/`HighlightText`
+pair. The selected Sync/Integrity half inherits the same stable foreground.
+Filter
 pills are likewise borderless: inactive pills use an inverse grayscale surface
 and text pairing, while an active operation filter uses that operation family's
 exact main swatch with contrast-selected grayscale text. Delete is the
 deliberate exception: its inactive label is exact red-main in both ordinary
 themes, while its active red-main surface keeps the contrast-safe red-dark text.
 Active chip hover/press cues preserve the opaque color pair and use a small
-geometric change rather than reducing opacity.
+geometric change rather than reducing opacity; plain pressed chips likewise
+retain their active label color rather than carrying a latent state inversion.
 Operation/file badges and status pills keep their established semantic fill,
 typography, icon, and cue but have no painted border. Progress uses a neutral
 gray track and the live sampled Windows accent fill in both ordinary themes,
@@ -266,6 +267,12 @@ without hover/pressed inset strokes. The two-half Sync/Integrity component's sta
 roles. The owning later renderer still supplies interaction behavior. These
 ordinary-theme border removals do not remove keyboard focus indication or
 override forced-color authority.
+
+Ordinary keyboard focus uses Fluent's opposing dual stroke: a 1 px inner
+`colorStrokeFocus1` separator and a 2 px outer `colorStrokeFocus2` ring. This
+keeps the page-contrast ring distinct from inverse control fills. Mouse
+activation does not request that ring. Forced colors continue to use the
+system focus outline and its explicit offset.
 
 Elevated surfaces use a dedicated flyout boundary rather than the accessible
 control-stroke role: black 6% in Light and black 20% in Dark, with opaque
@@ -291,7 +298,7 @@ still passes through `render.js`. Neither `app.js` nor `panels.js` imports these
 modules, so production remains the honest empty Slice 4 shell until Slice 5
 owns validated Python projections and bridge paths.
 
-Both lists use the same compact six-column grid and 28 px rows with 16 px
+Both lists use the same compact six-column grid and 24 px rows with 16 px
 native checkboxes. The sync plan order is Selection, Filename, Size, Operation
 / status, Checksum, Notes. The integrity order is Selection, Filename, Size,
 Presence, Integrity, Notes. Selection has no visible header text and retains
@@ -383,13 +390,14 @@ The selector is a production-owned DOM combobox rather than the browser's
 native picker. Its fixed-position listbox is portaled under `body`, matches the
 trigger width, aligns the selected option center with the trigger center when
 space permits, and clamps to an 8 px viewport inset. Ordinary options are
-transparent, hover/press use neutral interaction fills, and the selected option
-has a 3 px accent pill. The closed trigger uses a subtle tokenized vertical
+transparent at rest; the selected option keeps a filled neutral tab plus a
+3 px accent pill, while hover and press use distinct neutral interaction fills.
+The closed trigger uses a subtle tokenized vertical
 elevation boundary at rest/hover and a flat subtle boundary while pressed/open;
 mouse activation does not request a focus ring, while `:focus-visible` retains
-a separate keyboard ring. The popup uses the flyout stroke, overlay radius,
-in-app acrylic approximation with opaque fallback, and elevation 16. Forced
-colors remove acrylic/shadow and use Canvas, CanvasText, ButtonBorder,
+the shared dual keyboard ring. The M1 popup uses an opaque theme surface because
+no Acrylic owner exists yet, plus the flyout stroke, overlay radius, and
+elevation 16. Forced colors remove shadow and use Canvas, CanvasText, ButtonBorder,
 Highlight, and HighlightText through system-owned tokens. Microsoft's official
 [XAML styling guide](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-styling-guide.md)
 is the reference for the closed control-elevation boundary.
@@ -691,12 +699,14 @@ command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.
 A resting unselected task card is fully transparent. Hover, press, selection,
-and current state use the same primary blend as a content card; hovering or
-pressing a selected/current card weakens that tint to the secondary blend. Task
-cards have no painted border or elevation in ordinary themes. In forced colors,
+and current state remain separate: unselected hover uses the primary card blend
+and press uses secondary; selected/current rest uses primary, hover secondary,
+and press tertiary. Selected/current cards retain a 3 px sampled-accent marker,
+so hover never erases selection. Task cards have no painted border or elevation
+in ordinary themes. In forced colors,
 every enabled selected/current card pairs the `Highlight` surface with
-`HighlightText`; disabled cards retain `GrayText`, and keyboard focus retains a
-system-visible outline. Selection is conveyed
+`HighlightText` and an opposing marker; disabled cards retain `GrayText`, and
+keyboard focus retains a system-visible outline. Selection is conveyed
 with `aria-selected`/`aria-current` and is not
 inferred from a task's running status.
 
